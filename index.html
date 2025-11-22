@@ -1,6 +1,7 @@
-<html lang="en">
-<head>
-<meta charset="UTF-8">
+<!DOCTYPE html>
+<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/56.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
 <title>Wakzome</title>
 
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/ICON.png">
@@ -20,7 +21,7 @@ body, h1, h2, .box, #small-wakzome, #dynamic-text {
     font-weight: 150;
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    overflow-x: hidden;
 }
 
 html, body { width: 100%; height: 100%; }
@@ -42,19 +43,19 @@ header.intro {
 
 #dynamic-text {
     text-transform: lowercase;
-    font-size: 10vw;
+    font-size: clamp(3rem, 8vw, 6rem); /* escalable con límites */
 }
 
 .loading-dots {
     display: flex;
-    gap: 5px;
+    gap: 1vw;
     justify-content: center;
-    margin-top: 10px;
+    margin-top: 1vh;
 }
 
 .loading-dots span {
-    width: 22px;
-    height: 22px;
+    width: 2vw;
+    height: 2vw;
     background-color: #b0b0b0;
     border-radius: 50%;
     opacity: 0;
@@ -72,10 +73,10 @@ header.intro {
 
 #small-wakzome {
     position: fixed;
-    top: 20px;
-    left: 25px;
-    font-size: 3rem;
-    letter-spacing: 15px;
+    top: 2vh;
+    left: 2vw;
+    font-size: clamp(1rem, 3vw, 3rem);
+    letter-spacing: clamp(5px, 2vw, 15px);
     color: #000;
     opacity: 0;
     transition: opacity 0.5s ease;
@@ -96,45 +97,35 @@ header.intro {
 
 .show-wrapper { opacity: 1; }
 
-#horarios-wrapper { position: relative; display: inline-block; margin-bottom: 20px; }
+#horarios-wrapper {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 2vh;
+}
 
-/* triángulo invertido más grande y más lento */
 #horarios-dots {
     position: relative;
-    width: 55px;
-    height: 42px;
-    margin: 0 auto 12px auto;
+    width: clamp(30px, 5vw, 55px);
+    height: clamp(20px, 4vh, 42px);
+    margin: 0 auto 1vh auto;
 }
 
 #horarios-dots span {
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: clamp(10px, 1.5vw, 18px);
+    height: clamp(10px, 1.5vw, 18px);
     background-color: #b0b0b0;
     border-radius: 50%;
     opacity: 0;
     animation: blink 3.4s infinite both;
 }
 
-#horarios-dots span:nth-child(1) {
-    top: 0;
-    left: 0;
-    animation-delay: 0s;
-}
-#horarios-dots span:nth-child(2) {
-    top: 0;
-    right: 0;
-    animation-delay: 0.5s;
-}
-#horarios-dots span:nth-child(3) {
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    animation-delay: 1s;
-}
+#horarios-dots span:nth-child(1) { top: 0; left: 0; animation-delay: 0s; }
+#horarios-dots span:nth-child(2) { top: 0; right: 0; animation-delay: 0.5s; }
+#horarios-dots span:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%); animation-delay: 1s; }
 
 #horarios-text {
-    font-size: 3rem;
+    font-size: clamp(2rem, 3vw, 3rem);
     text-transform: lowercase;
     margin: 0;
     color: #111;
@@ -145,25 +136,27 @@ header.intro {
 
 .boxes-container {
     display: flex;
-    flex-direction: column; /* vertical */
-    align-items: center;    /* centra horizontalmente */
-    gap: 40px;              /* espacio entre cuadros */
+    flex-direction: column;
+    align-items: center;
+    gap: 4vh;
+    width: 90%;
+    max-width: 800px; /* aumenta para móviles grandes */
 }
 
 .box {
-    width: 400px;   /* más grande */
-    height: 220px;  /* más grande */
+    width: 100%;
+    aspect-ratio: 16/9; /* mantiene proporción */
     background: #ffffff;
-    border-radius: 15px;
+    border-radius: 1.5vw;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 2rem; /* más grande */
+    font-size: clamp(2rem, 4vw, 4rem); /* más grande en móviles */
     color: #111;
     cursor: pointer;
-    box-shadow: 0px 4px 25px rgba(0,0,0,0.10);
+    box-shadow: 0px 0.4vw 2vw rgba(0,0,0,0.10);
     opacity: 0;
-    transform: translateY(50px);
+    transform: translateY(5vh);
     transition: all 0.6s ease;
 }
 
@@ -171,20 +164,14 @@ header.intro {
 
 .box:hover {
     background: #dcdcdc;
-    transform: scale(1.13);
+    transform: scale(1.05);
     color: #000;
 }
 
-@media (max-width: 900px) {
-    .box { width: 600px; height: 360px; font-size: 5rem; }
-}
-
-@media (max-width: 600px) {
-    .boxes-container { flex-direction: column; gap: 20px; }
-    .box { width: 180%; height: 320px; font-size: 5rem; }
-    #dynamic-text { font-size: 15vw; }
-    #small-wakzome { font-size: 1.2rem; }
-    #horarios-text { font-size: 2.5rem; }
+/* Opcional: si quieres un ajuste fino para pantallas muy pequeñas */
+@media (max-width: 400px) {
+    .boxes-container { max-width: 95%; gap: 3vh; }
+    .box { font-size: clamp(2rem, 5vw, 4rem); }
 }
 </style>
 </head>
@@ -243,5 +230,6 @@ setTimeout(() => {
 }, 3000);
 </script>
 
-</body>
-</html>
+
+
+</body></html>

@@ -15,7 +15,7 @@
     src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf') format('truetype');
     font-weight: 100;
     font-style: normal;
-    font-display: swap;
+    font-display: block; /* <-- cambiado para evitar salto de fuente */
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -124,7 +124,7 @@ function animateBoxesSequentially(boxes, delay=250){
 
 function startAnimation(){
     introText.style.opacity=0;
-    setTimeout(()=>{
+    setTimeout(()=> {
         boxesWrapper.classList.add("show");
         smallWakzome.style.opacity=1;
         animateBoxesSequentially(boxes);

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/46.html -->
+<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/47.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <title>Wakzome</title>
@@ -21,7 +21,6 @@ body, h1, h2, .box, #small-wakzome, #dynamic-text {
     font-weight: 150;
     margin: 0;
     padding: 0;
-    overflow: hidden;
 }
 
 html, body { width: 100%; height: 100%; }
@@ -32,7 +31,6 @@ header.intro {
     justify-content: center;
     align-items: center;
     background-color: #fff;
-    position: relative;
 }
 
 #intro-text {
@@ -97,7 +95,7 @@ header.intro {
 
 .show-wrapper { opacity: 1; }
 
-#horarios-wrapper { position: relative; display: inline-block; margin-bottom: 20px; }
+#horarios-wrapper { margin-bottom: 20px; }
 
 /* triángulo invertido */
 #horarios-dots {
@@ -117,16 +115,11 @@ header.intro {
     animation: blink 3.4s infinite both;
 }
 
-#horarios-dots span:nth-child(1) {
-    top: 0; left: 0;
-    animation-delay: 0s;
-}
-#horarios-dots span:nth-child(2) {
-    top: 0; right: 0;
-    animation-delay: 0.5s;
-}
+#horarios-dots span:nth-child(1) { top: 0; left: 0; animation-delay: 0s; }
+#horarios-dots span:nth-child(2) { top: 0; right: 0; animation-delay: 0.5s; }
 #horarios-dots span:nth-child(3) {
-    bottom: 0; left: 50%;
+    bottom: 0;
+    left: 50%;
     transform: translateX(-50%);
     animation-delay: 1s;
 }
@@ -134,19 +127,17 @@ header.intro {
 #horarios-text {
     font-size: 3rem;
     text-transform: lowercase;
-    margin: 0;
     color: #222;
     opacity: 0;
     transition: opacity 1s ease;
 }
+
 #horarios-text.show { opacity: 1; }
 
-/* Layout escritorio */
 .boxes-container {
     display: flex;
     justify-content: center;
     gap: 50px;
-    flex-wrap: nowrap;
 }
 
 .box {
@@ -174,57 +165,48 @@ header.intro {
     color: #000;
 }
 
-/* ------------------------- */
-/*        MÓVILES (<600px)   */
-/* ------------------------- */
+/* ------------------- */
+/*     SOLO MÓVILES    */
+/* ------------------- */
 @media (max-width: 600px) {
 
-    /* wakzome en vertical */
-    #dynamic-text {
-        font-size: 18vw;
-        line-height: 1.1;
-    }
-    #dynamic-text br {
-        display: block;
-    }
+    header.intro { padding: 0; }
 
-    /* reemplazamos el texto al entrar */
-    #dynamic-text::before {
-        content: "w\0a\0k\0z\0o\0m\0e";
-        white-space: pre-line;
+    /* palabra wakzome vertical */
+    #dynamic-text {
+        writing-mode: vertical-rl;
+        text-orientation: upright;
+        font-size: 28vw;
+        line-height: 1;
     }
 
     /* puntos verticales debajo */
     .loading-dots {
         flex-direction: column;
-        gap: 12px;
-        margin-top: 20px;
+        gap: 18px;
     }
 
     .loading-dots span {
-        width: 26px;
-        height: 26px;
+        width: 32px;
+        height: 32px;
+        animation-duration: 4s;
     }
 
-    /* cuadros uno debajo del otro, más grandes */
+    /* CUADROS → EN COLUMNA */
     .boxes-container {
         flex-direction: column;
         gap: 25px;
+        width: 100%;
         align-items: center;
     }
 
     .box {
-        width: 90%;
+        width: 85%;
         height: 160px;
-        font-size: 1.6rem;
+        font-size: 1.8rem;
     }
 
-    #small-wakzome {
-        font-size: 1.5rem;
-        letter-spacing: 8px;
-    }
-
-    #horarios-text { font-size: 2.4rem; }
+    #horarios-text { font-size: 3.2rem; }
 }
 </style>
 </head>
@@ -236,17 +218,14 @@ header.intro {
 <header class="intro">
     <div id="intro-text">
         <h1 id="dynamic-text">wakzome</h1>
-        <div class="loading-dots">
-            <span></span><span></span><span></span>
-        </div>
+        <div class="loading-dots"><span></span><span></span><span></span></div>
     </div>
 </header>
 
 <div class="boxes-wrapper" id="boxes-wrapper">
+
     <div id="horarios-wrapper">
-        <div id="horarios-dots">
-            <span></span><span></span><span></span>
-        </div>
+        <div id="horarios-dots"><span></span><span></span><span></span></div>
         <h2 id="horarios-text">horários</h2>
     </div>
 
@@ -255,6 +234,7 @@ header.intro {
         <div class="box">MEZKA PORTO SANTO</div>
         <div class="box">PARFOIS</div>
     </div>
+
 </div>
 
 <script>
@@ -282,7 +262,6 @@ setTimeout(() => {
     }, 600);
 }, 3000);
 </script>
-
 
 
 

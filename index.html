@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/43.html -->
+<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/46.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <title>Wakzome</title>
@@ -24,10 +24,7 @@ body, h1, h2, .box, #small-wakzome, #dynamic-text {
     overflow: hidden;
 }
 
-html, body {
-    width: 100%;
-    height: 100%;
-}
+html, body { width: 100%; height: 100%; }
 
 header.intro {
     height: 100vh;
@@ -57,21 +54,21 @@ header.intro {
 }
 
 .loading-dots span {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     background-color: #b0b0b0;
     border-radius: 50%;
     opacity: 0;
-    animation: blink 1.4s infinite both;
+    animation: blink 3.4s infinite both;
 }
 
 .loading-dots span:nth-child(1) { animation-delay: 0s; }
-.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+.loading-dots span:nth-child(2) { animation-delay: 0.5s; }
+.loading-dots span:nth-child(3) { animation-delay: 1s; }
 
 @keyframes blink {
-    0%, 80%, 100% { opacity: 0; }
-    40% { opacity: 1; }
+    0%, 92%, 100% { opacity: 0; }
+    50% { opacity: 1; }
 }
 
 #small-wakzome {
@@ -88,7 +85,6 @@ header.intro {
     text-transform: lowercase;
 }
 
-/* Contenedor que agrupa los cuadros y la palabra horários */
 .boxes-wrapper {
     position: absolute;
     top: 50%;
@@ -99,56 +95,58 @@ header.intro {
     text-align: center;
 }
 
-.show-wrapper {
-    opacity: 1;
-}
+.show-wrapper { opacity: 1; }
 
-/* Puntos sobre a palavra */
-#horarios-wrapper {
-    position: relative;
-    display: inline-block;
-    margin-bottom: 20px;
-}
+#horarios-wrapper { position: relative; display: inline-block; margin-bottom: 20px; }
 
+/* triángulo invertido */
 #horarios-dots {
-    display: flex;
-    justify-content: center;
-    gap: 5px;
-    margin-bottom: 5px;
+    position: relative;
+    width: 55px;
+    height: 42px;
+    margin: 0 auto 12px auto;
 }
 
 #horarios-dots span {
-    width: 12px;
-    height: 12px;
+    position: absolute;
+    width: 18px;
+    height: 18px;
     background-color: #b0b0b0;
     border-radius: 50%;
     opacity: 0;
-    animation: blink 1.4s infinite both;
+    animation: blink 3.4s infinite both;
 }
 
-#horarios-dots span:nth-child(1) { animation-delay: 0s; }
-#horarios-dots span:nth-child(2) { animation-delay: 0.2s; }
-#horarios-dots span:nth-child(3) { animation-delay: 0.4s; }
+#horarios-dots span:nth-child(1) {
+    top: 0; left: 0;
+    animation-delay: 0s;
+}
+#horarios-dots span:nth-child(2) {
+    top: 0; right: 0;
+    animation-delay: 0.5s;
+}
+#horarios-dots span:nth-child(3) {
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    animation-delay: 1s;
+}
 
-/* Palavra horários */
 #horarios-text {
     font-size: 3rem;
     text-transform: lowercase;
     margin: 0;
     color: #222;
-    opacity: 0;               /* Inicialmente invisible */
-    transition: opacity 1s ease; /* Difuminación */
+    opacity: 0;
+    transition: opacity 1s ease;
 }
-#horarios-text.show {
-    opacity: 1;               /* Se muestra con difuminación */
-}
+#horarios-text.show { opacity: 1; }
 
-/* Contenedor de cuadros */
+/* Layout escritorio */
 .boxes-container {
     display: flex;
     justify-content: center;
     gap: 50px;
-    flex-wrap: nowrap; /* nunca rompe en escritorio */
+    flex-wrap: nowrap;
 }
 
 .box {
@@ -160,7 +158,6 @@ header.intro {
     justify-content: center;
     align-items: center;
     font-size: 1.7rem;
-    font-weight: 100;
     color: #222;
     cursor: pointer;
     box-shadow: 0px 4px 25px rgba(0,0,0,0.10);
@@ -169,10 +166,7 @@ header.intro {
     transition: all 0.6s ease;
 }
 
-.box.show {
-    opacity: 1;
-    transform: translateY(0);
-}
+.box.show { opacity: 1; transform: translateY(0); }
 
 .box:hover {
     background: #dcdcdc;
@@ -180,20 +174,61 @@ header.intro {
     color: #000;
 }
 
-@media (max-width: 900px) {
-    .boxes-container { flex-wrap: wrap; gap: 25px; justify-content: center; }
-    .box { width: 260px; height: 150px; font-size: 1.4rem; }
-}
-
+/* ------------------------- */
+/*        MÓVILES (<600px)   */
+/* ------------------------- */
 @media (max-width: 600px) {
-    .boxes-container { flex-direction: column; gap: 20px; }
-    .box { width: 80%; height: 130px; font-size: 1.3rem; }
-    #dynamic-text { font-size: 15vw; }
-    #small-wakzome { font-size: 1.2rem; }
-    #horarios-text { font-size: 2.5rem; }
+
+    /* wakzome en vertical */
+    #dynamic-text {
+        font-size: 18vw;
+        line-height: 1.1;
+    }
+    #dynamic-text br {
+        display: block;
+    }
+
+    /* reemplazamos el texto al entrar */
+    #dynamic-text::before {
+        content: "w\0a\0k\0z\0o\0m\0e";
+        white-space: pre-line;
+    }
+
+    /* puntos verticales debajo */
+    .loading-dots {
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .loading-dots span {
+        width: 26px;
+        height: 26px;
+    }
+
+    /* cuadros uno debajo del otro, más grandes */
+    .boxes-container {
+        flex-direction: column;
+        gap: 25px;
+        align-items: center;
+    }
+
+    .box {
+        width: 90%;
+        height: 160px;
+        font-size: 1.6rem;
+    }
+
+    #small-wakzome {
+        font-size: 1.5rem;
+        letter-spacing: 8px;
+    }
+
+    #horarios-text { font-size: 2.4rem; }
 }
 </style>
 </head>
+
 <body>
 
 <div id="small-wakzome">wakzome</div>
@@ -214,6 +249,7 @@ header.intro {
         </div>
         <h2 id="horarios-text">horários</h2>
     </div>
+
     <div id="info-boxes" class="boxes-container">
         <div class="box">MEZKA FUNCHAL</div>
         <div class="box">MEZKA PORTO SANTO</div>
@@ -226,32 +262,27 @@ const introText = document.getElementById('intro-text');
 const boxesWrapper = document.getElementById("boxes-wrapper");
 const smallWakzome = document.getElementById("small-wakzome");
 const boxes = document.querySelectorAll(".box");
-const horariosText = document.getElementById("horarios-text"); // nueva referencia
+const horariosText = document.getElementById("horarios-text");
 
-// Después de 3 segundos
 setTimeout(() => {
-    introText.style.opacity = 0; // desaparece wakzome central
+    introText.style.opacity = 0;
 
     setTimeout(() => {
         boxesWrapper.classList.add("show-wrapper");
         smallWakzome.style.opacity = 1;
 
-        // Animación de los cuadros uno por uno
         boxes.forEach((box, index) => {
             setTimeout(() => {
                 box.classList.add("show");
-
-                // Cuando el último cuadro aparezca, mostramos "horários"
                 if (index === boxes.length - 1) {
-                    setTimeout(() => {
-                        horariosText.classList.add("show");
-                    }, 300); // pequeño delay para efecto más suave
+                    setTimeout(() => horariosText.classList.add("show"), 300);
                 }
             }, index * 300);
         });
     }, 600);
 }, 3000);
 </script>
+
 
 
 

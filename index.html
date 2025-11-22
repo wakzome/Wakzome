@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/56.html -->
+<!-- saved from url=(0065)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/index.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <title>Wakzome</title>
@@ -43,7 +43,7 @@ header.intro {
 
 #dynamic-text {
     text-transform: lowercase;
-    font-size: clamp(3rem, 8vw, 6rem); /* escalable con límites */
+    font-size: clamp(4rem, 8vw, 6rem); /* tamaño grande y proporcional */
 }
 
 .loading-dots {
@@ -105,8 +105,8 @@ header.intro {
 
 #horarios-dots {
     position: relative;
-    width: clamp(30px, 5vw, 55px);
-    height: clamp(20px, 4vh, 42px);
+    width: clamp(35px, 5vw, 50px);
+    height: clamp(25px, 4vh, 40px);
     margin: 0 auto 1vh auto;
 }
 
@@ -138,25 +138,25 @@ header.intro {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4vh;
+    gap: 3.5vh;
     width: 90%;
-    max-width: 800px; /* aumenta para móviles grandes */
+    max-width: 550px; /* tamaño moderado */
 }
 
 .box {
     width: 100%;
-    aspect-ratio: 16/9; /* mantiene proporción */
+    aspect-ratio: 16/9;
     background: #ffffff;
-    border-radius: 1.5vw;
+    border-radius: 1vw;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: clamp(2rem, 4vw, 4rem); /* más grande en móviles */
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem); /* ligeramente más grande en móviles */
     color: #111;
     cursor: pointer;
-    box-shadow: 0px 0.4vw 2vw rgba(0,0,0,0.10);
+    box-shadow: 0px 0.3vw 1.5vw rgba(0,0,0,0.10);
     opacity: 0;
-    transform: translateY(5vh);
+    transform: translateY(4vh);
     transition: all 0.6s ease;
 }
 
@@ -166,12 +166,6 @@ header.intro {
     background: #dcdcdc;
     transform: scale(1.05);
     color: #000;
-}
-
-/* Opcional: si quieres un ajuste fino para pantallas muy pequeñas */
-@media (max-width: 400px) {
-    .boxes-container { max-width: 95%; gap: 3vh; }
-    .box { font-size: clamp(2rem, 5vw, 4rem); }
 }
 </style>
 </head>

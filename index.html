@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/51.html -->
+<!-- saved from url=(0062)file:///C:/Users/Wakzo/OneDrive/GOOGLE%20DRIVE/Wakzome/52.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <title>Wakzome</title>
+
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/ICON.png">
 <link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin="anonymous">
+
 <style>
 @font-face {
     font-family: 'MontserratLight';
@@ -13,6 +15,7 @@
     font-style: normal;
     font-display: block;
 }
+
 body, h1, h2, .box, #small-wakzome, #dynamic-text {
     font-family: 'MontserratLight', sans-serif !important;
     font-weight: 150;
@@ -20,10 +23,9 @@ body, h1, h2, .box, #small-wakzome, #dynamic-text {
     padding: 0;
     overflow: hidden;
 }
-html, body {
-    width: 100%;
-    height: 100%;
-}
+
+html, body { width: 100%; height: 100%; }
+
 header.intro {
     height: 100vh;
     display: flex;
@@ -32,21 +34,25 @@ header.intro {
     background-color: #fff;
     position: relative;
 }
+
 #intro-text {
     text-align: center;
     color: #b0b0b0;
     transition: opacity 1s ease;
 }
+
 #dynamic-text {
     text-transform: lowercase;
     font-size: 10vw;
 }
+
 .loading-dots {
     display: flex;
     gap: 5px;
     justify-content: center;
     margin-top: 10px;
 }
+
 .loading-dots span {
     width: 22px;
     height: 22px;
@@ -55,13 +61,16 @@ header.intro {
     opacity: 0;
     animation: blink 3.4s infinite both;
 }
+
 .loading-dots span:nth-child(1) { animation-delay: 0s; }
 .loading-dots span:nth-child(2) { animation-delay: 0.5s; }
 .loading-dots span:nth-child(3) { animation-delay: 1s; }
+
 @keyframes blink {
     0%, 92%, 100% { opacity: 0; }
     50% { opacity: 1; }
 }
+
 #small-wakzome {
     position: fixed;
     top: 20px;
@@ -75,6 +84,7 @@ header.intro {
     pointer-events: none;
     text-transform: lowercase;
 }
+
 .boxes-wrapper {
     position: absolute;
     top: 50%;
@@ -84,18 +94,19 @@ header.intro {
     transition: opacity 0.6s ease;
     text-align: center;
 }
+
 .show-wrapper { opacity: 1; }
-#horarios-wrapper {
-    position: relative;
-    display: inline-block;
-    margin-bottom: 20px;
-}
+
+#horarios-wrapper { position: relative; display: inline-block; margin-bottom: 20px; }
+
+/* triángulo invertido más grande y más lento */
 #horarios-dots {
     position: relative;
     width: 55px;
     height: 42px;
     margin: 0 auto 12px auto;
 }
+
 #horarios-dots span {
     position: absolute;
     width: 18px;
@@ -105,9 +116,24 @@ header.intro {
     opacity: 0;
     animation: blink 3.4s infinite both;
 }
-#horarios-dots span:nth-child(1) { top: 0; left: 0; animation-delay: 0s; }
-#horarios-dots span:nth-child(2) { top: 0; right: 0; animation-delay: 0.5s; }
-#horarios-dots span:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%); animation-delay: 1s; }
+
+#horarios-dots span:nth-child(1) {
+    top: 0;
+    left: 0;
+    animation-delay: 0s;
+}
+#horarios-dots span:nth-child(2) {
+    top: 0;
+    right: 0;
+    animation-delay: 0.5s;
+}
+#horarios-dots span:nth-child(3) {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    animation-delay: 1s;
+}
+
 #horarios-text {
     font-size: 3rem;
     text-transform: lowercase;
@@ -120,19 +146,20 @@ header.intro {
 
 .boxes-container {
     display: flex;
-    justify-content: center;
-    gap: 50px;
-    flex-wrap: nowrap;
+    flex-direction: column; /* vertical */
+    align-items: center;    /* centra horizontalmente */
+    gap: 40px;              /* espacio entre cuadros */
 }
+
 .box {
-    width: 320px;
-    height: 180px;
+    width: 400px;   /* más grande */
+    height: 220px;  /* más grande */
     background: #ffffff;
     border-radius: 15px;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.7rem;
+    font-size: 2rem; /* más grande */
     color: #222;
     cursor: pointer;
     box-shadow: 0px 4px 25px rgba(0,0,0,0.10);
@@ -140,59 +167,29 @@ header.intro {
     transform: translateY(50px);
     transition: all 0.6s ease;
 }
-.box.show {
-    opacity: 1;
-    transform: translateY(0);
-}
+
+.box.show { opacity: 1; transform: translateY(0); }
+
 .box:hover {
     background: #dcdcdc;
     transform: scale(1.13);
     color: #000;
 }
 
-/* Tablets */
 @media (max-width: 900px) {
-    .boxes-container {
-        flex-wrap: wrap;
-        gap: 25px;
-        justify-content: center;
-    }
-    .box {
-        width: 260px;
-        height: 150px;
-        font-size: 1.4rem;
-    }
+    .box { width: 300px; height: 180px; font-size: 1.6rem; }
 }
 
-/* === SOLO MÓVILES - LOS CAMBIOS QUE PEDISTE === */
 @media (max-width: 600px) {
-    .boxes-container {
-        flex-direction: column;
-        align-items: center;
-        gap: 32px;              /* más espacio entre cuadros */
-    }
-    
-    .box {
-        width: 88vw;            /* casi todo el ancho de pantalla */
-        max-width: 380px;       /* límite razonable para no ser gigantes en phablets */
-        height: 180px;          /* más altos (antes eran 130px) */
-        font-size: 1.75rem;     /* texto más grande y legible */
-        padding: 20px;          /* un poco más de aire interior */
-        border-radius: 20px;    /* esquinas un poco más redondeadas (opcional, queda más moderno) */
-    }
-    
-    /* Animación de hover → en móviles se convierte en active (presionado) */
-    .box:active {
-        background: #dcdcdc;
-        transform: scale(0.97);
-    }
-
+    .boxes-container { flex-direction: column; gap: 20px; }
+    .box { width: 90%; height: 160px; font-size: 1.5rem; }
     #dynamic-text { font-size: 15vw; }
     #small-wakzome { font-size: 1.2rem; }
-    #horarios-text { font-size: 2.8rem; }   /* un pelín más grande también en móvil */
+    #horarios-text { font-size: 2.5rem; }
 }
 </style>
 </head>
+
 <body>
 
 <div id="small-wakzome">wakzome</div>
@@ -230,9 +227,11 @@ const horariosText = document.getElementById("horarios-text");
 
 setTimeout(() => {
     introText.style.opacity = 0;
+
     setTimeout(() => {
         boxesWrapper.classList.add("show-wrapper");
         smallWakzome.style.opacity = 1;
+
         boxes.forEach((box, index) => {
             setTimeout(() => {
                 box.classList.add("show");
@@ -244,6 +243,7 @@ setTimeout(() => {
     }, 600);
 }, 3000);
 </script>
+
 
 
 </body></html>

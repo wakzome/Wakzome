@@ -1,219 +1,113 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Wakzome</title>
-
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/ICON.png">
-<link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin="anonymous">
+<link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
 
 <style>
+/* =====================
+   Tipografía y Reset
+===================== */
 @font-face {
     font-family: 'MontserratLight';
     src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf') format('truetype');
     font-weight: 100;
     font-style: normal;
-    font-display: block;
+    font-display: swap;
 }
 
-body, h1, h2, .box, #small-wakzome, #dynamic-text {
-    font-family: 'MontserratLight', sans-serif !important;
-    font-weight: 150;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-}
-
-html, body { width: 100%; height: 100%; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; font-family:'MontserratLight', sans-serif; overflow:hidden; }
 
 header.intro {
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: #fff;
-    position: relative;
+    height:100vh; display:flex; justify-content:center; align-items:center;
+    background:#fff; position:relative; flex-direction:column;
 }
 
-#intro-text {
-    text-align: center;
-    color: #b0b0b0;
-    transition: opacity 1s ease;
-}
+#intro-text { text-align:center; color:#555; transition:opacity 1s ease; }
+#dynamic-text { font-size:10vw; text-transform:lowercase; }
 
-#dynamic-text {
-    text-transform: lowercase;
-    font-size: 10vw;
-}
-
-.loading-dots {
-    display: flex;
-    gap: 5px;
-    justify-content: center;
-    margin-top: 10px;
-}
-
+/* ====== Loading Dots Más Lentos ====== */
+.loading-dots { display:flex; gap:10px; justify-content:center; margin-top:20px; }
 .loading-dots span {
-    width: 22px;
-    height: 22px;
-    background-color: #b0b0b0;
-    border-radius: 50%;
-    opacity: 0;
-    animation: blink 3.4s infinite both;
+    width:20px; height:20px; background:#555; border-radius:50%;
+    opacity:0; animation:blink 2s infinite;
 }
+.loading-dots span:nth-child(1){animation-delay:0s;}
+.loading-dots span:nth-child(2){animation-delay:0.5s;}
+.loading-dots span:nth-child(3){animation-delay:1s;}
+@keyframes blink { 0%, 80%, 100% {opacity:0; transform:scale(0.8);} 40% {opacity:1; transform:scale(1.2);} }
 
-.loading-dots span:nth-child(1) { animation-delay: 0s; }
-.loading-dots span:nth-child(2) { animation-delay: 0.5s; }
-.loading-dots span:nth-child(3) { animation-delay: 1s; }
+/* ====== Logo Fijo ====== */
+#small-wakzome { position:fixed; top:20px; left:25px; font-size:1.2rem; letter-spacing:15px;
+color:#000; opacity:0; transition:opacity 0.6s ease; z-index:10; pointer-events:none; text-transform:lowercase; }
 
-@keyframes blink {
-    0%, 92%, 100% { opacity: 0; }
-    50% { opacity: 1; }
-}
+/* ====== Boxes Wrapper ====== */
+.boxes-wrapper { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity 0.8s ease; text-align:center; }
+.boxes-wrapper.show { opacity:1; }
 
-#small-wakzome {
-    position: fixed;
-    top: 20px;
-    left: 25px;
-    font-size: 3rem;
-    letter-spacing: 15px;
-    color: #000;
-    opacity: 0;
-    transition: opacity 0.5s ease;
-    z-index: 10;
-    pointer-events: none;
-    text-transform: lowercase;
-}
+/* ====== Horarios con Triángulo de Puntos ====== */
+#horarios-wrapper { margin-bottom:30px; }
+#horarios-dots { position:relative; width:55px; height:42px; margin:0 auto 12px auto; }
+#horarios-dots span { position:absolute; width:18px; height:18px; background:#555; border-radius:50%; opacity:0; animation:blink 2s infinite; }
+#horarios-dots span:nth-child(1){ top:0; left:0; animation-delay:0s; }
+#horarios-dots span:nth-child(2){ top:0; right:0; animation-delay:0.5s; }
+#horarios-dots span:nth-child(3){ bottom:0; left:50%; transform:translateX(-50%); animation-delay:1s; }
 
-.boxes-wrapper {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    opacity: 0;
-    transition: opacity 0.6s ease;
-    text-align: center;
-}
+#horarios-text { font-size:3rem; text-transform:lowercase; color:#111; opacity:0; transition:opacity 1s ease; }
+#horarios-text.show { opacity:1; }
 
-.show-wrapper { opacity: 1; }
-
-#horarios-wrapper { position: relative; display: inline-block; margin-bottom: 20px; }
-
-/* triángulo invertido más grande y más lento */
-#horarios-dots {
-    position: relative;
-    width: 55px;
-    height: 42px;
-    margin: 0 auto 12px auto;
-}
-
-#horarios-dots span {
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    background-color: #b0b0b0;
-    border-radius: 50%;
-    opacity: 0;
-    animation: blink 3.4s infinite both;
-}
-
-#horarios-dots span:nth-child(1) {
-    top: 0;
-    left: 0;
-    animation-delay: 0s;
-}
-#horarios-dots span:nth-child(2) {
-    top: 0;
-    right: 0;
-    animation-delay: 0.5s;
-}
-#horarios-dots span:nth-child(3) {
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    animation-delay: 1s;
-}
-
-#horarios-text {
-    font-size: 3rem;
-    text-transform: lowercase;
-    margin: 0;
-    color: #111;
-    opacity: 0;
-    transition: opacity 1s ease;
-}
-#horarios-text.show { opacity: 1; }
-
-.boxes-container {
-    display: flex;
-    flex-direction: column; /* vertical */
-    align-items: center;    /* centra horizontalmente */
-    gap: 40px;              /* espacio entre cuadros */
-}
-
+/* ====== Boxes Animadas y Letras WOW ====== */
+.boxes-container { display:flex; flex-direction:column; align-items:center; gap:40px; }
 .box {
-    width: 400px;   /* más grande */
-    height: 220px;  /* más grande */
-    background: #ffffff;
-    border-radius: 15px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 2rem; /* más grande */
-    color: #111;
-    cursor: pointer;
-    box-shadow: 0px 4px 25px rgba(0,0,0,0.10);
-    opacity: 0;
-    transform: translateY(50px);
-    transition: all 0.6s ease;
+    width:400px; height:220px; background:#fff; border-radius:15px;
+    display:flex; justify-content:center; align-items:center;
+    font-family:'MontserratLight', sans-serif; /* MISMA FUENTE QUE WAKZOME */
+    font-size:2.5rem;
+    color:#111; cursor:pointer;
+    box-shadow:0 4px 25px rgba(0,0,0,0.1);
+    opacity:0; transform:translateY(50px) scale(0.95);
+    transition: all 0.6s cubic-bezier(0.4,0,0.2,1), color 0.3s;
+    letter-spacing:2px;
+    text-transform:lowercase; /* Igual que wakzome */
 }
+.box.show { opacity:1; transform:translateY(0) scale(1); color:#222; }
+.box:hover { background:#f0f0f0; transform:scale(1.08); color:#000; }
 
-.box.show { opacity: 1; transform: translateY(0); }
-
-.box:hover {
-    background: #dcdcdc;
-    transform: scale(1.13);
-    color: #000;
-}
-
-@media (max-width: 900px) {
-    .box { width: 300px; height: 180px; font-size: 2.1rem; }
-}
-
-@media (max-width: 600px) {
-    .boxes-container { flex-direction: column; gap: 20px; }
-    .box { width: 90%; height: 160px; font-size: 2.1rem; }
-    #dynamic-text { font-size: 15vw; }
-    #small-wakzome { font-size: 1.2rem; }
-    #horarios-text { font-size: 2.5rem; }
+/* ====== Responsive ====== */
+@media(max-width:900px){ .box{width:300px; height:180px; font-size:2.1rem;} }
+@media(max-width:600px){
+    .boxes-container{gap:20px;}
+    .box{width:90%; height:160px; font-size:2rem;}
+    #dynamic-text{font-size:15vw;}
+    #small-wakzome{font-size:1rem;}
+    #horarios-text{font-size:2.5rem;}
 }
 </style>
 </head>
 
 <body>
-
 <div id="small-wakzome">wakzome</div>
 
 <header class="intro">
     <div id="intro-text">
         <h1 id="dynamic-text">wakzome</h1>
-        <div class="loading-dots">
-            <span></span><span></span><span></span>
-        </div>
+        <div class="loading-dots"><span></span><span></span><span></span></div>
     </div>
 </header>
 
 <div class="boxes-wrapper" id="boxes-wrapper">
     <div id="horarios-wrapper">
-        <div id="horarios-dots">
-            <span></span><span></span><span></span>
-        </div>
+        <div id="horarios-dots"><span></span><span></span><span></span></div>
         <h2 id="horarios-text">horários</h2>
     </div>
 
     <div id="info-boxes" class="boxes-container">
-        <div class="box">FUNCHAL</div>
-        <div class="box">PORTO SANTO</div>
-        <div class="box">PARFOIS</div>
+        <div class="box">funchal</div>
+        <div class="box">porto santo</div>
+        <div class="box">parfois</div>
     </div>
 </div>
 
@@ -224,24 +118,21 @@ const smallWakzome = document.getElementById("small-wakzome");
 const boxes = document.querySelectorAll(".box");
 const horariosText = document.getElementById("horarios-text");
 
-setTimeout(() => {
-    introText.style.opacity = 0;
+function animateBoxesSequentially(boxes, delay=250){
+    boxes.forEach((box,i)=>{ setTimeout(()=>box.classList.add("show"), i*delay); });
+}
 
-    setTimeout(() => {
-        boxesWrapper.classList.add("show-wrapper");
-        smallWakzome.style.opacity = 1;
+function startAnimation(){
+    introText.style.opacity=0;
+    setTimeout(()=>{
+        boxesWrapper.classList.add("show");
+        smallWakzome.style.opacity=1;
+        animateBoxesSequentially(boxes);
+        setTimeout(()=>horariosText.classList.add("show"), boxes.length*250+300);
+    },1000);
+}
 
-        boxes.forEach((box, index) => {
-            setTimeout(() => {
-                box.classList.add("show");
-                if (index === boxes.length - 1) {
-                    setTimeout(() => horariosText.classList.add("show"), 300);
-                }
-            }, index * 300);
-        });
-    }, 600);
-}, 3000);
+window.addEventListener('load', ()=>{ setTimeout(startAnimation,1500); });
 </script>
-
 </body>
 </html>

@@ -1,0 +1,667 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<!-- ===== INTRO ===== -->
+<style>
+@font-face {
+    font-family: 'MontserratLight';
+    src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf') format('truetype');
+    font-weight: 100;
+    font-style: normal;
+    font-display: block;
+}
+
+/* ===== Pantalla completa ===== */
+#intro-screen {
+  position: fixed;
+  top:0; left:0;
+  width:100vw; height:100vh;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+
+  font-family:'MontserratLight', sans-serif;
+  transition: opacity 2s ease;
+}
+
+/* ===== Texto principal ===== */
+#dynamic-text {
+  font-size:10vw;
+  text-transform:lowercase;
+  color:#555;
+  text-align:center;
+}
+
+/* ===== Puntos animados idénticos ===== */
+.loading-dots {
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    margin-top:20px;
+}
+.loading-dots span {
+    width:20px; height:20px;
+    background:#555;
+    border-radius:50%;
+    opacity:0;
+    animation:blink 7s infinite;
+}
+.loading-dots span:nth-child(1){animation-delay:0s;}
+.loading-dots span:nth-child(2){animation-delay:0.5s;}
+.loading-dots span:nth-child(3){animation-delay:1s;}
+
+@keyframes blink {
+    0%, 80%, 100% { opacity:0; transform:scale(0.8); }
+    40% { opacity:1; transform:scale(1.2); }
+}
+
+/* ===== Responsive ===== */
+@media(max-width:600px){
+    #dynamic-text{ font-size:15vw; }
+}
+</style>
+<!-- ===== INTRO ===== -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horarios</title>
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/ICON.png">
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
+<style>
+/* --- Fuentes y reset --- */
+@font-face {
+  font-family: 'MontserratLight';
+  src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-Light.ttf.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+html, body {
+  margin:0;
+  padding:0;
+  height:100%;
+  font-family:'MontserratLight', sans-serif;
+  background:#fff;
+  color:#000;
+  overflow:hidden;
+}
+body {
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-start;
+  align-items:center;
+  min-height:100vh;
+}
+
+/* ROTATE MESSAGE */
+#rotate-message {
+  display:none;
+  text-align:center;
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:2rem;
+  font-weight:bold;
+  z-index:10;
+}
+
+/* LOGIN SCREEN */
+#login-screen {
+  text-align:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  height:100%;
+  width:100%;
+  position:absolute;
+  top:0;
+  left:0;
+  background:#fff;
+  z-index:5;
+}
+#login-screen .logo-text { font-size:4rem; font-weight:bold; margin-bottom:-20px; text-transform:lowercase; }
+#login-screen #current-time { font-size:2rem; font-weight:bold; margin-top:10px; }
+#login-screen #current-date { font-size:1.5rem; font-weight:bold; margin-top:5px; }
+#login-screen .loading-dots { display:flex; gap:10px; justify-content:center; margin-top:10px; }
+#login-screen .loading-dots span { width:20px; height:20px; background:#555; border-radius:50%; opacity:0; animation: blink 7s infinite; }
+#login-screen .loading-dots span:nth-child(1){animation-delay:0s;}
+#login-screen .loading-dots span:nth-child(2){animation-delay:0.5s;}
+#login-screen .loading-dots span:nth-child(3){animation-delay:1s;}
+
+#key-input-container { margin-top:10px; display:flex; flex-direction:column; align-items:center; }
+#key-input { font-size:1.2rem; padding:10px 15px; width:200px; text-align:center; }
+#key-submit { margin-top:15px; padding:8px 15px; font-size:1rem; cursor:pointer; }
+
+/* MAIN HEADER */
+#main-header { display:flex; flex-direction:column; align-items:center; margin-bottom:10px; opacity:0; transition: opacity 1s ease; }
+#main-header.show { opacity:1; }
+#main-header .logo-text { font-size:3rem; text-transform:lowercase; margin-bottom:0px; line-height:1;}
+#main-header #current-time-main { font-size:1.2rem; font-weight:bold; }
+#main-header #current-date-main { font-size:1rem; font-weight:bold; }
+#main-header .loading-dots { display:flex; gap:10px; justify-content:center; margin-top:5px; }
+
+/* TABLES */
+#container-tables { display:flex; flex-direction:column; flex:1; width:100%; justify-content:flex-end; padding-bottom:10px; overflow:auto; -webkit-overflow-scrolling: touch; }
+
+#summary-wrap { 
+  display:none; 
+  width:100%; 
+  max-height:50%; 
+  overflow:auto; 
+  margin-bottom:10px; 
+}
+
+@media (min-width: 769px) {
+  #summary-wrap {
+      display:flex;
+      justify-content:center;
+  }
+  #summary-wrap table {
+      margin:0 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  #summary-wrap {
+      display:none !important;
+  }
+}
+
+#table-container { display:flex; justify-content:center; width:100%; max-height:100%; overflow:auto; -webkit-overflow-scrolling: touch; }
+.table-wrap { overflow-x:auto; display:flex; justify-content:center; transition: opacity 0.5s ease; }
+table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
+th, td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.9rem; font-weight:bold; color:#000; }
+th { background:#e0e0e0; text-transform:uppercase; font-size:1rem; position:relative; top:0; z-index:2; }
+td.name { white-space:nowrap; text-align:center; border-radius:15px 0 0 15px; }
+td.multi-line { white-space:pre-line; }
+td.bold-row { font-weight:bold; }
+tr:hover td { background:#eaeaea; }
+td, th { border-radius:10px; margin:2px; }
+.today-col { background: #D7D7D7 !important; }
+.today-col:hover { background: #ffffff !important; }
+#summary-table { margin-bottom:8px; border-collapse:separate; border-spacing:0; }
+#summary-table th, #summary-table td { border:1px solid #e6e6e6; padding:1px 2px; font-size:0.7rem; min-width:20px; height:10px; text-align:center; vertical-align:middle; }
+#summary-table td.active-now::after { content:'●'; color:green; display:inline-block; margin-left:2px; font-size:0.6rem; vertical-align:middle; }
+.blinking-now { animation: blinkCell 2s infinite !important; background-color: #e0e0e0 !important; }
+@keyframes blinkCell { 0%,100%{background-color:#f0f0f0;} 50%{background-color:#d0d0d0;} }
+
+@media (max-width: 1024px) {
+  #summary-wrap {
+      display: none !important;
+  }
+}
+
+#page-name-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1); font-size:3rem; font-weight:bold; opacity:0; pointer-events:none; transition: opacity 0.5s ease, transform 0.5s ease; color:#000; font-family:'MontserratLight', sans-serif; z-index:4; }
+</style>
+</head>
+<body>
+<!-- ===== INTRO ===== -->
+<div id="intro-screen">
+  <div id="intro-text">
+      <h1 id="dynamic-text">wakzome</h1>
+
+      <div class="loading-dots">
+          <span></span><span></span><span></span>
+      </div>
+  </div>
+</div>
+
+<script>
+window.addEventListener("load", () => {
+  // Esperar 5.5 segundos para mantener la duración de la intro
+  setTimeout(() => {
+    const intro = document.getElementById("intro-screen");
+    // Inicia el desvanecimiento
+    intro.style.opacity = "0";
+    // Cuando termine la transición, eliminar el nodo del DOM
+    intro.addEventListener('transitionend', () => intro.remove());
+  }, 3500);
+});
+</script>
+<!-- ===== INTRO ===== -->
+<div id="rotate-message">Por favor, rode o telemóvel para o modo horizontal</div>
+
+<div id="login-screen">
+  <div class="logo-text">wakzome</div>
+  <div id="current-time"></div>
+  <div id="current-date"></div>
+  <div class="loading-dots"><span></span><span></span><span></span></div>
+  <div id="key-input-container">
+    <input type="password" id="key-input" placeholder="Introduza a senha">
+    <button id="key-submit">Entrar</button>
+  </div>
+</div>
+
+<div id="main-header">
+  <div class="logo-text">wakzome</div>
+  <div id="current-time-main"></div>
+  <div id="current-date-main"></div>
+  <div class="loading-dots"><span></span><span></span><span></span></div>
+</div>
+
+<div id="container-tables">
+  <div id="summary-wrap" class="table-wrap"></div>
+  <div class="table-wrap" id="table-container"><div>A carregar...</div></div>
+</div>
+
+<div id="page-name-popup"></div>
+
+<script>
+(function(){
+  // Mapeo clave => tienda
+  const accessKeys = {
+    "135": "mezka funchal",
+    "136": "parfois madeira shopping",
+    "137": "parfois arcadas sao francisco"
+  };
+
+  let isLoggedIn = false;
+  let currentStore = null;
+
+  // Manejar rotación móvil
+  function checkOrientation() {
+    const rotateMsg = document.getElementById('rotate-message');
+    const login = document.getElementById('login-screen');
+    const mainHeader = document.getElementById('main-header');
+    const containerTables = document.getElementById('container-tables');
+
+    if(window.innerHeight > window.innerWidth && window.innerWidth <= 768) {
+      rotateMsg.style.display = 'block';
+      login.style.display = 'none';
+      mainHeader.style.display = 'none';
+      containerTables.style.display = 'none';
+    } else {
+      rotateMsg.style.display = 'none';
+      if(isLoggedIn) {
+        mainHeader.style.display = 'flex';
+        containerTables.style.display = 'flex';
+        login.style.display = 'none';
+      } else {
+        login.style.display = 'flex';
+        mainHeader.style.display = 'none';
+        containerTables.style.display = 'none';
+      }
+    }
+  }
+
+  window.addEventListener('resize', checkOrientation);
+  window.addEventListener('orientationchange', checkOrientation);
+  checkOrientation();
+
+  // Actualizar hora y fecha
+  function updateTimeDateLogin(){
+    const now = new Date();
+    document.getElementById('current-time').textContent = now.toLocaleTimeString('pt-PT',{hour12:false});
+    document.getElementById('current-date').textContent = now.toLocaleDateString('pt-PT',{weekday:'long',year:'numeric',month:'numeric',day:'numeric'});
+  }
+  setInterval(updateTimeDateLogin,1000);
+  updateTimeDateLogin();
+
+  function updateTimeDateMain(){
+    const now = new Date();
+    document.getElementById('current-time-main').textContent = now.toLocaleTimeString('pt-PT',{hour12:false});
+    document.getElementById('current-date-main').textContent = now.toLocaleDateString('pt-PT',{weekday:'long',year:'numeric',month:'numeric',day:'numeric'});
+  }
+  setInterval(updateTimeDateMain,1000);
+
+  // Login según clave
+  function attemptLogin(){
+    const userKey = document.getElementById('key-input').value.trim();
+    if(accessKeys[userKey]){
+      isLoggedIn = true;
+      currentStore = accessKeys[userKey];
+      document.getElementById('login-screen').style.display='none';
+
+      const popup = document.getElementById('page-name-popup');
+      popup.textContent = currentStore;
+      popup.style.opacity = 1;
+      popup.style.transform = "translate(-50%, -50%) scale(1.1)";
+      setTimeout(() => {
+        popup.style.opacity = 0;
+        popup.style.transform = "translate(-50%, -50%) scale(1)";
+        setTimeout(() => {
+          document.getElementById('main-header').classList.add('show');
+          document.getElementById('main-header').style.display = 'flex';
+          document.getElementById('container-tables').style.display = 'flex';
+          loadData(currentStore);
+        }, 500);
+      }, 1000);
+    } else {
+      alert('Senha incorreta');
+      document.getElementById('key-input').value='';
+      document.getElementById('key-input').focus();
+    }
+  }
+
+  document.getElementById('key-submit').addEventListener('click',attemptLogin);
+  document.getElementById('key-input').addEventListener('keydown',function(e){ if(e.key==='Enter') attemptLogin(); });
+
+  // Carga de datos CSV según tienda
+  async function loadData(store){
+    const csvUrl = 'https://raw.githubusercontent.com/wakzome/Wakzome/main/datosfnc.csv';
+    let csvText='';
+    try{
+      const res = await fetch(csvUrl);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      csvText = await res.text();
+    } catch(err){
+      document.getElementById('table-container').innerHTML = 'Error cargando CSV: '+err.message;
+      return;
+    }
+
+    const parsed = Papa.parse(csvText,{skipEmptyLines:false});
+    let rows = parsed.data.map(r => r.map(c => (c==null?'':String(c).trim())));
+    const blocks=[];
+    let currentBlock=[];
+    rows.forEach(r=>{
+      if(r.every(c=>c==='')){
+        if(currentBlock.length){ blocks.push(currentBlock); currentBlock=[]; }
+      } else currentBlock.push(r);
+    });
+    if(currentBlock.length) blocks.push(currentBlock);
+    if(blocks.length===0){ document.getElementById('table-container').innerHTML='CSV vacío'; return; }
+
+    const nameMapping = {
+      "mezka funchal": "mezka funchal",
+      "parfois madeira shopping": "madeira shopping",
+      "parfois arcadas sao francisco": "parfois arcadas"
+    };
+    const searchName = nameMapping[store];
+    const filteredBlocks = blocks.filter(b => b[0][0].toLowerCase() === searchName);
+    if(filteredBlocks.length === 0){ document.getElementById('table-container').innerHTML='No hay datos para esta tienda'; return; }
+
+    function updateSummaryWrapVisibility() {
+        const summary = document.getElementById('summary-wrap');
+        if (window.innerWidth > 768) {
+            summary.style.display = 'flex';
+        } else {
+            summary.style.display = 'none';
+        }
+    }
+    updateSummaryWrapVisibility();
+    window.addEventListener('resize', updateSummaryWrapVisibility);
+
+    document.getElementById('table-container').style.display='flex';
+
+    const weekSelectId = 'week-select';
+    if(!document.getElementById(weekSelectId)){
+      const weekSelect = document.createElement('select');
+      weekSelect.id = weekSelectId;
+      filteredBlocks.forEach((_,i)=>{
+        const op=document.createElement('option');
+        op.value=i;
+        op.textContent='SEMANA '+(i+1);
+        weekSelect.appendChild(op);
+      });
+      document.getElementById('main-header').appendChild(weekSelect);
+      weekSelect.addEventListener('change',()=>{ fadeRenderTable(filteredBlocks,parseInt(weekSelect.value)); });
+    }
+
+    const startWeek = findCurrentWeek(filteredBlocks);
+    document.getElementById(weekSelectId).value=startWeek;
+    fadeRenderTable(filteredBlocks,startWeek);
+
+    setInterval(() => {
+      const currentWeek = parseInt(document.getElementById(weekSelectId).value);
+      renderSummary(filteredBlocks,currentWeek);
+      highlightCurrentCell(filteredBlocks,currentWeek);
+    }, 30000);
+  }
+
+/* --- FUNCIONES COMPLETAS --- */
+function fadeRenderTable(blocks,index){
+    const cont = document.getElementById('table-container');
+    cont.style.opacity=0;
+    setTimeout(()=>{
+        renderSummary(blocks,index);
+        renderTable(blocks,index);
+        cont.style.opacity=1;
+    },400);
+}
+
+function findCurrentWeek(blocks){
+    const hoy=new Date();
+    for(let i=0;i<blocks.length;i++){
+        const header2=blocks[i][1]; if(!header2) continue;
+        for(let c=1;c<header2.length;c++){
+            const d=header2[c]; if(!d) continue;
+            const parts=d.split('/');
+            if(parts.length!==3) continue;
+            const dateObj=new Date(Number(parts[2]), Number(parts[1])-1, Number(parts[0]));
+            if(dateObj.toDateString()===hoy.toDateString()) return i;
+        }
+    }
+    return 0;
+}
+
+function highlightCurrentCell(blocks,index){
+    const table = document.getElementById('summary-table');
+    if (!table) return;
+    const previous = table.querySelectorAll('.blinking-now');
+    previous.forEach(el => el.classList.remove('blinking-now'));
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const rows = table.rows;
+    if (rows.length < 2) return;
+    const todayColIndex = findTodayCol(blocks[index][1]) + 1;
+    if(todayColIndex<1) return;
+
+    for(let i=1;i<rows.length;i++){
+        const timeCell = rows[i].cells[0];
+        if(!timeCell || !timeCell.textContent) continue;
+        const [h,m] = timeCell.textContent.split(':').map(Number);
+        const nextM = m + ((m%30===0)?30:60);
+        const nextH = nextM>=60? h+1:h;
+        if((currentHour>h || (currentHour===h && currentMinute>=m)) &&
+           (currentHour<nextH || (currentHour===nextH && currentMinute<(nextM%60)))) {
+            const targetCell = rows[i].cells[todayColIndex];
+            if(targetCell) targetCell.classList.add('blinking-now');
+            break;
+        }
+    }
+}
+
+function renderSummary(blocks,index){
+    const rows = blocks[index];
+    const dataRows = rows.slice(2);
+    const headerCols = rows[1].slice(1);
+
+    let minHour=24, maxHour=0;
+    dataRows.forEach(row=>{
+        row.forEach((cell,c)=>{
+            if(c===0||!cell) return;
+            const segments = cell.split('<br>').join(',').split(',').map(s=>s.trim()).filter(s=>s);
+            segments.forEach(seg=>{
+                const [start,end]=seg.split('-').map(s=>s.trim());
+                if(!start||!end) return;
+                const sh = parseInt(start.split(':')[0]);
+                const eh = parseInt(end.split(':')[0]);
+                if(sh<minHour) minHour=sh;
+                if(eh>maxHour) maxHour=eh;
+            });
+        });
+    });
+
+    const now=new Date();
+    let use30min=false;
+    dataRows.forEach(row=>{
+        row.forEach((cell,c)=>{
+            if(c===0||!cell) return;
+            const segments = cell.split('<br>').join(',').split(',').map(s=>s.trim()).filter(s=>s);
+            segments.forEach(seg=>{
+                const [start,]=seg.split('-').map(s=>s.trim());
+                const sm = parseInt(start.split(':')[1]||'0');
+                if(sm!==0) use30min=true;
+            });
+        });
+    });
+
+    const interval = use30min?30:60;
+    const timeIntervals=[];
+    for(let h=minHour;h<maxHour;h++){
+        for(let m=0;m<60;m+=interval){
+            timeIntervals.push(h+':'+(m<10?'0':'')+m);
+        }
+    }
+
+    const summaryCounts = timeIntervals.map(t=>headerCols.map(_=>0));
+    dataRows.forEach((row)=>{
+        row.forEach((cell,c)=>{
+            if(c===0||!cell) return;
+            const segments = cell.split('<br>').join(',').split(',').map(s=>s.trim()).filter(s=>s);
+            segments.forEach(seg=>{
+                const [start,end]=seg.split('-').map(s=>s.trim());
+                if(!start||!end) return;
+                timeIntervals.forEach((intervalTime,iInt)=>{
+                    const [ih,im] = intervalTime.split(':').map(Number);
+                    const [sh,sm]=start.split(':').map(Number);
+                    const [eh,em]=end.split(':').map(Number);
+                    const intervalDate=new Date(0,0,0,ih,im);
+                    const startDate=new Date(0,0,0,sh,sm);
+                    const endDate=new Date(0,0,0,eh,em);
+                    if(intervalDate>=startDate && intervalDate<endDate) summaryCounts[iInt][c-1]++;
+                });
+            });
+        });
+    });
+
+    let html='<table id="summary-table">';
+    html+='<tr><th></th>'+headerCols.map(h=>`<th>${escapeHtml(h)}</th>`).join('')+'</tr>';
+    const todayCol = findTodayCol(rows[1]);
+    timeIntervals.forEach(interval=>{
+        html+='<tr>';
+        html+=`<td>${interval}</td>`;
+        summaryCounts[timeIntervals.indexOf(interval)].forEach((cnt,j)=>{
+            let classes = '';
+            if(j===todayCol){
+                const [ih,im]=interval.split(':').map(Number);
+                if(now.getHours()===ih && now.getMinutes()>=im) classes='active-now';
+            }
+            html+=`<td class="${classes}">${cnt}</td>`;
+        });
+        html+='</tr>';
+    });
+    html+='</table>';
+    document.getElementById('summary-wrap').innerHTML=html;
+    setTimeout(()=>highlightCurrentCell(blocks,index),100);
+}
+
+function findTodayCol(headerDates){
+    const today=new Date();
+    for(let c=1;c<headerDates.length;c++){
+        const d=headerDates[c]; if(!d) continue;
+        const parts=d.split('/');
+        if(parts.length!==3) continue;
+        const dd=new Date(Number(parts[2]),Number(parts[1])-1,Number(parts[0]));
+        if(dd.toDateString()===today.toDateString()) return c-1;
+    }
+    return -1;
+}
+
+function renderTable(blocks,index){
+    const rows = blocks[index];
+    const headerRows = rows.slice(0,2);
+    const dataRows = rows.slice(2);
+    const cols = Math.max(...rows.map(r=>r.length));
+    const colWidths = Array(cols).fill(0);
+    rows.forEach(r=>r.forEach((c,i)=>colWidths[i]=Math.max(colWidths[i],c.length)));
+
+    const todayCol = findTodayCol(headerRows[1])+1;
+    const persons=[];
+    for(let i=0;i<dataRows.length;i+=3) persons.push({A:dataRows[i]||Array(cols).fill(''),B:dataRows[i+1]||Array(cols).fill(''),C:dataRows[i+2]||Array(cols).fill('')});
+
+    function rowHasBlankToken(row){ if(!row) return false; const re=/^\s*(?:40\s*hrs|40hrs|7(?:[\.,]5)?|8|0)\s*$/i; return row.some(cell=>re.test(String(cell).trim())); }
+
+    let html='<table>';
+    for(let r=0;r<2;r++){
+        html+='<tr>';
+        for(let c=0;c<cols;c++){
+            const cls=(c===todayCol?'today-col':'');
+            html+=`<th class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(headerRows[r][c]||'')}</th>`;
+        }
+        html+='</tr>';
+    }
+
+    persons.forEach(p=>{
+        const A=p.A,B=p.B,C=p.C;
+        const bgA=rowHasBlankToken(A)?'#fff':'#f2f2f2';
+        const bgB=rowHasBlankToken(B)?'#fff':'#f2f2f2';
+        let circleColor='red';
+        for(let c=1;c<cols;c++){
+            const colDate=headerRows[1][c]; if(!colDate) continue;
+            const parts=colDate.split('/'); if(parts.length!==3) continue;
+            const d=new Date(+parts[2],parts[1]-1,+parts[0]);
+            if(d.toDateString()===new Date().toDateString()){
+                const horarios=[A[c],B[c],C[c]].filter(v=>v);
+                if(horarios.some(h=>isNowInSchedule(h))) circleColor='green';
+            }
+        }
+
+        let rowspanCols=[];
+        html+='<tr>';
+        html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px">
+                <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
+                ${escapeHtml(A[0]||'')}</td>`;
+        for(let c=1;c<cols;c++){
+            const cls=(c===todayCol?'today-col':'');
+            const top=A[c]||'', bot=B[c]||'';
+            if(top===bot && top!==''){
+                html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px">${escapeHtml(top)}</td>`;
+                rowspanCols.push(c);
+            } else if(top!==''||bot!==''){
+                const cont=[top,bot].filter(v=>v).map(escapeHtml).join('<br>');
+                html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px">${cont}</td>`;
+                rowspanCols.push(c);
+            } else { html+=`<td class="${cls}" style="background:${bgA};width:${colWidths[c]*12}px"></td>`; }
+        }
+        html+='</tr><tr>';
+        for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
+            const cls=(c===todayCol?'today-col':'');
+            html+=`<td class="${cls}" style="background:${bgB};width:${colWidths[c]*12}px">${escapeHtml(B[c]||'')}</td>`;
+        }
+        html+='</tr><tr>';
+        for(let c=0;c<cols;c++){
+            const cls=(c===todayCol?'today-col':'');
+            html+=`<td class="bold-row ${cls}" style="background:#fff;width:${colWidths[c]*12}px">${escapeHtml(C[c]||'')}</td>`;
+        }
+        html+='</tr>';
+    });
+
+    html+='</table>';
+    document.getElementById('table-container').innerHTML=html;
+}
+
+function isNowInSchedule(schedule){
+    const now=new Date();
+    const segments=schedule.split('<br>').join(',').split(',').map(s=>s.trim()).filter(s=>s);
+    for(let seg of segments){
+        const [start,end]=seg.split('-').map(t=>t.trim());
+        if(!start||!end) continue;
+        const [sh,sm]=start.split(':').map(Number);
+        const [eh,em]=end.split(':').map(Number);
+        const s=new Date(now.getFullYear(),now.getMonth(),now.getDate(),sh,sm);
+        const e=new Date(now.getFullYear(),now.getMonth(),now.getDate(),eh,em);
+        if(now>=s && now<=e) return true;
+    }
+    return false;
+}
+
+function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+})();
+</script>
+</body>
+</html>
+
+
+
+

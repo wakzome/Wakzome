@@ -87,15 +87,17 @@ html, body {
   font-family:'MontserratLight', sans-serif;
   background:#fff;
   color:#000;
-  overflow:hidden;
+  overflow:visible; /* permite scroll */
 }
+
 body {
   display:flex;
   flex-direction:column;
   justify-content:flex-start;
   align-items:center;
-  min-height:100vh;
+  height:100vh; /* ocupar toda la pantalla */
 }
+
 
 /* ROTATE MESSAGE */
 #rotate-message {
@@ -221,7 +223,7 @@ window.addEventListener("load", () => {
     intro.style.opacity = "0";
     // Cuando termine la transición, eliminar el nodo del DOM
     intro.addEventListener('transitionend', () => intro.remove());
-  }, 2500);
+  }, 3500);
 });
 </script>
 <!-- ===== INTRO ===== -->
@@ -661,7 +663,6 @@ function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,
 </script>
 </body>
 </html>
-
 
 
 

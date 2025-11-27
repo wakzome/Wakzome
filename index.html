@@ -729,13 +729,13 @@ function renderPortoSanto(blocks, index) {
         }
 
         // --- Fila de tienda + fechas ---
+        const todayCol = findTodayCol(row);
         html += '<tr>';
         for (let c = 0; c < cols; c++) {
-            html += `<th style="width:${colWidths[c]*12}px">${escapeHtml(rows[i][c] || '')}</th>`;
+            const cls = (c === todayCol ? 'today-col' : '');
+            html += `<th class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(row[c] || '')}</th>`;
         }
         html += '</tr>';
-
-        const todayCol = findTodayCol(rows[i]); // columna del día actual
         i++;
 
         // --- Empleados (2 filas por empleado) ---
@@ -754,17 +754,18 @@ function renderPortoSanto(blocks, index) {
             // Primera fila del empleado
             html += '<tr>';
             for (let c = 0; c < cols; c++) {
+                const cls = (c === todayCol ? 'today-col' : '');
                 if (c === 0) {
-                    html += `<td rowspan="2" style="white-space:nowrap;width:${colWidths[c]*12}px">
+                    html += `<td rowspan="2" class="${cls}" style="white-space:nowrap;width:${colWidths[c]*12}px">
                                 <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
                                 ${escapeHtml(A[c] || '')}
                              </td>`;
                     mergedCols.push(c);
                 } else if (A[c] === B[c] && A[c] !== '') {
-                    html += `<td rowspan="2" style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
+                    html += `<td rowspan="2" class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
                     mergedCols.push(c);
                 } else {
-                    html += `<td style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
+                    html += `<td class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
                 }
             }
             html += '</tr>';
@@ -773,7 +774,8 @@ function renderPortoSanto(blocks, index) {
             html += '<tr>';
             for (let c = 1; c < cols; c++) {
                 if (!mergedCols.includes(c)) {
-                    html += `<td style="width:${colWidths[c]*12}px">${escapeHtml(B[c] || '')}</td>`;
+                    const cls = (c === todayCol ? 'today-col' : '');
+                    html += `<td class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(B[c] || '')}</td>`;
                 }
             }
             html += '</tr>';
@@ -786,6 +788,7 @@ function renderPortoSanto(blocks, index) {
     document.getElementById('table-container').innerHTML = html;
 }
 // TABLA PORTO SANTO
+
 
 
 

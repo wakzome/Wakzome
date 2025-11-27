@@ -763,49 +763,37 @@ function renderPortoSanto(blocks, index) {
         html += '</tr>';
         i++;
 
-        // --- Empleados (2 filas por empleado) ---
+        // --- Empleados (fusionar mañana y tarde en la misma celda) ---
         while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
-            const A = rows[i];
-            const B = rows[i + 1];
-            let mergedCols = [];
+            const A = rows[i];     // Mañana
+            const B = rows[i + 1]; // Tarde
 
-            // Determinar color del punto solo para la columna de hoy
+            html += '<tr>';
+
+            // Columna de nombre
             let circleColor = 'red';
             if (todayCol > 0) {
                 const horarios = [A[todayCol], B[todayCol]].filter(v => v);
                 if (horarios.some(h => isNowInSchedule(h))) circleColor = 'green';
             }
+            html += `<td class="name" style="white-space:nowrap;width:${colWidths[0]*12}px">
+                        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
+                        ${escapeHtml(A[0]||'')}
+                     </td>`;
 
-            // Primera fila del empleado
-            html += '<tr>';
-            for (let c = 0; c < cols; c++) {
-                const cls = (c === todayCol ? 'today-col' : '');
-                if (c === 0) {
-                    html += `<td rowspan="2" class="${cls}" style="white-space:nowrap;width:${colWidths[c]*12}px">
-                                <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
-                                ${escapeHtml(A[c] || '')}
-                             </td>`;
-                    mergedCols.push(c);
-                } else if (A[c] === B[c] && A[c] !== '') {
-                    html += `<td rowspan="2" class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
-                    mergedCols.push(c);
-                } else {
-                    html += `<td class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
-                }
-            }
-            html += '</tr>';
-
-            // Segunda fila del empleado (solo columnas no fusionadas)
-            html += '<tr>';
+            // Columnas de horarios
             for (let c = 1; c < cols; c++) {
-                if (!mergedCols.includes(c)) {
-                    const cls = (c === todayCol ? 'today-col' : '');
-                    html += `<td class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(B[c] || '')}</td>`;
-                }
+                const cls = (c === todayCol ? 'today-col' : '');
+                const morning = A[c] || '';
+                const afternoon = B[c] || '';
+                let content = '';
+                if (morning && afternoon) content = `${escapeHtml(morning)}<br>${escapeHtml(afternoon)}`;
+                else content = escapeHtml(morning || afternoon || '');
+                html += `<td class="${cls}" style="width:${colWidths[c]*12}px; text-align:center;">${content}</td>`;
             }
-            html += '</tr>';
 
-            i += 2;
+            html += '</tr>';
+            i += 2; // Pasar al siguiente empleado
         }
     }
 
@@ -813,7 +801,6 @@ function renderPortoSanto(blocks, index) {
     document.getElementById('table-container').innerHTML = html;
 }
 // TABLA PORTO SANTO
-
 
 
 

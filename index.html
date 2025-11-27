@@ -146,7 +146,7 @@ body {
 #main-header .logo-text { font-size:3rem; text-transform:lowercase; margin-bottom:0px; line-height:1;}
 #main-header #current-time-main { font-size:1.2rem; font-weight:bold; }
 #main-header #current-date-main { font-size:1rem; font-weight:bold; }
-#main-header .loading-dots { display:flex; gap:10px; justify-content:center; margin-top:5px; }
+#main-header .loading-dots { display:flex; gap:10px; justify-content:center; margin-top:5px; margin-bottom: 5px; }
 
 /* TABLES */
 #container-tables { display:flex; flex-direction:column; flex:1; width:100%; justify-content:flex-end; padding-bottom:10px; overflow:auto; -webkit-overflow-scrolling: touch; }
@@ -223,7 +223,7 @@ window.addEventListener("load", () => {
     intro.style.opacity = "0";
     // Cuando termine la transición, eliminar el nodo del DOM
     intro.addEventListener('transitionend', () => intro.remove());
-  }, 3500);
+  }, 2500);
 });
 </script>
 <!-- ===== INTRO ===== -->
@@ -260,7 +260,8 @@ window.addEventListener("load", () => {
   const accessKeys = {
     "135": "mezka funchal",
     "136": "parfois madeira shopping",
-    "137": "parfois arcadas sao francisco"
+    "137": "parfois arcadas sao francisco",
+    "138": "porto santo"
   };
 
   let isLoggedIn = false;
@@ -345,6 +346,43 @@ window.addEventListener("load", () => {
   document.getElementById('key-input').addEventListener('keydown',function(e){ if(e.key==='Enter') attemptLogin(); });
 
   // Carga de datos CSV según tienda
+
+  // Divide un bloque de Porto Santo en sub-bloques por tienda
+function splitPortoSantoBlock(block){
+    const subBlocks = [];
+    let currentSub = [];
+
+    const totalCols = block[0].length; // <-- Mantiene ancho original SIEMPRE
+
+    for(let i=1; i<block.length; i++){
+        const firstCell = (block[i][0] || '').trim().toLowerCase();
+
+        // fila de tienda
+        if(firstCell && firstCell !== 'porto santo'){
+            if(currentSub.length) subBlocks.push(currentSub);
+
+            const headerRow = block[0];
+            const storeRow  = padRow(block[i], totalCols);
+            const datesRow  = padRow(block[i+1] || [], totalCols);
+
+            currentSub = [headerRow, storeRow, datesRow];
+            i++; 
+        } 
+        else if(currentSub.length){
+            currentSub.push(padRow(block[i], totalCols));
+        }
+    }
+
+    if(currentSub.length) subBlocks.push(currentSub);
+    return subBlocks;
+}
+
+// Asegura que TODAS las filas tengan el mismo número de columnas
+function padRow(row, total){
+    const r = [...row];
+    while(r.length < total) r.push("");
+    return r;
+}
   async function loadData(store){
     const csvUrl = 'https://raw.githubusercontent.com/wakzome/Wakzome/main/datosfnc.csv';
     let csvText='';
@@ -372,7 +410,8 @@ window.addEventListener("load", () => {
     const nameMapping = {
       "mezka funchal": "mezka funchal",
       "parfois madeira shopping": "madeira shopping",
-      "parfois arcadas sao francisco": "parfois arcadas"
+      "parfois arcadas sao francisco": "parfois arcadas",
+      "porto santo": "porto santo"
     };
     const searchName = nameMapping[store];
     const filteredBlocks = blocks.filter(b => b[0][0].toLowerCase() === searchName);
@@ -417,15 +456,21 @@ window.addEventListener("load", () => {
   }
 
 /* --- FUNCIONES COMPLETAS --- */
-function fadeRenderTable(blocks,index){
+function fadeRenderTable(blocks, index){
     const cont = document.getElementById('table-container');
-    cont.style.opacity=0;
-    setTimeout(()=>{
-        renderSummary(blocks,index);
-        renderTable(blocks,index);
-        cont.style.opacity=1;
-    },400);
+    cont.style.opacity = 0;
+    setTimeout(() => {
+        renderSummary(blocks, index);
+        const firstCell = (blocks[index][0][0] || '').trim().toLowerCase();
+        if(firstCell === 'porto santo'){
+            renderPortoSanto(blocks, index);
+        } else {
+            renderTable(blocks, index);
+        }
+        cont.style.opacity = 1;
+    }, 400);
 }
+
 
 function findCurrentWeek(blocks){
     const hoy=new Date();
@@ -641,6 +686,75 @@ function renderTable(blocks,index){
     html+='</table>';
     document.getElementById('table-container').innerHTML=html;
 }
+
+// TABLA PORTO SANTO
+function renderPortoSanto(blocks, index) {
+    const rows = blocks[index];
+    const cols = Math.max(...rows.map(r => r.length));
+    let html = '<table>';
+
+    let i = 0;
+    while (i < rows.length) {
+        const row = rows[i];
+        const firstCell = (row[0] || '').trim().toLowerCase();
+
+        // --- Fila de título "PORTO SANTO" ---
+        if (firstCell === 'porto santo') {
+            html += '<tr>';
+            html += `<th>${escapeHtml(row[0])}</th>`; // solo la primera celda como título
+            for (let c = 1; c < cols; c++) {
+                html += `<th>${escapeHtml(row[c] || '')}</th>`; // resto de celdas normales (fechas)
+            }
+            html += '</tr>';
+            i++;
+            continue;
+        }
+
+        // --- Fila de tienda + fechas ---
+        html += '<tr>';
+        for (let c = 0; c < cols; c++) {
+            html += `<th>${escapeHtml(rows[i][c] || '')}</th>`;
+        }
+        html += '</tr>';
+        i++;
+
+        // --- Empleados (2 filas por empleado) ---
+        while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
+            const A = rows[i];
+            const B = rows[i + 1];
+
+            let mergedCols = [];
+
+            // Primera fila del empleado
+            html += '<tr>';
+            for (let c = 0; c < cols; c++) {
+                if (A[c] === B[c] && A[c] !== '') {
+                    html += `<td rowspan="2">${escapeHtml(A[c])}</td>`;
+                    mergedCols.push(c);
+                } else {
+                    html += `<td>${escapeHtml(A[c])}</td>`;
+                }
+            }
+            html += '</tr>';
+
+            // Segunda fila del empleado (solo columnas no fusionadas)
+            html += '<tr>';
+            for (let c = 0; c < cols; c++) {
+                if (!mergedCols.includes(c)) {
+                    html += `<td>${escapeHtml(B[c] || '')}</td>`;
+                }
+            }
+            html += '</tr>';
+
+            i += 2; // saltamos las dos filas del empleado
+        }
+    }
+
+    html += '</table>';
+    document.getElementById('table-container').innerHTML = html;
+}
+// TABLA PORTO SANTO
+
 
 function isNowInSchedule(schedule){
     const now=new Date();

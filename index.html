@@ -693,7 +693,7 @@ function renderPortoSanto(blocks, index) {
     const cols = Math.max(...rows.map(r => r.length));
     let html = '<table>';
 
-    // Encontrar la fila de fechas (normalmente segunda fila después del título de tienda)
+    // Encontrar la columna del día actual según la fila de fechas
     function findTodayCol(row) {
         const today = new Date();
         for (let c = 1; c < row.length; c++) {
@@ -707,6 +707,10 @@ function renderPortoSanto(blocks, index) {
         return -1;
     }
 
+    // Calcular ancho de cada columna
+    const colWidths = Array(cols).fill(0);
+    rows.forEach(r => r.forEach((c, i) => colWidths[i] = Math.max(colWidths[i], (c||'').length)));
+
     let i = 0;
     while (i < rows.length) {
         const row = rows[i];
@@ -715,9 +719,9 @@ function renderPortoSanto(blocks, index) {
         // --- Fila de título "PORTO SANTO" ---
         if (firstCell === 'porto santo') {
             html += '<tr>';
-            html += `<th>${escapeHtml(row[0])}</th>`;
+            html += `<th style="width:${colWidths[0]*12}px">${escapeHtml(row[0])}</th>`;
             for (let c = 1; c < cols; c++) {
-                html += `<th>${escapeHtml(row[c] || '')}</th>`;
+                html += `<th style="width:${colWidths[c]*12}px">${escapeHtml(row[c] || '')}</th>`;
             }
             html += '</tr>';
             i++;
@@ -727,11 +731,11 @@ function renderPortoSanto(blocks, index) {
         // --- Fila de tienda + fechas ---
         html += '<tr>';
         for (let c = 0; c < cols; c++) {
-            html += `<th>${escapeHtml(rows[i][c] || '')}</th>`;
+            html += `<th style="width:${colWidths[c]*12}px">${escapeHtml(rows[i][c] || '')}</th>`;
         }
         html += '</tr>';
 
-        const todayCol = findTodayCol(rows[i]); // <-- columna del día actual
+        const todayCol = findTodayCol(rows[i]); // columna del día actual
         i++;
 
         // --- Empleados (2 filas por empleado) ---
@@ -751,16 +755,16 @@ function renderPortoSanto(blocks, index) {
             html += '<tr>';
             for (let c = 0; c < cols; c++) {
                 if (c === 0) {
-                    html += `<td rowspan="2" style="white-space:nowrap;">
+                    html += `<td rowspan="2" style="white-space:nowrap;width:${colWidths[c]*12}px">
                                 <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
                                 ${escapeHtml(A[c] || '')}
                              </td>`;
                     mergedCols.push(c);
                 } else if (A[c] === B[c] && A[c] !== '') {
-                    html += `<td rowspan="2">${escapeHtml(A[c])}</td>`;
+                    html += `<td rowspan="2" style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
                     mergedCols.push(c);
                 } else {
-                    html += `<td>${escapeHtml(A[c])}</td>`;
+                    html += `<td style="width:${colWidths[c]*12}px">${escapeHtml(A[c])}</td>`;
                 }
             }
             html += '</tr>';
@@ -769,7 +773,7 @@ function renderPortoSanto(blocks, index) {
             html += '<tr>';
             for (let c = 1; c < cols; c++) {
                 if (!mergedCols.includes(c)) {
-                    html += `<td>${escapeHtml(B[c] || '')}</td>`;
+                    html += `<td style="width:${colWidths[c]*12}px">${escapeHtml(B[c] || '')}</td>`;
                 }
             }
             html += '</tr>';

@@ -582,7 +582,16 @@ function renderSummary(blocks,index){
     });
 
     let html='<table id="summary-table">';
-    html+='<tr><th></th>'+headerCols.map(h=>`<th>${escapeHtml(h)}</th>`).join('')+'</tr>';
+   const weekdayMap = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+
+html += '<tr><th></th>' + headerCols.map(h => {
+    if(!h) return '';
+    const parts = h.split('/');
+    if(parts.length !== 3) return h; // si no es fecha, dejar igual
+    const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+    return weekdayMap[d.getDay()];
+}).map(escapeHtml).map(day => `<th>${day}</th>`).join('') + '</tr>';
+
     const todayCol = findTodayCol(rows[1]);
     timeIntervals.forEach(interval=>{
         html+='<tr>';

@@ -64,6 +64,20 @@
 @media(max-width:600px){
     #dynamic-text{ font-size:15vw; }
 }
+
+/* ===== FORZAR MONTSERRATLIGHT EN INPUTS, BUTTONS Y SELECT ===== */
+input, button, select, textarea {
+    font-family: 'MontserratLight', sans-serif !important;
+    font-weight: 600; /* más cargado que 100, pero no exagerado */
+}
+
+/* ===== SELECT Y SUS OPCIONES MÁS VISIBLES ===== */
+select, select option {
+    font-family: 'MontserratLight', sans-serif !important;
+    font-weight: 600 !important; /* opción más legible */
+}
+
+
 </style>
 <!-- ===== INTRO ===== -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -223,6 +237,8 @@ window.addEventListener("load", () => {
     intro.style.opacity = "0";
     // Cuando termine la transición, eliminar el nodo del DOM
     intro.addEventListener('transitionend', () => intro.remove());
+    document.getElementById('key-input').focus();
+
   }, 2500);
 });
 </script>
@@ -241,7 +257,7 @@ window.addEventListener("load", () => {
 </div>
 
 <div id="main-header">
-  <div class="logo-text">wakzome</div>
+  <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
   <div id="current-time-main"></div>
   <div id="current-date-main"></div>
   <div class="loading-dots"><span></span><span></span><span></span></div>
@@ -819,6 +835,21 @@ function isNowInSchedule(schedule){
 }
 
 function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// CLICK EN LOGO PARA VOLVER AL LOGIN
+document.getElementById('main-logo').addEventListener('click', () => {
+    isLoggedIn = false;
+    currentStore = null;
+
+    // Ocultar main header y tablas
+    document.getElementById('main-header').classList.remove('show');
+    document.getElementById('main-header').style.display = 'none';
+    document.getElementById('container-tables').style.display = 'none';
+
+    // Mostrar login
+    document.getElementById('key-input').value = '';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('key-input').focus();
+});
 
 })();
 </script>

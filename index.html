@@ -31,7 +31,7 @@
 
 /* ===== Texto principal ===== */
 #dynamic-text {
-  font-size:10vw;
+  font-size:20vw;
   text-transform:lowercase;
   color:#555;
   text-align:center;
@@ -46,7 +46,7 @@
 }
 .loading-dots span {
     width:20px; height:20px;
-    background:#5555;
+    background:#555;
     border-radius:50%;
     opacity:0;
     animation:blink 7s infinite;
@@ -222,7 +222,7 @@ td, th { border-radius:10px; margin:2px; }
   <div id="intro-text">
       <h1 id="dynamic-text">wakzome</h1>
 
-      <div class="loading-dots">
+      
           <span></span><span></span><span></span>
       </div>
   </div>
@@ -239,7 +239,7 @@ window.addEventListener("load", () => {
     intro.addEventListener('transitionend', () => intro.remove());
     document.getElementById('key-input').focus();
 
-  }, 2500);
+  }, 1000);
 });
 </script>
 <!-- ===== INTRO ===== -->

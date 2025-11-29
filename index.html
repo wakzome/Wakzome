@@ -828,24 +828,14 @@ function isNowInSchedule(schedule){
 function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 // CLICK EN LOGO PARA VOLVER AL LOGIN
 document.getElementById('main-logo').addEventListener('click', () => {
-    isLoggedIn = false;
-    currentStore = null;
-
-    // Ocultar main header y tablas
-    document.getElementById('main-header').classList.remove('show');
-    document.getElementById('main-header').style.display = 'none';
-    document.getElementById('container-tables').style.display = 'none';
-
-    // Mostrar login
-    document.getElementById('key-input').value = '';
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('key-input').focus();
+    location.reload();
 });
 
 })();
 </script>
 </body>
 </html>
+
 
 
 

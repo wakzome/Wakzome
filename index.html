@@ -214,6 +214,31 @@ td, th { border-radius:10px; margin:2px; }
 }
 
 #page-name-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1); font-size:3rem; font-weight:bold; opacity:0; pointer-events:none; transition: opacity 0.5s ease, transform 0.5s ease; color:#000; font-family:'MontserratLight', sans-serif; z-index:4; }
+
+/* ===== MENSAGEM LEGAL NO LOGIN ===== */
+#login-desktop-message {
+  max-width: 900px;
+  margin-top: 80px;
+  padding: 20px 30px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #000;
+  text-align: justify;
+  opacity: 1;
+  font-weight: 1000;
+}
+
+#login-desktop-message p {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+  #login-desktop-message {
+    display: none;
+  }
+}
+
+
 </style>
 </head>
 <body>
@@ -250,11 +275,41 @@ window.addEventListener("load", () => {
   <div id="current-time"></div>
   <div id="current-date"></div>
   <div class="loading-dots"><span></span><span></span><span></span></div>
+
   <div id="key-input-container">
     <input type="password" id="key-input" placeholder="Introduza a senha">
     <button id="key-submit">Entrar</button>
   </div>
+
+  <!-- MENSAJE DESKTOP -->
+  <div id="login-desktop-message">
+    <p>
+      AS AUSÊNCIAS AO TRABALHO DEVEM SER COMUNICADAS COM A ANTECEDÊNCIA LEGALMENTE PREVISTA
+      SEMPRE QUE PREVISÍVEIS, OU LOGO QUE POSSÍVEL QUANDO IMPREVISÍVEIS, INDICANDO O RESPETIVO MOTIVO.
+    </p>
+
+    <p>
+      O COMPROVATIVO DA AUSÊNCIA DEVERÁ SER APRESENTADO NOS TERMOS E PRAZOS PREVISTOS NO CÓDIGO DO TRABALHO.
+      QUANDO A FALTA, EMBORA JUSTIFICADA, DETERMINE LEGALMENTE PERDA DE RETRIBUIÇÃO, CABERÁ EXCLUSIVAMENTE
+      AO TRABALHADOR OPTAR ENTRE O DESCONTO REMUNERATÓRIO CORRESPONDENTE OU, SE ASSIM O ENTENDER, A
+      SUBSTITUIÇÃO DESSA PERDA POR RENÚNCIA A DIAS DE FÉRIAS OU PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO.
+    </p>
+
+    <p>
+      NO CASO DE A FALTA SER RECUPERADA ATRAVÉS DE PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO, O TRABALHADOR DEVERÁ
+      INFORMAR PREVIAMENTE OS DIAS E HORÁRIOS EM QUE ESSA RECUPERAÇÃO SERÁ REALIZADA, GARANTINDO O DEVIDO
+      ACORDO COM O EMPREGADOR.
+    </p>
+
+    <p>
+      QUALQUER PRESTAÇÃO DE TRABALHO EM HORAS EXTRAORDINÁRIAS DEVE SER PREVIAMENTE COMUNICADA E ACORDADA
+      COM O EMPREGADOR, NÃO SENDO ACEITES HORAS NÃO INFORMADAS POSTERIORMENTE.
+
+
+    </p>
+  </div>
 </div>
+
 
 <div id="main-header">
   <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
@@ -831,11 +886,11 @@ document.getElementById('main-logo').addEventListener('click', () => {
     location.reload();
 });
 
+
 })();
 </script>
 </body>
 </html>
-
 
 
 

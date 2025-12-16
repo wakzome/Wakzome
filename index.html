@@ -217,6 +217,7 @@ td, th { border-radius:10px; margin:2px; }
 
 /* ===== MENSAGEM LEGAL NO LOGIN ===== */
 #login-desktop-message {
+  display: none;
   max-width: 900px;
   margin-top: 80px;
   padding: 20px 30px;
@@ -232,9 +233,9 @@ td, th { border-radius:10px; margin:2px; }
   margin-bottom: 10px;
 }
 
-@media (max-width: 768px) {
+@media (min-width: 1025px) {
   #login-desktop-message {
-    display: none;
+    display: block;
   }
 }
 

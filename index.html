@@ -654,7 +654,7 @@ function renderSummary(blocks,index){
     });
 
     let html='<table id="summary-table">';
-   const weekdayMap = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+   const weekdayMap = ['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
 
 html += '<tr><th></th>' + headerCols.map(h => {
     if(!h) return '';
@@ -892,6 +892,7 @@ document.getElementById('main-logo').addEventListener('click', () => {
 </script>
 </body>
 </html>
+
 
 
 

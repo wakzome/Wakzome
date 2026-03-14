@@ -281,7 +281,7 @@ body {
 .recibos-nota p { margin-bottom: 8px; }
 .recibos-nota p:last-child { margin-bottom: 0; }
 .recibos-nota strong { color: #444; font-weight: bold; display: block; margin-bottom: 6px; font-size: .85rem; }
-@media (max-width: 900px) { .recibos-nota { display: none; } }
+@media (max-width: 1024px) { .recibos-nota { display: none; } }
 @media (prefers-color-scheme: dark) {
   .recibos-nota { color: #555 !important; }
   .recibos-nota strong { color: #777 !important; }
@@ -607,7 +607,7 @@ td, th { border-radius:10px; margin:2px; }
   font-size: .76rem; font-weight: bold; color: #e09000;
   margin: 0; line-height: 1.5;
 }
-@media (max-width: 900px) { #r-conferir-fixed { display: none !important; } }
+@media (max-width: 1024px) { #r-conferir-fixed { display: none !important; } }
 @media (prefers-color-scheme: dark) {
   #r-conferir-btn { background: transparent !important; border-color: #888 !important; color: #aaa !important; }
   #r-conferir-btn:hover { background: #888 !important; color: #111 !important; }
@@ -833,7 +833,9 @@ input, textarea { cursor: text !important; }
   td { border-color: #1e1e1e !important; color: #e8e8e8 !important; }
   tr:hover td { background: #1a1a1a !important; }
   .today-col { background: #2a2a2a !important; }
-  td.bold-row { color: #e8e8e8 !important; }
+  .today-col:hover { background: #333 !important; }
+  td { background: #111 !important; }
+  td.bold-row { background: #161616 !important; color: #e8e8e8 !important; }
   #tab-nav { border-bottom-color: #2a2a2a !important; }
   .tab-btn { color: #555 !important; }
   .tab-btn.active { color: #f0f0f0 !important; border-bottom-color: #f0f0f0 !important; }
@@ -1074,7 +1076,7 @@ input, textarea { cursor: text !important; }
 #saft-reminder.urgent #saft-countdown { color: #c05000; }
 #saft-reminder.urgent #saft-title { color: #c05000; }
 #saft-reminder.urgent #saft-countdown-label { color: #e08050; }
-@media (max-width: 900px) { #saft-reminder { display: none !important; } }
+@media (max-width: 1024px) { #saft-reminder { display: none !important; } }
 @media (prefers-color-scheme: dark) {
   #saft-label { color: #444 !important; }
   #saft-title { color: #888 !important; }
@@ -1373,18 +1375,26 @@ input, textarea { cursor: text !important; }
     flex-direction: column; align-items: center;
     margin-bottom: 6px; padding: 0 12px;
   }
-  #main-header .logo-text { font-size: 2rem; }
-  #main-header #current-time-main { font-size: 1rem; }
-  #main-header #current-date-main { font-size: .82rem; }
+  #main-header-center { order: 1; }
   #main-nav {
     display: flex !important;
     position: static; transform: none;
     flex-direction: row; gap: 8px;
     margin-top: 8px; justify-content: center;
+    order: 2;
   }
+  #main-header .logo-text { font-size: 2rem; }
+  #main-header #current-time-main { font-size: 1rem; }
+  #main-header #current-date-main { font-size: .82rem; }
   #recibos-link { font-size: .82rem; padding: 5px 12px; }
-  #container-tables { padding-bottom: 16px; }
-  #table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #container-tables { padding-bottom: 16px; overflow-x: hidden; overflow-y: auto; }
+  #table-container {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+  }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; justify-content: flex-start; }
+  /* ── Hide active persons dashboard on phones ── */
+  #h-dashboard { display: none !important; }
 
   /* ── Admin app ── */
   #admin-app {
@@ -1408,9 +1418,18 @@ input, textarea { cursor: text !important; }
   .tab-btn { padding: 8px 16px; font-size: .78rem; white-space: nowrap; }
 
   /* ── Tab panels ── */
-  .tab-panel.active { overflow: visible; flex: none; }
-  #tab-horarios.active { overflow: hidden; flex: 1; min-height: 60vh; }
+  .tab-panel.active { overflow: visible; flex: none; min-height: 0; }
+  /* #tab-horarios.active flex:1 removed — admin-app is height:auto in mobile, flex:1 has no effect and breaks scroll */
   #tab-ferias.active { min-height: 60vh; }
+  /* all non-horarios tabs: give them vertical scroll when content overflows */
+  #tab-salarios.active,
+  #tab-recibos.active,
+  #tab-ferias.active,
+  #tab-editor.active {
+    overflow-y: auto;
+    width: 100%;
+    max-width: 100%;
+  }
 
   /* ── Salários ── */
   #s-upload-zone { max-width: 100%; }
@@ -1436,8 +1455,27 @@ input, textarea { cursor: text !important; }
 
   /* ── Admin horários tab ── */
   #h-store-selector { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-  #h-table-area { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  #h-dashboard { flex-wrap: wrap; gap: 8px; }
+  /* Em portrait, o #admin-app tem height:auto — flex:1 no tab não funciona.
+     Deixamos o tab fluir normalmente e o admin-app faz scroll vertical. */
+  #tab-horarios.active {
+    flex: none !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+    width: 100%;
+  }
+  #h-table-area {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+    max-height: none !important;
+    min-height: 40px;
+    flex: none !important;
+    width: 100%;
+  }
+  /* Tabela: não forçar largura mínima, deixar scroll horizontal funcionar */
+  #h-table-area table { width: auto; }
+  /* Esconder dashboard — JS faz inline style="display:flex", contornamos com max-height */
+  #h-dashboard { display: none !important; max-height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
   .dash-card { min-width: 80px; padding: 6px 12px; }
   .dash-card .dash-val { font-size: 1.2rem; }
 
@@ -1476,6 +1514,40 @@ input, textarea { cursor: text !important; }
   .tab-btn { padding: 8px 10px; font-size: .72rem; }
   #r-upload-grid { grid-template-columns: 1fr; }
   .upload-box { min-height: 90px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE LANDSCAPE — telemóveis em horizontal
+══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) and (orientation: landscape) {
+  /* Allow full-page scroll */
+  html, body { overflow-y: auto !important; overflow-x: hidden; }
+
+  /* Admin app: auto height, scroll freely */
+  #admin-app {
+    height: auto !important; min-height: 100vh;
+    overflow-y: auto !important; overflow-x: hidden;
+  }
+
+  /* All tab panels flow naturally so admin-app can scroll */
+  .tab-panel.active { flex: none; overflow: visible; min-height: 0; }
+  #tab-horarios.active { flex: 1; overflow: hidden; min-height: 50vh; }
+
+  /* Hide active-persons dashboard in landscape — takes too much space */
+  #h-dashboard { display: none !important; }
+
+  /* Hide saft reminder and conferir button — already hidden by 1024px rule above but be explicit */
+  #saft-reminder { display: none !important; }
+  #r-conferir-fixed { display: none !important; }
+
+  /* Employee schedule view: ensure table scrolls horizontally */
+  #container-tables { overflow-x: hidden; overflow-y: auto; }
+  #table-container { justify-content: flex-start; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-wrap { justify-content: flex-start; width: 100%; }
+
+  /* Admin horarios: ensure table scrolls */
+  #tab-horarios.active { flex: none !important; overflow: visible !important; }
+  #h-table-area { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; max-height: 60vh; flex: none !important; }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -3407,7 +3479,7 @@ function rGenerateStandaloneHTML(results) {
 
     const temp = document.createElement('div');
     temp.id = 'table-container';
-    temp.style.cssText = 'display:flex;justify-content:center;width:100%;';
+    temp.style.cssText = 'display:flex;justify-content:flex-start;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;';
     area.appendChild(temp);
 
     const firstCell = (filtered[index][0][0] || '').trim().toLowerCase();

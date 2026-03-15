@@ -1421,9 +1421,11 @@ input, textarea { cursor: text !important; }
 
   /* ── Admin app ── */
   #admin-app {
-    padding: 12px 10px 12px;
-    height: auto; min-height: 100vh;
-    overflow-y: auto !important; overflow-x: hidden;
+    position: static !important;
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+    padding: 12px 10px 40px;
   }
   #admin-header { margin-bottom: 12px; }
   #admin-header .logo-text { font-size: 2rem; }
@@ -1441,16 +1443,15 @@ input, textarea { cursor: text !important; }
   .tab-btn { padding: 8px 16px; font-size: .78rem; white-space: nowrap; }
 
   /* ── Tab panels ── */
-  .tab-panel.active { overflow: visible; flex: none; min-height: 0; }
-  /* #tab-horarios.active flex:1 removed — admin-app is height:auto in mobile, flex:1 has no effect and breaks scroll */
-  #tab-ferias.active { min-height: 60vh; overflow-y: visible !important; overflow-x: hidden; }
-  #f-area { overflow-y: visible !important; min-height: 200px; flex: none !important; }
-  /* all non-horarios tabs: give them vertical scroll when content overflows */
+  .tab-panel.active { overflow: visible !important; flex: none !important; min-height: 0; }
+  #tab-ferias.active { min-height: 60vh; overflow: visible !important; }
+  #f-area { overflow: visible !important; flex: none !important; min-height: 200px; }
+  /* all non-horarios tabs: flow naturally — body does the scrolling */
   #tab-salarios.active,
   #tab-recibos.active,
   #tab-ferias.active,
   #tab-editor.active {
-    overflow-y: auto;
+    overflow: visible !important;
     width: 100%;
     max-width: 100%;
   }

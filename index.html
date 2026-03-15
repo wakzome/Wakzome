@@ -1377,6 +1377,9 @@ input, textarea { cursor: text !important; }
   #ed-export-btn { border-color: #aaa !important; }
   #ed-export-btn:hover { background: #aaa !important; color: #111 !important; }
 }
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+  #tab-nav { background: #0d0d0d !important; border-bottom-color: #2a2a2a !important; }
+}
 
 /* ══════════════════════════════════════════════════════════
    MOBILE RESPONSIVE  (≤ 768px)
@@ -1435,19 +1438,22 @@ input, textarea { cursor: text !important; }
 
   /* ── Tabs ── */
   #tab-nav {
-    position: sticky;
+    position: fixed;
     top: 0;
-    z-index: 10;
+    left: 0;
+    right: 0;
+    z-index: 100;
     background: #fff;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
-    margin-bottom: 16px; max-width: 100%;
+    margin-bottom: 0; max-width: 100%;
     scrollbar-width: none;
-  }
-  @media (prefers-color-scheme: dark) {
-    #tab-nav { background: #0d0d0d !important; }
+    border-bottom: 2px solid #e6e6e6;
   }
   #tab-nav::-webkit-scrollbar { display: none; }
   .tab-btn { padding: 8px 16px; font-size: .78rem; white-space: nowrap; }
+
+  /* push content below the fixed nav */
+  #admin-header { margin-top: 54px; }
 
   /* ── Tab panels ── */
   .tab-panel.active { overflow: visible !important; flex: none !important; min-height: 0; }
@@ -2813,21 +2819,25 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     // on mobile body scroll is always allowed (ferias and others need it)
     const adminApp = document.getElementById('admin-app');
     const isMobile = window.innerWidth <= 768;
-    if (btn.dataset.tab === 'salarios' && adminApp.dataset.sLoaded === '1') {
+    if (isMobile) {
+      // Mobile: body always scrolls freely, tab-nav is fixed so always visible
+      document.body.style.overflow = '';
+      adminApp.classList.remove('s-loaded');
+      document.getElementById('tab-salarios').classList.remove('s-loaded');
+      if (btn.dataset.tab === 'salarios' && adminApp.dataset.sLoaded === '1') {
+        adminApp.classList.add('s-loaded');
+        document.getElementById('tab-salarios').classList.add('s-loaded');
+      }
+      window.scrollTo(0, 0);
+    } else if (btn.dataset.tab === 'salarios' && adminApp.dataset.sLoaded === '1') {
       document.body.style.overflow = 'auto';
       adminApp.classList.add('s-loaded');
       document.getElementById('tab-salarios').classList.add('s-loaded');
-    } else if (isMobile) {
-      document.body.style.overflow = 'auto'; // mobile always needs body scroll
-      adminApp.classList.remove('s-loaded');
-      document.getElementById('tab-salarios').classList.remove('s-loaded');
     } else {
       document.body.style.overflow = 'hidden';
       adminApp.classList.remove('s-loaded');
       document.getElementById('tab-salarios').classList.remove('s-loaded');
     }
-    // Scroll back to top when switching tabs on mobile
-    if (isMobile) window.scrollTo(0, 0);
     // Recibos tab: show mes hint if no mes saved yet
     if (btn.dataset.tab === 'recibos') {
       const mesSaved = localStorage.getItem('gh_mes') || '';

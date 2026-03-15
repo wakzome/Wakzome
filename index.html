@@ -98,8 +98,8 @@ html, body {
 }
 body {
   display:flex; flex-direction:column;
-  justify-content:flex-start; align-items:center; height:100vh;
-  overflow:hidden;
+  justify-content:flex-start; align-items:center; min-height:100vh;
+  overflow-x:hidden; overflow-y:auto;
 }
 
 /* ─── ROTATE MESSAGE (solo landscape muy pequeño) ─── */
@@ -112,55 +112,55 @@ body {
 /* LOGIN - refined minimalist */
 #login-screen {
   text-align:center; display:flex; flex-direction:column;
-  align-items:center; justify-content:flex-start;
-  height:100%; width:100%; position:absolute;
+  align-items:center; justify-content:center;
+  height:100vh; width:100%; position:fixed;
   top:0; left:0; background:#fff; z-index:5;
   overflow:hidden; box-sizing:border-box;
-  padding: clamp(16px, 4vh, 40px) 16px 16px;
+  padding: 16px;
   opacity:0; transform: translateY(18px);
   transition: opacity 0.9s cubic-bezier(0.22,1,0.36,1), transform 0.9s cubic-bezier(0.22,1,0.36,1);
 }
 #login-screen.visible { opacity:1; transform: translateY(0); }
 #login-screen .logo-text {
   font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 100;
-  text-transform: lowercase; color: #999;
+  text-transform: lowercase; color: #000;
   letter-spacing: .1em; margin-bottom: 20px;
 }
 #login-screen #current-time {
   font-size: clamp(3rem, 10vw, 5.5rem); font-weight: 100;
-  letter-spacing: -.02em; color: #111;
+  letter-spacing: -.02em; color: #000;
   line-height: 1; margin-top: 0;
 }
 #login-screen #current-date {
   font-size: 0.82rem; font-weight: 600;
-  text-transform: lowercase; color: #bbb;
+  text-transform: lowercase; color: #000;
   letter-spacing: .07em; margin-top: 10px;
 }
 #login-screen .loading-dots { display:flex; gap:8px; justify-content:center; margin-top:18px; }
-#login-screen .loading-dots span { width:5px; height:5px; background:#ccc; border-radius:50%; opacity:0; animation:blink 7s infinite; }
+#login-screen .loading-dots span { width:5px; height:5px; background:#000; border-radius:50%; opacity:0; animation:blink 7s infinite; }
 #login-screen .loading-dots span:nth-child(1){animation-delay:0s;}
 #login-screen .loading-dots span:nth-child(2){animation-delay:0.5s;}
 #login-screen .loading-dots span:nth-child(3){animation-delay:1s;}
-#login-divider { width:32px; height:1px; background:#e8e8e8; margin:26px auto; }
+#login-divider { width:32px; height:1px; background:#000; margin:26px auto; opacity:.15; }
 #key-input-container { display:flex; flex-direction:column; align-items:center; }
 #key-input {
   font-size: 1.05rem; font-weight: 600;
   padding: 8px 4px; width: 170px; text-align: center;
-  border: none; border-bottom: 1.5px solid #ddd;
-  outline: none; background: transparent; color: #111;
+  border: none; border-bottom: 1.5px solid #000;
+  outline: none; background: transparent; color: #000;
   transition: border-color .3s;
 }
-#key-input:focus { border-bottom-color: #555; }
-#key-input::placeholder { color: #ccc; font-weight: 400; font-size:.9rem; }
+#key-input:focus { border-bottom-color: #000; }
+#key-input::placeholder { color: #999; font-weight: 400; font-size:.9rem; }
 #key-submit {
   margin-top: 22px; padding: 8px 34px;
   font-size: .78rem; font-weight: 600;
   letter-spacing: .12em; text-transform: lowercase;
-  cursor: pointer; border: 1px solid #ccc;
-  border-radius: 20px; background: transparent; color: #666;
+  cursor: pointer; border: 1px solid #000;
+  border-radius: 20px; background: transparent; color: #000;
   transition: border-color .2s, color .2s, background .2s;
 }
-#key-submit:hover { border-color: #111; background: #111; color: #fff; }
+#key-submit:hover { border-color: #000; background: #000; color: #fff; }
 
 /* ─── INDEX: main header (horarios) ─── */
 #main-header { display:flex; flex-direction:row; align-items:flex-start; justify-content:center; margin-bottom:10px; opacity:0; transition: opacity 1s ease; position:relative; width:100%; }
@@ -301,14 +301,48 @@ body {
 }
 
 /* ─── INDEX: tablas de horarios ─── */
-#container-tables { display:flex; flex-direction:column; flex:1; width:100%; justify-content:flex-end; padding-bottom:10px; overflow:auto; -webkit-overflow-scrolling: touch; }
-#summary-wrap { display:none; width:100%; max-height:50%; overflow:auto; margin-bottom:10px; }
-@media (min-width: 769px) {
-  #summary-wrap { display:flex; justify-content:center; }
-  #summary-wrap table { margin:0 auto; }
+/* summary-wrap: kept in DOM for JS but NEVER shown */
+#summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
+
+#container-tables {
+  display: flex; flex-direction: column;
+  flex: 0 0 auto;  /* shrinks to content, does NOT expand */
+  width: 100%;
+  overflow: visible;
+  padding-bottom: 10px;
 }
-@media (max-width: 768px) { #summary-wrap { display:none !important; } }
-#table-container { display:flex; justify-content:center; width:100%; max-height:100%; overflow:auto; -webkit-overflow-scrolling: touch; }
+
+/* Legal notice — sits above the table, shrinks to its text */
+#legal-notice {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 860px;
+  align-self: center;
+  box-sizing: border-box;
+  padding: 10px 32px 8px;
+  font-size: 0.7rem;
+  line-height: 1.7;
+  color: #bbb;
+  text-align: justify;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+#legal-notice p { margin: 0 0 4px; }
+@media (max-width: 768px) {
+  #legal-notice { display: none !important; }
+}
+@media (prefers-color-scheme: dark) { #legal-notice { color: #2e2e2e !important; } }
+
+/* Table container — fits content, scrolls horizontally if needed */
+#table-container {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
 .table-wrap { overflow-x:auto; display:flex; justify-content:center; transition: opacity 0.5s ease; }
 table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
 th, td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.9rem; font-weight:bold; color:#000; }
@@ -320,30 +354,9 @@ tr:hover td { background:#eaeaea; }
 td, th { border-radius:10px; margin:2px; }
 .today-col { background: #D7D7D7 !important; }
 .today-col:hover { background: #ffffff !important; }
-#summary-table { margin-bottom:8px; border-collapse:separate; border-spacing:0; }
-#summary-table th, #summary-table td { border:1px solid #e6e6e6; padding:1px 2px; font-size:0.7rem; min-width:20px; height:10px; text-align:center; vertical-align:middle; }
-#summary-table td.active-now::after { content:'●'; color:green; display:inline-block; margin-left:2px; font-size:0.6rem; vertical-align:middle; }
 .blinking-now { animation: blinkCell 2s infinite !important; background-color: #e0e0e0 !important; }
 @keyframes blinkCell { 0%,100%{background-color:#f0f0f0;} 50%{background-color:#d0d0d0;} }
-@media (max-width: 1024px) { #summary-wrap { display: none !important; } }
 #page-name-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1); font-size:3rem; font-weight:bold; opacity:0; pointer-events:none; transition: opacity 0.5s ease, transform 0.5s ease; color:#000; font-family:'MontserratLight', sans-serif; z-index:4; }
-
-/* LOGIN: legal text */
-#login-desktop-message {
-  display: none;
-  max-width: min(560px, 88vw);
-  margin-top: 24px;
-  padding: 0 16px;
-  font-size: 0.7rem;
-  line-height: 1.6;
-  color: #000;
-  text-align: center;
-  font-weight: 600;
-  letter-spacing: .01em;
-  flex-shrink: 1;
-}
-#login-desktop-message p { margin-bottom: 4px; }
-@media (min-width: 1025px) { #login-desktop-message { display: block; } }
 
 /* ══════════════════════════════════════════════════════════
    ADMIN APP  (salários + recibos)
@@ -352,11 +365,15 @@ td, th { border-radius:10px; margin:2px; }
   display: none;
   flex-direction: column;
   align-items: center;
+  position: fixed;
+  top: 0; left: 0;
   width: 100%;
   height: 100vh;
   box-sizing: border-box;
   padding: 20px 16px 16px;
   overflow: hidden;
+  background: #fff;
+  z-index: 4;
 }
 #admin-app.show { display: flex; }
 #admin-app, #admin-app.show { box-sizing: border-box; }
@@ -819,18 +836,19 @@ input, textarea { cursor: text !important; }
   #intro-screen #intro-line { background: linear-gradient(90deg, transparent, #444, transparent) !important; }
   #dynamic-text .char { color: #888; }
   #login-screen { background: #0d0d0d !important; }
-  #login-screen .logo-text { color: #555 !important; }
+  #login-screen .logo-text { color: #e8e8e8 !important; }
   #login-screen #current-time { color: #f0f0f0 !important; }
-  #login-screen #current-date { color: #666 !important; }
-  #login-screen .loading-dots span { background: #444 !important; }
-  #login-divider { background: #2a2a2a !important; }
-  #key-input { color: #f0f0f0 !important; border-bottom-color: #444 !important; }
+  #login-screen #current-date { color: #aaa !important; }
+  #login-screen .loading-dots span { background: #555 !important; }
+  #login-divider { background: #444 !important; opacity: 1 !important; }
+  #key-input { color: #f0f0f0 !important; border-bottom-color: #555 !important; }
   #key-input:focus { border-bottom-color: #aaa !important; }
   #key-input::placeholder { color: #444 !important; }
-  #key-submit { border-color: #444 !important; color: #888 !important; }
+  #key-submit { border-color: #555 !important; color: #aaa !important; }
   #key-submit:hover { border-color: #f0f0f0 !important; background: #f0f0f0 !important; color: #0d0d0d !important; }
   #login-desktop-message { color: #555 !important; }
   #main-header, #admin-header { background: transparent !important; }
+  #admin-app { background: #0d0d0d !important; }
   .logo-text { color: #e8e8e8 !important; }
   #current-time-main, #current-date-main, #admin-time, #admin-date { color: #aaa !important; }
   #page-name-popup { color: #f0f0f0 !important; }
@@ -1374,7 +1392,6 @@ input, textarea { cursor: text !important; }
   #login-screen .logo-text { font-size: 2rem; margin-bottom: 12px; }
   #login-screen #current-time { font-size: clamp(3.2rem, 16vw, 5rem); }
   #login-divider { margin: 18px auto; }
-  #login-desktop-message { display: none !important; }
 
   /* ── Horarios (employee view) ── */
   #main-header {
@@ -1787,13 +1804,6 @@ window.addEventListener("load", function() {
     <input type="password" id="key-input" placeholder="senha">
     <button id="key-submit">entrar</button>
   </div>
-  <div id="login-desktop-message">
-    <p>AS AUSÊNCIAS AO TRABALHO DEVEM SER COMUNICADAS COM A ANTECEDÊNCIA LEGALMENTE PREVISTA SEMPRE QUE PREVISÍVEIS, OU LOGO QUE POSSÍVEL QUANDO IMPREVISÍVEIS, INDICANDO O RESPETIVO MOTIVO.</p>
-    <p>O COMPROVATIVO DA AUSÊNCIA DEVERÁ SER APRESENTADO NOS TERMOS E PRAZOS PREVISTOS NO CÓDIGO DO TRABALHO. QUANDO A FALTA, EMBORA JUSTIFICADA, DETERMINE LEGALMENTE PERDA DE RETRIBUIÇÃO, CABERÁ EXCLUSIVAMENTE AO TRABALHADOR OPTAR ENTRE O DESCONTO REMUNERATÓRIO CORRESPONDENTE OU, SE ASSIM O ENTENDER, A SUBSTITUIÇÃO DESSA PERDA POR RENÚNCIA A DIAS DE FÉRIAS OU PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO.</p>
-    <p>QUALQUER PRESTAÇÃO DE TRABALHO EM HORAS EXTRAORDINÁRIAS DEVE SER PREVIAMENTE COMUNICADA E ACORDADA COM O EMPREGADOR, NÃO SENDO ACEITES HORAS NÃO INFORMADAS POSTERIORMENTE.</p>
-    <p>DE ACORDO COM A LEGISLAÇÃO VIGENTE, OS HORÁRIOS ROTATIVOS DA EMPRESA PODERÃO SER ALTERADOS PONTUALMENTE EM SITUAÇÕES DE FORÇA MAIOR OU NECESSIDADE ORGANIZATIVA, SEMPRE RESPEITANDO O DESCANSO MÍNIMO LEGAL. QUALQUER ALTERAÇÃO SERÁ COMUNICADA COM A DEVIDA ANTECEDÊNCIA APENAS ÀS COLABORADORAS AFETADAS, NÃO SENDO NECESSÁRIO O SEU CONSENTIMENTO OU APROVAÇÃO, SALVO SE A ALTERAÇÃO IMPLICAR A REDUÇÃO DO DESCANSO MÍNIMO LEGAL.</p>
-    <p>CASO ALGUMA COLABORADORA NECESSITE TROCAR UM DIA DE FOLGA POR MOTIVOS ATENDÍVEIS, DEVERÁ INFORMAR À EMPRESA, APRESENTANDO A COORDENAÇÃO COM A PESSOA QUE TENHA A FOLGA PRETENDIDA.</p>
-  </div>
 </div>
 
 <!-- ═══ VISTA HORARIOS (index) ═══ -->
@@ -1810,7 +1820,15 @@ window.addEventListener("load", function() {
 </div>
 <div id="shift-countdown"></div>
 <div id="container-tables" class="reveal-item">
-  <div id="summary-wrap" class="table-wrap"></div>
+  <!-- summary-wrap kept hidden in DOM — required by JS, never shown -->
+  <div id="summary-wrap" class="table-wrap" style="display:none !important;"></div>
+  <div id="legal-notice">
+    <p>AS AUSÊNCIAS AO TRABALHO DEVEM SER COMUNICADAS COM A ANTECEDÊNCIA LEGALMENTE PREVISTA SEMPRE QUE PREVISÍVEIS, OU LOGO QUE POSSÍVEL QUANDO IMPREVISÍVEIS, INDICANDO O RESPETIVO MOTIVO.</p>
+    <p>O COMPROVATIVO DA AUSÊNCIA DEVERÁ SER APRESENTADO NOS TERMOS E PRAZOS PREVISTOS NO CÓDIGO DO TRABALHO. QUANDO A FALTA, EMBORA JUSTIFICADA, DETERMINE LEGALMENTE PERDA DE RETRIBUIÇÃO, CABERÁ EXCLUSIVAMENTE AO TRABALHADOR OPTAR ENTRE O DESCONTO REMUNERATÓRIO CORRESPONDENTE OU, SE ASSIM O ENTENDER, A SUBSTITUIÇÃO DESSA PERDA POR RENÚNCIA A DIAS DE FÉRIAS OU PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO.</p>
+    <p>QUALQUER PRESTAÇÃO DE TRABALHO EM HORAS EXTRAORDINÁRIAS DEVE SER PREVIAMENTE COMUNICADA E ACORDADA COM O EMPREGADOR, NÃO SENDO ACEITES HORAS NÃO INFORMADAS POSTERIORMENTE.</p>
+    <p>DE ACORDO COM A LEGISLAÇÃO VIGENTE, OS HORÁRIOS ROTATIVOS DA EMPRESA PODERÃO SER ALTERADOS PONTUALMENTE EM SITUAÇÕES DE FORÇA MAIOR OU NECESSIDADE ORGANIZATIVA, SEMPRE RESPEITANDO O DESCANSO MÍNIMO LEGAL. QUALQUER ALTERAÇÃO SERÁ COMUNICADA COM A DEVIDA ANTECEDÊNCIA APENAS ÀS COLABORADORAS AFETADAS, NÃO SENDO NECESSÁRIO O SEU CONSENTIMENTO OU APROVAÇÃO, SALVO SE A ALTERAÇÃO IMPLICAR A REDUÇÃO DO DESCANSO MÍNIMO LEGAL.</p>
+    <p>CASO ALGUMA COLABORADORA NECESSITE TROCAR UM DIA DE FOLGA POR MOTIVOS ATENDÍVEIS, DEVERÁ INFORMAR À EMPRESA, APRESENTANDO A COORDENAÇÃO COM A PESSOA QUE TENHA A FOLGA PRETENDIDA.</p>
+  </div>
   <div class="table-wrap" id="table-container"><div>A carregar...</div></div>
 </div>
 
@@ -2405,9 +2423,7 @@ window.addEventListener("load", function() {
     if(filteredBlocks.length === 0){ document.getElementById('table-container').innerHTML='No hay datos para esta tienda'; return; }
 
     function updateSummaryWrapVisibility() {
-      const summary = document.getElementById('summary-wrap');
-      if (window.innerWidth > 768) { summary.style.display = 'flex'; }
-      else { summary.style.display = 'none'; }
+      // summary-wrap is permanently hidden — replaced by #legal-notice above the table
     }
     updateSummaryWrapVisibility();
     window.addEventListener('resize', updateSummaryWrapVisibility);

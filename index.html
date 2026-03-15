@@ -1443,7 +1443,8 @@ input, textarea { cursor: text !important; }
   /* ── Tab panels ── */
   .tab-panel.active { overflow: visible; flex: none; min-height: 0; }
   /* #tab-horarios.active flex:1 removed — admin-app is height:auto in mobile, flex:1 has no effect and breaks scroll */
-  #tab-ferias.active { min-height: 60vh; }
+  #tab-ferias.active { min-height: 60vh; overflow-y: visible !important; overflow-x: hidden; }
+  #f-area { overflow-y: visible !important; min-height: 200px; flex: none !important; }
   /* all non-horarios tabs: give them vertical scroll when content overflows */
   #tab-salarios.active,
   #tab-recibos.active,
@@ -2307,25 +2308,41 @@ window.addEventListener("load", function() {
     const dataRows = rows.slice(2);
     let active = 0, folga = 0, nextStart = null;
 
+    // Group rows by person name (col 0) — a person with multiple rows is still ONE person
+    const personMap = {};
     dataRows.forEach(function(row) {
-      const val = (row[todayCol] || '').trim().toUpperCase();
-      if (!val) return;
-      if (val === 'FOLGA' || val === 'FERIAS') { folga++; return; }
-      // check if active now
-      val.toLowerCase().split(',').forEach(function(seg) {
-        seg = seg.trim();
-        const pts = seg.split('-');
-        if (pts.length < 2) return;
-        const sh = parseInt(pts[0].split(':')[0]);
-        const sm = parseInt((pts[0].split(':')[1]) || 0);
-        const eh = parseInt(pts[1].split(':')[0]);
-        const em = parseInt((pts[1].split(':')[1]) || 0);
-        const s = new Date(today.getFullYear(), today.getMonth(), today.getDate(), sh, sm);
-        const e = new Date(today.getFullYear(), today.getMonth(), today.getDate(), eh, em);
-        if (today >= s && today <= e) active++;
-        // next start
-        if (s > today && (!nextStart || s < nextStart)) nextStart = s;
+      const name = (row[0] || '').trim();
+      if (!name) return;
+      if (!personMap[name]) personMap[name] = [];
+      personMap[name].push(row);
+    });
+
+    Object.keys(personMap).forEach(function(name) {
+      const personRows = personMap[name];
+      let isFolga = false, isActive = false;
+
+      personRows.forEach(function(row) {
+        const val = (row[todayCol] || '').trim().toUpperCase();
+        if (!val) return;
+        if (val === 'FOLGA' || val === 'FERIAS') { isFolga = true; return; }
+        // check if active now
+        val.toLowerCase().split(',').forEach(function(seg) {
+          seg = seg.trim();
+          const pts = seg.split('-');
+          if (pts.length < 2) return;
+          const sh = parseInt(pts[0].split(':')[0]);
+          const sm = parseInt((pts[0].split(':')[1]) || 0);
+          const eh = parseInt(pts[1].split(':')[0]);
+          const em = parseInt((pts[1].split(':')[1]) || 0);
+          const s = new Date(today.getFullYear(), today.getMonth(), today.getDate(), sh, sm);
+          const e = new Date(today.getFullYear(), today.getMonth(), today.getDate(), eh, em);
+          if (today >= s && today <= e) isActive = true;
+          if (s > today && (!nextStart || s < nextStart)) nextStart = s;
+        });
       });
+
+      if (isFolga) folga++;
+      else if (isActive) active++;
     });
 
     const nextStr = nextStart

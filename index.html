@@ -1273,6 +1273,61 @@ input, textarea { cursor: text !important; }
 .ed-img-el { overflow: hidden; }
 .ed-img-el img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
 
+/* ── Native text (original PDF text — editable overlay) ── */
+.ed-native-text {
+  pointer-events: none;
+  cursor: default !important;
+  background: transparent !important;
+}
+.ed-native-text.editable-mode {
+  pointer-events: auto;
+  cursor: text !important;
+}
+.ed-native-text.editable-mode:not(.selected):not(.editing):not(.modified):hover {
+  outline: 1.5px dashed rgba(60,120,255,0.35) !important;
+  outline-offset: 1px;
+  background: rgba(60,120,255,0.04) !important;
+}
+.ed-native-text .ed-handle { display: none !important; }
+.ed-native-text .ed-del-btn { display: none !important; }
+.ed-native-text textarea {
+  color: transparent !important;
+  background: transparent !important;
+  cursor: text !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  pointer-events: none;
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+.ed-native-text.selected:not(.editing):not(.modified) {
+  outline: 2px solid rgba(60,120,255,0.45) !important;
+  background: rgba(60,120,255,0.05) !important;
+}
+.ed-native-text.editing textarea {
+  color: #000 !important;
+  background: rgba(255, 255, 248, 0.97) !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  pointer-events: auto !important;
+}
+.ed-native-text.modified {
+  background: #fff !important;
+}
+.ed-native-text.modified textarea {
+  color: #000 !important;
+  background: #fff !important;
+}
+.ed-native-text.selected.modified {
+  outline: 2px solid rgba(255,150,0,0.6) !important;
+}
+
+/* Toggle button active state */
+#ed-edit-native-btn.active {
+  background: #555 !important;
+  color: #fff !important;
+  border-color: #333 !important;
+}
+
 /* Export modal */
 #ed-export-modal {
   display: none; position: fixed; inset: 0;
@@ -1599,9 +1654,276 @@ input, textarea { cursor: text !important; }
 .reveal-item.in {
   animation: revealUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* ══════════════════════════════════════════════════════════
+   PREMIUM UI — Micro-interactions · Depth · Motion
+══════════════════════════════════════════════════════════ */
+
+/* ── Animated background gradient with moving glow ── */
+html, body { background: #fafafa !important; }
+#login-screen, #admin-app { background: transparent !important; }
+
+@keyframes glowShift1 {
+  0%,100% { background-position: 20% 20%; }
+  33%      { background-position: 75% 30%; }
+  66%      { background-position: 40% 75%; }
+}
+@keyframes glowShift2 {
+  0%,100% { background-position: 80% 80%; }
+  33%      { background-position: 20% 65%; }
+  66%      { background-position: 70% 20%; }
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -1;
+  pointer-events: none;
+}
+/* primary ambient glow — slow drift */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+/* two independent gradient glow layers */
+#glow-layer-1, #glow-layer-2 {
+  position: fixed; inset: 0; z-index: -1;
+  pointer-events: none;
+  border-radius: 0;
+  will-change: opacity;
+}
+#glow-layer-1 {
+  background:
+    radial-gradient(circle at 22% 28%, rgba(0,0,0,0.045) 0%, transparent 45%),
+    radial-gradient(circle at 78% 72%, rgba(0,0,0,0.03) 0%, transparent 45%),
+    #fafafa;
+  animation: glowDrift1 18s ease-in-out infinite;
+}
+#glow-layer-2 {
+  background:
+    radial-gradient(circle at 65% 18%, rgba(0,0,0,0.025) 0%, transparent 38%),
+    radial-gradient(circle at 30% 80%, rgba(0,0,0,0.02) 0%, transparent 38%);
+  animation: glowDrift2 24s ease-in-out infinite;
+}
+@keyframes glowDrift1 {
+  0%,100% { transform: translate(0,0); }
+  25%     { transform: translate(3%, 2%); }
+  50%     { transform: translate(-2%, 4%); }
+  75%     { transform: translate(2%, -2%); }
+}
+@keyframes glowDrift2 {
+  0%,100% { transform: translate(0,0); }
+  30%     { transform: translate(-3%, 3%); }
+  60%     { transform: translate(4%, -2%); }
+}
+@media (prefers-color-scheme: dark) {
+  html, body { background: #0a0a0a !important; }
+  #glow-layer-1 {
+    background:
+      radial-gradient(circle at 22% 28%, rgba(255,255,255,0.025) 0%, transparent 45%),
+      radial-gradient(circle at 78% 72%, rgba(255,255,255,0.015) 0%, transparent 45%),
+      #0a0a0a;
+  }
+  #glow-layer-2 {
+    background:
+      radial-gradient(circle at 65% 18%, rgba(255,255,255,0.012) 0%, transparent 38%),
+      radial-gradient(circle at 30% 80%, rgba(255,255,255,0.01) 0%, transparent 38%);
+  }
+  body::before { opacity: 0.06 !important; }
+}
+
+/* ── Button micro-interactions ── */
+button, .tab-btn, #key-submit, #recibos-link,
+.modal-btn, #r-process-btn, #r-save-config,
+#r-conferir-btn, #saft-btn, #saft-recibos-btn,
+.ed-modal-btn, #ed-folder-pick-btn {
+  transition: transform 0.18s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.18s cubic-bezier(0.22,1,0.36,1),
+              background 0.2s, color 0.2s, border-color 0.2s !important;
+  will-change: transform;
+}
+button:hover:not(:disabled), .tab-btn:hover,
+#key-submit:hover, #recibos-link:hover,
+.modal-btn:hover, #r-process-btn:hover, #r-save-config:hover,
+#r-conferir-btn:hover, #saft-btn:hover, #saft-recibos-btn:hover,
+.ed-modal-btn:hover, #ed-folder-pick-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.07);
+}
+button:active:not(:disabled), .tab-btn:active,
+#key-submit:active, #recibos-link:active,
+.modal-btn:active, #r-process-btn:active,
+.ed-modal-btn:active {
+  transform: translateY(1px) scale(0.97) !important;
+  box-shadow: none !important;
+}
+
+/* ── Input focus lift ── */
+#key-input, #r-cfg-token, #r-cfg-repo, #r-cfg-base-folder,
+#r-cfg-mes, #r-modal-pwd-input, #ed-export-filename, #ed-font-size {
+  transition: border-color 0.25s, box-shadow 0.25s !important;
+}
+#key-input:focus, #r-cfg-token:focus, #r-cfg-mes:focus,
+#r-modal-pwd-input:focus, #ed-export-filename:focus {
+  box-shadow: 0 2px 14px rgba(0,0,0,0.06) !important;
+}
+
+/* ── Cards depth (dash-cards, f-cards, modal boxes) ── */
+.dash-card {
+  background: rgba(255,255,255,0.75) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.05) !important;
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.2s cubic-bezier(0.22,1,0.36,1) !important;
+}
+.dash-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.09) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+.f-card {
+  background: rgba(255,255,255,0.8) !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04) !important;
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.2s cubic-bezier(0.22,1,0.36,1),
+              border-color 0.2s !important;
+}
+.f-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.07) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+#r-modal-box, #ed-export-modal-box {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.06) !important;
+}
+@media (prefers-color-scheme: dark) {
+  .dash-card {
+    background: rgba(20,20,20,0.8) !important;
+    border-color: rgba(255,255,255,0.05) !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.3) !important;
+  }
+  .dash-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.45) !important; }
+  .f-card {
+    background: rgba(17,17,17,0.85) !important;
+    border-color: rgba(255,255,255,0.04) !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
+  }
+  .f-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important; }
+}
+
+/* ── Tab transitions — crossfade between panels ── */
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tab-panel.active {
+  animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+
+/* ── Table rows hover smooth ── */
+tr { transition: background 0.15s ease; }
+
+/* ── Logo subtle pulse on hover ── */
+.logo-text {
+  transition: letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1),
+              opacity 0.2s !important;
+}
+.logo-text:hover { letter-spacing: .18em !important; opacity: 0.7; }
+
+/* ── Greeting overlay richer motion ── */
+#greeting-overlay {
+  backdrop-filter: blur(0px);
+  transition: opacity 0.5s ease, backdrop-filter 0.5s ease !important;
+}
+#greeting-overlay.show { backdrop-filter: blur(2px); }
+
+/* ══ LOGIN BUBBLES ══ */
+.login-bubble {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.07);
+  background: radial-gradient(circle at 35% 35%,
+    rgba(255,255,255,0.55),
+    rgba(200,200,210,0.08) 60%,
+    transparent 100%);
+  pointer-events: none;
+  transform: scale(0);
+  opacity: 0;
+  will-change: transform, opacity;
+  z-index: 0;
+}
+.login-bubble:nth-child(1) {
+  width: 440px; height: 440px;
+  top: -80px; left: -150px;
+  animation: bubblePop 9s cubic-bezier(0.15,0.8,0.25,1) infinite;
+  animation-delay: 0s;
+}
+.login-bubble:nth-child(2) {
+  width: 400px; height: 400px;
+  bottom: -90px; right: -110px;
+  animation: bubblePop 9s cubic-bezier(0.15,0.8,0.25,1) infinite;
+  animation-delay: 3s;
+}
+.login-bubble:nth-child(3) {
+  width: 360px; height: 360px;
+  top: 50%; left: 50%;
+  animation: bubblePopCenter 9s cubic-bezier(0.15,0.8,0.25,1) infinite;
+  animation-delay: 6s;
+}
+@keyframes bubblePop {
+  0%   { transform: scale(0);    opacity: 0;    }
+  12%  {                          opacity: 0.85; }
+  65%  { transform: scale(1);    opacity: 0.5;  }
+  85%  { transform: scale(1.07); opacity: 0.15; }
+  100% { transform: scale(1.12); opacity: 0;    }
+}
+@keyframes bubblePopCenter {
+  0%   { transform: translate(-50%,-50%) scale(0);    opacity: 0;    }
+  12%  {                                              opacity: 0.85; }
+  65%  { transform: translate(-50%,-50%) scale(1);    opacity: 0.5;  }
+  85%  { transform: translate(-50%,-50%) scale(1.07); opacity: 0.15; }
+  100% { transform: translate(-50%,-50%) scale(1.12); opacity: 0;    }
+}
+@media (max-width: 600px) {
+  .login-bubble:nth-child(1) { width: 300px; height: 300px; top: -50px; left: -90px; }
+  .login-bubble:nth-child(2) { width: 280px; height: 280px; }
+  .login-bubble:nth-child(3) { width: 250px; height: 250px; }
+}
+@media (prefers-color-scheme: dark) {
+  .login-bubble {
+    border-color: rgba(255,255,255,0.05);
+    background: radial-gradient(circle at 35% 35%,
+      rgba(255,255,255,0.06),
+      rgba(180,180,200,0.02) 60%,
+      transparent 100%);
+  }
+}
+/* keep all login content above bubbles */
+#login-screen > *:not(.login-bubble) { position: relative; z-index: 1; }
+
+/* ── Login stagger entry ── */
+@keyframes loginItemIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.login-item {
+  opacity: 0;
+  animation: loginItemIn 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-play-state: paused;
+}
 </style>
 </head>
 <body>
+
+<!-- glow layers — animated background -->
+<div id="glow-layer-1"></div>
+<div id="glow-layer-2"></div>
 
 <!-- ===== INTRO ===== -->
 <div id="sweep-line"></div>
@@ -1798,6 +2120,10 @@ window.addEventListener("load", function() {
       // pequeño delay para que el browser pinte opacity:0 antes de la transición
       setTimeout(function() {
         loginScreen.classList.add('visible');
+        // trigger stagger animations for login items
+        loginScreen.querySelectorAll('.login-item').forEach(function(el) {
+          el.style.animationPlayState = 'running';
+        });
       }, 50);
       document.getElementById('key-input').focus();
     }, 2100);
@@ -1810,12 +2136,15 @@ window.addEventListener("load", function() {
 
 <!-- ═══ LOGIN (estilo index) ═══ -->
 <div id="login-screen">
-  <div class="logo-text">wakzome</div>
-  <div id="current-time"></div>
-  <div id="current-date"></div>
-  <div class="loading-dots"><span></span><span></span><span></span></div>
-  <div id="login-divider"></div>
-  <div id="key-input-container">
+  <div class="login-bubble"></div>
+  <div class="login-bubble"></div>
+  <div class="login-bubble"></div>
+  <div class="logo-text login-item" style="animation-delay:0.05s">wakzome</div>
+  <div id="current-time" class="login-item" style="animation-delay:0.18s"></div>
+  <div id="current-date" class="login-item" style="animation-delay:0.28s"></div>
+  <div class="loading-dots login-item" style="animation-delay:0.38s"><span></span><span></span><span></span></div>
+  <div id="login-divider" class="login-item" style="animation-delay:0.48s"></div>
+  <div id="key-input-container" class="login-item" style="animation-delay:0.58s">
     <input type="password" id="key-input" placeholder="senha">
     <button id="key-submit">entrar</button>
   </div>
@@ -1995,6 +2324,7 @@ window.addEventListener("load", function() {
         🖼️ imagem
         <input type="file" id="ed-img-input" accept="image/*" style="display:none">
       </label>
+      <button id="ed-edit-native-btn" title="Ativar edição do texto original do PDF">🔤 editar texto original</button>
       <div class="ed-sep"></div>
       <label class="ed-tool-label" for="ed-font-size">tamanho</label>
       <input type="number" id="ed-font-size" value="14" min="6" max="120" step="1">
@@ -2812,9 +3142,17 @@ function escHtml(str) {
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => {
+      p.classList.remove('active');
+      // reset animation so it re-fires on next activation
+      p.style.animation = 'none';
+    });
     btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    const panel = document.getElementById('tab-' + btn.dataset.tab);
+    panel.classList.add('active');
+    // force reflow then re-enable animation
+    void panel.offsetWidth;
+    panel.style.animation = '';
     // Manage page scroll: desktop keeps overflow hidden except salários loaded;
     // on mobile body scroll is always allowed (ferias and others need it)
     const adminApp = document.getElementById('admin-app');
@@ -3927,6 +4265,10 @@ function rGenerateStandaloneHTML(results) {
       edHistory    = [];
       edHistoryIdx = -1;
       edUpdateUndoRedo();
+      // Reset native edit mode
+      edNativeEditMode = false;
+      edEditNativeBtn.classList.remove('active');
+      edEditNativeBtn.textContent = '🔤 editar texto original';
 
       edPdfDoc    = await pdfjsLib.getDocument({ data: edPdfBytes.slice(0) }).promise;
       edPageCount = edPdfDoc.numPages;
@@ -3967,8 +4309,11 @@ function rGenerateStandaloneHTML(results) {
 
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
+    // Extract and overlay original PDF text (native text editing)
+    await edExtractNativeText(page, wrap, pageNum - 1, viewport);
+
     // Re-attach existing elements for this page
-    edElements.filter(function(r) { return r.pageIndex === pageNum - 1; }).forEach(function(r) {
+    edElements.filter(function(r) { return r.pageIndex === pageNum - 1 && r.type !== 'native-text'; }).forEach(function(r) {
       wrap.appendChild(r.el);
     });
 
@@ -3986,6 +4331,155 @@ function rGenerateStandaloneHTML(results) {
     const target = pages[parseInt(this.value) - 1];
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
+
+  // ── Native text editing mode toggle ──
+  let edNativeEditMode = false;
+  const edEditNativeBtn = document.getElementById('ed-edit-native-btn');
+
+  edEditNativeBtn.addEventListener('click', function() {
+    edNativeEditMode = !edNativeEditMode;
+    edEditNativeBtn.classList.toggle('active', edNativeEditMode);
+    edEditNativeBtn.textContent = edNativeEditMode ? '🔤 sair de edição' : '🔤 editar texto original';
+    // Update all native text elements
+    edElements.forEach(function(r) {
+      if (r.type !== 'native-text') return;
+      if (edNativeEditMode) {
+        r.el.classList.add('editable-mode');
+      } else {
+        r.el.classList.remove('editable-mode');
+        if (edEditingEl === r.el) edStopEditing();
+        if (edSelectedEl === r.el) edDeselect();
+      }
+    });
+  });
+
+  // ── Extract and overlay original PDF text ──
+  async function edExtractNativeText(page, wrap, pageIndex, viewport) {
+    let textContent;
+    try { textContent = await page.getTextContent(); } catch(e) { return; }
+    const items = (textContent.items || []).filter(function(it) { return it.str && it.str.trim(); });
+    if (!items.length) return;
+
+    // Group items into visual lines by Y coordinate proximity
+    const groups = [];
+    items.forEach(function(item) {
+      // Convert PDF coords to viewport (canvas) coords
+      var pt;
+      try { pt = viewport.convertToViewportPoint(item.transform[4], item.transform[5]); }
+      catch(e) { return; }
+      var vx = pt[0], vy = pt[1];
+      // Font size in viewport pixels
+      var fontPx = Math.abs(item.transform[0]) * edScale;
+      if (fontPx < 1) fontPx = 12 * edScale / 72;
+
+      // Find existing group with matching Y (within half a font-line)
+      var group = null;
+      for (var g = 0; g < groups.length; g++) {
+        if (Math.abs(groups[g].baseVY - vy) < fontPx * 0.7) { group = groups[g]; break; }
+      }
+      if (!group) {
+        group = { baseVY: vy, fontPx: fontPx, items: [] };
+        groups.push(group);
+      }
+      group.items.push({ item: item, vx: vx, vy: vy, fontPx: fontPx });
+    });
+
+    // Sort groups top→bottom, items within group left→right
+    groups.sort(function(a, b) { return a.baseVY - b.baseVY; });
+    groups.forEach(function(g) { g.items.sort(function(a, b) { return a.vx - b.vx; }); });
+
+    groups.forEach(function(group) {
+      var text = group.items.map(function(i) { return i.item.str; }).join('');
+      if (!text.trim()) return;
+
+      var first = group.items[0];
+      var fontPx = first.fontPx;
+      var vx = first.vx;
+      var vy = group.baseVY; // baseline in canvas coords
+      var elTop = vy - fontPx * 1.15; // top of the bounding box
+
+      // Width: sum of item widths scaled to viewport
+      var totalW = 0;
+      group.items.forEach(function(i) {
+        totalW += (i.item.width || 0) * edScale;
+      });
+      if (totalW < fontPx * 0.8) totalW = fontPx * text.length * 0.6;
+      totalW = Math.max(totalW, fontPx * 2);
+
+      // PDF coords for the first item (for export white-cover)
+      var pdfX = first.item.transform[4];
+      var pdfY = first.item.transform[5];
+      var pdfFontSize = Math.abs(first.item.transform[0]);
+      var pdfItemWidths = group.items.map(function(i) { return i.item.width || 0; });
+      var pdfTotalW = pdfItemWidths.reduce(function(a, b) { return a + b; }, 0);
+
+      // Create the overlay element
+      var el = document.createElement('div');
+      el.className = 'ed-element ed-text-el ed-native-text';
+      el.style.left = vx + 'px';
+      el.style.top  = elTop + 'px';
+      el.style.width = (totalW + 6) + 'px';
+
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = [
+        'display:block', 'width:100%',
+        'min-height:' + Math.ceil(fontPx * 1.3) + 'px',
+        'padding:0 2px', 'box-sizing:border-box',
+        'border:none', 'outline:none',
+        'background:transparent', 'resize:none', 'overflow:hidden',
+        'font-family:Arial,Helvetica,sans-serif',
+        'font-size:' + Math.round(fontPx) + 'px',
+        'color:transparent',
+        'line-height:1.3',
+        'writing-mode:horizontal-tb', 'direction:ltr',
+        'pointer-events:none', 'cursor:text'
+      ].join(';');
+      ta.rows = 1;
+      ta.spellcheck = false;
+      el.appendChild(ta);
+
+      (function autoResize() {
+        ta.style.height = 'auto';
+        ta.style.height = Math.max(Math.ceil(fontPx * 1.3), ta.scrollHeight) + 'px';
+        el.style.height = ta.offsetHeight + 'px';
+      })();
+      ta.addEventListener('input', function() {
+        ta.style.height = 'auto';
+        ta.style.height = Math.max(Math.ceil(fontPx * 1.3), ta.scrollHeight) + 'px';
+        el.style.height = ta.offsetHeight + 'px';
+      });
+
+      // Click = select; dblclick = enter edit
+      el.addEventListener('mousedown', function(e) {
+        if (!edNativeEditMode) return;
+        if (e.target.classList.contains('ed-del-btn')) return;
+        if (el.classList.contains('editing')) return;
+        e.stopPropagation();
+        edStopEditing();
+        edSelect(el);
+      });
+      el.addEventListener('dblclick', function(e) {
+        if (!edNativeEditMode) return;
+        e.stopPropagation();
+        edEnterEditing(el);
+      });
+
+      wrap.appendChild(el);
+
+      var record = {
+        pageIndex: pageIndex,
+        el: el, ta: ta,
+        type: 'native-text',
+        originalText: text,
+        pdfX: pdfX, pdfY: pdfY,
+        pdfFontSize: pdfFontSize,
+        pdfTotalW: pdfTotalW,
+        viewX: vx, viewY: elTop
+      };
+      edElements.push(record);
+    });
+  }
 
   // ── Add text ──
   edAddTextBtn.addEventListener('click', function() {
@@ -4068,7 +4562,13 @@ function rGenerateStandaloneHTML(results) {
     ta.dataset.textBefore  = ta.value;
     ta.style.pointerEvents = 'auto';
     ta.style.cursor        = 'text';
-    ta.style.background    = 'rgba(255,255,255,0.92)';
+    ta.style.background    = el.classList.contains('ed-native-text')
+      ? 'rgba(255,255,248,0.97)'
+      : 'rgba(255,255,255,0.92)';
+    // For native text, make text visible while editing
+    if (el.classList.contains('ed-native-text')) {
+      ta.style.color = '#000';
+    }
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
@@ -4087,6 +4587,19 @@ function rGenerateStandaloneHTML(results) {
       const after  = ta.value;
       if (before !== after) {
         edPushHistory({ type: 'text', el, ta, prevText: before, nextText: after });
+        // Mark native text elements as modified for visual feedback + export
+        if (el.classList.contains('ed-native-text')) {
+          const record = edElements.find(function(r) { return r.el === el; });
+          if (record && after !== record.originalText) {
+            el.classList.add('modified');
+          } else if (record && after === record.originalText) {
+            el.classList.remove('modified');
+          }
+        }
+      }
+      // For unmodified native text, reset to transparent
+      if (el.classList.contains('ed-native-text') && !el.classList.contains('modified')) {
+        ta.style.color = 'transparent';
       }
       delete ta.dataset.textBefore;
     }
@@ -4388,6 +4901,45 @@ function rGenerateStandaloneHTML(results) {
               color: PDFLib.rgb(color.r / 255, color.g / 255, color.b / 255)
             });
           });
+        } else if (record.type === 'native-text') {
+          // Only process if text was modified or element was moved
+          const ta = record.ta || record.el.querySelector('textarea');
+          const newText = ta ? ta.value : '';
+          const wasModified = newText !== record.originalText;
+          const wasMoved = Math.abs(parseFloat(el.style.left) - record.viewX) > 2 ||
+                           Math.abs(parseFloat(el.style.top)  - record.viewY) > 2;
+          if (!wasModified && !wasMoved) continue;
+
+          // Cover original text with a white rectangle at original PDF coords
+          const coverW = Math.max(record.pdfTotalW * 1.05, record.pdfFontSize * 2);
+          const coverH = record.pdfFontSize * 1.5;
+          pdfPage.drawRectangle({
+            x: record.pdfX - 1,
+            y: record.pdfY - coverH * 0.35,
+            width: coverW + 2,
+            height: coverH,
+            color: PDFLib.rgb(1, 1, 1),
+            borderWidth: 0
+          });
+
+          if (newText.trim()) {
+            // Draw new text at current (possibly moved) position
+            const lines = newText.split('\n');
+            const pdfFontPx = record.pdfFontSize;
+            const lineH = pdfFontPx * 1.35;
+            lines.forEach(function(line, i) {
+              if (!line) return;
+              try {
+                pdfPage.drawText(line, {
+                  x: pdfX,
+                  y: record.pdfY - i * lineH,
+                  size: Math.max(pdfFontPx, 4),
+                  font: fontEmbed,
+                  color: PDFLib.rgb(0, 0, 0)
+                });
+              } catch(te) { console.warn('native text draw error:', te); }
+            });
+          }
         } else if (record.type === 'image') {
           try {
             const src      = record.src;

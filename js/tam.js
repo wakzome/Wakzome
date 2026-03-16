@@ -1,25 +1,27 @@
 // ══════════════════════════════════════════════════════════════
-//  TAM FASHION — invoice parser  (dual-method + cross-validation)
+//  TAM FASHION — invoice parser  v3  (dual-engine cross-check)
 // ══════════════════════════════════════════════════════════════
 (function() {
 
   /* ── Drag & drop ── */
-  const upLabel = document.getElementById('tam-upload-label');
+  var upLabel = document.getElementById('tam-upload-label');
   if (!upLabel) return;
-  upLabel.addEventListener('dragover', function(e) { e.preventDefault(); upLabel.classList.add('drag-over'); });
-  upLabel.addEventListener('dragleave', function()  { upLabel.classList.remove('drag-over'); });
-  upLabel.addEventListener('drop', function(e) {
+  upLabel.addEventListener('dragover', function(e){ e.preventDefault(); upLabel.classList.add('drag-over'); });
+  upLabel.addEventListener('dragleave', function(){ upLabel.classList.remove('drag-over'); });
+  upLabel.addEventListener('drop', function(e){
     e.preventDefault(); upLabel.classList.remove('drag-over');
     var f = e.dataTransfer.files[0];
     if (f && f.type === 'application/pdf') tamHandleFile(f);
   });
-  document.getElementById('tam-file-input').addEventListener('change', function(e) {
+  document.getElementById('tam-file-input').addEventListener('change', function(e){
     if (e.target.files[0]) tamHandleFile(e.target.files[0]);
   });
 
-  /* ── Main handler ── */
   var tamCurrentResult = null;
 
+  /* ════════════════════════════════════════════════════════════
+     MAIN HANDLER
+  ════════════════════════════════════════════════════════════ */
   async function tamHandleFile(file) {
     document.getElementById('tam-file-name').textContent = file.name;
     document.getElementById('tam-status-msg').textContent = 'a processar…';
@@ -34,42 +36,38 @@
     try {
       var buf = await file.arrayBuffer();
       var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-
-      // Collect raw items per page with position info for Method B
-      var allRows   = [];   // for Method A (row-grouped)
-      var allItems  = [];   // for Method B (raw item stream)
+      var allRows = [];  // rows in reading order, page by page
 
       for (var p = 1; p <= pdf.numPages; p++) {
         var page    = await pdf.getPage(p);
         var content = await page.getTextContent();
         allRows.push.apply(allRows, tamGroupByRows(content.items));
-        allItems.push.apply(allItems, content.items);
       }
 
-      // Run both extraction methods
-      var resultA = tamParseMethodA(allRows);
-      var resultB = tamParseMethodB(allItems);
+      // Both engines receive the same allRows — same input, different strategy
+      var resA = tamEngineA(allRows);
+      var resB = tamEngineB(allRows);
 
-      if (!resultA.grouped.length && !resultB.grouped.length) {
+      var result = tamCrossValidate(resA, resB);
+
+      if (!result.grouped.length) {
         document.getElementById('tam-status-msg').textContent = 'nenhum artigo encontrado.';
         return;
       }
 
-      // Cross-validate and pick best result
-      var merged = tamCrossValidate(resultA, resultB);
-
       document.getElementById('tam-status-msg').textContent =
-        merged.grouped.length + ' referências · ' + merged.totalPieces + ' unidades';
+        result.grouped.length + ' referências · ' + result.totalPieces + ' unidades';
 
       document.getElementById('tam-upload-label').classList.add('loaded');
       document.getElementById('tab-tam').classList.add('tam-loaded');
       document.getElementById('admin-app').classList.add('tam-loaded');
 
-      tamRenderMeta(merged);
-      tamRenderValidation(merged);
-      tamRenderTable(merged);
+      tamRenderMeta(result);
+      tamRenderValidation(result);
+      tamRenderTable(result);
+      tamEnsureStyles();
 
-      tamCurrentResult = merged;
+      tamCurrentResult = result;
       document.getElementById('tam-export-btn').classList.add('show');
     } catch(err) {
       console.error(err);
@@ -78,9 +76,48 @@
   }
 
   /* ════════════════════════════════════════════════════════════
-     MÉTODO A — baseado em linhas agrupadas por Y (original melhorado)
-     Fixes: REF_RE agora aceita underscore; janela de busca alargada
-     ════════════════════════════════════════════════════════════ */
+     SHARED UTILITIES
+  ════════════════════════════════════════════════════════════ */
+
+  // Fixed REF_RE: accepts hyphen AND underscore (e.g. JUS-24268_2)
+  var REF_RE = /^[A-Z]{2,5}([-_][A-Z0-9]+){1,6}$/;
+  var HS_RE  = /\b(6[0-3]\d{6})\b/;
+
+  function tamParseEU(s) { return parseFloat(String(s).replace(/\./g,'').replace(',','.')); }
+  function tamRound2(n)  { return Math.round(n * 100) / 100; }
+  function tamFmtEU(n)   {
+    if (n == null || isNaN(n)) return '—';
+    return Number(n).toLocaleString('pt-PT', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+  function tamEsc(s)      { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function tamCleanName(n){ return String(n||'').replace(/44/g,''); }
+
+  var GARMENT_WORDS = new Set([
+    'Blouse','Dress','Skirt','Top','Trouser','Trousers','Cardigan','Pullover','Pullunder',
+    'Culotte','Scarf','Jacket','Coat','Shirt','Leggings','Vest','Jumper','Sweater',
+    'Blazer','Shorts','Pants','Tee','Tunic','Cape','Poncho','Bodysuit','Overall',
+    'Jumpsuit','Romper','Light'
+  ]);
+  var BRANDS_SET = new Set(['hailys','zabaione']);
+
+  function tamExtractTypeAndName(beforeHS) {
+    var words = beforeHS.trim().split(/\s+/).filter(Boolean);
+    var start = 0;
+    while (start < words.length && BRANDS_SET.has(words[start].toLowerCase())) start++;
+    var relevant = words.slice(start);
+    if (!relevant.length) return { type:'', name:'' };
+    if (relevant.length === 1) return { type:'', name: tamCleanName(relevant[0]) };
+    var modelName   = tamCleanName(relevant[relevant.length - 1]);
+    var typeWords   = relevant.slice(0, relevant.length - 1);
+    var realGarment = typeWords.find(function(w){ return GARMENT_WORDS.has(w); });
+    var abbrevs     = typeWords.filter(function(w){ return !GARMENT_WORDS.has(w); });
+    var typeLabel   = realGarment
+      ? (abbrevs.length ? realGarment + ' ' + abbrevs.join(' ') : realGarment)
+      : typeWords.join(' ');
+    return { type: typeLabel.trim(), name: modelName };
+  }
+
+  /* Group PDF text items by Y coordinate into ordered rows */
   function tamGroupByRows(items) {
     if (!items.length) return [];
     var sorted = items.slice().sort(function(a,b){ return b.transform[5] - a.transform[5]; });
@@ -89,26 +126,75 @@
       var y = sorted[i].transform[5];
       if (Math.abs(y - lastY) > 3.5) {
         var row = cur.slice().sort(function(a,b){ return a.transform[4]-b.transform[4]; })
-                     .map(function(x){ return x.str.trim(); }).filter(function(s){ return s; });
+                     .map(function(x){ return x.str.trim(); }).filter(Boolean);
         if (row.length) rows.push(row);
         cur = [sorted[i]]; lastY = y;
       } else { cur.push(sorted[i]); }
     }
     var last = cur.slice().sort(function(a,b){ return a.transform[4]-b.transform[4]; })
-                  .map(function(x){ return x.str.trim(); }).filter(function(s){ return s; });
+                  .map(function(x){ return x.str.trim(); }).filter(Boolean);
     if (last.length) rows.push(last);
     return rows;
   }
 
-  // REF_RE melhorado: aceita hífen E underscore, e referências com sufixo numérico sozinho
-  var REF_RE = /^[A-Z]{2,5}(-[A-Z0-9]+|_[A-Z0-9]+){1,5}$/;
-  var HS_RE  = /\b(6[0-3]\d{6})\b/;
+  /* Build grouped summary from raw line items */
+  function tamBuildGrouped(rawItems) {
+    var map = {};
+    rawItems.forEach(function(item) {
+      if (!map[item.ref]) map[item.ref] = {
+        ref: item.ref, garmentType: item.garmentType, name: item.name,
+        pieces: 0, totalCost: 0, lines: []
+      };
+      var g = map[item.ref];
+      g.pieces    += item.pieces;
+      g.totalCost  = tamRound2(g.totalCost + item.total);
+      g.lines.push(item);
+      if (item.name)        g.name = item.name;
+      if (item.garmentType) g.garmentType = item.garmentType;
+    });
+    return Object.values(map);
+  }
 
-  function tamParseMethodA(allRows) {
+  /* Finalise result object */
+  function tamFinalise(rawItems, tagged) {
+    var grouped        = tamBuildGrouped(rawItems);
+    var totalPieces    = grouped.reduce(function(s,g){ return s+g.pieces; }, 0);
+    var subtotalGoods  = tamRound2(grouped.reduce(function(s,g){ return s+g.totalCost; }, 0));
+    var shipRow        = tagged.find(function(r){ return r.type==='SHIP'; });
+    var shipping       = shipRow ? shipRow.cost     : 0;
+    var shipPkgs       = shipRow ? shipRow.packages : 0;
+    var shipPerPiece   = totalPieces > 0 ? shipping / totalPieces : 0;
+
+    grouped.forEach(function(g) {
+      var baseUnit        = g.pieces > 0 ? g.totalCost / g.pieces : 0;
+      g.unitPriceWithShip = tamRound2(baseUnit + shipPerPiece);
+      g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+    });
+
+    var subtotalRows    = tagged.filter(function(r){ return r.type==='SUBTOTAL'; });
+    var invoiceSubtotal = subtotalRows.length ? subtotalRows[0].value : null;
+    var invNoRow        = tagged.find(function(r){ return r.type==='INVOICENO'; });
+    var invDateRow      = tagged.find(function(r){ return r.type==='DATE'; });
+
+    return {
+      rawItems, grouped, totalPieces, subtotalGoods, shipping, shipPkgs, shipPerPiece,
+      grandTotal:      tamRound2(subtotalGoods + shipping),
+      invoiceSubtotal,
+      invoiceNo:   invNoRow   ? invNoRow.value   : '—',
+      invoiceDate: invDateRow ? invDateRow.value : '—'
+    };
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     ENGINE A — HS-code anchor strategy (original, fixed)
+     For each row containing an HS code + numeric data,
+     looks backwards up to 20 rows for the nearest REF row.
+     Fix applied: REF_RE now accepts underscores (JUS-24268_2).
+  ════════════════════════════════════════════════════════════ */
+  function tamEngineA(allRows) {
     var tagged = allRows.map(function(tokens, idx) {
       var joined = tokens.join(' ');
 
-      // Referência: primeiro token que bate o padrão
       if (tokens[0] && REF_RE.test(tokens[0]))
         return { idx:idx, type:'REF', ref:tokens[0] };
 
@@ -121,13 +207,11 @@
           var pieces    = parseInt(numM[1]);
           var unitPrice = tamParseEU(numM[2]);
           var total     = tamParseEU(numM[3]);
-          var before    = joined.slice(0, hsPos);
-          var tn        = tamExtractTypeAndName(before);
+          var tn        = tamExtractTypeAndName(joined.slice(0, hsPos));
           return { idx:idx, type:'DATA', garmentType:tn.type, name:tn.name,
                    pieces:pieces, unitPrice:unitPrice, total:total };
         }
       }
-
       if (/Versandkosten|Transportation costs/i.test(joined)) {
         var anzM = joined.match(/Anzahl\s+(\d+)\s+([\d.]*\d+,\d{2})/);
         if (anzM) return { idx:idx, type:'SHIP', packages:parseInt(anzM[1]), cost:tamParseEU(anzM[2]) };
@@ -144,254 +228,202 @@
       return { idx:idx, type:'OTHER' };
     });
 
-    return tamBuildResult(tagged, 'A');
+    var rawItems = [];
+    tagged.forEach(function(row) {
+      if (row.type !== 'DATA') return;
+      for (var j = row.idx - 1; j >= Math.max(0, row.idx - 20); j--) {
+        if (tagged[j] && tagged[j].type === 'REF') {
+          rawItems.push({
+            ref: tagged[j].ref, garmentType: row.garmentType, name: row.name,
+            pieces: row.pieces, unitPrice: row.unitPrice, total: row.total,
+            valid: Math.abs(row.pieces * row.unitPrice - row.total) < 0.02
+          });
+          break;
+        }
+      }
+    });
+
+    return tamFinalise(rawItems, tagged);
   }
 
   /* ════════════════════════════════════════════════════════════
-     MÉTODO B — baseado em stream de itens ordenados por posição
-     Estratégia: reconstrói blocos de artigo pelo padrão TAM:
-       LINHA 1: REF + código_cor (ex: "BK-148-035 21000")
-       LINHA 2: cor + composição (ex: "camel 52%Viskose...")
-       LINHA 3: Herkunft/coo + Auftr.-Nr.
-       LINHA 4: Marca (Hailys / Zabaione)
-       LINHA 5: Tipo + HS code + qtd + p.unit + total
-     ════════════════════════════════════════════════════════════ */
-  function tamParseMethodB(rawItems) {
-    if (!rawItems.length) return tamEmptyResult('B');
+     ENGINE B — forward state-machine strategy
+     Scans rows top-to-bottom maintaining currentRef state.
+     When a REF row is found, it updates currentRef.
+     When a DATA row (HS + numbers) is found, it emits a line
+     using currentRef WITHOUT looking backwards.
+     This is fundamentally different from Engine A:
+       - Engine A:  DATA row → search back for REF
+       - Engine B:  REF row  → hold state → DATA row uses it
+     Both break on different edge cases, so discrepancies
+     between them reveal parsing errors reliably.
+  ════════════════════════════════════════════════════════════ */
+  function tamEngineB(allRows) {
+    var tagged     = [];
+    var currentRef = null;
+    var currentType= '';
+    var currentName= '';
 
-    // Sort all items top→bottom, left→right across all pages
-    var sorted = rawItems.slice().sort(function(a,b){
-      // group by Y (page order already handled by collecting per page)
-      var dy = b.transform[5] - a.transform[5];
-      if (Math.abs(dy) > 3) return dy;
-      return a.transform[4] - b.transform[4];
-    });
+    for (var i = 0; i < allRows.length; i++) {
+      var tokens = allRows[i];
+      var joined = tokens.join(' ');
 
-    // Reconstruct full text flow as a single array of {text, x, y}
-    var tokens = sorted.map(function(it){
-      return { text: it.str.trim(), x: it.transform[4], y: it.transform[5] };
-    }).filter(function(t){ return t.text; });
-
-    // Build a flat string that mirrors the PDF reading order
-    // Then apply a pattern-based scanner
-    var fullText = tokens.map(function(t){ return t.text; }).join('\n');
-    var lines = fullText.split('\n');
-
-    var tagged = [];
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-
-      // REF line: starts with a model code (with possible colour code after space)
-      // e.g. "BK-148-035 21000" or "AIM-BB2208071 90001" or "JUS-24268_2 12000"
-      var refM = line.match(/^([A-Z]{2,5}(?:[-_][A-Z0-9]+){1,5})(?:\s+\d+)?$/);
-      if (refM) {
-        tagged.push({ idx:i, type:'REF', ref:refM[1] });
+      // ── INVOICENO ──
+      if (/^ZY-\d+/.test(tokens[0]||'')) {
+        tagged.push({ idx:i, type:'INVOICENO', value:tokens[0] });
         continue;
       }
 
-      // HS code line with quantities
-      var hsM = line.match(HS_RE);
-      if (hsM) {
-        var hsPos = line.indexOf(hsM[1]);
-        var after = line.slice(hsPos + 8).trim();
+      // ── DATE ──
+      if (joined.includes('Datum/Date')) {
+        var dM = joined.match(/(\d{2}\.\d{2}\.\d{4})/);
+        if (dM) { tagged.push({ idx:i, type:'DATE', value:dM[1] }); continue; }
+      }
+
+      // ── SHIP ──
+      if (/Versandkosten|Transportation costs/i.test(joined)) {
+        var anzM = joined.match(/Anzahl\s+(\d+)\s+([\d.]*\d+,\d{2})/);
+        if (anzM) { tagged.push({ idx:i, type:'SHIP', packages:parseInt(anzM[1]), cost:tamParseEU(anzM[2]) }); continue; }
+      }
+
+      // ── SUBTOTAL ──
+      if (/Zwischensumme.*Subtotal/i.test(joined)) {
+        var nM = joined.match(/([\d.]*\d+,\d{2})\s*$/);
+        if (nM) { tagged.push({ idx:i, type:'SUBTOTAL', value:tamParseEU(nM[1]) }); continue; }
+      }
+
+      // ── REF row ──
+      // A row is a REF if:
+      //   1. First token matches REF_RE
+      //   2. Row has at most 2 tokens (ref + optional colour code)
+      //   3. There is NO HS code on this row (avoids misclassifying data rows)
+      if (tokens[0] && REF_RE.test(tokens[0]) && !HS_RE.test(joined)) {
+        var secondToken = tokens[1] || '';
+        // Second token (if any) must be a pure colour code (digits only) or empty
+        if (!secondToken || /^\d+$/.test(secondToken)) {
+          currentRef  = tokens[0];
+          currentType = '';
+          currentName = '';
+          tagged.push({ idx:i, type:'REF', ref:currentRef });
+          continue;
+        }
+      }
+
+      // ── DATA row (HS code + quantities) ──
+      var hsM = joined.match(HS_RE);
+      if (hsM && currentRef) {
+        var hsPos = joined.indexOf(hsM[1]);
+        var after = joined.slice(hsPos + 8).replace(/\s*\*\s*$/, '').trim();
         var numM  = after.match(/^(\d{1,4})\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2})/);
         if (numM) {
           var pieces    = parseInt(numM[1]);
           var unitPrice = tamParseEU(numM[2]);
           var total     = tamParseEU(numM[3]);
-          var before    = line.slice(0, hsPos);
-          var tn        = tamExtractTypeAndName(before);
-          tagged.push({ idx:i, type:'DATA', garmentType:tn.type, name:tn.name,
+          var tn        = tamExtractTypeAndName(joined.slice(0, hsPos));
+          if (tn.name)        currentName = tn.name;
+          if (tn.type)        currentType = tn.type;
+          tagged.push({ idx:i, type:'DATA', ref:currentRef,
+                        garmentType:currentType, name:currentName,
                         pieces:pieces, unitPrice:unitPrice, total:total });
           continue;
         }
       }
 
-      if (/Versandkosten|Transportation costs/i.test(line)) {
-        var anzM = line.match(/Anzahl\s+(\d+)\s+([\d.]*\d+,\d{2})/);
-        if (anzM) { tagged.push({ idx:i, type:'SHIP', packages:parseInt(anzM[1]), cost:tamParseEU(anzM[2]) }); continue; }
-      }
-      if (/Zwischensumme.*Subtotal/i.test(line)) {
-        var nM = line.match(/([\d.]*\d+,\d{2})\s*$/);
-        if (nM) { tagged.push({ idx:i, type:'SUBTOTAL', value:tamParseEU(nM[1]) }); continue; }
-      }
-      if (/^ZY-\d+/.test(line)) { tagged.push({ idx:i, type:'INVOICENO', value:line.split(' ')[0] }); continue; }
-      if (line.includes('Datum/Date')) {
-        var dM = line.match(/(\d{2}\.\d{2}\.\d{4})/);
-        if (dM) { tagged.push({ idx:i, type:'DATE', value:dM[1] }); continue; }
-      }
       tagged.push({ idx:i, type:'OTHER' });
     }
 
-    return tamBuildResult(tagged, 'B');
-  }
-
-  /* ── Shared result builder (used by both methods) ── */
-  function tamBuildResult(tagged, methodLabel) {
+    // Build rawItems directly from tagged DATA (ref already embedded)
     var rawItems = [];
     tagged.forEach(function(row) {
       if (row.type !== 'DATA') return;
-      var refRow = null;
-      // Search wider window backwards for a REF (up to 20 rows)
-      for (var j = row.idx - 1; j >= Math.max(0, row.idx - 20); j--) {
-        var t = tagged.find(function(x){ return x.idx === j; });
-        if (t && t.type === 'REF') { refRow = t; break; }
-      }
-      if (refRow) rawItems.push({
-        ref: refRow.ref, garmentType: row.garmentType, name: row.name,
+      rawItems.push({
+        ref: row.ref, garmentType: row.garmentType, name: row.name,
         pieces: row.pieces, unitPrice: row.unitPrice, total: row.total,
         valid: Math.abs(row.pieces * row.unitPrice - row.total) < 0.02
       });
     });
 
-    var groupMap = {};
-    rawItems.forEach(function(item) {
-      if (!groupMap[item.ref]) groupMap[item.ref] = {
-        ref:item.ref, garmentType:item.garmentType, name:item.name,
-        pieces:0, totalCost:0, lines:[]
-      };
-      var g = groupMap[item.ref];
-      g.pieces    += item.pieces;
-      g.totalCost  = tamRound2(g.totalCost + item.total);
-      g.lines.push(item);
-      if (item.name) g.name = item.name;
-      if (item.garmentType) g.garmentType = item.garmentType;
-    });
-    var grouped = Object.values(groupMap);
-
-    var totalPieces   = grouped.reduce(function(s,g){ return s+g.pieces; }, 0);
-    var subtotalGoods = tamRound2(grouped.reduce(function(s,g){ return s+g.totalCost; }, 0));
-
-    var shipRow      = tagged.find(function(r){ return r.type==='SHIP'; });
-    var shipping     = shipRow ? shipRow.cost     : 0;
-    var shipPkgs     = shipRow ? shipRow.packages : 0;
-    var shipPerPiece = totalPieces > 0 ? shipping / totalPieces : 0;
-
-    grouped.forEach(function(g) {
-      var baseUnit        = g.pieces > 0 ? g.totalCost / g.pieces : 0;
-      g.unitPriceWithShip = tamRound2(baseUnit + shipPerPiece);
-      g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
-    });
-
-    var subtotalRows    = tagged.filter(function(r){ return r.type==='SUBTOTAL'; });
-    var invoiceSubtotal = subtotalRows.length ? subtotalRows[0].value : null;
-    var invNoRow        = tagged.find(function(r){ return r.type==='INVOICENO'; });
-    var invDateRow      = tagged.find(function(r){ return r.type==='DATE'; });
-
-    return {
-      method: methodLabel,
-      rawItems, grouped, totalPieces, subtotalGoods, shipping, shipPkgs, shipPerPiece,
-      grandTotal: tamRound2(subtotalGoods + shipping),
-      invoiceSubtotal,
-      invoiceNo:   invNoRow   ? invNoRow.value   : '—',
-      invoiceDate: invDateRow ? invDateRow.value : '—'
-    };
-  }
-
-  function tamEmptyResult(label) {
-    return { method:label, rawItems:[], grouped:[], totalPieces:0, subtotalGoods:0,
-             shipping:0, shipPkgs:0, shipPerPiece:0, grandTotal:0,
-             invoiceSubtotal:null, invoiceNo:'—', invoiceDate:'—' };
+    return tamFinalise(rawItems, tagged);
   }
 
   /* ════════════════════════════════════════════════════════════
-     CROSS-VALIDATION — compara os dois métodos
-     Retorna resultado anotado com estado da concordância
-     ════════════════════════════════════════════════════════════ */
-  function tamCrossValidate(rA, rB) {
-    // Score: +1 por cada referência coincidente com mesma quantidade
-    var refsA = {}, refsB = {};
-    rA.grouped.forEach(function(g){ refsA[g.ref] = g.pieces; });
-    rB.grouped.forEach(function(g){ refsB[g.ref] = g.pieces; });
+     CROSS-VALIDATION
+  ════════════════════════════════════════════════════════════ */
+  function tamCrossValidate(resA, resB) {
+    var mapA = {}, mapB = {};
+    resA.grouped.forEach(function(g){ mapA[g.ref] = g; });
+    resB.grouped.forEach(function(g){ mapB[g.ref] = g; });
 
-    var allRefs = new Set([...Object.keys(refsA), ...Object.keys(refsB)]);
-    var matches = 0, mismatches = [], onlyInA = [], onlyInB = [];
+    var allRefs = Object.keys(Object.assign({}, mapA, mapB));
+    var confirmed = 0, conflicts = [], onlyA = [], onlyB = [];
 
-    allRefs.forEach(function(ref) {
-      var a = refsA[ref], b = refsB[ref];
-      if (a !== undefined && b !== undefined) {
-        if (a === b) { matches++; }
-        else { mismatches.push({ ref:ref, piecesA:a, piecesB:b }); }
-      } else if (a !== undefined) {
-        onlyInA.push(ref);
+    function scoreEngine(res) {
+      if (res.invoiceSubtotal == null || res.grouped.length === 0) return 9999;
+      return Math.abs(res.invoiceSubtotal - res.subtotalGoods);
+    }
+    var primary   = (resB.grouped.length > 0 && scoreEngine(resB) < scoreEngine(resA)) ? resB : resA;
+    var secondary = primary === resA ? resB : resA;
+
+    var mergedGrouped = allRefs.map(function(ref) {
+      var a = mapA[ref], b = mapB[ref];
+      if (a && b) {
+        var pOk = a.pieces === b.pieces;
+        var tOk = Math.abs(a.totalCost - b.totalCost) < 0.02;
+        if (pOk && tOk) {
+          confirmed++;
+          return Object.assign({}, a, { confidence:'CONFIRMED' });
+        } else {
+          conflicts.push({ ref:ref, pA:a.pieces, tA:a.totalCost, pB:b.pieces, tB:b.totalCost });
+          var aValid = a.lines.every(function(l){ return l.valid; });
+          var bValid = b.lines.every(function(l){ return l.valid; });
+          var chosen = (bValid && !aValid) ? b : a;
+          return Object.assign({}, chosen, {
+            confidence:'CONFLICT',
+            conflictDetail:'A: '+a.pieces+'un/'+tamFmtEU(a.totalCost)+'€ · B: '+b.pieces+'un/'+tamFmtEU(b.totalCost)+'€'
+          });
+        }
+      } else if (a) {
+        onlyA.push(ref);
+        return Object.assign({}, a, { confidence:'SOLO_A' });
       } else {
-        onlyInB.push(ref);
+        onlyB.push(ref);
+        return Object.assign({}, b, { confidence:'SOLO_B' });
       }
     });
 
-    var totalRefs = allRefs.size;
-    var scoreA = rA.invoiceSubtotal ? Math.abs(rA.invoiceSubtotal - rA.subtotalGoods) : 999;
-    var scoreB = rB.invoiceSubtotal ? Math.abs(rB.invoiceSubtotal - rB.subtotalGoods) : 999;
+    var totalPieces   = mergedGrouped.reduce(function(s,g){ return s+g.pieces; }, 0);
+    var subtotalGoods = tamRound2(mergedGrouped.reduce(function(s,g){ return s+g.totalCost; }, 0));
+    var shipping      = primary.shipping  || secondary.shipping;
+    var shipPkgs      = primary.shipPkgs  || secondary.shipPkgs;
+    var shipPerPiece  = totalPieces > 0 ? shipping / totalPieces : 0;
 
-    // Pick the method closest to the invoice subtotal, or with more refs if subtotal unavailable
-    var best;
-    if (rA.grouped.length === 0) best = rB;
-    else if (rB.grouped.length === 0) best = rA;
-    else if (scoreA <= scoreB) best = rA;
-    else best = rB;
+    mergedGrouped.forEach(function(g) {
+      var base = g.pieces > 0 ? g.totalCost / g.pieces : 0;
+      g.unitPriceWithShip = tamRound2(base + shipPerPiece);
+      g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+    });
 
-    // Concordância global
-    var agreementPct = totalRefs > 0 ? Math.round(matches / totalRefs * 100) : 0;
-    var fullyAgree   = mismatches.length === 0 && onlyInA.length === 0 && onlyInB.length === 0;
+    var meta = primary.invoiceNo !== '—' ? primary : secondary;
 
-    best.crossValidation = {
-      fullyAgree,
-      agreementPct,
-      matches,
-      totalRefs,
-      mismatches,   // refs com qtd diferente entre métodos
-      onlyInA,      // refs só no método A
-      onlyInB,      // refs só no método B
-      usedMethod: best.method,
-      piecesA: rA.totalPieces,
-      piecesB: rB.totalPieces,
-      subtotalA: rA.subtotalGoods,
-      subtotalB: rB.subtotalGoods,
-      refsA: rA.grouped.length,
-      refsB: rB.grouped.length
+    return {
+      grouped: mergedGrouped, rawItems: primary.rawItems,
+      totalPieces, subtotalGoods, shipping, shipPkgs, shipPerPiece,
+      grandTotal:      tamRound2(subtotalGoods + shipping),
+      invoiceSubtotal: meta.invoiceSubtotal,
+      invoiceNo:       meta.invoiceNo,
+      invoiceDate:     meta.invoiceDate,
+      xv: {
+        confirmed, conflicts, onlyA, onlyB,
+        fullyAgree: conflicts.length === 0 && onlyA.length === 0 && onlyB.length === 0,
+        refsA:  resA.grouped.length, unitsA: resA.totalPieces, subA: resA.subtotalGoods,
+        refsB:  resB.grouped.length, unitsB: resB.totalPieces, subB: resB.subtotalGoods
+      }
     };
-
-    return best;
   }
 
-  /* ── Clean model name: remove embedded "44" ── */
-  function tamCleanName(name) { return String(name||'').replace(/44/g,''); }
-
-  var GARMENT_WORDS = new Set([
-    'Blouse','Dress','Skirt','Top','Trouser','Trousers','Cardigan','Pullover','Pullunder',
-    'Culotte','Scarf','Jacket','Coat','Shirt','Leggings','Vest','Jumper',
-    'Sweater','Blazer','Shorts','Pants','Tee','Tunic','Cape','Poncho',
-    'Bodysuit','Overall','Jumpsuit','Romper','Light'
-  ]);
-  var BRANDS_SET = new Set(['hailys','zabaione']);
-
-  function tamExtractTypeAndName(beforeHS) {
-    var words = beforeHS.trim().split(/\s+/).filter(function(w){ return w; });
-    var start = 0;
-    while (start < words.length && BRANDS_SET.has(words[start].toLowerCase())) start++;
-    var relevant = words.slice(start);
-    if (!relevant.length) return { type:'', name:'' };
-    if (relevant.length === 1) return { type:'', name: tamCleanName(relevant[0]) };
-    var modelName  = tamCleanName(relevant[relevant.length - 1]);
-    var typeWords  = relevant.slice(0, relevant.length - 1);
-    var realGarment = typeWords.find(function(w){ return GARMENT_WORDS.has(w); });
-    var abbrevs     = typeWords.filter(function(w){ return !GARMENT_WORDS.has(w); });
-    var typeLabel   = realGarment
-      ? (abbrevs.length ? realGarment + ' ' + abbrevs.join(' ') : realGarment)
-      : typeWords.join(' ');
-    return { type: typeLabel.trim(), name: modelName };
-  }
-
-  /* ── Helpers ── */
-  function tamParseEU(s)  { return parseFloat(String(s).replace(/\./g,'').replace(',','.')); }
-  function tamRound2(n)   { return Math.round(n*100)/100; }
-  function tamFmtEU(n)    {
-    if (n==null||isNaN(n)) return '—';
-    return Number(n).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2});
-  }
-  function tamEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-  /* ── Render meta ── */
+  /* ════════════════════════════════════════════════════════════
+     RENDER: META
+  ════════════════════════════════════════════════════════════ */
   function tamRenderMeta(r) {
     var el = document.getElementById('tam-invoice-meta');
     el.innerHTML =
@@ -405,151 +437,134 @@
     el.classList.add('show');
   }
 
-  /* ── Render validation (inclui painel de cross-validation) ── */
+  /* ════════════════════════════════════════════════════════════
+     RENDER: VALIDATION BANNER
+  ════════════════════════════════════════════════════════════ */
   function tamRenderValidation(r) {
-    var el       = document.getElementById('tam-validation-banner');
-    var badLines = r.rawItems.filter(function(i){ return !i.valid; });
-    var subOk    = r.invoiceSubtotal !== null ? Math.abs(r.invoiceSubtotal - r.subtotalGoods) < 0.05 : true;
-    var cv       = r.crossValidation || {};
-    var allOk    = badLines.length === 0 && subOk && (cv.fullyAgree !== false);
+    var el  = document.getElementById('tam-validation-banner');
+    var xv  = r.xv;
+    var subOk = r.invoiceSubtotal != null ? Math.abs(r.invoiceSubtotal - r.subtotalGoods) < 0.05 : true;
+    var allOk = xv.fullyAgree && subOk;
 
-    var subLine = r.invoiceSubtotal !== null
+    var subLine = r.invoiceSubtotal != null
       ? 'fatura: <strong>'+tamFmtEU(r.invoiceSubtotal)+' €</strong> · calculado: <strong>'+tamFmtEU(r.subtotalGoods)+' €</strong>'
       : 'calculado: <strong>'+tamFmtEU(r.subtotalGoods)+' €</strong>';
 
-    // Cross-validation panel
     var cvHtml = '';
-    if (cv) {
-      var cvIcon  = cv.fullyAgree ? '✅' : '⚠️';
-      var cvLabel = cv.fullyAgree
-        ? 'ambos os métodos coincidem 100%'
-        : cv.agreementPct + '% de concordância entre métodos';
-
-      cvHtml = '<div class="tam-vi tam-cv-row"><em>cross-validação</em><span>' +
-        cvIcon + ' <strong>' + cvLabel + '</strong>' +
-        ' &nbsp;·&nbsp; método usado: <strong>' + (cv.usedMethod === 'A' ? 'A (linhas)' : 'B (stream)') + '</strong>' +
-        '</span></div>';
-
-      // Detalhes de divergências entre métodos
-      if (!cv.fullyAgree) {
-        var details = [];
-        if (cv.mismatches && cv.mismatches.length) {
-          details.push('<div class="tam-cv-detail-block"><strong>quantidades divergentes:</strong><ul>' +
-            cv.mismatches.map(function(m){
-              return '<li><code>'+tamEsc(m.ref)+'</code> — método A: <strong>'+m.piecesA+' un</strong> · método B: <strong>'+m.piecesB+' un</strong></li>';
-            }).join('') + '</ul></div>');
-        }
-        if (cv.onlyInA && cv.onlyInA.length) {
-          details.push('<div class="tam-cv-detail-block"><strong>só no método A:</strong> ' +
-            cv.onlyInA.map(function(r){ return '<code>'+tamEsc(r)+'</code>'; }).join(', ') + '</div>');
-        }
-        if (cv.onlyInB && cv.onlyInB.length) {
-          details.push('<div class="tam-cv-detail-block"><strong>só no método B:</strong> ' +
-            cv.onlyInB.map(function(r){ return '<code>'+tamEsc(r)+'</code>'; }).join(', ') + '</div>');
-        }
-        if (details.length) {
-          cvHtml += '<div class="tam-cv-details">' + details.join('') + '</div>';
-        }
-
-        cvHtml += '<div class="tam-vi tam-cv-compare"><em>comparação de métodos</em><span>' +
-          'A: <strong>'+cv.refsA+' refs · '+cv.piecesA+' un · '+tamFmtEU(cv.subtotalA)+' €</strong>' +
-          '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          'B: <strong>'+cv.refsB+' refs · '+cv.piecesB+' un · '+tamFmtEU(cv.subtotalB)+' €</strong>' +
-          '</span></div>';
+    if (allOk) {
+      cvHtml = '<div class="tam-vi" style="color:#2a7a2a"><em>dupla verificação</em>' +
+               '<span>✅ motores A e B coincidem em <strong>'+xv.confirmed+' referências</strong></span></div>';
+    } else {
+      cvHtml += '<div class="tam-vi"><em>motor A</em><span>'+xv.refsA+' refs · '+xv.unitsA+' un · '+tamFmtEU(xv.subA)+' €</span></div>';
+      cvHtml += '<div class="tam-vi"><em>motor B</em><span>'+xv.refsB+' refs · '+xv.unitsB+' un · '+tamFmtEU(xv.subB)+' €</span></div>';
+      if (xv.confirmed > 0)
+        cvHtml += '<div class="tam-vi"><em>coincidências</em><span><strong>'+xv.confirmed+'</strong> refs iguais nos dois motores</span></div>';
+      if (xv.conflicts.length) {
+        var cLines = xv.conflicts.map(function(c){
+          return '<span class="tam-conflict-ref">'+tamEsc(c.ref)+'</span> (A: '+c.pA+'un/'+tamFmtEU(c.tA)+'€ · B: '+c.pB+'un/'+tamFmtEU(c.tB)+'€)';
+        }).join('<br>');
+        cvHtml += '<div class="tam-vi"><em style="color:#c00">⚠️ conflitos ('+xv.conflicts.length+')</em><span>'+cLines+'</span></div>';
       }
+      if (xv.onlyA.length) cvHtml += '<div class="tam-vi"><em>só em A</em><span>'+xv.onlyA.map(tamEsc).join(', ')+'</span></div>';
+      if (xv.onlyB.length) cvHtml += '<div class="tam-vi"><em>só em B</em><span>'+xv.onlyB.map(tamEsc).join(', ')+'</span></div>';
     }
 
+    var badLines = r.rawItems.filter(function(i){ return !i.valid; });
     el.innerHTML =
-      '<div class="tam-vi"><em>estado</em><span>'+(allOk?'✅ fatura correcta':'⚠️ divergência detectada')+'</span></div>' +
+      '<div class="tam-vi"><em>estado</em><span>'+(allOk?'✅ fatura correcta':'⚠️ verificar itens marcados')+'</span></div>' +
       '<div class="tam-vi"><em>subtotal mercadoria</em><span>'+subLine+'</span></div>' +
-      '<div class="tam-vi"><em>linhas verificadas</em><span><strong>'+(r.rawItems.length-badLines.length)+'/'+r.rawItems.length+'</strong> correctas'+(badLines.length?' · <strong style="color:#c00">'+badLines.length+' com erro</strong>':'')+'</span></div>' +
-      '<div class="tam-vi"><em>transporte por unidade</em><span><strong>'+tamFmtEU(r.shipping)+' €</strong> ÷ '+r.totalPieces+' un = <strong>'+tamFmtEU(r.shipPerPiece)+' €/un</strong></span></div>' +
-      cvHtml;
+      '<div class="tam-vi"><em>linhas verificadas</em><span><strong>'+(r.rawItems.length-badLines.length)+'/'+r.rawItems.length+'</strong> correctas'+
+        (badLines.length?' · <strong style="color:#c00">'+badLines.length+' com erro</strong>':'')+'</span></div>' +
+      cvHtml +
+      '<div class="tam-vi"><em>transporte por unidade</em><span><strong>'+tamFmtEU(r.shipping)+' €</strong> ÷ '+r.totalPieces+' un = <strong>'+tamFmtEU(r.shipPerPiece)+' €/un</strong></span></div>';
 
     el.className = allOk ? 'ok' : 'err';
   }
 
-  /* ── Render table ── */
+  /* ════════════════════════════════════════════════════════════
+     RENDER: TABLE
+  ════════════════════════════════════════════════════════════ */
   function tamRenderTable(r) {
     if (!r.grouped.length) return;
     var html = '<table class="tam-table"><thead><tr>' +
-      '<th class="tam-row-num">#</th>' +
-      '<th>referência</th>' +
-      '<th>tipo · nome</th>' +
-      '<th>unidades</th>' +
-      '<th>p. unit. c/ envio</th>' +
-      '<th>total</th>' +
-      '<th>✓</th>' +
+      '<th class="tam-row-num">#</th><th>referência</th><th>tipo · nome</th>' +
+      '<th>unidades</th><th>p. unit. c/ envio</th><th>total</th><th>✓</th>' +
       '</tr></thead><tbody>';
 
     r.grouped.forEach(function(g, i) {
-      var allValid  = g.lines.every(function(l){ return l.valid; });
-      var typeNome  = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'—');
-      html += '<tr>' +
+      var allValid = g.lines ? g.lines.every(function(l){ return l.valid; }) : true;
+      var conf     = g.confidence || 'CONFIRMED';
+      var typeNome = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'—');
+      var rowCls   = conf==='CONFLICT' ? ' class="tam-row-conflict"' : (conf==='SOLO_A'||conf==='SOLO_B') ? ' class="tam-row-solo"' : '';
+      var checkIcon= conf==='CONFLICT' ? '⚠' : (conf==='SOLO_A'||conf==='SOLO_B') ? '?' : (allValid?'✓':'✗');
+      var checkCls = conf==='CONFLICT' ? 'tam-chk-warn' : (conf==='SOLO_A'||conf==='SOLO_B') ? 'tam-chk-solo' : (allValid?'tam-chk-ok':'tam-chk-err');
+      var tooltip  = conf==='CONFLICT' ? ' title="'+tamEsc(g.conflictDetail||'')+'"' : '';
+      var badge    = conf!=='CONFIRMED' ? '<span class="tam-badge tam-badge-'+conf.toLowerCase()+'">'+conf+'</span>' : '';
+
+      html += '<tr'+rowCls+tooltip+'>' +
         '<td class="tam-row-num">'+(i+1)+'</td>' +
-        '<td><strong>'+tamEsc(g.ref)+'</strong></td>' +
+        '<td><strong>'+tamEsc(g.ref)+'</strong>'+badge+'</td>' +
         '<td>'+tamEsc(typeNome)+'</td>' +
         '<td>'+g.pieces+'</td>' +
         '<td>'+tamFmtEU(g.unitPriceWithShip)+' €</td>' +
         '<td><strong>'+tamFmtEU(g.grandTotal)+' €</strong></td>' +
-        '<td class="'+(allValid?'tam-chk-ok':'tam-chk-err')+'">'+(allValid?'✓':'✗')+'</td>' +
+        '<td class="'+checkCls+'">'+checkIcon+'</td>' +
         '</tr>';
     });
 
     html += '</tbody><tfoot>' +
-      '<tr>' +
-        '<td class="tam-row-num"></td>' +
-        '<td colspan="2"><strong>subtotal mercadoria</strong></td>' +
-        '<td><strong>'+r.totalPieces+' un</strong></td>' +
-        '<td></td>' +
-        '<td><strong>'+tamFmtEU(r.subtotalGoods)+' €</strong></td>' +
-        '<td></td>' +
-      '</tr>' +
-      '<tr class="tam-tr-ship">' +
-        '<td class="tam-row-num"></td>' +
-        '<td colspan="2">transporte · '+r.shipPkgs+' pacotes × 17,50 €</td>' +
-        '<td></td><td></td>' +
-        '<td>'+tamFmtEU(r.shipping)+' €</td>' +
-        '<td></td>' +
-      '</tr>' +
-      '<tr class="tam-tr-grand">' +
-        '<td class="tam-row-num"></td>' +
-        '<td colspan="2"><strong>total geral</strong></td>' +
-        '<td><strong>'+r.totalPieces+' un</strong></td>' +
-        '<td></td>' +
-        '<td><strong>'+tamFmtEU(r.grandTotal)+' €</strong></td>' +
-        '<td></td>' +
-      '</tr>' +
+      '<tr><td class="tam-row-num"></td><td colspan="2"><strong>subtotal mercadoria</strong></td>' +
+      '<td><strong>'+r.totalPieces+' un</strong></td><td></td><td><strong>'+tamFmtEU(r.subtotalGoods)+' €</strong></td><td></td></tr>' +
+      '<tr class="tam-tr-ship"><td class="tam-row-num"></td><td colspan="2">transporte · '+r.shipPkgs+' pacotes × 17,50 €</td>' +
+      '<td></td><td></td><td>'+tamFmtEU(r.shipping)+' €</td><td></td></tr>' +
+      '<tr class="tam-tr-grand"><td class="tam-row-num"></td><td colspan="2"><strong>total geral</strong></td>' +
+      '<td><strong>'+r.totalPieces+' un</strong></td><td></td><td><strong>'+tamFmtEU(r.grandTotal)+' €</strong></td><td></td></tr>' +
       '</tfoot></table>';
 
     document.getElementById('tam-results-wrap').innerHTML = html;
   }
 
-  /* ── Excel (CSV) export ── */
+  /* ════════════════════════════════════════════════════════════
+     INJECT STYLES (once)
+  ════════════════════════════════════════════════════════════ */
+  function tamEnsureStyles() {
+    if (document.getElementById('tam-xv-styles')) return;
+    var s = document.createElement('style');
+    s.id  = 'tam-xv-styles';
+    s.textContent =
+      '.tam-row-conflict td{background:#fff8e1!important}' +
+      '.tam-row-solo td{background:#f5f5f5!important}' +
+      '.tam-chk-warn{color:#e67e00;font-weight:bold;text-align:center}' +
+      '.tam-chk-solo{color:#999;font-weight:bold;text-align:center}' +
+      '.tam-badge{display:inline-block;margin-left:5px;font-size:.6rem;padding:1px 4px;border-radius:3px;vertical-align:middle;font-weight:bold;color:#fff}' +
+      '.tam-badge-conflict{background:#e67e00}' +
+      '.tam-badge-solo_a,.tam-badge-solo_b{background:#999}' +
+      '.tam-conflict-ref{font-weight:bold;color:#c00}';
+    document.head.appendChild(s);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     EXPORT CSV
+  ════════════════════════════════════════════════════════════ */
   document.getElementById('tam-export-btn').addEventListener('click', function() {
     if (!tamCurrentResult) return;
     var r = tamCurrentResult;
-    var BOM = '\uFEFF';
-    var lines = [];
-    lines.push(['Referência','Tipo · Nome','Unidades','P. Unit. c/ Envio (€)','Total (€)','OK'].join(';'));
+    var lines = ['\uFEFF'+['Referência','Tipo · Nome','Unidades','P.Unit c/ Envio (€)','Total (€)','OK','Verificação'].join(';')];
     r.grouped.forEach(function(g) {
-      var allValid = g.lines.every(function(l){ return l.valid; });
-      var typeNome = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'');
-      lines.push([g.ref, typeNome, g.pieces, tamFmtEU(g.unitPriceWithShip), tamFmtEU(g.grandTotal), allValid?'SIM':'NÃO'].join(';'));
+      var ok = g.lines ? g.lines.every(function(l){ return l.valid; }) : true;
+      var tn = (g.garmentType||'')+(g.garmentType&&g.name?' · ':'')+( g.name||'');
+      lines.push([g.ref, tn, g.pieces, tamFmtEU(g.unitPriceWithShip), tamFmtEU(g.grandTotal), ok?'SIM':'NÃO', g.confidence||'CONFIRMED'].join(';'));
     });
     lines.push('');
-    lines.push(['Subtotal mercadoria','', r.totalPieces, '', tamFmtEU(r.subtotalGoods), ''].join(';'));
-    lines.push(['Transporte ('+r.shipPkgs+' pacotes × 17,50 €)','','','', tamFmtEU(r.shipping),''].join(';'));
-    lines.push(['Total geral','', r.totalPieces, '', tamFmtEU(r.grandTotal), ''].join(';'));
-    var csv  = BOM + lines.join('\r\n');
-    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    lines.push(['Subtotal mercadoria','',r.totalPieces,'',tamFmtEU(r.subtotalGoods),'',''].join(';'));
+    lines.push(['Transporte ('+r.shipPkgs+' × 17,50 €)','','','',tamFmtEU(r.shipping),'',''].join(';'));
+    lines.push(['Total geral','',r.totalPieces,'',tamFmtEU(r.grandTotal),'',''].join(';'));
+    var blob = new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url  = URL.createObjectURL(blob);
     var a    = document.createElement('a');
-    a.href = url;
-    a.download = 'TAM_' + (r.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_') + '.csv';
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    a.href=url; a.download='TAM_'+(r.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_')+'.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); },1000);
   });
 
 })();

@@ -59,7 +59,7 @@
         .from('claves')
         .select('tienda, rol')
         .eq('clave', userKey)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         alert('Senha incorreta');

@@ -519,14 +519,15 @@
       }
 
       // ── Motor selector — always visible on divergence ──
-      var selectorBtns=xv.engines.map(function(e){
+      var selectorBtns=xv.engines.map(function(e, rank){
         var er=tamEngineResults[e.label];
         var refs=er?er.grouped.length:0, units=er?er.totalPieces:0;
         var sub=er?tamFmtEU(er.subtotalGoods):'—';
         var isActive = e.label===xv.activeEngine;
+        var isBest   = e.label===xv.autoEngine;
         var cls='tam-ebtn'+(isActive?' tam-ebtn-active':'');
         return '<button class="'+cls+'" data-engine="'+e.label+'">'+
-                 '<span class="tam-ebtn-label">Motor '+e.label+'</span>'+
+                 '<span class="tam-ebtn-label">'+(rank+1)+'. Motor '+e.label+(isBest?' ★':'')+'</span>'+
                  '<span class="tam-ebtn-detail">'+refs+' refs · '+units+' un<br>'+sub+' €</span>'+
                '</button>';
       }).join('');
@@ -576,21 +577,13 @@
 
     var html=
       '<table class="tam-table">'+
-      '<colgroup>'+
-        '<col style="width:30px">'+       // #
-        '<col style="width:150px">'+      // referência
-        '<col style="width:220px">'+      // tipo · nome  ← explicit px, not auto
-        '<col style="width:50px">'+       // UND
-        '<col style="width:92px">'+       // P.Unit/T
-        '<col style="width:92px">'+       // Total
-      '</colgroup>'+
       '<thead><tr>'+
-        '<th style="text-align:center">#</th>'+
-        '<th style="text-align:left;padding-left:8px">referência</th>'+
-        '<th style="text-align:left;padding-left:8px">tipo · nome</th>'+
-        '<th style="text-align:center">UND</th>'+
-        '<th style="text-align:right;padding-right:10px">P.Unit/T</th>'+
-        '<th style="text-align:right;padding-right:10px">Total</th>'+
+        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">#</th>'+
+        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">referência</th>'+
+        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">tipo · nome</th>'+
+        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">UND</th>'+
+        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">P.Unit/T</th>'+
+        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">Total</th>'+
       '</tr></thead><tbody>';
 
     r.grouped.forEach(function(g, i){
@@ -604,14 +597,14 @@
 
       html+=
         '<tr'+rowCls+tooltip+'>'+
-        '<td style="text-align:center;color:#aaa;font-size:.72rem">'+(i+1)+'</td>'+
-        '<td style="text-align:left;padding-left:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+        '<td style="text-align:center;white-space:nowrap;padding:4px 10px;color:#aaa;font-size:.72rem">'+(i+1)+'</td>'+
+        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+
           '<strong>'+tamEsc(g.ref)+'</strong>'+badge+'</td>'+
-        '<td style="text-align:left;padding-left:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+tamEsc(typeNome)+'">'+
+        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+
           tamEsc(typeNome)+'</td>'+
-        '<td style="text-align:center;white-space:nowrap">'+g.pieces+'</td>'+
-        '<td style="text-align:right;padding-right:10px;white-space:nowrap">'+tamFmtEU(g.unitPriceWithShip)+'</td>'+
-        '<td style="text-align:right;padding-right:10px;white-space:nowrap"><strong>'+tamFmtEU(g.grandTotal)+'</strong></td>'+
+        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+g.pieces+'</td>'+
+        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+tamFmtEU(g.unitPriceWithShip)+'</td>'+
+        '<td style="text-align:center;white-space:nowrap;padding:4px 10px"><strong>'+tamFmtEU(g.grandTotal)+'</strong></td>'+
         '</tr>';
     });
 
@@ -619,23 +612,23 @@
       '</tbody><tfoot>'+
       '<tr>'+
         '<td></td>'+
-        '<td colspan="2" style="text-align:left;padding-left:8px"><strong>subtotal mercadoria</strong></td>'+
-        '<td style="text-align:center"><strong>'+r.totalPieces+'</strong></td>'+
+        '<td colspan="2" style="text-align:center;padding:4px 10px"><strong>subtotal mercadoria</strong></td>'+
+        '<td style="text-align:center;padding:4px 10px"><strong>'+r.totalPieces+'</strong></td>'+
         '<td></td>'+
-        '<td style="text-align:right;padding-right:10px"><strong>'+tamFmtEU(r.subtotalGoods)+'</strong></td>'+
+        '<td style="text-align:center;padding:4px 10px"><strong>'+tamFmtEU(r.subtotalGoods)+'</strong></td>'+
       '</tr>'+
       '<tr class="tam-tr-ship">'+
         '<td></td>'+
-        '<td colspan="2" style="text-align:left;padding-left:8px">transporte · '+r.shipPkgs+' pac. × 17,50 €</td>'+
+        '<td colspan="2" style="text-align:center;padding:4px 10px">transporte · '+r.shipPkgs+' pac. × 17,50 €</td>'+
         '<td></td><td></td>'+
-        '<td style="text-align:right;padding-right:10px">'+tamFmtEU(r.shipping)+'</td>'+
+        '<td style="text-align:center;padding:4px 10px">'+tamFmtEU(r.shipping)+'</td>'+
       '</tr>'+
       '<tr class="tam-tr-grand">'+
         '<td></td>'+
-        '<td colspan="2" style="text-align:left;padding-left:8px"><strong>total geral</strong></td>'+
-        '<td style="text-align:center"><strong>'+r.totalPieces+'</strong></td>'+
+        '<td colspan="2" style="text-align:center;padding:4px 10px"><strong>total geral</strong></td>'+
+        '<td style="text-align:center;padding:4px 10px"><strong>'+r.totalPieces+'</strong></td>'+
         '<td></td>'+
-        '<td style="text-align:right;padding-right:10px"><strong>'+tamFmtEU(r.grandTotal)+'</strong></td>'+
+        '<td style="text-align:center;padding:4px 10px"><strong>'+tamFmtEU(r.grandTotal)+'</strong></td>'+
       '</tr>'+
       '</tfoot></table>';
 
@@ -650,8 +643,9 @@
     var s=document.createElement('style');
     s.id='tam-xv-styles';
     s.textContent=[
-      /* Force fixed layout so <col> widths are respected */
-      '.tam-table{table-layout:fixed!important;width:100%!important}',
+      /* Auto layout so columns fit their content exactly */
+      '.tam-table{table-layout:auto!important;width:auto!important;min-width:100%;border-collapse:collapse}',
+      '.tam-table th,.tam-table td{white-space:nowrap!important}',
       /* Row states */
       '.tam-row-conflict td{background:#fff8e1!important}',
       '.tam-row-solo td{background:#f5f5f5!important}',
@@ -660,7 +654,11 @@
       '.tam-badge-conflict{background:#e67e00}',
       '.tam-badge-solo_a,.tam-badge-solo_b,.tam-badge-solo_c{background:#999}',
       '.tam-conflict-ref{font-weight:bold;color:#c00}',
-      /* Engine selector */
+      /* Invoice meta panel — always visible when populated */
+      '#tam-invoice-meta.show{display:flex!important;flex-wrap:wrap;gap:10px 20px;padding:10px 0}',
+      '#tam-invoice-meta .tam-mi{display:flex;flex-direction:column;gap:2px;min-width:120px}',
+      '#tam-invoice-meta .tam-mi em{font-style:normal;font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;color:#888}',
+      '#tam-invoice-meta .tam-mi strong{font-size:.88rem;color:#111}',
       '.tam-engine-sel-wrap{grid-column:1/-1;width:100%;margin-top:2px}',
       '.tam-engine-btns{display:flex;gap:8px;margin-top:5px;justify-content:center;flex-wrap:wrap}',
       '.tam-ebtn{border:1px solid #ccc;background:#fafafa;padding:6px 18px;border-radius:8px;'+

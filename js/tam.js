@@ -94,7 +94,12 @@
     return Number(n).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
   function tamEsc(s)       { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function tamCleanName(n) { return String(n||'').replace(/44/g,''); }
+  function tamCleanName(n) {
+    return String(n||'')
+      .replace(/\bModell\s*:\s*/gi, '')   // remove "Modell:" prefix
+      .replace(/44/g, '')                  // remove stray "44"
+      .trim();
+  }
 
   var GARMENT_WORDS = new Set([
     'Blouse','Dress','Skirt','Top','Trouser','Trousers','Cardigan','Pullover','Pullunder',
@@ -477,6 +482,7 @@
       '<div class="tam-mi"><em>total unidades</em><strong>'+r.totalPieces+'</strong></div>'+
       '<div class="tam-mi"><em>envio (pacotes)</em><strong>'+r.shipPkgs+'</strong></div>';
     el.classList.add('show');
+    el.style.cssText = 'display:flex!important;flex-wrap:wrap;gap:10px 20px;padding:10px 0;visibility:visible;opacity:1';
   }
 
   /* ════════════════════════════════════════════════════════════
@@ -501,12 +507,21 @@
       cvHtml='<div class="tam-vi" style="color:#2a7a2a"><em>tripla verificação</em>'+
              '<span>✅ todos os motores coincidem · <strong>'+xv.confirmed+' refs confirmadas</strong></span></div>';
     } else {
-      // Engine stats row
+      // Engine stats row — show merged label if two agree
+      var _e0=xv.engines[0],_e1=xv.engines[1],_e2=xv.engines[2];
+      function _eKey(e){return e.refs+'|'+e.units+'|'+tamFmtEU(e.sub);}
       var engLines=xv.engines.map(function(e){
         var star = e.label===xv.autoEngine ? ' ★' : '';
-        return 'Motor <strong>'+e.label+star+'</strong>: '+e.refs+' refs / '+e.units+' un / '+tamFmtEU(e.sub)+'€';
-      }).join('&emsp;&emsp;');
-      cvHtml+='<div class="tam-vi"><em>motores</em><span style="white-space:nowrap">'+engLines+'</span></div>';
+        var lbl = e.label;
+        if (_eKey(_e0)===_eKey(_e1)&&(e.label===_e0.label||e.label===_e1.label)) lbl=_e0.label+'+'+_e1.label;
+        else if (_eKey(_e0)===_eKey(_e2)&&(e.label===_e0.label||e.label===_e2.label)) lbl=_e0.label+'+'+_e2.label;
+        else if (_eKey(_e1)===_eKey(_e2)&&(e.label===_e1.label||e.label===_e2.label)) lbl=_e1.label+'+'+_e2.label;
+        return 'Motor <strong>'+lbl+star+'</strong>: '+e.refs+' refs / '+e.units+' un / '+tamFmtEU(e.sub)+'€';
+      });
+      // deduplicate merged entries
+      var seen={}, engLinesDed=[];
+      engLines.forEach(function(l){if(!seen[l]){seen[l]=true;engLinesDed.push(l);}});
+      cvHtml+='<div class="tam-vi"><em>motores</em><span style="white-space:nowrap">'+engLinesDed.join('&emsp;&emsp;')+'</span></div>';
 
       if (xv.confirmed>0)
         cvHtml+='<div class="tam-vi"><em>coincidências</em><span><strong>'+xv.confirmed+'</strong> refs iguais em vários motores</span></div>';
@@ -519,16 +534,61 @@
       }
 
       // ── Motor selector — always visible on divergence ──
-      var selectorBtns=xv.engines.map(function(e, rank){
-        var er=tamEngineResults[e.label];
-        var refs=er?er.grouped.length:0, units=er?er.totalPieces:0;
-        var sub=er?tamFmtEU(er.subtotalGoods):'—';
-        var isActive = e.label===xv.activeEngine;
-        var isBest   = e.label===xv.autoEngine;
+      // If two engines agree (same refs/units/sub), merge them into one button → only 2 choices shown
+      var engA = xv.engines[0], engB = xv.engines[1], engC = xv.engines[2];
+      function engKey(e){ return e.refs+'|'+e.units+'|'+tamFmtEU(e.sub); }
+      var groups; // array of { labels:[], rankLabel, isBest, isActive }
+      if (engKey(engA)===engKey(engB)) {
+        // best two agree → merged first button, solo third
+        groups = [
+          { labels:[engA.label,engB.label], isBest:true,
+            refs:engA.refs, units:engA.units, sub:tamFmtEU(tamEngineResults[engA.label]?tamEngineResults[engA.label].subtotalGoods:0),
+            pickLabel: (xv.activeEngine===engB.label ? engB.label : engA.label) },
+          { labels:[engC.label], isBest:false,
+            refs:engC.refs, units:engC.units, sub:tamFmtEU(tamEngineResults[engC.label]?tamEngineResults[engC.label].subtotalGoods:0),
+            pickLabel: engC.label }
+        ];
+      } else if (engKey(engA)===engKey(engC)) {
+        // 1st and 3rd agree
+        groups = [
+          { labels:[engA.label,engC.label], isBest:true,
+            refs:engA.refs, units:engA.units, sub:tamFmtEU(tamEngineResults[engA.label]?tamEngineResults[engA.label].subtotalGoods:0),
+            pickLabel: (xv.activeEngine===engC.label ? engC.label : engA.label) },
+          { labels:[engB.label], isBest:false,
+            refs:engB.refs, units:engB.units, sub:tamFmtEU(tamEngineResults[engB.label]?tamEngineResults[engB.label].subtotalGoods:0),
+            pickLabel: engB.label }
+        ];
+      } else if (engKey(engB)===engKey(engC)) {
+        // 2nd and 3rd agree → solo best first, merged second
+        groups = [
+          { labels:[engA.label], isBest:true,
+            refs:engA.refs, units:engA.units, sub:tamFmtEU(tamEngineResults[engA.label]?tamEngineResults[engA.label].subtotalGoods:0),
+            pickLabel: engA.label },
+          { labels:[engB.label,engC.label], isBest:false,
+            refs:engB.refs, units:engB.units, sub:tamFmtEU(tamEngineResults[engB.label]?tamEngineResults[engB.label].subtotalGoods:0),
+            pickLabel: (xv.activeEngine===engC.label ? engC.label : engB.label) }
+        ];
+      } else {
+        // all three differ — 3 separate buttons
+        groups = xv.engines.map(function(e){
+          var er=tamEngineResults[e.label];
+          return { labels:[e.label], isBest:e.label===xv.autoEngine,
+            refs:e.refs, units:e.units,
+            sub:tamFmtEU(er?er.subtotalGoods:0), pickLabel:e.label };
+        });
+      }
+
+      var selectorBtns=groups.map(function(g, rank){
+        var isActive = g.labels.indexOf(xv.activeEngine)!==-1;
         var cls='tam-ebtn'+(isActive?' tam-ebtn-active':'');
-        return '<button class="'+cls+'" data-engine="'+e.label+'">'+
-                 '<span class="tam-ebtn-label">'+(rank+1)+'. Motor '+e.label+(isBest?' ★':'')+'</span>'+
-                 '<span class="tam-ebtn-detail">'+refs+' refs · '+units+' un<br>'+sub+' €</span>'+
+        var motorLabel = g.labels.length>1
+          ? 'Motor '+g.labels.join('+')
+          : 'Motor '+g.labels[0];
+        var rankPrefix = (rank+1)+'. ';
+        var star = g.isBest ? ' ★' : '';
+        return '<button class="'+cls+'" data-engine="'+g.pickLabel+'">'+
+                 '<span class="tam-ebtn-label">'+rankPrefix+motorLabel+star+'</span>'+
+                 '<span class="tam-ebtn-detail">'+g.refs+' refs · '+g.units+' un<br>'+g.sub+' €</span>'+
                '</button>';
       }).join('');
 

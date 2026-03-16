@@ -101,7 +101,7 @@ async function _loadRecibosIndex() {
 
   try {
     // Leer index.json desde Supabase Storage
-    var { data: indexData, error: indexError } = await supabase
+    var { data: indexData, error: indexError } = await sbClient
       .storage.from('recibos').download('index.json');
     if (indexError) throw new Error('Sem recibos disponíveis de momento.');
     var idx = JSON.parse(await indexData.text());
@@ -149,7 +149,7 @@ async function _downloadRecibo(i) {
 
   // Generar URL firmada (válida 60 segundos) para descargar el PDF privado
   var path = item.mes + '/' + item.filename;
-  var { data, error } = await supabase.storage.from('recibos').createSignedUrl(path, 60);
+  var { data, error } = await sbClient.storage.from('recibos').createSignedUrl(path, 60);
   if (error || !data) { alert('Erro ao descarregar o recibo.'); return; }
 
   var a = document.createElement('a');

@@ -55,7 +55,7 @@
     btn.disabled = true;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sbClient
         .from('claves')
         .select('tienda, rol')
         .eq('clave', userKey)

@@ -212,7 +212,7 @@ async function rProcessRecibos() {
       dados: uploadResults.map(r => ({ filename: r.filename, name: r.name, mes }))
     };
     const indexBlob = new Blob([JSON.stringify(indexData, null, 2)], { type: 'application/json' });
-    await supabase.storage.from('recibos').upload('index.json', indexBlob, { upsert: true, contentType: 'application/json' });
+    await sbClient.storage.from('recibos').upload('index.json', indexBlob, { upsert: true, contentType: 'application/json' });
 
     rSetProgress(100); rHideProgress();
     const uploaded = uploadResults.filter(r => r.uploaded).length;
@@ -326,7 +326,7 @@ function rEncryptPDFpureJS(rawInput, userPassword) {
 async function rUploadToSupabase(mes, filename, bytes) {
   const path = mes + '/' + filename;
   const blob = new Blob([bytes], { type: 'application/pdf' });
-  const { error } = await supabase.storage.from('recibos')
+  const { error } = await sbClient.storage.from('recibos')
     .upload(path, blob, { upsert: true, contentType: 'application/pdf' });
   return !error;
 }

@@ -49,20 +49,6 @@
   ══════════════════════════════════════════════════════════════ */
   document.getElementById('tam-export-btn').addEventListener('click', tamExportCSV);
 
-  // Botón sesiones
-  var sesBtn = document.getElementById('tam-sessions-btn');
-  if (sesBtn) sesBtn.addEventListener('click', tamOpenSessionsModal);
-
-  // Modal sesiones — cerrar
-  var modalOverlay = document.getElementById('tam-sessions-modal');
-  if (modalOverlay) {
-    modalOverlay.addEventListener('click', function(e){
-      if (e.target === modalOverlay) tamCloseSessionsModal();
-    });
-    var closeBtn = document.getElementById('tam-modal-close');
-    if (closeBtn) closeBtn.addEventListener('click', tamCloseSessionsModal);
-  }
-
   /* ══════════════════════════════════════════════════════════════
      MAIN HANDLER — procesa uno o varios PDFs
   ══════════════════════════════════════════════════════════════ */
@@ -728,10 +714,11 @@
   ══════════════════════════════════════════════════════════════ */
   function tamRenderSessionBar() {
     var bar = document.getElementById('tam-session-bar');
-    if (!bar || !tamSession) return;
+    if (!bar) return;
+    // Always visible — no longer hidden until session loads
     bar.style.display = 'flex';
     var nameEl = document.getElementById('tam-session-name');
-    if (nameEl) nameEl.value = tamSession.name;
+    if (nameEl && tamSession) nameEl.value = tamSession.name;
     var stEl = document.getElementById('tam-session-status');
     if (stEl) stEl.textContent = '';
   }
@@ -774,6 +761,7 @@
       var all = tamLoadAllSessionsLocal();
       all[payload.name] = payload;
       localStorage.setItem('tam_sessions', JSON.stringify(all));
+      console.log('TAM: sessão guardada em localStorage —', payload.name, new Date().toLocaleTimeString());
     } catch(e) { console.warn('TAM localStorage save error', e); }
 
     /* 2 — Supabase: asíncrono, sin bloquear UI */
@@ -1463,8 +1451,8 @@
       '#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
       '#tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display:none!important; }',
 
-      /* ── Session bar ── */
-      '#tam-session-bar { display:none; align-items:center; gap:12px; width:100%; max-width:960px; padding:8px 14px; margin-bottom:12px; border:1px solid #e6e6e6; border-radius:12px; background:#fafafa; flex-wrap:wrap; }',
+      /* ── Session bar — always visible ── */
+      '#tam-session-bar { display:flex!important; align-items:center; gap:12px; width:100%; max-width:960px; padding:8px 14px; margin-bottom:12px; border:1px solid #e6e6e6; border-radius:12px; background:#fafafa; flex-wrap:wrap; }',
       '#tam-session-name { font-size:.88rem; font-weight:bold; flex:1; border:none; background:transparent; outline:none; color:#000; min-width:200px; font-family:MontserratLight,sans-serif; }',
       '#tam-session-status { font-size:.72rem; font-weight:bold; color:#aaa; }',
       '#tam-session-status.saved { color:#2a8a2a; }',
@@ -1512,7 +1500,10 @@
       '.tam-table tbody tr:hover td { background:#f5f5f5; }',
       '.tam-table tbody tr:hover .tam-cell-funchal { background:#ddf0ff; }',
       '.tam-table tbody tr:hover .tam-cell-porto   { background:#ffe0ef; }',
-      '.tam-ref-complete td { opacity:.4; }',
+      /* Ref completada — sin opacity, solo color más claro */
+      '.tam-ref-complete td { color:#bbb!important; }',
+      '.tam-ref-complete td strong { color:#bbb!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; }',
       '.tam-table tfoot td { background:#f2f2f2; font-weight:bold; border-top:2px solid #ccc; padding:4px 12px; text-align:center; line-height:1.2; }',
       '.tam-table tfoot tr.tam-tr-ship td { background:#fafafa; font-weight:600; font-size:.82rem; color:#666; border-top:1px solid #e8e8e8; padding:3px 12px; }',
       '.tam-table tfoot tr.tam-tr-grand td { background:#e4e4e4; font-size:.94rem; border-top:2px solid #bbb; }',
@@ -1534,7 +1525,7 @@
       '.tam-inv-banner.ok  { background:#f0faf0; color:#2a6a2a; }',
       '.tam-inv-banner.err { background:#fff8f0; color:#994400; }',
       '.tam-inv-banner .tam-vi { display:flex; align-items:center; gap:6px; }',
-      '.tam-inv-banner .tam-vi em { font-style:normal; font-size:.63rem; opacity:.6; text-transform:uppercase; letter-spacing:.06em; }',
+      '.tam-inv-banner .tam-vi em { font-style:normal; font-size:.63rem; color:#999; text-transform:uppercase; letter-spacing:.06em; }',
       '.tam-inv-banner .tam-engine-sel-wrap { width:100%; margin-top:2px; }',
       '.tam-inv-banner .tam-engine-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }',
 
@@ -1549,14 +1540,14 @@
       '#tam-validation-banner.ok  { display:flex; background:#f0faf0; color:#2a6a2a; }',
       '#tam-validation-banner.err { display:flex; background:#fff0f0; color:#a00; }',
       '#tam-validation-banner .tam-vi { display:flex; flex-direction:column; gap:0; align-items:center; text-align:center; }',
-      '#tam-validation-banner .tam-vi em { font-style:normal; font-size:.64rem; opacity:.6; text-transform:uppercase; letter-spacing:.06em; }',
+      '#tam-validation-banner .tam-vi em { font-style:normal; font-size:.64rem; color:#999; text-transform:uppercase; letter-spacing:.06em; }',
       '.tam-engine-sel-wrap { grid-column:1/-1; width:100%; margin-top:4px; }',
       '.tam-engine-btns { display:flex; gap:8px; margin-top:6px; justify-content:center; flex-wrap:wrap; }',
       '.tam-ebtn { border:1px solid #ccc; background:#fafafa; padding:7px 20px; border-radius:8px; cursor:pointer; font-family:MontserratLight,sans-serif; font-size:.78rem; line-height:1.45; text-align:center; transition:background .15s,border-color .15s; min-width:110px; }',
       '.tam-ebtn:hover { background:#f0f0f0; border-color:#777; }',
       '.tam-ebtn-active { background:#222!important; color:#fff!important; border-color:#222!important; }',
       '.tam-ebtn-label { display:block; font-weight:bold; font-size:.82rem; }',
-      '.tam-ebtn-detail { display:block; font-size:.68rem; opacity:.75; margin-top:2px; }',
+      '.tam-ebtn-detail { display:block; font-size:.68rem; color:#999; margin-top:2px; }',
       '.tam-chk-ok { color:#2a6a2a; }',
       '.tam-chk-err { color:#c00; }',
 
@@ -1620,7 +1611,8 @@
       '.tam-rec-boxes-table tbody tr:hover td { background:#f9f9f9; }',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-f { background:#e3f2fd; }',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-p { background:#fce4ec; }',
-      '.tam-rec-boxes-table .tam-ref-complete td { opacity:.4; }',
+      '.tam-rec-boxes-table .tam-ref-complete td { color:#bbb!important; }',
+      '.tam-rec-boxes-table .tam-ref-complete td strong { color:#bbb!important; }',
 
       /* ── Fila en rojo: F+P >= total ref ── */
       '.tam-ref-over td { background:#fff0f0!important; }',
@@ -1678,10 +1670,11 @@
     var ul = document.getElementById('tam-upload-label');
     if (ul) ul.id = 'upload-label';
 
-    // Session bar
+    // Session bar — shown immediately, always visible
     if (!document.getElementById('tam-session-bar')) {
       var bar = document.createElement('div');
       bar.id = 'tam-session-bar';
+      bar.style.cssText = 'display:flex!important;';   // visible desde el inicio
       bar.innerHTML =
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
@@ -1689,14 +1682,22 @@
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>';
+
+      // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
-      if (uz && uz.nextSibling) uz.parentNode.insertBefore(bar, uz.nextSibling);
-      else if (uz) uz.parentNode.appendChild(bar);
+      if (uz) uz.parentNode.insertBefore(bar, uz);
       else tab.insertBefore(bar, tab.firstChild);
 
       bar.querySelector('#tam-session-name').addEventListener('change', function(e){
         if (tamSession) tamSession.name = e.target.value;
         tamScheduleSave();
+      });
+
+      // Bind sessions button here, not in the separate listener block above
+      var sesBtn2 = bar.querySelector('#tam-sessions-btn');
+      if (sesBtn2) sesBtn2.addEventListener('click', function(e){
+        e.stopPropagation();
+        tamOpenSessionsModal();
       });
 
       // Close dropdown when clicking outside

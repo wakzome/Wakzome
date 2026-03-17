@@ -128,15 +128,21 @@
           // Session exists with same name — ask what to do
           var choiceNew = await tamAskSessionChoiceOnLoad(weekName, parsed.map(function(r){ return r.invoiceNo; }));
           if (choiceNew === 'new') {
-            // Archive existing and start fresh
+            // Archive existing as (1), new session becomes (2)
             var all2 = tamLoadAllSessionsLocal();
             var baseName2 = weekName.replace(/ \(\d+\)$/, '');
-            var suffix2 = 1;
-            while (all2[baseName2 + ' (' + suffix2 + ')']) suffix2++;
-            all2[baseName2 + ' (' + suffix2 + ')'] = existing;
+            var existingCopy2 = Object.assign({}, existing, { name: baseName2 + ' (1)' });
             delete all2[weekName];
+            all2[baseName2 + ' (1)'] = existingCopy2;
+            var suffix2 = 2;
+            while (all2[baseName2 + ' (' + suffix2 + ')']) suffix2++;
             localStorage.setItem('tam_sessions', JSON.stringify(all2));
-            tamInitSession();
+            // Create session with next number
+            var totalBoxesNew = tamInvoices.reduce(function(s,r){ return s+(r.shipPkgs||0); },0);
+            if (totalBoxesNew < 1) totalBoxesNew = 1;
+            var boxesNew = [];
+            for (var bni = 0; bni < totalBoxesNew; bni++) boxesNew.push({ total:null, refs:{}, locked:false });
+            tamSession = { name: baseName2 + ' (' + suffix2 + ')', boxes: boxesNew, createdAt: Date.now() };
           } else {
             // Load existing session and add new invoices to it
             tamLoadSession(weekName, existing);
@@ -202,19 +208,16 @@
     });
   }
 
-  /* Start a brand new session, archiving the current one with (1) suffix */
+  /* Start a brand new session, archiving the current one with numbered suffix */
   function tamStartNewSession(parsedInvoices) {
-    // Save current session first (rename it with suffix if needed)
     if (tamSession && tamInvoices.length > 0) {
-      var baseName = tamSession.name.replace(/ \(\d+\)$/, '');
       var all = tamLoadAllSessionsLocal();
-      // Find next available suffix
-      var suffix = 1;
-      while (all[baseName + ' (' + suffix + ')']) suffix++;
-      var archivedName = baseName + ' (' + suffix + ')';
-      // Save current session under archived name
-      var archivedPayload = {
-        name:    archivedName,
+      var baseName = tamSession.name.replace(/ \(\d+\)$/, '');
+
+      // If current session has no suffix yet, rename it to (1) first
+      var currentKey = tamSession.name;
+      var currentPayload = {
+        name:    baseName + ' (1)',
         savedAt: Date.now(),
         boxes:   tamSession.boxes,
         invoices: tamInvoices.map(function(r){
@@ -224,20 +227,33 @@
                    invoiceSubtotal: r.invoiceSubtotal, grouped: r.grouped };
         })
       };
-      all[archivedName] = archivedPayload;
-      // Remove old key if name changed
-      if (all[tamSession.name] && tamSession.name !== archivedName) {
-        delete all[tamSession.name];
-      }
-      localStorage.setItem('tam_sessions', JSON.stringify(all));
-    }
+      // Remove old unsuffixed entry, save as (1)
+      delete all[currentKey];
+      all[baseName + ' (1)'] = currentPayload;
 
-    // Reset state for new session
-    tamInvoices = parsedInvoices;
-    tamEngineCache = {};
-    tamActiveEngines = {};
-    tamSession = null;
-    tamInitSession();
+      // New session gets (2), (3), etc.
+      var suffix = 2;
+      while (all[baseName + ' (' + suffix + ')']) suffix++;
+      localStorage.setItem('tam_sessions', JSON.stringify(all));
+
+      // Build new session name
+      tamInvoices = parsedInvoices;
+      tamEngineCache = {};
+      tamActiveEngines = {};
+      tamSession = null;
+      // Force the new session name to use the next suffix
+      var totalBoxes = parsedInvoices.reduce(function(s,r){ return s+(r.shipPkgs||0); },0);
+      if (totalBoxes < 1) totalBoxes = 1;
+      var boxes = [];
+      for (var i = 0; i < totalBoxes; i++) boxes.push({ total:null, refs:{}, locked:false });
+      tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now() };
+    } else {
+      tamInvoices = parsedInvoices;
+      tamEngineCache = {};
+      tamActiveEngines = {};
+      tamSession = null;
+      tamInitSession();
+    }
 
     var lbl = document.getElementById('upload-label') || document.getElementById('tam-upload-label');
     if (lbl) lbl.classList.add('loaded');
@@ -1045,7 +1061,38 @@
         var s = sessions[k];
         var date = s.savedAt ? new Date(s.savedAt).toLocaleString('pt-PT') : '—';
         var invInfo = s.invoices ? s.invoices.length + ' fat.' : '';
+
+        // ── Compute completion status ──────────────────────
+        var dot = '<span class="tam-dd-dot tam-dd-dot-grey"></span>';
+        if (s.invoices && s.invoices.length && s.boxes) {
+          // Build ref totals from boxes
+          var refTotals = {};
+          s.boxes.forEach(function(box){
+            Object.keys(box.refs || {}).forEach(function(ref){
+              if (!refTotals[ref]) refTotals[ref] = { f:0, p:0 };
+              refTotals[ref].f += (box.refs[ref].f || 0);
+              refTotals[ref].p += (box.refs[ref].p || 0);
+            });
+          });
+          // Build consolidated ref totals from invoices
+          var refNeeded = {};
+          s.invoices.forEach(function(inv){
+            (inv.grouped || []).forEach(function(g){
+              refNeeded[g.ref] = (refNeeded[g.ref] || 0) + g.pieces;
+            });
+          });
+          var allDone = Object.keys(refNeeded).length > 0 &&
+            Object.keys(refNeeded).every(function(ref){
+              var got = refTotals[ref] ? (refTotals[ref].f + refTotals[ref].p) : 0;
+              return got >= refNeeded[ref];
+            });
+          dot = allDone
+            ? '<span class="tam-dd-dot tam-dd-dot-green" title="distribuição completa"></span>'
+            : '<span class="tam-dd-dot tam-dd-dot-red"   title="distribuição incompleta"></span>';
+        }
+
         return '<div class="tam-dd-item" data-key="' + tamEsc(k) + '">' +
+          dot +
           '<div class="tam-dd-item-info">' +
             '<div class="tam-dd-item-name">' + tamEsc(s.name) + '</div>' +
             '<div class="tam-dd-item-meta">' + date + (invInfo ? ' · ' + invInfo : '') + '</div>' +
@@ -1675,6 +1722,11 @@
       '#tam-sessions-dropdown.open { display:block; }',
       '.tam-dd-header { padding:10px 14px; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; border-bottom:1px solid #f0f0f0; background:#fafafa; border-radius:14px 14px 0 0; }',
       '.tam-dd-item { display:flex; align-items:center; gap:8px; padding:9px 14px; border-bottom:1px solid #f5f5f5; transition:background .12s; }',
+      /* Status dot */
+      '.tam-dd-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }',
+      '.tam-dd-dot-green { background:#2a8a2a; }',
+      '.tam-dd-dot-red   { background:#c03000; }',
+      '.tam-dd-dot-grey  { background:#ccc; }',
       '.tam-dd-item:last-child { border-bottom:none; border-radius:0 0 14px 14px; }',
       '.tam-dd-item:hover { background:#f8f8f8; }',
       '.tam-dd-item-info { flex:1; min-width:0; }',

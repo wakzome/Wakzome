@@ -28,7 +28,7 @@
   /* ══════════════════════════════════════════════════════════════
      DRAG & DROP + FILE INPUT
   ══════════════════════════════════════════════════════════════ */
-  var upLabel = document.getElementById('tam-upload-label');
+  var upLabel = document.getElementById('tam-upload-label') || document.getElementById('upload-label');
   if (!upLabel) return;
 
   upLabel.addEventListener('dragover',  function(e){ e.preventDefault(); upLabel.classList.add('drag-over'); });
@@ -105,7 +105,8 @@
         return;
       }
 
-      document.getElementById('upload-label').classList.add('loaded');
+      var lbl = document.getElementById('upload-label') || document.getElementById('tam-upload-label');
+      if (lbl) lbl.classList.add('loaded');
       document.getElementById('tab-tam').classList.add('tam-loaded');
       document.getElementById('admin-app').classList.add('tam-loaded');
 
@@ -1459,8 +1460,8 @@
     s.id = 'tam-v9-styles';
     s.textContent = [
       /* ── Upload zone compacto cuando ya hay facturas ── */
-      '#tam-upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
-      '#tam-upload-label.loaded .upload-icon { display:none!important; }',
+      '#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
+      '#tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display:none!important; }',
 
       /* ── Session bar ── */
       '#tam-session-bar { display:none; align-items:center; gap:12px; width:100%; max-width:960px; padding:8px 14px; margin-bottom:12px; border:1px solid #e6e6e6; border-radius:12px; background:#fafafa; flex-wrap:wrap; }',
@@ -1564,7 +1565,7 @@
       ══════════════════════════ */
       '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
 
-      '.tam-rec-area { border:1px solid #e6e6e6; border-radius:16px; overflow:hidden; background:#fff; }',
+      '.tam-rec-area { border:1px solid #e6e6e6; border-radius:16px; overflow:visible; background:#fff; }',
       '.tam-rec-area-title { padding:10px 18px; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; }',
 
       '.tam-th-funchal { background:#e3f2fd!important; color:#1565c0!important; }',
@@ -1597,15 +1598,16 @@
       '.tam-sub-f { font-size:.65rem; font-weight:bold; color:#1565c0; letter-spacing:.03em; }',
       '.tam-sub-p { font-size:.65rem; font-weight:bold; color:#880e4f; letter-spacing:.03em; }',
 
-      /* Columnas fijas de refs y totales — sticky con background sólido */
-      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; position:sticky; left:0; z-index:2; box-shadow:2px 0 4px rgba(0,0,0,.04); }',
-      '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background:#fafafa!important; border-right:1px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
-      /* Sticky header cells — z-index higher so they sit above body cells */
-      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background:#f8f8f8!important; box-shadow:2px 0 4px rgba(0,0,0,.06); }',
-      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background:#fafafa!important; box-shadow:2px 0 4px rgba(0,0,0,.04); }',
-      /* Override for red-alert rows — keep sticky cell opaque */
-      '.tam-ref-over .tam-rec-ref-col { background:#ffe0e0!important; }',
-      '.tam-ref-complete .tam-rec-ref-col { background:#fafafa!important; }',
+      /* Columnas fijas — sticky con background OPACO forzado */
+      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background-color:#fafafa!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; position:sticky; left:0; z-index:2; box-shadow:2px 0 6px rgba(0,0,0,.07); will-change:transform; }',
+      '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background-color:#fafafa!important; background:#fafafa!important; border-right:1px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
+      /* Sticky header cells */
+      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#f8f8f8!important; background:#f8f8f8!important; box-shadow:2px 0 6px rgba(0,0,0,.09); }',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 6px rgba(0,0,0,.07); }',
+      /* Override sticky bg per row state */
+      '.tam-ref-over .tam-rec-ref-col { background-color:#ffe0e0!important; background:#ffe0e0!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; }',
+      '.tam-rec-boxes-table tbody tr:hover .tam-rec-ref-col { background-color:#f0f0f0!important; background:#f0f0f0!important; }',
 
       /* Celdas input */
       '.tam-rec-cell-f { background:#f0f8ff; padding:2px 4px!important; min-width:52px; }',
@@ -1645,10 +1647,11 @@
       '.tam-rec-input-f{color:#64b5f6!important;}',
       '.tam-rec-input-p{color:#f48fb1!important;}',
       '.tam-rec-input:focus{border-color:#888!important;background:#111!important;}',
-      '.tam-rec-ref-col,.tam-rec-total-col{background:#161616!important;border-color:#2a2a2a!important;}',
-      '.tam-boxes-hdr-row .tam-rec-ref-col{background:#1a1a1a!important;}',
-      '.tam-boxes-sub-hdr .tam-rec-ref-col{background:#161616!important;}',
-      '.tam-ref-over .tam-rec-ref-col{background:#3a0a0a!important;}',
+      '.tam-rec-ref-col,.tam-rec-total-col{background-color:#161616!important;background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-boxes-hdr-row .tam-rec-ref-col{background-color:#1a1a1a!important;background:#1a1a1a!important;}',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col{background-color:#161616!important;background:#161616!important;}',
+      '.tam-ref-over .tam-rec-ref-col{background-color:#3a0a0a!important;background:#3a0a0a!important;}',
+      '.tam-rec-boxes-table tbody tr:hover .tam-rec-ref-col{background-color:#222!important;background:#222!important;}',
       '.tam-rec-boxes-table th,.tam-rec-boxes-table td{border-color:#1e1e1e!important;color:#e8e8e8!important;}',
       '.tam-rec-boxes-table tbody tr:hover td{background:#1a1a1a!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-f{background:#112233!important;}',

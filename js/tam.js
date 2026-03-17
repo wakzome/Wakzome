@@ -95,7 +95,7 @@
   //   · Separators: hyphen, underscore, dot, or ONE space before a short suffix
   //   · ZY- excluded (those are invoice numbers, not product refs)
   var REF_RE = /^(?!ZY-)[A-Za-z]{1,5}(?:-[A-Za-z]{1,3})*[-_.]([A-Za-z0-9]+)((?:[-_.]| (?=[A-Za-z0-9]{1,4}$))[A-Za-z0-9]+){0,5}$/;
-  var HS_RE  = /\b(6[0-9]\d{6})\b/;
+  var HS_RE  = /\b(\d{8})\b/;  // any 8-digit customs code (covers chapters 42, 60-69, etc.)
   // ZY invoice number — can appear anywhere in a row
   var ZY_RE  = /\b(ZY-\d{7,})\b/;
 
@@ -1433,7 +1433,7 @@
   function tamCleanName(n) {
     return String(n||'')
       .replace(/\bModell\s*:\s*/gi, '')   // remove "Modell:" prefix
-      .replace(/\b6[0-9]\d{6}\b/g, '')   // strip HS codes that leak into name (61091000…64029939…)
+      .replace(/\b\d{8}\b/g, '')          // strip 8-digit customs codes that leak into name
       .replace(/44/g, '')                  // remove "44" (TAM Fashion embeds it in model names: El44vezia→Elvezia)
       .replace(/\s{2,}/g, ' ')            // collapse spaces left by removals
       .trim();
@@ -1451,7 +1451,7 @@
     // Strip HS codes, standalone numeric tokens, and "Modell:" prefix before parsing
     var cleaned = beforeHS
       .replace(/\bModell\s*:\s*/gi, '')   // remove "Modell:" prefix
-      .replace(/\b6[0-9]\d{6}\b/g, '')   // strip HS codes
+      .replace(/\b\d{8}\b/g, '')          // strip 8-digit customs codes
       .replace(/\b\d{4,}\b/g, '')         // strip standalone 4+ digit numbers (colour codes etc.)
       .trim();
     var words = cleaned.split(/\s+/).filter(Boolean);
@@ -1737,8 +1737,9 @@
   }
 
   /* ════════════════════════════════════════════════════════════
-     CROSS-VALIDATION (3 engines)
-     manualLabel: 'A'|'B'|'C'|null  — forces a specific engine
+     CROSS-VALIDATION (2 engines: A and B only)
+     Motor C runs internally but is never shown to the user.
+     manualLabel: 'A'|'B'|null
   ════════════════════════════════════════════════════════════ */
   function tamCrossValidate(resA, resB, resC, manualLabel) {
     function score(res){
@@ -1746,60 +1747,39 @@
       if (res.invoiceSubtotal==null) return 5000-res.grouped.length;
       return Math.abs(res.invoiceSubtotal-res.subtotalGoods);
     }
-    var engines=[
-      {label:'A',res:resA,score:score(resA)},
-      {label:'B',res:resB,score:score(resB)},
-      {label:'C',res:resC,score:score(resC)}
-    ].sort(function(a,b){return a.score-b.score;});
+    // Only score A and B — C is internal only
+    var scoreA = score(resA), scoreB = score(resB);
+    var autoLabel   = scoreA <= scoreB ? 'A' : 'B';
+    var activeLabel = (manualLabel==='A'||manualLabel==='B') ? manualLabel : autoLabel;
+    var activeRes   = activeLabel==='A' ? resA : resB;
 
-    var autoLabel  = engines[0].label;
-    var activeLabel= manualLabel || autoLabel;
-    var activeRes  = {A:resA,B:resB,C:resC}[activeLabel];
-
-    // ── No mixing: show exactly what the active engine found.
-    // A+B agree → use A (they produce same result). A or B alone → use that one. C → use C.
-    // Cross-check A vs B only to detect conflicts — never inject C refs into A/B results.
-    var mapA={},mapB={};
-    resA.grouped.forEach(function(g){mapA[g.ref]=g;});
-    resB.grouped.forEach(function(g){mapB[g.ref]=g;});
+    var mapA={}, mapB={};
+    resA.grouped.forEach(function(g){ mapA[g.ref]=g; });
+    resB.grouped.forEach(function(g){ mapB[g.ref]=g; });
 
     var confirmed=0, conflicts=[];
     var activeGrouped = activeRes.grouped.map(function(g){
       var a=mapA[g.ref], b=mapB[g.ref];
-
-      // If active engine is A or B, cross-check between A and B only
-      if (activeLabel==='A'||activeLabel==='B') {
-        if (a && b) {
-          if (a.pieces===b.pieces && Math.abs(a.totalCost-b.totalCost)<0.02) {
-            confirmed++;
-            return Object.assign({},g,{confidence:'CONFIRMED'});
-          } else {
-            // A and B disagree on this ref
-            var detailParts=[];
-            detailParts.push('A: '+a.pieces+' un / '+tamFmtEU(a.totalCost)+'€');
-            detailParts.push('B: '+b.pieces+' un / '+tamFmtEU(b.totalCost)+'€');
-            conflicts.push({ref:g.ref, detail:detailParts.join(' · ')});
-            return Object.assign({},g,{
-              confidence:'CONFLICT',
-              conflictDetail:detailParts.join(' · ')
-            });
-          }
+      if (a && b) {
+        if (a.pieces===b.pieces && Math.abs(a.totalCost-b.totalCost)<0.02) {
+          confirmed++;
+          return Object.assign({},g,{confidence:'CONFIRMED'});
+        } else {
+          var detailParts=[];
+          detailParts.push('A: '+a.pieces+' un / '+tamFmtEU(a.totalCost)+'€');
+          detailParts.push('B: '+b.pieces+' un / '+tamFmtEU(b.totalCost)+'€');
+          conflicts.push({ref:g.ref, detail:detailParts.join(' · ')});
+          return Object.assign({},g,{confidence:'CONFLICT', conflictDetail:detailParts.join(' · ')});
         }
-        // Only one of A/B has it — still show it, no badge needed
-        confirmed++;
-        return Object.assign({},g,{confidence:'CONFIRMED'});
       }
-
-      // Engine C selected — show as-is, no cross-check
       confirmed++;
       return Object.assign({},g,{confidence:'CONFIRMED'});
     });
 
-    // Recalculate shipping distribution based on active engine totals only
     var totalPieces   = activeGrouped.reduce(function(s,g){return s+g.pieces;},0);
     var subtotalGoods = tamRound2(activeGrouped.reduce(function(s,g){return s+g.totalCost;},0));
-    var shipping  = activeRes.shipping  || resA.shipping  || resB.shipping  || resC.shipping;
-    var shipPkgs  = activeRes.shipPkgs  || resA.shipPkgs  || resB.shipPkgs  || resC.shipPkgs;
+    var shipping  = activeRes.shipping  || resA.shipping  || resB.shipping;
+    var shipPkgs  = activeRes.shipPkgs  || resA.shipPkgs  || resB.shipPkgs;
     var shipPerPiece = totalPieces>0 ? shipping/totalPieces : 0;
     activeGrouped.forEach(function(g){
       var base=g.pieces>0?g.totalCost/g.pieces:0;
@@ -1807,9 +1787,15 @@
       g.grandTotal=tamRound2(g.unitPriceWithShip*g.pieces);
     });
 
-    var meta=[resA,resB,resC].find(function(r){return r.invoiceNo!=='—';})||resA;
-    var fullyAgree=conflicts.length===0 &&
-                   activeGrouped.every(function(g){return g.confidence==='CONFIRMED';});
+    var meta = resA.invoiceNo!=='—' ? resA : resB;
+    var fullyAgree = conflicts.length===0 &&
+                     activeGrouped.every(function(g){return g.confidence==='CONFIRMED';});
+
+    // Build engine info for display (A and B only)
+    var enginesInfo = [
+      {label:'A', res:resA, score:scoreA},
+      {label:'B', res:resB, score:scoreB}
+    ];
 
     return {
       grouped:activeGrouped, rawItems:activeRes.rawItems,
@@ -1823,7 +1809,7 @@
         autoEngine:  autoLabel,
         activeEngine:activeLabel,
         isManual:    !!manualLabel,
-        engines: engines.map(function(e){
+        engines: enginesInfo.map(function(e){
           return { label:e.label, refs:e.res.grouped.length,
                    units:e.res.totalPieces, sub:e.res.subtotalGoods, score:tamRound2(e.score) };
         })
@@ -1871,27 +1857,28 @@
     var cvHtml='';
 
     if (allOk) {
-      cvHtml='<div class="tam-vi" style="color:#2a7a2a"><em>tripla verificação</em>'+
-             '<span>✅ todos os motores coincidem · <strong>'+xv.confirmed+' refs confirmadas</strong></span></div>';
+      cvHtml='<div class="tam-vi" style="color:#2a7a2a"><em>verificação</em>'+
+             '<span>✅ motores A e B coincidem · <strong>'+xv.confirmed+' refs confirmadas</strong></span></div>';
     } else {
-      // Engine stats row — show merged label if two agree
-      var _e0=xv.engines[0],_e1=xv.engines[1],_e2=xv.engines[2];
+      // Show A vs B stats
+      var engA=xv.engines[0], engB=xv.engines[1];
       function _eKey(e){return e.refs+'|'+e.units+'|'+tamFmtEU(e.sub);}
-      var engLines=xv.engines.map(function(e){
-        var star = e.label===xv.autoEngine ? ' ★' : '';
-        var lbl = e.label;
-        if (_eKey(_e0)===_eKey(_e1)&&(e.label===_e0.label||e.label===_e1.label)) lbl=_e0.label+'+'+_e1.label;
-        else if (_eKey(_e0)===_eKey(_e2)&&(e.label===_e0.label||e.label===_e2.label)) lbl=_e0.label+'+'+_e2.label;
-        else if (_eKey(_e1)===_eKey(_e2)&&(e.label===_e1.label||e.label===_e2.label)) lbl=_e1.label+'+'+_e2.label;
-        return 'Motor <strong>'+lbl+star+'</strong>: '+e.refs+' refs / '+e.units+' un / '+tamFmtEU(e.sub)+'€';
-      });
-      // deduplicate merged entries
-      var seen={}, engLinesDed=[];
-      engLines.forEach(function(l){if(!seen[l]){seen[l]=true;engLinesDed.push(l);}});
-      cvHtml+='<div class="tam-vi"><em>motores</em><span style="white-space:nowrap">'+engLinesDed.join('&emsp;&emsp;')+'</span></div>';
+      var abAgree = _eKey(engA)===_eKey(engB);
 
-      if (xv.confirmed>0)
-        cvHtml+='<div class="tam-vi"><em>coincidências</em><span><strong>'+xv.confirmed+'</strong> refs iguais em vários motores</span></div>';
+      if (abAgree) {
+        cvHtml+='<div class="tam-vi"><em>motores</em><span style="white-space:nowrap">'+
+          'Motor <strong>A+B ★</strong>: '+engA.refs+' refs / '+engA.units+' un / '+tamFmtEU(engA.sub)+'€'+
+          '</span></div>';
+      } else {
+        cvHtml+='<div class="tam-vi"><em>motores</em><span style="white-space:nowrap">'+
+          'Motor <strong>A'+(engA.label===xv.autoEngine?' ★':'')+'</strong>: '+engA.refs+' refs / '+engA.units+' un / '+tamFmtEU(engA.sub)+'€'+
+          '&emsp;&emsp;'+
+          'Motor <strong>B'+(engB.label===xv.autoEngine?' ★':'')+'</strong>: '+engB.refs+' refs / '+engB.units+' un / '+tamFmtEU(engB.sub)+'€'+
+          '</span></div>';
+      }
+
+      if (xv.confirmed>0 && !abAgree)
+        cvHtml+='<div class="tam-vi"><em>coincidências</em><span><strong>'+xv.confirmed+'</strong> refs iguais em A e B</span></div>';
 
       if (xv.conflicts.length) {
         var cLines=xv.conflicts.map(function(c){
@@ -1900,70 +1887,25 @@
         cvHtml+='<div class="tam-vi"><em style="color:#c00">⚠️ conflitos ('+xv.conflicts.length+')</em><span>'+cLines+'</span></div>';
       }
 
-      // ── Motor selector — always visible on divergence ──
-      // If two engines agree (same refs/units/sub), merge them into one button → only 2 choices shown
-      var engA = xv.engines[0], engB = xv.engines[1], engC = xv.engines[2];
-      function engKey(e){ return e.refs+'|'+e.units+'|'+tamFmtEU(e.sub); }
-      var groups; // array of { labels:[], rankLabel, isBest, isActive }
-      if (engKey(engA)===engKey(engB)) {
-        // best two agree → merged first button, solo third
-        groups = [
-          { labels:[engA.label,engB.label], isBest:true,
-            refs:engA.refs, units:engA.units, sub:tamFmtEU(tamEngineResults[engA.label]?tamEngineResults[engA.label].subtotalGoods:0),
-            pickLabel: (xv.activeEngine===engB.label ? engB.label : engA.label) },
-          { labels:[engC.label], isBest:false,
-            refs:engC.refs, units:engC.units, sub:tamFmtEU(tamEngineResults[engC.label]?tamEngineResults[engC.label].subtotalGoods:0),
-            pickLabel: engC.label }
-        ];
-      } else if (engKey(engA)===engKey(engC)) {
-        // 1st and 3rd agree
-        groups = [
-          { labels:[engA.label,engC.label], isBest:true,
-            refs:engA.refs, units:engA.units, sub:tamFmtEU(tamEngineResults[engA.label]?tamEngineResults[engA.label].subtotalGoods:0),
-            pickLabel: (xv.activeEngine===engC.label ? engC.label : engA.label) },
-          { labels:[engB.label], isBest:false,
-            refs:engB.refs, units:engB.units, sub:tamFmtEU(tamEngineResults[engB.label]?tamEngineResults[engB.label].subtotalGoods:0),
-            pickLabel: engB.label }
-        ];
-      } else if (engKey(engB)===engKey(engC)) {
-        // 2nd and 3rd agree → solo best first, merged second
-        groups = [
-          { labels:[engA.label], isBest:true,
-            refs:engA.refs, units:engA.units, sub:tamFmtEU(tamEngineResults[engA.label]?tamEngineResults[engA.label].subtotalGoods:0),
-            pickLabel: engA.label },
-          { labels:[engB.label,engC.label], isBest:false,
-            refs:engB.refs, units:engB.units, sub:tamFmtEU(tamEngineResults[engB.label]?tamEngineResults[engB.label].subtotalGoods:0),
-            pickLabel: (xv.activeEngine===engC.label ? engC.label : engB.label) }
-        ];
-      } else {
-        // all three differ — 3 separate buttons
-        groups = xv.engines.map(function(e){
-          var er=tamEngineResults[e.label];
-          return { labels:[e.label], isBest:e.label===xv.autoEngine,
-            refs:e.refs, units:e.units,
-            sub:tamFmtEU(er?er.subtotalGoods:0), pickLabel:e.label };
-        });
+      // Motor selector — only show if A and B differ
+      if (!abAgree) {
+        var selectorBtns = xv.engines.map(function(e, rank){
+          var isActive = e.label===xv.activeEngine;
+          var cls='tam-ebtn'+(isActive?' tam-ebtn-active':'');
+          var star = e.label===xv.autoEngine ? ' ★' : '';
+          var er = tamEngineResults[e.label];
+          return '<button class="'+cls+'" data-engine="'+e.label+'">'+
+                   '<span class="tam-ebtn-label">'+(rank+1)+'. Motor '+e.label+star+'</span>'+
+                   '<span class="tam-ebtn-detail">'+e.refs+' refs · '+e.units+' un<br>'+tamFmtEU(er?er.subtotalGoods:0)+' €</span>'+
+                 '</button>';
+        }).join('');
+
+        cvHtml+=
+          '<div class="tam-vi tam-engine-sel-wrap">'+
+            '<em>'+(xv.isManual ? 'motor activo (manual)' : 'seleccionar motor')+'</em>'+
+            '<span class="tam-engine-btns">'+selectorBtns+'</span>'+
+          '</div>';
       }
-
-      var selectorBtns=groups.map(function(g, rank){
-        var isActive = g.labels.indexOf(xv.activeEngine)!==-1;
-        var cls='tam-ebtn'+(isActive?' tam-ebtn-active':'');
-        var motorLabel = g.labels.length>1
-          ? 'Motor '+g.labels.join('+')
-          : 'Motor '+g.labels[0];
-        var rankPrefix = (rank+1)+'. ';
-        var star = g.isBest ? ' ★' : '';
-        return '<button class="'+cls+'" data-engine="'+g.pickLabel+'">'+
-                 '<span class="tam-ebtn-label">'+rankPrefix+motorLabel+star+'</span>'+
-                 '<span class="tam-ebtn-detail">'+g.refs+' refs · '+g.units+' un<br>'+g.sub+' €</span>'+
-               '</button>';
-      }).join('');
-
-      cvHtml+=
-        '<div class="tam-vi tam-engine-sel-wrap">'+
-          '<em>'+(xv.isManual ? 'motor activo (manual)' : 'seleccionar motor')+'</em>'+
-          '<span class="tam-engine-btns">'+selectorBtns+'</span>'+
-        '</div>';
     }
 
     var badLines=r.rawItems.filter(function(i){return !i.valid;});

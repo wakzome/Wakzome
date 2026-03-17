@@ -53,16 +53,15 @@
      MAIN HANDLER — procesa uno o varios PDFs
   ══════════════════════════════════════════════════════════════ */
   async function tamHandleFiles(files) {
-    // ACCUMULATE — new PDFs are added to existing invoices, not replacing them
     document.getElementById('tam-status-msg').textContent = 'a processar…';
     tamEnsureStyles();
 
     try {
-      var newCount = 0;
+      // Parse all PDFs first to get their invoice numbers
+      var parsed = [];
       for (var fi = 0; fi < files.length; fi++) {
         var file = files[fi];
-        // Skip duplicates (same filename already loaded)
-        var globalIdx = tamInvoices.length + fi;
+        var globalIdx = tamInvoices.length + parsed.length + fi;
         var key = file.name + '_' + globalIdx;
         if (tamEngineCache[key]) continue;
 
@@ -80,11 +79,36 @@
         var result = tamCrossValidate(resA, resB, resC, null);
         result._fileKey  = key;
         result._fileName = file.name;
-        tamInvoices.push(result);
-        newCount++;
-        // Aprender referencias nuevas en segundo plano
+        parsed.push(result);
         tamLearnRefsFromResult(result);
       }
+
+      if (!parsed.length) {
+        document.getElementById('tam-status-msg').textContent = 'nenhum artigo encontrado.';
+        return;
+      }
+
+      // ── Decide: add to current session or create new? ─────
+      if (tamSession && tamInvoices.length > 0) {
+        // Check if any new invoice number is already in the current session
+        var existingNos = tamInvoices.map(function(r){ return r.invoiceNo; });
+        var allAlreadyIn = parsed.every(function(r){ return existingNos.indexOf(r.invoiceNo) >= 0; });
+        var noneIn       = parsed.every(function(r){ return existingNos.indexOf(r.invoiceNo) < 0; });
+
+        if (noneIn) {
+          // Entirely new invoices — ask the user
+          var choice = await tamAskSessionChoice(parsed.map(function(r){ return r.invoiceNo; }));
+          if (choice === 'new') {
+            tamStartNewSession(parsed);
+            return;
+          }
+          // choice === 'add' → fall through to add normally
+        }
+        // allAlreadyIn or mixed → add normally (skip duplicates)
+      }
+
+      // Add parsed invoices to current state
+      parsed.forEach(function(r){ tamInvoices.push(r); });
 
       if (!tamInvoices.some(function(r){ return r.grouped.length; })) {
         document.getElementById('tam-status-msg').textContent = 'nenhum artigo encontrado.';
@@ -96,7 +120,6 @@
       document.getElementById('tab-tam').classList.add('tam-loaded');
       document.getElementById('admin-app').classList.add('tam-loaded');
 
-      // Init or refresh session boxes when invoice count changes
       if (!tamSession) {
         tamInitSession();
       } else {
@@ -111,6 +134,88 @@
       console.error(err);
       document.getElementById('tam-status-msg').textContent = 'erro: ' + err.message;
     }
+  }
+
+  /* Prompt: add to session or start new */
+  function tamAskSessionChoice(newInvoiceNos) {
+    return new Promise(function(resolve){
+      // Remove any existing dialog
+      var old = document.getElementById('tam-session-dialog');
+      if (old) old.parentNode.removeChild(old);
+
+      var dialog = document.createElement('div');
+      dialog.id = 'tam-session-dialog';
+      dialog.innerHTML =
+        '<div id="tam-session-dialog-box">' +
+          '<div class="tam-dialog-title">nova fatura detetada</div>' +
+          '<div class="tam-dialog-body">' +
+            'A fatura <strong>' + newInvoiceNos.join(', ') + '</strong> não pertence à sessão atual.<br>' +
+            'O que pretende fazer?' +
+          '</div>' +
+          '<div class="tam-dialog-btns">' +
+            '<button class="tam-dialog-btn tam-dialog-btn-add">➕ adicionar à sessão atual</button>' +
+            '<button class="tam-dialog-btn tam-dialog-btn-new">🆕 criar nova sessão</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(dialog);
+
+      dialog.querySelector('.tam-dialog-btn-add').addEventListener('click', function(){
+        dialog.parentNode.removeChild(dialog);
+        resolve('add');
+      });
+      dialog.querySelector('.tam-dialog-btn-new').addEventListener('click', function(){
+        dialog.parentNode.removeChild(dialog);
+        resolve('new');
+      });
+    });
+  }
+
+  /* Start a brand new session, archiving the current one with (1) suffix */
+  function tamStartNewSession(parsedInvoices) {
+    // Save current session first (rename it with suffix if needed)
+    if (tamSession && tamInvoices.length > 0) {
+      var baseName = tamSession.name.replace(/ \(\d+\)$/, '');
+      var all = tamLoadAllSessionsLocal();
+      // Find next available suffix
+      var suffix = 1;
+      while (all[baseName + ' (' + suffix + ')']) suffix++;
+      var archivedName = baseName + ' (' + suffix + ')';
+      // Save current session under archived name
+      var archivedPayload = {
+        name:    archivedName,
+        savedAt: Date.now(),
+        boxes:   tamSession.boxes,
+        invoices: tamInvoices.map(function(r){
+          return { invoiceNo: r.invoiceNo, invoiceDate: r.invoiceDate, fileName: r._fileName,
+                   totalPieces: r.totalPieces, shipPkgs: r.shipPkgs, shipping: r.shipping,
+                   subtotalGoods: r.subtotalGoods, grandTotal: r.grandTotal,
+                   invoiceSubtotal: r.invoiceSubtotal, grouped: r.grouped };
+        })
+      };
+      all[archivedName] = archivedPayload;
+      // Remove old key if name changed
+      if (all[tamSession.name] && tamSession.name !== archivedName) {
+        delete all[tamSession.name];
+      }
+      localStorage.setItem('tam_sessions', JSON.stringify(all));
+    }
+
+    // Reset state for new session
+    tamInvoices = parsedInvoices;
+    tamEngineCache = {};
+    tamActiveEngines = {};
+    tamSession = null;
+    tamInitSession();
+
+    var lbl = document.getElementById('upload-label') || document.getElementById('tam-upload-label');
+    if (lbl) lbl.classList.add('loaded');
+    document.getElementById('tab-tam').classList.add('tam-loaded');
+    document.getElementById('admin-app').classList.add('tam-loaded');
+    document.getElementById('tam-export-btn').classList.add('show');
+
+    tamRenderAll();
+    tamStartAutoSave();
+    tamSaveSession(false);
   }
 
   /* Sync session boxes when new invoices are added — add missing boxes */
@@ -746,12 +851,16 @@
       boxes:    tamSession.boxes,
       invoices: tamInvoices.map(function(r){
         return {
-          invoiceNo:   r.invoiceNo,
-          invoiceDate: r.invoiceDate,
-          fileName:    r._fileName,
-          totalPieces: r.totalPieces,
-          shipPkgs:    r.shipPkgs,
-          grouped:     r.grouped
+          invoiceNo:     r.invoiceNo,
+          invoiceDate:   r.invoiceDate,
+          fileName:      r._fileName,
+          totalPieces:   r.totalPieces,
+          shipPkgs:      r.shipPkgs,
+          shipping:      r.shipping      || 0,
+          subtotalGoods: r.subtotalGoods || 0,
+          grandTotal:    r.grandTotal    || 0,
+          invoiceSubtotal: r.invoiceSubtotal || null,
+          grouped:       r.grouped
         };
       })
     };
@@ -906,19 +1015,38 @@
     tamSession = { name: s.name, boxes: s.boxes, createdAt: s.savedAt };
     if (s.invoices && s.invoices.length) {
       tamInvoices = s.invoices.map(function(inv, idx){
+        // Recalculate shipPerPiece for restored grouped items
+        var shipping      = inv.shipping      || (inv.shipPkgs || 0) * 17.5;
+        var subtotalGoods = inv.subtotalGoods || 0;
+        var grandTotal    = inv.grandTotal    || tamRound2(subtotalGoods + shipping);
+        var totalPieces   = inv.totalPieces   || 0;
+        var shipPerPiece  = totalPieces > 0 ? shipping / totalPieces : 0;
+
+        // Restore unitPriceWithShip and grandTotal on each grouped item if missing
+        var grouped = (inv.grouped || []).map(function(g){
+          if (!g.unitPriceWithShip && g.totalCost && g.pieces) {
+            var base = g.pieces > 0 ? g.totalCost / g.pieces : 0;
+            g.unitPriceWithShip = tamRound2(base + shipPerPiece);
+            g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+          }
+          return g;
+        });
+
         return {
-          invoiceNo:    inv.invoiceNo,
-          invoiceDate:  inv.invoiceDate,
-          _fileName:    inv.fileName,
-          _fileKey:     inv.fileName + '_' + idx,
-          totalPieces:  inv.totalPieces,
-          shipPkgs:     inv.shipPkgs,
-          shipping:     (inv.shipPkgs || 0) * 17.5,
-          subtotalGoods: 0,
-          grandTotal:   0,
-          grouped:      inv.grouped || [],
-          xv: { fullyAgree: true, confirmed: (inv.grouped||[]).length, conflicts: [],
-                engines: [{label:'A',refs:0,units:0},{label:'B',refs:0,units:0}],
+          invoiceNo:      inv.invoiceNo,
+          invoiceDate:    inv.invoiceDate,
+          _fileName:      inv.fileName,
+          _fileKey:       inv.fileName + '_' + idx,
+          totalPieces:    totalPieces,
+          shipPkgs:       inv.shipPkgs      || 0,
+          shipping:       shipping,
+          subtotalGoods:  subtotalGoods,
+          grandTotal:     grandTotal,
+          invoiceSubtotal: inv.invoiceSubtotal || null,
+          grouped:        grouped,
+          xv: { fullyAgree: true, confirmed: grouped.length, conflicts: [],
+                engines: [{label:'A',refs:grouped.length,units:totalPieces},
+                          {label:'B',refs:grouped.length,units:totalPieces}],
                 autoEngine:'A', activeEngine:'A', isManual:false }
         };
       });
@@ -1451,7 +1579,24 @@
       '#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
       '#tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display:none!important; }',
 
-      /* ── Session bar — always visible ── */
+      /* ── Session choice dialog ── */
+      '#tam-session-dialog { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:800; display:flex; align-items:center; justify-content:center; }',
+      '#tam-session-dialog-box { background:#fff; border-radius:16px; padding:28px 28px 22px; width:420px; max-width:92vw; font-family:MontserratLight,sans-serif; box-shadow:0 20px 60px rgba(0,0,0,.15); }',
+      '.tam-dialog-title { font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; margin-bottom:12px; }',
+      '.tam-dialog-body { font-size:.9rem; font-weight:600; color:#333; line-height:1.6; margin-bottom:22px; }',
+      '.tam-dialog-btns { display:flex; flex-direction:column; gap:8px; }',
+      '.tam-dialog-btn { padding:11px 16px; font-size:.88rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:10px; border:1px solid #ccc; background:#fff; text-align:left; transition:background .15s,border-color .15s; }',
+      '.tam-dialog-btn:hover { background:#f5f5f5; border-color:#999; }',
+      '.tam-dialog-btn-new { border-color:#555; }',
+      '.tam-dialog-btn-new:hover { background:#555; color:#fff; }',
+      '@media(prefers-color-scheme:dark){',
+      '#tam-session-dialog-box{background:#1a1a1a!important;}',
+      '.tam-dialog-title{color:#555!important;}',
+      '.tam-dialog-body{color:#ccc!important;}',
+      '.tam-dialog-btn{background:#111!important;border-color:#333!important;color:#ccc!important;}',
+      '.tam-dialog-btn:hover{background:#222!important;border-color:#666!important;}',
+      '.tam-dialog-btn-new:hover{background:#555!important;color:#fff!important;}',
+      '}',
       '#tam-session-bar { display:flex!important; align-items:center; gap:12px; width:100%; max-width:960px; padding:8px 14px; margin-bottom:12px; border:1px solid #e6e6e6; border-radius:12px; background:#fafafa; flex-wrap:wrap; }',
       '#tam-session-name { font-size:.88rem; font-weight:bold; flex:1; border:none; background:transparent; outline:none; color:#000; min-width:200px; font-family:MontserratLight,sans-serif; }',
       '#tam-session-status { font-size:.72rem; font-weight:bold; color:#aaa; }',

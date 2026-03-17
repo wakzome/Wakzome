@@ -1942,7 +1942,7 @@
 
   /* ════════════════════════════════════════════════════════════
      RENDER: TABLE
-     · table-layout:fixed with explicit pixel widths on <col>
+     · table-layout:auto — each column fits its widest content
      · nome column: fixed width 220px, text truncates with ellipsis
      · numeric columns: right-aligned, no wrap, padding for breathing room
   ════════════════════════════════════════════════════════════ */
@@ -1951,14 +1951,6 @@
 
     var html=
       '<table class="tam-table">'+
-      '<colgroup>'+
-        '<col class="col-num">'+   /* # */
-        '<col class="col-ref">'+   /* referência */
-        '<col class="col-nome">'+  /* tipo · nome — takes remaining space */
-        '<col class="col-num">'+   /* UND */
-        '<col class="col-num">'+   /* P.Unit/T */
-        '<col class="col-num">'+   /* Total */
-      '</colgroup>'+
       '<thead><tr>'+
         '<th class="tam-th">#</th>'+
         '<th class="tam-th">referência</th>'+
@@ -2022,15 +2014,14 @@
     var s=document.createElement('style');
     s.id='tam-xv-styles';
     s.textContent=[
-      /* ── Table: auto-fit each column to its widest content ── */
-      '.tam-table{table-layout:fixed;width:100%;border-collapse:collapse;font-size:.85rem}',
-      /* Column widths: # tiny, ref medium, tipo·nome fills rest, num cols fixed */
-      '.tam-table col.col-num{width:60px}',
-      '.tam-table col.col-ref{width:180px}',
-      '.tam-table col.col-nome{width:auto}',
-      '.tam-th{white-space:nowrap;padding:6px 14px;text-align:center;font-size:.65rem;'+
+      /* ── Table: each column auto-fits to its widest content ── */
+      /* Wrap in scroll container so table never stretches beyond its content */
+      '#tam-results-wrap{overflow-x:auto}',
+      '.tam-table{table-layout:auto;width:max-content;border-collapse:collapse;font-size:.85rem}',
+
+      '.tam-th{white-space:nowrap;padding:6px 16px;text-align:center;font-size:.65rem;'+
               'text-transform:uppercase;letter-spacing:.06em;color:#888;border-bottom:2px solid #e0e0e0}',
-      '.tam-td{white-space:nowrap;padding:6px 14px;text-align:center;border-bottom:1px solid #f0f0f0;vertical-align:middle}',
+      '.tam-td{white-space:nowrap;padding:6px 16px;text-align:center;border-bottom:1px solid #f0f0f0;vertical-align:middle}',
       '.tam-td-num{font-variant-numeric:tabular-nums}',
       /* Row states */
       '.tam-row-conflict td{background:#fff8e1!important}',

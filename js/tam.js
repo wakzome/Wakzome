@@ -121,7 +121,39 @@
       document.getElementById('admin-app').classList.add('tam-loaded');
 
       if (!tamSession) {
-        tamInitSession();
+        // Check if a session with this week's name already exists in storage
+        var weekName = tamGetWeekSessionName();
+        var existing = tamLoadAllSessionsLocal()[weekName];
+        if (existing && existing.invoices && existing.invoices.length > 0) {
+          // Session exists with same name — ask what to do
+          var choiceNew = await tamAskSessionChoiceOnLoad(weekName, parsed.map(function(r){ return r.invoiceNo; }));
+          if (choiceNew === 'new') {
+            // Archive existing and start fresh
+            var all2 = tamLoadAllSessionsLocal();
+            var baseName2 = weekName.replace(/ \(\d+\)$/, '');
+            var suffix2 = 1;
+            while (all2[baseName2 + ' (' + suffix2 + ')']) suffix2++;
+            all2[baseName2 + ' (' + suffix2 + ')'] = existing;
+            delete all2[weekName];
+            localStorage.setItem('tam_sessions', JSON.stringify(all2));
+            tamInitSession();
+          } else {
+            // Load existing session and add new invoices to it
+            tamLoadSession(weekName, existing);
+            // Add the newly parsed invoices on top
+            var newInvNos = existing.invoices ? existing.invoices.map(function(i){ return i.invoiceNo; }) : [];
+            parsed.forEach(function(r){
+              if (newInvNos.indexOf(r.invoiceNo) < 0) tamInvoices.push(r);
+            });
+            tamSyncSessionBoxes();
+            tamRenderAll();
+            document.getElementById('tam-export-btn').classList.add('show');
+            tamStartAutoSave();
+            return;
+          }
+        } else {
+          tamInitSession();
+        }
       } else {
         tamSyncSessionBoxes();
       }
@@ -230,28 +262,61 @@
   /* ══════════════════════════════════════════════════════════════
      INICIALIZAR SESIÓN
   ══════════════════════════════════════════════════════════════ */
-  function tamInitSession() {
+  function tamGetWeekSessionName() {
     var d = new Date();
-    // Calcular lunes de la semana actual
-    var day = d.getDay(); // 0=dom, 1=lun...
+    var day = d.getDay();
     var diff = (day === 0) ? -6 : 1 - day;
     var monday = new Date(d);
     monday.setDate(d.getDate() + diff);
     var dd = String(monday.getDate()).padStart(2,'0');
     var mm = String(monday.getMonth()+1).padStart(2,'0');
     var yyyy = monday.getFullYear();
-    var sessionName = 'Sessão TAM ' + dd + '/' + mm + '/' + yyyy;
+    return 'Sessão TAM ' + dd + '/' + mm + '/' + yyyy;
+  }
 
-    // Contar total de cajas de todas las facturas
+  function tamInitSession() {
+    var sessionName = tamGetWeekSessionName();
     var totalBoxes = tamInvoices.reduce(function(s, r){ return s + (r.shipPkgs || 0); }, 0);
     if (totalBoxes < 1) totalBoxes = 1;
-
     var boxes = [];
     for (var i = 0; i < totalBoxes; i++) {
       boxes.push({ total: null, refs: {}, locked: false });
     }
-
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now() };
+  }
+
+  /* Dialog: existing session found on fresh load */
+  function tamAskSessionChoiceOnLoad(existingName, newInvoiceNos) {
+    return new Promise(function(resolve){
+      var old = document.getElementById('tam-session-dialog');
+      if (old) old.parentNode.removeChild(old);
+
+      var dialog = document.createElement('div');
+      dialog.id = 'tam-session-dialog';
+      dialog.innerHTML =
+        '<div id="tam-session-dialog-box">' +
+          '<div class="tam-dialog-title">sessão existente detetada</div>' +
+          '<div class="tam-dialog-body">' +
+            'Já existe trabalho guardado em <strong>' + tamEsc(existingName) + '</strong>.<br>' +
+            'A fatura <strong>' + newInvoiceNos.join(', ') + '</strong> é nova.<br><br>' +
+            'O que pretende fazer?' +
+          '</div>' +
+          '<div class="tam-dialog-btns">' +
+            '<button class="tam-dialog-btn tam-dialog-btn-add">➕ continuar na sessão existente</button>' +
+            '<button class="tam-dialog-btn tam-dialog-btn-new">🆕 arquivar sessão anterior e criar nova</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(dialog);
+
+      dialog.querySelector('.tam-dialog-btn-add').addEventListener('click', function(){
+        dialog.parentNode.removeChild(dialog);
+        resolve('add');
+      });
+      dialog.querySelector('.tam-dialog-btn-new').addEventListener('click', function(){
+        dialog.parentNode.removeChild(dialog);
+        resolve('new');
+      });
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════

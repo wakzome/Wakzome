@@ -183,15 +183,19 @@
 
     if (tamInvoices.length === 1) {
       tamRenderSingleMeta(tamInvoices[0], meta);
-      tamRenderSingleValidation(tamInvoices[0], ban);
+      tamRenderInvoiceBanner(tamInvoices[0], ban);
+      ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
       tamRenderInvoiceTable(tamInvoices[0], wrap, 0);
     } else {
-      meta.style.cssText = 'display:flex!important;flex-wrap:wrap;gap:10px 20px;padding:10px 0;';
-      meta.className = 'show';
+      // Hide the shared meta/banner — each block has its own
+      meta.style.display = 'none';
+      ban.style.display  = 'none';
       tamInvoices.forEach(function(r, idx) {
         var block = document.createElement('div');
         block.className = 'tam-invoice-block';
         block.id = 'tam-invoice-block-' + idx;
+
+        // ── Header row ──────────────────────────────────────
         var hdr = document.createElement('div');
         hdr.className = 'tam-invoice-block-header';
         hdr.innerHTML =
@@ -202,18 +206,24 @@
           '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
           '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>';
         block.appendChild(hdr);
-        // Bind export button
         hdr.querySelector('.tam-inv-export-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-export-btn').getAttribute('data-inv'));
           tamExportInvoiceCSV(tamInvoices[i]);
         });
+
+        // ── Validation banner per invoice ──────────────────
+        var banEl = document.createElement('div');
+        banEl.className = 'tam-inv-banner';
+        tamRenderInvoiceBanner(r, banEl);
+        block.appendChild(banEl);
+
+        // ── Table ──────────────────────────────────────────
         var tWrap = document.createElement('div');
         tWrap.className = 'tam-inv-table-wrap';
         tamRenderInvoiceTable(r, tWrap, idx);
         block.appendChild(tWrap);
         wrap.appendChild(block);
 
-        // Separador entre facturas
         if (idx < tamInvoices.length - 1) {
           var sep = document.createElement('div');
           sep.className = 'tam-inv-separator';
@@ -221,6 +231,77 @@
         }
       });
     }
+  }
+
+  /* Renders the motors/validation banner inside an invoice block */
+  function tamRenderInvoiceBanner(r, el) {
+    var xv    = r.xv;
+    var subOk = r.invoiceSubtotal != null ? Math.abs(r.invoiceSubtotal - r.subtotalGoods) < 0.05 : true;
+    var allOk = xv.fullyAgree && subOk;
+
+    var subLine = r.invoiceSubtotal != null
+      ? 'fatura: <strong>' + tamFmtEU(r.invoiceSubtotal) + '€</strong> · calculado: <strong>' + tamFmtEU(r.subtotalGoods) + '€</strong>'
+      : 'calculado: <strong>' + tamFmtEU(r.subtotalGoods) + '€</strong>';
+
+    var cvHtml = '<div class="tam-vi"><em>subtotal</em><span>' + subLine + '</span></div>';
+
+    if (allOk) {
+      cvHtml += '<div class="tam-vi" style="color:#2a7a2a"><em>verificação</em><span>✅ ' + xv.confirmed + ' refs confirmadas</span></div>';
+    } else {
+      var engA = xv.engines[0], engB = xv.engines[1];
+      function _eKey(e){ return e.refs+'|'+e.units; }
+      var abAgree = _eKey(engA) === _eKey(engB);
+
+      if (abAgree) {
+        cvHtml += '<div class="tam-vi"><em>motores</em><span>A+B ★: ' + engA.refs + ' refs / ' + engA.units + ' un</span></div>';
+      } else {
+        cvHtml += '<div class="tam-vi"><em>motores</em><span>' +
+          'A' + (engA.label===xv.autoEngine?' ★':'') + ': ' + engA.refs + ' refs / ' + engA.units + ' un' +
+          ' &emsp; B' + (engB.label===xv.autoEngine?' ★':'') + ': ' + engB.refs + ' refs / ' + engB.units + ' un' +
+          '</span></div>';
+      }
+
+      if (xv.conflicts && xv.conflicts.length) {
+        cvHtml += '<div class="tam-vi"><em style="color:#c00">⚠️ conflitos (' + xv.conflicts.length + ')</em><span>' +
+          xv.conflicts.map(function(c){ return '<span class="tam-conflict-ref">' + tamEsc(c.ref) + '</span>'; }).join(' · ') +
+          '</span></div>';
+      }
+
+      if (!abAgree && tamEngineCache[r._fileKey]) {
+        var selectorBtns = xv.engines.map(function(e, rank){
+          var isActive = e.label === xv.activeEngine;
+          var cls = 'tam-ebtn' + (isActive ? ' tam-ebtn-active' : '');
+          var star = e.label === xv.autoEngine ? ' ★' : '';
+          var er = tamEngineCache[r._fileKey][e.label];
+          return '<button class="' + cls + '" data-engine="' + e.label + '" data-filekey="' + tamEsc(r._fileKey) + '">' +
+            '<span class="tam-ebtn-label">' + (rank+1) + '. Motor ' + e.label + star + '</span>' +
+            '<span class="tam-ebtn-detail">' + e.refs + ' refs · ' + e.units + ' un · ' + tamFmtEU(er ? er.subtotalGoods : 0) + ' €</span>' +
+            '</button>';
+        }).join('');
+        cvHtml += '<div class="tam-vi tam-engine-sel-wrap"><em>seleccionar motor</em><span class="tam-engine-btns">' + selectorBtns + '</span></div>';
+      }
+    }
+
+    el.innerHTML = cvHtml;
+    el.className = 'tam-inv-banner ' + (allOk ? 'ok' : 'err');
+
+    el.querySelectorAll('.tam-ebtn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var label   = btn.getAttribute('data-engine');
+        var fileKey = btn.getAttribute('data-filekey');
+        tamActiveEngines[fileKey] = label;
+        var cache = tamEngineCache[fileKey];
+        if (!cache) return;
+        var newResult = tamCrossValidate(cache.A, cache.B, cache.C, label);
+        var i = tamInvoices.findIndex(function(inv){ return inv._fileKey === fileKey; });
+        if (i >= 0) {
+          newResult._fileKey  = tamInvoices[i]._fileKey;
+          newResult._fileName = tamInvoices[i]._fileName;
+          tamInvoices[i] = newResult;
+          tamRenderAll();
+        }
+      });
+    });
   }
 
   function tamRenderSingleMeta(r, el) {
@@ -689,51 +770,56 @@
      MODAL DE SESIONES
   ══════════════════════════════════════════════════════════════ */
   function tamOpenSessionsModal() {
-    var modal = document.getElementById('tam-sessions-modal');
-    if (!modal) return;
-    tamRenderSessionsList();
-    modal.classList.add('open');
+    var dd = document.getElementById('tam-sessions-dropdown');
+    if (!dd) return;
+    var isOpen = dd.classList.contains('open');
+    dd.classList.toggle('open', !isOpen);
+    if (!isOpen) tamRenderSessionsList();
   }
 
   function tamCloseSessionsModal() {
-    var modal = document.getElementById('tam-sessions-modal');
-    if (modal) modal.classList.remove('open');
+    var dd = document.getElementById('tam-sessions-dropdown');
+    if (dd) dd.classList.remove('open');
   }
 
   function tamRenderSessionsList() {
-    var list = document.getElementById('tam-sessions-list');
-    if (!list) return;
+    var dd = document.getElementById('tam-sessions-dropdown');
+    if (!dd) return;
     var sessions = tamLoadAllSessions();
     var keys = Object.keys(sessions).sort(function(a,b){ return (sessions[b].savedAt||0) - (sessions[a].savedAt||0); });
 
     if (!keys.length) {
-      list.innerHTML = '<div class="tam-sessions-empty">nenhuma sessão guardada</div>';
+      dd.innerHTML = '<div class="tam-sessions-empty">nenhuma sessão guardada</div>';
       return;
     }
 
-    list.innerHTML = keys.map(function(k){
-      var s = sessions[k];
-      var date = s.savedAt ? new Date(s.savedAt).toLocaleString('pt-PT') : '—';
-      var invInfo = s.invoices ? s.invoices.length + ' fatura(s)' : '';
-      return '<div class="tam-session-item" data-key="' + tamEsc(k) + '">' +
-        '<div class="tam-session-item-info">' +
-          '<div class="tam-session-item-name">' + tamEsc(s.name) + '</div>' +
-          '<div class="tam-session-item-meta">' + date + (invInfo ? ' · ' + invInfo : '') + '</div>' +
-        '</div>' +
-        '<button class="tam-session-load-btn" data-key="' + tamEsc(k) + '">carregar</button>' +
-        '<button class="tam-session-del-btn"  data-key="' + tamEsc(k) + '">✕</button>' +
-        '</div>';
-    }).join('');
+    dd.innerHTML =
+      '<div class="tam-dd-header">sessões guardadas</div>' +
+      keys.map(function(k){
+        var s = sessions[k];
+        var date = s.savedAt ? new Date(s.savedAt).toLocaleString('pt-PT') : '—';
+        var invInfo = s.invoices ? s.invoices.length + ' fat.' : '';
+        return '<div class="tam-dd-item" data-key="' + tamEsc(k) + '">' +
+          '<div class="tam-dd-item-info">' +
+            '<div class="tam-dd-item-name">' + tamEsc(s.name) + '</div>' +
+            '<div class="tam-dd-item-meta">' + date + (invInfo ? ' · ' + invInfo : '') + '</div>' +
+          '</div>' +
+          '<button class="tam-dd-load-btn" data-key="' + tamEsc(k) + '">carregar</button>' +
+          '<button class="tam-dd-del-btn"  data-key="' + tamEsc(k) + '" title="apagar">✕</button>' +
+          '</div>';
+      }).join('');
 
-    list.querySelectorAll('.tam-session-load-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
+    dd.querySelectorAll('.tam-dd-load-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
         tamLoadSession(btn.getAttribute('data-key'));
         tamCloseSessionsModal();
       });
     });
 
-    list.querySelectorAll('.tam-session-del-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
+    dd.querySelectorAll('.tam-dd-del-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
         tamDeleteSession(btn.getAttribute('data-key'));
         tamRenderSessionsList();
       });
@@ -1231,36 +1317,32 @@
       '.tam-session-btn { padding:5px 14px; font-size:.75rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:#fff; transition:background .15s,color .15s; }',
       '.tam-session-btn:hover { background:#555; color:#fff; border-color:#555; }',
 
-      /* ── Sessions modal ── */
-      '#tam-sessions-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:600; justify-content:center; align-items:center; }',
-      '#tam-sessions-modal.open { display:flex!important; }',
-      '#tam-sessions-box { background:#fff; border-radius:18px; padding:28px 28px 22px; width:520px; max-width:95vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.14); font-family:MontserratLight,sans-serif; }',
-      '#tam-sessions-box .tam-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }',
-      '#tam-sessions-box .tam-modal-title { font-size:.78rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; }',
-      '#tam-modal-close { background:none; border:none; font-size:1.2rem; cursor:pointer; color:#aaa; padding:0 4px; line-height:1; }',
-      '#tam-modal-close:hover { color:#000; }',
-      '#tam-sessions-list { overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; min-height:0; }',
-      '.tam-sessions-empty { color:#aaa; text-align:center; padding:40px 0; font-size:.88rem; font-weight:bold; }',
-      '.tam-session-item { display:flex; align-items:center; gap:10px; padding:10px 14px; border:1px solid #efefef; border-radius:12px; transition:border-color .15s; }',
-      '.tam-session-item:hover { border-color:#ccc; }',
-      '.tam-session-item-info { flex:1; }',
-      '.tam-session-item-name { font-size:.88rem; font-weight:bold; color:#000; }',
-      '.tam-session-item-meta { font-size:.72rem; color:#aaa; margin-top:2px; }',
-      '.tam-session-load-btn { padding:5px 14px; font-size:.75rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #555; border-radius:8px; background:#fff; text-transform:lowercase; transition:background .15s,color .15s; }',
-      '.tam-session-load-btn:hover { background:#555; color:#fff; }',
-      '.tam-session-del-btn { background:none; border:none; cursor:pointer; font-size:.95rem; color:#ccc; padding:2px 6px; border-radius:6px; transition:color .15s,background .15s; }',
-      '.tam-session-del-btn:hover { color:#c00; background:rgba(192,0,0,.06); }',
+      /* ── Sessions dropdown ── */
+      '.tam-sessions-dropdown-wrap { position:relative; }',
+      '#tam-sessions-dropdown { display:none; position:absolute; top:calc(100% + 6px); right:0; width:400px; max-width:90vw; max-height:360px; overflow-y:auto; background:#fff; border:1px solid #e6e6e6; border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,.12); z-index:700; font-family:MontserratLight,sans-serif; }',
+      '#tam-sessions-dropdown.open { display:block; }',
+      '.tam-dd-header { padding:10px 14px; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; border-bottom:1px solid #f0f0f0; background:#fafafa; border-radius:14px 14px 0 0; }',
+      '.tam-dd-item { display:flex; align-items:center; gap:8px; padding:9px 14px; border-bottom:1px solid #f5f5f5; transition:background .12s; }',
+      '.tam-dd-item:last-child { border-bottom:none; border-radius:0 0 14px 14px; }',
+      '.tam-dd-item:hover { background:#f8f8f8; }',
+      '.tam-dd-item-info { flex:1; min-width:0; }',
+      '.tam-dd-item-name { font-size:.84rem; font-weight:bold; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
+      '.tam-dd-item-meta { font-size:.7rem; color:#aaa; margin-top:1px; }',
+      '.tam-dd-load-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #555; border-radius:7px; background:#fff; text-transform:lowercase; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-dd-load-btn:hover { background:#555; color:#fff; }',
+      '.tam-dd-del-btn { background:none; border:none; cursor:pointer; font-size:.88rem; color:#ccc; padding:2px 6px; border-radius:6px; flex-shrink:0; transition:color .15s,background .15s; }',
+      '.tam-dd-del-btn:hover { color:#c00; background:rgba(192,0,0,.06); }',
+      '.tam-sessions-empty { color:#aaa; text-align:center; padding:28px 0; font-size:.84rem; font-weight:bold; }',
 
-      /* ── Dark mode sessions ── */
+      /* ── Dark mode dropdown ── */
       '@media(prefers-color-scheme:dark){',
-      '#tam-session-bar{background:#111!important;border-color:#2a2a2a!important;}',
-      '#tam-session-name{color:#e8e8e8!important;}',
-      '#tam-sessions-box{background:#1a1a1a!important;}',
-      '.tam-session-item{border-color:#2a2a2a!important;background:#111!important;}',
-      '.tam-session-item:hover{border-color:#444!important;}',
-      '.tam-session-item-name{color:#e8e8e8!important;}',
-      '.tam-session-load-btn{background:#111!important;border-color:#555!important;color:#aaa!important;}',
-      '.tam-session-load-btn:hover{background:#555!important;color:#fff!important;}',
+      '#tam-sessions-dropdown{background:#1a1a1a!important;border-color:#2a2a2a!important;box-shadow:0 8px 32px rgba(0,0,0,.4)!important;}',
+      '.tam-dd-header{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-dd-item{border-color:#1e1e1e!important;}',
+      '.tam-dd-item:hover{background:#222!important;}',
+      '.tam-dd-item-name{color:#e8e8e8!important;}',
+      '.tam-dd-load-btn{background:#111!important;border-color:#555!important;color:#aaa!important;}',
+      '.tam-dd-load-btn:hover{background:#555!important;color:#fff!important;}',
       '}',
 
       /* ── Tabla de factura con columnas F/P ── */
@@ -1293,6 +1375,14 @@
       '.tam-inv-total { font-size:.88rem; font-weight:bold; color:#000; margin-left:auto; }',
       '.tam-inv-table-wrap { overflow-x:auto; }',
       '.tam-inv-separator { height:1px; background:#e6e6e6; margin:6px 0; width:100%; max-width:960px; }',
+      /* Validation banner inside block */
+      '.tam-inv-banner { display:flex; flex-wrap:wrap; gap:4px 20px; padding:7px 16px; font-size:.78rem; font-weight:600; font-family:MontserratLight,sans-serif; border-bottom:1px solid #e6e6e6; }',
+      '.tam-inv-banner.ok  { background:#f0faf0; color:#2a6a2a; }',
+      '.tam-inv-banner.err { background:#fff8f0; color:#994400; }',
+      '.tam-inv-banner .tam-vi { display:flex; align-items:center; gap:6px; }',
+      '.tam-inv-banner .tam-vi em { font-style:normal; font-size:.63rem; opacity:.6; text-transform:uppercase; letter-spacing:.06em; }',
+      '.tam-inv-banner .tam-engine-sel-wrap { width:100%; margin-top:2px; }',
+      '.tam-inv-banner .tam-engine-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }',
 
       /* ── Meta banner ── */
       '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:#f8f8f8; border-radius:14px; padding:10px 20px; margin-bottom:12px; font-size:.85rem; font-weight:600; color:#444; flex-wrap:wrap; gap:6px 28px; }',
@@ -1355,8 +1445,10 @@
       '.tam-sub-p { font-size:.65rem; font-weight:bold; color:#880e4f; letter-spacing:.03em; }',
 
       /* Columnas fijas de refs y totales */
-      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; }',
+      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; position:sticky; left:0; z-index:2; }',
       '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background:#fafafa!important; border-right:1px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
+      /* Sticky header cells for ref and total cols */
+      '.tam-boxes-hdr-row .tam-rec-ref-col, .tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:3; background:#f8f8f8!important; }',
 
       /* Celdas input */
       '.tam-rec-cell-f { background:#f0f8ff; padding:2px 4px!important; min-width:52px; }',
@@ -1430,17 +1522,27 @@
       bar.innerHTML =
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
-        '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões</button>';
-      // Insertar después de tam-upload-zone
+        '<div class="tam-sessions-dropdown-wrap">' +
+          '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
+          '<div id="tam-sessions-dropdown"></div>' +
+        '</div>';
       var uz = document.getElementById('tam-upload-zone');
       if (uz && uz.nextSibling) uz.parentNode.insertBefore(bar, uz.nextSibling);
       else if (uz) uz.parentNode.appendChild(bar);
       else tab.insertBefore(bar, tab.firstChild);
 
-      // Bind: cambio de nombre de sesión
       bar.querySelector('#tam-session-name').addEventListener('change', function(e){
         if (tamSession) tamSession.name = e.target.value;
         tamScheduleSave();
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function(e){
+        var dd = document.getElementById('tam-sessions-dropdown');
+        var btn = document.getElementById('tam-sessions-btn');
+        if (dd && !dd.contains(e.target) && e.target !== btn) {
+          dd.classList.remove('open');
+        }
       });
     }
 
@@ -1448,31 +1550,10 @@
     if (!document.getElementById('tam-reception-area')) {
       var ra = document.createElement('div');
       ra.id = 'tam-reception-area';
-      // Insertar después de tam-results-wrap
       var rw = document.getElementById('tam-results-wrap');
       if (rw && rw.nextSibling) rw.parentNode.insertBefore(ra, rw.nextSibling);
       else if (rw) rw.parentNode.appendChild(ra);
       else tab.appendChild(ra);
-    }
-
-    // Sessions modal
-    if (!document.getElementById('tam-sessions-modal')) {
-      var modal = document.createElement('div');
-      modal.id = 'tam-sessions-modal';
-      modal.innerHTML =
-        '<div id="tam-sessions-box">' +
-          '<div class="tam-modal-header">' +
-            '<span class="tam-modal-title">sessões guardadas</span>' +
-            '<button id="tam-modal-close">✕</button>' +
-          '</div>' +
-          '<div id="tam-sessions-list"></div>' +
-        '</div>';
-      document.body.appendChild(modal);
-
-      modal.addEventListener('click', function(e){
-        if (e.target === modal) tamCloseSessionsModal();
-      });
-      modal.querySelector('#tam-modal-close').addEventListener('click', tamCloseSessionsModal);
     }
   })();
 

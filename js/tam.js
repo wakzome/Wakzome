@@ -1,21 +1,29 @@
 // ══════════════════════════════════════════════════════════════
-//  TAM FASHION — invoice parser + receção de mercadoria  v8
-//  · v8: Sistema multi-fatura com receção de caixas
-//        Distribuição Funchal / Porto Santo por caixa
-//        Resumo consolidado com scroll horizontal
-//        Autoguardado de sessão a cada 20s
-//        Gestão de sessões (carregar / apagar)
+//  TAM FASHION — invoice parser + receção de mercadoria  v9
+//  · v9: Autoguardado fiable (localStorage + Supabase)
+//        Biblioteca de referências aprendida automaticamente
+//        Sticky ref column fix (background sólido)
 // ══════════════════════════════════════════════════════════════
 (function () {
 
   /* ══════════════════════════════════════════════════════════════
      ESTADO GLOBAL
   ══════════════════════════════════════════════════════════════ */
-  var tamInvoices     = [];          // array de resultados parseados
-  var tamEngineCache  = {};          // { fileKey: {A,B,C} }
-  var tamActiveEngines = {};         // { fileKey: 'A'|'B'|null }
-  var tamSession      = null;        // { name, boxes: [{total, refs:{refKey:{f,p}}}, ...] }
+  var tamInvoices      = [];
+  var tamEngineCache   = {};
+  var tamActiveEngines = {};
+  var tamSession       = null;
   var tamAutoSaveTimer = null;
+  var tamSaveInFlight  = false;   // evita guardados simultáneos en Supabase
+
+  /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
+  var TAM_SESSIONS_TABLE = 'tam_sessions';
+  var TAM_REFS_TABLE     = 'tam_refs';
+
+  /* Obtener cliente Supabase del sistema (inyectado por supabase-config.js) */
+  function tamSB() {
+    return (typeof window !== 'undefined' && window._supabase) ? window._supabase : null;
+  }
 
   /* ══════════════════════════════════════════════════════════════
      DRAG & DROP + FILE INPUT
@@ -88,6 +96,8 @@
         result._fileName = file.name;
         tamInvoices.push(result);
         newCount++;
+        // Aprender referencias nuevas en segundo plano
+        tamLearnRefsFromResult(result);
       }
 
       if (!tamInvoices.some(function(r){ return r.grouped.length; })) {
@@ -726,44 +736,112 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     AUTOGUARDADO
+     AUTOGUARDADO — localStorage (inmediato) + Supabase (async)
   ══════════════════════════════════════════════════════════════ */
   function tamStartAutoSave() {
     if (tamAutoSaveTimer) clearInterval(tamAutoSaveTimer);
-    tamAutoSaveTimer = setInterval(tamSaveSession, 20000);
+    // Guardar cada 15s de forma incondicional
+    tamAutoSaveTimer = setInterval(function(){ tamSaveSession(false); }, 15000);
   }
 
   function tamScheduleSave() {
-    // Guardar en < 1s después de un cambio
-    clearTimeout(tamSession._saveDebounce);
-    tamSession._saveDebounce = setTimeout(tamSaveSession, 800);
+    // Guardado inmediato en localStorage + Supabase en cuanto cambia algo
+    tamSaveSession(false);
   }
 
-  function tamSaveSession() {
-    if (!tamSession) return;
+  function tamSaveSession(silent) {
+    if (!tamSession || !tamInvoices.length) return;
+
+    var payload = {
+      name:     tamSession.name,
+      savedAt:  Date.now(),
+      boxes:    tamSession.boxes,
+      invoices: tamInvoices.map(function(r){
+        return {
+          invoiceNo:   r.invoiceNo,
+          invoiceDate: r.invoiceDate,
+          fileName:    r._fileName,
+          totalPieces: r.totalPieces,
+          shipPkgs:    r.shipPkgs,
+          grouped:     r.grouped
+        };
+      })
+    };
+
+    /* 1 — localStorage: siempre, síncrono, instantáneo */
     try {
-      var sessions = tamLoadAllSessions();
-      sessions[tamSession.name] = {
-        name:      tamSession.name,
-        savedAt:   Date.now(),
-        boxes:     tamSession.boxes,
-        invoices:  tamInvoices.map(function(r){ return { invoiceNo: r.invoiceNo, invoiceDate: r.invoiceDate, fileName: r._fileName, totalPieces: r.totalPieces, shipPkgs: r.shipPkgs, grouped: r.grouped }; })
-      };
-      localStorage.setItem('tam_sessions', JSON.stringify(sessions));
+      var all = tamLoadAllSessionsLocal();
+      all[payload.name] = payload;
+      localStorage.setItem('tam_sessions', JSON.stringify(all));
+    } catch(e) { console.warn('TAM localStorage save error', e); }
+
+    /* 2 — Supabase: asíncrono, sin bloquear UI */
+    tamSaveSessionSupabase(payload);
+
+    /* Indicador visual */
+    if (!silent) {
       var stEl = document.getElementById('tam-session-status');
       if (stEl) {
-        stEl.textContent = 'guardado';
+        stEl.textContent = '✓ guardado';
         stEl.classList.add('saved');
-        setTimeout(function(){ stEl.textContent = ''; stEl.classList.remove('saved'); }, 2000);
+        clearTimeout(stEl._hideTimer);
+        stEl._hideTimer = setTimeout(function(){
+          stEl.textContent = '';
+          stEl.classList.remove('saved');
+        }, 2500);
       }
-    } catch(e) { console.warn('TAM: erro ao guardar sessão', e); }
+    }
   }
 
-  function tamLoadAllSessions() {
+  async function tamSaveSessionSupabase(payload) {
+    var sb = tamSB();
+    if (!sb || tamSaveInFlight) return;
+    tamSaveInFlight = true;
+    try {
+      await sb.from(TAM_SESSIONS_TABLE).upsert({
+        session_name: payload.name,
+        saved_at:     new Date(payload.savedAt).toISOString(),
+        data:         JSON.stringify(payload)
+      }, { onConflict: 'session_name' });
+    } catch(e) { /* Supabase opcional — localStorage es el fallback */ }
+    tamSaveInFlight = false;
+  }
+
+  /* Cargar desde localStorage */
+  function tamLoadAllSessionsLocal() {
     try {
       var raw = localStorage.getItem('tam_sessions');
       return raw ? JSON.parse(raw) : {};
     } catch(e) { return {}; }
+  }
+
+  /* Cargar fusionando localStorage + Supabase */
+  async function tamLoadAllSessionsMerged() {
+    var local = tamLoadAllSessionsLocal();
+    var sb = tamSB();
+    if (!sb) return local;
+    try {
+      var res = await sb.from(TAM_SESSIONS_TABLE).select('session_name, saved_at, data').order('saved_at', { ascending: false });
+      if (res.data && res.data.length) {
+        res.data.forEach(function(row){
+          try {
+            var parsed = JSON.parse(row.data);
+            var localEntry = local[parsed.name];
+            // Usar el más reciente entre local y remoto
+            if (!localEntry || (parsed.savedAt > (localEntry.savedAt || 0))) {
+              local[parsed.name] = parsed;
+            }
+          } catch(e) {}
+        });
+        // Actualizar localStorage con versión fusionada
+        localStorage.setItem('tam_sessions', JSON.stringify(local));
+      }
+    } catch(e) {}
+    return local;
+  }
+
+  function tamLoadAllSessions() {
+    return tamLoadAllSessionsLocal();
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -774,7 +852,12 @@
     if (!dd) return;
     var isOpen = dd.classList.contains('open');
     dd.classList.toggle('open', !isOpen);
-    if (!isOpen) tamRenderSessionsList();
+    if (!isOpen) {
+      dd.innerHTML = '<div class="tam-dd-header">a carregar sessões…</div>';
+      tamLoadAllSessionsMerged().then(function(sessions){
+        tamRenderSessionsList(sessions);
+      });
+    }
   }
 
   function tamCloseSessionsModal() {
@@ -782,19 +865,19 @@
     if (dd) dd.classList.remove('open');
   }
 
-  function tamRenderSessionsList() {
+  function tamRenderSessionsList(sessions) {
     var dd = document.getElementById('tam-sessions-dropdown');
     if (!dd) return;
-    var sessions = tamLoadAllSessions();
+    if (!sessions) sessions = tamLoadAllSessionsLocal();
     var keys = Object.keys(sessions).sort(function(a,b){ return (sessions[b].savedAt||0) - (sessions[a].savedAt||0); });
 
     if (!keys.length) {
-      dd.innerHTML = '<div class="tam-sessions-empty">nenhuma sessão guardada</div>';
+      dd.innerHTML = '<div class="tam-dd-header">sessões guardadas</div><div class="tam-sessions-empty">nenhuma sessão guardada</div>';
       return;
     }
 
     dd.innerHTML =
-      '<div class="tam-dd-header">sessões guardadas</div>' +
+      '<div class="tam-dd-header">sessões guardadas · ' + keys.length + '</div>' +
       keys.map(function(k){
         var s = sessions[k];
         var date = s.savedAt ? new Date(s.savedAt).toLocaleString('pt-PT') : '—';
@@ -812,7 +895,8 @@
     dd.querySelectorAll('.tam-dd-load-btn').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        tamLoadSession(btn.getAttribute('data-key'));
+        var key = btn.getAttribute('data-key');
+        tamLoadSession(key, sessions[key]);
         tamCloseSessionsModal();
       });
     });
@@ -821,17 +905,16 @@
       btn.addEventListener('click', function(e){
         e.stopPropagation();
         tamDeleteSession(btn.getAttribute('data-key'));
-        tamRenderSessionsList();
+        var updatedSessions = tamLoadAllSessionsLocal();
+        tamRenderSessionsList(updatedSessions);
       });
     });
   }
 
-  function tamLoadSession(key) {
-    var sessions = tamLoadAllSessions();
-    var s = sessions[key];
+  function tamLoadSession(key, sessionData) {
+    var s = sessionData || tamLoadAllSessionsLocal()[key];
     if (!s) return;
     tamSession = { name: s.name, boxes: s.boxes, createdAt: s.savedAt };
-    // Reconstruir tamInvoices desde los datos guardados (sin pdf)
     if (s.invoices && s.invoices.length) {
       tamInvoices = s.invoices.map(function(inv, idx){
         return {
@@ -845,7 +928,9 @@
           subtotalGoods: 0,
           grandTotal:   0,
           grouped:      inv.grouped || [],
-          xv: { fullyAgree: true, confirmed: (inv.grouped||[]).length, conflicts: [], engines: [{label:'A',refs:0,units:0},{label:'B',refs:0,units:0}], autoEngine:'A', activeEngine:'A', isManual:false }
+          xv: { fullyAgree: true, confirmed: (inv.grouped||[]).length, conflicts: [],
+                engines: [{label:'A',refs:0,units:0},{label:'B',refs:0,units:0}],
+                autoEngine:'A', activeEngine:'A', isManual:false }
         };
       });
       tamEnsureStyles();
@@ -860,14 +945,78 @@
   }
 
   function tamDeleteSession(key) {
-    var sessions = tamLoadAllSessions();
-    delete sessions[key];
-    localStorage.setItem('tam_sessions', JSON.stringify(sessions));
+    // localStorage
+    var all = tamLoadAllSessionsLocal();
+    delete all[key];
+    localStorage.setItem('tam_sessions', JSON.stringify(all));
+    // Supabase async
+    var sb = tamSB();
+    if (sb) {
+      sb.from(TAM_SESSIONS_TABLE).delete().eq('session_name', key).then(function(){});
+    }
   }
 
   /* ══════════════════════════════════════════════════════════════
-     EXPORT CSV — por factura individual
+     BIBLIOTECA DE REFERÊNCIAS — aprendizagem automática
+     Cada vez que se parsea uma fatura, as refs novas são guardadas
+     em Supabase (tam_refs) e em localStorage como fallback.
+     Na próxima fatura, essas refs são carregadas e adicionadas ao
+     KNOWN_REFS para melhorar a deteção.
   ══════════════════════════════════════════════════════════════ */
+  var tamLearnedRefs = new Set(); // Carregado ao iniciar
+
+  async function tamLoadLearnedRefs() {
+    // 1. localStorage primeiro (rápido)
+    try {
+      var local = localStorage.getItem('tam_learned_refs');
+      if (local) {
+        JSON.parse(local).forEach(function(r){ tamLearnedRefs.add(r.toUpperCase()); });
+      }
+    } catch(e) {}
+
+    // 2. Supabase (mais completo, assíncrono)
+    var sb = tamSB();
+    if (!sb) return;
+    try {
+      var res = await sb.from(TAM_REFS_TABLE).select('ref');
+      if (res.data && res.data.length) {
+        var remoteRefs = res.data.map(function(row){ return row.ref.toUpperCase(); });
+        remoteRefs.forEach(function(r){ tamLearnedRefs.add(r); });
+        // Actualizar localStorage con la versión fusionada
+        localStorage.setItem('tam_learned_refs', JSON.stringify(Array.from(tamLearnedRefs)));
+        // Incorporar al KNOWN_REFS para mejorar detección en esta sesión
+        tamLearnedRefs.forEach(function(r){ KNOWN_REFS.add(r); });
+      }
+    } catch(e) {}
+  }
+
+  async function tamLearnRefsFromResult(result) {
+    if (!result || !result.grouped || !result.grouped.length) return;
+    var newRefs = result.grouped
+      .map(function(g){ return g.ref; })
+      .filter(function(r){ return r && !tamLearnedRefs.has(r.toUpperCase()); });
+
+    if (!newRefs.length) return;
+
+    // Añadir a memoria local
+    newRefs.forEach(function(r){ tamLearnedRefs.add(r.toUpperCase()); KNOWN_REFS.add(r.toUpperCase()); });
+    try {
+      localStorage.setItem('tam_learned_refs', JSON.stringify(Array.from(tamLearnedRefs)));
+    } catch(e) {}
+
+    // Supabase: upsert en lote
+    var sb = tamSB();
+    if (!sb) return;
+    try {
+      var rows = newRefs.map(function(r){
+        return { ref: r.toUpperCase(), first_seen: new Date().toISOString(), source: 'auto' };
+      });
+      await sb.from(TAM_REFS_TABLE).upsert(rows, { onConflict: 'ref', ignoreDuplicates: true });
+    } catch(e) {}
+  }
+
+  // Cargar referencias aprendidas al inicializar el módulo
+  tamLoadLearnedRefs();
   function tamExportInvoiceCSV(r) {
     var lines = ['\uFEFF' + ['Referência','Tipo · Nome','UND','P.Unit c/ Envio (€)','Total (€)','Funchal','Porto Santo'].join(';')];
     var invIdx = tamInvoices.indexOf(r);
@@ -1444,11 +1593,15 @@
       '.tam-sub-f { font-size:.65rem; font-weight:bold; color:#1565c0; letter-spacing:.03em; }',
       '.tam-sub-p { font-size:.65rem; font-weight:bold; color:#880e4f; letter-spacing:.03em; }',
 
-      /* Columnas fijas de refs y totales */
-      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; position:sticky; left:0; z-index:2; }',
+      /* Columnas fijas de refs y totales — sticky con background sólido */
+      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; position:sticky; left:0; z-index:2; box-shadow:2px 0 4px rgba(0,0,0,.04); }',
       '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background:#fafafa!important; border-right:1px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
-      /* Sticky header cells for ref and total cols */
-      '.tam-boxes-hdr-row .tam-rec-ref-col, .tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:3; background:#f8f8f8!important; }',
+      /* Sticky header cells — z-index higher so they sit above body cells */
+      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background:#f8f8f8!important; box-shadow:2px 0 4px rgba(0,0,0,.06); }',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background:#fafafa!important; box-shadow:2px 0 4px rgba(0,0,0,.04); }',
+      /* Override for red-alert rows — keep sticky cell opaque */
+      '.tam-ref-over .tam-rec-ref-col { background:#ffe0e0!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background:#fafafa!important; }',
 
       /* Celdas input */
       '.tam-rec-cell-f { background:#f0f8ff; padding:2px 4px!important; min-width:52px; }',
@@ -1489,6 +1642,9 @@
       '.tam-rec-input-p{color:#f48fb1!important;}',
       '.tam-rec-input:focus{border-color:#888!important;background:#111!important;}',
       '.tam-rec-ref-col,.tam-rec-total-col{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-boxes-hdr-row .tam-rec-ref-col{background:#1a1a1a!important;}',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col{background:#161616!important;}',
+      '.tam-ref-over .tam-rec-ref-col{background:#3a0a0a!important;}',
       '.tam-rec-boxes-table th,.tam-rec-boxes-table td{border-color:#1e1e1e!important;color:#e8e8e8!important;}',
       '.tam-rec-boxes-table tbody tr:hover td{background:#1a1a1a!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-f{background:#112233!important;}',

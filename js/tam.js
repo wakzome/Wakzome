@@ -97,7 +97,7 @@
   var REF_RE = /^(?!ZY-)[A-Za-z]{1,5}(?:-[A-Za-z]{1,3})*[-_.]([A-Za-z0-9]+)((?:[-_.]| (?=[A-Za-z0-9]{1,4}$))[A-Za-z0-9]+){0,5}$/;
   var HS_RE  = /\b(\d{8})\b/;  // any 8-digit customs code (covers chapters 42, 60-69, etc.)
   // ZY invoice number — can appear anywhere in a row
-  var ZY_RE  = /\b(ZY-\d{7,})\b/;
+  var ZY_RE  = /\b(ZY-[2][\d]{7,})\b/;  // invoice numbers start with ZY-2x (year prefix 22-26+)
 
   // ── Known reference list (1296 entries from PATRON_DE_REFERENCIAS) ─────────────
   var KNOWN_REFS_ARR = [
@@ -1522,11 +1522,12 @@
     var subtotalRows    = tagged.filter(function(r){return r.type==='SUBTOTAL';});
     var invoiceSubtotal = subtotalRows.length ? subtotalRows[0].value : null;
     // Invoice number: first INVOICENO tag found
-    var invNoRow   = tagged.find(function(r){return r.type==='INVOICENO';});
+    // Prefer INVOICENO row that also has a date (most reliable — same line as Datum/Date)
+    var invNoRows  = tagged.filter(function(r){return r.type==='INVOICENO';});
+    var invNoRow   = invNoRows.find(function(r){return r.date;}) || invNoRows[0] || null;
     var invDateRow = tagged.find(function(r){return r.type==='DATE';});
-    // Date can also be embedded in the INVOICENO row (same PDF line as ZY-)
-    var invoiceDate = invDateRow ? invDateRow.value
-                    : (invNoRow && invNoRow.date) ? invNoRow.date
+    var invoiceDate = (invNoRow && invNoRow.date) ? invNoRow.date
+                    : invDateRow ? invDateRow.value
                     : '—';
     return {
       rawItems, grouped, totalPieces, subtotalGoods, shipping, shipPkgs, shipPerPiece,
@@ -1582,6 +1583,8 @@
       var meta   = tamTagMeta(joined, tokens, idx);
       if (meta) return meta;
 
+      // Always check if first token is a REF first, regardless of HS codes in row
+      if (tamIsRef(tokens[0])) return { idx:idx, type:'REF', ref:tokens[0] };
       var _refA = tamFindRefInRow(tokens);
       if (_refA) return { idx:idx, type:'REF', ref:_refA };
 
@@ -1637,7 +1640,8 @@
       var meta=tamTagMeta(joined, tokens, i);
       if (meta) { tagged.push(meta); continue; }
 
-      var _refB = !HS_RE.test(joined) ? tamFindRefInRow(tokens) : null;
+      // Always check first token as REF before HS-blocking logic
+      var _refB = tamIsRef(tokens[0]) ? tokens[0] : (!HS_RE.test(joined) ? tamFindRefInRow(tokens) : null);
       if (_refB) {
         currentRef=_refB; currentType=''; currentName='';
         tagged.push({ idx:i, type:'REF', ref:currentRef }); continue;
@@ -1686,7 +1690,7 @@
       if (meta) { tagged.push(meta); continue; }
       if (NOISE_RE.test(joined)) { tagged.push({ idx:i, type:'OTHER' }); continue; }
 
-      var _refC = !HS_RE.test(joined) ? tamFindRefInRow(tokens) : null;
+      var _refC = tamIsRef(tokens[0]) ? tokens[0] : (!HS_RE.test(joined) ? tamFindRefInRow(tokens) : null);
       if (_refC) { tagged.push({ idx:i, type:'REF', ref:_refC }); continue; }
 
       // Engine C skips rows with HS codes — Engines A/B handle those with better precision.

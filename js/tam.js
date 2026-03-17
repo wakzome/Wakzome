@@ -1489,7 +1489,7 @@
 
       /* ── Tabla de factura con columnas F/P ── */
       '#tam-results-wrap { width:100%; max-width:960px; overflow-x:auto; }',
-      '.tam-table { width:100%; border-collapse:separate; border-spacing:0; border-radius:15px; overflow:hidden; font-family:MontserratLight,sans-serif; }',
+      '.tam-table { width:100%; border-collapse:separate; border-spacing:0; border-radius:15px; overflow:visible; font-family:MontserratLight,sans-serif; }',
       '.tam-th { background:#e0e0e0; padding:5px 12px; text-align:center; font-size:.73rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; border:1px solid #e6e6e6; white-space:nowrap; line-height:1.2; }',
       '.tam-th-funchal { background:#e3f2fd!important; color:#1565c0!important; }',
       '.tam-th-porto   { background:#fce4ec!important; color:#880e4f!important; }',
@@ -1513,7 +1513,7 @@
       '.tam-conflict-ref { font-weight:bold; color:#c00; }',
 
       /* ── Multi-factura: bloques ── */
-      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:8px; border:1px solid #e6e6e6; border-radius:14px; overflow:hidden; }',
+      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:8px; border:1px solid #e6e6e6; border-radius:14px; overflow:visible; }',
       '.tam-invoice-block-header { display:flex; align-items:center; gap:16px; padding:10px 16px; background:#f8f8f8; border-bottom:1px solid #e6e6e6; flex-wrap:wrap; }',
       '.tam-inv-num { font-size:.88rem; font-weight:bold; color:#000; }',
       '.tam-inv-meta { font-size:.75rem; color:#aaa; font-weight:600; flex:1; }',

@@ -1548,11 +1548,12 @@
     // Also capture date if it appears on the same row as ZY- (Datum/Date 13.05.2022)
     var zyM = joined.match(ZY_RE);
     if (zyM) {
+      var dateOnRow = null;
       if (joined.includes('Datum/Date')) {
         var dSame = joined.match(/(\d{2}\.\d{2}\.\d{4})/);
-        if (dSame) tamTagMeta._lastDate = dSame[1];
+        if (dSame) dateOnRow = dSame[1];
       }
-      return { idx:idx, type:'INVOICENO', value:zyM[1] };
+      return { idx:idx, type:'INVOICENO', value:zyM[1], date:dateOnRow };
     }
 
     if (joined.includes('Datum/Date')) {
@@ -1951,56 +1952,54 @@
     var html=
       '<table class="tam-table">'+
       '<thead><tr>'+
-        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">#</th>'+
-        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">referência</th>'+
-        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">tipo · nome</th>'+
-        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">UND</th>'+
-        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">P.Unit/T</th>'+
-        '<th style="text-align:center;white-space:nowrap;padding:4px 10px">Total</th>'+
+        '<th class="tam-th">#</th>'+
+        '<th class="tam-th">referência</th>'+
+        '<th class="tam-th">tipo · nome</th>'+
+        '<th class="tam-th">UND</th>'+
+        '<th class="tam-th">P.Unit/T</th>'+
+        '<th class="tam-th">Total</th>'+
       '</tr></thead><tbody>';
 
     r.grouped.forEach(function(g, i){
-      var conf    = g.confidence||'CONFIRMED';
-      var typeNome= (g.garmentType||'')+(g.garmentType&&g.name?' · ':'')+( g.name||'—');
-      var rowCls  = conf==='CONFLICT' ? ' class="tam-row-conflict"' : '';
-      var tooltip = conf==='CONFLICT' ? ' title="'+tamEsc(g.conflictDetail||'')+'"' : '';
-      var badge   = conf==='CONFLICT'
+      var conf     = g.confidence||'CONFIRMED';
+      var typeNome = (g.garmentType||'')+(g.garmentType&&g.name?' · ':'')+( g.name||'—');
+      var rowCls   = conf==='CONFLICT' ? ' class="tam-row-conflict"' : '';
+      var tooltip  = conf==='CONFLICT' ? ' title="'+tamEsc(g.conflictDetail||'')+'"' : '';
+      var badge    = conf==='CONFLICT'
         ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : '';
 
       html+=
         '<tr'+rowCls+tooltip+'>'+
-        '<td style="text-align:center;white-space:nowrap;padding:4px 10px;color:#aaa;font-size:.72rem">'+(i+1)+'</td>'+
-        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+
-          '<strong>'+tamEsc(g.ref)+'</strong>'+badge+'</td>'+
-        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+
-          tamEsc(typeNome)+'</td>'+
-        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+g.pieces+'</td>'+
-        '<td style="text-align:center;white-space:nowrap;padding:4px 10px">'+tamFmtEU(g.unitPriceWithShip)+'</td>'+
-        '<td style="text-align:center;white-space:nowrap;padding:4px 10px"><strong>'+tamFmtEU(g.grandTotal)+'</strong></td>'+
+        '<td class="tam-td tam-td-num">'+  (i+1)+'</td>'+
+        '<td class="tam-td"><strong>'+tamEsc(g.ref)+'</strong>'+badge+'</td>'+
+        '<td class="tam-td">'+tamEsc(typeNome)+'</td>'+
+        '<td class="tam-td tam-td-num">'+g.pieces+'</td>'+
+        '<td class="tam-td tam-td-num">'+tamFmtEU(g.unitPriceWithShip)+'</td>'+
+        '<td class="tam-td tam-td-num"><strong>'+tamFmtEU(g.grandTotal)+'</strong></td>'+
         '</tr>';
     });
 
     html+=
       '</tbody><tfoot>'+
-      '<tr>'+
-        '<td></td>'+
-        '<td colspan="2" style="text-align:center;padding:4px 10px"><strong>subtotal mercadoria</strong></td>'+
-        '<td style="text-align:center;padding:4px 10px"><strong>'+r.totalPieces+'</strong></td>'+
-        '<td></td>'+
-        '<td style="text-align:center;padding:4px 10px"><strong>'+tamFmtEU(r.subtotalGoods)+'</strong></td>'+
+      '<tr class="tam-tr-sub">'+
+        '<td class="tam-td"></td>'+
+        '<td class="tam-td" colspan="2"><strong>subtotal mercadoria</strong></td>'+
+        '<td class="tam-td tam-td-num"><strong>'+r.totalPieces+'</strong></td>'+
+        '<td class="tam-td"></td>'+
+        '<td class="tam-td tam-td-num"><strong>'+tamFmtEU(r.subtotalGoods)+'</strong></td>'+
       '</tr>'+
       '<tr class="tam-tr-ship">'+
-        '<td></td>'+
-        '<td colspan="2" style="text-align:center;padding:4px 10px">transporte · '+r.shipPkgs+' pac. × 17,50 €</td>'+
-        '<td></td><td></td>'+
-        '<td style="text-align:center;padding:4px 10px">'+tamFmtEU(r.shipping)+'</td>'+
+        '<td class="tam-td"></td>'+
+        '<td class="tam-td" colspan="2">transporte · '+r.shipPkgs+' pac. × 17,50 €</td>'+
+        '<td class="tam-td"></td><td class="tam-td"></td>'+
+        '<td class="tam-td tam-td-num">'+tamFmtEU(r.shipping)+'</td>'+
       '</tr>'+
       '<tr class="tam-tr-grand">'+
-        '<td></td>'+
-        '<td colspan="2" style="text-align:center;padding:4px 10px"><strong>total geral</strong></td>'+
-        '<td style="text-align:center;padding:4px 10px"><strong>'+r.totalPieces+'</strong></td>'+
-        '<td></td>'+
-        '<td style="text-align:center;padding:4px 10px"><strong>'+tamFmtEU(r.grandTotal)+'</strong></td>'+
+        '<td class="tam-td"></td>'+
+        '<td class="tam-td" colspan="2"><strong>total geral</strong></td>'+
+        '<td class="tam-td tam-td-num"><strong>'+r.totalPieces+'</strong></td>'+
+        '<td class="tam-td"></td>'+
+        '<td class="tam-td tam-td-num"><strong>'+tamFmtEU(r.grandTotal)+'</strong></td>'+
       '</tr>'+
       '</tfoot></table>';
 
@@ -2015,32 +2014,39 @@
     var s=document.createElement('style');
     s.id='tam-xv-styles';
     s.textContent=[
-      /* Auto layout so columns fit their content exactly */
-      '.tam-table{table-layout:auto!important;width:auto!important;min-width:100%;border-collapse:collapse}',
-      '.tam-table th,.tam-table td{white-space:nowrap!important}',
+      /* ── Table: auto-fit each column to its widest content ── */
+      '.tam-table{table-layout:auto;width:100%;border-collapse:collapse;font-size:.85rem}',
+      '.tam-th{white-space:nowrap;padding:6px 14px;text-align:center;font-size:.65rem;'+
+              'text-transform:uppercase;letter-spacing:.06em;color:#888;border-bottom:2px solid #e0e0e0}',
+      '.tam-td{white-space:nowrap;padding:6px 14px;text-align:center;border-bottom:1px solid #f0f0f0;vertical-align:middle}',
+      '.tam-td-num{font-variant-numeric:tabular-nums}',
       /* Row states */
       '.tam-row-conflict td{background:#fff8e1!important}',
-      '.tam-row-solo td{background:#f5f5f5!important}',
+      /* Tfoot rows */
+      '.tam-tr-sub td{border-top:2px solid #e0e0e0;padding:6px 14px;text-align:center}',
+      '.tam-tr-ship td{padding:4px 14px;text-align:center;color:#888;font-size:.82rem}',
+      '.tam-tr-grand td{border-top:2px solid #333;padding:8px 14px;text-align:center;font-size:.92rem}',
       /* Badges */
-      '.tam-badge{display:inline-block;margin-left:4px;font-size:.58rem;padding:1px 4px;border-radius:3px;vertical-align:middle;font-weight:bold;color:#fff}',
+      '.tam-badge{display:inline-block;margin-left:5px;font-size:.6rem;padding:1px 5px;'+
+                 'border-radius:3px;vertical-align:middle;font-weight:bold;color:#fff}',
       '.tam-badge-conflict{background:#e67e00}',
-      '.tam-badge-solo_a,.tam-badge-solo_b,.tam-badge-solo_c{background:#999}',
       '.tam-conflict-ref{font-weight:bold;color:#c00}',
-      /* Invoice meta panel — always visible when populated */
-      '#tam-invoice-meta.show{display:flex!important;flex-wrap:wrap;gap:10px 20px;padding:10px 0}',
-      '#tam-invoice-meta .tam-mi{display:flex;flex-direction:column;gap:2px;min-width:120px}',
-      '#tam-invoice-meta .tam-mi em{font-style:normal;font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;color:#888}',
+      /* Invoice meta panel */
+      '#tam-invoice-meta.show{display:flex!important;flex-wrap:wrap;gap:10px 24px;padding:10px 0}',
+      '#tam-invoice-meta .tam-mi{display:flex;flex-direction:column;gap:2px;min-width:110px}',
+      '#tam-invoice-meta .tam-mi em{font-style:normal;font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:#888}',
       '#tam-invoice-meta .tam-mi strong{font-size:.88rem;color:#111}',
-      '.tam-engine-sel-wrap{grid-column:1/-1;width:100%;margin-top:2px}',
-      '.tam-engine-btns{display:flex;gap:8px;margin-top:5px;justify-content:center;flex-wrap:wrap}',
-      '.tam-ebtn{border:1px solid #ccc;background:#fafafa;padding:6px 18px;border-radius:8px;'+
-                'cursor:pointer;font-family:inherit;font-size:.78rem;line-height:1.4;text-align:center;'+
-                'transition:background .15s,border-color .15s,color .15s;min-width:100px}',
+      /* Motor selector */
+      '.tam-engine-sel-wrap{grid-column:1/-1;width:100%;margin-top:4px}',
+      '.tam-engine-btns{display:flex;gap:8px;margin-top:6px;justify-content:center;flex-wrap:wrap}',
+      '.tam-ebtn{border:1px solid #ccc;background:#fafafa;padding:7px 20px;border-radius:8px;'+
+                'cursor:pointer;font-family:inherit;font-size:.78rem;line-height:1.45;text-align:center;'+
+                'transition:background .15s,border-color .15s,color .15s;min-width:110px}',
       '.tam-ebtn:hover{background:#f0f0f0;border-color:#777}',
       '.tam-ebtn-active{background:#222!important;color:#fff!important;border-color:#222!important}',
       '.tam-ebtn-active:hover{background:#444!important}',
       '.tam-ebtn-label{display:block;font-weight:bold;font-size:.82rem}',
-      '.tam-ebtn-detail{display:block;font-size:.68rem;opacity:.75;margin-top:1px}'
+      '.tam-ebtn-detail{display:block;font-size:.68rem;opacity:.75;margin-top:2px}'
     ].join('');
     document.head.appendChild(s);
   }

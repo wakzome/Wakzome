@@ -291,7 +291,28 @@
   }
 
   function tamInitSession() {
-    var sessionName = tamGetWeekSessionName();
+    var baseName = tamGetWeekSessionName();
+    var all = tamLoadAllSessionsLocal();
+
+    // Find the right name: if base exists, use next available number
+    var sessionName;
+    if (all[baseName]) {
+      // Base name taken — rename existing to (1) if it has no suffix yet
+      var existing = all[baseName];
+      if (existing) {
+        var renamedExisting = Object.assign({}, existing, { name: baseName + ' (1)' });
+        delete all[baseName];
+        all[baseName + ' (1)'] = renamedExisting;
+        localStorage.setItem('tam_sessions', JSON.stringify(all));
+      }
+      // Find next suffix
+      var suffix = 2;
+      while (all[baseName + ' (' + suffix + ')']) suffix++;
+      sessionName = baseName + ' (' + suffix + ')';
+    } else {
+      sessionName = baseName;
+    }
+
     var totalBoxes = tamInvoices.reduce(function(s, r){ return s + (r.shipPkgs || 0); }, 0);
     if (totalBoxes < 1) totalBoxes = 1;
     var boxes = [];
@@ -984,11 +1005,17 @@
   function tamRenderSessionBar() {
     var bar = document.getElementById('tam-session-bar');
     if (!bar) return;
-    // Always visible — no longer hidden until session loads
     bar.style.display = 'flex';
     var nameEl = document.getElementById('tam-session-name');
-    if (nameEl && tamSession) nameEl.value = tamSession.name;
-    var stEl = document.getElementById('tam-session-status');
+    var saveBtn = document.getElementById('tam-save-btn');
+    var stEl   = document.getElementById('tam-session-status');
+    if (tamSession) {
+      if (nameEl) nameEl.value = tamSession.name;
+      if (saveBtn) saveBtn.classList.add('visible');
+    } else {
+      if (nameEl) nameEl.value = '';
+      if (saveBtn) saveBtn.classList.remove('visible');
+    }
     if (stEl) stEl.textContent = '';
   }
 
@@ -1043,6 +1070,8 @@
     /* Indicador visual */
     if (!silent) {
       var stEl = document.getElementById('tam-session-status');
+      var saveBtn = document.getElementById('tam-save-btn');
+      if (saveBtn) saveBtn.classList.add('visible');
       if (stEl) {
         stEl.textContent = '✓ guardado';
         stEl.classList.add('saved');
@@ -1801,12 +1830,30 @@
       '.tam-dialog-btn:hover{background:#222!important;border-color:#666!important;}',
       '.tam-dialog-btn-new:hover{background:#555!important;color:#fff!important;}',
       '}',
-      '#tam-session-bar { display:flex!important; align-items:center; gap:12px; width:100%; max-width:960px; padding:8px 14px; margin-bottom:12px; border:1px solid #e6e6e6; border-radius:12px; background:#fafafa; flex-wrap:wrap; }',
-      '#tam-session-name { font-size:.88rem; font-weight:bold; flex:1; border:none; background:transparent; outline:none; color:#000; min-width:200px; font-family:MontserratLight,sans-serif; }',
-      '#tam-session-status { font-size:.72rem; font-weight:bold; color:#aaa; }',
+      /* ── Session bar ── */
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:8px; width:100%; max-width:960px; padding:6px 12px; margin-bottom:12px; border:1px solid #e6e6e6; border-radius:10px; background:#fafafa; flex-wrap:wrap; box-sizing:border-box; }',
+      '#tam-session-name { font-size:.82rem; font-weight:bold; flex:1; min-width:120px; max-width:240px; border:none; background:transparent; outline:none; color:#555; font-family:MontserratLight,sans-serif; text-align:center; }',
+      '#tam-session-name:focus { color:#000; }',
+      '#tam-session-name::placeholder { color:#ccc; }',
+      '#tam-session-status { font-size:.68rem; font-weight:bold; color:#aaa; white-space:nowrap; }',
       '#tam-session-status.saved { color:#2a8a2a; }',
-      '.tam-session-btn { padding:5px 14px; font-size:.75rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:#fff; transition:background .15s,color .15s; }',
+      /* Save button hidden until session active */
+      '#tam-save-btn { display:none; padding:5px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #2a8a2a; border-radius:8px; background:#fff; color:#2a8a2a; transition:background .15s,color .15s; white-space:nowrap; }',
+      '#tam-save-btn:hover { background:#2a8a2a; color:#fff; }',
+      '#tam-save-btn.visible { display:inline-block!important; }',
+      '.tam-session-btn { padding:5px 11px; font-size:.75rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:#fff; transition:background .15s,color .15s,border-color .15s; white-space:nowrap; }',
       '.tam-session-btn:hover { background:#555; color:#fff; border-color:#555; }',
+      '@media(max-width:600px){#tam-session-name{max-width:100%;text-align:left;}}',
+      /* Dark mode */
+      '@media(prefers-color-scheme:dark){',
+      '#tam-session-bar{background:#111!important;border-color:#2a2a2a!important;}',
+      '#tam-session-name{color:#888!important;}',
+      '#tam-session-name:focus{color:#e8e8e8!important;}',
+      '#tam-save-btn{background:#111!important;border-color:#2a8a2a!important;color:#4caf50!important;}',
+      '#tam-save-btn:hover{background:#2a8a2a!important;color:#fff!important;}',
+      '.tam-session-btn{background:#111!important;border-color:#2a2a2a!important;color:#888!important;}',
+      '.tam-session-btn:hover{background:#555!important;color:#fff!important;border-color:#555!important;}',
+      '}',
 
       /* ── Sessions dropdown ── */
       '.tam-sessions-dropdown-wrap { position:relative; }',

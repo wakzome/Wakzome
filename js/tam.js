@@ -368,9 +368,15 @@
       tamRenderSingleMeta(tamInvoices[0], meta);
       tamRenderInvoiceBanner(tamInvoices[0], ban);
       ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
+      // Add X button for single invoice too
+      var singleRemove = document.createElement('button');
+      singleRemove.className = 'tam-inv-remove-btn';
+      singleRemove.title = 'remover fatura da sessão';
+      singleRemove.textContent = '✕ remover fatura';
+      singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
+      meta.appendChild(singleRemove);
       tamRenderInvoiceTable(tamInvoices[0], wrap, 0);
     } else {
-      // Hide the shared meta/banner — each block has its own
       meta.style.display = 'none';
       ban.style.display  = 'none';
       tamInvoices.forEach(function(r, idx) {
@@ -387,11 +393,16 @@
           r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
           r.shipPkgs + ' pac.</span>' +
           '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
-          '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>';
+          '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
+          '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>';
         block.appendChild(hdr);
         hdr.querySelector('.tam-inv-export-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-export-btn').getAttribute('data-inv'));
           tamExportInvoiceCSV(tamInvoices[i]);
+        });
+        hdr.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-remove-btn').getAttribute('data-inv'));
+          tamConfirmRemoveInvoice(i);
         });
 
         // ── Validation banner per invoice ──────────────────
@@ -416,7 +427,79 @@
     }
   }
 
-  /* Renders the motors/validation banner inside an invoice block */
+  /* Confirm and remove an invoice from the session */
+  function tamConfirmRemoveInvoice(idx) {
+    var r = tamInvoices[idx];
+    if (!r) return;
+    var confirmDialog = document.createElement('div');
+    confirmDialog.id = 'tam-session-dialog';
+    confirmDialog.innerHTML =
+      '<div id="tam-session-dialog-box">' +
+        '<div class="tam-dialog-title">remover fatura</div>' +
+        '<div class="tam-dialog-body">' +
+          'Tem a certeza que quer remover a fatura <strong>' + tamEsc(r.invoiceNo) + '</strong> da sessão?<br>' +
+          '<small style="color:#888">Os dados de distribuição desta fatura serão apagados.</small>' +
+        '</div>' +
+        '<div class="tam-dialog-btns">' +
+          '<button class="tam-dialog-btn tam-dialog-btn-new">🗑 sim, remover</button>' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add">cancelar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(confirmDialog);
+
+    confirmDialog.querySelector('.tam-dialog-btn-new').addEventListener('click', function(){
+      confirmDialog.parentNode.removeChild(confirmDialog);
+      tamRemoveInvoice(idx);
+    });
+    confirmDialog.querySelector('.tam-dialog-btn-add').addEventListener('click', function(){
+      confirmDialog.parentNode.removeChild(confirmDialog);
+    });
+  }
+
+  function tamRemoveInvoice(idx) {
+    var removed = tamInvoices.splice(idx, 1)[0];
+    // Remove the engine cache for this invoice
+    delete tamEngineCache[removed._fileKey];
+
+    // Recalculate session boxes: remove boxes that came from this invoice's packages
+    // and clean up any refs that only existed in this invoice
+    if (tamSession) {
+      var remainingRefs = new Set();
+      tamInvoices.forEach(function(r){
+        r.grouped.forEach(function(g){ remainingRefs.add(g.ref); });
+      });
+      // Clean refs from boxes that no longer exist
+      tamSession.boxes.forEach(function(box){
+        Object.keys(box.refs).forEach(function(ref){
+          if (!remainingRefs.has(ref)) delete box.refs[ref];
+        });
+      });
+      // Remove excess boxes beyond what remaining invoices need
+      var neededBoxes = tamInvoices.reduce(function(s,r){ return s+(r.shipPkgs||0); },0);
+      if (neededBoxes < 1) neededBoxes = 1;
+      while (tamSession.boxes.length > neededBoxes) tamSession.boxes.pop();
+    }
+
+    if (!tamInvoices.length) {
+      // No invoices left — clear everything
+      tamSession = null;
+      tamEngineCache = {};
+      tamActiveEngines = {};
+      ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) { el.className = ''; el.innerHTML = ''; }
+      });
+      var ra = document.getElementById('tam-reception-area');
+      if (ra) ra.innerHTML = '';
+      document.getElementById('tam-export-btn').classList.remove('show');
+      document.getElementById('tam-status-msg').textContent = '';
+      document.getElementById('tam-file-name').textContent = '';
+      return;
+    }
+
+    tamRenderAll();
+    tamSaveSession(false);
+  }
   function tamRenderInvoiceBanner(r, el) {
     var xv    = r.xv;
     var subOk = r.invoiceSubtotal != null ? Math.abs(r.invoiceSubtotal - r.subtotalGoods) < 0.05 : true;
@@ -1067,28 +1150,37 @@
         if (s.invoices && s.invoices.length && s.boxes) {
           // Build ref totals from boxes
           var refTotals = {};
+          var anyFilled = false;
           s.boxes.forEach(function(box){
             Object.keys(box.refs || {}).forEach(function(ref){
-              if (!refTotals[ref]) refTotals[ref] = { f:0, p:0 };
-              refTotals[ref].f += (box.refs[ref].f || 0);
-              refTotals[ref].p += (box.refs[ref].p || 0);
+              var f = box.refs[ref].f || 0;
+              var p = box.refs[ref].p || 0;
+              if (f > 0 || p > 0) {
+                anyFilled = true;
+                if (!refTotals[ref]) refTotals[ref] = { f:0, p:0 };
+                refTotals[ref].f += f;
+                refTotals[ref].p += p;
+              }
             });
           });
-          // Build consolidated ref totals from invoices
-          var refNeeded = {};
-          s.invoices.forEach(function(inv){
-            (inv.grouped || []).forEach(function(g){
-              refNeeded[g.ref] = (refNeeded[g.ref] || 0) + g.pieces;
+          if (anyFilled) {
+            // Build consolidated ref totals needed from invoices
+            var refNeeded = {};
+            s.invoices.forEach(function(inv){
+              (inv.grouped || []).forEach(function(g){
+                refNeeded[g.ref] = (refNeeded[g.ref] || 0) + g.pieces;
+              });
             });
-          });
-          var allDone = Object.keys(refNeeded).length > 0 &&
-            Object.keys(refNeeded).every(function(ref){
-              var got = refTotals[ref] ? (refTotals[ref].f + refTotals[ref].p) : 0;
-              return got >= refNeeded[ref];
-            });
-          dot = allDone
-            ? '<span class="tam-dd-dot tam-dd-dot-green" title="distribuição completa"></span>'
-            : '<span class="tam-dd-dot tam-dd-dot-red"   title="distribuição incompleta"></span>';
+            var allDone = Object.keys(refNeeded).length > 0 &&
+              Object.keys(refNeeded).every(function(ref){
+                var got = refTotals[ref] ? (refTotals[ref].f + refTotals[ref].p) : 0;
+                return got >= refNeeded[ref];
+              });
+            dot = allDone
+              ? '<span class="tam-dd-dot tam-dd-dot-green" title="distribuição completa"></span>'
+              : '<span class="tam-dd-dot tam-dd-dot-red"   title="distribuição incompleta"></span>';
+          }
+          // if !anyFilled → stays grey
         }
 
         return '<div class="tam-dd-item" data-key="' + tamEsc(k) + '">' +
@@ -1882,6 +1974,11 @@
       '.tam-ref-over .tam-rec-total-col { background:#ffe0e0!important; }',
       '.tam-ref-over td strong { color:#c00!important; }',
 
+      /* ── Remove button per invoice ── */
+      '.tam-inv-remove-btn { padding:4px 10px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #c03000; border-radius:8px; background:#fff; color:#c03000; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-remove-btn:hover { background:#c03000; color:#fff; }',
+      '@media(prefers-color-scheme:dark){.tam-inv-remove-btn{background:#111!important;}.tam-inv-remove-btn:hover{background:#c03000!important;color:#fff!important;}}',
+
       /* ── Export button per invoice ── */
       '.tam-inv-export-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #555; border-radius:8px; background:#fff; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-export-btn:hover { background:#555; color:#fff; }',
@@ -1940,6 +2037,7 @@
       bar.innerHTML =
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
+        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾 guardar</button>' +
         '<div class="tam-sessions-dropdown-wrap">' +
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
@@ -1954,6 +2052,9 @@
         if (tamSession) tamSession.name = e.target.value;
         tamScheduleSave();
       });
+
+      var saveBtn = bar.querySelector('#tam-save-btn');
+      if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
 
       // Bind sessions button here, not in the separate listener block above
       var sesBtn2 = bar.querySelector('#tam-sessions-btn');

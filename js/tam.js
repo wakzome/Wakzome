@@ -20,9 +20,9 @@
   var TAM_SESSIONS_TABLE = 'tam_sessions';
   var TAM_REFS_TABLE     = 'tam_refs';
 
-  /* Obtener cliente Supabase del sistema (inyectado por supabase-config.js) */
+  /* Obtener cliente Supabase del sistema (definido en supabase-config.js como sbClient) */
   function tamSB() {
-    return (typeof window !== 'undefined' && window._supabase) ? window._supabase : null;
+    return (typeof sbClient !== 'undefined') ? sbClient : null;
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -1450,9 +1450,13 @@
      STYLES
   ══════════════════════════════════════════════════════════════ */
   function tamEnsureStyles() {
-    if (document.getElementById('tam-v8-styles')) return;
+    // Always remove any existing TAM style block so we always get the latest CSS
+    ['tam-v8-styles','tam-v9-styles','tam-xv-styles'].forEach(function(id){
+      var old = document.getElementById(id);
+      if (old) old.parentNode.removeChild(old);
+    });
     var s = document.createElement('style');
-    s.id = 'tam-v8-styles';
+    s.id = 'tam-v9-styles';
     s.textContent = [
       /* ── Upload zone compacto cuando ya hay facturas ── */
       '#tam-upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
@@ -1711,6 +1715,9 @@
       else if (rw) rw.parentNode.appendChild(ra);
       else tab.appendChild(ra);
     }
+
+    // Inject styles immediately — always fresh
+    tamEnsureStyles();
   })();
 
 })();

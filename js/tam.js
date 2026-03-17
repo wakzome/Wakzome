@@ -59,29 +59,19 @@
      MAIN HANDLER — procesa uno o varios PDFs
   ══════════════════════════════════════════════════════════════ */
   async function tamHandleFiles(files) {
-    tamInvoices = [];
-    tamEngineCache = {};
-    tamActiveEngines = {};
-
-    // Limpiar UI anterior
-    ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
-      var el = document.getElementById(id);
-      el.className = ''; el.innerHTML = '';
-    });
-    document.getElementById('tam-reception-area').innerHTML = '';
-    document.getElementById('tam-export-btn').classList.remove('show');
-    document.getElementById('tam-file-name').textContent = files.length + ' fatura(s) selecionada(s)';
+    // ACCUMULATE — new PDFs are added to existing invoices, not replacing them
     document.getElementById('tam-status-msg').textContent = 'a processar…';
-
-    document.getElementById('upload-label').classList.add('loaded');
-    document.getElementById('tab-tam').classList.add('tam-loaded');
-    document.getElementById('admin-app').classList.add('tam-loaded');
-
     tamEnsureStyles();
 
     try {
+      var newCount = 0;
       for (var fi = 0; fi < files.length; fi++) {
         var file = files[fi];
+        // Skip duplicates (same filename already loaded)
+        var globalIdx = tamInvoices.length + fi;
+        var key = file.name + '_' + globalIdx;
+        if (tamEngineCache[key]) continue;
+
         var buf  = await file.arrayBuffer();
         var pdf  = await pdfjsLib.getDocument({ data: buf }).promise;
         var allRows = [];
@@ -92,12 +82,12 @@
         var resA = tamEngineA(allRows);
         var resB = tamEngineB(allRows);
         var resC = tamEngineC(allRows);
-        var key  = file.name + '_' + fi;
         tamEngineCache[key] = { A: resA, B: resB, C: resC };
         var result = tamCrossValidate(resA, resB, resC, null);
         result._fileKey  = key;
         result._fileName = file.name;
         tamInvoices.push(result);
+        newCount++;
       }
 
       if (!tamInvoices.some(function(r){ return r.grouped.length; })) {
@@ -105,8 +95,16 @@
         return;
       }
 
-      // Inicializar sesión si no hay una activa
-      if (!tamSession) tamInitSession();
+      document.getElementById('upload-label').classList.add('loaded');
+      document.getElementById('tab-tam').classList.add('tam-loaded');
+      document.getElementById('admin-app').classList.add('tam-loaded');
+
+      // Init or refresh session boxes when invoice count changes
+      if (!tamSession) {
+        tamInitSession();
+      } else {
+        tamSyncSessionBoxes();
+      }
 
       tamRenderAll();
       document.getElementById('tam-export-btn').classList.add('show');
@@ -115,6 +113,15 @@
     } catch(err) {
       console.error(err);
       document.getElementById('tam-status-msg').textContent = 'erro: ' + err.message;
+    }
+  }
+
+  /* Sync session boxes when new invoices are added — add missing boxes */
+  function tamSyncSessionBoxes() {
+    var totalBoxes = tamInvoices.reduce(function(s, r){ return s + (r.shipPkgs || 0); }, 0);
+    if (totalBoxes < 1) totalBoxes = 1;
+    while (tamSession.boxes.length < totalBoxes) {
+      tamSession.boxes.push({ total: null, refs: {}, locked: false });
     }
   }
 
@@ -153,6 +160,8 @@
     var totalRefs   = tamConsolidatedRefs().length;
     document.getElementById('tam-status-msg').textContent =
       tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
+    document.getElementById('tam-file-name').textContent =
+      tamInvoices.map(function(r){ return r._fileName; }).join(' · ');
 
     tamRenderInvoices();
     tamRenderReception();
@@ -190,8 +199,14 @@
           '<span class="tam-inv-meta">' + tamEsc(r.invoiceDate) + ' · ' +
           r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
           r.shipPkgs + ' pac.</span>' +
-          '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>';
+          '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
+          '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>';
         block.appendChild(hdr);
+        // Bind export button
+        hdr.querySelector('.tam-inv-export-btn').addEventListener('click', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-export-btn').getAttribute('data-inv'));
+          tamExportInvoiceCSV(tamInvoices[i]);
+        });
         var tWrap = document.createElement('div');
         tWrap.className = 'tam-inv-table-wrap';
         tamRenderInvoiceTable(r, tWrap, idx);
@@ -414,47 +429,18 @@
     var consolidated = tamConsolidatedRefs();
     var boxes = tamSession.boxes;
 
-    // ── SECCIÓN IZQUIERDA: resumen de referencias ──────────────
-    var summaryHtml =
-      '<div class="tam-rec-summary">' +
-      '<div class="tam-rec-summary-title">resumen de referências</div>' +
-      '<table class="tam-rec-sum-table">' +
-      '<thead><tr>' +
-        '<th>#</th><th>referência</th><th>total</th>' +
-        '<th class="tam-th-funchal">Funchal</th>' +
-        '<th class="tam-th-porto">Porto Santo</th>' +
-      '</tr></thead><tbody>';
-
-    consolidated.forEach(function(c, i){
-      var totals = tamGetRefTotals(c.ref);
-      var received = totals.f + totals.p;
-      var isDone = received >= c.totalPieces && c.totalPieces > 0;
-      var rowCls = isDone ? 'tam-ref-complete' : '';
-      summaryHtml +=
-        '<tr class="' + rowCls + '" data-ref="' + tamEsc(c.ref) + '">' +
-        '<td class="tam-td-num">' + (i+1) + '</td>' +
-        '<td><strong>' + tamEsc(c.ref) + '</strong></td>' +
-        '<td class="tam-td-num">' + c.totalPieces + '</td>' +
-        '<td class="tam-td-num tam-cell-funchal" id="tam-sum-f-' + tamEsc(c.ref).replace(/[^a-z0-9]/gi,'_') + '">' +
-          (totals.f > 0 ? totals.f : '—') + '</td>' +
-        '<td class="tam-td-num tam-cell-porto"  id="tam-sum-p-' + tamEsc(c.ref).replace(/[^a-z0-9]/gi,'_') + '">' +
-          (totals.p > 0 ? totals.p : '—') + '</td>' +
-        '</tr>';
-    });
-
-    summaryHtml += '</tbody></table></div>';
-
-    // ── SECCIÓN DERECHA: columnas de cajas ────────────────────
+    // ── ÚNICA SECCIÓN: tabla de cajas con refs y totales ──────
     var boxesHtml =
-      '<div class="tam-rec-boxes-wrap">' +
-      '<div class="tam-rec-boxes-title">receção por caixa</div>' +
+      '<div class="tam-rec-area">' +
+      '<div class="tam-rec-area-title">receção de mercadoria · ' + tamInvoices.length + ' fatura(s) · ' + consolidated.length + ' referências</div>' +
       '<div class="tam-rec-boxes-scroll">' +
       '<table class="tam-rec-boxes-table">' +
       '<thead>' +
-      // Fila 1: cabeceras de caja
       '<tr class="tam-boxes-hdr-row">' +
       '<th class="tam-rec-ref-col">referência</th>' +
-      '<th class="tam-rec-total-col">total</th>';
+      '<th class="tam-rec-total-col">total</th>' +
+      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
+      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
     boxes.forEach(function(box, bi){
       var received = 0;
@@ -463,16 +449,16 @@
       }
       var boxComplete = box.total && received >= box.total;
       var boxClass = boxComplete ? 'tam-box-col-complete' : '';
-      boxesHtml += '<th colspan="2" class="tam-box-header ' + boxClass + '" data-box="' + bi + '">' +
+      boxesHtml += '<th colspan="2" class="tam-box-header ' + boxClass + '">' +
         'Caixa ' + (bi+1) +
         (box.locked ? ' <span class="tam-box-lock">🔒</span>' : '') +
         '</th>';
     });
 
-    boxesHtml += '</tr>' +
-      // Fila 2: subheaders F / P y total de caja
-      '<tr class="tam-boxes-sub-hdr">' +
+    boxesHtml += '</tr><tr class="tam-boxes-sub-hdr">' +
       '<th class="tam-rec-ref-col"></th>' +
+      '<th class="tam-rec-total-col"></th>' +
+      '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>';
 
     boxes.forEach(function(box, bi){
@@ -493,13 +479,11 @@
           (isLocked ? 'disabled ' : '') +
           'min="1" data-box="' + bi + '">' +
         (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
-        (isLocked
-          ? '<button class="tam-box-edit-btn" data-box="' + bi + '" title="editar">✏️</button>'
-          : '') +
+        (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '" title="editar">✏️</button>' : '') +
         '</div>' +
         '<div class="tam-box-sub-labels">' +
-        '<span class="tam-sub-f">Funchal</span>' +
-        '<span class="tam-sub-p">Porto Santo</span>' +
+        '<span class="tam-sub-f">F</span>' +
+        '<span class="tam-sub-p">PS</span>' +
         '</div>' +
         '</th>';
     });
@@ -508,18 +492,20 @@
 
     // Filas de referencias
     consolidated.forEach(function(c){
-      var totals = tamGetRefTotals(c.ref);
+      var totals  = tamGetRefTotals(c.ref);
       var received = totals.f + totals.p;
-      var isDone = received >= c.totalPieces && c.totalPieces > 0;
-      var rowCls = isDone ? 'tam-ref-complete' : '';
+      var isDone  = received >= c.totalPieces && c.totalPieces > 0;
+      var isOver  = received > c.totalPieces && c.totalPieces > 0;
+      var rowCls  = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
       var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
 
       boxesHtml += '<tr class="' + rowCls + '" data-ref="' + tamEsc(c.ref) + '">' +
         '<td class="tam-rec-ref-col"><strong>' + tamEsc(c.ref) + '</strong></td>' +
-        '<td class="tam-rec-total-col tam-td-num">' + c.totalPieces + '</td>';
+        '<td class="tam-rec-total-col tam-td-num">' + c.totalPieces + '</td>' +
+        '<td class="tam-rec-total-col tam-td-num tam-cell-funchal" id="tam-sum-f-' + safeRef + '">' + (totals.f > 0 ? totals.f : '—') + '</td>' +
+        '<td class="tam-rec-total-col tam-td-num tam-cell-porto"  id="tam-sum-p-' + safeRef + '">' + (totals.p > 0 ? totals.p : '—') + '</td>';
 
       boxes.forEach(function(box, bi){
-        var isActive = box.total && !box.locked;
         var fVal = (box.refs[c.ref] && box.refs[c.ref].f) || '';
         var pVal = (box.refs[c.ref] && box.refs[c.ref].p) || '';
         var inputAttrs = (!box.total || box.locked) ? 'disabled ' : '';
@@ -543,14 +529,7 @@
 
     boxesHtml += '</tbody></table></div></div>';
 
-    area.innerHTML =
-      '<div class="tam-rec-area">' +
-      '<div class="tam-rec-area-title">receção de mercadoria</div>' +
-      '<div class="tam-rec-layout">' +
-      summaryHtml +
-      boxesHtml +
-      '</div>' +
-      '</div>';
+    area.innerHTML = boxesHtml;
 
     // ── BIND EVENTOS ──────────────────────────────────────────
 
@@ -561,13 +540,6 @@
         var val = parseInt(inp.value);
         if (!isNaN(val) && val > 0) {
           tamSession.boxes[bi].total = val;
-          inp.classList.add('tam-box-declared');
-          // Habilitar inputs de esa caja
-          area.querySelectorAll('[data-box="' + bi + '"]').forEach(function(el){
-            if (el.tagName === 'INPUT' && el.classList.contains('tam-rec-input')) {
-              el.disabled = false;
-            }
-          });
         } else {
           tamSession.boxes[bi].total = null;
         }
@@ -586,6 +558,8 @@
         if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f: 0, p: 0 };
         tamSession.boxes[bi].refs[ref][city] = val;
 
+        // Actualizar fila de alerta en tiempo real sin rerenderizar
+        tamUpdateRefRowAlert(ref);
         // Verificar si la caja se completó
         tamCheckBoxLock(bi);
         tamUpdateSummaryRow(ref);
@@ -620,8 +594,29 @@
   }
 
   /* ──────────────────────────────────────────────────────────────
-     Actualizar fila del resumen sin rerenderizar todo
+     Actualizar clase de alerta de una fila de ref en tiempo real
   ──────────────────────────────────────────────────────────────── */
+  function tamUpdateRefRowAlert(ref) {
+    var consolidated = tamConsolidatedRefs();
+    var c = consolidated.find(function(x){ return x.ref === ref; });
+    if (!c) return;
+    var totals   = tamGetRefTotals(ref);
+    var received = totals.f + totals.p;
+    var isDone   = received >= c.totalPieces && c.totalPieces > 0;
+    var isOver   = received > c.totalPieces && c.totalPieces > 0;
+
+    // Update row in reception table
+    var area = document.getElementById('tam-reception-area');
+    if (area) {
+      var row = area.querySelector('tr[data-ref="' + ref.replace(/"/g,'\\"') + '"]');
+      if (row) {
+        row.classList.toggle('tam-ref-over', isOver);
+        row.classList.toggle('tam-ref-complete', isDone && !isOver);
+      }
+    }
+  }
+
+  /* Actualizar celdas F/P del resumen en la tabla de cajas */
   function tamUpdateSummaryRow(ref) {
     var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
     var totals = tamGetRefTotals(ref);
@@ -785,7 +780,31 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     EXPORT CSV
+     EXPORT CSV — por factura individual
+  ══════════════════════════════════════════════════════════════ */
+  function tamExportInvoiceCSV(r) {
+    var lines = ['\uFEFF' + ['Referência','Tipo · Nome','UND','P.Unit c/ Envio (€)','Total (€)','Funchal','Porto Santo'].join(';')];
+    var invIdx = tamInvoices.indexOf(r);
+    r.grouped.forEach(function(g){
+      var tn = (g.garmentType||'') + (g.garmentType&&g.name?' · ':'') + (g.name||'');
+      var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
+      lines.push([g.ref, tn, g.pieces, tamFmtEU(g.unitPriceWithShip), tamFmtEU(g.grandTotal), distrib.f || 0, distrib.p || 0].join(';'));
+    });
+    lines.push('');
+    lines.push(['Subtotal mercadoria','',r.totalPieces,'',tamFmtEU(r.subtotalGoods),'',''].join(';'));
+    lines.push(['Transporte (' + r.shipPkgs + ' × 17,50 €)','','','',tamFmtEU(r.shipping),'',''].join(';'));
+    lines.push(['Total geral','',r.totalPieces,'',tamFmtEU(r.grandTotal),'',''].join(';'));
+    var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url;
+    a.download = 'TAM_' + (r.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_') + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     EXPORT CSV — todas las facturas (botón global)
   ══════════════════════════════════════════════════════════════ */
   function tamExportCSV() {
     if (!tamInvoices.length) return;
@@ -1300,26 +1319,15 @@
       /* ══════════════════════════
          ÁREA DE RECEPCIÓN
       ══════════════════════════ */
-      '#tam-reception-area { width:100%; max-width:1400px; margin-top:20px; }',
+      '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
 
       '.tam-rec-area { border:1px solid #e6e6e6; border-radius:16px; overflow:hidden; background:#fff; }',
-      '.tam-rec-area-title { padding:12px 18px; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; }',
-      '.tam-rec-layout { display:flex; gap:0; align-items:flex-start; }',
+      '.tam-rec-area-title { padding:10px 18px; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; }',
 
-      /* Resumen izquierdo */
-      '.tam-rec-summary { flex-shrink:0; min-width:320px; max-width:420px; border-right:1px solid #e6e6e6; }',
-      '.tam-rec-summary-title { padding:10px 14px; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#bbb; border-bottom:1px solid #f0f0f0; background:#fafafa; }',
-      '.tam-rec-sum-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; }',
-      '.tam-rec-sum-table th { padding:5px 10px; background:#f2f2f2; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; color:#888; border-bottom:1px solid #e6e6e6; text-align:center; white-space:nowrap; }',
-      '.tam-rec-sum-table td { padding:4px 10px; border-bottom:1px solid #f5f5f5; text-align:center; font-weight:bold; vertical-align:middle; }',
-      '.tam-rec-sum-table tbody tr:hover td { background:#f5f5f5; }',
-      '.tam-rec-sum-table .tam-ref-complete td { opacity:.4; }',
       '.tam-th-funchal { background:#e3f2fd!important; color:#1565c0!important; }',
       '.tam-th-porto   { background:#fce4ec!important; color:#880e4f!important; }',
 
-      /* Cajas derecha */
-      '.tam-rec-boxes-wrap { flex:1; overflow:hidden; min-width:0; }',
-      '.tam-rec-boxes-title { padding:10px 14px; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#bbb; border-bottom:1px solid #f0f0f0; background:#fafafa; }',
+      /* Scroll contenedor */
       '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
 
       '.tam-rec-boxes-table { border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
@@ -1331,7 +1339,7 @@
       '.tam-box-header.tam-box-col-complete { background:#f0fdf0!important; color:#2a6a2a!important; }',
       '.tam-box-lock { font-size:.75rem; }',
 
-      /* Sub-header (input total + F/P labels) */
+      /* Sub-header (input total + F/PS labels) */
       '.tam-boxes-sub-hdr th { padding:4px 6px; background:#fafafa; }',
       '.tam-box-sub-th { min-width:120px; padding:4px 6px!important; }',
       '.tam-box-sub-inner { display:flex; align-items:center; gap:4px; justify-content:center; margin-bottom:3px; }',
@@ -1346,9 +1354,9 @@
       '.tam-sub-f { font-size:.65rem; font-weight:bold; color:#1565c0; letter-spacing:.03em; }',
       '.tam-sub-p { font-size:.65rem; font-weight:bold; color:#880e4f; letter-spacing:.03em; }',
 
-      /* Columnas refs en tabla de cajas */
+      /* Columnas fijas de refs y totales */
       '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; text-align:left!important; }',
-      '.tam-rec-total-col { min-width:50px; padding:4px 8px!important; background:#fafafa!important; border-right:2px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
+      '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background:#fafafa!important; border-right:1px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
 
       /* Celdas input */
       '.tam-rec-cell-f { background:#f0f8ff; padding:2px 4px!important; min-width:52px; }',
@@ -1363,14 +1371,20 @@
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-p { background:#fce4ec; }',
       '.tam-rec-boxes-table .tam-ref-complete td { opacity:.4; }',
 
+      /* ── Fila en rojo: F+P >= total ref ── */
+      '.tam-ref-over td { background:#fff0f0!important; }',
+      '.tam-ref-over .tam-rec-ref-col { background:#ffe0e0!important; }',
+      '.tam-ref-over .tam-rec-total-col { background:#ffe0e0!important; }',
+      '.tam-ref-over td strong { color:#c00!important; }',
+
+      /* ── Export button per invoice ── */
+      '.tam-inv-export-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #555; border-radius:8px; background:#fff; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-export-btn:hover { background:#555; color:#fff; }',
+
       /* ── Dark mode receção ── */
       '@media(prefers-color-scheme:dark){',
       '.tam-rec-area{background:#111!important;border-color:#2a2a2a!important;}',
-      '.tam-rec-area-title,.tam-rec-summary-title,.tam-rec-boxes-title{background:#161616!important;border-color:#2a2a2a!important;}',
-      '.tam-rec-summary{border-color:#2a2a2a!important;}',
-      '.tam-rec-sum-table th{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
-      '.tam-rec-sum-table td{border-color:#1e1e1e!important;color:#e8e8e8!important;}',
-      '.tam-rec-sum-table tbody tr:hover td{background:#1a1a1a!important;}',
+      '.tam-rec-area-title{background:#161616!important;border-color:#2a2a2a!important;}',
       '.tam-boxes-hdr-row th,.tam-box-header{background:#1a1a1a!important;}',
       '.tam-boxes-sub-hdr th{background:#161616!important;}',
       '.tam-box-total-input{background:#111!important;border-color:#333!important;color:#ccc!important;}',
@@ -1387,6 +1401,9 @@
       '.tam-rec-boxes-table tbody tr:hover td{background:#1a1a1a!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-f{background:#112233!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-p{background:#2a1020!important;}',
+      '.tam-ref-over td{background:#2a0808!important;}',
+      '.tam-ref-over .tam-rec-ref-col,.tam-ref-over .tam-rec-total-col{background:#3a0a0a!important;}',
+      '.tam-ref-over td strong{color:#f48!important;}',
       '.tam-invoice-block{border-color:#2a2a2a!important;background:#111!important;}',
       '.tam-invoice-block-header{background:#161616!important;border-color:#2a2a2a!important;}',
       '.tam-inv-num,.tam-inv-total{color:#e8e8e8!important;}',

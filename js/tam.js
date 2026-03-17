@@ -1556,6 +1556,10 @@
 
   /* ════════════════════════════════════════════════════════════
      ENGINE A — HS-code anchor + backward REF search
+     Window: 40 rows (covers full page header/footer gap ~17 rows).
+     Fallback: if backward search fails, use the nearest preceding
+     REF anywhere in the document (handles edge cases where the gap
+     exceeds even the extended window).
   ════════════════════════════════════════════════════════════ */
   function tamEngineA(allRows) {
     var tagged = allRows.map(function(tokens, idx){
@@ -1580,16 +1584,29 @@
       return { idx:idx, type:'OTHER' };
     });
 
+    // Build an ordered list of all REF positions for fallback lookup
+    var refByIdx = {};
+    tagged.forEach(function(t){ if (t.type==='REF') refByIdx[t.idx]=t; });
+    var refIdxList = Object.keys(refByIdx).map(Number).sort(function(a,b){return a-b;});
+
     var rawItems=[];
     tagged.forEach(function(row){
       if (row.type!=='DATA') return;
-      for (var j=row.idx-1; j>=Math.max(0,row.idx-20); j--) {
-        if (tagged[j] && tagged[j].type==='REF') {
-          rawItems.push({ ref:tagged[j].ref, garmentType:row.garmentType, name:row.name,
-            pieces:row.pieces, unitPrice:row.unitPrice, total:row.total,
-            valid:Math.abs(row.pieces*row.unitPrice-row.total)<0.02 });
-          break;
+      // Primary: backward search within 40 rows (covers page-break header/footer gap)
+      var found = null;
+      for (var j=row.idx-1; j>=Math.max(0,row.idx-40); j--) {
+        if (tagged[j] && tagged[j].type==='REF') { found=tagged[j]; break; }
+      }
+      // Fallback: nearest preceding REF anywhere in document
+      if (!found) {
+        for (var k=refIdxList.length-1; k>=0; k--) {
+          if (refIdxList[k] < row.idx) { found=refByIdx[refIdxList[k]]; break; }
         }
+      }
+      if (found) {
+        rawItems.push({ ref:found.ref, garmentType:row.garmentType, name:row.name,
+          pieces:row.pieces, unitPrice:row.unitPrice, total:row.total,
+          valid:Math.abs(row.pieces*row.unitPrice-row.total)<0.02 });
       }
     });
     return tamFinalise(rawItems, tagged);

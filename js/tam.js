@@ -95,7 +95,7 @@
   //   · Separators: hyphen, underscore, dot, or ONE space before a short suffix
   //   · ZY- excluded (those are invoice numbers, not product refs)
   var REF_RE = /^(?!ZY-)[A-Za-z]{1,5}(?:-[A-Za-z]{1,3})*[-_.]([A-Za-z0-9]+)((?:[-_.]| (?=[A-Za-z0-9]{1,4}$))[A-Za-z0-9]+){0,5}$/;
-  var HS_RE  = /\b(6[0-3]\d{6})\b/;
+  var HS_RE  = /\b(6[0-9]\d{6})\b/;
   // ZY invoice number — can appear anywhere in a row
   var ZY_RE  = /\b(ZY-\d{7,})\b/;
 
@@ -1433,7 +1433,7 @@
   function tamCleanName(n) {
     return String(n||'')
       .replace(/\bModell\s*:\s*/gi, '')   // remove "Modell:" prefix
-      .replace(/\b6[0-3]\d{6}\b/g, '')   // strip HS codes that leak into name (61091000…)
+      .replace(/\b6[0-9]\d{6}\b/g, '')   // strip HS codes that leak into name (61091000…64029939…)
       .replace(/44/g, '')                  // remove "44" (TAM Fashion embeds it in model names: El44vezia→Elvezia)
       .replace(/\s{2,}/g, ' ')            // collapse spaces left by removals
       .trim();
@@ -1448,8 +1448,12 @@
   var BRANDS_SET = new Set(['hailys','zabaione']);
 
   function tamExtractTypeAndName(beforeHS) {
-    // Strip HS codes and standalone numeric tokens (colour codes, article numbers) before parsing
-    var cleaned = beforeHS.replace(/\b6[0-3]\d{6}\b/g, '').replace(/\b\d{4,}\b/g, '').trim();
+    // Strip HS codes, standalone numeric tokens, and "Modell:" prefix before parsing
+    var cleaned = beforeHS
+      .replace(/\bModell\s*:\s*/gi, '')   // remove "Modell:" prefix
+      .replace(/\b6[0-9]\d{6}\b/g, '')   // strip HS codes
+      .replace(/\b\d{4,}\b/g, '')         // strip standalone 4+ digit numbers (colour codes etc.)
+      .trim();
     var words = cleaned.split(/\s+/).filter(Boolean);
     var start = 0;
     while (start < words.length && BRANDS_SET.has(words[start].toLowerCase())) start++;
@@ -1520,12 +1524,16 @@
     // Invoice number: first INVOICENO tag found
     var invNoRow   = tagged.find(function(r){return r.type==='INVOICENO';});
     var invDateRow = tagged.find(function(r){return r.type==='DATE';});
+    // Date can also be embedded in the INVOICENO row (same PDF line as ZY-)
+    var invoiceDate = invDateRow ? invDateRow.value
+                    : (invNoRow && invNoRow.date) ? invNoRow.date
+                    : '—';
     return {
       rawItems, grouped, totalPieces, subtotalGoods, shipping, shipPkgs, shipPerPiece,
       grandTotal:      tamRound2(subtotalGoods+shipping),
       invoiceSubtotal,
-      invoiceNo:   invNoRow   ? invNoRow.value   : '—',
-      invoiceDate: invDateRow ? invDateRow.value : '—'
+      invoiceNo:   invNoRow ? invNoRow.value : '—',
+      invoiceDate: invoiceDate
     };
   }
 
@@ -1536,8 +1544,15 @@
   ──────────────────────────────────────────────────────────── */
   function tamTagMeta(joined, tokens, idx) {
     // Invoice number — ZY- anywhere in the row, first occurrence
+    // Also capture date if it appears on the same row as ZY- (Datum/Date 13.05.2022)
     var zyM = joined.match(ZY_RE);
-    if (zyM) return { idx:idx, type:'INVOICENO', value:zyM[1] };
+    if (zyM) {
+      if (joined.includes('Datum/Date')) {
+        var dSame = joined.match(/(\d{2}\.\d{2}\.\d{4})/);
+        if (dSame) tamTagMeta._lastDate = dSame[1];
+      }
+      return { idx:idx, type:'INVOICENO', value:zyM[1] };
+    }
 
     if (joined.includes('Datum/Date')) {
       var dM = joined.match(/(\d{2}\.\d{2}\.\d{4})/);
@@ -1694,7 +1709,8 @@
       }
       if (best) {
         tagged.push({ idx:i, type:'DATA_C', garmentType:best.tn.type, name:best.tn.name,
-                      pieces:best.pieces, unitPrice:best.unitPrice, total:best.total }); continue;
+                      pieces:best.pieces, unitPrice:best.unitPrice, total:best.total,
+                      idx:i }); continue;
       }
       tagged.push({ idx:i, type:'OTHER' });
     }
@@ -1740,67 +1756,52 @@
     var activeLabel= manualLabel || autoLabel;
     var activeRes  = {A:resA,B:resB,C:resC}[activeLabel];
 
-    var mapA={},mapB={},mapC={};
+    // ── No mixing: show exactly what the active engine found.
+    // A+B agree → use A (they produce same result). A or B alone → use that one. C → use C.
+    // Cross-check A vs B only to detect conflicts — never inject C refs into A/B results.
+    var mapA={},mapB={};
     resA.grouped.forEach(function(g){mapA[g.ref]=g;});
     resB.grouped.forEach(function(g){mapB[g.ref]=g;});
-    resC.grouped.forEach(function(g){mapC[g.ref]=g;});
-
-    var allRefs={};
-    [resA,resB,resC].forEach(function(r){r.grouped.forEach(function(g){allRefs[g.ref]=true;});});
-    allRefs=Object.keys(allRefs);
 
     var confirmed=0, conflicts=[];
-    var mergedGrouped=allRefs.map(function(ref){
-      var a=mapA[ref],b=mapB[ref],c=mapC[ref];
-      var present=[a,b,c].filter(Boolean);
-      if (!present.length) return null;
+    var activeGrouped = activeRes.grouped.map(function(g){
+      var a=mapA[g.ref], b=mapB[g.ref];
 
-      // ── Priority rule: A and B are HS-code anchored (precise for TAM invoices).
-      //    C is math-first (useful fallback but prone to false triplets).
-      //    Hierarchy:
-      //      1. A and B agree            → CONFIRMED, ignore C entirely
-      //      2. Only A exists (no B)     → use A, mark SOLO_A
-      //      3. Only B exists (no A)     → use B, mark SOLO_B
-      //      4. A and B disagree         → CONFLICT between A and B; C not promoted
-      //      5. Neither A nor B found it → C is the only data we have (SOLO_C)
-
-      // Case 1: A and B both present and agree
-      if (a && b && a.pieces===b.pieces && Math.abs(a.totalCost-b.totalCost)<0.02) {
+      // If active engine is A or B, cross-check between A and B only
+      if (activeLabel==='A'||activeLabel==='B') {
+        if (a && b) {
+          if (a.pieces===b.pieces && Math.abs(a.totalCost-b.totalCost)<0.02) {
+            confirmed++;
+            return Object.assign({},g,{confidence:'CONFIRMED'});
+          } else {
+            // A and B disagree on this ref
+            var detailParts=[];
+            detailParts.push('A: '+a.pieces+' un / '+tamFmtEU(a.totalCost)+'€');
+            detailParts.push('B: '+b.pieces+' un / '+tamFmtEU(b.totalCost)+'€');
+            conflicts.push({ref:g.ref, detail:detailParts.join(' · ')});
+            return Object.assign({},g,{
+              confidence:'CONFLICT',
+              conflictDetail:detailParts.join(' · ')
+            });
+          }
+        }
+        // Only one of A/B has it — still show it, no badge needed
         confirmed++;
-        return Object.assign({},a,{confidence:'CONFIRMED',enginesCount:c?3:2});
+        return Object.assign({},g,{confidence:'CONFIRMED'});
       }
 
-      // Case 5: only C has this ref (A and B missed it entirely)
-      if (!a && !b && c) {
-        return Object.assign({},c,{confidence:'SOLO_C',enginesCount:1});
-      }
+      // Engine C selected — show as-is, no cross-check
+      confirmed++;
+      return Object.assign({},g,{confidence:'CONFIRMED'});
+    });
 
-      // Cases 2/3: only one of A/B present
-      if (a && !b) return Object.assign({},a,{confidence:'SOLO_A',enginesCount:1});
-      if (b && !a) return Object.assign({},b,{confidence:'SOLO_B',enginesCount:1});
-
-      // Case 4: A and B both present but disagree → conflict between A and B only
-      var maps={A:mapA,B:mapB,C:mapC};
-      var chosen=maps[activeLabel][ref]||(maps[autoLabel][ref])||a||b;
-      var detailParts=[];
-      if(a) detailParts.push('A: '+a.pieces+' un / '+tamFmtEU(a.totalCost)+'€');
-      if(b) detailParts.push('B: '+b.pieces+' un / '+tamFmtEU(b.totalCost)+'€');
-      if(c) detailParts.push('C: '+c.pieces+' un / '+tamFmtEU(c.totalCost)+'€');
-      conflicts.push({ref:ref, detail:detailParts.join(' · ')});
-      return Object.assign({},chosen,{
-        confidence:'CONFLICT',
-        conflictDetail:detailParts.join(' · '),
-        enginesCount:present.length
-      });
-    }).filter(Boolean);
-
-    // Recalculate shipping distribution based on merged totals
-    var totalPieces   = mergedGrouped.reduce(function(s,g){return s+g.pieces;},0);
-    var subtotalGoods = tamRound2(mergedGrouped.reduce(function(s,g){return s+g.totalCost;},0));
+    // Recalculate shipping distribution based on active engine totals only
+    var totalPieces   = activeGrouped.reduce(function(s,g){return s+g.pieces;},0);
+    var subtotalGoods = tamRound2(activeGrouped.reduce(function(s,g){return s+g.totalCost;},0));
     var shipping  = activeRes.shipping  || resA.shipping  || resB.shipping  || resC.shipping;
     var shipPkgs  = activeRes.shipPkgs  || resA.shipPkgs  || resB.shipPkgs  || resC.shipPkgs;
     var shipPerPiece = totalPieces>0 ? shipping/totalPieces : 0;
-    mergedGrouped.forEach(function(g){
+    activeGrouped.forEach(function(g){
       var base=g.pieces>0?g.totalCost/g.pieces:0;
       g.unitPriceWithShip=tamRound2(base+shipPerPiece);
       g.grandTotal=tamRound2(g.unitPriceWithShip*g.pieces);
@@ -1808,10 +1809,10 @@
 
     var meta=[resA,resB,resC].find(function(r){return r.invoiceNo!=='—';})||resA;
     var fullyAgree=conflicts.length===0 &&
-                   mergedGrouped.every(function(g){return g.confidence==='CONFIRMED';});
+                   activeGrouped.every(function(g){return g.confidence==='CONFIRMED';});
 
     return {
-      grouped:mergedGrouped, rawItems:activeRes.rawItems,
+      grouped:activeGrouped, rawItems:activeRes.rawItems,
       totalPieces, subtotalGoods, shipping, shipPkgs, shipPerPiece,
       grandTotal:      tamRound2(subtotalGoods+shipping),
       invoiceSubtotal: meta.invoiceSubtotal,
@@ -2015,11 +2016,10 @@
     r.grouped.forEach(function(g, i){
       var conf    = g.confidence||'CONFIRMED';
       var typeNome= (g.garmentType||'')+(g.garmentType&&g.name?' · ':'')+( g.name||'—');
-      var rowCls  = conf==='CONFLICT'  ? ' class="tam-row-conflict"' :
-                   (conf==='SOLO_A'||conf==='SOLO_B'||conf==='SOLO_C') ? ' class="tam-row-solo"' : '';
+      var rowCls  = conf==='CONFLICT' ? ' class="tam-row-conflict"' : '';
       var tooltip = conf==='CONFLICT' ? ' title="'+tamEsc(g.conflictDetail||'')+'"' : '';
-      var badge   = conf!=='CONFIRMED'
-        ? '<span class="tam-badge tam-badge-'+conf.toLowerCase()+'">'+conf+'</span>' : '';
+      var badge   = conf==='CONFLICT'
+        ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : '';
 
       html+=
         '<tr'+rowCls+tooltip+'>'+

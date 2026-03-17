@@ -369,6 +369,7 @@
 
     tamRenderInvoices();
     tamRenderReception();
+    tamRenderAnomalies();
     tamRenderSessionBar();
   }
 
@@ -656,6 +657,14 @@
   function tamRenderInvoiceTable(r, container, invIdx) {
     var consolidated = tamConsolidatedRefs();
 
+    // Check if ANY ref in this invoice has distribution started
+    var anyDistrib = r.grouped.some(function(g){
+      var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
+      return (distrib.f + distrib.p) > 0;
+    });
+
+    var showAnomalyCol = anyDistrib;
+
     var html =
       '<table class="tam-table">' +
       '<thead><tr>' +
@@ -667,21 +676,37 @@
         '<th class="tam-th">Total</th>' +
         '<th class="tam-th tam-th-funchal">Funchal</th>' +
         '<th class="tam-th tam-th-porto">Porto Santo</th>' +
+        (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
     r.grouped.forEach(function(g, i){
       var conf     = g.confidence || 'CONFIRMED';
       var typeNome = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'—');
-      var rowCls   = conf === 'CONFLICT' ? ' class="tam-row-conflict"' : '';
       var badge    = conf === 'CONFLICT' ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : '';
 
-      // Calcular cuánto de este ref ha sido distribuido en esta factura
       var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
-      var fVal = distrib.f || 0;
-      var pVal = distrib.p || 0;
-      var refDone = (fVal + pVal >= g.pieces) && g.pieces > 0;
+      var fVal    = distrib.f || 0;
+      var pVal    = distrib.p || 0;
+      var total   = fVal + pVal;
+      var diff    = total - g.pieces;  // positive = more, negative = fewer
+      var refDone = total === g.pieces && g.pieces > 0;
 
-      var trClass = 'tam-inv-row' + (refDone ? ' tam-ref-complete' : '');
+      var trClass = conf === 'CONFLICT' ? 'tam-row-conflict' : '';
+      if (refDone) trClass += ' tam-ref-complete';
+
+      // Anomaly cell
+      var anomalyCell = '';
+      if (showAnomalyCol) {
+        if (total === 0) {
+          anomalyCell = '<td class="tam-td tam-td-num tam-cell-anomaly-empty"></td>';
+        } else if (diff === 0) {
+          anomalyCell = '<td class="tam-td tam-td-num tam-cell-anomaly-ok" title="completo">✓</td>';
+        } else if (diff < 0) {
+          anomalyCell = '<td class="tam-td tam-td-num tam-cell-anomaly-low" title="faltam ' + Math.abs(diff) + ' peças">' + diff + '</td>';
+        } else {
+          anomalyCell = '<td class="tam-td tam-td-num tam-cell-anomaly-high" title="' + diff + ' peças a mais">+' + diff + '</td>';
+        }
+      }
 
       html +=
         '<tr class="' + trClass + '"' + (conf==='CONFLICT' ? ' title="' + tamEsc(g.conflictDetail||'') + '"' : '') + '>' +
@@ -693,9 +718,12 @@
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
         '<td class="tam-td tam-td-num tam-cell-funchal">' + (fVal > 0 ? fVal : '—') + '</td>' +
         '<td class="tam-td tam-td-num tam-cell-porto">'   + (pVal > 0 ? pVal : '—') + '</td>' +
+        anomalyCell +
         '</tr>';
     });
 
+    // Tfoot spans depend on anomaly col
+    var extraTd = showAnomalyCol ? '<td class="tam-td"></td>' : '';
     html +=
       '</tbody><tfoot>' +
       '<tr class="tam-tr-sub">' +
@@ -704,14 +732,14 @@
         '<td class="tam-td tam-td-num"><strong>' + r.totalPieces + '</strong></td>' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.subtotalGoods) + '</strong></td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td>' +
+        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '<tr class="tam-tr-ship">' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td" colspan="2">transporte · ' + r.shipPkgs + ' pac. × 17,50 €</td>' +
         '<td class="tam-td"></td><td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(r.shipping) + '</td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td>' +
+        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '<tr class="tam-tr-grand">' +
         '<td class="tam-td"></td>' +
@@ -719,7 +747,7 @@
         '<td class="tam-td tam-td-num"><strong>' + r.totalPieces + '</strong></td>' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.grandTotal) + '</strong></td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td>' +
+        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '</tfoot></table>';
 
@@ -1000,8 +1028,85 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     SESSION BAR
+     ANOMALIAS — botão + bloco de resumo
   ══════════════════════════════════════════════════════════════ */
+  function tamRenderAnomalies() {
+    var area = document.getElementById('tam-anomaly-area');
+    if (!area) return;
+
+    // Collect all anomalies across all invoices
+    var anomalies = [];
+    tamInvoices.forEach(function(r, invIdx){
+      r.grouped.forEach(function(g){
+        var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
+        var total   = (distrib.f || 0) + (distrib.p || 0);
+        if (total === 0) return; // not started — ignore
+        var diff = total - g.pieces;
+        if (diff !== 0) {
+          anomalies.push({
+            ref:      g.ref,
+            invoiceNo: r.invoiceNo,
+            expected: g.pieces,
+            got:      total,
+            diff:     diff,
+            f:        distrib.f || 0,
+            p:        distrib.p || 0
+          });
+        }
+      });
+    });
+
+    if (!anomalies.length) {
+      area.innerHTML = '';
+      return;
+    }
+
+    var btnHtml =
+      '<div class="tam-anomaly-btn-wrap">' +
+        '<button id="tam-anomaly-btn" class="tam-anomaly-btn">⚠ ' + anomalies.length + ' anomalia(s) — ver resumo</button>' +
+      '</div>';
+
+    var reportHtml =
+      '<div id="tam-anomaly-report" style="display:none;">' +
+        '<div class="tam-anomaly-title">resumo de anomalias</div>' +
+        '<table class="tam-anomaly-table">' +
+        '<thead><tr>' +
+          '<th>referência</th>' +
+          '<th>fatura</th>' +
+          '<th>esperado</th>' +
+          '<th>funchal</th>' +
+          '<th>porto santo</th>' +
+          '<th>diferença</th>' +
+        '</tr></thead><tbody>' +
+        anomalies.map(function(a){
+          var diffCls = a.diff < 0 ? 'tam-anom-low' : 'tam-anom-high';
+          var diffTxt = a.diff < 0 ? a.diff + ' (faltam)' : '+' + a.diff + ' (a mais)';
+          return '<tr>' +
+            '<td><strong>' + tamEsc(a.ref) + '</strong></td>' +
+            '<td>' + tamEsc(a.invoiceNo) + '</td>' +
+            '<td class="tam-td-num">' + a.expected + '</td>' +
+            '<td class="tam-td-num tam-cell-funchal">' + a.f + '</td>' +
+            '<td class="tam-td-num tam-cell-porto">'   + a.p + '</td>' +
+            '<td class="tam-td-num ' + diffCls + '">' + diffTxt + '</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>' +
+      '</div>';
+
+    area.innerHTML = btnHtml + reportHtml;
+
+    area.querySelector('#tam-anomaly-btn').addEventListener('click', function(){
+      var report = document.getElementById('tam-anomaly-report');
+      var btn    = document.getElementById('tam-anomaly-btn');
+      if (report.style.display === 'none') {
+        report.style.display = 'block';
+        btn.textContent = '▲ ocultar resumo';
+      } else {
+        report.style.display = 'none';
+        btn.textContent = '⚠ ' + anomalies.length + ' anomalia(s) — ver resumo';
+      }
+    });
+  }
   function tamRenderSessionBar() {
     var bar = document.getElementById('tam-session-bar');
     if (!bar) return;
@@ -2030,7 +2135,44 @@
       '.tam-inv-export-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #555; border-radius:8px; background:#fff; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-export-btn:hover { background:#555; color:#fff; }',
 
-      /* ── Dark mode receção ── */
+      /* ── Anomaly column header and cells ── */
+      '.tam-th-anomaly { background:#f5f5f5!important; color:#888!important; font-size:.65rem!important; min-width:54px; }',
+      '.tam-cell-anomaly-ok   { background:#1a1a1a!important; color:#1a1a1a!important; font-size:.75rem; font-weight:bold; text-align:center; }',
+      '.tam-cell-anomaly-low  { background:#fff0f0; color:#c00; font-weight:bold; text-align:center; }',
+      '.tam-cell-anomaly-high { background:#f0f4ff; color:#1565c0; font-weight:bold; text-align:center; }',
+      '.tam-cell-anomaly-empty { background:#fafafa; }',
+
+      /* ── Anomaly report block ── */
+      '#tam-anomaly-area { width:100%; max-width:960px; margin-top:16px; }',
+      '.tam-anomaly-btn-wrap { display:flex; justify-content:center; margin-bottom:10px; }',
+      '.tam-anomaly-btn { padding:9px 24px; font-size:.82rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1.5px solid #e07000; border-radius:10px; background:#fff8f0; color:#b05000; transition:background .15s,color .15s; letter-spacing:.02em; }',
+      '.tam-anomaly-btn:hover { background:#e07000; color:#fff; }',
+      '#tam-anomaly-report { border:1px solid #e6e6e6; border-radius:14px; overflow:visible; font-family:MontserratLight,sans-serif; }',
+      '.tam-anomaly-title { padding:10px 16px; font-size:.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; border-radius:14px 14px 0 0; }',
+      '.tam-anomaly-table { width:100%; border-collapse:collapse; font-size:.84rem; }',
+      '.tam-anomaly-table th { padding:6px 12px; background:#f2f2f2; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; color:#888; border-bottom:1px solid #e6e6e6; text-align:center; }',
+      '.tam-anomaly-table td { padding:5px 12px; border-bottom:1px solid #f5f5f5; font-weight:bold; text-align:center; vertical-align:middle; }',
+      '.tam-anomaly-table td:first-child { text-align:left; }',
+      '.tam-anomaly-table tbody tr:last-child td { border-bottom:none; }',
+      '.tam-anom-low  { color:#c00!important; }',
+      '.tam-anom-high { color:#1565c0!important; }',
+
+      /* Dark mode anomaly */
+      '@media(prefers-color-scheme:dark){',
+      '.tam-th-anomaly{background:#1a1a1a!important;color:#555!important;}',
+      '.tam-cell-anomaly-ok{background:#333!important;color:#333!important;}',
+      '.tam-cell-anomaly-low{background:#2a0808!important;color:#f48!important;}',
+      '.tam-cell-anomaly-high{background:#0a1a3a!important;color:#64b5f6!important;}',
+      '.tam-cell-anomaly-empty{background:#111!important;}',
+      '.tam-anomaly-btn{background:#1a1000!important;border-color:#e07000!important;color:#e07000!important;}',
+      '.tam-anomaly-btn:hover{background:#e07000!important;color:#fff!important;}',
+      '#tam-anomaly-report{border-color:#2a2a2a!important;}',
+      '.tam-anomaly-title{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-anomaly-table th{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
+      '.tam-anomaly-table td{border-color:#1e1e1e!important;color:#e8e8e8!important;}',
+      '}'
+
+      /* ── Dark mode receção ── */,
       '@media(prefers-color-scheme:dark){',
       '.tam-rec-area{background:#111!important;border-color:#2a2a2a!important;}',
       '.tam-rec-area-title{background:#161616!important;border-color:#2a2a2a!important;}',
@@ -2128,6 +2270,16 @@
       if (rw && rw.nextSibling) rw.parentNode.insertBefore(ra, rw.nextSibling);
       else if (rw) rw.parentNode.appendChild(ra);
       else tab.appendChild(ra);
+    }
+
+    // Anomaly area — injected after reception area
+    if (!document.getElementById('tam-anomaly-area')) {
+      var aa = document.createElement('div');
+      aa.id = 'tam-anomaly-area';
+      var recArea = document.getElementById('tam-reception-area');
+      if (recArea && recArea.nextSibling) recArea.parentNode.insertBefore(aa, recArea.nextSibling);
+      else if (recArea) recArea.parentNode.appendChild(aa);
+      else tab.appendChild(aa);
     }
 
     // Inject styles immediately — always fresh

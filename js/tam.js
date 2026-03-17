@@ -5,10 +5,13 @@
 //  · Fixed: nome column always visible with proper width
 //  · Persistent motor selector — always shown on divergence,
 //    click any motor to switch, active motor stays highlighted
-//  · v7: REF_RE alargado — cobre 1296/1296 padrões conhecidos + novas refs automáticas
+//  · v7: REF_RE alargado — cobre 1296/1296 padrões + novas refs automáticas
 //        KNOWN_REFS whitelist como fallback extra
 //        tamFindRefInRow() detecta ref em qualquer posição da linha
-//        Refs com espaço (ex: "HL-2211008 Z1") e prefixo misto (FaYa, Ebb) suportados
+//  · v7 bug fixes (Motor C):
+//        [1] Engine C salta linhas com HS code → elimina triplos falsos
+//        [2] tamExtractTypeAndName: strip HS codes e números ≥4 dígitos antes de processar
+//        [3] tamCleanName: strip HS codes do nome; /44/g mantido (convenção TAM)
 // ══════════════════════════════════════════════════════════════
 (function () {
 
@@ -1430,7 +1433,9 @@
   function tamCleanName(n) {
     return String(n||'')
       .replace(/\bModell\s*:\s*/gi, '')   // remove "Modell:" prefix
-      .replace(/44/g, '')                  // remove stray "44"
+      .replace(/\b6[0-3]\d{6}\b/g, '')   // strip HS codes that leak into name (61091000…)
+      .replace(/44/g, '')                  // remove "44" (TAM Fashion embeds it in model names: El44vezia→Elvezia)
+      .replace(/\s{2,}/g, ' ')            // collapse spaces left by removals
       .trim();
   }
 
@@ -1443,7 +1448,9 @@
   var BRANDS_SET = new Set(['hailys','zabaione']);
 
   function tamExtractTypeAndName(beforeHS) {
-    var words = beforeHS.trim().split(/\s+/).filter(Boolean);
+    // Strip HS codes and standalone numeric tokens (colour codes, article numbers) before parsing
+    var cleaned = beforeHS.replace(/\b6[0-3]\d{6}\b/g, '').replace(/\b\d{4,}\b/g, '').trim();
+    var words = cleaned.split(/\s+/).filter(Boolean);
     var start = 0;
     while (start < words.length && BRANDS_SET.has(words[start].toLowerCase())) start++;
     var relevant = words.slice(start);
@@ -1649,6 +1656,10 @@
 
       var _refC = !HS_RE.test(joined) ? tamFindRefInRow(tokens) : null;
       if (_refC) { tagged.push({ idx:i, type:'REF', ref:_refC }); continue; }
+
+      // Engine C skips rows with HS codes — Engines A/B handle those with better precision.
+      // Applying math-first on HS-code rows risks finding false triplets from nearby digits.
+      if (HS_RE.test(joined)) { tagged.push({ idx:i, type:'OTHER' }); continue; }
 
       var rowStr=joined.replace(/\s*\*\s*/g,' ');
       NUM_RE.lastIndex=0;

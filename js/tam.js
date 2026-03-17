@@ -1034,32 +1034,58 @@
     var area = document.getElementById('tam-anomaly-area');
     if (!area) return;
 
-    // Collect all anomalies across all invoices
-    var anomalies = [];
-    tamInvoices.forEach(function(r, invIdx){
-      r.grouped.forEach(function(g){
-        var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
-        var total   = (distrib.f || 0) + (distrib.p || 0);
-        if (total === 0) return; // not started — ignore
-        var diff = total - g.pieces;
-        if (diff !== 0) {
-          anomalies.push({
-            ref:      g.ref,
-            invoiceNo: r.invoiceNo,
-            expected: g.pieces,
-            got:      total,
-            diff:     diff,
-            f:        distrib.f || 0,
-            p:        distrib.p || 0
-          });
-        }
+    // Build consolidated ref totals directly from boxes (raw, unfiltered)
+    var boxTotals = {};
+    if (tamSession) {
+      tamSession.boxes.forEach(function(box){
+        Object.keys(box.refs || {}).forEach(function(ref){
+          if (!boxTotals[ref]) boxTotals[ref] = { f:0, p:0 };
+          boxTotals[ref].f += (box.refs[ref].f || 0);
+          boxTotals[ref].p += (box.refs[ref].p || 0);
+        });
       });
+    }
+
+    // Build consolidated ref totals needed across all invoices
+    var refNeeded = {};
+    tamInvoices.forEach(function(r){
+      r.grouped.forEach(function(g){
+        refNeeded[g.ref] = (refNeeded[g.ref] || 0) + g.pieces;
+      });
+    });
+
+    // Collect anomalies: any ref that has been touched and differs from expected
+    var anomalies = [];
+    Object.keys(boxTotals).forEach(function(ref){
+      var got  = (boxTotals[ref].f || 0) + (boxTotals[ref].p || 0);
+      if (got === 0) return; // nothing entered yet
+      var expected = refNeeded[ref] || 0;
+      var diff = got - expected;
+      if (diff !== 0) {
+        // Find which invoice(s) this ref belongs to
+        var invoiceNos = tamInvoices
+          .filter(function(r){ return r.grouped.some(function(g){ return g.ref === ref; }); })
+          .map(function(r){ return r.invoiceNo; })
+          .join(', ');
+        anomalies.push({
+          ref:       ref,
+          invoiceNo: invoiceNos,
+          expected:  expected,
+          got:       got,
+          diff:      diff,
+          f:         boxTotals[ref].f || 0,
+          p:         boxTotals[ref].p || 0
+        });
+      }
     });
 
     if (!anomalies.length) {
       area.innerHTML = '';
       return;
     }
+
+    // Sort: most severe first (largest absolute diff)
+    anomalies.sort(function(a,b){ return Math.abs(b.diff) - Math.abs(a.diff); });
 
     var btnHtml =
       '<div class="tam-anomaly-btn-wrap">' +
@@ -1080,7 +1106,9 @@
         '</tr></thead><tbody>' +
         anomalies.map(function(a){
           var diffCls = a.diff < 0 ? 'tam-anom-low' : 'tam-anom-high';
-          var diffTxt = a.diff < 0 ? a.diff + ' (faltam)' : '+' + a.diff + ' (a mais)';
+          var diffTxt = a.diff < 0
+            ? a.diff + ' <span style="font-weight:normal;font-size:.75rem">(faltam ' + Math.abs(a.diff) + ')</span>'
+            : '+' + a.diff + ' <span style="font-weight:normal;font-size:.75rem">(a mais)</span>';
           return '<tr>' +
             '<td><strong>' + tamEsc(a.ref) + '</strong></td>' +
             '<td>' + tamEsc(a.invoiceNo) + '</td>' +

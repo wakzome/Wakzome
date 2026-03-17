@@ -94,7 +94,7 @@
   //   · Optional sub-prefix segments (-C, -PO, -HS, -TO …)
   //   · Separators: hyphen, underscore, dot, or ONE space before a short suffix
   //   · ZY- excluded (those are invoice numbers, not product refs)
-  var REF_RE = /^(?!ZY-)[A-Za-z]{1,5}(?:-[A-Za-z]{1,3})*[-_.]([A-Za-z0-9]+)((?:[-_.]| (?=[A-Za-z0-9]{1,4}$))[A-Za-z0-9]+){0,5}$/;
+  var REF_RE = /^(?!ZY-)(?:[A-Za-z]{1,5}(?:-[A-Za-z]{1,3})*)[-_.](?=[A-Za-z0-9]*\d)[A-Za-z0-9]+((?:[-_.])[A-Za-z0-9]+){0,5}$/;  // must contain digit after separator — excludes color words like off-white
   var HS_RE  = /\b(\d{8})\b/;  // any 8-digit customs code (covers chapters 42, 60-69, etc.)
   // ZY invoice number — can appear anywhere in a row
   var ZY_RE  = /\b(ZY-[2][\d]{7,})\b/;  // invoice numbers start with ZY-2x (year prefix 22-26+)
@@ -1951,6 +1951,14 @@
 
     var html=
       '<table class="tam-table">'+
+      '<colgroup>'+
+        '<col class="col-num">'+   /* # */
+        '<col class="col-ref">'+   /* referência */
+        '<col class="col-nome">'+  /* tipo · nome — takes remaining space */
+        '<col class="col-num">'+   /* UND */
+        '<col class="col-num">'+   /* P.Unit/T */
+        '<col class="col-num">'+   /* Total */
+      '</colgroup>'+
       '<thead><tr>'+
         '<th class="tam-th">#</th>'+
         '<th class="tam-th">referência</th>'+
@@ -2015,7 +2023,11 @@
     s.id='tam-xv-styles';
     s.textContent=[
       /* ── Table: auto-fit each column to its widest content ── */
-      '.tam-table{table-layout:auto;width:100%;border-collapse:collapse;font-size:.85rem}',
+      '.tam-table{table-layout:fixed;width:100%;border-collapse:collapse;font-size:.85rem}',
+      /* Column widths: # tiny, ref medium, tipo·nome fills rest, num cols fixed */
+      '.tam-table col.col-num{width:60px}',
+      '.tam-table col.col-ref{width:180px}',
+      '.tam-table col.col-nome{width:auto}',
       '.tam-th{white-space:nowrap;padding:6px 14px;text-align:center;font-size:.65rem;'+
               'text-transform:uppercase;letter-spacing:.06em;color:#888;border-bottom:2px solid #e0e0e0}',
       '.tam-td{white-space:nowrap;padding:6px 14px;text-align:center;border-bottom:1px solid #f0f0f0;vertical-align:middle}',

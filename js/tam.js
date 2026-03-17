@@ -1738,29 +1738,38 @@
       var present=[a,b,c].filter(Boolean);
       if (!present.length) return null;
 
-      var p0=present[0].pieces, t0=present[0].totalCost;
-      var allAgree=present.every(function(g){
-        return g.pieces===p0 && Math.abs(g.totalCost-t0)<0.02;
-      });
-      if (allAgree && present.length>1) {
+      // ── Priority rule: A and B are HS-code anchored (precise for TAM invoices).
+      //    C is math-first (useful fallback but prone to false triplets).
+      //    Hierarchy:
+      //      1. A and B agree            → CONFIRMED, ignore C entirely
+      //      2. Only A exists (no B)     → use A, mark SOLO_A
+      //      3. Only B exists (no A)     → use B, mark SOLO_B
+      //      4. A and B disagree         → CONFLICT between A and B; C not promoted
+      //      5. Neither A nor B found it → C is the only data we have (SOLO_C)
+
+      // Case 1: A and B both present and agree
+      if (a && b && a.pieces===b.pieces && Math.abs(a.totalCost-b.totalCost)<0.02) {
         confirmed++;
-        return Object.assign({},present[0],{confidence:'CONFIRMED',enginesCount:present.length});
+        return Object.assign({},a,{confidence:'CONFIRMED',enginesCount:c?3:2});
       }
 
-      // Use active engine's value for this ref (or best engine if active doesn't have it)
-      var maps={A:mapA,B:mapB,C:mapC};
-      var chosen=maps[activeLabel][ref]||(maps[autoLabel][ref])||present[0];
+      // Case 5: only C has this ref (A and B missed it entirely)
+      if (!a && !b && c) {
+        return Object.assign({},c,{confidence:'SOLO_C',enginesCount:1});
+      }
 
+      // Cases 2/3: only one of A/B present
+      if (a && !b) return Object.assign({},a,{confidence:'SOLO_A',enginesCount:1});
+      if (b && !a) return Object.assign({},b,{confidence:'SOLO_B',enginesCount:1});
+
+      // Case 4: A and B both present but disagree → conflict between A and B only
+      var maps={A:mapA,B:mapB,C:mapC};
+      var chosen=maps[activeLabel][ref]||(maps[autoLabel][ref])||a||b;
       var detailParts=[];
       if(a) detailParts.push('A: '+a.pieces+' un / '+tamFmtEU(a.totalCost)+'€');
       if(b) detailParts.push('B: '+b.pieces+' un / '+tamFmtEU(b.totalCost)+'€');
       if(c) detailParts.push('C: '+c.pieces+' un / '+tamFmtEU(c.totalCost)+'€');
-
-      if (present.length===1) {
-        var lbl=a?'SOLO_A':b?'SOLO_B':'SOLO_C';
-        return Object.assign({},present[0],{confidence:lbl,enginesCount:1});
-      }
-      conflicts.push({ref, detail:detailParts.join(' · ')});
+      conflicts.push({ref:ref, detail:detailParts.join(' · ')});
       return Object.assign({},chosen,{
         confidence:'CONFLICT',
         conflictDetail:detailParts.join(' · '),

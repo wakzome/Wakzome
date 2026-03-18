@@ -402,16 +402,42 @@
       tamRenderSingleMeta(tamInvoices[0], meta);
       tamRenderInvoiceBanner(tamInvoices[0], ban);
       ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
-      var singleRemove = document.createElement('button');
-      singleRemove.className = 'tam-inv-remove-btn';
-      singleRemove.title = 'remover fatura da sessão';
-      singleRemove.textContent = '✕ remover fatura';
-      singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
+
+      // Quick distribution buttons for single invoice
+      var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
+      var singleQuick = document.createElement('div');
+      singleQuick.className = 'tam-inv-quick-wrap';
+      singleQuick.style.marginTop = '6px';
+      if (qd0) {
+        singleQuick.innerHTML =
+          '<span class="tam-inv-quick-active">' +
+            (qd0 === 'funchal' ? '100% Funchal' : qd0 === 'porto' ? '100% Porto Santo' : '50/50') + ' ativo' +
+          '</span>' +
+          '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>';
+      } else {
+        singleQuick.innerHTML =
+          '<span class="tam-quick-label">distribuição rápida:</span>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100% Funchal</button>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100% Porto Santo</button>' +
+          '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50 / 50</button>';
+      }
+      singleQuick.querySelectorAll('[data-mode]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          tamQuickDistribInvoice(0, btn.getAttribute('data-mode'));
+        });
+      });
+      meta.appendChild(singleQuick);
+
       var singleEdit = document.createElement('button');
       singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
       singleEdit.textContent = tamEditMode[0] ? '✓ fechar edição' : '✏ editar tabela';
       singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
       meta.appendChild(singleEdit);
+      var singleRemove = document.createElement('button');
+      singleRemove.className = 'tam-inv-remove-btn';
+      singleRemove.title = 'remover fatura da sessão';
+      singleRemove.textContent = '✕ remover fatura';
+      singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
       meta.appendChild(singleRemove);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
@@ -1425,32 +1451,14 @@
   /* Global quick distribution (area de resumen buttons) */
   function tamQuickDistrib(mode) {
     if (!tamSession) return;
+    tamRepairBoxInvIdx();
     var consolidated = tamConsolidatedRefs();
 
     if (mode === 'funchal' || mode === 'porto') {
-      // Apply 100% to all refs across all boxes
       consolidated.forEach(function(c){
-        tamSession.boxes.forEach(function(box){
-          if (!box.refs[c.ref]) box.refs[c.ref] = { f:0, p:0 };
-          var boxTotal = tamGetBoxRefTotal(box, c.ref);
-          // We distribute proportionally to each box based on its declared total
-        });
-        // Distribute into boxes: fill each box up to its declared total
-        var remaining = c.totalPieces;
-        tamSession.boxes.forEach(function(box){
-          if (!box.total) return;
-          if (!box.refs[c.ref]) box.refs[c.ref] = { f:0, p:0 };
-          var boxShare = Math.min(remaining, box.total);
-          // But clamp to what the box hasn't already used for other refs
-          if (mode === 'funchal') {
-            box.refs[c.ref].f = boxShare;
-            box.refs[c.ref].p = 0;
-          } else {
-            box.refs[c.ref].f = 0;
-            box.refs[c.ref].p = boxShare;
-          }
-          remaining -= boxShare;
-        });
+        tamDistribToBoxes(c.ref, c.totalPieces,
+          mode === 'funchal' ? c.totalPieces : 0,
+          mode === 'porto'   ? c.totalPieces : 0);
       });
       tamRenderAll();
       tamSaveSession(false);
@@ -1458,41 +1466,40 @@
     }
 
     if (mode === 'split') {
-      // 50/50: collect odd-piece refs for dialog
       var oddRefs = [];
       consolidated.forEach(function(c){
-        var half    = Math.floor(c.totalPieces / 2);
-        var isOdd   = c.totalPieces % 2 !== 0;
-        // Distribute even part first
+        var half  = Math.floor(c.totalPieces / 2);
+        var isOdd = c.totalPieces % 2 !== 0;
         tamDistribToBoxes(c.ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0));
         if (isOdd) oddRefs.push(c);
       });
-
       if (oddRefs.length) {
-        tamOddPieceDialog(oddRefs, 0, function(){
-          tamRenderAll();
-          tamSaveSession(false);
-        });
+        tamOddPieceDialog(oddRefs, 0, function(){ tamRenderAll(); tamSaveSession(false); });
       } else {
-        tamRenderAll();
-        tamSaveSession(false);
+        tamRenderAll(); tamSaveSession(false);
       }
     }
   }
 
-  /* Distribute f and p amounts across boxes proportionally for a ref */
+  /* Distribute f and p across ALL boxes — works without box.total declared */
   function tamDistribToBoxes(ref, totalPieces, fTotal, pTotal) {
-    var fRem = fTotal, pRem = pTotal;
-    tamSession.boxes.forEach(function(box){
-      if (!box.total) return;
+    var boxes = tamSession.boxes;
+    if (!boxes.length) return;
+    var declared = boxes.filter(function(b){ return b.total; });
+    var targets  = declared.length ? declared : boxes;
+    var fRem = fTotal, pRem = pTotal, pieceRem = totalPieces;
+    targets.forEach(function(box, i){
       if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
-      var boxCapacity = box.total;
-      var fShare = Math.min(fRem, boxCapacity);
-      var pShare = Math.min(pRem, boxCapacity - fShare);
+      var isLast   = (i === targets.length - 1);
+      var capacity = box.total || Math.ceil(totalPieces / targets.length);
+      var share    = isLast ? pieceRem : Math.min(pieceRem, capacity);
+      var fShare   = isLast ? fRem : Math.round(fTotal * share / (totalPieces || 1));
+      var pShare   = share - fShare;
+      fShare = Math.max(0, Math.min(fShare, fRem));
+      pShare = Math.max(0, Math.min(pShare, pRem));
       box.refs[ref].f = fShare;
       box.refs[ref].p = pShare;
-      fRem -= fShare;
-      pRem -= pShare;
+      fRem -= fShare; pRem -= pShare; pieceRem -= share;
     });
   }
 

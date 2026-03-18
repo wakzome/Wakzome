@@ -838,13 +838,21 @@
       '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
       '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
-    boxes.forEach(function(box, bi){
+    // Sort boxes: incomplete first (left), complete last (right)
+    var boxOrder = boxes.map(function(box, bi){
       var received = 0;
-      if (box.total) {
-        Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
-      }
-      var boxComplete = box.total && received >= box.total;
-      var boxClass = boxComplete ? 'tam-box-col-complete' : '';
+      if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
+      var isComplete = box.total && received >= box.total;
+      return { bi: bi, box: box, received: received, isComplete: isComplete };
+    });
+    var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
+    var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
+    var sortedBoxes    = pendingBoxes.concat(completedBoxes);
+
+    sortedBoxes.forEach(function(bObj){
+      var bi  = bObj.bi;
+      var box = bObj.box;
+      var boxClass = bObj.isComplete ? 'tam-box-col-complete' : '';
       boxesHtml += '<th colspan="2" class="tam-box-header ' + boxClass + '">' +
         'Caixa ' + (bi+1) +
         (box.locked ? ' <span class="tam-box-lock">🔒</span>' : '') +
@@ -857,16 +865,15 @@
       '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>';
 
-    boxes.forEach(function(box, bi){
-      var received = 0;
-      if (box.total) {
-        Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
-      }
+    sortedBoxes.forEach(function(bObj){
+      var bi       = bObj.bi;
+      var box      = bObj.box;
+      var received = bObj.received;
       var pctLabel = box.total ? received + '/' + box.total : '';
       var isLocked = box.locked;
       var inputCls = box.total ? 'tam-box-total-input tam-box-declared' : 'tam-box-total-input';
       boxesHtml +=
-        '<th class="tam-box-sub-th" colspan="2">' +
+        '<th class="tam-box-sub-th' + (bObj.isComplete ? ' tam-box-sub-complete' : '') + '" colspan="2">' +
         '<div class="tam-box-sub-inner">' +
         '<input type="number" class="' + inputCls + '" ' +
           'id="tam-box-total-' + bi + '" ' +
@@ -913,18 +920,21 @@
         '<td class="tam-rec-total-col tam-td-num tam-cell-funchal" id="tam-sum-f-' + safeRef + '">' + (totals.f > 0 ? totals.f : '—') + '</td>' +
         '<td class="tam-rec-total-col tam-td-num tam-cell-porto"  id="tam-sum-p-' + safeRef + '">' + (totals.p > 0 ? totals.p : '—') + '</td>';
 
-      boxes.forEach(function(box, bi){
+      sortedBoxes.forEach(function(bObj){
+        var bi  = bObj.bi;
+        var box = bObj.box;
         var fVal = (box.refs[c.ref] && box.refs[c.ref].f) || '';
         var pVal = (box.refs[c.ref] && box.refs[c.ref].p) || '';
         var inputAttrs = (!box.total || box.locked) ? 'disabled ' : '';
+        var cellCls = bObj.isComplete ? ' tam-box-cell-complete' : '';
         boxesHtml +=
-          '<td class="tam-rec-cell-f">' +
+          '<td class="tam-rec-cell-f' + cellCls + '">' +
           '<input type="number" class="tam-rec-input tam-rec-input-f" ' +
             'id="tam-inp-f-' + bi + '-' + safeRef + '" ' +
             'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="f" ' +
             'value="' + fVal + '" min="0" ' + inputAttrs + 'placeholder="—">' +
           '</td>' +
-          '<td class="tam-rec-cell-p">' +
+          '<td class="tam-rec-cell-p' + cellCls + '">' +
           '<input type="number" class="tam-rec-input tam-rec-input-p" ' +
             'id="tam-inp-p-' + bi + '-' + safeRef + '" ' +
             'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="p" ' +
@@ -1148,6 +1158,7 @@
     var reportHtml =
       '<div id="tam-anomaly-report" style="display:none;">' +
         '<div class="tam-anomaly-title">resumo de anomalias</div>' +
+        '<div class="tam-anomaly-scroll">' +
         '<table class="tam-anomaly-table">' +
         '<thead><tr>' +
           '<th>referência</th>' +
@@ -1172,6 +1183,7 @@
             '</tr>';
         }).join('') +
         '</tbody></table>' +
+        '</div>' +
       '</div>';
 
     area.innerHTML = btnHtml + reportHtml;
@@ -2087,22 +2099,27 @@
       '.tam-table tbody tr:hover td { background:#f5f5f5; }',
       '.tam-table tbody tr:hover .tam-cell-funchal { background:#ddf0ff; }',
       '.tam-table tbody tr:hover .tam-cell-porto   { background:#ffe0ef; }',
-      /* Ref completada — fila oscura, vai para o final */
-      '.tam-ref-complete td { background-color:#2a2a2a!important; background:#2a2a2a!important; color:#666!important; }',
-      '.tam-ref-complete td strong { color:#555!important; }',
-      '.tam-ref-complete .tam-rec-ref-col { background-color:#222!important; background:#222!important; color:#555!important; }',
-      '.tam-ref-complete .tam-rec-total-col { background-color:#252525!important; background:#252525!important; }',
-      '.tam-ref-complete .tam-rec-cell-f { background-color:#1e2a1e!important; background:#1e2a1e!important; }',
-      '.tam-ref-complete .tam-rec-cell-p { background-color:#2a1e2a!important; background:#2a1e2a!important; }',
-      '.tam-ref-complete .tam-rec-input { color:#444!important; border-color:#3a3a3a!important; }',
-      /* Light mode: still dark for completed rows */
-      '@media(prefers-color-scheme:light){',
-      '.tam-ref-complete td{background-color:#2a2a2a!important;background:#2a2a2a!important;color:#666!important;}',
-      '.tam-ref-complete td strong{color:#555!important;}',
-      '.tam-ref-complete .tam-rec-ref-col{background-color:#222!important;background:#222!important;}',
+      /* Ref completada — fila suave, vai para o final */
+      '.tam-ref-complete td { background-color:#e8e8e8!important; background:#e8e8e8!important; color:#999!important; }',
+      '.tam-ref-complete td strong { color:#aaa!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background-color:#e0e0e0!important; background:#e0e0e0!important; color:#aaa!important; }',
+      '.tam-ref-complete .tam-rec-total-col { background-color:#e4e4e4!important; background:#e4e4e4!important; }',
+      '.tam-ref-complete .tam-rec-cell-f { background-color:#ddeedd!important; background:#ddeedd!important; }',
+      '.tam-ref-complete .tam-rec-cell-p { background-color:#eedded!important; background:#eedded!important; }',
+      '.tam-ref-complete .tam-rec-input { color:#bbb!important; border-color:#ddd!important; }',
+      /* Completed box column — slightly muted */
+      '.tam-box-sub-complete { background:#f0f0f0!important; }',
+      '.tam-box-cell-complete.tam-rec-cell-f { background-color:#eef4ee!important; background:#eef4ee!important; }',
+      '.tam-box-cell-complete.tam-rec-cell-p { background-color:#f4eef4!important; background:#f4eef4!important; }',
+      /* Dark mode completed rows */
+      '@media(prefers-color-scheme:dark){',
+      '.tam-ref-complete td{background-color:#282828!important;background:#282828!important;color:#555!important;}',
+      '.tam-ref-complete td strong{color:#4a4a4a!important;}',
+      '.tam-ref-complete .tam-rec-ref-col{background-color:#222!important;background:#222!important;color:#4a4a4a!important;}',
       '.tam-ref-complete .tam-rec-total-col{background-color:#252525!important;background:#252525!important;}',
-      '.tam-ref-complete .tam-rec-cell-f{background-color:#1e2a1e!important;background:#1e2a1e!important;}',
-      '.tam-ref-complete .tam-rec-cell-p{background-color:#2a1e2a!important;background:#2a1e2a!important;}',
+      '.tam-ref-complete .tam-rec-cell-f{background-color:#1e261e!important;background:#1e261e!important;}',
+      '.tam-ref-complete .tam-rec-cell-p{background-color:#261e26!important;background:#261e26!important;}',
+      '.tam-ref-complete .tam-rec-input{color:#3a3a3a!important;border-color:#2a2a2a!important;}',
       '}',
       '.tam-table tfoot td { background:#f2f2f2; font-weight:bold; border-top:2px solid #ccc; padding:4px 12px; text-align:center; line-height:1.2; }',
       '.tam-table tfoot tr.tam-tr-ship td { background:#fafafa; font-weight:600; font-size:.82rem; color:#666; border-top:1px solid #e8e8e8; padding:3px 12px; }',
@@ -2241,9 +2258,10 @@
       '.tam-anomaly-btn-wrap { display:flex; justify-content:center; margin-bottom:10px; }',
       '.tam-anomaly-btn { padding:9px 24px; font-size:.82rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1.5px solid #e07000; border-radius:10px; background:#fff8f0; color:#b05000; transition:background .15s,color .15s; letter-spacing:.02em; }',
       '.tam-anomaly-btn:hover { background:#e07000; color:#fff; }',
-      '#tam-anomaly-report { border:1px solid #e6e6e6; border-radius:14px; overflow:visible; font-family:MontserratLight,sans-serif; }',
+      '#tam-anomaly-report { border:1px solid #e6e6e6; border-radius:14px; overflow:hidden; font-family:MontserratLight,sans-serif; }',
       '.tam-anomaly-title { padding:10px 16px; font-size:.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; border-radius:14px 14px 0 0; }',
-      '.tam-anomaly-table { width:100%; border-collapse:collapse; font-size:.84rem; }',
+      '.tam-anomaly-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
+      '.tam-anomaly-table { width:100%; min-width:480px; border-collapse:collapse; font-size:.84rem; white-space:nowrap; }',
       '.tam-anomaly-table th { padding:6px 12px; background:#f2f2f2; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; color:#888; border-bottom:1px solid #e6e6e6; text-align:center; }',
       '.tam-anomaly-table td { padding:5px 12px; border-bottom:1px solid #f5f5f5; font-weight:bold; text-align:center; vertical-align:middle; }',
       '.tam-anomaly-table td:first-child { text-align:left; }',

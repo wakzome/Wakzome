@@ -1087,7 +1087,9 @@
 
     // Header row 2: sub-labels
     var hdr2 =
-      '<th class="tam-rec-ref-col"></th>' +
+      '<th class="tam-rec-ref-col">' +
+        '<input type="text" id="tam-ref-filter" class="tam-ref-filter-input" placeholder="\uD83D\uDD0D filtrar\u2026" autocomplete="off" spellcheck="false">' +
+      '</th>' +
       '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>';
@@ -1345,6 +1347,34 @@
         }
       });
     });
+
+    // ── BIND REF FILTER INPUT ─────────────────────────────────
+    (function(){
+      var filterInp = area.querySelector('#tam-ref-filter');
+      if (!filterInp) return;
+      filterInp.addEventListener('input', function(){
+        var q = filterInp.value.trim().toLowerCase();
+        var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+        if (!tbody) return;
+        var rows = tbody.querySelectorAll('tr[data-ref]');
+        rows.forEach(function(row){
+          if (!q) {
+            row.style.display = '';
+          } else {
+            var ref = (row.getAttribute('data-ref') || '').toLowerCase();
+            row.style.display = (ref.indexOf(q) >= 0) ? '' : 'none';
+          }
+        });
+      });
+      // Clear on Escape
+      filterInp.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') {
+          filterInp.value = '';
+          filterInp.dispatchEvent(new Event('input'));
+          filterInp.blur();
+        }
+      });
+    })();
 
     // ── SYNC TOP + BOTTOM SCROLLBARS ─────────────────────────
     (function(){
@@ -3004,7 +3034,17 @@
       '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background-color:#fafafa!important; background:#fafafa!important; border-right:1px solid #e6e6e6!important; font-variant-numeric:tabular-nums; }',
       /* Sticky header cells */
       '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#f8f8f8!important; background:#f8f8f8!important; box-shadow:2px 0 6px rgba(0,0,0,.09); }',
-      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 6px rgba(0,0,0,.07); }',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 6px rgba(0,0,0,.07); padding:4px 6px!important; }',
+
+      /* ── Ref filter input ── */
+      '.tam-ref-filter-input { width:100%; box-sizing:border-box; padding:4px 8px; font-size:.78rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; outline:none; background:#fff; color:#333; transition:border-color .15s, box-shadow .15s; }',
+      '.tam-ref-filter-input:focus { border-color:#1565c0; box-shadow:0 0 0 2px rgba(21,101,192,.15); }',
+      '.tam-ref-filter-input::placeholder { color:#bbb; font-style:italic; }',
+      '@media(prefers-color-scheme:dark){',
+      '.tam-ref-filter-input{background:#1a1a1a!important;border-color:#333!important;color:#e0e0e0!important;}',
+      '.tam-ref-filter-input:focus{border-color:#5dade2!important;box-shadow:0 0 0 2px rgba(93,173,226,.2)!important;}',
+      '.tam-ref-filter-input::placeholder{color:#555!important;}',
+      '}',
       /* Override sticky bg per row state */
       '.tam-ref-over .tam-rec-ref-col { background-color:#ffe0e0!important; background:#ffe0e0!important; }',
       '.tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; }',

@@ -430,7 +430,7 @@
         boxes.push({ total: null, refs: {}, locked: false, invIdx: invIdx });
       }
     });
-    tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
+    tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
   }
 
   /* Dialog: existing session found on fresh load */
@@ -543,8 +543,13 @@
       var singleStock = document.createElement('button');
       singleStock.className = 'tam-inv-stock-btn';
       singleStock.textContent = '📦 Ingreso de Stock';
-      singleStock.addEventListener('click', function(){ tamOpenStockFlow(0); });
+      singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
       meta.appendChild(singleStock);
+      var singleGuia = document.createElement('button');
+      singleGuia.className = 'tam-inv-guia-btn';
+      singleGuia.textContent = '📋 Guía';
+      singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
+      meta.appendChild(singleGuia);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
       } else {
@@ -586,6 +591,7 @@
             (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
           '</button>' +
           '<button class="tam-inv-stock-btn" data-inv="' + idx + '">📦 Ingreso de Stock</button>' +
+          '<button class="tam-inv-guia-btn" data-inv="' + idx + '">📋 Guía</button>' +
           '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
           '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>';
         block.appendChild(hdr);
@@ -606,7 +612,11 @@
         });
         hdr.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-stock-btn').getAttribute('data-inv'));
-          tamOpenStockFlow(i);
+          tamShowStockModal(i);
+        });
+        hdr.querySelector('.tam-inv-guia-btn').addEventListener('click', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-guia-btn').getAttribute('data-inv'));
+          tamShowGuiaModal(i);
         });
         hdr.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-remove-btn').getAttribute('data-inv'));
@@ -1095,8 +1105,7 @@
     return { f: f, p: p };
   }
 
-  /* Distribuir F/P de un ref para uma fatura específica
-     — soma apenas as caixas que pertencem a essa fatura (box.invIdx === invIdx) */
+  /* Distribuir F/P de un ref para uma fatura — soma só as caixas dessa fatura */
   function tamGetRefDistribForInvoice(ref, invIdx) {
     if (!tamSession) return { f: 0, p: 0 };
     var f = 0, p = 0;
@@ -1323,6 +1332,7 @@
         '<button class="tam-quick-btn" id="tam-quick-funchal">100% Funchal</button>' +
         '<button class="tam-quick-btn" id="tam-quick-porto">100% Porto Santo</button>' +
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
+        '<button class="tam-quick-btn tam-guia-all-btn" id="tam-guia-all-btn">📋 Guía consolidada</button>' +
       '</div>';
 
     area.innerHTML =
@@ -1335,6 +1345,12 @@
         globalBar +
         tableHtml +
       '</div>';
+
+    // ── BIND GUIA CONSOLIDADA ────────────────────────────────
+    (function(){
+      var guiaAllBtn = area.querySelector('#tam-guia-all-btn');
+      if (guiaAllBtn) guiaAllBtn.addEventListener('click', function(){ tamShowGuiaModal(null); });
+    })();
 
     // ── BIND UNDO / REDO / CLEAR BUTTONS ─────────────────────
     (function(){
@@ -1866,41 +1882,34 @@
     }
   }
 
-  /* Distribute only within a specific set of boxes — works even if box.total not yet set */
+  /* Distribute only within a specific set of boxes */
   function tamDistribToBoxesFiltered(ref, totalPieces, fTotal, pTotal, boxList) {
     if (!boxList.length) return;
     var declaredBoxes = boxList.filter(function(b){ return b.total; });
-
-    // ── No boxes have declared totals: put everything in the first box ──
-    // Spreading piece-by-piece across undeclared boxes causes rounding loss.
+    // No declared totals: put everything in first box to avoid rounding loss
     if (!declaredBoxes.length) {
-      var firstBox = boxList[0];
-      if (!firstBox.refs[ref]) firstBox.refs[ref] = { f:0, p:0 };
-      firstBox.refs[ref].f = fTotal;
-      firstBox.refs[ref].p = pTotal;
-      // Clear any stale values in the other boxes
+      var fb = boxList[0];
+      if (!fb.refs[ref]) fb.refs[ref] = { f:0, p:0 };
+      fb.refs[ref].f = fTotal;
+      fb.refs[ref].p = pTotal;
       for (var bi = 1; bi < boxList.length; bi++) {
         if (boxList[bi].refs[ref]) { boxList[bi].refs[ref].f = 0; boxList[bi].refs[ref].p = 0; }
       }
       return;
     }
-
-    // ── Boxes have declared totals: distribute proportionally ──
+    // Declared totals: distribute proportionally
     var fRem = fTotal, pRem = pTotal, pieceRem = totalPieces;
     declaredBoxes.forEach(function(box, i){
       if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
       var isLast = (i === declaredBoxes.length - 1);
-      var capacity = box.total;
-      var boxShare = isLast ? pieceRem : Math.min(pieceRem, capacity);
+      var boxShare = isLast ? pieceRem : Math.min(pieceRem, box.total);
       var fShare   = isLast ? fRem : (totalPieces > 0 ? Math.round(fTotal * boxShare / totalPieces) : 0);
       var pShare   = boxShare - fShare;
       fShare = Math.max(0, Math.min(fShare, fRem));
       pShare = Math.max(0, Math.min(pShare, pRem));
       box.refs[ref].f = fShare;
       box.refs[ref].p = pShare;
-      fRem -= fShare;
-      pRem -= pShare;
-      pieceRem -= boxShare;
+      fRem -= fShare; pRem -= pShare; pieceRem -= boxShare;
     });
   }
 
@@ -1997,7 +2006,7 @@
       var isLast   = (i === targets.length - 1);
       var capacity = box.total || Math.ceil(totalPieces / targets.length);
       var share    = isLast ? pieceRem : Math.min(pieceRem, capacity);
-      var fShare   = isLast ? fRem : (totalPieces > 0 ? Math.round(fTotal * share / totalPieces) : 0);
+      var fShare   = isLast ? fRem : Math.round(fTotal * share / (totalPieces || 1));
       var pShare   = share - fShare;
       fShare = Math.max(0, Math.min(fShare, fRem));
       pShare = Math.max(0, Math.min(pShare, pRem));
@@ -2195,6 +2204,7 @@
       name:     tamSession.name,
       savedAt:  Date.now(),
       boxes:    tamSession.boxes,
+      sentRefs: tamSession.sentRefs || {},
       invoices: tamInvoices.map(function(r){
         return {
           invoiceNo:     r.invoiceNo,
@@ -2400,7 +2410,7 @@
   function tamLoadSession(key, sessionData) {
     var s = sessionData || tamLoadAllSessionsLocal()[key];
     if (!s) return;
-    tamSession = { name: s.name, boxes: s.boxes, createdAt: s.savedAt };
+    tamSession = { name: s.name, boxes: s.boxes, createdAt: s.savedAt, sentRefs: s.sentRefs || {} };
     if (s.invoices && s.invoices.length) {
       tamInvoices = s.invoices.map(function(inv, idx){
         // Recalculate shipPerPiece for restored grouped items
@@ -2548,90 +2558,286 @@
   ══════════════════════════════════════════════════════════════ */
 
   /* ══════════════════════════════════════════════════════════════
-     INGRESO DE STOCK — validação antes de abrir o modal
+     GUIAS DE TRANSPORTE
+     invIdx = null  → consolidado de toda a sessão
+     invIdx = N     → guia de uma fatura específica
   ══════════════════════════════════════════════════════════════ */
-  function tamValidateStockDistrib(invIdx) {
-    var r = tamInvoices[invIdx];
-    if (!r) return [];
-    var issues = [];
-    r.grouped.forEach(function(g){
-      var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
-      var total   = (distrib.f || 0) + (distrib.p || 0);
-      var diff    = total - g.pieces;
-      if (total === 0) {
-        issues.push({ type:'empty', ref:g.ref, expected:g.pieces, got:0 });
-      } else if (diff < 0) {
-        issues.push({ type:'low',   ref:g.ref, expected:g.pieces, got:total, diff:diff });
-      } else if (diff > 0) {
-        issues.push({ type:'high',  ref:g.ref, expected:g.pieces, got:total, diff:diff });
-      }
-    });
-    return issues;
+
+  /* ── Chave única por ref+fatura para sentRefs ── */
+  function tamSentKey(ref, invIdx) { return ref + '___' + invIdx; }
+
+  /* ── Quantidade já enviada de uma ref+fatura ── */
+  function tamSentQty(ref, invIdx) {
+    if (!tamSession || !tamSession.sentRefs) return { f:0, p:0 };
+    var key = tamSentKey(ref, invIdx);
+    var lotes = tamSession.sentRefs[key] || [];
+    var f = 0, p = 0;
+    lotes.forEach(function(l){ f += (l.f||0); p += (l.p||0); });
+    return { f:f, p:p };
   }
 
-  function tamOpenStockFlow(invIdx) {
-    var issues = tamValidateStockDistrib(invIdx);
-    if (!issues.length) { tamShowStockModal(invIdx); return; }
-
+  /* ── Construir linhas da guia para uma fatura ── */
+  function tamBuildGuiaRows(invIdx) {
     var r = tamInvoices[invIdx];
-    var emptyRefs = issues.filter(function(i){ return i.type==='empty'; });
-    var lowRefs   = issues.filter(function(i){ return i.type==='low';   });
-    var highRefs  = issues.filter(function(i){ return i.type==='high';  });
+    if (!r) return [];
+    var rows = [];
+    r.grouped.forEach(function(g){
+      var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
+      var sent    = tamSentQty(g.ref, invIdx);
+      var pendF   = Math.max(0, (distrib.f||0) - (sent.f||0));
+      var pendP   = Math.max(0, (distrib.p||0) - (sent.p||0));
+      var totalF  = distrib.f||0;
+      var totalP  = distrib.p||0;
+      if (totalF > 0 || totalP > 0) {
+        rows.push({
+          ref:    g.ref,
+          invIdx: invIdx,
+          pendF:  pendF,
+          pendP:  pendP,
+          sentF:  sent.f||0,
+          sentP:  sent.p||0,
+          totalF: totalF,
+          totalP: totalP,
+          done:   (pendF === 0 && pendP === 0)
+        });
+      }
+    });
+    return rows;
+  }
 
-    var old = document.getElementById('tam-stock-warn');
+  /* ── Construir linhas consolidadas de todas as faturas ── */
+  function tamBuildGuiaRowsAll() {
+    var map = {};
+    tamInvoices.forEach(function(r, invIdx){
+      var rows = tamBuildGuiaRows(invIdx);
+      rows.forEach(function(row){
+        var key = row.ref + '___' + invIdx;
+        if (!map[key]) map[key] = Object.assign({}, row);
+        else {
+          map[key].pendF  += row.pendF;
+          map[key].pendP  += row.pendP;
+          map[key].sentF  += row.sentF;
+          map[key].sentP  += row.sentP;
+          map[key].totalF += row.totalF;
+          map[key].totalP += row.totalP;
+          map[key].done    = map[key].done && row.done;
+        }
+      });
+    });
+    return Object.values(map);
+  }
+
+  /* ── Confirmar envío: gravar lote com data ── */
+  function tamConfirmGuiaEnvio(rows) {
+    if (!tamSession) return;
+    if (!tamSession.sentRefs) tamSession.sentRefs = {};
+    var today = new Date().toISOString().slice(0,10);
+    rows.forEach(function(row){
+      if (row.done) return;   // já enviado — não duplicar
+      if (row.pendF === 0 && row.pendP === 0) return;
+      var key = tamSentKey(row.ref, row.invIdx);
+      if (!tamSession.sentRefs[key]) tamSession.sentRefs[key] = [];
+      tamSession.sentRefs[key].push({ data: today, f: row.pendF, p: row.pendP });
+    });
+    tamSaveSession(false);
+  }
+
+  /* ── Modal principal de guia ── */
+  function tamShowGuiaModal(invIdx) {
+    var isAll  = (invIdx === null);
+    var rows   = isAll ? tamBuildGuiaRowsAll() : tamBuildGuiaRows(invIdx);
+    var title  = isAll
+      ? 'Guía Consolidada · ' + tamInvoices.length + ' fatura(s)'
+      : 'Guía · ' + tamEsc(tamInvoices[invIdx].invoiceNo);
+
+    var pendRows = rows.filter(function(r){ return !r.done; });
+    var sentRows = rows.filter(function(r){ return  r.done; });
+
+    var old = document.getElementById('tam-guia-modal');
     if (old) old.parentNode.removeChild(old);
 
-    var bodyHtml = '<div class="tam-sw-inv">Fatura <strong>' + tamEsc(r.invoiceNo) + '</strong></div>';
+    var modal = document.createElement('div');
+    modal.id = 'tam-guia-modal';
 
-    if (emptyRefs.length) {
-      bodyHtml += '<div class="tam-sw-section">' +
-        '<div class="tam-sw-stitle tam-sw-empty">⚪ Sem distribuição (' + emptyRefs.length + ')</div>' +
-        '<div class="tam-sw-tags">' +
-          emptyRefs.map(function(i){ return '<span class="tam-sw-tag tam-sw-tag-empty">' + tamEsc(i.ref) + ' · ' + i.expected + ' uds</span>'; }).join('') +
-        '</div></div>';
-    }
-    if (lowRefs.length) {
-      bodyHtml += '<div class="tam-sw-section">' +
-        '<div class="tam-sw-stitle tam-sw-low">🔴 Incompletas (' + lowRefs.length + ')</div>' +
-        '<div class="tam-sw-tags">' +
-          lowRefs.map(function(i){ return '<span class="tam-sw-tag tam-sw-tag-low">' + tamEsc(i.ref) + ' · ' + i.got + '/' + i.expected + '</span>'; }).join('') +
-        '</div></div>';
-    }
-    if (highRefs.length) {
-      bodyHtml += '<div class="tam-sw-section">' +
-        '<div class="tam-sw-stitle tam-sw-high">🔵 Excesso (' + highRefs.length + ')</div>' +
-        '<div class="tam-sw-tags">' +
-          highRefs.map(function(i){ return '<span class="tam-sw-tag tam-sw-tag-high">' + tamEsc(i.ref) + ' · +' + i.diff + '</span>'; }).join('') +
-        '</div></div>';
+    /* ── Column copy helpers ── */
+    var COL_G = ['Ref. Funchal','Qtd. F','Ref. Porto Santo','Qtd. PS'];
+
+    function buildTableRows(rowList) {
+      if (!rowList.length) return '<tr><td colspan="4" class="tam-guia-empty">Sem referências pendentes</td></tr>';
+      return rowList.map(function(row, i){
+        var cls = row.done ? ' tam-guia-row-sent' : (i%2===0 ? ' tam-guia-row-even' : ' tam-guia-row-odd');
+        var fQty = row.done ? row.totalF : row.pendF;
+        var pQty = row.done ? row.totalP : row.pendP;
+        var fDisp = fQty > 0 ? fQty : '—';
+        var pDisp = pQty > 0 ? pQty : '—';
+        return '<tr class="tam-guia-tr' + cls + '">' +
+          '<td class="tam-guia-td tam-guia-ref-f" data-gcol="0">' + (fQty>0 ? tamEsc(row.ref) : '') + '</td>' +
+          '<td class="tam-guia-td tam-guia-qty-f" data-gcol="1">' + (fQty>0 ? fDisp : '') + '</td>' +
+          '<td class="tam-guia-td tam-guia-sep"></td>' +
+          '<td class="tam-guia-td tam-guia-ref-p" data-gcol="2">' + (pQty>0 ? tamEsc(row.ref) : '') + '</td>' +
+          '<td class="tam-guia-td tam-guia-qty-p" data-gcol="3">' + (pQty>0 ? pDisp : '') + '</td>' +
+        '</tr>';
+      }).join('');
     }
 
-    var warn = document.createElement('div');
-    warn.id = 'tam-stock-warn';
-    warn.innerHTML =
-      '<div id="tam-stock-warn-backdrop"></div>' +
-      '<div id="tam-stock-warn-box">' +
-        '<div class="tam-sw-header"><span>⚠️</span><span class="tam-sw-title">Inconsistências na distribuição</span></div>' +
-        '<div class="tam-sw-body">' + bodyHtml + '</div>' +
-        '<div class="tam-sw-btns">' +
-          '<button class="tam-sw-btn tam-sw-continue">Ver tabela assim mesmo</button>' +
-          '<button class="tam-sw-btn tam-sw-cancel">Voltar e corrigir</button>' +
+    var fPend = pendRows.reduce(function(s,r){ return s+r.pendF; },0);
+    var pPend = pendRows.reduce(function(s,r){ return s+r.pendP; },0);
+    var fSent = sentRows.reduce(function(s,r){ return s+r.totalF; },0);
+    var pSent = sentRows.reduce(function(s,r){ return s+r.totalP; },0);
+
+    var copyBar = '<div class="tam-guia-copy-bar">' +
+      '<span class="tam-guia-copy-label">copiar coluna:</span>' +
+      COL_G.map(function(lbl,ci){
+        return '<button class="tam-guia-copy-btn" data-gcol="' + ci + '">⧉ ' + lbl + '</button>';
+      }).join('') +
+      '<span class="tam-guia-copy-msg" id="tam-guia-copy-msg"></span>' +
+    '</div>';
+
+    var sentSection = sentRows.length
+      ? '<tr class="tam-guia-sent-hdr"><td colspan="5">✓ Já enviado (' + sentRows.length + ' refs · ' + fSent + ' F · ' + pSent + ' PS)</td></tr>' +
+        buildTableRows(sentRows)
+      : '';
+
+    modal.innerHTML =
+      '<div id="tam-guia-backdrop"></div>' +
+      '<div id="tam-guia-panel">' +
+        '<div id="tam-guia-header">' +
+          '<div id="tam-guia-title">' +
+            '<span id="tam-guia-title-main">' + title + '</span>' +
+            '<span id="tam-guia-title-sub">Guía de transporte · TAM Fashion</span>' +
+          '</div>' +
+          '<div id="tam-guia-header-btns">' +
+            '<button id="tam-guia-confirm-btn" class="tam-guia-action-btn tam-guia-confirm"' + (pendRows.length===0?' disabled':'') + '>✓ Confirmar envío</button>' +
+            '<button id="tam-guia-export-btn" class="tam-guia-action-btn">⬇ Exportar CSV</button>' +
+            '<button id="tam-guia-close-btn" class="tam-guia-close-btn">✕</button>' +
+          '</div>' +
+        '</div>' +
+        copyBar +
+        '<div id="tam-guia-scroll">' +
+          '<table id="tam-guia-table">' +
+            '<thead><tr>' +
+              '<th class="tam-guia-th tam-guia-th-f" colspan="2">🔵 FUNCHAL (A4) · ' + fPend + ' uds pendentes</th>' +
+              '<th class="tam-guia-th tam-guia-th-sep"></th>' +
+              '<th class="tam-guia-th tam-guia-th-p" colspan="2">🔴 PORTO SANTO (A5) · ' + pPend + ' uds pendentes</th>' +
+            '</tr>' +
+            '<tr>' +
+              '<th class="tam-guia-th2">Referência</th>' +
+              '<th class="tam-guia-th2 tam-guia-th2-qty">Qtd.</th>' +
+              '<th class="tam-guia-th-sep"></th>' +
+              '<th class="tam-guia-th2">Referência</th>' +
+              '<th class="tam-guia-th2 tam-guia-th2-qty">Qtd.</th>' +
+            '</tr></thead>' +
+            '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div id="tam-guia-footer">' +
+          pendRows.length + ' refs pendentes · ' + fPend + ' uds Funchal · ' + pPend + ' uds Porto Santo' +
+          (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '') +
         '</div>' +
       '</div>';
-    document.body.appendChild(warn);
-    requestAnimationFrame(function(){ warn.classList.add('tam-sw-visible'); });
 
-    function closeWarn() {
-      warn.classList.remove('tam-sw-visible');
-      setTimeout(function(){ if (warn.parentNode) warn.parentNode.removeChild(warn); }, 200);
-    }
-    warn.querySelector('#tam-stock-warn-backdrop').addEventListener('click', closeWarn);
-    warn.querySelector('.tam-sw-cancel').addEventListener('click', closeWarn);
-    warn.querySelector('.tam-sw-continue').addEventListener('click', function(){
-      closeWarn();
-      setTimeout(function(){ tamShowStockModal(invIdx); }, 220);
+    document.body.appendChild(modal);
+    requestAnimationFrame(function(){ modal.classList.add('tam-guia-visible'); });
+
+    /* ── Copy column ── */
+    var copyMsg   = modal.querySelector('#tam-guia-copy-msg');
+    var copyTimer = null;
+    modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var ci   = parseInt(btn.getAttribute('data-gcol'));
+        var vals = Array.from(modal.querySelectorAll('td[data-gcol="'+ci+'"]'))
+                       .map(function(td){ return td.textContent.trim(); })
+                       .filter(function(v){ return v && v !== '—'; });
+        if (!vals.length) return;
+        modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
+        btn.classList.add('tam-guia-copy-active');
+        var text = vals.join('\n');
+        function showMsg(ok){
+          if (!copyMsg) return;
+          copyMsg.textContent = ok ? '✓ ' + COL_G[ci] + ' copiado!' : '⚠ copie manualmente';
+          copyMsg.style.color = ok ? '#2e7d32' : '#b05000';
+          if (copyTimer) clearTimeout(copyTimer);
+          copyTimer = setTimeout(function(){
+            copyMsg.textContent = '';
+            modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
+          }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
+        } else {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta); showMsg(true);
+          } catch(e){ showMsg(false); }
+        }
+      });
     });
-    document.addEventListener('keydown', function escW(e){
-      if (e.key==='Escape'){ closeWarn(); document.removeEventListener('keydown', escW); }
+
+    /* ── Confirmar envío ── */
+    modal.querySelector('#tam-guia-confirm-btn').addEventListener('click', function(){
+      if (!pendRows.length) return;
+      var confirmDiv = document.createElement('div');
+      confirmDiv.id = 'tam-guia-confirm-overlay';
+      confirmDiv.innerHTML =
+        '<div id="tam-guia-confirm-box">' +
+          '<div class="tam-gc-title">⚠ Confirmar envío</div>' +
+          '<div class="tam-gc-body">' +
+            'Vas a marcar <strong>' + pendRows.length + ' referencias</strong> como enviadas hoy (' + new Date().toLocaleDateString('pt-PT') + ').<br>' +
+            '<strong>' + fPend + '</strong> uds Funchal · <strong>' + pPend + '</strong> uds Porto Santo<br><br>' +
+            'Esta acción no se puede deshacer.' +
+          '</div>' +
+          '<div class="tam-gc-btns">' +
+            '<button class="tam-gc-btn tam-gc-ok">✓ Confirmar</button>' +
+            '<button class="tam-gc-btn tam-gc-cancel">Cancelar</button>' +
+          '</div>' +
+        '</div>';
+      modal.querySelector('#tam-guia-panel').appendChild(confirmDiv);
+      confirmDiv.querySelector('.tam-gc-cancel').addEventListener('click', function(){
+        confirmDiv.parentNode.removeChild(confirmDiv);
+      });
+      confirmDiv.querySelector('.tam-gc-ok').addEventListener('click', function(){
+        tamConfirmGuiaEnvio(pendRows);
+        confirmDiv.parentNode.removeChild(confirmDiv);
+        closeModal();
+        // Re-open to show updated state
+        setTimeout(function(){ tamShowGuiaModal(invIdx); }, 280);
+      });
+    });
+
+    /* ── Export CSV ── */
+    modal.querySelector('#tam-guia-export-btn').addEventListener('click', function(){
+      var lines = ['\uFEFF' + 'Referencia;Qtd Funchal;Referencia;Qtd Porto Santo'];
+      var maxLen = Math.max(
+        pendRows.filter(function(r){ return r.pendF>0; }).length,
+        pendRows.filter(function(r){ return r.pendP>0; }).length
+      );
+      var fRows2 = pendRows.filter(function(r){ return r.pendF>0; });
+      var pRows2 = pendRows.filter(function(r){ return r.pendP>0; });
+      for (var li = 0; li < Math.max(fRows2.length, pRows2.length); li++) {
+        var fc = fRows2[li] ? fRows2[li].ref + ';' + fRows2[li].pendF : ';';
+        var pc = pRows2[li] ? pRows2[li].ref + ';' + pRows2[li].pendP : ';';
+        lines.push(fc + ';' + pc);
+      }
+      var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href = url;
+      a.download = 'Guia_' + (isAll ? 'Consolidada' : tamInvoices[invIdx].invoiceNo.replace(/[^a-zA-Z0-9_-]/g,'_')) + '_' + new Date().toISOString().slice(0,10) + '.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    });
+
+    /* ── Close ── */
+    function closeModal() {
+      modal.classList.remove('tam-guia-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
+    }
+    modal.querySelector('#tam-guia-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#tam-guia-close-btn').addEventListener('click', closeModal);
+    document.addEventListener('keydown', function escG(e){
+      if (e.key==='Escape'){ closeModal(); document.removeEventListener('keydown', escG); }
     });
   }
 
@@ -2665,30 +2871,19 @@
     var modal = document.createElement('div');
     modal.id = 'tam-stock-modal';
 
-    // Column definitions for copy bar
-    var COL_LABELS = ['Referencia','Armazém','IVA','Preço','Qtd.'];
-
     var tableRows = rows.map(function(row, i){
       return '<tr class="' + (i % 2 === 0 ? 'tam-stock-row-even' : 'tam-stock-row-odd') + '">' +
-        '<td class="tam-stock-td tam-stock-ref" data-col="0">' + tamEsc(row.ref) + '</td>' +
-        '<td class="tam-stock-td tam-stock-city" data-col="1">' + row.city + '</td>' +
-        '<td class="tam-stock-td tam-stock-iva" data-col="2">'  + row.iva   + '</td>' +
-        '<td class="tam-stock-td tam-stock-price" data-col="3">' + tamFmtEU(row.price) + '</td>' +
-        '<td class="tam-stock-td tam-stock-qty" data-col="4">'  + row.qty   + '</td>' +
+        '<td class="tam-stock-td tam-stock-ref">' + tamEsc(row.ref) + '</td>' +
+        '<td class="tam-stock-td tam-stock-city">' + row.city + '</td>' +
+        '<td class="tam-stock-td tam-stock-iva">'  + row.iva   + '</td>' +
+        '<td class="tam-stock-td tam-stock-price">' + tamFmtEU(row.price) + '</td>' +
+        '<td class="tam-stock-td tam-stock-qty">'  + row.qty   + '</td>' +
         '</tr>';
     }).join('');
 
     var noData = rows.length === 0
       ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
       : '';
-
-    var copyBar = '<div id="tam-stock-copy-bar">' +
-      '<span id="tam-stock-copy-label">copiar coluna:</span>' +
-      COL_LABELS.map(function(lbl, ci){
-        return '<button class="tam-stock-copy-col-btn" data-col="' + ci + '">⧉ ' + lbl + '</button>';
-      }).join('') +
-      '<span id="tam-stock-copy-msg"></span>' +
-    '</div>';
 
     modal.innerHTML =
       '<div id="tam-stock-backdrop"></div>' +
@@ -2703,7 +2898,6 @@
             '<button id="tam-stock-close-btn" class="tam-stock-close-btn" title="fechar">✕</button>' +
           '</div>' +
         '</div>' +
-        copyBar +
         '<div id="tam-stock-scroll">' +
           '<table id="tam-stock-table">' +
             '<thead>' +
@@ -2726,50 +2920,8 @@
       '</div>';
 
     document.body.appendChild(modal);
+    // Animate in
     requestAnimationFrame(function(){ modal.classList.add('tam-stock-visible'); });
-
-    // ── Copy column buttons ───────────────────────────────────
-    var copyMsg   = modal.querySelector('#tam-stock-copy-msg');
-    var copyTimer = null;
-
-    modal.querySelectorAll('.tam-stock-copy-col-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var ci  = parseInt(btn.getAttribute('data-col'));
-        var vals = Array.from(modal.querySelectorAll('td[data-col="' + ci + '"]'))
-                       .map(function(td){ return td.textContent.trim(); });
-        if (!vals.length) return;
-
-        // Highlight active button
-        modal.querySelectorAll('.tam-stock-copy-col-btn').forEach(function(b){ b.classList.remove('tam-stock-copy-col-btn-active'); });
-        btn.classList.add('tam-stock-copy-col-btn-active');
-
-        var text = vals.join('\n');
-        function showMsg(ok) {
-          if (!copyMsg) return;
-          copyMsg.textContent = ok ? '✓ ' + COL_LABELS[ci] + ' copiado!' : '⚠ selecione manualmente';
-          copyMsg.style.color = ok ? '#2e7d32' : '#b05000';
-          if (copyTimer) clearTimeout(copyTimer);
-          copyTimer = setTimeout(function(){
-            copyMsg.textContent = '';
-            modal.querySelectorAll('.tam-stock-copy-col-btn').forEach(function(b){ b.classList.remove('tam-stock-copy-col-btn-active'); });
-          }, 2000);
-        }
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
-        } else {
-          try {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-            document.body.appendChild(ta); ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            showMsg(true);
-          } catch(e){ showMsg(false); }
-        }
-      });
-    });
 
     // Close
     function closeModal() {
@@ -3704,45 +3856,89 @@
       '.tam-inv-stock-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:8px; background:#e8f0fe; color:#1565c0; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-stock-btn:hover { background:#1565c0; color:#fff; }',
 
-      /* ── Stock validation warning dialog ── */
-      '#tam-stock-warn { position:fixed; inset:0; z-index:10100; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s; pointer-events:none; }',
-      '#tam-stock-warn.tam-sw-visible { opacity:1; pointer-events:auto; }',
-      '#tam-stock-warn-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.42); }',
-      '#tam-stock-warn-box { position:relative; z-index:1; width:min(500px,94vw); max-height:78vh; display:flex; flex-direction:column; background:#fff; border-radius:14px; box-shadow:0 12px 48px rgba(0,0,0,.25); overflow:hidden; }',
-      '.tam-sw-header { display:flex; align-items:center; gap:9px; padding:14px 18px 11px; background:#fff8f0; border-bottom:1px solid #fde8cc; flex-shrink:0; }',
-      '.tam-sw-title { font-size:.82rem; font-weight:bold; font-family:MontserratLight,sans-serif; color:#7a3000; text-transform:uppercase; letter-spacing:.05em; }',
-      '.tam-sw-body { overflow-y:auto; flex:1; padding:14px 18px; font-family:MontserratLight,sans-serif; }',
-      '.tam-sw-inv { font-size:.82rem; color:#555; margin-bottom:10px; }',
-      '.tam-sw-section { margin-bottom:12px; }',
-      '.tam-sw-stitle { font-size:.72rem; font-weight:bold; margin-bottom:6px; }',
-      '.tam-sw-empty { color:#888; }',
-      '.tam-sw-low   { color:#c00; }',
-      '.tam-sw-high  { color:#1565c0; }',
-      '.tam-sw-tags { display:flex; flex-wrap:wrap; gap:4px; }',
-      '.tam-sw-tag { padding:2px 8px; border-radius:6px; font-size:.74rem; font-weight:bold; font-family:MontserratLight,sans-serif; }',
-      '.tam-sw-tag-empty { background:#f5f5f5; color:#888; border:1px solid #ddd; }',
-      '.tam-sw-tag-low   { background:#fff0f0; color:#c00; border:1px solid #fcc; }',
-      '.tam-sw-tag-high  { background:#e8f0fe; color:#1565c0; border:1px solid #bfdbfe; }',
-      '.tam-sw-btns { display:flex; gap:8px; padding:12px 18px; border-top:1px solid #eee; background:#fafafa; flex-shrink:0; }',
-      '.tam-sw-btn { flex:1; padding:9px 12px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; transition:background .13s,color .13s; }',
-      '.tam-sw-continue { border-color:#e07000; background:#fff8f0; color:#b05000; }',
-      '.tam-sw-continue:hover { background:#e07000; color:#fff; }',
-      '.tam-sw-cancel { border-color:#2e7d32; background:#e8f5e9; color:#2e7d32; }',
-      '.tam-sw-cancel:hover { background:#2e7d32; color:#fff; }',
+      /* ── Guia de transporte modal ── */
+      '#tam-guia-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s; pointer-events:none; }',
+      '#tam-guia-modal.tam-guia-visible { opacity:1; pointer-events:auto; }',
+      '#tam-guia-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-guia-panel { position:relative; z-index:1; width:min(860px,97vw); max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.3); overflow:hidden; transform:translateY(10px); transition:transform .22s; }',
+      '#tam-guia-modal.tam-guia-visible #tam-guia-panel { transform:translateY(0); }',
+      '#tam-guia-header { display:flex; align-items:center; justify-content:space-between; padding:13px 18px 11px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
+      '#tam-guia-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-guia-title-main { font-size:.92rem; font-weight:bold; color:#111; font-family:MontserratLight,sans-serif; }',
+      '#tam-guia-title-sub { font-size:.66rem; color:#aaa; font-family:MontserratLight,sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      '#tam-guia-header-btns { display:flex; align-items:center; gap:7px; }',
+      '.tam-guia-action-btn { padding:6px 14px; font-size:.74rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; transition:background .13s,color .13s; white-space:nowrap; }',
+      '.tam-guia-confirm { border-color:#2e7d32!important; background:#e8f5e9!important; color:#2e7d32!important; }',
+      '.tam-guia-confirm:hover:not([disabled]) { background:#2e7d32!important; color:#fff!important; }',
+      '.tam-guia-confirm[disabled] { opacity:.4; cursor:not-allowed; }',
+      '.tam-guia-action-btn:not(.tam-guia-confirm):hover { background:#555; color:#fff; border-color:#555; }',
+      '.tam-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
+      '.tam-guia-close-btn:hover { background:#c62828; color:#fff; border-color:#c62828; }',
+      /* copy bar */
+      '.tam-guia-copy-bar { display:flex; align-items:center; gap:5px; flex-wrap:wrap; padding:6px 14px; background:#f5f5f5; border-bottom:1px solid #e4e4e4; flex-shrink:0; }',
+      '.tam-guia-copy-label { font-size:.63rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; font-family:MontserratLight,sans-serif; margin-right:4px; }',
+      '.tam-guia-copy-btn { padding:3px 10px; font-size:.71rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#fff; color:#555; transition:background .12s,color .12s; white-space:nowrap; }',
+      '.tam-guia-copy-btn:hover,.tam-guia-copy-active { background:#1565c0!important; color:#fff!important; border-color:#1565c0!important; }',
+      '.tam-guia-copy-msg { font-size:.71rem; font-weight:bold; font-family:MontserratLight,sans-serif; margin-left:5px; }',
+      /* table */
+      '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#tam-guia-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
+      '#tam-guia-table thead { position:sticky; top:0; z-index:2; }',
+      '.tam-guia-th { padding:8px 14px; font-size:.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #ddd; }',
+      '.tam-guia-th-f { background:#e8f0fe; color:#1565c0; text-align:center; }',
+      '.tam-guia-th-p { background:#fce4ec; color:#880e4f; text-align:center; }',
+      '.tam-guia-th-sep { background:#f5f5f5; width:18px; border-left:2px solid #ddd; border-right:2px solid #ddd; }',
+      '.tam-guia-th2 { padding:6px 14px; background:#f8f8f8; font-size:.67rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; color:#888; border-bottom:2px solid #ddd; }',
+      '.tam-guia-th2-qty { text-align:center; width:60px; }',
+      '.tam-guia-td { padding:5px 14px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
+      '.tam-guia-ref-f { font-weight:bold; color:#1a1a1a; min-width:140px; }',
+      '.tam-guia-ref-p { font-weight:bold; color:#1a1a1a; min-width:140px; }',
+      '.tam-guia-qty-f { text-align:center; font-weight:bold; color:#1565c0; }',
+      '.tam-guia-qty-p { text-align:center; font-weight:bold; color:#880e4f; }',
+      '.tam-guia-sep { width:18px; background:#f9f9f9; border-left:2px solid #e8e8e8; border-right:2px solid #e8e8e8; }',
+      '.tam-guia-row-even { background:#fff; }',
+      '.tam-guia-row-odd  { background:#fafafa; }',
+      '.tam-guia-row-sent td { color:#bbb!important; text-decoration:line-through; background:#f8f8f8!important; }',
+      '.tam-guia-sent-hdr td { padding:5px 14px; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#aaa; background:#f5f5f5; border-top:2px solid #e8e8e8; border-bottom:1px solid #e8e8e8; }',
+      '.tam-guia-empty { padding:20px; text-align:center; color:#aaa; font-style:italic; }',
+      '#tam-guia-footer { padding:8px 18px; font-size:.71rem; color:#888; border-top:1px solid #eee; background:#fafafa; font-family:MontserratLight,sans-serif; flex-shrink:0; }',
+      /* confirm overlay */
+      '#tam-guia-confirm-overlay { position:absolute; inset:0; background:rgba(0,0,0,.5); z-index:10; display:flex; align-items:center; justify-content:center; }',
+      '#tam-guia-confirm-box { background:#fff; border-radius:12px; padding:24px; max-width:380px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,.2); font-family:MontserratLight,sans-serif; }',
+      '.tam-gc-title { font-size:.82rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#555; margin-bottom:12px; }',
+      '.tam-gc-body { font-size:.85rem; color:#333; line-height:1.6; margin-bottom:18px; }',
+      '.tam-gc-btns { display:flex; gap:8px; }',
+      '.tam-gc-btn { flex:1; padding:9px; font-size:.8rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; transition:background .13s,color .13s; }',
+      '.tam-gc-ok { border-color:#2e7d32!important; background:#e8f5e9!important; color:#2e7d32!important; }',
+      '.tam-gc-ok:hover { background:#2e7d32!important; color:#fff!important; }',
+      '.tam-gc-cancel:hover { background:#555; color:#fff; border-color:#555; }',
+      /* guia button styles */
+      '.tam-inv-guia-btn { padding:4px 10px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #5c6bc0; border-radius:8px; background:#e8eaf6; color:#3949ab; transition:background .13s,color .13s; white-space:nowrap; }',
+      '.tam-inv-guia-btn:hover { background:#3949ab; color:#fff; }',
+      '.tam-guia-all-btn { border-color:#5c6bc0!important; background:#e8eaf6!important; color:#3949ab!important; }',
+      '.tam-guia-all-btn:hover { background:#3949ab!important; color:#fff!important; border-color:#3949ab!important; }',
+      /* dark mode */
       '@media(prefers-color-scheme:dark){',
-      '#tam-stock-warn-box{background:#1a1a1a!important;}',
-      '.tam-sw-header{background:#1a0d00!important;border-color:#3a1a00!important;}',
-      '.tam-sw-body .tam-sw-inv{color:#888!important;}',
-      '.tam-sw-tag-empty{background:#222!important;color:#666!important;border-color:#333!important;}',
-      '.tam-sw-tag-low{background:#2a0808!important;color:#f48!important;border-color:#3a1010!important;}',
-      '.tam-sw-tag-high{background:#0d1f3a!important;color:#64b5f6!important;border-color:#1a3a6a!important;}',
-      '.tam-sw-btns{background:#161616!important;border-color:#2a2a2a!important;}',
-      '.tam-sw-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
-      '.tam-sw-continue{border-color:#b05000!important;background:#1a0800!important;color:#e07000!important;}',
-      '.tam-sw-cancel{border-color:#2e7d32!important;background:#0d1a0d!important;color:#4caf50!important;}',
+      '#tam-guia-panel{background:#111!important;}',
+      '#tam-guia-header{background:#161616!important;border-color:#2a2a2a!important;}',
+      '#tam-guia-title-main{color:#e8e8e8!important;}',
+      '.tam-guia-copy-bar{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
+      '.tam-guia-copy-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
+      '.tam-guia-th-f{background:#0d1f3a!important;color:#5dade2!important;}',
+      '.tam-guia-th-p{background:#2a0d1a!important;color:#f48fb1!important;}',
+      '.tam-guia-th2{background:#1a1a1a!important;color:#555!important;border-color:#2a2a2a!important;}',
+      '.tam-guia-td{border-color:#1e1e1e!important;color:#e0e0e0!important;}',
+      '.tam-guia-row-even{background:#111!important;}',
+      '.tam-guia-row-odd{background:#161616!important;}',
+      '.tam-guia-row-sent td{color:#333!important;background:#0d0d0d!important;}',
+      '.tam-guia-sent-hdr td{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
+      '#tam-guia-footer{background:#161616!important;border-color:#2a2a2a!important;}',
+      '#tam-guia-confirm-box{background:#1a1a1a!important;}',
+      '.tam-gc-body{color:#ccc!important;}',
+      '.tam-inv-guia-btn{background:#0d1020!important;border-color:#5c6bc0!important;color:#7986cb!important;}',
       '}',
 
-      /* ── Stock modal backdrop + panel ── */
+            /* ── Stock modal backdrop + panel ── */
       '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-stock-modal.tam-stock-visible { opacity:1; pointer-events:auto; }',
       '#tam-stock-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
@@ -3761,18 +3957,6 @@
       '#tam-stock-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
       '#tam-stock-table thead { position:sticky; top:0; z-index:2; }',
       '.tam-stock-th { padding:8px 14px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666; border-bottom:2px solid #ddd; text-align:left; user-select:none; }',
-      /* ── Copy bar ── */
-      '#tam-stock-copy-bar { display:flex; align-items:center; gap:5px; flex-wrap:wrap; padding:6px 16px; background:#f5f5f5; border-bottom:1px solid #e4e4e4; flex-shrink:0; }',
-      '#tam-stock-copy-label { font-size:.64rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; font-family:MontserratLight,sans-serif; white-space:nowrap; margin-right:4px; }',
-      '.tam-stock-copy-col-btn { padding:3px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#fff; color:#555; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; }',
-      '.tam-stock-copy-col-btn:hover { background:#1565c0; color:#fff; border-color:#1565c0; }',
-      '.tam-stock-copy-col-btn.tam-stock-copy-col-btn-active { background:#1565c0; color:#fff; border-color:#1565c0; }',
-      '#tam-stock-copy-msg { font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; margin-left:6px; }',
-      '@media(prefers-color-scheme:dark){',
-      '#tam-stock-copy-bar{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
-      '.tam-stock-copy-col-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
-      '.tam-stock-copy-col-btn:hover,.tam-stock-copy-col-btn.tam-stock-copy-col-btn-active{background:#1565c0!important;color:#fff!important;border-color:#1565c0!important;}',
-      '}',
       '.tam-stock-th.tam-stock-city,.tam-stock-th.tam-stock-iva,.tam-stock-th.tam-stock-price,.tam-stock-th.tam-stock-qty { text-align:center; }',
       '.tam-stock-td { padding:6px 14px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
       '.tam-stock-td.tam-stock-city,.tam-stock-td.tam-stock-iva,.tam-stock-td.tam-stock-qty { text-align:center; font-weight:bold; }',

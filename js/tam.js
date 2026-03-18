@@ -428,17 +428,27 @@
         // ── Header row ──────────────────────────────────────
         var hdr = document.createElement('div');
         hdr.className = 'tam-invoice-block-header';
+        var qd = (tamSession && tamSession.quickDistrib && tamSession.quickDistrib[idx]);
+        var quickBtnsHtml = qd
+          ? '<div class="tam-inv-quick-wrap">' +
+              '<span class="tam-inv-quick-active">' +
+                (qd === 'funchal' ? '100%F' : qd === 'porto' ? '100%PS' : '50/50') + ' ativo' +
+              '</span>' +
+              '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + idx + '" data-mode="undo">↩ desfazer</button>' +
+            '</div>'
+          : '<div class="tam-inv-quick-wrap">' +
+              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">100%F</button>' +
+              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">100%PS</button>' +
+              '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + idx + '" data-mode="split">50/50</button>' +
+            '</div>';
+
         hdr.innerHTML =
           '<span class="tam-inv-num">' + tamEsc(r.invoiceNo) + '</span>' +
           '<span class="tam-inv-meta">' + tamEsc(r.invoiceDate) + ' · ' +
           r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
           r.shipPkgs + ' pac.</span>' +
           '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
-          '<div class="tam-inv-quick-wrap">' +
-            '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">100%F</button>' +
-            '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">100%PS</button>' +
-            '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + idx + '" data-mode="split">50/50</button>' +
-          '</div>' +
+          quickBtnsHtml +
           '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
             (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
           '</button>' +
@@ -1281,6 +1291,21 @@
     var r = tamInvoices[invIdx];
     if (!r) return;
 
+    // UNDO — clear quick distribution for this invoice
+    if (mode === 'undo') {
+      delete tamSession.quickDistrib[invIdx];
+      // Clear all box refs for refs belonging to this invoice
+      var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+      r.grouped.forEach(function(g){
+        invBoxes.forEach(function(box){
+          delete box.refs[g.ref];
+        });
+      });
+      tamRenderAll();
+      tamSaveSession(false);
+      return;
+    }
+
     // Get boxes that belong to this invoice
     var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
 
@@ -1312,18 +1337,34 @@
     }
   }
 
-  /* Distribute only within a specific set of boxes */
+  /* Distribute only within a specific set of boxes — works even if box.total not yet set */
   function tamDistribToBoxesFiltered(ref, totalPieces, fTotal, pTotal, boxList) {
+    if (!boxList.length) return;
+    // If boxes have declared totals, distribute proportionally
+    // If not, put everything in the first box (or spread evenly)
+    var declaredBoxes = boxList.filter(function(b){ return b.total; });
+    var targets = declaredBoxes.length ? declaredBoxes : boxList;
+
     var fRem = fTotal, pRem = pTotal;
-    boxList.forEach(function(box){
-      if (!box.total) return;
+    var pieceRem = totalPieces;
+    targets.forEach(function(box, i){
       if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
-      var fShare = Math.min(fRem, box.total);
-      var pShare = Math.min(pRem, box.total - fShare);
+      var isLast = (i === targets.length - 1);
+      // Each box gets a proportional share based on its declared total,
+      // or equal share if no totals declared
+      var capacity = box.total || Math.ceil(totalPieces / targets.length);
+      var boxShare = isLast ? pieceRem : Math.min(pieceRem, capacity);
+      // Split fTotal/pTotal proportionally within this box
+      var fShare = isLast ? fRem : Math.round(fTotal * boxShare / totalPieces);
+      var pShare = boxShare - fShare;
+      // Clamp
+      fShare = Math.max(0, Math.min(fShare, fRem));
+      pShare = Math.max(0, Math.min(pShare, pRem));
       box.refs[ref].f = fShare;
       box.refs[ref].p = pShare;
       fRem -= fShare;
       pRem -= pShare;
+      pieceRem -= boxShare;
     });
   }
 
@@ -2560,6 +2601,8 @@
       ══════════════════════════ */
       '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
 
+      /* Scroll contenedor */
+      '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }',
       '.tam-rec-area { border:1px solid #e6e6e6; border-radius:16px; overflow:visible; background:#fff; }',
       '.tam-rec-area-title { padding:10px 18px; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; }',
 
@@ -2636,11 +2679,14 @@
       '.tam-ref-over td strong { color:#c00!important; }',
 
       /* ── Per-invoice quick distribution buttons ── */
-      '.tam-inv-quick-wrap { display:flex; gap:4px; flex-shrink:0; }',
+      '.tam-inv-quick-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }',
       '.tam-inv-quick-btn { padding:3px 9px; font-size:.68rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:#fff; color:#555; transition:background .15s,color .15s,border-color .15s; white-space:nowrap; }',
       '.tam-inv-quick-btn:hover { background:#555; color:#fff; border-color:#555; }',
       '.tam-inv-quick-split { border-color:#1565c0; color:#1565c0; }',
       '.tam-inv-quick-split:hover { background:#1565c0!important; color:#fff!important; }',
+      '.tam-inv-quick-active { font-size:.68rem; font-weight:bold; color:#2a8a2a; background:#f0faf0; border:1px solid #2a8a2a; border-radius:7px; padding:3px 8px; white-space:nowrap; }',
+      '.tam-inv-quick-undo { border-color:#c03000!important; color:#c03000!important; }',
+      '.tam-inv-quick-undo:hover { background:#c03000!important; color:#fff!important; border-color:#c03000!important; }',
       '@media(prefers-color-scheme:dark){',
       '.tam-inv-quick-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
       '.tam-inv-quick-btn:hover{background:#555!important;color:#fff!important;}',

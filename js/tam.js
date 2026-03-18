@@ -16,7 +16,10 @@
   var tamAutoSaveTimer = null;
   var tamSaveInFlight  = false;
   var tamEditMode      = {};   // { invIdx: true } — which invoices are in edit mode
-  var tamBoxLockTimers = {};   // { bi: timeoutId } — pending 3-second lock delays
+  var tamBoxLockTimers      = {};         // { bi: timeoutId } - pending 3-second lock delays
+  var tamBoxLockPending     = {};         // { bi: true }      - boxes in the 3s transition window
+  var tamRefCompleting      = new Set();  // refs that just completed, held at top for 3s
+  var tamRefCompletingTimers = {};        // { ref: timeoutId } - per-ref 3s timers
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -1021,7 +1024,8 @@
     var boxOrder = boxes.map(function(box, bi){
       var received = 0;
       if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
-      var isComplete = box.total && received >= box.total;
+      // A box in tamBoxLockPending is in the 3s transition window: treat as NOT yet complete
+      var isComplete = box.total && received >= box.total && !tamBoxLockPending[bi];
       var isHidden   = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
       return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
     }).filter(function(b){ return !b.isHidden; });
@@ -1045,18 +1049,25 @@
       '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
       '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
-    sortedBoxes.forEach(function(bObj, boxPos){
-      var bi  = bObj.bi;
-      var boxLabel = 'Caixa ' + (bi+1) + (bObj.box.locked ? ' 🔒' : '');
-      var isActiveBox = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
+    // Pre-compute per-box style info used in both hdr1 and hdr2
+    var boxStyleInfo = sortedBoxes.map(function(bObj, boxPos){
+      var isActiveBox    = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
       var isCompletedBox = bObj.isComplete;
       var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
-      var greyShade = (completedCount % 2 === 0) ? 'tam-box-col-grey-odd' : 'tam-box-col-grey-even';
+      var greyShade = isCompletedBox ? ((completedCount % 2 === 0) ? 'tam-box-col-grey-odd' : 'tam-box-col-grey-even') : '';
       var boxCls = isCompletedBox
         ? ('tam-box-col-complete ' + greyShade)
         : (isActiveBox ? 'tam-box-col-active' : 'tam-box-col-inactive');
-      var colSpan = isActiveBox ? 3 : 2;
-      hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + boxCls + '">' + boxLabel + '</th>';
+      var colParity = (boxPos % 2 === 0) ? 'tam-col-odd' : 'tam-col-even';
+      return { isActiveBox:isActiveBox, isCompletedBox:isCompletedBox, greyShade:greyShade, boxCls:boxCls, colParity:colParity };
+    });
+
+    sortedBoxes.forEach(function(bObj, boxPos){
+      var bi  = bObj.bi;
+      var info = boxStyleInfo[boxPos];
+      var boxLabel = 'Caixa ' + (bi+1) + (bObj.box.locked ? ' \uD83D\uDD12' : '');
+      var colSpan = info.isActiveBox ? 3 : 2;
+      hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + boxLabel + '</th>';
     });
 
     // Header row 2: sub-labels
@@ -1066,49 +1077,46 @@
       '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>';
 
-    sortedBoxes.forEach(function(bObj){
+    sortedBoxes.forEach(function(bObj, boxPos){
       var bi       = bObj.bi;
       var box      = bObj.box;
       var received = bObj.received;
       var pctLabel = box.total ? received + '/' + box.total : '';
       var isLocked = box.locked;
       var inputCls = box.total ? 'tam-box-total-input tam-box-declared' : 'tam-box-total-input';
-      var isPending = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
-      var colSpan  = isPending ? 3 : 2;
+      var info      = boxStyleInfo[boxPos];
+      var isPending = info.isActiveBox;
+      var colSpan   = isPending ? 3 : 2;
+      // Sub-header gets both complete and grey shade classes
+      var subCls = (bObj.isComplete ? ' tam-box-sub-complete' : '') + (info.greyShade ? ' ' + info.greyShade : '');
 
       hdr2 +=
-        '<th class="tam-box-sub-th' + (bObj.isComplete ? ' tam-box-sub-complete' : '') + '" colspan="' + colSpan + '">' +
+        '<th class="tam-box-sub-th' + subCls + '" colspan="' + colSpan + '">' +
         '<div class="tam-box-sub-inner">' +
           '<input type="number" class="' + inputCls + '" id="tam-box-total-' + bi + '" ' +
             'value="' + (box.total||'') + '" placeholder="total" ' +
             (isLocked ? 'disabled ' : '') + 'min="1" data-box="' + bi + '">' +
           (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
-          (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '">✏️</button>' : '') +
+          (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '">\u270F\uFE0F</button>' : '') +
         '</div>' +
         '<div class="tam-box-sub-labels">' +
           '<span class="tam-sub-f">F</span>' +
           '<span class="tam-sub-p">PS</span>' +
-          (isPending && !isLocked ? '<span class="tam-sub-q">rápido</span>' : '') +
+          (isPending && !isLocked ? '<span class="tam-sub-q">r\u00E1pido</span>' : '') +
         '</div>' +
         '</th>';
     });
 
-    // Ref rows
+    // Ref rows — refs in tamRefCompleting stay at top (3s hold) even if complete
     var pending2  = [], completed2 = [];
-    consolidatedForSummary.forEach(function(c){
-      var t = tamGetRefTotals(c.ref);
-      var r = t.f + t.p;
-      if (r >= c.totalPieces && c.totalPieces > 0) completed2.push(c);
-      else completed2.indexOf(c) < 0 && pending2.push(c);
-    });
-    // re-sort
-    pending2  = []; completed2 = [];
     consolidatedForSummary.forEach(function(c){
       var t = tamGetRefTotals(c.ref);
       var recv = t.f + t.p;
       var done = recv >= c.totalPieces && c.totalPieces > 0;
-      var over = recv > c.totalPieces && c.totalPieces > 0;
-      if (done || over) completed2.push(c); else pending2.push(c);
+      var over = recv > c.totalPieces  && c.totalPieces > 0;
+      // Refs in the completing set: keep at top for the 3s animation window
+      var sortAsDone = (done || over) && !tamRefCompleting.has(c.ref);
+      if (sortAsDone) completed2.push(c); else pending2.push(c);
     });
     var sortedRefs = pending2.concat(completed2);
 
@@ -1118,7 +1126,8 @@
       var recv    = totals.f + totals.p;
       var isDone  = recv >= c.totalPieces && c.totalPieces > 0;
       var isOver  = recv > c.totalPieces  && c.totalPieces > 0;
-      var rowCls  = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
+      var isCompleting = isDone && tamRefCompleting.has(c.ref);
+      var rowCls  = isOver ? 'tam-ref-over' : (isCompleting ? 'tam-ref-completing' : (isDone ? 'tam-ref-complete' : ''));
       var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
 
       rowsHtml +=
@@ -1131,20 +1140,17 @@
       sortedBoxes.forEach(function(bObj, boxPos){
         var bi  = bObj.bi;
         var box = bObj.box;
+        var info = boxStyleInfo[boxPos];
         var fVal = (box.refs[c.ref] && box.refs[c.ref].f) || '';
         var pVal = (box.refs[c.ref] && box.refs[c.ref].p) || '';
         var disabled = (!box.total || box.locked) ? 'disabled ' : '';
-        var cellCls  = bObj.isComplete ? ' tam-box-cell-complete' : '';
-        var colParity = (boxPos % 2 === 0) ? ' tam-col-odd' : ' tam-col-even';
-        var isPending = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
-        var isActive  = isPending && box.total && !box.locked;
-        var compactCls = (!isPending) ? ' tam-box-compact' : '';
+        var cellCls   = bObj.isComplete ? ' tam-box-cell-complete' : '';
+        var colParity = ' ' + info.colParity;
+        var greyCls   = info.greyShade ? (' ' + info.greyShade) : '';
+        var compactCls = (!info.isActiveBox) ? ' tam-box-compact' : '';
+        var isPending  = info.isActiveBox;
 
-        // Completed columns: alternating grey shades
-        var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
-        var greyCls = bObj.isComplete ? (' ' + (completedCount % 2 === 0 ? 'tam-col-grey-odd' : 'tam-col-grey-even')) : '';
-
-        // Quick buttons only in the active (first pending) box, only for pending refs
+        // Quick buttons only in the active (first pending) box, only for pending/completing refs
         var quickCell = '';
         if (isPending && !isDone && !isOver) {
           quickCell =
@@ -1152,9 +1158,11 @@
               '<div class="tam-row-quick">' +
                 '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
                 '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
-                '<button class="tam-row-quick-btn tam-row-quick-split" data-ref="' + tamEsc(c.ref) + '" data-mode="split">½</button>' +
+                '<button class="tam-row-quick-btn tam-row-quick-split" data-ref="' + tamEsc(c.ref) + '" data-mode="split">\xbd</button>' +
               '</div>' +
             '</td>';
+        } else if (isPending && isCompleting) {
+          quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
         } else if (isPending) {
           quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
         }
@@ -1165,13 +1173,13 @@
             '<input type="number" class="tam-rec-input tam-rec-input-f" ' +
               'id="tam-inp-f-' + bi + '-' + safeRef + '" ' +
               'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="f" ' +
-              'value="' + fVal + '" min="0" ' + disabled + 'placeholder="—">' +
+              'value="' + fVal + '" min="0" ' + disabled + 'placeholder="\u2014">' +
           '</td>' +
           '<td class="tam-rec-cell-p' + cellCls + colParity + compactCls + greyCls + '">' +
             '<input type="number" class="tam-rec-input tam-rec-input-p" ' +
               'id="tam-inp-p-' + bi + '-' + safeRef + '" ' +
               'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="p" ' +
-              'value="' + pVal + '" min="0" ' + disabled + 'placeholder="—">' +
+              'value="' + pVal + '" min="0" ' + disabled + 'placeholder="\u2014">' +
           '</td>' +
           quickCell;
       });
@@ -1232,11 +1240,16 @@
           tamDistribToBoxesFiltered(ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0), boxList);
           if (isOdd) {
             tamOddPieceDialogFiltered([{ ref:ref, totalPieces:c.totalPieces }], 0, boxList, function(){
+              tamDetectRefCompletions();
+              if (firstPending) tamCheckBoxLock(firstPending.bi);
               tamRenderAll(); tamSaveSession(false);
             });
             return;
           }
         }
+        // Detect completions BEFORE re-render so 3s state is set
+        tamDetectRefCompletions();
+        if (firstPending) tamCheckBoxLock(firstPending.bi);
         tamRenderAll();
         tamSaveSession(false);
       });
@@ -1279,7 +1292,9 @@
         if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f:0, p:0 };
         tamSession.boxes[bi].refs[ref][city] = val;
         tamUpdateSummaryRow(ref);
-        tamUpdateInvoicesRows(ref);
+        // Detect completions on every keystroke (3s timers handle the deferred sort/lock)
+        tamDetectRefCompletions();
+        tamCheckBoxLock(bi);
         tamScheduleSave();
       });
 
@@ -1287,8 +1302,7 @@
         if (e.key !== 'Tab' && e.key !== 'Enter') return;
         var bi  = parseInt(inp.getAttribute('data-box'));
         var ref = inp.getAttribute('data-ref');
-        tamUpdateRefRowAlert(ref);
-        tamCheckBoxLock(bi);
+        // Navigation only — detection already handled by input event
         var isF  = inp.classList.contains('tam-rec-input-f');
         var isPS = inp.classList.contains('tam-rec-input-p');
         var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
@@ -1339,73 +1353,106 @@
      Verificar si una caja alcanzó el total → bloquear
   ──────────────────────────────────────────────────────────────── */
   function tamCheckBoxLock(bi) {
+    if (!tamSession) return;
     var box = tamSession.boxes[bi];
-    if (!box.total || box.locked) return;
+    if (!box || !box.total || box.locked) return;
     var received = 0;
     Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
+
     if (received >= box.total) {
-      // Already waiting for this box — don't stack timers
+      // Mark as pending (keeps it shown as active during the 3s window)
+      tamBoxLockPending[bi] = true;
+      // Don't stack timers
       if (tamBoxLockTimers[bi]) return;
       tamBoxLockTimers[bi] = setTimeout(function(){
         delete tamBoxLockTimers[bi];
+        delete tamBoxLockPending[bi];
         if (!tamSession) return;
         var box2 = tamSession.boxes[bi];
         if (!box2 || box2.locked) return;
-        // Re-verify still complete (user may have edited a value during the delay)
+        // Re-verify (user may have corrected a value during the 3s)
         var recv2 = 0;
         Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
         if (recv2 >= box2.total) {
           box2.locked = true;
+          // Clear any completing-ref animations for refs in this box
+          Object.keys(box2.refs).forEach(function(ref){
+            if (tamRefCompleting.has(ref)) {
+              tamRefCompleting.delete(ref);
+              if (tamRefCompletingTimers[ref]) {
+                clearTimeout(tamRefCompletingTimers[ref]);
+                delete tamRefCompletingTimers[ref];
+              }
+            }
+          });
           tamRenderAll();
           tamScheduleSave();
         }
       }, 3000);
     } else {
-      // No longer complete — cancel any pending lock timer for this box
+      // No longer complete — cancel pending lock for this box
       if (tamBoxLockTimers[bi]) {
         clearTimeout(tamBoxLockTimers[bi]);
         delete tamBoxLockTimers[bi];
       }
+      delete tamBoxLockPending[bi];
     }
   }
 
   /* ──────────────────────────────────────────────────────────────
      Actualizar clase de alerta de una fila de ref en tiempo real
   ──────────────────────────────────────────────────────────────── */
-  function tamUpdateRefRowAlert(ref) {
+  /* Detect which refs just completed / uncompleted and update tamRefCompleting + DOM classes */
+  function tamDetectRefCompletions() {
+    if (!tamSession) return;
     var consolidated = tamConsolidatedRefs();
-    var c = consolidated.find(function(x){ return x.ref === ref; });
-    if (!c) return;
-    var totals   = tamGetRefTotals(ref);
-    var received = totals.f + totals.p;
-    var isDone   = received >= c.totalPieces && c.totalPieces > 0;
-    var isOver   = received > c.totalPieces  && c.totalPieces > 0;
-
     var area = document.getElementById('tam-reception-area');
-    if (!area) return;
-    var row = area.querySelector('tr[data-ref="' + ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"]');
-    if (!row) return;
 
-    var wasComplete = row.classList.contains('tam-ref-complete');
-    row.classList.toggle('tam-ref-over',     isOver);
-    row.classList.toggle('tam-ref-complete', isDone && !isOver);
+    consolidated.forEach(function(c){
+      var totals = tamGetRefTotals(c.ref);
+      var recv   = totals.f + totals.p;
+      var isDone = recv >= c.totalPieces && c.totalPieces > 0;
+      var isOver = recv >  c.totalPieces && c.totalPieces > 0;
+      var alreadyCompleting = tamRefCompleting.has(c.ref);
 
-    // Move row to bottom of tbody when just completed, top when uncompleted
-    var tbody = row.closest('tbody');
-    if (!tbody) return;
-    if ((isDone || isOver) && !wasComplete) {
-      // Highlight briefly, then move after 3 seconds
-      row.style.transition = 'opacity 0.5s, background-color 0.5s';
-      row.style.backgroundColor = '#c8f5c8';
-      setTimeout(function(){
-        row.style.backgroundColor = '';
-        setTimeout(function(){
-          tbody.appendChild(row);  // move to end after delay
-        }, 500);
-      }, 3000);
-    } else if (!isDone && !isOver && wasComplete) {
-      tbody.insertBefore(row, tbody.firstChild);  // move back to top
-    }
+      if (isDone && !alreadyCompleting) {
+        // Newly complete — add to set, start 3s per-ref timer
+        tamRefCompleting.add(c.ref);
+        if (tamRefCompletingTimers[c.ref]) clearTimeout(tamRefCompletingTimers[c.ref]);
+        (function(ref){
+          tamRefCompletingTimers[ref] = setTimeout(function(){
+            delete tamRefCompletingTimers[ref];
+            tamRefCompleting.delete(ref);
+            // Re-render reception so the ref sorts to the bottom
+            tamRenderReception();
+          }, 3000);
+        })(c.ref);
+      } else if (!isDone && alreadyCompleting) {
+        // No longer complete — cancel and remove
+        if (tamRefCompletingTimers[c.ref]) {
+          clearTimeout(tamRefCompletingTimers[c.ref]);
+          delete tamRefCompletingTimers[c.ref];
+        }
+        tamRefCompleting.delete(c.ref);
+      }
+
+      // Update DOM row classes directly (no rebuild needed for just class changes)
+      if (!area) return;
+      var safeSelector = c.ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+      var row = area.querySelector('tr[data-ref="' + safeSelector + '"]');
+      if (!row) return;
+      row.classList.remove('tam-ref-over', 'tam-ref-complete', 'tam-ref-completing');
+      if (isOver) {
+        row.classList.add('tam-ref-over');
+      } else if (isDone) {
+        row.classList.add(tamRefCompleting.has(c.ref) ? 'tam-ref-completing' : 'tam-ref-complete');
+      }
+    });
+  }
+
+  /* Legacy wrapper */
+  function tamUpdateRefRowAlert(ref) {
+    tamDetectRefCompletions();
   }
 
   /* Actualizar celdas F/P del resumen en la tabla de cajas */
@@ -1471,6 +1518,8 @@
         tamDistribToBoxesFiltered(g.ref, g.pieces, mode === 'funchal' ? g.pieces : 0, mode === 'porto' ? g.pieces : 0, invBoxes);
       });
       tamSession.quickDistrib[invIdx] = mode;
+      tamDetectRefCompletions();
+      invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
       tamRenderAll();
       tamSaveSession(false);
     } else if (mode === 'split') {
@@ -1484,10 +1533,14 @@
       tamSession.quickDistrib[invIdx] = 'split';
       if (oddRefs.length) {
         tamOddPieceDialogFiltered(oddRefs, 0, invBoxes, function(){
+          tamDetectRefCompletions();
+          invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
           tamRenderAll();
           tamSaveSession(false);
         });
       } else {
+        tamDetectRefCompletions();
+        invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
         tamRenderAll();
         tamSaveSession(false);
       }
@@ -1567,12 +1620,19 @@
     tamRepairBoxInvIdx();
     var consolidated = tamConsolidatedRefs();
 
+    function afterDistrib() {
+      // Detect completions before re-render so 3s state is set
+      tamDetectRefCompletions();
+      tamSession.boxes.forEach(function(box, bi){ tamCheckBoxLock(bi); });
+    }
+
     if (mode === 'funchal' || mode === 'porto') {
       consolidated.forEach(function(c){
         tamDistribToBoxes(c.ref, c.totalPieces,
           mode === 'funchal' ? c.totalPieces : 0,
           mode === 'porto'   ? c.totalPieces : 0);
       });
+      afterDistrib();
       tamRenderAll();
       tamSaveSession(false);
       return;
@@ -1587,8 +1647,12 @@
         if (isOdd) oddRefs.push(c);
       });
       if (oddRefs.length) {
-        tamOddPieceDialog(oddRefs, 0, function(){ tamRenderAll(); tamSaveSession(false); });
+        tamOddPieceDialog(oddRefs, 0, function(){
+          afterDistrib();
+          tamRenderAll(); tamSaveSession(false);
+        });
       } else {
+        afterDistrib();
         tamRenderAll(); tamSaveSession(false);
       }
     }
@@ -2813,43 +2877,73 @@
       '}',
       '.tam-box-col-active { background:rgba(21,101,192,0.10)!important; border-bottom:2px solid #1565c0!important; color:#1565c0!important; }',
 
-      /* ── Completed box columns: alternating grey shades ── */
-      '.tam-box-col-grey-odd  { background:#d6d6d6!important; color:#555!important; border-top:3px solid #aaa!important; }',
-      '.tam-box-col-grey-even { background:#c0c0c0!important; color:#444!important; border-top:3px solid #999!important; }',
-      '.tam-col-grey-odd  { background:#e4e4e4!important; }',
-      '.tam-col-grey-even { background:#d8d8d8!important; }',
-      '.tam-box-sub-th.tam-box-sub-complete { background:#e0e0e0!important; border-top:2px solid #aaa!important; }',
+      /* ── Completed box columns: alternating grey — 2-class selectors beat cell selectors ── */
+      /* odd-grey: light grey */
+      '.tam-box-header.tam-box-col-grey-odd  { background:#d0d0d0!important; color:#555!important; border-top:3px solid #aaa!important; }',
+      '.tam-box-sub-th.tam-box-col-grey-odd  { background:#d8d8d8!important; border-top:2px solid #aaa!important; }',
+      '.tam-rec-cell-f.tam-col-grey-odd      { background:#d8d8d8!important; }',
+      '.tam-rec-cell-p.tam-col-grey-odd      { background:#d4d4d4!important; border-right:2px solid #bbb!important; }',
+      '.tam-rec-cell-quick.tam-col-odd.tam-col-grey-odd  { background:#d0d0d0!important; border-left:1px solid #bbb!important; }',
+      /* even-grey: darker grey */
+      '.tam-box-header.tam-box-col-grey-even { background:#b8b8b8!important; color:#333!important; border-top:3px solid #999!important; }',
+      '.tam-box-sub-th.tam-box-col-grey-even { background:#c4c4c4!important; border-top:2px solid #999!important; }',
+      '.tam-rec-cell-f.tam-col-grey-even     { background:#c4c4c4!important; }',
+      '.tam-rec-cell-p.tam-col-grey-even     { background:#bfbfbf!important; border-right:2px solid #aaa!important; }',
+      '.tam-rec-cell-quick.tam-col-even.tam-col-grey-even { background:#bbb!important; border-left:1px solid #aaa!important; }',
+      /* Sub-header complete */
+      '.tam-box-sub-th.tam-box-sub-complete { background:#d0d0d0!important; border-top:2px solid #aaa!important; }',
+      /* disabled inputs inside grey cols */
+      '.tam-col-grey-odd .tam-rec-input:disabled, .tam-col-grey-even .tam-rec-input:disabled { background:transparent!important; border-color:#bbb!important; color:#888!important; }',
 
       /* ── Inactive (non-active, non-complete) box columns: compact ── */
       '.tam-box-col-inactive { background:#f4f4f4!important; color:#777!important; border-top:3px solid #ddd!important; }',
-      '.tam-box-compact { width:1px!important; min-width:0!important; padding:2px 4px!important; }',
-      '.tam-box-compact .tam-rec-input { width:36px!important; }',
+      '.tam-box-compact { width:1px!important; min-width:0!important; padding:2px 3px!important; }',
+      '.tam-box-compact .tam-rec-input { width:34px!important; }',
+
+      /* ── Quick column (rápido) — very dark grey background ── */
+      '.tam-rec-cell-quick.tam-col-odd, .tam-rec-cell-quick.tam-col-even { background:#2e2e2e!important; border-left:1px solid #555!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn { background:#444!important; border-color:#666!important; color:#e0e0e0!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn:hover { background:#eee!important; color:#000!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split { border-color:#64b5f6!important; color:#64b5f6!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split:hover { background:#1565c0!important; color:#fff!important; border-color:#1565c0!important; }',
+      /* sub-header quick label */
+      '.tam-sub-q { font-size:.6rem; font-weight:bold; color:#aaa; letter-spacing:.03em; }',
+
+      /* ── ref-completing: green flash kept at top for 3s ── */
+      '.tam-ref-completing td { background:#d4f5d4!important; transition:background 0.4s; }',
+      '.tam-ref-completing .tam-rec-ref-col { background:#c0eec0!important; }',
+      '.tam-ref-completing .tam-rec-total-col { background:#c8f2c8!important; }',
 
       /* ── Top scrollbar sync bar ── */
       '.tam-rec-scroll-sync-wrap { display:flex; flex-direction:column; width:100%; }',
-      '.tam-rec-scroll-top-bar { overflow-x:auto; overflow-y:hidden; height:12px; background:#f0f0f0; border-radius:6px 6px 0 0; border-bottom:1px solid #ddd; scrollbar-width:thin; }',
+      '.tam-rec-scroll-top-bar { overflow-x:auto; overflow-y:hidden; height:12px; background:#e8e8e8; border-radius:6px 6px 0 0; border-bottom:1px solid #ccc; scrollbar-width:thin; }',
       '.tam-rec-scroll-top-bar::-webkit-scrollbar { height:8px; }',
-      '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb { background:#bbb; border-radius:4px; }',
+      '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb { background:#aaa; border-radius:4px; }',
       '.tam-rec-scroll-top-inner { height:1px; }',
+
+      /* dark mode overrides */
       '@media(prefers-color-scheme:dark){',
-      '.tam-box-col-grey-odd{background:#2a2a2a!important;color:#888!important;border-top-color:#444!important;}',
-      '.tam-box-col-grey-even{background:#222222!important;color:#777!important;border-top-color:#3a3a3a!important;}',
-      '.tam-col-grey-odd{background:#252525!important;}',
-      '.tam-col-grey-even{background:#1e1e1e!important;}',
+      '.tam-box-header.tam-box-col-grey-odd{background:#2a2a2a!important;color:#888!important;border-top-color:#444!important;}',
+      '.tam-box-sub-th.tam-box-col-grey-odd{background:#252525!important;border-top-color:#444!important;}',
+      '.tam-rec-cell-f.tam-col-grey-odd{background:#252525!important;}',
+      '.tam-rec-cell-p.tam-col-grey-odd{background:#222!important;border-right-color:#444!important;}',
+      '.tam-rec-cell-quick.tam-col-odd.tam-col-grey-odd{background:#222!important;}',
+      '.tam-box-header.tam-box-col-grey-even{background:#1e1e1e!important;color:#666!important;border-top-color:#3a3a3a!important;}',
+      '.tam-box-sub-th.tam-box-col-grey-even{background:#1a1a1a!important;border-top-color:#3a3a3a!important;}',
+      '.tam-rec-cell-f.tam-col-grey-even{background:#1a1a1a!important;}',
+      '.tam-rec-cell-p.tam-col-grey-even{background:#181818!important;border-right-color:#3a3a3a!important;}',
+      '.tam-rec-cell-quick.tam-col-even.tam-col-grey-even{background:#181818!important;}',
       '.tam-box-sub-th.tam-box-sub-complete{background:#252525!important;border-top-color:#444!important;}',
       '.tam-box-col-inactive{background:#1a1a1a!important;color:#555!important;border-top-color:#333!important;}',
+      '.tam-rec-cell-quick.tam-col-odd,.tam-rec-cell-quick.tam-col-even{background:#181818!important;border-left-color:#3a3a3a!important;}',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn,.tam-rec-cell-quick.tam-col-even .tam-row-quick-btn{background:#222!important;border-color:#444!important;color:#bbb!important;}',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn:hover,.tam-rec-cell-quick.tam-col-even .tam-row-quick-btn:hover{background:#555!important;color:#fff!important;}',
+      '.tam-ref-completing td{background:#0a2a0a!important;}',
+      '.tam-ref-completing .tam-rec-ref-col{background:#0a2a0a!important;}',
+      '.tam-ref-completing .tam-rec-total-col{background:#0a2a0a!important;}',
       '.tam-rec-scroll-top-bar{background:#1a1a1a!important;border-color:#333!important;}',
       '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb{background:#444!important;}',
       '}',
-
-      /* ── Quick cell inside each box ── */
-      '.tam-rec-cell-quick { background:#f5f5f5; padding:2px 5px!important; min-width:80px; border-left:1px dashed #ccc!important; }',
-      '.tam-sub-q { font-size:.6rem; font-weight:bold; color:#888; letter-spacing:.03em; }',
-      '.tam-row-quick { display:flex; gap:3px; justify-content:center; align-items:center; }',
-      '.tam-row-quick-btn { padding:2px 7px; font-size:.69rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:#fff; color:#333; transition:background .12s,color .12s; white-space:nowrap; line-height:1.4; }',
-      '.tam-row-quick-btn:hover { background:#333; color:#fff; border-color:#333; }',
-      '.tam-row-quick-split { border-color:#1565c0!important; color:#1565c0!important; }',
-      '.tam-row-quick-split:hover { background:#1565c0!important; color:#fff!important; }',
 
       /* Cabecera caja */
       '.tam-boxes-hdr-row th { padding:6px 8px; background:#f8f8f8; font-size:.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#888; white-space:nowrap; }',

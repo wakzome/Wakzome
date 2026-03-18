@@ -18,8 +18,9 @@
   var tamEditMode      = {};   // { invIdx: true } — which invoices are in edit mode
   var tamBoxLockTimers      = {};         // { bi: timeoutId } - pending 3-second lock delays
   var tamBoxLockPending     = {};         // { bi: true }      - boxes in the 3s transition window
-  var tamRefCompleting      = new Set();  // refs that just completed, held at top for 3s
+  var tamRefCompleting      = new Set();  // refs in the 3s green-flash window (just completed)
   var tamRefCompletingTimers = {};        // { ref: timeoutId } - per-ref 3s timers
+  var tamRefDone            = new Set();  // refs that have ALREADY completed animation — no re-flash
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -246,6 +247,11 @@
       tamEngineCache = {};
       tamActiveEngines = {};
       tamSession = null;
+      tamRefCompleting.clear();
+      tamRefDone.clear();
+      Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+      Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+      tamBoxLockPending = {};
       // Force the new session name to use the next suffix
       var totalBoxes = parsedInvoices.reduce(function(s,r){ return s+(r.shipPkgs||0); },0);
       if (totalBoxes < 1) totalBoxes = 1;
@@ -260,6 +266,11 @@
       tamEngineCache = {};
       tamActiveEngines = {};
       tamSession = null;
+      tamRefCompleting.clear();
+      tamRefDone.clear();
+      Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+      Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+      tamBoxLockPending = {};
       tamInitSession();
     }
 
@@ -590,6 +601,10 @@
       tamSession = null;
       tamEngineCache = {};
       tamActiveEngines = {};
+      tamRefCompleting.clear(); tamRefDone.clear();
+      Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+      Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+      tamBoxLockPending = {};
       ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
         var el = document.getElementById(id);
         if (el) { el.className = ''; el.innerHTML = ''; }
@@ -1152,13 +1167,16 @@
 
         // Quick buttons only in the active (first pending) box, only for pending/completing refs
         var quickCell = '';
+        var boxHasTotal = !!(box.total);
         if (isPending && !isDone && !isOver) {
+          var btnDisabled = boxHasTotal ? '' : ' disabled';
+          var btnTitle    = boxHasTotal ? '' : ' title="introduza primeiro o total da caixa"';
           quickCell =
-            '<td class="tam-rec-cell-quick' + colParity + '">' +
+            '<td class="tam-rec-cell-quick' + colParity + (boxHasTotal ? '' : ' tam-quick-nototals') + '">' +
               '<div class="tam-row-quick">' +
-                '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
-                '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
-                '<button class="tam-row-quick-btn tam-row-quick-split" data-ref="' + tamEsc(c.ref) + '" data-mode="split">\xbd</button>' +
+                '<button class="tam-row-quick-btn"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
+                '<button class="tam-row-quick-btn"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
+                '<button class="tam-row-quick-btn tam-row-quick-split"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="split">\xbd</button>' +
               '</div>' +
             '</td>';
         } else if (isPending && isCompleting) {
@@ -1277,7 +1295,13 @@
     // ── BIND EDIT BOX BUTTON ──────────────────────────────────
     area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
-        tamSession.boxes[parseInt(btn.getAttribute('data-box'))].locked = false;
+        var bi = parseInt(btn.getAttribute('data-box'));
+        var box = tamSession.boxes[bi];
+        if (box) {
+          // Clear tamRefDone for all refs in this box so they can flash again after re-work
+          Object.keys(box.refs).forEach(function(ref){ tamRefDone.delete(ref); });
+          box.locked = false;
+        }
         tamRenderAll(); tamScheduleSave();
       });
     });
@@ -1414,29 +1438,32 @@
       var isDone = recv >= c.totalPieces && c.totalPieces > 0;
       var isOver = recv >  c.totalPieces && c.totalPieces > 0;
       var alreadyCompleting = tamRefCompleting.has(c.ref);
+      var alreadyDone       = tamRefDone.has(c.ref);
 
-      if (isDone && !alreadyCompleting) {
-        // Newly complete — add to set, start 3s per-ref timer
+      if (isDone && !alreadyCompleting && !alreadyDone) {
+        // Newly complete for the first time — start 3s green flash
         tamRefCompleting.add(c.ref);
         if (tamRefCompletingTimers[c.ref]) clearTimeout(tamRefCompletingTimers[c.ref]);
         (function(ref){
           tamRefCompletingTimers[ref] = setTimeout(function(){
             delete tamRefCompletingTimers[ref];
             tamRefCompleting.delete(ref);
+            tamRefDone.add(ref);        // mark permanently done — no re-flash
             // Re-render reception so the ref sorts to the bottom
             tamRenderReception();
           }, 3000);
         })(c.ref);
-      } else if (!isDone && alreadyCompleting) {
-        // No longer complete — cancel and remove
+      } else if (!isDone && (alreadyCompleting || alreadyDone)) {
+        // Ref became incomplete again (user edited a value) — reset everything
         if (tamRefCompletingTimers[c.ref]) {
           clearTimeout(tamRefCompletingTimers[c.ref]);
           delete tamRefCompletingTimers[c.ref];
         }
         tamRefCompleting.delete(c.ref);
+        tamRefDone.delete(c.ref);       // allow re-flash next time it completes
       }
 
-      // Update DOM row classes directly (no rebuild needed for just class changes)
+      // Update DOM row classes in-place (no full rebuild needed)
       if (!area) return;
       var safeSelector = c.ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
       var row = area.querySelector('tr[data-ref="' + safeSelector + '"]');
@@ -1445,7 +1472,11 @@
       if (isOver) {
         row.classList.add('tam-ref-over');
       } else if (isDone) {
-        row.classList.add(tamRefCompleting.has(c.ref) ? 'tam-ref-completing' : 'tam-ref-complete');
+        if (tamRefCompleting.has(c.ref)) {
+          row.classList.add('tam-ref-completing');
+        } else {
+          row.classList.add('tam-ref-complete');
+        }
       }
     });
   }
@@ -2881,19 +2912,19 @@
       /* odd-grey: light grey */
       '.tam-box-header.tam-box-col-grey-odd  { background:#d0d0d0!important; color:#555!important; border-top:3px solid #aaa!important; }',
       '.tam-box-sub-th.tam-box-col-grey-odd  { background:#d8d8d8!important; border-top:2px solid #aaa!important; }',
-      '.tam-rec-cell-f.tam-col-grey-odd      { background:#d8d8d8!important; }',
-      '.tam-rec-cell-p.tam-col-grey-odd      { background:#d4d4d4!important; border-right:2px solid #bbb!important; }',
-      '.tam-rec-cell-quick.tam-col-odd.tam-col-grey-odd  { background:#d0d0d0!important; border-left:1px solid #bbb!important; }',
+      '.tam-rec-cell-f.tam-box-col-grey-odd  { background:#d8d8d8!important; }',
+      '.tam-rec-cell-p.tam-box-col-grey-odd  { background:#d4d4d4!important; border-right:2px solid #bbb!important; }',
+      '.tam-rec-cell-quick.tam-col-odd.tam-box-col-grey-odd  { background:#d0d0d0!important; border-left:1px solid #bbb!important; }',
       /* even-grey: darker grey */
       '.tam-box-header.tam-box-col-grey-even { background:#b8b8b8!important; color:#333!important; border-top:3px solid #999!important; }',
       '.tam-box-sub-th.tam-box-col-grey-even { background:#c4c4c4!important; border-top:2px solid #999!important; }',
-      '.tam-rec-cell-f.tam-col-grey-even     { background:#c4c4c4!important; }',
-      '.tam-rec-cell-p.tam-col-grey-even     { background:#bfbfbf!important; border-right:2px solid #aaa!important; }',
-      '.tam-rec-cell-quick.tam-col-even.tam-col-grey-even { background:#bbb!important; border-left:1px solid #aaa!important; }',
+      '.tam-rec-cell-f.tam-box-col-grey-even { background:#c4c4c4!important; }',
+      '.tam-rec-cell-p.tam-box-col-grey-even { background:#bfbfbf!important; border-right:2px solid #aaa!important; }',
+      '.tam-rec-cell-quick.tam-col-even.tam-box-col-grey-even { background:#bbb!important; border-left:1px solid #aaa!important; }',
       /* Sub-header complete */
       '.tam-box-sub-th.tam-box-sub-complete { background:#d0d0d0!important; border-top:2px solid #aaa!important; }',
       /* disabled inputs inside grey cols */
-      '.tam-col-grey-odd .tam-rec-input:disabled, .tam-col-grey-even .tam-rec-input:disabled { background:transparent!important; border-color:#bbb!important; color:#888!important; }',
+      '.tam-box-col-grey-odd .tam-rec-input:disabled, .tam-box-col-grey-even .tam-rec-input:disabled { background:transparent!important; border-color:#bbb!important; color:#888!important; }',
 
       /* ── Inactive (non-active, non-complete) box columns: compact ── */
       '.tam-box-col-inactive { background:#f4f4f4!important; color:#777!important; border-top:3px solid #ddd!important; }',
@@ -2908,6 +2939,8 @@
       '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split:hover { background:#1565c0!important; color:#fff!important; border-color:#1565c0!important; }',
       /* sub-header quick label */
       '.tam-sub-q { font-size:.6rem; font-weight:bold; color:#aaa; letter-spacing:.03em; }',
+      '.tam-row-quick-btn:disabled { opacity:0.3; cursor:not-allowed; }',
+      '.tam-quick-nototals { opacity:0.5; }',
 
       /* ── ref-completing: green flash kept at top for 3s ── */
       '.tam-ref-completing td { background:#d4f5d4!important; transition:background 0.4s; }',
@@ -2925,14 +2958,14 @@
       '@media(prefers-color-scheme:dark){',
       '.tam-box-header.tam-box-col-grey-odd{background:#2a2a2a!important;color:#888!important;border-top-color:#444!important;}',
       '.tam-box-sub-th.tam-box-col-grey-odd{background:#252525!important;border-top-color:#444!important;}',
-      '.tam-rec-cell-f.tam-col-grey-odd{background:#252525!important;}',
-      '.tam-rec-cell-p.tam-col-grey-odd{background:#222!important;border-right-color:#444!important;}',
-      '.tam-rec-cell-quick.tam-col-odd.tam-col-grey-odd{background:#222!important;}',
+      '.tam-rec-cell-f.tam-box-col-grey-odd{background:#252525!important;}',
+      '.tam-rec-cell-p.tam-box-col-grey-odd{background:#222!important;border-right-color:#444!important;}',
+      '.tam-rec-cell-quick.tam-col-odd.tam-box-col-grey-odd{background:#222!important;}',
       '.tam-box-header.tam-box-col-grey-even{background:#1e1e1e!important;color:#666!important;border-top-color:#3a3a3a!important;}',
       '.tam-box-sub-th.tam-box-col-grey-even{background:#1a1a1a!important;border-top-color:#3a3a3a!important;}',
-      '.tam-rec-cell-f.tam-col-grey-even{background:#1a1a1a!important;}',
-      '.tam-rec-cell-p.tam-col-grey-even{background:#181818!important;border-right-color:#3a3a3a!important;}',
-      '.tam-rec-cell-quick.tam-col-even.tam-col-grey-even{background:#181818!important;}',
+      '.tam-rec-cell-f.tam-box-col-grey-even{background:#1a1a1a!important;}',
+      '.tam-rec-cell-p.tam-box-col-grey-even{background:#181818!important;border-right-color:#3a3a3a!important;}',
+      '.tam-rec-cell-quick.tam-col-even.tam-box-col-grey-even{background:#181818!important;}',
       '.tam-box-sub-th.tam-box-sub-complete{background:#252525!important;border-top-color:#444!important;}',
       '.tam-box-col-inactive{background:#1a1a1a!important;color:#555!important;border-top-color:#333!important;}',
       '.tam-rec-cell-quick.tam-col-odd,.tam-rec-cell-quick.tam-col-even{background:#181818!important;border-left-color:#3a3a3a!important;}',

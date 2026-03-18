@@ -16,6 +16,7 @@
   var tamAutoSaveTimer = null;
   var tamSaveInFlight  = false;
   var tamEditMode      = {};   // { invIdx: true } — which invoices are in edit mode
+  var tamBoxLockTimers = {};   // { bi: timeoutId } — pending 3-second lock delays
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -1044,12 +1045,18 @@
       '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
       '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
-    sortedBoxes.forEach(function(bObj){
+    sortedBoxes.forEach(function(bObj, boxPos){
       var bi  = bObj.bi;
       var boxLabel = 'Caixa ' + (bi+1) + (bObj.box.locked ? ' 🔒' : '');
-      var boxCls   = bObj.isComplete ? 'tam-box-col-complete' : (bObj === pendingBoxes[0] ? 'tam-box-col-active' : '');
-      // Box columns: F + PS + quick (3 cols total, colspan=3 on header)
-      hdr1 += '<th colspan="3" class="tam-box-header ' + boxCls + '">' + boxLabel + '</th>';
+      var isActiveBox = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
+      var isCompletedBox = bObj.isComplete;
+      var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
+      var greyShade = (completedCount % 2 === 0) ? 'tam-box-col-grey-odd' : 'tam-box-col-grey-even';
+      var boxCls = isCompletedBox
+        ? ('tam-box-col-complete ' + greyShade)
+        : (isActiveBox ? 'tam-box-col-active' : 'tam-box-col-inactive');
+      var colSpan = isActiveBox ? 3 : 2;
+      hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + boxCls + '">' + boxLabel + '</th>';
     });
 
     // Header row 2: sub-labels
@@ -1067,9 +1074,10 @@
       var isLocked = box.locked;
       var inputCls = box.total ? 'tam-box-total-input tam-box-declared' : 'tam-box-total-input';
       var isPending = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
+      var colSpan  = isPending ? 3 : 2;
 
       hdr2 +=
-        '<th class="tam-box-sub-th' + (bObj.isComplete ? ' tam-box-sub-complete' : '') + '" colspan="3">' +
+        '<th class="tam-box-sub-th' + (bObj.isComplete ? ' tam-box-sub-complete' : '') + '" colspan="' + colSpan + '">' +
         '<div class="tam-box-sub-inner">' +
           '<input type="number" class="' + inputCls + '" id="tam-box-total-' + bi + '" ' +
             'value="' + (box.total||'') + '" placeholder="total" ' +
@@ -1080,7 +1088,7 @@
         '<div class="tam-box-sub-labels">' +
           '<span class="tam-sub-f">F</span>' +
           '<span class="tam-sub-p">PS</span>' +
-          (isPending && !isLocked ? '<span class="tam-sub-q">rápido</span>' : '<span></span>') +
+          (isPending && !isLocked ? '<span class="tam-sub-q">rápido</span>' : '') +
         '</div>' +
         '</th>';
     });
@@ -1130,8 +1138,13 @@
         var colParity = (boxPos % 2 === 0) ? ' tam-col-odd' : ' tam-col-even';
         var isPending = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
         var isActive  = isPending && box.total && !box.locked;
+        var compactCls = (!isPending) ? ' tam-box-compact' : '';
 
-        // Quick buttons only in the first pending (active) box column, only for pending refs
+        // Completed columns: alternating grey shades
+        var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
+        var greyCls = bObj.isComplete ? (' ' + (completedCount % 2 === 0 ? 'tam-col-grey-odd' : 'tam-col-grey-even')) : '';
+
+        // Quick buttons only in the active (first pending) box, only for pending refs
         var quickCell = '';
         if (isPending && !isDone && !isOver) {
           quickCell =
@@ -1144,18 +1157,17 @@
             '</td>';
         } else if (isPending) {
           quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
-        } else {
-          quickCell = '<td class="tam-rec-cell-quick' + cellCls + colParity + '"></td>';
         }
+        // Non-active boxes: NO quick cell at all
 
         rowsHtml +=
-          '<td class="tam-rec-cell-f' + cellCls + colParity + '">' +
+          '<td class="tam-rec-cell-f' + cellCls + colParity + compactCls + greyCls + '">' +
             '<input type="number" class="tam-rec-input tam-rec-input-f" ' +
               'id="tam-inp-f-' + bi + '-' + safeRef + '" ' +
               'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="f" ' +
               'value="' + fVal + '" min="0" ' + disabled + 'placeholder="—">' +
           '</td>' +
-          '<td class="tam-rec-cell-p' + cellCls + colParity + '">' +
+          '<td class="tam-rec-cell-p' + cellCls + colParity + compactCls + greyCls + '">' +
             '<input type="number" class="tam-rec-input tam-rec-input-p" ' +
               'id="tam-inp-p-' + bi + '-' + safeRef + '" ' +
               'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="p" ' +
@@ -1168,14 +1180,17 @@
     });
 
     var tableHtml =
-      '<div class="tam-rec-boxes-scroll">' +
-      '<table class="tam-rec-boxes-table">' +
-      '<thead>' +
-        '<tr class="tam-boxes-hdr-row">' + hdr1 + '</tr>' +
-        '<tr class="tam-boxes-sub-hdr">' + hdr2 + '</tr>' +
-      '</thead>' +
-      '<tbody>' + rowsHtml + '</tbody>' +
-      '</table></div>';
+      '<div class="tam-rec-scroll-sync-wrap">' +
+        '<div class="tam-rec-scroll-top-bar"><div class="tam-rec-scroll-top-inner"></div></div>' +
+        '<div class="tam-rec-boxes-scroll">' +
+        '<table class="tam-rec-boxes-table">' +
+        '<thead>' +
+          '<tr class="tam-boxes-hdr-row">' + hdr1 + '</tr>' +
+          '<tr class="tam-boxes-sub-hdr">' + hdr2 + '</tr>' +
+        '</thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+        '</table></div>' +
+      '</div>';
 
     // Global quick buttons bar
     var globalBar =
@@ -1292,6 +1307,32 @@
         }
       });
     });
+
+    // ── SYNC TOP + BOTTOM SCROLLBARS ─────────────────────────
+    (function(){
+      var topBar   = area.querySelector('.tam-rec-scroll-top-bar');
+      var botScroll = area.querySelector('.tam-rec-boxes-scroll');
+      var inner    = area.querySelector('.tam-rec-scroll-top-inner');
+      if (!topBar || !botScroll || !inner) return;
+
+      function syncInnerWidth(){
+        inner.style.width = botScroll.scrollWidth + 'px';
+        inner.style.height = '1px';
+      }
+      syncInnerWidth();
+
+      var syncing = false;
+      topBar.addEventListener('scroll', function(){
+        if (syncing) return; syncing = true;
+        botScroll.scrollLeft = topBar.scrollLeft;
+        syncing = false;
+      });
+      botScroll.addEventListener('scroll', function(){
+        if (syncing) return; syncing = true;
+        topBar.scrollLeft = botScroll.scrollLeft;
+        syncing = false;
+      });
+    })();
   }
 
   /* ──────────────────────────────────────────────────────────────
@@ -1299,12 +1340,32 @@
   ──────────────────────────────────────────────────────────────── */
   function tamCheckBoxLock(bi) {
     var box = tamSession.boxes[bi];
-    if (!box.total) return;
+    if (!box.total || box.locked) return;
     var received = 0;
     Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
     if (received >= box.total) {
-      box.locked = true;
-      tamRenderAll();
+      // Already waiting for this box — don't stack timers
+      if (tamBoxLockTimers[bi]) return;
+      tamBoxLockTimers[bi] = setTimeout(function(){
+        delete tamBoxLockTimers[bi];
+        if (!tamSession) return;
+        var box2 = tamSession.boxes[bi];
+        if (!box2 || box2.locked) return;
+        // Re-verify still complete (user may have edited a value during the delay)
+        var recv2 = 0;
+        Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
+        if (recv2 >= box2.total) {
+          box2.locked = true;
+          tamRenderAll();
+          tamScheduleSave();
+        }
+      }, 3000);
+    } else {
+      // No longer complete — cancel any pending lock timer for this box
+      if (tamBoxLockTimers[bi]) {
+        clearTimeout(tamBoxLockTimers[bi]);
+        delete tamBoxLockTimers[bi];
+      }
     }
   }
 
@@ -2751,6 +2812,35 @@
       '.tam-rec-cell-f.tam-col-even{background:#0a2a18!important;}.tam-rec-cell-p.tam-col-even{background:#2a2a0a!important;}',
       '}',
       '.tam-box-col-active { background:rgba(21,101,192,0.10)!important; border-bottom:2px solid #1565c0!important; color:#1565c0!important; }',
+
+      /* ── Completed box columns: alternating grey shades ── */
+      '.tam-box-col-grey-odd  { background:#d6d6d6!important; color:#555!important; border-top:3px solid #aaa!important; }',
+      '.tam-box-col-grey-even { background:#c0c0c0!important; color:#444!important; border-top:3px solid #999!important; }',
+      '.tam-col-grey-odd  { background:#e4e4e4!important; }',
+      '.tam-col-grey-even { background:#d8d8d8!important; }',
+      '.tam-box-sub-th.tam-box-sub-complete { background:#e0e0e0!important; border-top:2px solid #aaa!important; }',
+
+      /* ── Inactive (non-active, non-complete) box columns: compact ── */
+      '.tam-box-col-inactive { background:#f4f4f4!important; color:#777!important; border-top:3px solid #ddd!important; }',
+      '.tam-box-compact { width:1px!important; min-width:0!important; padding:2px 4px!important; }',
+      '.tam-box-compact .tam-rec-input { width:36px!important; }',
+
+      /* ── Top scrollbar sync bar ── */
+      '.tam-rec-scroll-sync-wrap { display:flex; flex-direction:column; width:100%; }',
+      '.tam-rec-scroll-top-bar { overflow-x:auto; overflow-y:hidden; height:12px; background:#f0f0f0; border-radius:6px 6px 0 0; border-bottom:1px solid #ddd; scrollbar-width:thin; }',
+      '.tam-rec-scroll-top-bar::-webkit-scrollbar { height:8px; }',
+      '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb { background:#bbb; border-radius:4px; }',
+      '.tam-rec-scroll-top-inner { height:1px; }',
+      '@media(prefers-color-scheme:dark){',
+      '.tam-box-col-grey-odd{background:#2a2a2a!important;color:#888!important;border-top-color:#444!important;}',
+      '.tam-box-col-grey-even{background:#222222!important;color:#777!important;border-top-color:#3a3a3a!important;}',
+      '.tam-col-grey-odd{background:#252525!important;}',
+      '.tam-col-grey-even{background:#1e1e1e!important;}',
+      '.tam-box-sub-th.tam-box-sub-complete{background:#252525!important;border-top-color:#444!important;}',
+      '.tam-box-col-inactive{background:#1a1a1a!important;color:#555!important;border-top-color:#333!important;}',
+      '.tam-rec-scroll-top-bar{background:#1a1a1a!important;border-color:#333!important;}',
+      '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb{background:#444!important;}',
+      '}',
 
       /* ── Quick cell inside each box ── */
       '.tam-rec-cell-quick { background:#f5f5f5; padding:2px 5px!important; min-width:80px; border-left:1px dashed #ccc!important; }',

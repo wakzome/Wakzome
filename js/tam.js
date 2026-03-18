@@ -886,14 +886,26 @@
 
     boxesHtml += '</tr></thead><tbody>';
 
-    // Filas de referencias
+    // Filas de referencias — pendientes primero, completadas al final
+    var pending   = [];
+    var completed = [];
     consolidated.forEach(function(c){
-      var totals  = tamGetRefTotals(c.ref);
+      var totals   = tamGetRefTotals(c.ref);
       var received = totals.f + totals.p;
-      var isDone  = received >= c.totalPieces && c.totalPieces > 0;
-      var isOver  = received > c.totalPieces && c.totalPieces > 0;
-      var rowCls  = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
-      var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
+      var isDone   = received >= c.totalPieces && c.totalPieces > 0;
+      var isOver   = received > c.totalPieces  && c.totalPieces > 0;
+      if (isDone || isOver) completed.push(c);
+      else                  pending.push(c);
+    });
+    var sortedRefs = pending.concat(completed);
+
+    sortedRefs.forEach(function(c){
+      var totals   = tamGetRefTotals(c.ref);
+      var received = totals.f + totals.p;
+      var isDone   = received >= c.totalPieces && c.totalPieces > 0;
+      var isOver   = received > c.totalPieces  && c.totalPieces > 0;
+      var rowCls   = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
+      var safeRef  = c.ref.replace(/[^a-z0-9]/gi,'_');
 
       boxesHtml += '<tr class="' + rowCls + '" data-ref="' + tamEsc(c.ref) + '">' +
         '<td class="tam-rec-ref-col"><strong>' + tamEsc(c.ref) + '</strong></td>' +
@@ -954,13 +966,46 @@
         if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f: 0, p: 0 };
         tamSession.boxes[bi].refs[ref][city] = val;
 
-        // Actualizar fila de alerta en tiempo real sin rerenderizar
         tamUpdateRefRowAlert(ref);
-        // Verificar si la caja se completó
         tamCheckBoxLock(bi);
         tamUpdateSummaryRow(ref);
         tamUpdateInvoicesRows(ref);
         tamScheduleSave();
+      });
+
+      // Keyboard navigation: Tab on PS → focus F of next enabled row
+      // Enter acts like Tab for fast entry
+      inp.addEventListener('keydown', function(e){
+        if (e.key !== 'Tab' && e.key !== 'Enter') return;
+        var isPS = inp.classList.contains('tam-rec-input-p');
+        var isF  = inp.classList.contains('tam-rec-input-f');
+
+        // F → PS of same cell: default Tab handles it, only intercept PS→next
+        if (isF && e.key === 'Enter') {
+          e.preventDefault();
+          // Move to PS of same box/row
+          var bi  = inp.getAttribute('data-box');
+          var ref = inp.getAttribute('data-ref');
+          var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
+          var ps = document.getElementById('tam-inp-p-' + bi + '-' + safeRef);
+          if (ps && !ps.disabled) { ps.focus(); ps.select(); }
+          return;
+        }
+
+        if (isPS && (e.key === 'Tab' || e.key === 'Enter')) {
+          e.preventDefault();
+          // Find next enabled F input after current row
+          var allF = Array.from(area.querySelectorAll('.tam-rec-input-f:not([disabled])'));
+          var curBi  = inp.getAttribute('data-box');
+          var curRef = inp.getAttribute('data-ref');
+          // Find the F input of this same row
+          var safeRef = curRef.replace(/[^a-z0-9]/gi,'_');
+          var curF = document.getElementById('tam-inp-f-' + curBi + '-' + safeRef);
+          var curFIdx = allF.indexOf(curF);
+          var nextF = allF[curFIdx + 1];
+          if (nextF) { nextF.focus(); nextF.select(); }
+          return;
+        }
       });
     });
 
@@ -999,16 +1044,24 @@
     var totals   = tamGetRefTotals(ref);
     var received = totals.f + totals.p;
     var isDone   = received >= c.totalPieces && c.totalPieces > 0;
-    var isOver   = received > c.totalPieces && c.totalPieces > 0;
+    var isOver   = received > c.totalPieces  && c.totalPieces > 0;
 
-    // Update row in reception table
     var area = document.getElementById('tam-reception-area');
-    if (area) {
-      var row = area.querySelector('tr[data-ref="' + ref.replace(/"/g,'\\"') + '"]');
-      if (row) {
-        row.classList.toggle('tam-ref-over', isOver);
-        row.classList.toggle('tam-ref-complete', isDone && !isOver);
-      }
+    if (!area) return;
+    var row = area.querySelector('tr[data-ref="' + ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"]');
+    if (!row) return;
+
+    var wasComplete = row.classList.contains('tam-ref-complete');
+    row.classList.toggle('tam-ref-over',     isOver);
+    row.classList.toggle('tam-ref-complete', isDone && !isOver);
+
+    // Move row to bottom of tbody when just completed, top when uncompleted
+    var tbody = row.closest('tbody');
+    if (!tbody) return;
+    if ((isDone || isOver) && !wasComplete) {
+      tbody.appendChild(row);  // move to end
+    } else if (!isDone && !isOver && wasComplete) {
+      tbody.insertBefore(row, tbody.firstChild);  // move back to top
     }
   }
 
@@ -2034,10 +2087,23 @@
       '.tam-table tbody tr:hover td { background:#f5f5f5; }',
       '.tam-table tbody tr:hover .tam-cell-funchal { background:#ddf0ff; }',
       '.tam-table tbody tr:hover .tam-cell-porto   { background:#ffe0ef; }',
-      /* Ref completada — sin opacity, solo color más claro */
-      '.tam-ref-complete td { color:#bbb!important; }',
-      '.tam-ref-complete td strong { color:#bbb!important; }',
-      '.tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; }',
+      /* Ref completada — fila oscura, vai para o final */
+      '.tam-ref-complete td { background-color:#2a2a2a!important; background:#2a2a2a!important; color:#666!important; }',
+      '.tam-ref-complete td strong { color:#555!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background-color:#222!important; background:#222!important; color:#555!important; }',
+      '.tam-ref-complete .tam-rec-total-col { background-color:#252525!important; background:#252525!important; }',
+      '.tam-ref-complete .tam-rec-cell-f { background-color:#1e2a1e!important; background:#1e2a1e!important; }',
+      '.tam-ref-complete .tam-rec-cell-p { background-color:#2a1e2a!important; background:#2a1e2a!important; }',
+      '.tam-ref-complete .tam-rec-input { color:#444!important; border-color:#3a3a3a!important; }',
+      /* Light mode: still dark for completed rows */
+      '@media(prefers-color-scheme:light){',
+      '.tam-ref-complete td{background-color:#2a2a2a!important;background:#2a2a2a!important;color:#666!important;}',
+      '.tam-ref-complete td strong{color:#555!important;}',
+      '.tam-ref-complete .tam-rec-ref-col{background-color:#222!important;background:#222!important;}',
+      '.tam-ref-complete .tam-rec-total-col{background-color:#252525!important;background:#252525!important;}',
+      '.tam-ref-complete .tam-rec-cell-f{background-color:#1e2a1e!important;background:#1e2a1e!important;}',
+      '.tam-ref-complete .tam-rec-cell-p{background-color:#2a1e2a!important;background:#2a1e2a!important;}',
+      '}',
       '.tam-table tfoot td { background:#f2f2f2; font-weight:bold; border-top:2px solid #ccc; padding:4px 12px; text-align:center; line-height:1.2; }',
       '.tam-table tfoot tr.tam-tr-ship td { background:#fafafa; font-weight:600; font-size:.82rem; color:#666; border-top:1px solid #e8e8e8; padding:3px 12px; }',
       '.tam-table tfoot tr.tam-tr-grand td { background:#e4e4e4; font-size:.94rem; border-top:2px solid #bbb; }',

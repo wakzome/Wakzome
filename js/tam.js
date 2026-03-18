@@ -1348,7 +1348,7 @@
       });
     });
 
-    // ── HOVER-TO-MODIFY on completed ref rows ─────────────────
+    // ── CLICK-TO-MODIFY on completed ref rows ─────────────────
     (function(){
       // ── Singleton tooltip — created once, reused across renders ──
       var tip = document.getElementById('tam-modify-tip');
@@ -1356,28 +1356,44 @@
         tip = document.createElement('div');
         tip.id = 'tam-modify-tip';
         tip.innerHTML =
-          '<span class="tam-tip-msg">\u00BFModificar?</span>' +
-          '<button class="tam-tip-btn" id="tam-tip-yes">S\u00ED</button>';
+          '<span class="tam-tip-msg">\u00BFModificar esta referencia?</span>' +
+          '<button class="tam-tip-btn" id="tam-tip-yes">S\u00ED</button>' +
+          '<button class="tam-tip-cancel" id="tam-tip-cancel">No</button>';
         document.body.appendChild(tip);
 
-        // Button listener attached ONCE here — reads from window.tamTipState
-        tip.querySelector('#tam-tip-yes').addEventListener('click', function(){
+        // ── Close on outside click ────────────────────────────────
+        document.addEventListener('click', function(e){
+          if (!tip.classList.contains('tam-tip-visible')) return;
+          if (tip.contains(e.target)) return;
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+        }, true);
+
+        // ── Cancel button ─────────────────────────────────────────
+        tip.querySelector('#tam-tip-cancel').addEventListener('click', function(e){
+          e.stopPropagation();
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+        });
+
+        // ── "Sí" button ───────────────────────────────────────────
+        tip.querySelector('#tam-tip-yes').addEventListener('click', function(e){
+          e.stopPropagation();
           var state = window.tamTipState;
           if (!state || !state.ref || !tamSession) return;
           var ref = state.ref;
 
-          // Hide immediately
           tip.classList.remove('tam-tip-visible');
           window.tamTipState = null;
 
-          // Unlock all locked boxes that contain this ref
-          var unlocked = false;
+          // Find which boxes are locked AND contain this ref
+          var unlockedBis = [];
           tamSession.boxes.forEach(function(box, bi){
             if (box.locked && box.refs[ref] !== undefined) {
               box.locked = false;
               if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
               delete tamBoxLockPending[bi];
-              unlocked = true;
+              unlockedBis.push(bi);
             }
           });
 
@@ -1386,92 +1402,86 @@
           tamRefCompleting.delete(ref);
           if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
 
-          if (!unlocked) return;
+          if (!unlockedBis.length) return;
           tamScheduleSave();
           tamRenderAll();
 
-          // After re-render: highlight all editable cells for this ref
+          // After re-render: illuminate the unlocked column(s) and grey out ref cells
           requestAnimationFrame(function(){
             var recArea = document.getElementById('tam-reception-area');
             if (!recArea) return;
-            var inputs = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
-              .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
-            inputs.forEach(function(inp){
-              var td = inp.closest('td');
-              if (td) {
-                td.classList.add('tam-cell-edit-flash');
-                setTimeout(function(){ td.classList.remove('tam-cell-edit-flash'); }, 2000);
+
+            // 1. Illuminate entire column for each unlocked box (white column highlight)
+            unlockedBis.forEach(function(bi){
+              recArea.querySelectorAll('.tam-rec-input[data-box="' + bi + '"]').forEach(function(inp){
+                var td = inp.closest('td');
+                if (td) td.classList.add('tam-col-unlocked');
+              });
+              // Also header cells
+              var hdrInput = recArea.querySelector('#tam-box-total-' + bi);
+              if (hdrInput) {
+                var th = hdrInput.closest('th');
+                if (th) th.classList.add('tam-col-unlocked-hdr');
               }
             });
-            // Also highlight the entire active box header
-            var firstBi = inputs.length ? parseInt(inputs[0].getAttribute('data-box')) : -1;
-            if (firstBi >= 0) {
-              var hdr = recArea.querySelector('.tam-box-header[colspan]');
-              recArea.querySelectorAll('.tam-box-header').forEach(function(th){
-                // find by contained input id
-              });
-            }
-            if (inputs[0]) { inputs[0].focus(); inputs[0].select(); }
-          });
-        });
 
-        // Keep tooltip visible while hovering it — listener added ONCE
-        tip.addEventListener('mouseenter', function(){
-          if (window.tamTipHideTimer) { clearTimeout(window.tamTipHideTimer); window.tamTipHideTimer = null; }
-        });
-        tip.addEventListener('mouseleave', function(){
-          window.tamTipHideTimer = setTimeout(function(){
-            tip.classList.remove('tam-tip-visible');
-            window.tamTipState = null;
-          }, 280);
+            // 2. Grey-highlight (relieve) the specific ref cells
+            recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
+              if (inp.getAttribute('data-ref') === ref && !inp.disabled) {
+                var td = inp.closest('td');
+                if (td) td.classList.add('tam-cell-ref-edit');
+              }
+            });
+
+            // 3. Focus first editable cell of this ref
+            var first = recArea.querySelector('.tam-rec-input[data-ref]:not([disabled])');
+            recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
+              if (inp.getAttribute('data-ref') === ref && !inp.disabled && !first) first = inp;
+              if (inp.getAttribute('data-ref') === ref && !inp.disabled) first = inp; // get last matched; use first
+            });
+            // Get actual first
+            var allEditable = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
+              .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
+            if (allEditable[0]) { allEditable[0].focus(); allEditable[0].select(); }
+          });
         });
       }
 
-      // ── Attach hover via event delegation on tbody ─────────────
+      // ── Event delegation: click on ref cell of completed rows ──
       var tbody = area.querySelector('.tam-rec-boxes-table tbody');
       if (!tbody) return;
 
-      // Use delegation so we don't need to re-bind on every render
-      tbody.addEventListener('mouseenter', function(e){
+      tbody.addEventListener('click', function(e){
         var row = e.target.closest('tr[data-ref]');
         if (!row) return;
-        // Only for completed/over rows
         if (!row.classList.contains('tam-ref-complete') && !row.classList.contains('tam-ref-over')) return;
 
-        if (window.tamTipHideTimer) { clearTimeout(window.tamTipHideTimer); window.tamTipHideTimer = null; }
+        var refCell = e.target.closest('.tam-rec-ref-col');
+        if (!refCell) return;   // only clicking the ref cell triggers the tooltip
+
+        e.stopPropagation();
         window.tamTipState = { ref: row.getAttribute('data-ref') };
 
         // Position to the RIGHT of the ref cell, vertically centered on the row
-        var refCell = row.querySelector('.tam-rec-ref-col');
-        if (!refCell) return;
-        var rect = refCell.getBoundingClientRect();
+        var rect    = refCell.getBoundingClientRect();
         var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
         var scrollY = window.pageYOffset || document.documentElement.scrollTop;
 
-        // Show first (invisible) to measure width, then position
         tip.style.visibility = 'hidden';
         tip.classList.add('tam-tip-visible');
         requestAnimationFrame(function(){
-          var tipH = tip.offsetHeight;
-          var tipW = tip.offsetWidth;
+          var tipH    = tip.offsetHeight;
           var rowRect = row.getBoundingClientRect();
-          var leftPos = rect.right + scrollX + 10;
+          var leftPos = rect.right + scrollX + 12;
           var topPos  = rowRect.top + scrollY + (rowRect.height - tipH) / 2;
+          // Clamp so it doesn't go off the right edge of the viewport
+          var maxLeft = scrollX + window.innerWidth - tip.offsetWidth - 16;
+          if (leftPos > maxLeft) leftPos = rect.left + scrollX - tip.offsetWidth - 12;
           tip.style.left = leftPos + 'px';
-          tip.style.top  = topPos + 'px';
+          tip.style.top  = topPos  + 'px';
           tip.style.visibility = '';
         });
-      }, true);  // capture phase so we catch even if child stops propagation
-
-      tbody.addEventListener('mouseleave', function(e){
-        var row = e.target.closest('tr[data-ref]');
-        if (!row) return;
-        if (!row.classList.contains('tam-ref-complete') && !row.classList.contains('tam-ref-over')) return;
-        window.tamTipHideTimer = setTimeout(function(){
-          tip.classList.remove('tam-tip-visible');
-          window.tamTipState = null;
-        }, 280);
-      }, true);
+      });
     })();
 
     // ── BIND REF FILTER INPUT ─────────────────────────────────
@@ -3162,22 +3172,38 @@
       '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#f8f8f8!important; background:#f8f8f8!important; box-shadow:2px 0 6px rgba(0,0,0,.09); }',
       '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 6px rgba(0,0,0,.07); padding:4px 6px!important; }',
 
-      /* ── Hover-to-modify tooltip ── */
-      '#tam-modify-tip { position:absolute; z-index:9999; display:flex; align-items:center; gap:8px; padding:7px 12px; background:#fff; border:1.5px solid #1565c0; border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,.18); font-family:MontserratLight,sans-serif; font-size:.78rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translateY(4px); transition:opacity .18s ease, transform .18s ease; }',
-      '#tam-modify-tip.tam-tip-visible { opacity:1; pointer-events:auto; transform:translateY(0); }',
+      /* ── Click-to-modify tooltip ── */
+      '#tam-modify-tip { position:absolute; z-index:9999; display:flex; align-items:center; gap:8px; padding:8px 14px; background:#fff; border:1.5px solid #1565c0; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.22); font-family:MontserratLight,sans-serif; font-size:.78rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translateX(-4px); transition:opacity .15s ease, transform .15s ease; }',
+      '#tam-modify-tip.tam-tip-visible { opacity:1; pointer-events:auto; transform:translateX(0); }',
       '.tam-tip-msg { color:#333; font-weight:bold; }',
-      '.tam-tip-btn { padding:3px 12px; font-size:.74rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:7px; background:#1565c0; color:#fff; transition:background .12s; }',
+      '.tam-tip-btn { padding:3px 14px; font-size:.74rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:7px; background:#1565c0; color:#fff; transition:background .12s; }',
       '.tam-tip-btn:hover { background:#0d47a1; border-color:#0d47a1; }',
-      /* ── Cell edit flash animation ── */
+      '.tam-tip-cancel { padding:3px 10px; font-size:.74rem; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#f5f5f5; color:#555; transition:background .12s; }',
+      '.tam-tip-cancel:hover { background:#e0e0e0; }',
+      /* pointer on clickable ref cells */
+      '.tam-ref-complete .tam-rec-ref-col, .tam-ref-over .tam-rec-ref-col { cursor:pointer; }',
+      '.tam-ref-complete .tam-rec-ref-col:hover, .tam-ref-over .tam-rec-ref-col:hover { background:#e8f0fe!important; }',
+      /* ── Unlocked column highlight: bright white ── */
+      '.tam-col-unlocked { background:#ffffff!important; box-shadow:inset 0 0 0 1px #1565c020; }',
+      '.tam-col-unlocked-hdr { background:#e8f4fd!important; border-top:3px solid #1565c0!important; }',
+      /* ── Ref cells in edit state: grey with relief ── */
+      '.tam-cell-ref-edit { background:#e0e0e0!important; box-shadow:inset 0 1px 4px rgba(0,0,0,.18)!important; }',
+      '.tam-cell-ref-edit .tam-rec-input { background:#e0e0e0!important; font-weight:bold!important; color:#1a1a1a!important; }',
+      /* ── Cell edit flash animation (kept for other uses) ── */
       '@keyframes tam-edit-flash { 0%{background:#ffe082!important;outline:2px solid #f9a825!important;} 50%{background:#fff176!important;outline:2px solid #f9a825!important;} 100%{background:inherit;outline:none;} }',
       '.tam-cell-edit-flash { animation:tam-edit-flash 2s ease forwards!important; }',
       '@media(prefers-color-scheme:dark){',
-      '#tam-modify-tip{background:#1a1a1a!important;border-color:#5dade2!important;box-shadow:0 4px 18px rgba(0,0,0,.5)!important;}',
+      '#tam-modify-tip{background:#1a1a1a!important;border-color:#5dade2!important;box-shadow:0 4px 20px rgba(0,0,0,.55)!important;}',
       '.tam-tip-msg{color:#e0e0e0!important;}',
       '.tam-tip-btn{background:#1565c0!important;border-color:#5dade2!important;color:#fff!important;}',
       '.tam-tip-btn:hover{background:#0d47a1!important;}',
-      '@keyframes tam-edit-flash-dark { 0%{background:#4a3800!important;outline:2px solid #f9a825!important;} 50%{background:#3a2e00!important;outline:2px solid #f9a825!important;} 100%{background:inherit;outline:none;} }',
-      '.tam-cell-edit-flash{animation:tam-edit-flash-dark 2s ease forwards!important;}',
+      '.tam-tip-cancel{background:#2a2a2a!important;border-color:#444!important;color:#aaa!important;}',
+      '.tam-tip-cancel:hover{background:#3a3a3a!important;}',
+      '.tam-ref-complete .tam-rec-ref-col:hover,.tam-ref-over .tam-rec-ref-col:hover{background:#0d2137!important;}',
+      '.tam-col-unlocked{background:#1a2a3a!important;}',
+      '.tam-col-unlocked-hdr{background:#0d1f2e!important;border-top-color:#5dade2!important;}',
+      '.tam-cell-ref-edit{background:#333!important;}',
+      '.tam-cell-ref-edit .tam-rec-input{background:#333!important;color:#fff!important;}',
       '}',
 
       /* ── Ref filter input ── */

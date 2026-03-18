@@ -1095,24 +1095,18 @@
     return { f: f, p: p };
   }
 
-  /* Distribuir F/P de un ref a una factura específica (llenando en orden) */
+  /* Distribuir F/P de un ref para uma fatura específica
+     — soma apenas as caixas que pertencem a essa fatura (box.invIdx === invIdx) */
   function tamGetRefDistribForInvoice(ref, invIdx) {
-    var totals = tamGetRefTotals(ref);
-    var fRem = totals.f, pRem = totals.p;
-    // Llenar facturas en orden hasta llegar a invIdx
-    for (var i = 0; i <= invIdx; i++) {
-      var inv = tamInvoices[i];
-      var grp = inv.grouped.find(function(g){ return g.ref === ref; });
-      if (!grp) continue;
-      if (i === invIdx) {
-        return { f: Math.min(fRem, grp.pieces), p: Math.min(pRem, grp.pieces - Math.min(fRem, grp.pieces)) };
+    if (!tamSession) return { f: 0, p: 0 };
+    var f = 0, p = 0;
+    tamSession.boxes.forEach(function(box){
+      if (box.invIdx === invIdx && box.refs[ref]) {
+        f += (box.refs[ref].f || 0);
+        p += (box.refs[ref].p || 0);
       }
-      var fUsed = Math.min(fRem, grp.pieces);
-      var pUsed = Math.min(pRem, grp.pieces - fUsed);
-      fRem -= fUsed;
-      pRem -= pUsed;
-    }
-    return { f: 0, p: 0 };
+    });
+    return { f: f, p: p };
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -1875,24 +1869,31 @@
   /* Distribute only within a specific set of boxes — works even if box.total not yet set */
   function tamDistribToBoxesFiltered(ref, totalPieces, fTotal, pTotal, boxList) {
     if (!boxList.length) return;
-    // If boxes have declared totals, distribute proportionally
-    // If not, put everything in the first box (or spread evenly)
     var declaredBoxes = boxList.filter(function(b){ return b.total; });
-    var targets = declaredBoxes.length ? declaredBoxes : boxList;
 
-    var fRem = fTotal, pRem = pTotal;
-    var pieceRem = totalPieces;
-    targets.forEach(function(box, i){
+    // ── No boxes have declared totals: put everything in the first box ──
+    // Spreading piece-by-piece across undeclared boxes causes rounding loss.
+    if (!declaredBoxes.length) {
+      var firstBox = boxList[0];
+      if (!firstBox.refs[ref]) firstBox.refs[ref] = { f:0, p:0 };
+      firstBox.refs[ref].f = fTotal;
+      firstBox.refs[ref].p = pTotal;
+      // Clear any stale values in the other boxes
+      for (var bi = 1; bi < boxList.length; bi++) {
+        if (boxList[bi].refs[ref]) { boxList[bi].refs[ref].f = 0; boxList[bi].refs[ref].p = 0; }
+      }
+      return;
+    }
+
+    // ── Boxes have declared totals: distribute proportionally ──
+    var fRem = fTotal, pRem = pTotal, pieceRem = totalPieces;
+    declaredBoxes.forEach(function(box, i){
       if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
-      var isLast = (i === targets.length - 1);
-      // Each box gets a proportional share based on its declared total,
-      // or equal share if no totals declared
-      var capacity = box.total || Math.ceil(totalPieces / targets.length);
+      var isLast = (i === declaredBoxes.length - 1);
+      var capacity = box.total;
       var boxShare = isLast ? pieceRem : Math.min(pieceRem, capacity);
-      // Split fTotal/pTotal proportionally within this box
-      var fShare = isLast ? fRem : (totalPieces > 0 ? Math.round(fTotal * boxShare / totalPieces) : 0);
-      var pShare = boxShare - fShare;
-      // Clamp
+      var fShare   = isLast ? fRem : (totalPieces > 0 ? Math.round(fTotal * boxShare / totalPieces) : 0);
+      var pShare   = boxShare - fShare;
       fShare = Math.max(0, Math.min(fShare, fRem));
       pShare = Math.max(0, Math.min(pShare, pRem));
       box.refs[ref].f = fShare;

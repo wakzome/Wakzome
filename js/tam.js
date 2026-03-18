@@ -539,6 +539,12 @@
       singleRemove.textContent = '✕ remover fatura';
       singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
       meta.appendChild(singleRemove);
+
+      var singleStock = document.createElement('button');
+      singleStock.className = 'tam-inv-stock-btn';
+      singleStock.textContent = '📦 Ingreso de Stock';
+      singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
+      meta.appendChild(singleStock);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
       } else {
@@ -579,6 +585,7 @@
           '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
             (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
           '</button>' +
+          '<button class="tam-inv-stock-btn" data-inv="' + idx + '">📦 Ingreso de Stock</button>' +
           '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
           '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>';
         block.appendChild(hdr);
@@ -596,6 +603,10 @@
         hdr.querySelector('.tam-inv-export-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-export-btn').getAttribute('data-inv'));
           tamExportInvoiceCSV(tamInvoices[i]);
+        });
+        hdr.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-stock-btn').getAttribute('data-inv'));
+          tamShowStockModal(i);
         });
         hdr.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-remove-btn').getAttribute('data-inv'));
@@ -2532,6 +2543,118 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     INGRESO DE STOCK — modal flotante con tabla Primavera
+  ══════════════════════════════════════════════════════════════ */
+  function tamShowStockModal(invIdx) {
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+
+    // Build rows: first ALL Funchal (A4) refs, then ALL Porto Santo (A5) refs
+    // Skip refs with 0 distribution
+    var rows = [];
+    ['f','p'].forEach(function(city){
+      var cityCode = city === 'f' ? 'A4' : 'A5';
+      r.grouped.forEach(function(g){
+        var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
+        var qty = city === 'f' ? (distrib.f || 0) : (distrib.p || 0);
+        if (qty <= 0) return;
+        rows.push({
+          ref:      g.ref,
+          city:     cityCode,
+          iva:      '00',
+          price:    g.unitPriceWithShip,
+          qty:      qty
+        });
+      });
+    });
+
+    // ── Build modal HTML ──────────────────────────────────────
+    var old = document.getElementById('tam-stock-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'tam-stock-modal';
+
+    var tableRows = rows.map(function(row, i){
+      return '<tr class="' + (i % 2 === 0 ? 'tam-stock-row-even' : 'tam-stock-row-odd') + '">' +
+        '<td class="tam-stock-td tam-stock-ref">' + tamEsc(row.ref) + '</td>' +
+        '<td class="tam-stock-td tam-stock-city">' + row.city + '</td>' +
+        '<td class="tam-stock-td tam-stock-iva">'  + row.iva   + '</td>' +
+        '<td class="tam-stock-td tam-stock-price">' + tamFmtEU(row.price) + '</td>' +
+        '<td class="tam-stock-td tam-stock-qty">'  + row.qty   + '</td>' +
+        '</tr>';
+    }).join('');
+
+    var noData = rows.length === 0
+      ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
+      : '';
+
+    modal.innerHTML =
+      '<div id="tam-stock-backdrop"></div>' +
+      '<div id="tam-stock-panel">' +
+        '<div id="tam-stock-header">' +
+          '<div id="tam-stock-title">' +
+            '<span id="tam-stock-inv-label">' + tamEsc(r.invoiceNo) + '</span>' +
+            '<span id="tam-stock-sub-label">Ingreso de Stock · Primavera ERP</span>' +
+          '</div>' +
+          '<div id="tam-stock-actions">' +
+            '<button id="tam-stock-export-btn" class="tam-stock-action-btn">⬇ Exportar Excel</button>' +
+            '<button id="tam-stock-close-btn" class="tam-stock-close-btn" title="fechar">✕</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="tam-stock-scroll">' +
+          '<table id="tam-stock-table">' +
+            '<thead>' +
+              '<tr>' +
+                '<th class="tam-stock-th tam-stock-ref">Referencia</th>' +
+                '<th class="tam-stock-th tam-stock-city">Armazém</th>' +
+                '<th class="tam-stock-th tam-stock-iva">IVA</th>' +
+                '<th class="tam-stock-th tam-stock-price">Preço</th>' +
+                '<th class="tam-stock-th tam-stock-qty">Qtd.</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' + (noData || tableRows) + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div id="tam-stock-footer">' +
+          rows.length + ' linhas · ' +
+          rows.filter(function(rw){ return rw.city==='A4'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Funchal · ' +
+          rows.filter(function(rw){ return rw.city==='A5'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Porto Santo' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(modal);
+    // Animate in
+    requestAnimationFrame(function(){ modal.classList.add('tam-stock-visible'); });
+
+    // Close
+    function closeModal() {
+      modal.classList.remove('tam-stock-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
+    }
+    modal.querySelector('#tam-stock-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#tam-stock-close-btn').addEventListener('click', closeModal);
+    document.addEventListener('keydown', function esc(e){
+      if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc); }
+    });
+
+    // Export to CSV (Excel-compatible)
+    modal.querySelector('#tam-stock-export-btn').addEventListener('click', function(){
+      var lines = ['\uFEFF' + ['Referencia','Armazem','IVA','Preco','Quantidade'].join(';')];
+      rows.forEach(function(row){
+        lines.push([row.ref, row.city, row.iva, String(row.price).replace('.',','), row.qty].join(';'));
+      });
+      var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'Stock_' + (r.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_') + '.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      EXPORT CSV — todas las facturas (botón global)
   ══════════════════════════════════════════════════════════════ */
   function tamExportCSV() {
@@ -3434,6 +3557,53 @@
       /* ── Export button per invoice ── */
       '.tam-inv-export-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #555; border-radius:8px; background:#fff; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-export-btn:hover { background:#555; color:#fff; }',
+      '.tam-inv-stock-btn { padding:4px 12px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:8px; background:#e8f0fe; color:#1565c0; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-stock-btn:hover { background:#1565c0; color:#fff; }',
+
+      /* ── Stock modal backdrop + panel ── */
+      '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#tam-stock-modal.tam-stock-visible { opacity:1; pointer-events:auto; }',
+      '#tam-stock-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-stock-panel { position:relative; z-index:1; width:min(820px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
+      '#tam-stock-modal.tam-stock-visible #tam-stock-panel { transform:translateY(0); }',
+      '#tam-stock-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
+      '#tam-stock-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-stock-inv-label { font-size:.95rem; font-weight:bold; color:#111; font-family:MontserratLight,sans-serif; }',
+      '#tam-stock-sub-label { font-size:.68rem; color:#888; font-family:MontserratLight,sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      '#tam-stock-actions { display:flex; align-items:center; gap:8px; }',
+      '.tam-stock-action-btn { padding:6px 16px; font-size:.76rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #2e7d32; border-radius:8px; background:#e8f5e9; color:#2e7d32; transition:background .13s,color .13s; white-space:nowrap; }',
+      '.tam-stock-action-btn:hover { background:#2e7d32; color:#fff; }',
+      '.tam-stock-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
+      '.tam-stock-close-btn:hover { background:#c62828; color:#fff; border-color:#c62828; }',
+      '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#tam-stock-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
+      '#tam-stock-table thead { position:sticky; top:0; z-index:2; }',
+      '.tam-stock-th { padding:8px 14px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666; border-bottom:2px solid #ddd; text-align:left; user-select:none; }',
+      '.tam-stock-th.tam-stock-city,.tam-stock-th.tam-stock-iva,.tam-stock-th.tam-stock-price,.tam-stock-th.tam-stock-qty { text-align:center; }',
+      '.tam-stock-td { padding:6px 14px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
+      '.tam-stock-td.tam-stock-city,.tam-stock-td.tam-stock-iva,.tam-stock-td.tam-stock-qty { text-align:center; font-weight:bold; }',
+      '.tam-stock-td.tam-stock-price { text-align:right; font-variant-numeric:tabular-nums; }',
+      '.tam-stock-td.tam-stock-ref { font-weight:bold; color:#1a1a1a; min-width:160px; }',
+      '.tam-stock-row-even { background:#fff; }',
+      '.tam-stock-row-odd  { background:#fafafa; }',
+      '#tam-stock-table tbody tr:hover td { background:#e8f0fe!important; }',
+      '.tam-stock-td.tam-stock-city[data-city="A4"] { color:#1565c0; }',
+      '.tam-stock-td.tam-stock-city[data-city="A5"] { color:#880e4f; }',
+      '#tam-stock-footer { padding:8px 20px; font-size:.72rem; color:#888; border-top:1px solid #eee; background:#fafafa; font-family:MontserratLight,sans-serif; flex-shrink:0; }',
+      '@media(prefers-color-scheme:dark){',
+      '#tam-stock-panel{background:#111!important;box-shadow:0 16px 64px rgba(0,0,0,.6)!important;}',
+      '#tam-stock-header{background:#161616!important;border-color:#2a2a2a!important;}',
+      '#tam-stock-inv-label{color:#e8e8e8!important;}',
+      '#tam-stock-sub-label{color:#555!important;}',
+      '.tam-stock-th{background:#1a1a1a!important;color:#666!important;border-color:#2a2a2a!important;}',
+      '.tam-stock-td{border-color:#1e1e1e!important;color:#e0e0e0!important;}',
+      '.tam-stock-row-even{background:#111!important;}',
+      '.tam-stock-row-odd{background:#161616!important;}',
+      '#tam-stock-table tbody tr:hover td{background:#0d1f2e!important;}',
+      '#tam-stock-footer{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-inv-stock-btn{background:#0d1f2e!important;border-color:#5dade2!important;color:#5dade2!important;}',
+      '.tam-inv-stock-btn:hover{background:#1565c0!important;color:#fff!important;}',
+      '}',
 
       /* ── Anomaly column header and cells ── */
       '.tam-th-anomaly { background:#f5f5f5!important; color:#888!important; font-size:.65rem!important; min-width:54px; }',

@@ -246,8 +246,11 @@
       var totalBoxes = parsedInvoices.reduce(function(s,r){ return s+(r.shipPkgs||0); },0);
       if (totalBoxes < 1) totalBoxes = 1;
       var boxes = [];
-      for (var i = 0; i < totalBoxes; i++) boxes.push({ total:null, refs:{}, locked:false });
-      tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now() };
+      parsedInvoices.forEach(function(r, invIdx){
+        var pkgs = r.shipPkgs || 1;
+        for (var i = 0; i < pkgs; i++) boxes.push({ total:null, refs:{}, locked:false, invIdx:invIdx });
+      });
+      tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
     } else {
       tamInvoices = parsedInvoices;
       tamEngineCache = {};
@@ -269,10 +272,13 @@
 
   /* Sync session boxes when new invoices are added — add missing boxes */
   function tamSyncSessionBoxes() {
+    if (!tamSession.quickDistrib) tamSession.quickDistrib = {};
     var totalBoxes = tamInvoices.reduce(function(s, r){ return s + (r.shipPkgs || 0); }, 0);
     if (totalBoxes < 1) totalBoxes = 1;
     while (tamSession.boxes.length < totalBoxes) {
-      tamSession.boxes.push({ total: null, refs: {}, locked: false });
+      // Find which invIdx the new box belongs to
+      var newInvIdx = tamInvoices.length - 1;
+      tamSession.boxes.push({ total: null, refs: {}, locked: false, invIdx: newInvIdx });
     }
   }
 
@@ -317,10 +323,14 @@
     var totalBoxes = tamInvoices.reduce(function(s, r){ return s + (r.shipPkgs || 0); }, 0);
     if (totalBoxes < 1) totalBoxes = 1;
     var boxes = [];
-    for (var i = 0; i < totalBoxes; i++) {
-      boxes.push({ total: null, refs: {}, locked: false });
-    }
-    tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now() };
+    var boxOffset = 0;
+    tamInvoices.forEach(function(r, invIdx){
+      var pkgs = r.shipPkgs || 1;
+      for (var i = 0; i < pkgs; i++) {
+        boxes.push({ total: null, refs: {}, locked: false, invIdx: invIdx });
+      }
+    });
+    tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
   }
 
   /* Dialog: existing session found on fresh load */
@@ -424,12 +434,24 @@
           r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
           r.shipPkgs + ' pac.</span>' +
           '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
+          '<div class="tam-inv-quick-wrap">' +
+            '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">100%F</button>' +
+            '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">100%PS</button>' +
+            '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + idx + '" data-mode="split">50/50</button>' +
+          '</div>' +
           '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
             (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
           '</button>' +
           '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
           '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>';
         block.appendChild(hdr);
+        hdr.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            var i    = parseInt(btn.getAttribute('data-inv'));
+            var mode = btn.getAttribute('data-mode');
+            tamQuickDistribInvoice(i, mode);
+          });
+        });
         hdr.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-edit-btn').getAttribute('data-inv'));
           tamToggleEditMode(i);
@@ -953,9 +975,20 @@
     var boxes = tamSession.boxes;
 
     // ── ÚNICA SECCIÓN: tabla de cajas con refs y totales ──────
+    var quickDistrib = (tamSession && tamSession.quickDistrib) || {};
+    var quickCount   = Object.keys(quickDistrib).length;
+    var areaTitle    = 'receção de mercadoria · ' + tamInvoices.length + ' fatura(s) · ' + consolidated.length + ' referências' +
+      (quickCount > 0 ? ' · ' + quickCount + ' fatura(s) com distribuição rápida' : '');
+
     var boxesHtml =
       '<div class="tam-rec-area">' +
-      '<div class="tam-rec-area-title">receção de mercadoria · ' + tamInvoices.length + ' fatura(s) · ' + consolidated.length + ' referências</div>' +
+      '<div class="tam-rec-area-title">' + areaTitle + '</div>' +
+      '<div class="tam-rec-quick-btns">' +
+        '<span class="tam-quick-label">distribuição rápida:</span>' +
+        '<button class="tam-quick-btn" id="tam-quick-funchal" title="enviar 100% para Funchal">100% Funchal</button>' +
+        '<button class="tam-quick-btn" id="tam-quick-porto"   title="enviar 100% para Porto Santo">100% Porto Santo</button>' +
+        '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split" title="dividir 50/50">50 / 50</button>' +
+      '</div>' +
       '<div class="tam-rec-boxes-scroll">' +
       '<table class="tam-rec-boxes-table">' +
       '<thead>' +
@@ -965,13 +998,16 @@
       '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
       '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
-    // Sort boxes: incomplete first (left), complete last (right)
+    // Sort boxes: incomplete first, complete last
+    // Also HIDE boxes from invoices that used quick distribution
+    var quickDistrib = (tamSession && tamSession.quickDistrib) || {};
     var boxOrder = boxes.map(function(box, bi){
       var received = 0;
       if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
       var isComplete = box.total && received >= box.total;
-      return { bi: bi, box: box, received: received, isComplete: isComplete };
-    });
+      var isHidden   = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
+      return { bi: bi, box: box, received: received, isComplete: isComplete, isHidden: isHidden };
+    }).filter(function(b){ return !b.isHidden; });  // remove quick-distributed boxes
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
     var sortedBoxes    = pendingBoxes.concat(completedBoxes);
@@ -1020,10 +1056,19 @@
 
     boxesHtml += '</tr></thead><tbody>';
 
+    // Only show refs that still need manual distribution
+    // (belong to at least one invoice NOT using quick distrib)
+    var manualInvoiceIdxs = tamInvoices.map(function(r, i){ return i; })
+      .filter(function(i){ return quickDistrib[i] === undefined; });
+
+    var consolidatedForSummary = consolidated.filter(function(c){
+      return c.invoices.some(function(inv){ return manualInvoiceIdxs.indexOf(inv.invIdx) >= 0; });
+    });
+
     // Filas de referencias — pendientes primero, completadas al final
     var pending   = [];
     var completed = [];
-    consolidated.forEach(function(c){
+    consolidatedForSummary.forEach(function(c){
       var totals   = tamGetRefTotals(c.ref);
       var received = totals.f + totals.p;
       var isDone   = received >= c.totalPieces && c.totalPieces > 0;
@@ -1075,6 +1120,14 @@
     boxesHtml += '</tbody></table></div></div>';
 
     area.innerHTML = boxesHtml;
+
+    // ── BIND QUICK DISTRIBUTION BUTTONS ──────────────────────
+    var qFunchal = area.querySelector('#tam-quick-funchal');
+    var qPorto   = area.querySelector('#tam-quick-porto');
+    var qSplit   = area.querySelector('#tam-quick-split');
+    if (qFunchal) qFunchal.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
+    if (qPorto)   qPorto.addEventListener('click',   function(){ tamQuickDistrib('porto'); });
+    if (qSplit)   qSplit.addEventListener('click',   function(){ tamQuickDistrib('split'); });
 
     // ── BIND EVENTOS ──────────────────────────────────────────
 
@@ -1218,8 +1271,215 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     ANOMALIAS — botão + bloco de resumo
+     DISTRIBUIÇÃO RÁPIDA — global (área de resumen) y por factura
   ══════════════════════════════════════════════════════════════ */
+
+  /* Per-invoice quick distribution */
+  function tamQuickDistribInvoice(invIdx, mode) {
+    if (!tamSession) return;
+    if (!tamSession.quickDistrib) tamSession.quickDistrib = {};
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+
+    // Get boxes that belong to this invoice
+    var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+
+    if (mode === 'funchal' || mode === 'porto') {
+      r.grouped.forEach(function(g){
+        tamDistribToBoxesFiltered(g.ref, g.pieces, mode === 'funchal' ? g.pieces : 0, mode === 'porto' ? g.pieces : 0, invBoxes);
+      });
+      tamSession.quickDistrib[invIdx] = mode;
+      tamRenderAll();
+      tamSaveSession(false);
+    } else if (mode === 'split') {
+      var oddRefs = [];
+      r.grouped.forEach(function(g){
+        var half  = Math.floor(g.pieces / 2);
+        var isOdd = g.pieces % 2 !== 0;
+        tamDistribToBoxesFiltered(g.ref, g.pieces, half, g.pieces - half - (isOdd ? 1 : 0), invBoxes);
+        if (isOdd) oddRefs.push({ ref: g.ref, totalPieces: g.pieces, invBoxes: invBoxes });
+      });
+      tamSession.quickDistrib[invIdx] = 'split';
+      if (oddRefs.length) {
+        tamOddPieceDialogFiltered(oddRefs, 0, invBoxes, function(){
+          tamRenderAll();
+          tamSaveSession(false);
+        });
+      } else {
+        tamRenderAll();
+        tamSaveSession(false);
+      }
+    }
+  }
+
+  /* Distribute only within a specific set of boxes */
+  function tamDistribToBoxesFiltered(ref, totalPieces, fTotal, pTotal, boxList) {
+    var fRem = fTotal, pRem = pTotal;
+    boxList.forEach(function(box){
+      if (!box.total) return;
+      if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
+      var fShare = Math.min(fRem, box.total);
+      var pShare = Math.min(pRem, box.total - fShare);
+      box.refs[ref].f = fShare;
+      box.refs[ref].p = pShare;
+      fRem -= fShare;
+      pRem -= pShare;
+    });
+  }
+
+  function tamOddPieceDialogFiltered(oddRefs, idx, invBoxes, onComplete) {
+    if (idx >= oddRefs.length) { onComplete(); return; }
+    var c    = oddRefs[idx];
+    var half = Math.floor(c.totalPieces / 2);
+
+    var old = document.getElementById('tam-session-dialog');
+    if (old) old.parentNode.removeChild(old);
+
+    var dialog = document.createElement('div');
+    dialog.id = 'tam-session-dialog';
+    dialog.innerHTML =
+      '<div id="tam-session-dialog-box">' +
+        '<div class="tam-dialog-title">peça impar — ' + (idx+1) + ' de ' + oddRefs.length + '</div>' +
+        '<div class="tam-dialog-body">' +
+          'Referência <strong>' + tamEsc(c.ref) + '</strong><br>' +
+          'Total: <strong>' + c.totalPieces + ' peças</strong> · Funchal: ' + half + ' · Porto Santo: ' + half + '<br><br>' +
+          'Sobra <strong>1 peça</strong>. Para onde vai?' +
+        '</div>' +
+        '<div class="tam-dialog-btns">' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-odd-f">→ Funchal (' + (half+1) + 'F / ' + half + 'PS)</button>' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-odd-p">→ Porto Santo (' + half + 'F / ' + (half+1) + 'PS)</button>' +
+          '<button class="tam-dialog-btn" id="tam-odd-s">deixar pendente</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(dialog);
+
+    function choose(f, p) {
+      tamDistribToBoxesFiltered(c.ref, c.totalPieces, f, p, invBoxes);
+      dialog.parentNode.removeChild(dialog);
+      tamOddPieceDialogFiltered(oddRefs, idx + 1, invBoxes, onComplete);
+    }
+    dialog.querySelector('#tam-odd-f').addEventListener('click', function(){ choose(half+1, half); });
+    dialog.querySelector('#tam-odd-p').addEventListener('click', function(){ choose(half, half+1); });
+    dialog.querySelector('#tam-odd-s').addEventListener('click', function(){ choose(half, half); });
+  }
+
+  /* Global quick distribution (area de resumen buttons) */
+  function tamQuickDistrib(mode) {
+    if (!tamSession) return;
+    var consolidated = tamConsolidatedRefs();
+
+    if (mode === 'funchal' || mode === 'porto') {
+      // Apply 100% to all refs across all boxes
+      consolidated.forEach(function(c){
+        tamSession.boxes.forEach(function(box){
+          if (!box.refs[c.ref]) box.refs[c.ref] = { f:0, p:0 };
+          var boxTotal = tamGetBoxRefTotal(box, c.ref);
+          // We distribute proportionally to each box based on its declared total
+        });
+        // Distribute into boxes: fill each box up to its declared total
+        var remaining = c.totalPieces;
+        tamSession.boxes.forEach(function(box){
+          if (!box.total) return;
+          if (!box.refs[c.ref]) box.refs[c.ref] = { f:0, p:0 };
+          var boxShare = Math.min(remaining, box.total);
+          // But clamp to what the box hasn't already used for other refs
+          if (mode === 'funchal') {
+            box.refs[c.ref].f = boxShare;
+            box.refs[c.ref].p = 0;
+          } else {
+            box.refs[c.ref].f = 0;
+            box.refs[c.ref].p = boxShare;
+          }
+          remaining -= boxShare;
+        });
+      });
+      tamRenderAll();
+      tamSaveSession(false);
+      return;
+    }
+
+    if (mode === 'split') {
+      // 50/50: collect odd-piece refs for dialog
+      var oddRefs = [];
+      consolidated.forEach(function(c){
+        var half    = Math.floor(c.totalPieces / 2);
+        var isOdd   = c.totalPieces % 2 !== 0;
+        // Distribute even part first
+        tamDistribToBoxes(c.ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0));
+        if (isOdd) oddRefs.push(c);
+      });
+
+      if (oddRefs.length) {
+        tamOddPieceDialog(oddRefs, 0, function(){
+          tamRenderAll();
+          tamSaveSession(false);
+        });
+      } else {
+        tamRenderAll();
+        tamSaveSession(false);
+      }
+    }
+  }
+
+  /* Distribute f and p amounts across boxes proportionally for a ref */
+  function tamDistribToBoxes(ref, totalPieces, fTotal, pTotal) {
+    var fRem = fTotal, pRem = pTotal;
+    tamSession.boxes.forEach(function(box){
+      if (!box.total) return;
+      if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
+      var boxCapacity = box.total;
+      var fShare = Math.min(fRem, boxCapacity);
+      var pShare = Math.min(pRem, boxCapacity - fShare);
+      box.refs[ref].f = fShare;
+      box.refs[ref].p = pShare;
+      fRem -= fShare;
+      pRem -= pShare;
+    });
+  }
+
+  function tamGetBoxRefTotal(box, ref) {
+    if (!box.refs[ref]) return 0;
+    return (box.refs[ref].f || 0) + (box.refs[ref].p || 0);
+  }
+
+  /* Sequential dialog for odd-piece refs */
+  function tamOddPieceDialog(oddRefs, idx, onComplete) {
+    if (idx >= oddRefs.length) { onComplete(); return; }
+    var c = oddRefs[idx];
+    var half = Math.floor(c.totalPieces / 2);
+
+    var old = document.getElementById('tam-session-dialog');
+    if (old) old.parentNode.removeChild(old);
+
+    var dialog = document.createElement('div');
+    dialog.id = 'tam-session-dialog';
+    dialog.innerHTML =
+      '<div id="tam-session-dialog-box">' +
+        '<div class="tam-dialog-title">peça impar — ' + (idx+1) + ' de ' + oddRefs.length + '</div>' +
+        '<div class="tam-dialog-body">' +
+          'Referência <strong>' + tamEsc(c.ref) + '</strong><br>' +
+          'Total: <strong>' + c.totalPieces + ' peças</strong> · ' +
+          'Funchal: ' + half + ' · Porto Santo: ' + half + '<br><br>' +
+          'Sobra <strong>1 peça</strong>. Para onde vai?' +
+        '</div>' +
+        '<div class="tam-dialog-btns">' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-odd-funchal">→ Funchal (' + (half+1) + ' F / ' + half + ' PS)</button>' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-odd-porto">→ Porto Santo (' + half + ' F / ' + (half+1) + ' PS)</button>' +
+          '<button class="tam-dialog-btn" id="tam-odd-skip">deixar pendente (não distribuir esta peça)</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(dialog);
+
+    function choose(f, p) {
+      tamDistribToBoxes(c.ref, c.totalPieces, f, p);
+      dialog.parentNode.removeChild(dialog);
+      tamOddPieceDialog(oddRefs, idx + 1, onComplete);
+    }
+
+    dialog.querySelector('#tam-odd-funchal').addEventListener('click', function(){ choose(half+1, half); });
+    dialog.querySelector('#tam-odd-porto').addEventListener('click',   function(){ choose(half, half+1); });
+    dialog.querySelector('#tam-odd-skip').addEventListener('click',    function(){ choose(half, half); }); // leaves 1 unassigned
+  }
   function tamRenderAnomalies() {
     var area = document.getElementById('tam-anomaly-area');
     if (!area) return;
@@ -2306,8 +2566,19 @@
       '.tam-th-funchal { background:#e3f2fd!important; color:#1565c0!important; }',
       '.tam-th-porto   { background:#fce4ec!important; color:#880e4f!important; }',
 
-      /* Scroll contenedor */
-      '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
+      /* ── Quick distribution buttons ── */
+      '.tam-rec-quick-btns { display:flex; align-items:center; gap:8px; padding:8px 14px; border-bottom:1px solid #e6e6e6; background:#fafafa; flex-wrap:wrap; }',
+      '.tam-quick-label { font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; white-space:nowrap; }',
+      '.tam-quick-btn { padding:5px 14px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:#fff; transition:background .15s,color .15s,border-color .15s; white-space:nowrap; }',
+      '.tam-quick-btn:hover { background:#555; color:#fff; border-color:#555; }',
+      '.tam-quick-btn-split { border-color:#1565c0; color:#1565c0; }',
+      '.tam-quick-btn-split:hover { background:#1565c0!important; color:#fff!important; border-color:#1565c0!important; }',
+      '@media(prefers-color-scheme:dark){',
+      '.tam-rec-quick-btns{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-quick-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
+      '.tam-quick-btn:hover{background:#555!important;color:#fff!important;border-color:#555!important;}',
+      '.tam-quick-btn-split{border-color:#1565c0!important;color:#64b5f6!important;}',
+      '}',
 
       '.tam-rec-boxes-table { border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
       '.tam-rec-boxes-table th, .tam-rec-boxes-table td { border:1px solid #f0f0f0; text-align:center; vertical-align:middle; }',
@@ -2363,6 +2634,18 @@
       '.tam-ref-over .tam-rec-ref-col { background:#ffe0e0!important; }',
       '.tam-ref-over .tam-rec-total-col { background:#ffe0e0!important; }',
       '.tam-ref-over td strong { color:#c00!important; }',
+
+      /* ── Per-invoice quick distribution buttons ── */
+      '.tam-inv-quick-wrap { display:flex; gap:4px; flex-shrink:0; }',
+      '.tam-inv-quick-btn { padding:3px 9px; font-size:.68rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:#fff; color:#555; transition:background .15s,color .15s,border-color .15s; white-space:nowrap; }',
+      '.tam-inv-quick-btn:hover { background:#555; color:#fff; border-color:#555; }',
+      '.tam-inv-quick-split { border-color:#1565c0; color:#1565c0; }',
+      '.tam-inv-quick-split:hover { background:#1565c0!important; color:#fff!important; }',
+      '@media(prefers-color-scheme:dark){',
+      '.tam-inv-quick-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
+      '.tam-inv-quick-btn:hover{background:#555!important;color:#fff!important;}',
+      '.tam-inv-quick-split{border-color:#1565c0!important;color:#64b5f6!important;}',
+      '}',
 
       /* ── Edit mode button ── */
       '.tam-inv-edit-btn { padding:4px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #aaa; border-radius:8px; background:#fff; color:#555; transition:background .15s,color .15s,border-color .15s; white-space:nowrap; flex-shrink:0; }',

@@ -1033,7 +1033,8 @@
       '<th class="tam-rec-ref-col">referência</th>' +
       '<th class="tam-rec-total-col">total</th>' +
       '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
-      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
+      '<th class="tam-rec-total-col tam-th-porto">PS</th>' +
+      '<th class="tam-rec-quick-col">distribuição rápida</th>';
 
     // Repair invIdx on all boxes (handles legacy sessions without invIdx)
     tamRepairBoxInvIdx();
@@ -1066,7 +1067,8 @@
       '<th class="tam-rec-ref-col"></th>' +
       '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>' +
-      '<th class="tam-rec-total-col"></th>';
+      '<th class="tam-rec-total-col"></th>' +
+      '<th class="tam-rec-quick-col"></th>';
 
     sortedBoxes.forEach(function(bObj){
       var bi       = bObj.bi;
@@ -1154,12 +1156,57 @@
           '</td>';
       });
 
-      boxesHtml += '</tr>';
+      // Per-row quick buttons (only when row is pending and has at least one active box)
+      var hasActiveBox = sortedBoxes.some(function(b){ return b.box.total && !b.box.locked; });
+      var rowQuickBtns = (!isDone && !isOver && hasActiveBox)
+        ? '<td class="tam-rec-quick-col">' +
+            '<div class="tam-row-quick">' +
+              '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
+              '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
+              '<button class="tam-row-quick-btn tam-row-quick-split" data-ref="' + tamEsc(c.ref) + '" data-mode="split">½</button>' +
+            '</div>' +
+          '</td>'
+        : '<td class="tam-rec-quick-col"></td>';
+
+      boxesHtml += rowQuickBtns + '</tr>';
     });
 
     boxesHtml += '</tbody></table></div></div>';
 
-    area.innerHTML = boxesHtml;
+    // ── DIVIDER BANNER above summary area
+    area.innerHTML =
+      '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
+      boxesHtml;
+
+    // ── BIND PER-ROW QUICK BUTTONS ────────────────────────────
+    area.querySelectorAll('.tam-row-quick-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var ref  = btn.getAttribute('data-ref');
+        var mode = btn.getAttribute('data-mode');
+        var c    = consolidatedForSummary.find(function(x){ return x.ref === ref; });
+        if (!c) return;
+        var activeSortedBoxes = sortedBoxes.filter(function(b){ return !b.isComplete; });
+        if (!activeSortedBoxes.length) activeSortedBoxes = sortedBoxes;
+        var boxList = activeSortedBoxes.map(function(b){ return b.box; });
+        if (mode === 'funchal') {
+          tamDistribToBoxesFiltered(ref, c.totalPieces, c.totalPieces, 0, boxList);
+        } else if (mode === 'porto') {
+          tamDistribToBoxesFiltered(ref, c.totalPieces, 0, c.totalPieces, boxList);
+        } else if (mode === 'split') {
+          var half  = Math.floor(c.totalPieces / 2);
+          var isOdd = c.totalPieces % 2 !== 0;
+          tamDistribToBoxesFiltered(ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0), boxList);
+          if (isOdd) {
+            tamOddPieceDialogFiltered([{ ref: ref, totalPieces: c.totalPieces }], 0, boxList, function(){
+              tamRenderAll(); tamSaveSession(false);
+            });
+            return;
+          }
+        }
+        tamRenderAll();
+        tamSaveSession(false);
+      });
+    });
 
     // ── BIND QUICK DISTRIBUTION BUTTONS ──────────────────────
     var qFunchal = area.querySelector('#tam-quick-funchal');
@@ -1188,6 +1235,7 @@
 
     // Input de distribución F/P
     area.querySelectorAll('.tam-rec-input').forEach(function(inp){
+      // On every keystroke: save value silently, update summary cells
       inp.addEventListener('input', function(){
         var bi   = parseInt(inp.getAttribute('data-box'));
         var ref  = inp.getAttribute('data-ref');
@@ -1195,44 +1243,38 @@
         var val  = parseInt(inp.value) || 0;
         if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f: 0, p: 0 };
         tamSession.boxes[bi].refs[ref][city] = val;
-
-        tamUpdateRefRowAlert(ref);
-        tamCheckBoxLock(bi);
+        // Update summary cells and invoice rows quietly — no row move yet
         tamUpdateSummaryRow(ref);
         tamUpdateInvoicesRows(ref);
         tamScheduleSave();
       });
 
-      // Keyboard navigation: Tab on PS → focus F of next enabled row
-      // Enter acts like Tab for fast entry
+      // On Enter/Tab: confirm the value → trigger row move + box lock
       inp.addEventListener('keydown', function(e){
         if (e.key !== 'Tab' && e.key !== 'Enter') return;
+        var bi   = parseInt(inp.getAttribute('data-box'));
+        var ref  = inp.getAttribute('data-ref');
+        // Trigger alert + lock NOW (on confirm)
+        tamUpdateRefRowAlert(ref);
+        tamCheckBoxLock(bi);
+
         var isPS = inp.classList.contains('tam-rec-input-p');
         var isF  = inp.classList.contains('tam-rec-input-f');
 
-        // F → PS of same cell: default Tab handles it, only intercept PS→next
         if (isF && e.key === 'Enter') {
           e.preventDefault();
-          // Move to PS of same box/row
-          var bi  = inp.getAttribute('data-box');
-          var ref = inp.getAttribute('data-ref');
           var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-          var ps = document.getElementById('tam-inp-p-' + bi + '-' + safeRef);
+          var ps = document.getElementById('tam-inp-p-' + inp.getAttribute('data-box') + '-' + safeRef);
           if (ps && !ps.disabled) { ps.focus(); ps.select(); }
           return;
         }
 
         if (isPS && (e.key === 'Tab' || e.key === 'Enter')) {
           e.preventDefault();
-          // Find next enabled F input after current row
           var allF = Array.from(area.querySelectorAll('.tam-rec-input-f:not([disabled])'));
-          var curBi  = inp.getAttribute('data-box');
-          var curRef = inp.getAttribute('data-ref');
-          // Find the F input of this same row
-          var safeRef = curRef.replace(/[^a-z0-9]/gi,'_');
-          var curF = document.getElementById('tam-inp-f-' + curBi + '-' + safeRef);
-          var curFIdx = allF.indexOf(curF);
-          var nextF = allF[curFIdx + 1];
+          var safeRef2 = ref.replace(/[^a-z0-9]/gi,'_');
+          var curF = document.getElementById('tam-inp-f-' + inp.getAttribute('data-box') + '-' + safeRef2);
+          var nextF = allF[allF.indexOf(curF) + 1];
           if (nextF) { nextF.focus(); nextF.select(); }
           return;
         }
@@ -2648,8 +2690,29 @@
       '.tam-quick-btn-split{border-color:#1565c0!important;color:#64b5f6!important;}',
       '}',
 
-      '.tam-rec-boxes-table { border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
-      '.tam-rec-boxes-table th, .tam-rec-boxes-table td { border:1px solid #f0f0f0; text-align:center; vertical-align:middle; }',
+      /* ── Reception table: deep black text, no spinners ── */
+      '.tam-rec-boxes-table { border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; color:#000!important; }',
+      '.tam-rec-boxes-table th, .tam-rec-boxes-table td { border:1px solid #f0f0f0; text-align:center; vertical-align:middle; color:#000!important; }',
+      '.tam-rec-input { width:48px; padding:2px 4px; font-size:.8rem; font-weight:bold; font-family:MontserratLight,sans-serif; border:1px solid #ddd; border-radius:6px; text-align:center; outline:none; background:transparent; transition:border-color .15s; color:#000!important; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-rec-input::-webkit-outer-spin-button, .tam-rec-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }',
+      '.tam-rec-input-f { color:#1565c0!important; }',
+      '.tam-rec-input-p { color:#880e4f!important; }',
+      '.tam-rec-input:focus { border-color:#555; background:#fff; }',
+      '.tam-rec-input:disabled { background:#f5f5f5; color:#bbb!important; border-color:#eee; }',
+
+      /* ── Per-row quick buttons column ── */
+      '.tam-rec-quick-col { min-width:100px; padding:2px 6px!important; background:#fafafa!important; border-left:2px solid #e6e6e6!important; }',
+      '.tam-boxes-hdr-row .tam-rec-quick-col { font-size:.65rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#aaa; background:#f8f8f8!important; }',
+      '.tam-row-quick { display:flex; gap:3px; justify-content:center; }',
+      '.tam-row-quick-btn { padding:2px 7px; font-size:.7rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:#fff; color:#555; transition:background .12s,color .12s; white-space:nowrap; line-height:1.4; }',
+      '.tam-row-quick-btn:hover { background:#555; color:#fff; border-color:#555; }',
+      '.tam-row-quick-split { border-color:#1565c0!important; color:#1565c0!important; }',
+      '.tam-row-quick-split:hover { background:#1565c0!important; color:#fff!important; }',
+
+      /* ── Distribuição divider banner ── */
+      '.tam-rec-divider { display:flex; align-items:center; gap:12px; margin-bottom:0; padding:10px 0 6px; width:100%; max-width:1600px; }',
+      '.tam-rec-divider::before, .tam-rec-divider::after { content:""; flex:1; height:1px; background:#e0e0e0; }',
+      '.tam-rec-divider span { font-family:MontserratLight,sans-serif; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.14em; color:#bbb; white-space:nowrap; padding:0 8px; }',
 
       /* Cabecera caja */
       '.tam-boxes-hdr-row th { padding:6px 8px; background:#f8f8f8; font-size:.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#888; white-space:nowrap; }',
@@ -2686,7 +2749,6 @@
       /* Celdas input */
       '.tam-rec-cell-f { background:#f0f8ff; padding:2px 4px!important; min-width:52px; }',
       '.tam-rec-cell-p { background:#fff0f5; padding:2px 4px!important; min-width:52px; border-right:2px solid #e0e0e0!important; }',
-      '.tam-rec-input { width:48px; padding:2px 4px; font-size:.8rem; font-weight:bold; font-family:MontserratLight,sans-serif; border:1px solid #ddd; border-radius:6px; text-align:center; outline:none; background:transparent; transition:border-color .15s; }',
       '.tam-rec-input-f { color:#1565c0; }',
       '.tam-rec-input-p { color:#880e4f; }',
       '.tam-rec-input:focus { border-color:#555; background:#fff; }',
@@ -2818,11 +2880,17 @@
       '.tam-rec-input-f{color:#64b5f6!important;}',
       '.tam-rec-input-p{color:#f48fb1!important;}',
       '.tam-rec-input:focus{border-color:#888!important;background:#111!important;}',
-      '.tam-rec-ref-col,.tam-rec-total-col{background-color:#161616!important;background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-rec-ref-col,.tam-rec-total-col{background-color:#161616!important;background:#161616!important;border-color:#2a2a2a!important;color:#e8e8e8!important;}',
       '.tam-boxes-hdr-row .tam-rec-ref-col{background-color:#1a1a1a!important;background:#1a1a1a!important;}',
       '.tam-boxes-sub-hdr .tam-rec-ref-col{background-color:#161616!important;background:#161616!important;}',
       '.tam-ref-over .tam-rec-ref-col{background-color:#3a0a0a!important;background:#3a0a0a!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-ref-col{background-color:#222!important;background:#222!important;}',
+      '.tam-rec-quick-col{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-boxes-hdr-row .tam-rec-quick-col{background:#1a1a1a!important;}',
+      '.tam-row-quick-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
+      '.tam-row-quick-btn:hover{background:#555!important;color:#fff!important;}',
+      '.tam-rec-divider::before,.tam-rec-divider::after{background:#2a2a2a!important;}',
+      '.tam-rec-divider span{color:#444!important;}',
       '.tam-rec-boxes-table th,.tam-rec-boxes-table td{border-color:#1e1e1e!important;color:#e8e8e8!important;}',
       '.tam-rec-boxes-table tbody tr:hover td{background:#1a1a1a!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-f{background:#112233!important;}',

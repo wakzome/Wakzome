@@ -1348,6 +1348,132 @@
       });
     });
 
+    // ── HOVER-TO-MODIFY on completed ref rows ─────────────────
+    (function(){
+      // Ensure the singleton tooltip exists
+      var tip = document.getElementById('tam-modify-tip');
+      if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'tam-modify-tip';
+        tip.innerHTML =
+          '<span class="tam-tip-msg">\u00BFDesea modificar?</span>' +
+          '<button class="tam-tip-btn" id="tam-tip-yes">S\u00ED</button>';
+        document.body.appendChild(tip);
+      }
+
+      var tipHideTimer = null;
+      var tipActiveRef = null;
+      var tipActiveRow = null;
+
+      function showTip(row, refVal) {
+        clearTimeout(tipHideTimer);
+        tipActiveRef = refVal;
+        tipActiveRow = row;
+
+        // Position relative to the ref cell
+        var refCell = row.querySelector('.tam-rec-ref-col');
+        if (!refCell) return;
+        var rect = refCell.getBoundingClientRect();
+        var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+        var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+        tip.style.left = (rect.left + scrollX) + 'px';
+        tip.style.top  = (rect.top  + scrollY - tip.offsetHeight - 6) + 'px';
+        tip.classList.add('tam-tip-visible');
+
+        // Reposition after paint (offsetHeight may be 0 on first show)
+        requestAnimationFrame(function(){
+          var rect2 = refCell.getBoundingClientRect();
+          tip.style.left = (rect2.left + scrollX) + 'px';
+          tip.style.top  = (rect2.top  + scrollY - tip.offsetHeight - 6) + 'px';
+        });
+      }
+
+      function hideTip(immediate) {
+        if (immediate) {
+          tip.classList.remove('tam-tip-visible');
+          tipActiveRef = null;
+          tipActiveRow = null;
+        } else {
+          tipHideTimer = setTimeout(function(){
+            tip.classList.remove('tam-tip-visible');
+            tipActiveRef = null;
+            tipActiveRow = null;
+          }, 320);
+        }
+      }
+
+      // Attach hover listeners to completed/over rows
+      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+      if (!tbody) return;
+      tbody.querySelectorAll('tr.tam-ref-complete, tr.tam-ref-over').forEach(function(row){
+        row.addEventListener('mouseenter', function(){
+          showTip(row, row.getAttribute('data-ref'));
+        });
+        row.addEventListener('mouseleave', function(){ hideTip(false); });
+      });
+
+      // Keep tip visible while hovering it
+      tip.addEventListener('mouseenter', function(){ clearTimeout(tipHideTimer); });
+      tip.addEventListener('mouseleave', function(){ hideTip(false); });
+
+      // "Sí" button — unlock the box(es) containing this ref and highlight cells
+      var yesBtn = tip.querySelector('#tam-tip-yes');
+      if (yesBtn) {
+        // Remove old listener by replacing the button
+        var newYes = yesBtn.cloneNode(true);
+        yesBtn.parentNode.replaceChild(newYes, yesBtn);
+        newYes.addEventListener('click', function(){
+          hideTip(true);
+          var ref = tipActiveRef;
+          if (!ref || !tamSession) return;
+
+          // Find locked boxes that have data for this ref
+          var unlocked = false;
+          tamSession.boxes.forEach(function(box, bi){
+            if (box.locked && box.refs[ref]) {
+              box.locked = false;
+              // Cancel any pending lock timer
+              if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+              delete tamBoxLockPending[bi];
+              unlocked = true;
+            }
+          });
+
+          // Reset animation state for this ref so it can flash again
+          tamRefDone.delete(ref);
+          tamRefCompleting.delete(ref);
+          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
+
+          if (!unlocked) return;
+          tamScheduleSave();
+          tamRenderAll();
+
+          // After re-render, flash-highlight the cells for this ref
+          requestAnimationFrame(function(){
+            var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
+            var toFlash = area.querySelectorAll(
+              '#tam-inp-f-' + safeRef + ', #tam-inp-p-' + safeRef +
+              ', [id^="tam-inp-f-"][id$="-' + safeRef + '"], [id^="tam-inp-p-"][id$="-' + safeRef + '"]'
+            );
+            // Better: select by data-ref
+            var inputs = area.querySelectorAll('.tam-rec-input[data-ref]');
+            var matched = Array.from(inputs).filter(function(inp){
+              return inp.getAttribute('data-ref') === ref && !inp.disabled;
+            });
+            matched.forEach(function(inp){
+              var td = inp.closest('td');
+              if (td) {
+                td.classList.add('tam-cell-edit-flash');
+                setTimeout(function(){ td.classList.remove('tam-cell-edit-flash'); }, 1400);
+              }
+            });
+            // Focus first editable input
+            if (matched[0]) { matched[0].focus(); matched[0].select(); }
+          });
+        });
+      }
+    })();
+
     // ── BIND REF FILTER INPUT ─────────────────────────────────
     (function(){
       var filterInp = area.querySelector('#tam-ref-filter');
@@ -3035,6 +3161,24 @@
       /* Sticky header cells */
       '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#f8f8f8!important; background:#f8f8f8!important; box-shadow:2px 0 6px rgba(0,0,0,.09); }',
       '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 6px rgba(0,0,0,.07); padding:4px 6px!important; }',
+
+      /* ── Hover-to-modify tooltip ── */
+      '#tam-modify-tip { position:absolute; z-index:9999; display:flex; align-items:center; gap:8px; padding:7px 12px; background:#fff; border:1.5px solid #1565c0; border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,.18); font-family:MontserratLight,sans-serif; font-size:.78rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translateY(4px); transition:opacity .18s ease, transform .18s ease; }',
+      '#tam-modify-tip.tam-tip-visible { opacity:1; pointer-events:auto; transform:translateY(0); }',
+      '.tam-tip-msg { color:#333; font-weight:bold; }',
+      '.tam-tip-btn { padding:3px 12px; font-size:.74rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:7px; background:#1565c0; color:#fff; transition:background .12s; }',
+      '.tam-tip-btn:hover { background:#0d47a1; border-color:#0d47a1; }',
+      /* ── Cell edit flash animation ── */
+      '@keyframes tam-edit-flash { 0%{background:#fff9c4!important;} 60%{background:#fff176!important;} 100%{background:inherit;} }',
+      '.tam-cell-edit-flash { animation:tam-edit-flash 1.4s ease forwards!important; }',
+      '@media(prefers-color-scheme:dark){',
+      '#tam-modify-tip{background:#1a1a1a!important;border-color:#5dade2!important;box-shadow:0 4px 18px rgba(0,0,0,.5)!important;}',
+      '.tam-tip-msg{color:#e0e0e0!important;}',
+      '.tam-tip-btn{background:#1565c0!important;border-color:#5dade2!important;color:#fff!important;}',
+      '.tam-tip-btn:hover{background:#0d47a1!important;}',
+      '@keyframes tam-edit-flash-dark { 0%{background:#3a3000!important;} 60%{background:#4a3e00!important;} 100%{background:inherit;} }',
+      '.tam-cell-edit-flash{animation:tam-edit-flash-dark 1.4s ease forwards!important;}',
+      '}',
 
       /* ── Ref filter input ── */
       '.tam-ref-filter-input { width:100%; box-sizing:border-box; padding:4px 8px; font-size:.78rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; outline:none; background:#fff; color:#333; transition:border-color .15s, box-shadow .15s; }',

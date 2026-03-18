@@ -21,6 +21,91 @@
   var tamRefCompleting      = new Set();  // refs in the 3s green-flash window (just completed)
   var tamRefCompletingTimers = {};        // { ref: timeoutId } - per-ref 3s timers
   var tamRefDone            = new Set();  // refs that have ALREADY completed animation — no re-flash
+  var tamUndoStack          = [];         // array of JSON snapshots of boxes+quickDistrib
+  var tamRedoStack          = [];         // redo stack (cleared on new action)
+
+  var tamRedoStack          = [];         // redo stack (cleared on new action)
+  var TAM_UNDO_MAX          = 50;         // max undo steps
+
+  /* ── Undo/Redo helpers ── */
+  function tamSnapshotBoxes() {
+    if (!tamSession) return null;
+    return JSON.stringify({
+      boxes:        tamSession.boxes,
+      quickDistrib: tamSession.quickDistrib || {}
+    });
+  }
+
+  function tamPushUndo() {
+    var snap = tamSnapshotBoxes();
+    if (!snap) return;
+    // Don't push duplicate of the last state
+    if (tamUndoStack.length && tamUndoStack[tamUndoStack.length - 1] === snap) return;
+    tamUndoStack.push(snap);
+    if (tamUndoStack.length > TAM_UNDO_MAX) tamUndoStack.shift();
+    tamRedoStack = [];          // new action clears redo
+    tamUpdateUndoButtons();
+  }
+
+  function tamApplySnapshot(snap) {
+    if (!snap || !tamSession) return;
+    try {
+      var s = JSON.parse(snap);
+      tamSession.boxes        = s.boxes;
+      tamSession.quickDistrib = s.quickDistrib || {};
+      // Clear animation state — snapshot restores may uncomplete refs
+      tamRefCompleting.clear();
+      tamRefDone.clear();
+      Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+      Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+      tamBoxLockPending = {};
+      tamRenderAll();
+      tamScheduleSave();
+    } catch(e) { console.error('TAM undo/redo error', e); }
+  }
+
+  function tamUndo() {
+    if (!tamUndoStack.length) return;
+    var current = tamSnapshotBoxes();
+    if (current) { tamRedoStack.push(current); }
+    tamApplySnapshot(tamUndoStack.pop());
+    tamUpdateUndoButtons();
+  }
+
+  function tamRedo() {
+    if (!tamRedoStack.length) return;
+    var current = tamSnapshotBoxes();
+    if (current) { tamUndoStack.push(current); }
+    tamApplySnapshot(tamRedoStack.pop());
+    tamUpdateUndoButtons();
+  }
+
+  function tamClearAll() {
+    if (!tamSession) return;
+    tamPushUndo();
+    tamSession.boxes.forEach(function(box){
+      box.refs   = {};
+      box.locked = false;
+      if (tamBoxLockTimers) {
+        var bi = tamSession.boxes.indexOf(box);
+        if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+        delete tamBoxLockPending[bi];
+      }
+    });
+    tamSession.quickDistrib = {};
+    tamRefCompleting.clear();
+    tamRefDone.clear();
+    Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+    tamRenderAll();
+    tamScheduleSave();
+  }
+
+  function tamUpdateUndoButtons() {
+    var undoBtn = document.getElementById('tam-undo-btn');
+    var redoBtn = document.getElementById('tam-redo-btn');
+    if (undoBtn) undoBtn.disabled = !tamUndoStack.length;
+    if (redoBtn) redoBtn.disabled = !tamRedoStack.length;
+  }
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -1090,9 +1175,15 @@
       '<th class="tam-rec-ref-col">' +
         '<input type="text" id="tam-ref-filter" class="tam-ref-filter-input" placeholder="\uD83D\uDD0D filtrar\u2026" autocomplete="off" spellcheck="false">' +
       '</th>' +
-      '<th class="tam-rec-total-col"></th>' +
-      '<th class="tam-rec-total-col"></th>' +
-      '<th class="tam-rec-total-col"></th>';
+      '<th class="tam-rec-total-col tam-hdr-action-col">' +
+        '<button class="tam-action-btn tam-undo-btn" id="tam-undo-btn" title="desfazer (\u21A9)" disabled>\u21A9</button>' +
+      '</th>' +
+      '<th class="tam-rec-total-col tam-hdr-action-col">' +
+        '<button class="tam-action-btn tam-redo-btn" id="tam-redo-btn" title="refazer (\u21AA)" disabled>\u21AA</button>' +
+      '</th>' +
+      '<th class="tam-rec-total-col tam-hdr-action-col">' +
+        '<button class="tam-action-btn tam-clear-btn" id="tam-clear-btn" title="borrar todo">\u{1F5D1}</button>' +
+      '</th>';
 
     sortedBoxes.forEach(function(bObj, boxPos){
       var bi       = bObj.bi;
@@ -1240,6 +1331,24 @@
         tableHtml +
       '</div>';
 
+    // ── BIND UNDO / REDO / CLEAR BUTTONS ─────────────────────
+    (function(){
+      var undoBtn  = area.querySelector('#tam-undo-btn');
+      var redoBtn  = area.querySelector('#tam-redo-btn');
+      var clearBtn = area.querySelector('#tam-clear-btn');
+
+      tamUpdateUndoButtons();   // sync disabled state on every render
+
+      if (undoBtn)  undoBtn.addEventListener('click',  function(e){ e.stopPropagation(); tamUndo(); });
+      if (redoBtn)  redoBtn.addEventListener('click',  function(e){ e.stopPropagation(); tamRedo(); });
+      if (clearBtn) clearBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        // Confirm before clearing everything
+        if (!confirm('Borrar toda la distribución?\n\nPuedes deshacer con el botón ↩')) return;
+        tamClearAll();
+      });
+    })();
+
     // ── BIND PER-ROW QUICK BUTTONS ────────────────────────────
     area.querySelectorAll('.tam-row-quick-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -1247,6 +1356,7 @@
         var mode = btn.getAttribute('data-mode');
         var c    = consolidatedForSummary.find(function(x){ return x.ref === ref; });
         if (!c) return;
+        tamPushUndo();
         // Use only the first pending box
         var firstPending = pendingBoxes[0];
         var boxList = firstPending ? [firstPending.box] : sortedBoxes.map(function(b){ return b.box; });
@@ -1310,6 +1420,11 @@
 
     // ── BIND F/P INPUTS ───────────────────────────────────────
     area.querySelectorAll('.tam-rec-input').forEach(function(inp){
+      // Push undo when the user starts editing a field (on focus)
+      inp.addEventListener('focus', function(){
+        tamPushUndo();
+      });
+
       inp.addEventListener('input', function(){
         var bi   = parseInt(inp.getAttribute('data-box'));
         var ref  = inp.getAttribute('data-ref');
@@ -1696,6 +1811,7 @@
 
     // UNDO — clear quick distribution for this invoice
     if (mode === 'undo') {
+      tamPushUndo();
       delete tamSession.quickDistrib[invIdx];
       var undoBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
       r.grouped.forEach(function(g){
@@ -1706,6 +1822,7 @@
       return;
     }
 
+    tamPushUndo();
     // Get boxes that belong to this invoice
     var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
     console.log('TAM: quick distrib invIdx=' + invIdx + ' mode=' + mode + ' boxes=' + invBoxes.length);
@@ -1814,6 +1931,7 @@
   /* Global quick distribution (area de resumen buttons) */
   function tamQuickDistrib(mode) {
     if (!tamSession) return;
+    tamPushUndo();
     tamRepairBoxInvIdx();
     var consolidated = tamConsolidatedRefs();
 
@@ -3204,6 +3322,22 @@
       '.tam-col-unlocked-hdr{background:#0d1f2e!important;border-top-color:#5dade2!important;}',
       '.tam-cell-ref-edit{background:#333!important;}',
       '.tam-cell-ref-edit .tam-rec-input{background:#333!important;color:#fff!important;}',
+      '}',
+
+      /* ── Undo / Redo / Clear action buttons in hdr2 ── */
+      '.tam-hdr-action-col { padding:2px 4px!important; text-align:center!important; vertical-align:middle!important; }',
+      '.tam-action-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:26px; font-size:.9rem; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#f8f8f8; color:#444; transition:background .12s, color .12s, border-color .12s; line-height:1; padding:0; }',
+      '.tam-action-btn:hover:not(:disabled) { background:#333; color:#fff; border-color:#333; }',
+      '.tam-action-btn:disabled { opacity:.3; cursor:not-allowed; }',
+      '.tam-undo-btn:hover:not(:disabled) { background:#1565c0!important; border-color:#1565c0!important; color:#fff!important; }',
+      '.tam-redo-btn:hover:not(:disabled) { background:#1565c0!important; border-color:#1565c0!important; color:#fff!important; }',
+      '.tam-clear-btn:hover:not(:disabled) { background:#c62828!important; border-color:#c62828!important; color:#fff!important; }',
+      '@media(prefers-color-scheme:dark){',
+      '.tam-action-btn{background:#1a1a1a!important;border-color:#333!important;color:#aaa!important;}',
+      '.tam-action-btn:hover:not(:disabled){background:#444!important;color:#fff!important;border-color:#666!important;}',
+      '.tam-undo-btn:hover:not(:disabled){background:#1565c0!important;border-color:#5dade2!important;color:#fff!important;}',
+      '.tam-redo-btn:hover:not(:disabled){background:#1565c0!important;border-color:#5dade2!important;color:#fff!important;}',
+      '.tam-clear-btn:hover:not(:disabled){background:#b71c1c!important;border-color:#ef5350!important;color:#fff!important;}',
       '}',
 
       /* ── Ref filter input ── */

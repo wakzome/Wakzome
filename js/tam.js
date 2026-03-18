@@ -1011,64 +1011,53 @@
     var consolidated = tamConsolidatedRefs();
     var boxes = tamSession.boxes;
 
-    // ── ÚNICA SECCIÓN: tabla de cajas con refs y totales ──────
-    var quickDistrib = (tamSession && tamSession.quickDistrib) || {};
-    var quickCount   = Object.keys(quickDistrib).length;
-    var areaTitle    = 'receção de mercadoria · ' + tamInvoices.length + ' fatura(s) · ' + consolidated.length + ' referências' +
-      (quickCount > 0 ? ' · ' + quickCount + ' fatura(s) com distribuição rápida' : '');
-
-    var boxesHtml =
-      '<div class="tam-rec-area">' +
-      '<div class="tam-rec-area-title">' + areaTitle + '</div>' +
-      '<div class="tam-rec-quick-btns">' +
-        '<span class="tam-quick-label">distribuição rápida:</span>' +
-        '<button class="tam-quick-btn" id="tam-quick-funchal" title="enviar 100% para Funchal">100% Funchal</button>' +
-        '<button class="tam-quick-btn" id="tam-quick-porto"   title="enviar 100% para Porto Santo">100% Porto Santo</button>' +
-        '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split" title="dividir 50/50">50 / 50</button>' +
-      '</div>' +
-      '<div class="tam-rec-boxes-scroll">' +
-      '<table class="tam-rec-boxes-table">' +
-      '<thead>' +
-      '<tr class="tam-boxes-hdr-row">' +
-      '<th class="tam-rec-ref-col">referência</th>' +
-      '<th class="tam-rec-total-col">total</th>' +
-      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
-      '<th class="tam-rec-total-col tam-th-porto">PS</th>' +
-      '<th class="tam-rec-quick-col">distribuição rápida</th>';
-
-    // Repair invIdx on all boxes (handles legacy sessions without invIdx)
     tamRepairBoxInvIdx();
 
-    // Sort boxes: incomplete first, complete last
-    // Also HIDE boxes from invoices that used quick distribution
-    var quickDistrib = (tamSession && tamSession.quickDistrib) || {};
+    var quickDistrib = (tamSession.quickDistrib) || {};
+    var quickCount   = Object.keys(quickDistrib).length;
+
+    // Sort boxes: pending first, complete last, hidden removed
     var boxOrder = boxes.map(function(box, bi){
       var received = 0;
       if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
       var isComplete = box.total && received >= box.total;
       var isHidden   = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
-      return { bi: bi, box: box, received: received, isComplete: isComplete, isHidden: isHidden };
-    }).filter(function(b){ return !b.isHidden; });  // remove quick-distributed boxes
+      return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
+    }).filter(function(b){ return !b.isHidden; });
+
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
     var sortedBoxes    = pendingBoxes.concat(completedBoxes);
 
-    sortedBoxes.forEach(function(bObj){
-      var bi  = bObj.bi;
-      var box = bObj.box;
-      var boxClass = bObj.isComplete ? 'tam-box-col-complete' : '';
-      boxesHtml += '<th colspan="2" class="tam-box-header ' + boxClass + '">' +
-        'Caixa ' + (bi+1) +
-        (box.locked ? ' <span class="tam-box-lock">🔒</span>' : '') +
-        '</th>';
+    // Only refs needing manual work
+    var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
+      .filter(function(i){ return quickDistrib[i] === undefined; });
+    var consolidatedForSummary = consolidated.filter(function(c){
+      return c.invoices.some(function(inv){ return manualInvoiceIdxs.indexOf(inv.invIdx) >= 0; });
     });
 
-    boxesHtml += '</tr><tr class="tam-boxes-sub-hdr">' +
+    // ── Build HTML ────────────────────────────────────────────
+    // Header row 1: ref | total | F | PS | [for each box: F PS QUICK_BTNS]
+    var hdr1 =
+      '<th class="tam-rec-ref-col">referência</th>' +
+      '<th class="tam-rec-total-col">total</th>' +
+      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
+      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
+
+    sortedBoxes.forEach(function(bObj){
+      var bi  = bObj.bi;
+      var boxLabel = 'Caixa ' + (bi+1) + (bObj.box.locked ? ' 🔒' : '');
+      var boxCls   = bObj.isComplete ? 'tam-box-col-complete' : (bObj === pendingBoxes[0] ? 'tam-box-col-active' : '');
+      // Box columns: F + PS + quick (3 cols total, colspan=3 on header)
+      hdr1 += '<th colspan="3" class="tam-box-header ' + boxCls + '">' + boxLabel + '</th>';
+    });
+
+    // Header row 2: sub-labels
+    var hdr2 =
       '<th class="tam-rec-ref-col"></th>' +
       '<th class="tam-rec-total-col"></th>' +
       '<th class="tam-rec-total-col"></th>' +
-      '<th class="tam-rec-total-col"></th>' +
-      '<th class="tam-rec-quick-col"></th>';
+      '<th class="tam-rec-total-col"></th>';
 
     sortedBoxes.forEach(function(bObj){
       var bi       = bObj.bi;
@@ -1077,106 +1066,135 @@
       var pctLabel = box.total ? received + '/' + box.total : '';
       var isLocked = box.locked;
       var inputCls = box.total ? 'tam-box-total-input tam-box-declared' : 'tam-box-total-input';
-      boxesHtml +=
-        '<th class="tam-box-sub-th' + (bObj.isComplete ? ' tam-box-sub-complete' : '') + '" colspan="2">' +
+      var isPending = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
+
+      hdr2 +=
+        '<th class="tam-box-sub-th' + (bObj.isComplete ? ' tam-box-sub-complete' : '') + '" colspan="3">' +
         '<div class="tam-box-sub-inner">' +
-        '<input type="number" class="' + inputCls + '" ' +
-          'id="tam-box-total-' + bi + '" ' +
-          'value="' + (box.total || '') + '" ' +
-          'placeholder="total caixa" ' +
-          (isLocked ? 'disabled ' : '') +
-          'min="1" data-box="' + bi + '">' +
-        (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
-        (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '" title="editar">✏️</button>' : '') +
+          '<input type="number" class="' + inputCls + '" id="tam-box-total-' + bi + '" ' +
+            'value="' + (box.total||'') + '" placeholder="total" ' +
+            (isLocked ? 'disabled ' : '') + 'min="1" data-box="' + bi + '">' +
+          (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
+          (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '">✏️</button>' : '') +
         '</div>' +
         '<div class="tam-box-sub-labels">' +
-        '<span class="tam-sub-f">F</span>' +
-        '<span class="tam-sub-p">PS</span>' +
+          '<span class="tam-sub-f">F</span>' +
+          '<span class="tam-sub-p">PS</span>' +
+          (isPending && !isLocked ? '<span class="tam-sub-q">rápido</span>' : '<span></span>') +
         '</div>' +
         '</th>';
     });
 
-    boxesHtml += '</tr></thead><tbody>';
-
-    // Only show refs that still need manual distribution
-    // (belong to at least one invoice NOT using quick distrib)
-    var manualInvoiceIdxs = tamInvoices.map(function(r, i){ return i; })
-      .filter(function(i){ return quickDistrib[i] === undefined; });
-
-    var consolidatedForSummary = consolidated.filter(function(c){
-      return c.invoices.some(function(inv){ return manualInvoiceIdxs.indexOf(inv.invIdx) >= 0; });
-    });
-
-    // Filas de referencias — pendientes primero, completadas al final
-    var pending   = [];
-    var completed = [];
+    // Ref rows
+    var pending2  = [], completed2 = [];
     consolidatedForSummary.forEach(function(c){
-      var totals   = tamGetRefTotals(c.ref);
-      var received = totals.f + totals.p;
-      var isDone   = received >= c.totalPieces && c.totalPieces > 0;
-      var isOver   = received > c.totalPieces  && c.totalPieces > 0;
-      if (isDone || isOver) completed.push(c);
-      else                  pending.push(c);
+      var t = tamGetRefTotals(c.ref);
+      var r = t.f + t.p;
+      if (r >= c.totalPieces && c.totalPieces > 0) completed2.push(c);
+      else completed2.indexOf(c) < 0 && pending2.push(c);
     });
-    var sortedRefs = pending.concat(completed);
+    // re-sort
+    pending2  = []; completed2 = [];
+    consolidatedForSummary.forEach(function(c){
+      var t = tamGetRefTotals(c.ref);
+      var recv = t.f + t.p;
+      var done = recv >= c.totalPieces && c.totalPieces > 0;
+      var over = recv > c.totalPieces && c.totalPieces > 0;
+      if (done || over) completed2.push(c); else pending2.push(c);
+    });
+    var sortedRefs = pending2.concat(completed2);
 
+    var rowsHtml = '';
     sortedRefs.forEach(function(c){
-      var totals   = tamGetRefTotals(c.ref);
-      var received = totals.f + totals.p;
-      var isDone   = received >= c.totalPieces && c.totalPieces > 0;
-      var isOver   = received > c.totalPieces  && c.totalPieces > 0;
-      var rowCls   = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
-      var safeRef  = c.ref.replace(/[^a-z0-9]/gi,'_');
+      var totals  = tamGetRefTotals(c.ref);
+      var recv    = totals.f + totals.p;
+      var isDone  = recv >= c.totalPieces && c.totalPieces > 0;
+      var isOver  = recv > c.totalPieces  && c.totalPieces > 0;
+      var rowCls  = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
+      var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
 
-      boxesHtml += '<tr class="' + rowCls + '" data-ref="' + tamEsc(c.ref) + '">' +
+      rowsHtml +=
+        '<tr class="' + rowCls + '" data-ref="' + tamEsc(c.ref) + '">' +
         '<td class="tam-rec-ref-col"><strong>' + tamEsc(c.ref) + '</strong></td>' +
         '<td class="tam-rec-total-col tam-td-num">' + c.totalPieces + '</td>' +
         '<td class="tam-rec-total-col tam-td-num tam-cell-funchal" id="tam-sum-f-' + safeRef + '">' + (totals.f > 0 ? totals.f : '—') + '</td>' +
         '<td class="tam-rec-total-col tam-td-num tam-cell-porto"  id="tam-sum-p-' + safeRef + '">' + (totals.p > 0 ? totals.p : '—') + '</td>';
 
-      sortedBoxes.forEach(function(bObj){
+      sortedBoxes.forEach(function(bObj, boxPos){
         var bi  = bObj.bi;
         var box = bObj.box;
         var fVal = (box.refs[c.ref] && box.refs[c.ref].f) || '';
         var pVal = (box.refs[c.ref] && box.refs[c.ref].p) || '';
-        var inputAttrs = (!box.total || box.locked) ? 'disabled ' : '';
-        var cellCls = bObj.isComplete ? ' tam-box-cell-complete' : '';
-        boxesHtml +=
+        var disabled = (!box.total || box.locked) ? 'disabled ' : '';
+        var cellCls  = bObj.isComplete ? ' tam-box-cell-complete' : '';
+        var isPending = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
+        var isActive  = isPending && box.total && !box.locked;
+
+        // Quick buttons only in the first pending (active) box column, only for pending refs
+        var quickCell = '';
+        if (isPending && !isDone && !isOver) {
+          quickCell =
+            '<td class="tam-rec-cell-quick">' +
+              '<div class="tam-row-quick">' +
+                '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
+                '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
+                '<button class="tam-row-quick-btn tam-row-quick-split" data-ref="' + tamEsc(c.ref) + '" data-mode="split">½</button>' +
+              '</div>' +
+            '</td>';
+        } else if (isPending) {
+          quickCell = '<td class="tam-rec-cell-quick"></td>';
+        } else {
+          quickCell = '<td class="tam-rec-cell-quick' + cellCls + '"></td>';
+        }
+
+        rowsHtml +=
           '<td class="tam-rec-cell-f' + cellCls + '">' +
-          '<input type="number" class="tam-rec-input tam-rec-input-f" ' +
-            'id="tam-inp-f-' + bi + '-' + safeRef + '" ' +
-            'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="f" ' +
-            'value="' + fVal + '" min="0" ' + inputAttrs + 'placeholder="—">' +
+            '<input type="number" class="tam-rec-input tam-rec-input-f" ' +
+              'id="tam-inp-f-' + bi + '-' + safeRef + '" ' +
+              'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="f" ' +
+              'value="' + fVal + '" min="0" ' + disabled + 'placeholder="—">' +
           '</td>' +
           '<td class="tam-rec-cell-p' + cellCls + '">' +
-          '<input type="number" class="tam-rec-input tam-rec-input-p" ' +
-            'id="tam-inp-p-' + bi + '-' + safeRef + '" ' +
-            'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="p" ' +
-            'value="' + pVal + '" min="0" ' + inputAttrs + 'placeholder="—">' +
-          '</td>';
+            '<input type="number" class="tam-rec-input tam-rec-input-p" ' +
+              'id="tam-inp-p-' + bi + '-' + safeRef + '" ' +
+              'data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-city="p" ' +
+              'value="' + pVal + '" min="0" ' + disabled + 'placeholder="—">' +
+          '</td>' +
+          quickCell;
       });
 
-      // Per-row quick buttons (only when row is pending and has at least one active box)
-      var hasActiveBox = sortedBoxes.some(function(b){ return b.box.total && !b.box.locked; });
-      var rowQuickBtns = (!isDone && !isOver && hasActiveBox)
-        ? '<td class="tam-rec-quick-col">' +
-            '<div class="tam-row-quick">' +
-              '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
-              '<button class="tam-row-quick-btn" data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
-              '<button class="tam-row-quick-btn tam-row-quick-split" data-ref="' + tamEsc(c.ref) + '" data-mode="split">½</button>' +
-            '</div>' +
-          '</td>'
-        : '<td class="tam-rec-quick-col"></td>';
-
-      boxesHtml += rowQuickBtns + '</tr>';
+      rowsHtml += '</tr>';
     });
 
-    boxesHtml += '</tbody></table></div></div>';
+    var tableHtml =
+      '<div class="tam-rec-boxes-scroll">' +
+      '<table class="tam-rec-boxes-table">' +
+      '<thead>' +
+        '<tr class="tam-boxes-hdr-row">' + hdr1 + '</tr>' +
+        '<tr class="tam-boxes-sub-hdr">' + hdr2 + '</tr>' +
+      '</thead>' +
+      '<tbody>' + rowsHtml + '</tbody>' +
+      '</table></div>';
 
-    // ── DIVIDER BANNER above summary area
+    // Global quick buttons bar
+    var globalBar =
+      '<div class="tam-rec-quick-btns">' +
+        '<span class="tam-quick-label">tudo:</span>' +
+        '<button class="tam-quick-btn" id="tam-quick-funchal">100% Funchal</button>' +
+        '<button class="tam-quick-btn" id="tam-quick-porto">100% Porto Santo</button>' +
+        '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
+      '</div>';
+
     area.innerHTML =
       '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
-      boxesHtml;
+      '<div class="tam-rec-area">' +
+        '<div class="tam-rec-area-title">' +
+          tamInvoices.length + ' fatura(s) · ' + consolidatedForSummary.length + ' referências' +
+          (quickCount > 0 ? ' · ' + quickCount + ' com distribuição rápida' : '') +
+        '</div>' +
+        globalBar +
+        tableHtml +
+      '</div>';
 
     // ── BIND PER-ROW QUICK BUTTONS ────────────────────────────
     area.querySelectorAll('.tam-row-quick-btn').forEach(function(btn){
@@ -1185,9 +1203,9 @@
         var mode = btn.getAttribute('data-mode');
         var c    = consolidatedForSummary.find(function(x){ return x.ref === ref; });
         if (!c) return;
-        var activeSortedBoxes = sortedBoxes.filter(function(b){ return !b.isComplete; });
-        if (!activeSortedBoxes.length) activeSortedBoxes = sortedBoxes;
-        var boxList = activeSortedBoxes.map(function(b){ return b.box; });
+        // Use only the first pending box
+        var firstPending = pendingBoxes[0];
+        var boxList = firstPending ? [firstPending.box] : sortedBoxes.map(function(b){ return b.box; });
         if (mode === 'funchal') {
           tamDistribToBoxesFiltered(ref, c.totalPieces, c.totalPieces, 0, boxList);
         } else if (mode === 'porto') {
@@ -1197,7 +1215,7 @@
           var isOdd = c.totalPieces % 2 !== 0;
           tamDistribToBoxesFiltered(ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0), boxList);
           if (isOdd) {
-            tamOddPieceDialogFiltered([{ ref: ref, totalPieces: c.totalPieces }], 0, boxList, function(){
+            tamOddPieceDialogFiltered([{ ref:ref, totalPieces:c.totalPieces }], 0, boxList, function(){
               tamRenderAll(); tamSaveSession(false);
             });
             return;
@@ -1208,86 +1226,69 @@
       });
     });
 
-    // ── BIND QUICK DISTRIBUTION BUTTONS ──────────────────────
-    var qFunchal = area.querySelector('#tam-quick-funchal');
-    var qPorto   = area.querySelector('#tam-quick-porto');
-    var qSplit   = area.querySelector('#tam-quick-split');
-    if (qFunchal) qFunchal.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
-    if (qPorto)   qPorto.addEventListener('click',   function(){ tamQuickDistrib('porto'); });
-    if (qSplit)   qSplit.addEventListener('click',   function(){ tamQuickDistrib('split'); });
+    // ── BIND GLOBAL QUICK BUTTONS ─────────────────────────────
+    var qF = area.querySelector('#tam-quick-funchal');
+    var qP = area.querySelector('#tam-quick-porto');
+    var qS = area.querySelector('#tam-quick-split');
+    if (qF) qF.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
+    if (qP) qP.addEventListener('click', function(){ tamQuickDistrib('porto'); });
+    if (qS) qS.addEventListener('click', function(){ tamQuickDistrib('split'); });
 
-    // ── BIND EVENTOS ──────────────────────────────────────────
-
-    // Input total de caja
+    // ── BIND BOX TOTAL INPUT ──────────────────────────────────
     area.querySelectorAll('.tam-box-total-input').forEach(function(inp){
       inp.addEventListener('change', function(){
         var bi  = parseInt(inp.getAttribute('data-box'));
         var val = parseInt(inp.value);
-        if (!isNaN(val) && val > 0) {
-          tamSession.boxes[bi].total = val;
-        } else {
-          tamSession.boxes[bi].total = null;
-        }
+        tamSession.boxes[bi].total = (!isNaN(val) && val > 0) ? val : null;
         tamRenderAll();
         tamScheduleSave();
       });
     });
 
-    // Input de distribución F/P
+    // ── BIND EDIT BOX BUTTON ──────────────────────────────────
+    area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        tamSession.boxes[parseInt(btn.getAttribute('data-box'))].locked = false;
+        tamRenderAll(); tamScheduleSave();
+      });
+    });
+
+    // ── BIND F/P INPUTS ───────────────────────────────────────
     area.querySelectorAll('.tam-rec-input').forEach(function(inp){
-      // On every keystroke: save value silently, update summary cells
       inp.addEventListener('input', function(){
         var bi   = parseInt(inp.getAttribute('data-box'));
         var ref  = inp.getAttribute('data-ref');
         var city = inp.getAttribute('data-city');
         var val  = parseInt(inp.value) || 0;
-        if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f: 0, p: 0 };
+        if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f:0, p:0 };
         tamSession.boxes[bi].refs[ref][city] = val;
-        // Update summary cells and invoice rows quietly — no row move yet
         tamUpdateSummaryRow(ref);
         tamUpdateInvoicesRows(ref);
         tamScheduleSave();
       });
 
-      // On Enter/Tab: confirm the value → trigger row move + box lock
       inp.addEventListener('keydown', function(e){
         if (e.key !== 'Tab' && e.key !== 'Enter') return;
-        var bi   = parseInt(inp.getAttribute('data-box'));
-        var ref  = inp.getAttribute('data-ref');
-        // Trigger alert + lock NOW (on confirm)
+        var bi  = parseInt(inp.getAttribute('data-box'));
+        var ref = inp.getAttribute('data-ref');
         tamUpdateRefRowAlert(ref);
         tamCheckBoxLock(bi);
-
-        var isPS = inp.classList.contains('tam-rec-input-p');
         var isF  = inp.classList.contains('tam-rec-input-f');
-
+        var isPS = inp.classList.contains('tam-rec-input-p');
+        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
         if (isF && e.key === 'Enter') {
           e.preventDefault();
-          var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
           var ps = document.getElementById('tam-inp-p-' + inp.getAttribute('data-box') + '-' + safeRef);
           if (ps && !ps.disabled) { ps.focus(); ps.select(); }
           return;
         }
-
         if (isPS && (e.key === 'Tab' || e.key === 'Enter')) {
           e.preventDefault();
           var allF = Array.from(area.querySelectorAll('.tam-rec-input-f:not([disabled])'));
-          var safeRef2 = ref.replace(/[^a-z0-9]/gi,'_');
-          var curF = document.getElementById('tam-inp-f-' + inp.getAttribute('data-box') + '-' + safeRef2);
-          var nextF = allF[allF.indexOf(curF) + 1];
-          if (nextF) { nextF.focus(); nextF.select(); }
-          return;
+          var curF = document.getElementById('tam-inp-f-' + inp.getAttribute('data-box') + '-' + safeRef);
+          var nxt  = allF[allF.indexOf(curF) + 1];
+          if (nxt) { nxt.focus(); nxt.select(); }
         }
-      });
-    });
-
-    // Botón editar (desbloquear caja)
-    area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var bi = parseInt(btn.getAttribute('data-box'));
-        tamSession.boxes[bi].locked = false;
-        tamRenderAll();
-        tamScheduleSave();
       });
     });
   }
@@ -2710,9 +2711,22 @@
       '.tam-row-quick-split:hover { background:#1565c0!important; color:#fff!important; }',
 
       /* ── Distribuição divider banner ── */
-      '.tam-rec-divider { display:flex; align-items:center; gap:12px; margin-bottom:0; padding:10px 0 6px; width:100%; max-width:1600px; }',
-      '.tam-rec-divider::before, .tam-rec-divider::after { content:""; flex:1; height:1px; background:#e0e0e0; }',
-      '.tam-rec-divider span { font-family:MontserratLight,sans-serif; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.14em; color:#bbb; white-space:nowrap; padding:0 8px; }',
+      '.tam-rec-divider { display:flex; align-items:center; gap:0; margin-bottom:0; width:100%; max-width:1600px; }',
+      '.tam-rec-divider::before { content:""; flex:1; height:2px; background:linear-gradient(to right, transparent, #c8c8c8); }',
+      '.tam-rec-divider::after  { content:""; flex:1; height:2px; background:linear-gradient(to left,  transparent, #c8c8c8); }',
+      '.tam-rec-divider span { font-family:MontserratLight,sans-serif; font-size:.78rem; font-weight:bold; text-transform:uppercase; letter-spacing:.18em; color:#fff; background:#888; padding:5px 22px; border-radius:20px; white-space:nowrap; }',
+
+      /* ── Active box column highlight ── */
+      '.tam-box-col-active { background:rgba(21,101,192,0.10)!important; border-bottom:2px solid #1565c0!important; color:#1565c0!important; }',
+
+      /* ── Quick cell inside each box ── */
+      '.tam-rec-cell-quick { background:#f5f5f5; padding:2px 5px!important; min-width:80px; border-left:1px dashed #ccc!important; }',
+      '.tam-sub-q { font-size:.6rem; font-weight:bold; color:#888; letter-spacing:.03em; }',
+      '.tam-row-quick { display:flex; gap:3px; justify-content:center; align-items:center; }',
+      '.tam-row-quick-btn { padding:2px 7px; font-size:.69rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:#fff; color:#333; transition:background .12s,color .12s; white-space:nowrap; line-height:1.4; }',
+      '.tam-row-quick-btn:hover { background:#333; color:#fff; border-color:#333; }',
+      '.tam-row-quick-split { border-color:#1565c0!important; color:#1565c0!important; }',
+      '.tam-row-quick-split:hover { background:#1565c0!important; color:#fff!important; }',
 
       /* Cabecera caja */
       '.tam-boxes-hdr-row th { padding:6px 8px; background:#f8f8f8; font-size:.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#888; white-space:nowrap; }',
@@ -2885,8 +2899,12 @@
       '.tam-boxes-sub-hdr .tam-rec-ref-col{background-color:#161616!important;background:#161616!important;}',
       '.tam-ref-over .tam-rec-ref-col{background-color:#3a0a0a!important;background:#3a0a0a!important;}',
       '.tam-rec-boxes-table tbody tr:hover .tam-rec-ref-col{background-color:#222!important;background:#222!important;}',
-      '.tam-rec-quick-col{background:#161616!important;border-color:#2a2a2a!important;}',
-      '.tam-boxes-hdr-row .tam-rec-quick-col{background:#1a1a1a!important;}',
+      '.tam-rec-cell-quick{background:#1e1e1e!important;border-color:#333!important;}',
+      '.tam-row-quick-btn{background:#111!important;border-color:#333!important;color:#ccc!important;}',
+      '.tam-row-quick-btn:hover{background:#555!important;color:#fff!important;}',
+      '.tam-box-col-active{background:rgba(21,101,192,0.15)!important;border-color:#1565c0!important;}',
+      '.tam-rec-divider span{background:#444!important;}',
+      '.tam-rec-divider::before,.tam-rec-divider::after{background:linear-gradient(to right,transparent,#444)!important;}',
       '.tam-row-quick-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
       '.tam-row-quick-btn:hover{background:#555!important;color:#fff!important;}',
       '.tam-rec-divider::before,.tam-rec-divider::after{background:#2a2a2a!important;}',

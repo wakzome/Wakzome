@@ -14,7 +14,8 @@
   var tamActiveEngines = {};
   var tamSession       = null;
   var tamAutoSaveTimer = null;
-  var tamSaveInFlight  = false;   // evita guardados simultáneos en Supabase
+  var tamSaveInFlight  = false;
+  var tamEditMode      = {};   // { invIdx: true } — which invoices are in edit mode
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -390,14 +391,22 @@
       tamRenderSingleMeta(tamInvoices[0], meta);
       tamRenderInvoiceBanner(tamInvoices[0], ban);
       ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
-      // Add X button for single invoice too
       var singleRemove = document.createElement('button');
       singleRemove.className = 'tam-inv-remove-btn';
       singleRemove.title = 'remover fatura da sessão';
       singleRemove.textContent = '✕ remover fatura';
       singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
+      var singleEdit = document.createElement('button');
+      singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
+      singleEdit.textContent = tamEditMode[0] ? '✓ fechar edição' : '✏ editar tabela';
+      singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
+      meta.appendChild(singleEdit);
       meta.appendChild(singleRemove);
-      tamRenderInvoiceTable(tamInvoices[0], wrap, 0);
+      if (tamEditMode[0]) {
+        tamRenderEditTable(tamInvoices[0], wrap, 0);
+      } else {
+        tamRenderInvoiceTable(tamInvoices[0], wrap, 0);
+      }
     } else {
       meta.style.display = 'none';
       ban.style.display  = 'none';
@@ -415,9 +424,16 @@
           r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
           r.shipPkgs + ' pac.</span>' +
           '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
+          '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
+            (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
+          '</button>' +
           '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
           '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>';
         block.appendChild(hdr);
+        hdr.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-edit-btn').getAttribute('data-inv'));
+          tamToggleEditMode(i);
+        });
         hdr.querySelector('.tam-inv-export-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-export-btn').getAttribute('data-inv'));
           tamExportInvoiceCSV(tamInvoices[i]);
@@ -436,7 +452,11 @@
         // ── Table ──────────────────────────────────────────
         var tWrap = document.createElement('div');
         tWrap.className = 'tam-inv-table-wrap';
-        tamRenderInvoiceTable(r, tWrap, idx);
+        if (tamEditMode[idx]) {
+          tamRenderEditTable(r, tWrap, idx);
+        } else {
+          tamRenderInvoiceTable(r, tWrap, idx);
+        }
         block.appendChild(tWrap);
         wrap.appendChild(block);
 
@@ -522,6 +542,113 @@
     tamRenderAll();
     tamSaveSession(false);
   }
+  /* ══════════════════════════════════════════════════════════════
+     MODO EDICIÓN DE TABLA
+  ══════════════════════════════════════════════════════════════ */
+  function tamToggleEditMode(invIdx) {
+    if (tamEditMode[invIdx]) {
+      delete tamEditMode[invIdx];
+    } else {
+      tamEditMode[invIdx] = true;
+    }
+    tamRenderInvoices();
+  }
+
+  function tamRenderEditTable(r, container, invIdx) {
+    var html =
+      '<div class="tam-edit-notice">modo edição — alterações aplicam-se apenas a esta sessão</div>' +
+      '<table class="tam-table tam-table-edit">' +
+      '<thead><tr>' +
+        '<th class="tam-th" style="width:28px">#</th>' +
+        '<th class="tam-th">referência</th>' +
+        '<th class="tam-th">tipo · nome</th>' +
+        '<th class="tam-th">UND</th>' +
+        '<th class="tam-th">P.Unit c/ env.</th>' +
+        '<th class="tam-th">Total</th>' +
+        '<th class="tam-th" style="width:28px"></th>' +
+      '</tr></thead><tbody>';
+
+    r.grouped.forEach(function(g, i){
+      var typeNameVal = (g.garmentType ? g.garmentType + (g.name ? ' · ' + g.name : '') : (g.name || ''));
+      html +=
+        '<tr class="tam-edit-row" data-idx="' + i + '">' +
+        '<td class="tam-td tam-td-num" style="color:#aaa;font-size:.72rem">' + (i+1) + '</td>' +
+        '<td class="tam-td"><input class="tam-edit-input" data-field="ref" value="' + tamEsc(g.ref) + '"></td>' +
+        '<td class="tam-td"><input class="tam-edit-input tam-edit-wide" data-field="typeName" value="' + tamEsc(typeNameVal) + '"></td>' +
+        '<td class="tam-td"><input class="tam-edit-input tam-edit-num" type="number" data-field="pieces" value="' + g.pieces + '" min="1"></td>' +
+        '<td class="tam-td"><input class="tam-edit-input tam-edit-num" type="number" data-field="unitPrice" value="' + g.unitPriceWithShip + '" step="0.01" min="0"></td>' +
+        '<td class="tam-td tam-td-num">' + tamFmtEU(g.grandTotal) + '</td>' +
+        '<td class="tam-td"><button class="tam-edit-del-row" data-row="' + i + '" title="eliminar">✕</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>' +
+      '<div class="tam-edit-actions">' +
+        '<button class="tam-edit-add-row">＋ adicionar referência</button>' +
+        '<button class="tam-edit-save">✓ aplicar alterações</button>' +
+        '<button class="tam-edit-cancel">cancelar</button>' +
+      '</div>';
+
+    container.innerHTML = html;
+
+    // Delete row
+    container.querySelectorAll('.tam-edit-del-row').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        r.grouped.splice(parseInt(btn.getAttribute('data-row')), 1);
+        tamRecalcInvoice(r);
+        tamRenderEditTable(r, container, invIdx);
+      });
+    });
+
+    // Add row
+    container.querySelector('.tam-edit-add-row').addEventListener('click', function(){
+      r.grouped.push({ ref:'NOVA-REF', garmentType:'', name:'', pieces:1,
+        unitPriceWithShip:0, grandTotal:0, totalCost:0, confidence:'CONFIRMED' });
+      tamRenderEditTable(r, container, invIdx);
+      var last = container.querySelectorAll('[data-field="ref"]');
+      if (last.length) { last[last.length-1].focus(); last[last.length-1].select(); }
+    });
+
+    // Save
+    container.querySelector('.tam-edit-save').addEventListener('click', function(){
+      var rows = container.querySelectorAll('.tam-edit-row');
+      var newGrouped = [];
+      rows.forEach(function(row, i){
+        var refVal   = row.querySelector('[data-field="ref"]').value.trim();
+        var tnVal    = row.querySelector('[data-field="typeName"]').value.trim();
+        var pieces   = parseInt(row.querySelector('[data-field="pieces"]').value) || 1;
+        var unitP    = parseFloat(row.querySelector('[data-field="unitPrice"]').value) || 0;
+        var parts    = tnVal.split('·');
+        var gType    = parts.length > 1 ? parts[0].trim() : '';
+        var gName    = parts.length > 1 ? parts.slice(1).join('·').trim() : tnVal;
+        newGrouped.push({
+          ref: refVal, garmentType: gType, name: gName,
+          pieces: pieces, unitPriceWithShip: unitP,
+          grandTotal: tamRound2(unitP * pieces),
+          totalCost:  tamRound2(unitP * pieces),
+          confidence: (r.grouped[i] && r.grouped[i].confidence) || 'CONFIRMED'
+        });
+      });
+      r.grouped = newGrouped;
+      tamRecalcInvoice(r);
+      delete tamEditMode[invIdx];
+      tamRenderAll();
+      tamSaveSession(false);
+    });
+
+    // Cancel
+    container.querySelector('.tam-edit-cancel').addEventListener('click', function(){
+      delete tamEditMode[invIdx];
+      tamRenderInvoices();
+    });
+  }
+
+  function tamRecalcInvoice(r) {
+    r.totalPieces   = r.grouped.reduce(function(s,g){ return s + g.pieces; }, 0);
+    r.subtotalGoods = tamRound2(r.grouped.reduce(function(s,g){ return s + g.grandTotal; }, 0));
+    r.grandTotal    = tamRound2(r.subtotalGoods + (r.shipping || 0));
+  }
+
   function tamRenderInvoiceBanner(r, el) {
     var xv    = r.xv;
     var subOk = r.invoiceSubtotal != null ? Math.abs(r.invoiceSubtotal - r.subtotalGoods) < 0.05 : true;
@@ -2236,6 +2363,44 @@
       '.tam-ref-over .tam-rec-ref-col { background:#ffe0e0!important; }',
       '.tam-ref-over .tam-rec-total-col { background:#ffe0e0!important; }',
       '.tam-ref-over td strong { color:#c00!important; }',
+
+      /* ── Edit mode button ── */
+      '.tam-inv-edit-btn { padding:4px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #aaa; border-radius:8px; background:#fff; color:#555; transition:background .15s,color .15s,border-color .15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-edit-btn:hover { background:#555; color:#fff; border-color:#555; }',
+      '.tam-inv-edit-btn.active { background:#1a6a1a; color:#fff; border-color:#1a6a1a; }',
+      '.tam-inv-edit-btn.active:hover { background:#145014; }',
+
+      /* ── Edit mode table ── */
+      '.tam-edit-notice { padding:7px 16px; font-size:.72rem; font-weight:bold; color:#b05000; background:#fff8f0; border-bottom:1px solid #f0d0a0; font-family:MontserratLight,sans-serif; letter-spacing:.02em; }',
+      '.tam-table-edit tbody tr:hover td { background:#fffdf0!important; }',
+      '.tam-edit-input { font-family:MontserratLight,sans-serif; font-size:.84rem; font-weight:bold; padding:3px 6px; border:1px solid #ddd; border-radius:6px; outline:none; background:#fff; width:100%; box-sizing:border-box; transition:border-color .15s; }',
+      '.tam-edit-input:focus { border-color:#555; background:#fffef8; }',
+      '.tam-edit-wide { min-width:160px; }',
+      '.tam-edit-num { width:70px; text-align:center; }',
+      '.tam-edit-del-row { background:none; border:1px solid #eee; border-radius:6px; cursor:pointer; font-size:.8rem; color:#ccc; padding:2px 7px; transition:color .15s,border-color .15s,background .15s; }',
+      '.tam-edit-del-row:hover { color:#c00; border-color:#c00; background:#fff0f0; }',
+      '.tam-edit-actions { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px solid #e6e6e6; flex-wrap:wrap; }',
+      '.tam-edit-add-row { padding:6px 14px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:#fff; transition:background .15s; }',
+      '.tam-edit-add-row:hover { background:#f5f5f5; border-color:#999; }',
+      '.tam-edit-save { padding:6px 16px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #1a6a1a; border-radius:8px; background:#fff; color:#1a6a1a; transition:background .15s,color .15s; }',
+      '.tam-edit-save:hover { background:#1a6a1a; color:#fff; }',
+      '.tam-edit-cancel { padding:6px 14px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #eee; border-radius:8px; background:#fff; color:#aaa; transition:background .15s; }',
+      '.tam-edit-cancel:hover { background:#f5f5f5; color:#555; }',
+
+      /* dark mode edit */
+      '@media(prefers-color-scheme:dark){',
+      '.tam-inv-edit-btn{background:#111!important;border-color:#444!important;color:#888!important;}',
+      '.tam-inv-edit-btn:hover{background:#555!important;color:#fff!important;}',
+      '.tam-inv-edit-btn.active{background:#1a6a1a!important;color:#fff!important;border-color:#1a6a1a!important;}',
+      '.tam-edit-notice{background:#1a1000!important;color:#e07000!important;border-color:#3a2000!important;}',
+      '.tam-edit-input{background:#111!important;border-color:#333!important;color:#e8e8e8!important;}',
+      '.tam-edit-input:focus{background:#1a1a0a!important;border-color:#888!important;}',
+      '.tam-edit-actions{background:#111!important;border-color:#2a2a2a!important;}',
+      '.tam-edit-add-row{background:#111!important;border-color:#333!important;color:#888!important;}',
+      '.tam-edit-save{background:#111!important;border-color:#2a6a2a!important;color:#4caf50!important;}',
+      '.tam-edit-save:hover{background:#1a6a1a!important;color:#fff!important;}',
+      '.tam-edit-cancel{background:#111!important;border-color:#2a2a2a!important;color:#555!important;}',
+      '}',
 
       /* ── Remove button per invoice ── */
       '.tam-inv-remove-btn { padding:4px 10px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #c03000; border-radius:8px; background:#fff; color:#c03000; transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0; }',

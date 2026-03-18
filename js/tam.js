@@ -543,7 +543,7 @@
       var singleStock = document.createElement('button');
       singleStock.className = 'tam-inv-stock-btn';
       singleStock.textContent = '📦 Ingreso de Stock';
-      singleStock.addEventListener('click', function(){ tamOpenStockFlow(0); });
+      singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
       meta.appendChild(singleStock);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
@@ -606,7 +606,7 @@
         });
         hdr.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-stock-btn').getAttribute('data-inv'));
-          tamOpenStockFlow(i);
+          tamShowStockModal(i);
         });
         hdr.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-remove-btn').getAttribute('data-inv'));
@@ -2543,138 +2543,14 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     INGRESO DE STOCK — validación previa + modal flotante Primavera
+     INGRESO DE STOCK — modal flotante con tabla Primavera
   ══════════════════════════════════════════════════════════════ */
-
-  /* ── Validar distribución de una factura antes de abrir modal ── */
-  function tamValidateStockDistrib(invIdx) {
-    var r = tamInvoices[invIdx];
-    if (!r) return [];
-    var issues = [];
-
-    r.grouped.forEach(function(g){
-      var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
-      var total   = (distrib.f || 0) + (distrib.p || 0);
-      var diff    = total - g.pieces;
-
-      if (total === 0) {
-        issues.push({ type: 'empty', ref: g.ref, expected: g.pieces, got: 0, diff: -g.pieces });
-      } else if (diff < 0) {
-        issues.push({ type: 'low',   ref: g.ref, expected: g.pieces, got: total, diff: diff });
-      } else if (diff > 0) {
-        issues.push({ type: 'high',  ref: g.ref, expected: g.pieces, got: total, diff: diff });
-      }
-    });
-
-    return issues;
-  }
-
-  /* ── Mostrar aviso de inconsistencias con opción de continuar ── */
-  function tamStockValidationAlert(invIdx, issues, onContinue) {
-    var r = tamInvoices[invIdx];
-    var old = document.getElementById('tam-stock-alert');
-    if (old) old.parentNode.removeChild(old);
-
-    var emptyRefs = issues.filter(function(i){ return i.type === 'empty'; });
-    var lowRefs   = issues.filter(function(i){ return i.type === 'low'; });
-    var highRefs  = issues.filter(function(i){ return i.type === 'high'; });
-
-    var bodyHtml = '<div class="tam-sa-inv">Fatura <strong>' + tamEsc(r.invoiceNo) + '</strong></div>';
-
-    if (emptyRefs.length) {
-      bodyHtml += '<div class="tam-sa-section tam-sa-empty">' +
-        '<div class="tam-sa-section-title">⚪ Sem distribuição (' + emptyRefs.length + ' ref' + (emptyRefs.length>1?'s':'') + ')</div>' +
-        '<div class="tam-sa-refs">' +
-          emptyRefs.map(function(i){
-            return '<span class="tam-sa-tag tam-sa-tag-empty">' + tamEsc(i.ref) + ' <em>' + i.expected + ' uds</em></span>';
-          }).join('') +
-        '</div>' +
-      '</div>';
-    }
-
-    if (lowRefs.length) {
-      bodyHtml += '<div class="tam-sa-section tam-sa-low">' +
-        '<div class="tam-sa-section-title">🔴 Distribuição incompleta (' + lowRefs.length + ' ref' + (lowRefs.length>1?'s':'') + ')</div>' +
-        '<div class="tam-sa-refs">' +
-          lowRefs.map(function(i){
-            return '<span class="tam-sa-tag tam-sa-tag-low">' + tamEsc(i.ref) + ' <em>' + i.got + '/' + i.expected + '</em></span>';
-          }).join('') +
-        '</div>' +
-      '</div>';
-    }
-
-    if (highRefs.length) {
-      bodyHtml += '<div class="tam-sa-section tam-sa-high">' +
-        '<div class="tam-sa-section-title">🔵 Excesso de unidades (' + highRefs.length + ' ref' + (highRefs.length>1?'s':'') + ')</div>' +
-        '<div class="tam-sa-refs">' +
-          highRefs.map(function(i){
-            return '<span class="tam-sa-tag tam-sa-tag-high">' + tamEsc(i.ref) + ' <em>+' + i.diff + ' uds</em></span>';
-          }).join('') +
-        '</div>' +
-      '</div>';
-    }
-
-    var totalIssues = issues.length;
-    var totalRefs   = r.grouped.length;
-    var okRefs      = totalRefs - totalIssues;
-
-    bodyHtml += '<div class="tam-sa-summary">' +
-      okRefs + ' de ' + totalRefs + ' referências OK' +
-      (emptyRefs.length ? ' · ' + emptyRefs.length + ' sem distribuir' : '') +
-      (lowRefs.length   ? ' · ' + lowRefs.length + ' incompletas' : '') +
-      (highRefs.length  ? ' · ' + highRefs.length + ' com excesso' : '') +
-    '</div>';
-
-    var alert = document.createElement('div');
-    alert.id = 'tam-stock-alert';
-    alert.innerHTML =
-      '<div id="tam-stock-alert-backdrop"></div>' +
-      '<div id="tam-stock-alert-box">' +
-        '<div class="tam-sa-header">' +
-          '<span class="tam-sa-icon">⚠️</span>' +
-          '<span class="tam-sa-title">Inconsistências na distribuição</span>' +
-        '</div>' +
-        '<div class="tam-sa-body">' + bodyHtml + '</div>' +
-        '<div class="tam-sa-btns">' +
-          '<button class="tam-sa-btn tam-sa-btn-continue">Continuar assim · Ver tabela</button>' +
-          '<button class="tam-sa-btn tam-sa-btn-cancel">Voltar e corrigir</button>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(alert);
-    requestAnimationFrame(function(){ alert.classList.add('tam-sa-visible'); });
-
-    function closeAlert() {
-      alert.classList.remove('tam-sa-visible');
-      setTimeout(function(){ if (alert.parentNode) alert.parentNode.removeChild(alert); }, 220);
-    }
-
-    alert.querySelector('.tam-sa-btn-cancel').addEventListener('click', closeAlert);
-    alert.querySelector('#tam-stock-alert-backdrop').addEventListener('click', closeAlert);
-    alert.querySelector('.tam-sa-btn-continue').addEventListener('click', function(){
-      closeAlert();
-      setTimeout(onContinue, 230);
-    });
-    document.addEventListener('keydown', function escA(e){
-      if (e.key === 'Escape') { closeAlert(); document.removeEventListener('keydown', escA); }
-    });
-  }
-
-  /* ── Punto de entrada del botón — valida y luego abre o avisa ── */
-  function tamOpenStockFlow(invIdx) {
-    var issues = tamValidateStockDistrib(invIdx);
-    if (issues.length > 0) {
-      tamStockValidationAlert(invIdx, issues, function(){ tamShowStockModal(invIdx); });
-    } else {
-      tamShowStockModal(invIdx);
-    }
-  }
-
   function tamShowStockModal(invIdx) {
     var r = tamInvoices[invIdx];
     if (!r) return;
 
     // Build rows: first ALL Funchal (A4) refs, then ALL Porto Santo (A5) refs
+    // Skip refs with 0 distribution
     var rows = [];
     ['f','p'].forEach(function(city){
       var cityCode = city === 'f' ? 'A4' : 'A5';
@@ -2682,31 +2558,17 @@
         var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
         var qty = city === 'f' ? (distrib.f || 0) : (distrib.p || 0);
         if (qty <= 0) return;
-        rows.push({ ref: g.ref, city: cityCode, iva: '00', price: g.unitPriceWithShip, qty: qty });
+        rows.push({
+          ref:      g.ref,
+          city:     cityCode,
+          iva:      '00',
+          price:    g.unitPriceWithShip,
+          qty:      qty
+        });
       });
     });
 
-    // ── Format price for Primavera: comma decimal, no thousands separator ──
-    function fmtPriceERP(n) {
-      if (n == null || isNaN(n)) return '0,00';
-      return Number(n).toFixed(2).replace('.', ',');
-    }
-
-    var COL_KEYS   = ['ref','city','iva','price','qty'];
-    var COL_LABELS = ['Referencia','Armazém','IVA','Preço','Qtd.'];
-
-    // ── Get column values as plain text array ──
-    function getColValues(colIdx) {
-      return rows.map(function(row){
-        if (colIdx === 0) return row.ref;
-        if (colIdx === 1) return row.city;
-        if (colIdx === 2) return row.iva;
-        if (colIdx === 3) return fmtPriceERP(row.price);
-        if (colIdx === 4) return String(row.qty);
-        return '';
-      });
-    }
-
+    // ── Build modal HTML ──────────────────────────────────────
     var old = document.getElementById('tam-stock-modal');
     if (old) old.parentNode.removeChild(old);
 
@@ -2715,29 +2577,17 @@
 
     var tableRows = rows.map(function(row, i){
       return '<tr class="' + (i % 2 === 0 ? 'tam-stock-row-even' : 'tam-stock-row-odd') + '">' +
-        '<td class="tam-stock-td tam-stock-ref" data-col="0">' + tamEsc(row.ref) + '</td>' +
-        '<td class="tam-stock-td tam-stock-city" data-col="1" data-city="' + row.city + '">' + row.city + '</td>' +
-        '<td class="tam-stock-td tam-stock-iva" data-col="2">' + row.iva + '</td>' +
-        '<td class="tam-stock-td tam-stock-price" data-col="3">' + fmtPriceERP(row.price) + '</td>' +
-        '<td class="tam-stock-td tam-stock-qty" data-col="4">' + row.qty + '</td>' +
+        '<td class="tam-stock-td tam-stock-ref">' + tamEsc(row.ref) + '</td>' +
+        '<td class="tam-stock-td tam-stock-city">' + row.city + '</td>' +
+        '<td class="tam-stock-td tam-stock-iva">'  + row.iva   + '</td>' +
+        '<td class="tam-stock-td tam-stock-price">' + tamFmtEU(row.price) + '</td>' +
+        '<td class="tam-stock-td tam-stock-qty">'  + row.qty   + '</td>' +
         '</tr>';
     }).join('');
 
     var noData = rows.length === 0
-      ? '<tr><td colspan="5" style="text-align:center;padding:24px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura.<br><small>Distribua as referências primeiro na área de Distribuição.</small></td></tr>'
+      ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
       : '';
-
-    var fRows = rows.filter(function(rw){ return rw.city==='A4'; });
-    var pRows = rows.filter(function(rw){ return rw.city==='A5'; });
-    var fQty  = fRows.reduce(function(s,rw){ return s+rw.qty; },0);
-    var pQty  = pRows.reduce(function(s,rw){ return s+rw.qty; },0);
-
-    // ── Copy buttons row (one per column) ──
-    var copyBtnsHtml = COL_LABELS.map(function(label, ci){
-      return '<button class="tam-stock-copy-btn" data-copycol="' + ci + '" title="Copiar coluna \'' + label + '\'">' +
-        '⧉ ' + label +
-      '</button>';
-    }).join('');
 
     modal.innerHTML =
       '<div id="tam-stock-backdrop"></div>' +
@@ -2752,101 +2602,32 @@
             '<button id="tam-stock-close-btn" class="tam-stock-close-btn" title="fechar">✕</button>' +
           '</div>' +
         '</div>' +
-        '<div id="tam-stock-copy-bar">' +
-          '<span class="tam-stock-copy-label">Copiar coluna:</span>' +
-          copyBtnsHtml +
-          '<span id="tam-stock-copy-feedback"></span>' +
-        '</div>' +
         '<div id="tam-stock-scroll">' +
           '<table id="tam-stock-table">' +
             '<thead>' +
               '<tr>' +
-                '<th class="tam-stock-th tam-stock-ref" data-col="0">Referencia</th>' +
-                '<th class="tam-stock-th tam-stock-city" data-col="1">Armazém</th>' +
-                '<th class="tam-stock-th tam-stock-iva" data-col="2">IVA</th>' +
-                '<th class="tam-stock-th tam-stock-price" data-col="3">Preço</th>' +
-                '<th class="tam-stock-th tam-stock-qty" data-col="4">Qtd.</th>' +
+                '<th class="tam-stock-th tam-stock-ref">Referencia</th>' +
+                '<th class="tam-stock-th tam-stock-city">Armazém</th>' +
+                '<th class="tam-stock-th tam-stock-iva">IVA</th>' +
+                '<th class="tam-stock-th tam-stock-price">Preço</th>' +
+                '<th class="tam-stock-th tam-stock-qty">Qtd.</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + (noData || tableRows) + '</tbody>' +
           '</table>' +
         '</div>' +
         '<div id="tam-stock-footer">' +
-          '<span>' + rows.length + ' linhas</span>' +
-          '<span class="tam-stock-footer-sep">·</span>' +
-          '<span class="tam-stock-footer-f">🔵 Funchal (A4): ' + fRows.length + ' refs · ' + fQty + ' uds</span>' +
-          '<span class="tam-stock-footer-sep">·</span>' +
-          '<span class="tam-stock-footer-p">🔴 Porto Santo (A5): ' + pRows.length + ' refs · ' + pQty + ' uds</span>' +
+          rows.length + ' linhas · ' +
+          rows.filter(function(rw){ return rw.city==='A4'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Funchal · ' +
+          rows.filter(function(rw){ return rw.city==='A5'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Porto Santo' +
         '</div>' +
       '</div>';
 
     document.body.appendChild(modal);
+    // Animate in
     requestAnimationFrame(function(){ modal.classList.add('tam-stock-visible'); });
 
-    var table       = modal.querySelector('#tam-stock-table');
-    var feedback    = modal.querySelector('#tam-stock-copy-feedback');
-    var activeCol   = -1;
-    var copyTimer   = null;
-
-    // ── Column highlight on header click ─────────────────────
-    function setActiveCol(colIdx) {
-      table.querySelectorAll('.tam-stock-col-selected').forEach(function(el){ el.classList.remove('tam-stock-col-selected'); });
-      table.querySelectorAll('.tam-stock-th').forEach(function(th){ th.classList.remove('tam-stock-th-selected'); });
-      modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(b){ b.classList.remove('tam-stock-copy-btn-active'); });
-      if (colIdx === activeCol) { activeCol = -1; return; }
-      activeCol = colIdx;
-      var th = table.querySelector('.tam-stock-th[data-col="' + colIdx + '"]');
-      if (th) th.classList.add('tam-stock-th-selected');
-      table.querySelectorAll('td[data-col="' + colIdx + '"]').forEach(function(td){ td.classList.add('tam-stock-col-selected'); });
-      var copyBtn = modal.querySelector('.tam-stock-copy-btn[data-copycol="' + colIdx + '"]');
-      if (copyBtn) copyBtn.classList.add('tam-stock-copy-btn-active');
-    }
-
-    table.querySelectorAll('.tam-stock-th[data-col]').forEach(function(th){
-      th.style.cursor = 'pointer';
-      th.addEventListener('click', function(){ setActiveCol(parseInt(th.getAttribute('data-col'))); });
-    });
-
-    // ── Copy column to clipboard ──────────────────────────────
-    function copyColToClipboard(colIdx) {
-      var values = getColValues(colIdx);
-      if (!values.length) return;
-      var text = values.join('\n');
-      setActiveCol(colIdx);
-
-      function showFeedback(ok) {
-        if (feedback) {
-          feedback.textContent = ok ? '✓ ' + COL_LABELS[colIdx] + ' copiado!' : '⚠ Copie manualmente (Ctrl+C)';
-          feedback.className   = ok ? 'tam-stock-copy-ok' : 'tam-stock-copy-warn';
-          if (copyTimer) clearTimeout(copyTimer);
-          copyTimer = setTimeout(function(){ feedback.textContent = ''; feedback.className = ''; }, 2200);
-        }
-      }
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function(){ showFeedback(true); }).catch(function(){ showFeedback(false); });
-      } else {
-        // Fallback: textarea trick
-        try {
-          var ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-          showFeedback(true);
-        } catch(e) { showFeedback(false); }
-      }
-    }
-
-    modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        copyColToClipboard(parseInt(btn.getAttribute('data-copycol')));
-      });
-    });
-
-    // ── Close ─────────────────────────────────────────────────
+    // Close
     function closeModal() {
       modal.classList.remove('tam-stock-visible');
       setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
@@ -2857,32 +2638,17 @@
       if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc); }
     });
 
-    // ── Export to Excel (SheetJS if available, else CSV) ──────
+    // Export to CSV (Excel-compatible)
     modal.querySelector('#tam-stock-export-btn').addEventListener('click', function(){
-      var fname = 'Stock_' + (r.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_');
-
-      if (typeof XLSX !== 'undefined') {
-        var wsData = [['Referencia','Armazem','IVA','Preco','Quantidade']];
-        rows.forEach(function(row){
-          wsData.push([row.ref, row.city, row.iva, fmtPriceERP(row.price), row.qty]);
-        });
-        var ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = [{wch:22},{wch:10},{wch:6},{wch:12},{wch:10}];
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Ingreso de Stock');
-        XLSX.writeFile(wb, fname + '.xlsx');
-        return;
-      }
-
-      // Fallback CSV
       var lines = ['\uFEFF' + ['Referencia','Armazem','IVA','Preco','Quantidade'].join(';')];
       rows.forEach(function(row){
-        lines.push([row.ref, row.city, row.iva, fmtPriceERP(row.price), row.qty].join(';'));
+        lines.push([row.ref, row.city, row.iva, String(row.price).replace('.',','), row.qty].join(';'));
       });
       var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement('a');
-      a.href = url; a.download = fname + '.csv';
+      a.href     = url;
+      a.download = 'Stock_' + (r.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_') + '.csv';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
     });
@@ -3798,7 +3564,7 @@
       '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-stock-modal.tam-stock-visible { opacity:1; pointer-events:auto; }',
       '#tam-stock-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
-      '#tam-stock-panel { position:relative; z-index:1; width:min(820px,96vw); max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
+      '#tam-stock-panel { position:relative; z-index:1; width:min(820px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
       '#tam-stock-modal.tam-stock-visible #tam-stock-panel { transform:translateY(0); }',
       '#tam-stock-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
       '#tam-stock-title { display:flex; flex-direction:column; gap:2px; }',
@@ -3809,103 +3575,35 @@
       '.tam-stock-action-btn:hover { background:#2e7d32; color:#fff; }',
       '.tam-stock-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
       '.tam-stock-close-btn:hover { background:#c62828; color:#fff; border-color:#c62828; }',
-      /* Copy bar */
-      '#tam-stock-copy-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:7px 16px; background:#f5f5f5; border-bottom:1px solid #e8e8e8; flex-shrink:0; }',
-      '.tam-stock-copy-label { font-size:.65rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#aaa; font-family:MontserratLight,sans-serif; white-space:nowrap; margin-right:2px; }',
-      '.tam-stock-copy-btn { padding:4px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#fff; color:#555; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; }',
-      '.tam-stock-copy-btn:hover { background:#1565c0; color:#fff; border-color:#1565c0; }',
-      '.tam-stock-copy-btn.tam-stock-copy-btn-active { background:#1565c0; color:#fff; border-color:#1565c0; }',
-      '#tam-stock-copy-feedback { font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; margin-left:4px; }',
-      '.tam-stock-copy-ok { color:#2e7d32; }',
-      '.tam-stock-copy-warn { color:#b05000; }',
-      /* Table */
       '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#tam-stock-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.82rem; white-space:nowrap; }',
       '#tam-stock-table thead { position:sticky; top:0; z-index:2; }',
-      '.tam-stock-th { padding:8px 14px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666; border-bottom:2px solid #ddd; text-align:left; user-select:none; cursor:pointer; transition:background .12s,color .12s; }',
-      '.tam-stock-th:hover { background:#dbeafe; color:#1565c0; }',
-      '.tam-stock-th.tam-stock-th-selected { background:#1565c0!important; color:#fff!important; }',
+      '.tam-stock-th { padding:8px 14px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666; border-bottom:2px solid #ddd; text-align:left; user-select:none; }',
       '.tam-stock-th.tam-stock-city,.tam-stock-th.tam-stock-iva,.tam-stock-th.tam-stock-price,.tam-stock-th.tam-stock-qty { text-align:center; }',
       '.tam-stock-td { padding:6px 14px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
       '.tam-stock-td.tam-stock-city,.tam-stock-td.tam-stock-iva,.tam-stock-td.tam-stock-qty { text-align:center; font-weight:bold; }',
-      '.tam-stock-td.tam-stock-price { text-align:right; font-family:monospace; font-size:.8rem; }',
+      '.tam-stock-td.tam-stock-price { text-align:right; font-variant-numeric:tabular-nums; }',
       '.tam-stock-td.tam-stock-ref { font-weight:bold; color:#1a1a1a; min-width:160px; }',
-      '.tam-stock-td.tam-stock-col-selected { background:#dbeafe!important; }',
       '.tam-stock-row-even { background:#fff; }',
       '.tam-stock-row-odd  { background:#fafafa; }',
       '#tam-stock-table tbody tr:hover td { background:#e8f0fe!important; }',
-      '#tam-stock-table tbody tr:hover td.tam-stock-col-selected { background:#bfdbfe!important; }',
       '.tam-stock-td.tam-stock-city[data-city="A4"] { color:#1565c0; }',
       '.tam-stock-td.tam-stock-city[data-city="A5"] { color:#880e4f; }',
-      /* Footer */
-      '#tam-stock-footer { display:flex; align-items:center; gap:0; flex-wrap:wrap; padding:8px 20px; font-size:.72rem; color:#888; border-top:1px solid #eee; background:#fafafa; font-family:MontserratLight,sans-serif; flex-shrink:0; }',
-      '.tam-stock-footer-sep { margin:0 8px; color:#ddd; }',
-      '.tam-stock-footer-f { color:#1565c0; font-weight:bold; }',
-      '.tam-stock-footer-p { color:#880e4f; font-weight:bold; }',
-      /* Stock validation alert */
-      '#tam-stock-alert { position:fixed; inset:0; z-index:10500; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s ease; pointer-events:none; }',
-      '#tam-stock-alert.tam-sa-visible { opacity:1; pointer-events:auto; }',
-      '#tam-stock-alert-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.4); }',
-      '#tam-stock-alert-box { position:relative; z-index:1; width:min(540px,94vw); max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.28); overflow:hidden; }',
-      '.tam-sa-header { display:flex; align-items:center; gap:10px; padding:16px 20px 12px; background:#fff8f0; border-bottom:1px solid #fde8cc; flex-shrink:0; }',
-      '.tam-sa-icon { font-size:1.3rem; }',
-      '.tam-sa-title { font-size:.88rem; font-weight:bold; font-family:MontserratLight,sans-serif; color:#7a3000; text-transform:uppercase; letter-spacing:.05em; }',
-      '.tam-sa-body { overflow-y:auto; flex:1; padding:16px 20px; font-family:MontserratLight,sans-serif; }',
-      '.tam-sa-inv { font-size:.82rem; color:#555; margin-bottom:12px; }',
-      '.tam-sa-section { margin-bottom:14px; }',
-      '.tam-sa-section-title { font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }',
-      '.tam-sa-empty .tam-sa-section-title { color:#888; }',
-      '.tam-sa-low   .tam-sa-section-title { color:#c00; }',
-      '.tam-sa-high  .tam-sa-section-title { color:#1565c0; }',
-      '.tam-sa-refs { display:flex; flex-wrap:wrap; gap:5px; }',
-      '.tam-sa-tag { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:6px; font-size:.76rem; font-weight:bold; font-family:MontserratLight,sans-serif; }',
-      '.tam-sa-tag em { font-style:normal; font-weight:normal; font-size:.7rem; opacity:.8; }',
-      '.tam-sa-tag-empty { background:#f5f5f5; color:#888; border:1px solid #e0e0e0; }',
-      '.tam-sa-tag-low   { background:#fff0f0; color:#c00;    border:1px solid #fcc; }',
-      '.tam-sa-tag-high  { background:#e8f0fe; color:#1565c0; border:1px solid #bfdbfe; }',
-      '.tam-sa-summary { margin-top:12px; padding:10px 14px; background:#fafafa; border-radius:8px; font-size:.76rem; color:#666; font-family:MontserratLight,sans-serif; border:1px solid #eee; }',
-      '.tam-sa-btns { display:flex; gap:8px; padding:14px 20px; border-top:1px solid #eee; background:#fafafa; flex-shrink:0; }',
-      '.tam-sa-btn { flex:1; padding:10px 14px; font-size:.8rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:9px; border:1.5px solid #ccc; background:#fff; transition:background .13s,color .13s,border-color .13s; }',
-      '.tam-sa-btn-continue { border-color:#e07000; background:#fff8f0; color:#b05000; }',
-      '.tam-sa-btn-continue:hover { background:#e07000; color:#fff; border-color:#e07000; }',
-      '.tam-sa-btn-cancel { border-color:#2e7d32; background:#e8f5e9; color:#2e7d32; }',
-      '.tam-sa-btn-cancel:hover { background:#2e7d32; color:#fff; border-color:#2e7d32; }',
-      /* Dark mode — stock + alert */
+      '#tam-stock-footer { padding:8px 20px; font-size:.72rem; color:#888; border-top:1px solid #eee; background:#fafafa; font-family:MontserratLight,sans-serif; flex-shrink:0; }',
       '@media(prefers-color-scheme:dark){',
       '#tam-stock-panel{background:#111!important;box-shadow:0 16px 64px rgba(0,0,0,.6)!important;}',
       '#tam-stock-header{background:#161616!important;border-color:#2a2a2a!important;}',
       '#tam-stock-inv-label{color:#e8e8e8!important;}',
       '#tam-stock-sub-label{color:#555!important;}',
-      '#tam-stock-copy-bar{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
-      '.tam-stock-copy-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
-      '.tam-stock-copy-btn:hover,.tam-stock-copy-btn.tam-stock-copy-btn-active{background:#1565c0!important;color:#fff!important;border-color:#1565c0!important;}',
       '.tam-stock-th{background:#1a1a1a!important;color:#666!important;border-color:#2a2a2a!important;}',
-      '.tam-stock-th:hover{background:#0d1f3a!important;color:#64b5f6!important;}',
-      '.tam-stock-th.tam-stock-th-selected{background:#1565c0!important;color:#fff!important;}',
       '.tam-stock-td{border-color:#1e1e1e!important;color:#e0e0e0!important;}',
-      '.tam-stock-td.tam-stock-col-selected{background:#0d2040!important;}',
-      '.tam-stock-td.tam-stock-ref{color:#e8e8e8!important;}',
       '.tam-stock-row-even{background:#111!important;}',
       '.tam-stock-row-odd{background:#161616!important;}',
       '#tam-stock-table tbody tr:hover td{background:#0d1f2e!important;}',
-      '#tam-stock-footer{background:#161616!important;border-color:#2a2a2a!important;color:#555!important;}',
-      '.tam-stock-footer-f{color:#5dade2!important;}',
-      '.tam-stock-footer-p{color:#f48fb1!important;}',
+      '#tam-stock-footer{background:#161616!important;border-color:#2a2a2a!important;}',
       '.tam-inv-stock-btn{background:#0d1f2e!important;border-color:#5dade2!important;color:#5dade2!important;}',
       '.tam-inv-stock-btn:hover{background:#1565c0!important;color:#fff!important;}',
-      '#tam-stock-alert-box{background:#1a1a1a!important;}',
-      '.tam-sa-header{background:#1a0d00!important;border-color:#3a1a00!important;}',
-      '.tam-sa-title{color:#e07000!important;}',
-      '.tam-sa-inv{color:#888!important;}',
-      '.tam-sa-tag-empty{background:#222!important;color:#666!important;border-color:#333!important;}',
-      '.tam-sa-tag-low{background:#2a0808!important;color:#f48!important;border-color:#3a1010!important;}',
-      '.tam-sa-tag-high{background:#0d1f3a!important;color:#64b5f6!important;border-color:#1565c0!important;}',
-      '.tam-sa-summary{background:#111!important;border-color:#2a2a2a!important;color:#555!important;}',
-      '.tam-sa-btns{background:#161616!important;border-color:#2a2a2a!important;}',
-      '.tam-sa-btn{background:#111!important;border-color:#333!important;color:#888!important;}',
-      '.tam-sa-btn-continue{border-color:#b05000!important;background:#1a0800!important;color:#e07000!important;}',
-      '.tam-sa-btn-cancel{border-color:#2e7d32!important;background:#0d1a0d!important;color:#4caf50!important;}',
-      '}'
+      '}',
 
       /* ── Anomaly column header and cells ── */
       '.tam-th-anomaly { background:#f5f5f5!important; color:#888!important; font-size:.65rem!important; min-width:54px; }',

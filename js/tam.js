@@ -371,6 +371,7 @@
      RENDER COMPLETO
   ══════════════════════════════════════════════════════════════ */
   function tamRenderAll() {
+    tamRepairBoxInvIdx();
     var totalPieces = tamInvoices.reduce(function(s,r){ return s+r.totalPieces; },0);
     var totalRefs   = tamConsolidatedRefs().length;
     document.getElementById('tam-status-msg').textContent =
@@ -1008,6 +1009,9 @@
       '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
       '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
+    // Repair invIdx on all boxes (handles legacy sessions without invIdx)
+    tamRepairBoxInvIdx();
+
     // Sort boxes: incomplete first, complete last
     // Also HIDE boxes from invoices that used quick distribution
     var quickDistrib = (tamSession && tamSession.quickDistrib) || {};
@@ -1284,22 +1288,35 @@
      DISTRIBUIÇÃO RÁPIDA — global (área de resumen) y por factura
   ══════════════════════════════════════════════════════════════ */
 
+  /* Repair: assign invIdx to boxes that don't have it (legacy sessions) */
+  function tamRepairBoxInvIdx() {
+    if (!tamSession || !tamSession.boxes) return;
+    var offset = 0;
+    tamInvoices.forEach(function(r, invIdx){
+      var pkgs = r.shipPkgs || 1;
+      for (var i = 0; i < pkgs; i++) {
+        if (tamSession.boxes[offset + i] !== undefined) {
+          tamSession.boxes[offset + i].invIdx = invIdx;
+        }
+      }
+      offset += pkgs;
+    });
+    if (!tamSession.quickDistrib) tamSession.quickDistrib = {};
+  }
+
   /* Per-invoice quick distribution */
   function tamQuickDistribInvoice(invIdx, mode) {
     if (!tamSession) return;
-    if (!tamSession.quickDistrib) tamSession.quickDistrib = {};
+    tamRepairBoxInvIdx();  // ensure all boxes have invIdx
     var r = tamInvoices[invIdx];
     if (!r) return;
 
     // UNDO — clear quick distribution for this invoice
     if (mode === 'undo') {
       delete tamSession.quickDistrib[invIdx];
-      // Clear all box refs for refs belonging to this invoice
-      var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+      var undoBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
       r.grouped.forEach(function(g){
-        invBoxes.forEach(function(box){
-          delete box.refs[g.ref];
-        });
+        undoBoxes.forEach(function(box){ delete box.refs[g.ref]; });
       });
       tamRenderAll();
       tamSaveSession(false);
@@ -1308,6 +1325,7 @@
 
     // Get boxes that belong to this invoice
     var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+    console.log('TAM: quick distrib invIdx=' + invIdx + ' mode=' + mode + ' boxes=' + invBoxes.length);
 
     if (mode === 'funchal' || mode === 'porto') {
       r.grouped.forEach(function(g){

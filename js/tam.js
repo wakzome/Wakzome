@@ -1350,96 +1350,38 @@
 
     // ── HOVER-TO-MODIFY on completed ref rows ─────────────────
     (function(){
-      // Ensure the singleton tooltip exists
+      // ── Singleton tooltip — created once, reused across renders ──
       var tip = document.getElementById('tam-modify-tip');
       if (!tip) {
         tip = document.createElement('div');
         tip.id = 'tam-modify-tip';
         tip.innerHTML =
-          '<span class="tam-tip-msg">\u00BFDesea modificar?</span>' +
+          '<span class="tam-tip-msg">\u00BFModificar?</span>' +
           '<button class="tam-tip-btn" id="tam-tip-yes">S\u00ED</button>';
         document.body.appendChild(tip);
-      }
 
-      var tipHideTimer = null;
-      var tipActiveRef = null;
-      var tipActiveRow = null;
+        // Button listener attached ONCE here — reads from window.tamTipState
+        tip.querySelector('#tam-tip-yes').addEventListener('click', function(){
+          var state = window.tamTipState;
+          if (!state || !state.ref || !tamSession) return;
+          var ref = state.ref;
 
-      function showTip(row, refVal) {
-        clearTimeout(tipHideTimer);
-        tipActiveRef = refVal;
-        tipActiveRow = row;
-
-        // Position relative to the ref cell
-        var refCell = row.querySelector('.tam-rec-ref-col');
-        if (!refCell) return;
-        var rect = refCell.getBoundingClientRect();
-        var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-        var scrollY = window.pageYOffset || document.documentElement.scrollTop;
-        tip.style.left = (rect.left + scrollX) + 'px';
-        tip.style.top  = (rect.top  + scrollY - tip.offsetHeight - 6) + 'px';
-        tip.classList.add('tam-tip-visible');
-
-        // Reposition after paint (offsetHeight may be 0 on first show)
-        requestAnimationFrame(function(){
-          var rect2 = refCell.getBoundingClientRect();
-          tip.style.left = (rect2.left + scrollX) + 'px';
-          tip.style.top  = (rect2.top  + scrollY - tip.offsetHeight - 6) + 'px';
-        });
-      }
-
-      function hideTip(immediate) {
-        if (immediate) {
+          // Hide immediately
           tip.classList.remove('tam-tip-visible');
-          tipActiveRef = null;
-          tipActiveRow = null;
-        } else {
-          tipHideTimer = setTimeout(function(){
-            tip.classList.remove('tam-tip-visible');
-            tipActiveRef = null;
-            tipActiveRow = null;
-          }, 320);
-        }
-      }
+          window.tamTipState = null;
 
-      // Attach hover listeners to completed/over rows
-      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
-      if (!tbody) return;
-      tbody.querySelectorAll('tr.tam-ref-complete, tr.tam-ref-over').forEach(function(row){
-        row.addEventListener('mouseenter', function(){
-          showTip(row, row.getAttribute('data-ref'));
-        });
-        row.addEventListener('mouseleave', function(){ hideTip(false); });
-      });
-
-      // Keep tip visible while hovering it
-      tip.addEventListener('mouseenter', function(){ clearTimeout(tipHideTimer); });
-      tip.addEventListener('mouseleave', function(){ hideTip(false); });
-
-      // "Sí" button — unlock the box(es) containing this ref and highlight cells
-      var yesBtn = tip.querySelector('#tam-tip-yes');
-      if (yesBtn) {
-        // Remove old listener by replacing the button
-        var newYes = yesBtn.cloneNode(true);
-        yesBtn.parentNode.replaceChild(newYes, yesBtn);
-        newYes.addEventListener('click', function(){
-          hideTip(true);
-          var ref = tipActiveRef;
-          if (!ref || !tamSession) return;
-
-          // Find locked boxes that have data for this ref
+          // Unlock all locked boxes that contain this ref
           var unlocked = false;
           tamSession.boxes.forEach(function(box, bi){
-            if (box.locked && box.refs[ref]) {
+            if (box.locked && box.refs[ref] !== undefined) {
               box.locked = false;
-              // Cancel any pending lock timer
               if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
               delete tamBoxLockPending[bi];
               unlocked = true;
             }
           });
 
-          // Reset animation state for this ref so it can flash again
+          // Reset animation state so it can flash again when re-completed
           tamRefDone.delete(ref);
           tamRefCompleting.delete(ref);
           if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
@@ -1448,30 +1390,88 @@
           tamScheduleSave();
           tamRenderAll();
 
-          // After re-render, flash-highlight the cells for this ref
+          // After re-render: highlight all editable cells for this ref
           requestAnimationFrame(function(){
-            var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-            var toFlash = area.querySelectorAll(
-              '#tam-inp-f-' + safeRef + ', #tam-inp-p-' + safeRef +
-              ', [id^="tam-inp-f-"][id$="-' + safeRef + '"], [id^="tam-inp-p-"][id$="-' + safeRef + '"]'
-            );
-            // Better: select by data-ref
-            var inputs = area.querySelectorAll('.tam-rec-input[data-ref]');
-            var matched = Array.from(inputs).filter(function(inp){
-              return inp.getAttribute('data-ref') === ref && !inp.disabled;
-            });
-            matched.forEach(function(inp){
+            var recArea = document.getElementById('tam-reception-area');
+            if (!recArea) return;
+            var inputs = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
+              .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
+            inputs.forEach(function(inp){
               var td = inp.closest('td');
               if (td) {
                 td.classList.add('tam-cell-edit-flash');
-                setTimeout(function(){ td.classList.remove('tam-cell-edit-flash'); }, 1400);
+                setTimeout(function(){ td.classList.remove('tam-cell-edit-flash'); }, 2000);
               }
             });
-            // Focus first editable input
-            if (matched[0]) { matched[0].focus(); matched[0].select(); }
+            // Also highlight the entire active box header
+            var firstBi = inputs.length ? parseInt(inputs[0].getAttribute('data-box')) : -1;
+            if (firstBi >= 0) {
+              var hdr = recArea.querySelector('.tam-box-header[colspan]');
+              recArea.querySelectorAll('.tam-box-header').forEach(function(th){
+                // find by contained input id
+              });
+            }
+            if (inputs[0]) { inputs[0].focus(); inputs[0].select(); }
           });
         });
+
+        // Keep tooltip visible while hovering it — listener added ONCE
+        tip.addEventListener('mouseenter', function(){
+          if (window.tamTipHideTimer) { clearTimeout(window.tamTipHideTimer); window.tamTipHideTimer = null; }
+        });
+        tip.addEventListener('mouseleave', function(){
+          window.tamTipHideTimer = setTimeout(function(){
+            tip.classList.remove('tam-tip-visible');
+            window.tamTipState = null;
+          }, 280);
+        });
       }
+
+      // ── Attach hover via event delegation on tbody ─────────────
+      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+      if (!tbody) return;
+
+      // Use delegation so we don't need to re-bind on every render
+      tbody.addEventListener('mouseenter', function(e){
+        var row = e.target.closest('tr[data-ref]');
+        if (!row) return;
+        // Only for completed/over rows
+        if (!row.classList.contains('tam-ref-complete') && !row.classList.contains('tam-ref-over')) return;
+
+        if (window.tamTipHideTimer) { clearTimeout(window.tamTipHideTimer); window.tamTipHideTimer = null; }
+        window.tamTipState = { ref: row.getAttribute('data-ref') };
+
+        // Position to the RIGHT of the ref cell, vertically centered on the row
+        var refCell = row.querySelector('.tam-rec-ref-col');
+        if (!refCell) return;
+        var rect = refCell.getBoundingClientRect();
+        var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+        var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+        // Show first (invisible) to measure width, then position
+        tip.style.visibility = 'hidden';
+        tip.classList.add('tam-tip-visible');
+        requestAnimationFrame(function(){
+          var tipH = tip.offsetHeight;
+          var tipW = tip.offsetWidth;
+          var rowRect = row.getBoundingClientRect();
+          var leftPos = rect.right + scrollX + 10;
+          var topPos  = rowRect.top + scrollY + (rowRect.height - tipH) / 2;
+          tip.style.left = leftPos + 'px';
+          tip.style.top  = topPos + 'px';
+          tip.style.visibility = '';
+        });
+      }, true);  // capture phase so we catch even if child stops propagation
+
+      tbody.addEventListener('mouseleave', function(e){
+        var row = e.target.closest('tr[data-ref]');
+        if (!row) return;
+        if (!row.classList.contains('tam-ref-complete') && !row.classList.contains('tam-ref-over')) return;
+        window.tamTipHideTimer = setTimeout(function(){
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+        }, 280);
+      }, true);
     })();
 
     // ── BIND REF FILTER INPUT ─────────────────────────────────
@@ -3169,15 +3169,15 @@
       '.tam-tip-btn { padding:3px 12px; font-size:.74rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:7px; background:#1565c0; color:#fff; transition:background .12s; }',
       '.tam-tip-btn:hover { background:#0d47a1; border-color:#0d47a1; }',
       /* ── Cell edit flash animation ── */
-      '@keyframes tam-edit-flash { 0%{background:#fff9c4!important;} 60%{background:#fff176!important;} 100%{background:inherit;} }',
-      '.tam-cell-edit-flash { animation:tam-edit-flash 1.4s ease forwards!important; }',
+      '@keyframes tam-edit-flash { 0%{background:#ffe082!important;outline:2px solid #f9a825!important;} 50%{background:#fff176!important;outline:2px solid #f9a825!important;} 100%{background:inherit;outline:none;} }',
+      '.tam-cell-edit-flash { animation:tam-edit-flash 2s ease forwards!important; }',
       '@media(prefers-color-scheme:dark){',
       '#tam-modify-tip{background:#1a1a1a!important;border-color:#5dade2!important;box-shadow:0 4px 18px rgba(0,0,0,.5)!important;}',
       '.tam-tip-msg{color:#e0e0e0!important;}',
       '.tam-tip-btn{background:#1565c0!important;border-color:#5dade2!important;color:#fff!important;}',
       '.tam-tip-btn:hover{background:#0d47a1!important;}',
-      '@keyframes tam-edit-flash-dark { 0%{background:#3a3000!important;} 60%{background:#4a3e00!important;} 100%{background:inherit;} }',
-      '.tam-cell-edit-flash{animation:tam-edit-flash-dark 1.4s ease forwards!important;}',
+      '@keyframes tam-edit-flash-dark { 0%{background:#4a3800!important;outline:2px solid #f9a825!important;} 50%{background:#3a2e00!important;outline:2px solid #f9a825!important;} 100%{background:inherit;outline:none;} }',
+      '.tam-cell-edit-flash{animation:tam-edit-flash-dark 2s ease forwards!important;}',
       '}',
 
       /* ── Ref filter input ── */

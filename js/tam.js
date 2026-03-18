@@ -118,27 +118,69 @@
 
   /* ══════════════════════════════════════════════════════════════
      DRAG & DROP + FILE INPUT
+     bind defensivo: aguarda até os elementos existirem no DOM
   ══════════════════════════════════════════════════════════════ */
-  var upLabel = document.getElementById('tam-upload-label') || document.getElementById('upload-label');
-  if (!upLabel) return;
+  function tamBindUpload() {
+    var upLabel   = document.getElementById('tam-upload-label') || document.getElementById('upload-label');
+    var fileInput = document.getElementById('tam-file-input');
+    var exportBtn = document.getElementById('tam-export-btn');
 
-  upLabel.addEventListener('dragover',  function(e){ e.preventDefault(); upLabel.classList.add('drag-over'); });
-  upLabel.addEventListener('dragleave', function(){ upLabel.classList.remove('drag-over'); });
-  upLabel.addEventListener('drop', function(e){
-    e.preventDefault(); upLabel.classList.remove('drag-over');
-    var files = Array.from(e.dataTransfer.files).filter(function(f){ return f.type==='application/pdf'; });
-    if (files.length) tamHandleFiles(files);
-  });
-  document.getElementById('tam-file-input').addEventListener('change', function(e){
-    var files = Array.from(e.target.files);
-    if (files.length) tamHandleFiles(files);
-    e.target.value = '';
-  });
+    if (!upLabel || !fileInput || !exportBtn) {
+      // Elementos ainda não injetados — tentar de novo em 120ms
+      setTimeout(tamBindUpload, 120);
+      return;
+    }
+    if (upLabel._tamBound) return;   // evitar double-bind
+    upLabel._tamBound = true;
+
+    upLabel.addEventListener('dragover',  function(e){ e.preventDefault(); upLabel.classList.add('drag-over'); });
+    upLabel.addEventListener('dragleave', function(){ upLabel.classList.remove('drag-over'); });
+    upLabel.addEventListener('drop', function(e){
+      e.preventDefault(); upLabel.classList.remove('drag-over');
+      var files = Array.from(e.dataTransfer.files).filter(function(f){ return f.type==='application/pdf'; });
+      if (files.length) tamHandleFiles(files);
+    });
+
+    fileInput.addEventListener('change', function(e){
+      var files = Array.from(e.target.files);
+      if (files.length) tamHandleFiles(files);
+      e.target.value = '';
+    });
+
+    exportBtn.addEventListener('click', tamExportCSV);
+
+    // AUTO-RESTAURO: carregar sessão mais recente ao iniciar
+    tamAutoRestoreSession();
+  }
+  tamBindUpload();
 
   /* ══════════════════════════════════════════════════════════════
-     BOTONES PRINCIPALES
+     AUTO-RESTAURO DA ÚLTIMA SESSÃO AO ABRIR A PÁGINA
   ══════════════════════════════════════════════════════════════ */
-  document.getElementById('tam-export-btn').addEventListener('click', tamExportCSV);
+  function tamAutoRestoreSession() {
+    if (tamSession) return;   // já há sessão ativa
+    try {
+      var all  = tamLoadAllSessionsLocal();
+      var keys = Object.keys(all);
+      if (!keys.length) return;
+      // Ordenar por savedAt desc — pegar a mais recente
+      keys.sort(function(a,b){ return (all[b].savedAt||0) - (all[a].savedAt||0); });
+      var mostRecent = all[keys[0]];
+      if (!mostRecent || !mostRecent.invoices || !mostRecent.invoices.length) return;
+      tamLoadSession(keys[0], mostRecent);
+      // Notificação discreta durante 3,5s
+      var stEl = document.getElementById('tam-session-status');
+      if (stEl) {
+        stEl.textContent = '↩ sessão restaurada automaticamente';
+        stEl.className = 'saved';
+        setTimeout(function(){ stEl.textContent = ''; stEl.className = ''; }, 3500);
+      }
+    } catch(e) { /* falha silenciosa */ }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     BOTONES PRINCIPALES  (exportBtn ligado dentro de tamBindUpload)
+  ══════════════════════════════════════════════════════════════ */
 
   /* ══════════════════════════════════════════════════════════════
      MAIN HANDLER — procesa uno o varios PDFs

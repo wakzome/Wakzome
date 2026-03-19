@@ -1847,10 +1847,10 @@ tr { transition: background 0.15s ease; }
 .login-bubble {
   position: absolute;
   border-radius: 50%;
-  border: 1.5px solid rgba(0,0,0,0.07);
+  border: 1.5px solid rgba(0,0,0,0.14);
   background: radial-gradient(circle at 35% 35%,
-    rgba(255,255,255,0.55),
-    rgba(200,200,210,0.08) 60%,
+    rgba(180,180,195,0.28),
+    rgba(160,160,180,0.10) 60%,
     transparent 100%);
   pointer-events: none;
   transform: scale(0);
@@ -1897,10 +1897,10 @@ tr { transition: background 0.15s ease; }
 }
 @media (prefers-color-scheme: dark) {
   .login-bubble {
-    border-color: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.11);
     background: radial-gradient(circle at 35% 35%,
-      rgba(255,255,255,0.06),
-      rgba(180,180,200,0.02) 60%,
+      rgba(255,255,255,0.13),
+      rgba(200,200,220,0.05) 60%,
       transparent 100%);
   }
 }
@@ -2014,6 +2014,107 @@ tr { transition: background 0.15s ease; }
 }
 .tam-chk-ok  { color: #2a6a2a; }
 .tam-chk-err { color: #c00; }
+
+/* ══ ADMIN HAMBURGER — mobile only ══ */
+#admin-header-top {
+  display: flex; align-items: center; justify-content: center;
+  position: relative; width: 100%;
+}
+#admin-hamburger {
+  display: none;
+  flex-direction: column; justify-content: center; align-items: center;
+  gap: 5px; width: 38px; height: 38px;
+  background: none; border: none; cursor: pointer;
+  padding: 6px; border-radius: 9px;
+  transition: background 0.15s;
+  position: absolute; left: 0;
+  color: #000;
+}
+#admin-hamburger span {
+  display: block; width: 18px; height: 1.5px;
+  background: currentColor; border-radius: 2px;
+  transition: transform 0.25s, opacity 0.25s;
+}
+#admin-hamburger:hover { background: rgba(0,0,0,0.06); }
+@media (max-width: 768px) {
+  #admin-hamburger { display: flex; }
+  #tab-nav { display: none !important; }
+}
+
+/* ── Mobile menu drawer ── */
+#admin-mobile-menu {
+  display: none; position: fixed; inset: 0; z-index: 9000;
+}
+#admin-mobile-menu.open { display: block; }
+#admin-mobile-menu-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.45);
+  opacity: 0; transition: opacity 0.28s ease;
+}
+#admin-mobile-menu.open #admin-mobile-menu-backdrop { opacity: 1; }
+#admin-mobile-menu-panel {
+  position: absolute; top: 0; left: 0;
+  width: min(280px, 82vw); height: 100%;
+  background: #fff;
+  box-shadow: 6px 0 40px rgba(0,0,0,0.14);
+  transform: translateX(-100%);
+  transition: transform 0.32s cubic-bezier(0.22,1,0.36,1);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#admin-mobile-menu.open #admin-mobile-menu-panel { transform: translateX(0); }
+#admin-mobile-menu-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid #efefef; flex-shrink: 0;
+}
+#admin-mobile-menu-hdr .logo-text {
+  font-size: 1.5rem !important; letter-spacing: .06em !important;
+  transition: none !important; cursor: default !important;
+}
+#admin-mobile-menu-hdr .logo-text:hover {
+  letter-spacing: .06em !important; opacity: 1 !important;
+}
+#admin-mobile-menu-close {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; background: none;
+  border: 1.5px solid #ddd; border-radius: 8px;
+  cursor: pointer; color: #555;
+  font-family: 'MontserratLight', sans-serif;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#admin-mobile-menu-close:hover { background: #555; color: #fff; border-color: #555; }
+#admin-mobile-menu-items {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 10px 0; overflow-y: auto;
+}
+.mobile-tab-btn {
+  display: flex; align-items: center; width: 100%;
+  padding: 15px 24px; text-align: left;
+  font-size: .95rem; font-weight: 600;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: lowercase; letter-spacing: .03em;
+  color: #000; background: none; border: none;
+  cursor: pointer; transition: background 0.15s, padding-left 0.2s;
+  border-left: 3px solid transparent;
+}
+.mobile-tab-btn:hover { background: #f5f5f5; padding-left: 30px; }
+.mobile-tab-btn.mobile-tab-active {
+  background: #f0f0f0;
+  border-left-color: #000;
+  padding-left: 21px;
+}
+@media (prefers-color-scheme: dark) {
+  #admin-hamburger { color: #e8e8e8 !important; }
+  #admin-hamburger:hover { background: rgba(255,255,255,0.08) !important; }
+  #admin-mobile-menu-panel { background: #111 !important; box-shadow: 6px 0 40px rgba(0,0,0,0.5) !important; }
+  #admin-mobile-menu-hdr { border-color: #2a2a2a !important; }
+  #admin-mobile-menu-close { border-color: #333 !important; color: #888 !important; }
+  #admin-mobile-menu-close:hover { background: #555 !important; color: #fff !important; border-color: #555 !important; }
+  .mobile-tab-btn { color: #aaa !important; }
+  .mobile-tab-btn:hover { background: #1a1a1a !important; color: #e8e8e8 !important; padding-left: 30px; }
+  .mobile-tab-btn.mobile-tab-active { background: #1e1e1e !important; border-left-color: #e8e8e8 !important; color: #e8e8e8 !important; }
+}
 </style>
 </head>
 <body>
@@ -2084,7 +2185,12 @@ tr { transition: background 0.15s ease; }
 <!-- ═══ VISTA ADMIN (salários + recibos) ═══ -->
 <div id="admin-app">
   <div id="admin-header" class="reveal-item">
-    <div class="logo-text" id="admin-logo" style="cursor:pointer;">wakzome</div>
+    <div id="admin-header-top">
+      <button id="admin-hamburger" aria-label="menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="logo-text" id="admin-logo" style="cursor:pointer;">wakzome</div>
+    </div>
     <div id="admin-time"></div>
     <div id="admin-date"></div>
     <div class="loading-dots"><span></span><span></span><span></span></div>
@@ -2362,6 +2468,156 @@ tr { transition: background 0.15s ease; }
     </div>
   </div>
 </div>
+
+<!-- ═══ MOBILE ADMIN MENU ═══ -->
+<div id="admin-mobile-menu" aria-hidden="true">
+  <div id="admin-mobile-menu-backdrop"></div>
+  <nav id="admin-mobile-menu-panel">
+    <div id="admin-mobile-menu-hdr">
+      <span class="logo-text">wakzome</span>
+      <button id="admin-mobile-menu-close" aria-label="fechar">&times;</button>
+    </div>
+    <div id="admin-mobile-menu-items">
+      <button class="mobile-tab-btn mobile-tab-active" data-tab="salarios">salários</button>
+      <button class="mobile-tab-btn" data-tab="recibos">recibos</button>
+      <button class="mobile-tab-btn" data-tab="horarios">horários</button>
+      <button class="mobile-tab-btn" data-tab="ferias">férias</button>
+      <button class="mobile-tab-btn" data-tab="editor">editor pdf</button>
+      <button class="mobile-tab-btn" data-tab="tam">tam</button>
+    </div>
+  </nav>
+</div>
+
+<script>
+/* ── Hamburger menu ── */
+(function() {
+  function init() {
+    var hamburger  = document.getElementById('admin-hamburger');
+    var menu       = document.getElementById('admin-mobile-menu');
+    var backdrop   = document.getElementById('admin-mobile-menu-backdrop');
+    var closeBtn   = document.getElementById('admin-mobile-menu-close');
+    if (!hamburger || !menu) return;
+
+    function openMenu() {
+      menu.classList.add('open');
+      menu.setAttribute('aria-hidden', 'false');
+      hamburger.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeMenu() {
+      menu.classList.remove('open');
+      menu.setAttribute('aria-hidden', 'true');
+      hamburger.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    }
+
+    hamburger.addEventListener('click', openMenu);
+    closeBtn.addEventListener('click', closeMenu);
+    backdrop.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && menu.classList.contains('open')) closeMenu();
+    });
+
+    /* Mirror mobile tab clicks to desktop tabs */
+    document.querySelectorAll('.mobile-tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var tab = btn.getAttribute('data-tab');
+        var desktopBtn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+        if (desktopBtn) desktopBtn.click();
+        document.querySelectorAll('.mobile-tab-btn').forEach(function(b) {
+          b.classList.toggle('mobile-tab-active', b === btn);
+        });
+        closeMenu();
+      });
+    });
+
+    /* Sync active state from desktop tab clicks */
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var tab = btn.getAttribute('data-tab');
+        document.querySelectorAll('.mobile-tab-btn').forEach(function(b) {
+          b.classList.toggle('mobile-tab-active', b.getAttribute('data-tab') === tab);
+        });
+      });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+/* ── Session persistence (10-minute sliding window) ── */
+(function() {
+  var KEY = 'wkz_adm_s';
+  var TTL = 10 * 60 * 1000; // 10 minutes
+
+  function save(pw) {
+    try { localStorage.setItem(KEY, JSON.stringify({ k: btoa(unescape(encodeURIComponent(pw))), t: Date.now() })); } catch(e) {}
+  }
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY));
+      if (s && s.k && (Date.now() - s.t) < TTL) return decodeURIComponent(escape(atob(s.k)));
+    } catch(e) {}
+    return null;
+  }
+  function refresh() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY));
+      if (s && s.k) { s.t = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); }
+    } catch(e) {}
+  }
+
+  /* Save session on login — capture phase so we run before admin-init.js */
+  function bindSave() {
+    var btn = document.getElementById('key-submit');
+    var inp = document.getElementById('key-input');
+    if (btn) btn.addEventListener('click', function() {
+      if (inp && inp.value) save(inp.value);
+    }, true);
+    if (inp) inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && inp.value) save(inp.value);
+    }, true);
+  }
+
+  /* Auto-login when login screen becomes visible */
+  function tryAutoLogin() {
+    var pw = load();
+    if (!pw) return;
+    var inp = document.getElementById('key-input');
+    var btn = document.getElementById('key-submit');
+    if (inp && btn) { inp.value = pw; btn.click(); }
+  }
+
+  function waitForLoginScreen() {
+    var ls = document.getElementById('login-screen');
+    if (!ls) return;
+    var obs = new MutationObserver(function(muts) {
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].target.classList.contains('visible')) {
+          obs.disconnect();
+          setTimeout(tryAutoLogin, 250);
+          return;
+        }
+      }
+    });
+    obs.observe(ls, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* Refresh on user activity */
+  ['click','keydown','touchstart','scroll'].forEach(function(e) {
+    document.addEventListener(e, refresh, { passive: true });
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { bindSave(); waitForLoginScreen(); });
+  } else {
+    bindSave(); waitForLoginScreen();
+  }
+})();
+</script>
 
 <script src="js/shared.js"></script>
 <script src="js/admin-init.js"></script>

@@ -3061,13 +3061,12 @@
       try {
         var buf = await file.arrayBuffer();
         var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-        var allText = '';
+        var allRows = [];
         for (var p = 1; p <= pdf.numPages; p++) {
           var page = await pdf.getPage(p);
-          var tc   = await page.getTextContent();
-          allText += tc.items.map(function(i){ return i.str; }).join(' ') + '\n';
+          allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
         }
-        var dn = tamParseDNText(allText, file.name);
+        var dn = tamParseDNFromRows(allRows, file.name);
         if (dn) { tamDeliveryNotes[dn.zyCode] = dn; count++; }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
@@ -3076,6 +3075,7 @@
     console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
   }
 
+  /* ── Legacy text-based parser (kept for fallback / camera OCR path) ── */
   function tamParseDNText(text, fileName) {
     var zyMatch = text.match(/ZY-\d{8}/);
     if (!zyMatch) return null;
@@ -3098,7 +3098,116 @@
         refs.push({ ref: ref, qty: qty });
       });
     });
-    return { zyCode: zyCode, refs: refs, fileName: fileName };
+    return { zyCode: zyCode, refs: refs, fileName: fileName, gesamtPcs: null };
+  }
+
+  /* ── Row-based DN parser — mirrors the invoice engines approach ── */
+  function tamParseDNFromRows(allRows, fileName) {
+    // ── 1. Find ZY code (first occurrence) ──────────────────────────
+    var zyCode = null;
+    for (var i = 0; i < allRows.length; i++) {
+      var m = allRows[i].join(' ').match(/ZY-\d{8}/);
+      if (m) { zyCode = m[0]; break; }
+    }
+    if (!zyCode) return null;
+
+    // ── 2. Extract Gesamtstückzahl (declared total pieces) ─────────
+    var gesamtPcs = null;
+    for (var i = 0; i < allRows.length; i++) {
+      var joined = allRows[i].join(' ');
+      if (/Gesamtst[üu]ckzahl/i.test(joined)) {
+        // Try to find the number on the same row
+        var nums = joined.match(/\d+/g);
+        if (nums) {
+          for (var ni = 0; ni < nums.length; ni++) {
+            var n = parseInt(nums[ni]);
+            if (n >= 10 && n <= 9999) { gesamtPcs = n; break; }
+          }
+        }
+        // If not on same row, check next row
+        if (gesamtPcs === null && i + 1 < allRows.length) {
+          var nextNums = allRows[i + 1].join(' ').match(/\d+/g);
+          if (nextNums) {
+            for (var ni = 0; ni < nextNums.length; ni++) {
+              var n = parseInt(nextNums[ni]);
+              if (n >= 10 && n <= 9999) { gesamtPcs = n; break; }
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    // ── 3. Row-based ref + qty extraction ───────────────────────────
+    // TAM delivery note structure (per article / lot):
+    //   REF row   :  KY-201-0132  98508  khaki  100% Viscose  ...
+    //   Lot row   :  Lot-Nr./Anzahl: 10100591 / 2
+    //   Brand row :  Zabaione 61099020
+    //   DATA rows :  Modell: Shirt Mariella  4063942674360  S  2  B2B-2-EN-...  19,99
+    //                (one DATA row per size, with EAN=13 digits, size token, piece count)
+    //
+    // A ref may appear multiple times (multiple lots/colors) → sum all pieces.
+
+    var NOISE_DN = /Kunden|Konto|Seite\s*\/|TAM FASHION|Wakzome|Hauptsitz|IBAN|Fon \+|Fax \+|eMail|Lieferschein|Versandanschrift|Daimler|Volksbank|gelten ausschl|AGB|Gesch[äa]fts|Michael R|Thomas R|Alexander|Kontakt|Bankver|HRB Stuttgart|UST-ID|Essener Stra|Valvo-Park|DE-22419|DE-74545/i;
+    var EAN_RE   = /\b\d{13}\b/;
+    var SIZE_SET = new Set(['XS','S','M','L','XL','XXL','XXXL','XS/S','S/M','M/L','L/XL']);
+    // Tokens that look like refs but are actually structural codes to skip
+    var SKIP_PREFIXES = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD)/;
+
+    var refAccum = {};   // ref → total pieces
+    var refOrder = [];   // insertion order
+    var currentRef = null;
+
+    for (var i = 0; i < allRows.length; i++) {
+      var tokens = allRows[i];
+      var joined = tokens.join(' ');
+
+      // Skip noise / header / footer rows
+      if (NOISE_DN.test(joined)) continue;
+      if (/Gesamtst[üu]ckzahl|Gesamtpaket|Bruttogewicht|Nettogewicht|Herkunft\/coo/i.test(joined)) continue;
+
+      // DATA row: contains a 13-digit EAN → parse piece count after size token
+      if (EAN_RE.test(joined) && currentRef) {
+        var foundPieces = null;
+        for (var ti = 0; ti < tokens.length; ti++) {
+          if (SIZE_SET.has(tokens[ti].toUpperCase())) {
+            for (var tj = ti + 1; tj < Math.min(ti + 4, tokens.length); tj++) {
+              var n = parseInt(tokens[tj]);
+              if (!isNaN(n) && n >= 1 && n <= 999) { foundPieces = n; break; }
+            }
+            if (foundPieces !== null) break;
+          }
+        }
+        if (foundPieces !== null) {
+          refAccum[currentRef] = (refAccum[currentRef] || 0) + foundPieces;
+        }
+        continue;
+      }
+
+      // REF row: no EAN, find a ref token
+      if (!EAN_RE.test(joined)) {
+        var candidate = null;
+        // Only consider as ref row if it doesn't contain clearly structural patterns
+        if (!SKIP_PREFIXES.test(joined) && !/Lot-Nr|Lot-Num|Anzahl|Versandart|Auftr\.-Nr/i.test(joined)) {
+          candidate = tamIsRef(tokens[0]) ? tokens[0] : tamFindRefInRow(tokens);
+          if (candidate && SKIP_PREFIXES.test(candidate)) candidate = null;
+        }
+        if (candidate) {
+          currentRef = candidate;
+          if (!refAccum.hasOwnProperty(currentRef)) {
+            refAccum[currentRef] = 0;
+            refOrder.push(currentRef);
+          }
+        }
+      }
+    }
+
+    var refs = refOrder
+      .map(function(ref){ return { ref: ref, qty: refAccum[ref] }; })
+      .filter(function(r){ return r.qty > 0; });
+
+    if (!refs.length) return null;
+    return { zyCode: zyCode, refs: refs, fileName: fileName, gesamtPcs: gesamtPcs };
   }
 
   async function tamHandleDNCameraPhoto(imageFile) {
@@ -3165,13 +3274,30 @@
     modal.id = 'tam-dn-modal';
     var invIdx = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
     var invLabel = (invIdx >= 0 && tamInvoices[invIdx]) ? ' \u2192 ' + tamInvoices[invIdx].invoiceNo : '';
+
+    // ── Computed total vs declared (Gesamtstückzahl) ─────────────
+    var computedTotal = dn.refs.reduce(function(s, r){ return s + r.qty; }, 0);
+    var gesamtPcs     = dn.gesamtPcs || null;
+    var totalMatch    = gesamtPcs !== null && gesamtPcs === computedTotal;
+    var totalMismatch = gesamtPcs !== null && gesamtPcs !== computedTotal;
+    var totalLabel    = '';
+    if (gesamtPcs !== null) {
+      if (totalMatch) {
+        totalLabel = ' <span class="tam-dn-total-ok">\u2713 ' + computedTotal + ' pcs</span>';
+      } else {
+        totalLabel = ' <span class="tam-dn-total-err">\u26a0 ' + computedTotal + ' / declarado: ' + gesamtPcs + '</span>';
+      }
+    } else {
+      totalLabel = ' <span class="tam-dn-total-neutral">' + computedTotal + ' pcs</span>';
+    }
+
     var rowsHtml = dn.refs.map(function(r) {
       var safeRef = r.ref.replace(/[^a-z0-9]/gi,'_');
       return '<tr class="tam-dn-row">' +
         '<td class="tam-dn-ref">' + tamEsc(r.ref) + '</td>' +
         '<td class="tam-dn-total">' + r.qty + '</td>' +
-        '<td class="tam-dn-cell"><input type="number" class="tam-dn-inp tam-dn-inp-f" id="tam-dn-f-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" min="0" max="'+r.qty+'" placeholder="0"></td>' +
-        '<td class="tam-dn-cell"><input type="number" class="tam-dn-inp tam-dn-inp-p" id="tam-dn-p-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" min="0" max="'+r.qty+'" placeholder="0"></td>' +
+        '<td class="tam-dn-cell"><input type="text" inputmode="numeric" class="tam-dn-inp tam-dn-inp-f" id="tam-dn-f-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" placeholder="0" autocomplete="off"></td>' +
+        '<td class="tam-dn-cell"><input type="text" inputmode="numeric" class="tam-dn-inp tam-dn-inp-p" id="tam-dn-p-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" placeholder="0" autocomplete="off"></td>' +
         '<td class="tam-dn-btns">' +
           '<button class="tam-dn-qbtn tam-dn-f100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">F 100%</button>' +
           '<button class="tam-dn-qbtn tam-dn-p100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">PS 100%</button>' +
@@ -3184,7 +3310,7 @@
       '<div id="tam-dn-panel">' +
         '<div id="tam-dn-header">' +
           '<div id="tam-dn-title">' +
-            '<span id="tam-dn-zy">' + tamEsc(dn.zyCode) + invLabel + '</span>' +
+            '<span id="tam-dn-zy">' + tamEsc(dn.zyCode) + invLabel + totalLabel + '</span>' +
             '<span id="tam-dn-sub">Delivery Note &middot; distribuir por loja</span>' +
           '</div>' +
           '<button id="tam-dn-close-btn" class="tam-dn-close">&times;</button>' +
@@ -3233,12 +3359,77 @@
         if(fi) fi.value=0; if(pi) pi.value=qty; tamDNHighlightRow(btn);
       });
     });
+
+    /* ── Split ½ with odd-piece dialog ──────────────────────── */
     modal.querySelectorAll('.tam-dn-split').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var ref=btn.getAttribute('data-ref'), qty=parseInt(btn.getAttribute('data-qty')), half=Math.floor(qty/2);
-        var s=ref.replace(/[^a-z0-9]/gi,'_');
-        var fi=modal.querySelector('#tam-dn-f-'+s), pi=modal.querySelector('#tam-dn-p-'+s);
-        if(fi) fi.value=half; if(pi) pi.value=qty-half; tamDNHighlightRow(btn);
+        var ref = btn.getAttribute('data-ref');
+        var qty = parseInt(btn.getAttribute('data-qty'));
+        var half = Math.floor(qty / 2);
+        var isOdd = qty % 2 !== 0;
+        var s = ref.replace(/[^a-z0-9]/gi,'_');
+        var fi = modal.querySelector('#tam-dn-f-' + s);
+        var pi = modal.querySelector('#tam-dn-p-' + s);
+
+        if (!isOdd) {
+          if (fi) fi.value = half;
+          if (pi) pi.value = half;
+          tamDNHighlightRow(btn);
+          return;
+        }
+
+        // Odd qty — show inline dialog inside the modal
+        var oldDlg = modal.querySelector('.tam-dn-odd-dlg');
+        if (oldDlg) oldDlg.parentNode.removeChild(oldDlg);
+
+        var dlg = document.createElement('div');
+        dlg.className = 'tam-dn-odd-dlg';
+        dlg.innerHTML =
+          '<div class="tam-dn-odd-body">' +
+            '<strong>' + tamEsc(ref) + '</strong> &mdash; ' + qty + ' pcs &middot; ' +
+            'Sobra <strong>1 pe\u00e7a</strong>. Para onde vai?' +
+          '</div>' +
+          '<div class="tam-dn-odd-btns">' +
+            '<button class="tam-dn-odd-btn tam-dn-odd-f">\u2192 Funchal (' + (half+1) + 'F / ' + half + 'PS)</button>' +
+            '<button class="tam-dn-odd-btn tam-dn-odd-p">\u2192 Porto Santo (' + half + 'F / ' + (half+1) + 'PS)</button>' +
+            '<button class="tam-dn-odd-btn tam-dn-odd-skip">deixar pendente</button>' +
+          '</div>';
+
+        function applyOdd(fVal, pVal) {
+          if (fi) fi.value = fVal;
+          if (pi) pi.value = pVal;
+          tamDNHighlightRow(btn);
+          dlg.parentNode.removeChild(dlg);
+        }
+
+        dlg.querySelector('.tam-dn-odd-f').addEventListener('click',    function(){ applyOdd(half+1, half); });
+        dlg.querySelector('.tam-dn-odd-p').addEventListener('click',    function(){ applyOdd(half, half+1); });
+        dlg.querySelector('.tam-dn-odd-skip').addEventListener('click', function(){ applyOdd(half, half); });
+
+        // Insert dialog just below the current row
+        var row = btn.closest('tr');
+        var tbody = row ? row.parentNode : null;
+        if (tbody) {
+          var insertAfter = row.nextSibling;
+          var dlgTr = document.createElement('tr');
+          var dlgTd = document.createElement('td');
+          dlgTd.colSpan = 5;
+          dlgTd.className = 'tam-dn-odd-td';
+          dlgTd.appendChild(dlg);
+          dlgTr.className = 'tam-dn-odd-row';
+          dlgTr.appendChild(dlgTd);
+          tbody.insertBefore(dlgTr, insertAfter);
+          // Auto-remove when clicking elsewhere
+          setTimeout(function(){
+            function outsideClick(e) {
+              if (!dlg.contains(e.target) && e.target !== btn) {
+                if (dlgTr.parentNode) dlgTr.parentNode.removeChild(dlgTr);
+                document.removeEventListener('click', outsideClick);
+              }
+            }
+            document.addEventListener('click', outsideClick);
+          }, 50);
+        }
       });
     });
 
@@ -4351,8 +4542,12 @@
       '#tam-dn-modal.tam-dn-visible #tam-dn-panel { transform:translateY(0); }',
       '#tam-dn-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
       '#tam-dn-title { display:flex; flex-direction:column; gap:2px; }',
-      '#tam-dn-zy { font-size:1rem; font-weight:bold; color:#111; font-family:MontserratLight,sans-serif; }',
+      '#tam-dn-zy { font-size:1rem; font-weight:bold; color:#111; font-family:MontserratLight,sans-serif; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
       '#tam-dn-sub { font-size:.68rem; color:#888; font-family:MontserratLight,sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      /* Total pieces labels next to title */
+      '.tam-dn-total-ok      { font-size:.78rem; font-weight:bold; color:#2e7d32; background:#f0faf0; border:1px solid #2e7d32; border-radius:6px; padding:2px 8px; white-space:nowrap; }',
+      '.tam-dn-total-err     { font-size:.78rem; font-weight:bold; color:#c62828; background:#fff0f0; border:1px solid #c62828; border-radius:6px; padding:2px 8px; white-space:nowrap; }',
+      '.tam-dn-total-neutral { font-size:.78rem; font-weight:bold; color:#555;    background:#f5f5f5;  border:1px solid #ccc;    border-radius:6px; padding:2px 8px; white-space:nowrap; }',
       '.tam-dn-close { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
       '.tam-dn-close:hover { background:#c62828; color:#fff; border-color:#c62828; }',
       '#tam-dn-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
@@ -4365,7 +4560,9 @@
       '.tam-dn-ref { font-weight:bold; color:#222; white-space:nowrap; }',
       '.tam-dn-total { text-align:center; color:#555; font-weight:bold; }',
       '.tam-dn-cell { text-align:center; }',
-      '.tam-dn-inp { width:62px; padding:5px 6px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; }',
+      /* No spinners on DN inputs */
+      '.tam-dn-inp { width:62px; padding:5px 6px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-dn-inp::-webkit-inner-spin-button,.tam-dn-inp::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }',
       '.tam-dn-inp-f:focus { border-color:#1565c0; }',
       '.tam-dn-inp-p:focus { border-color:#c62828; }',
       '.tam-dn-btns { display:flex; gap:4px; align-items:center; }',
@@ -4376,6 +4573,17 @@
       '.tam-dn-p100:hover { background:#c62828!important; color:#fff!important; }',
       '.tam-dn-split:hover { background:#555!important; color:#fff!important; }',
       '.tam-dn-row-filled { background:#e8f5e9!important; transition:background .4s; }',
+      /* Odd-piece inline dialog */
+      '.tam-dn-odd-td { padding:0!important; border-bottom:1px solid #e8e8e8!important; }',
+      '.tam-dn-odd-dlg { padding:10px 16px; background:#fffbe6; border-top:1px solid #ffe082; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-family:MontserratLight,sans-serif; }',
+      '.tam-dn-odd-body { font-size:.82rem; font-weight:600; color:#555; }',
+      '.tam-dn-odd-btns { display:flex; gap:6px; flex-wrap:wrap; }',
+      '.tam-dn-odd-btn { padding:5px 12px; font-size:.76rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; color:#444; transition:background .12s,color .12s; white-space:nowrap; }',
+      '.tam-dn-odd-f { border-color:#1565c0!important; color:#1565c0!important; }',
+      '.tam-dn-odd-f:hover { background:#1565c0!important; color:#fff!important; }',
+      '.tam-dn-odd-p { border-color:#c62828!important; color:#c62828!important; }',
+      '.tam-dn-odd-p:hover { background:#c62828!important; color:#fff!important; }',
+      '.tam-dn-odd-skip:hover { background:#555!important; color:#fff!important; }',
       '#tam-dn-footer { display:flex; align-items:center; gap:10px; padding:12px 20px; border-top:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
       '.tam-dn-action-btn { padding:9px 22px; font-size:.82rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:none; border-radius:10px; background:#2e7d32; color:#fff; transition:background .13s; }',
       '.tam-dn-action-btn:hover { background:#1b5e20; }',

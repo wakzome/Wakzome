@@ -246,10 +246,8 @@
               if (newInvNos.indexOf(r.invoiceNo) < 0) tamInvoices.push(r);
             });
             tamSyncSessionBoxes();
-            tamRebuildDNMap();
             tamRenderAll();
             document.getElementById('tam-export-btn').classList.add('show');
-            tamShowDNBarButtons();
             tamStartAutoSave();
             return;
           }
@@ -372,7 +370,6 @@
     document.getElementById('admin-app').classList.add('tam-loaded');
     document.getElementById('tam-export-btn').classList.add('show');
 
-    tamShowDNBarButtons();
     tamRenderAll();
     tamStartAutoSave();
     tamSaveSession(false);
@@ -439,7 +436,6 @@
       }
     });
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
-    tamShowDNBarButtons();
   }
 
   /* Dialog: existing session found on fresh load */
@@ -3081,16 +3077,8 @@
               console.warn('\u26a0\ufe0f DN ' + dn.zyCode + ': parsed=' + dn.parsedTotal + ' gesamtTotal=' + dn.gesamtTotal);
             }
           }
-        } else {
-          console.warn('DN n\u00e3o reconhecida ou sem refs: ' + file.name);
-          var statusEl = document.getElementById('tam-status-msg');
-          if (statusEl) statusEl.textContent = 'Aviso: "' + file.name + '" n\u00e3o foi reconhecida como delivery note v\u00e1lida (sem c\u00f3digo ZY ou refer\u00eancias).';
         }
-      } catch(e) {
-        console.warn('DN parse error', file.name, e);
-        var statusEl = document.getElementById('tam-status-msg');
-        if (statusEl) statusEl.textContent = 'Erro ao processar "' + file.name + '": ' + e.message;
-      }
+      } catch(e) { console.warn('DN parse error', file.name, e); }
     }
     tamUpdateDNCount();
     tamScheduleSave();
@@ -3150,24 +3138,18 @@
         continue;
       }
 
-      // Detect reference row: use KNOWN_REFS as primary source of truth
-      // This ensures address fragments like B15-17 are never mistaken for refs
+      // Detect reference row: first token is a valid ref AND not a footer fragment
       var firstToken = tokens[0] || '';
-      var isKnownRef = KNOWN_REFS.has(firstToken.toUpperCase());
-      // Fallback: accept REF_RE match only if prefix is 2+ real letters (not B15, C17 etc)
-      var isPatternRef = !isKnownRef && REF_RE.test(firstToken) && (function(){
-        var prefix = firstToken.split('-')[0];
-        // Reject: single letter + digits (address codes like B15, C17)
-        if (/^[A-Z]\d+$/i.test(prefix)) return false;
-        // Reject: known footer strings
-        if (DN_FOOTER_RE.test(prefix)) return false;
-        // Reject: pure numbers
-        if (/^\d+$/.test(prefix)) return false;
-        // Accept: 2+ letter prefix
-        return /^[A-Z]{2}/i.test(prefix);
-      })();
-      if (isKnownRef || isPatternRef) {
-        currentRef = firstToken.toUpperCase() === firstToken ? firstToken : firstToken;
+      if (tamIsRef(firstToken) && !DN_FOOTER_RE.test(firstToken) && !/^B\d{2}-\d{2}$/.test(firstToken)) {
+        // Extra guard: real refs must have at least one letter prefix before the dash
+        // and the part before first dash must be 2+ chars that are not purely address-like
+        var refParts = firstToken.split('-');
+        var prefix = refParts[0];
+        // Skip if prefix looks like an address code (single letter + digits like B15)
+        if (/^[A-Z]\d+$/.test(prefix) && prefix.length <= 4) {
+          continue;
+        }
+        currentRef = firstToken;
         if (!refMap[currentRef]) refMap[currentRef] = 0;
         continue;
       }
@@ -4671,11 +4653,15 @@
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>' +
-        '<button class="tam-session-btn" id="tam-dn-load-bar-btn" style="display:none">\ud83d\udce6 delivery notes</button>' +
-        '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" style="display:none">' +
+          '\ud83d\udce6 delivery notes' +
+          '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
+        '</label>' +
         '<span id="tam-dn-count" style="display:none"></span>' +
-        '<button class="tam-session-btn tam-dn-cam-btn-style" id="tam-dn-cam-bar-btn" style="display:none">\ud83d\udcf7 fotografar caixa</button>' +
-        '<input type="file" id="tam-dn-cam-input" accept="image/*,application/pdf" capture="environment" style="display:none">';
+        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" style="display:none">' +
+          '\ud83d\udcf7 fotografar caixa' +
+          '<input type="file" id="tam-dn-cam-input" accept="image/*,application/pdf" capture="environment" style="display:none">' +
+        '</label>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
@@ -4698,30 +4684,18 @@
       });
 
       // DN buttons listeners
-      // DN load button: click triggers hidden file input
-      var dnLoadBtn = bar.querySelector('#tam-dn-load-bar-btn');
-      var dnFileInput = bar.querySelector('#tam-dn-file-input');
-      if (dnLoadBtn && dnFileInput) {
-        dnLoadBtn.addEventListener('click', function(){ dnFileInput.click(); });
-        dnFileInput.addEventListener('change', function(e){
-          var files = Array.from(e.target.files).filter(function(f){
-            return f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
-          });
-          if (files.length) tamHandleDeliveryNoteFiles(files);
-          e.target.value = '';
-        });
-      }
-      // DN camera button: click triggers hidden file input
-      var dnCamBtn = bar.querySelector('#tam-dn-cam-bar-btn');
-      var dnCamInput = bar.querySelector('#tam-dn-cam-input');
-      if (dnCamBtn && dnCamInput) {
-        dnCamBtn.addEventListener('click', function(){ dnCamInput.click(); });
-        dnCamInput.addEventListener('change', function(e){
-          var file = e.target.files[0];
-          if (file) tamHandleDNCameraPhoto(file);
-          e.target.value = '';
-        });
-      }
+      var dnBarI = bar.querySelector('#tam-dn-file-input');
+      if (dnBarI) dnBarI.addEventListener('change', function(e){
+        var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
+        if (files.length) tamHandleDeliveryNoteFiles(files);
+        e.target.value = '';
+      });
+      var dnBarC = bar.querySelector('#tam-dn-cam-input');
+      if (dnBarC) dnBarC.addEventListener('change', function(e){
+        var file = e.target.files[0];
+        if (file) tamHandleDNCameraPhoto(file);
+        e.target.value = '';
+      });
 
       // Close dropdown when clicking outside
       document.addEventListener('click', function(e){

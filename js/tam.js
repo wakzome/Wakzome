@@ -3059,15 +3059,14 @@
     for (var fi = 0; fi < files.length; fi++) {
       var file = files[fi];
       try {
-        var buf = await file.arrayBuffer();
-        var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-        var allText = '';
+        var buf  = await file.arrayBuffer();
+        var pdf  = await pdfjsLib.getDocument({ data: buf }).promise;
+        var allRows = [];
         for (var p = 1; p <= pdf.numPages; p++) {
           var page = await pdf.getPage(p);
-          var tc   = await page.getTextContent();
-          allText += tc.items.map(function(i){ return i.str; }).join(' ') + '\n';
+          allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
         }
-        var dn = tamParseDNText(allText, file.name);
+        var dn = tamParseDNRows(allRows, file.name);
         if (dn) { tamDeliveryNotes[dn.zyCode] = dn; count++; }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
@@ -3076,6 +3075,89 @@
     console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
   }
 
+  /* Dedicated parser for TAM delivery notes.
+     Structure per reference block:
+       Row 1: REF_CODE  [internal_code]          <- tamIsRef identifies this
+       Row 2: [brand/desc]  [HS_code]            <- optional info rows
+       Row 3+: ArticleName  EAN  SIZE  QTY  OrderNo  PVP   <- one row per size
+     Multiple color lots of the same ref appear as separate blocks — we sum them.
+     Result: { zyCode, refs:[{ref, qty}], fileName }
+  */
+  function tamParseDNRows(allRows, fileName) {
+    // Find ZY invoice number
+    var zyCode = null;
+    for (var i = 0; i < allRows.length; i++) {
+      var joined = allRows[i].join(' ');
+      var m = joined.match(/ZY-\d{8}/);
+      if (m) { zyCode = m[0]; break; }
+    }
+    if (!zyCode) return null;
+
+    // Accumulate quantities per ref (sum across tallas and colors)
+    var refMap = {};
+    var currentRef = null;
+
+    for (var i = 0; i < allRows.length; i++) {
+      var tokens = allRows[i];
+      var joined = tokens.join(' ');
+
+      // Skip header/footer rows
+      if (/Lieferschein|Versandanschrift|Shipment|TAM Fashion|Wakzome|Hauptsitz|Verwaltung|Gesamtstückzahl|Gesamtpaket|Bruttogewicht|Nettogewicht|Modell.*Farbe|Lot-Nr|Auftr|B2B-|IBAN|BIC|HRB|UST|Fon|Fax|eMail/i.test(joined)) {
+        continue;
+      }
+
+      // Detect reference row: first token is a ref code (e.g. LA-101-0076)
+      if (tokens.length >= 1 && tamIsRef(tokens[0])) {
+        currentRef = tokens[0];
+        if (!refMap[currentRef]) refMap[currentRef] = 0;
+        continue;
+      }
+
+      // Detect size/quantity row: contains EAN (13 digits) and a small quantity
+      // Pattern: ArticleName  EAN(13digits)  SIZE  QTY  OrderRef  PVP
+      if (currentRef) {
+        // Look for a 13-digit EAN in the row
+        var eanMatch = joined.match(/\b(\d{13})\b/);
+        if (eanMatch) {
+          // Find quantity: small integer (1-999) that appears AFTER the EAN
+          var afterEan = joined.slice(joined.indexOf(eanMatch[0]) + 13);
+          var qtyMatch = afterEan.match(/\b(\d{1,3})\b/);
+          if (qtyMatch) {
+            var qty = parseInt(qtyMatch[1]);
+            if (qty >= 1 && qty <= 999) {
+              refMap[currentRef] += qty;
+            }
+          }
+          continue;
+        }
+
+        // Fallback: row with size keyword (XS/S/M/L/XL/XXL/XXXL) + small number
+        var sizeMatch = joined.match(/\b(XXL|XXXL|XL|XS|[SMLX])\b/);
+        if (sizeMatch) {
+          var nums = joined.match(/\b(\d{1,3})\b/g);
+          if (nums) {
+            for (var ni = 0; ni < nums.length; ni++) {
+              var n = parseInt(nums[ni]);
+              if (n >= 1 && n <= 999) {
+                refMap[currentRef] += n;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Build refs array, filtering out refs with 0 qty
+    var refs = Object.keys(refMap)
+      .filter(function(ref){ return refMap[ref] > 0; })
+      .map(function(ref){ return { ref: ref, qty: refMap[ref] }; });
+
+    if (!refs.length) return null;
+    return { zyCode: zyCode, refs: refs, fileName: fileName };
+  }
+
+  /* Legacy text-based parser — kept as fallback, tamParseDNRows is preferred */
   function tamParseDNText(text, fileName) {
     var zyMatch = text.match(/ZY-\d{8}/);
     if (!zyMatch) return null;
@@ -3105,39 +3187,89 @@
     var lbl = document.getElementById('tam-dn-cam-bar-btn');
     if (lbl) { lbl.classList.add('tam-dn-loading'); lbl.childNodes[0].textContent = '\u23f3 a processar...'; }
     try {
-      if (typeof Tesseract === 'undefined') {
-        await new Promise(function(resolve, reject) {
-          var s = document.createElement('script');
-          s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-          s.onload = resolve; s.onerror = function(){ reject(new Error('Tesseract.js n\u00e3o carregado')); };
-          document.head.appendChild(s);
+      var zyCode = null;
+
+      // ── If PDF: extract ZY directly from text (no OCR needed) ──
+      if (imageFile.type === 'application/pdf' || imageFile.name.toLowerCase().endsWith('.pdf')) {
+        var buf = await imageFile.arrayBuffer();
+        var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        var allRows = [];
+        for (var p = 1; p <= pdf.numPages; p++) {
+          var page = await pdf.getPage(p);
+          allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
+        }
+        var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
+        var m = fullText.match(/ZY-\d{8}/);
+        if (m) zyCode = m[0];
+
+      // ── If image: use Tesseract with adaptive preprocessing ──
+      } else {
+        if (typeof Tesseract === 'undefined') {
+          await new Promise(function(resolve, reject) {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+            s.onload = resolve;
+            s.onerror = function(){ reject(new Error('Tesseract.js n\u00e3o carregado')); };
+            document.head.appendChild(s);
+          });
+        }
+
+        var imgBitmap = await createImageBitmap(imageFile);
+        var canvas = document.createElement('canvas');
+
+        // For screenshots/prints: keep original resolution (no downscale)
+        // For phone photos: scale down to 1400px max
+        var isHighDpi = imgBitmap.width > 1800 && imgBitmap.height > 1800;
+        var scale = isHighDpi ? Math.min(1, 1400 / imgBitmap.width) : 1;
+        canvas.width  = Math.round(imgBitmap.width  * scale);
+        canvas.height = Math.round(imgBitmap.height * scale);
+        var ctx = canvas.getContext('2d');
+
+        // Screenshots/prints: light processing — no aggressive contrast
+        // Phone photos: stronger contrast + grayscale
+        var isPhotoLike = imageFile.size > 500000 && !imageFile.name.includes('Captura') && !imageFile.name.includes('screen') && !imageFile.name.includes('Screenshot');
+        ctx.filter = isPhotoLike
+          ? 'grayscale(100%) contrast(160%)'
+          : 'grayscale(100%) contrast(110%)';
+        ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
+
+        var result = await Tesseract.recognize(canvas, 'eng', {
+          logger: function(m){
+            if (m.status === 'recognizing text' && lbl)
+              lbl.childNodes[0].textContent = '\u23f3 OCR ' + Math.round((m.progress||0)*100) + '%';
+          }
         });
+
+        var text = result.data.text || '';
+        var match = text.match(/ZY-\d{8}/);
+        zyCode = match ? match[0] : null;
+
+        // Fallback: fix common OCR misreads (O->0, I->1, S->5, l->1)
+        if (!zyCode) {
+          var cleaned = text
+            .replace(/ZY[- ]?(\d|[OIlSs]){8}/g, function(s){
+              return s.replace(/O/g,'0').replace(/I/g,'1').replace(/l/g,'1').replace(/S/g,'5').replace(/s/g,'5');
+            });
+          var m3 = cleaned.match(/ZY-\d{8}/);
+          if (m3) zyCode = m3[0];
+        }
       }
-      var imgBitmap = await createImageBitmap(imageFile);
-      var canvas = document.createElement('canvas');
-      var scale = Math.min(1, 1200 / imgBitmap.width);
-      canvas.width = Math.round(imgBitmap.width * scale);
-      canvas.height = Math.round(imgBitmap.height * scale);
-      var ctx = canvas.getContext('2d');
-      ctx.filter = 'grayscale(100%) contrast(180%)';
-      ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
-      var result = await Tesseract.recognize(canvas, 'eng', {
-        logger: function(m){ if (m.status==='recognizing text' && lbl) lbl.childNodes[0].textContent = '\u23f3 OCR ' + Math.round((m.progress||0)*100) + '%'; }
-      });
-      var text = result.data.text || '';
-      var match = text.match(/ZY-\d{8}/);
-      var zyCode = match ? match[0] : null;
+
       if (!zyCode) {
-        var m2 = text.replace(/[OI]/g, function(c){ return c==='O'?'0':'1'; }).match(/ZY-\d{8}/);
-        if (m2) zyCode = m2[0];
+        tamShowDNError('C\u00f3digo ZY n\u00e3o encontrado. Verifique que o documento est\u00e1 vis\u00edvel.');
+        return;
       }
-      if (!zyCode) { tamShowDNError('C\u00f3digo ZY n\u00e3o encontrado. Tente com melhor luz.'); return; }
+
       var dn = tamDeliveryNotes[zyCode];
-      if (!dn) { tamShowDNError('Delivery note ' + zyCode + ' n\u00e3o est\u00e1 carregada. Carregue o PDF primeiro.'); return; }
+      if (!dn) {
+        tamShowDNError('Delivery note ' + zyCode + ' n\u00e3o est\u00e1 carregada. Carregue o PDF primeiro.');
+        return;
+      }
       tamShowDNDistribModal(dn);
+
     } catch(e) {
       console.error('DN camera error', e);
-      tamShowDNError('Erro ao processar imagem: ' + e.message);
+      tamShowDNError('Erro ao processar: ' + e.message);
     } finally {
       if (lbl) {
         lbl.classList.remove('tam-dn-loading');
@@ -4477,7 +4609,7 @@
         '<span id="tam-dn-count" style="display:none"></span>' +
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" style="display:none">' +
           '\ud83d\udcf7 fotografar caixa' +
-          '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
+          '<input type="file" id="tam-dn-cam-input" accept="image/*,application/pdf" capture="environment" style="display:none">' +
         '</label>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior

@@ -246,8 +246,10 @@
               if (newInvNos.indexOf(r.invoiceNo) < 0) tamInvoices.push(r);
             });
             tamSyncSessionBoxes();
+            tamRebuildDNMap();
             tamRenderAll();
             document.getElementById('tam-export-btn').classList.add('show');
+            tamShowDNBarButtons();
             tamStartAutoSave();
             return;
           }
@@ -370,6 +372,7 @@
     document.getElementById('admin-app').classList.add('tam-loaded');
     document.getElementById('tam-export-btn').classList.add('show');
 
+    tamShowDNBarButtons();
     tamRenderAll();
     tamStartAutoSave();
     tamSaveSession(false);
@@ -436,6 +439,7 @@
       }
     });
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
+    tamShowDNBarButtons();
   }
 
   /* Dialog: existing session found on fresh load */
@@ -4659,15 +4663,11 @@
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" style="display:none">' +
-          '\ud83d\udce6 delivery notes' +
-          '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
-        '</label>' +
+        '<button class="tam-session-btn" id="tam-dn-load-bar-btn" style="display:none">\ud83d\udce6 delivery notes</button>' +
+        '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
         '<span id="tam-dn-count" style="display:none"></span>' +
-        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" style="display:none">' +
-          '\ud83d\udcf7 fotografar caixa' +
-          '<input type="file" id="tam-dn-cam-input" accept="image/*,application/pdf" capture="environment" style="display:none">' +
-        '</label>';
+        '<button class="tam-session-btn tam-dn-cam-btn-style" id="tam-dn-cam-bar-btn" style="display:none">\ud83d\udcf7 fotografar caixa</button>' +
+        '<input type="file" id="tam-dn-cam-input" accept="image/*,application/pdf" capture="environment" style="display:none">';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
@@ -4690,18 +4690,28 @@
       });
 
       // DN buttons listeners
-      var dnBarI = bar.querySelector('#tam-dn-file-input');
-      if (dnBarI) dnBarI.addEventListener('change', function(e){
-        var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
-        if (files.length) tamHandleDeliveryNoteFiles(files);
-        e.target.value = '';
-      });
-      var dnBarC = bar.querySelector('#tam-dn-cam-input');
-      if (dnBarC) dnBarC.addEventListener('change', function(e){
-        var file = e.target.files[0];
-        if (file) tamHandleDNCameraPhoto(file);
-        e.target.value = '';
-      });
+      // DN load button: click triggers hidden file input
+      var dnLoadBtn = bar.querySelector('#tam-dn-load-bar-btn');
+      var dnFileInput = bar.querySelector('#tam-dn-file-input');
+      if (dnLoadBtn && dnFileInput) {
+        dnLoadBtn.addEventListener('click', function(){ dnFileInput.click(); });
+        dnFileInput.addEventListener('change', function(e){
+          var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
+          if (files.length) tamHandleDeliveryNoteFiles(files);
+          e.target.value = '';
+        });
+      }
+      // DN camera button: click triggers hidden file input
+      var dnCamBtn = bar.querySelector('#tam-dn-cam-bar-btn');
+      var dnCamInput = bar.querySelector('#tam-dn-cam-input');
+      if (dnCamBtn && dnCamInput) {
+        dnCamBtn.addEventListener('click', function(){ dnCamInput.click(); });
+        dnCamInput.addEventListener('change', function(e){
+          var file = e.target.files[0];
+          if (file) tamHandleDNCameraPhoto(file);
+          e.target.value = '';
+        });
+      }
 
       // Close dropdown when clicking outside
       document.addEventListener('click', function(e){

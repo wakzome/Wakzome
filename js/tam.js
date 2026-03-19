@@ -3138,18 +3138,24 @@
         continue;
       }
 
-      // Detect reference row: first token is a valid ref AND not a footer fragment
+      // Detect reference row: use KNOWN_REFS as primary source of truth
+      // This ensures address fragments like B15-17 are never mistaken for refs
       var firstToken = tokens[0] || '';
-      if (tamIsRef(firstToken) && !DN_FOOTER_RE.test(firstToken) && !/^B\d{2}-\d{2}$/.test(firstToken)) {
-        // Extra guard: real refs must have at least one letter prefix before the dash
-        // and the part before first dash must be 2+ chars that are not purely address-like
-        var refParts = firstToken.split('-');
-        var prefix = refParts[0];
-        // Skip if prefix looks like an address code (single letter + digits like B15)
-        if (/^[A-Z]\d+$/.test(prefix) && prefix.length <= 4) {
-          continue;
-        }
-        currentRef = firstToken;
+      var isKnownRef = KNOWN_REFS.has(firstToken.toUpperCase());
+      // Fallback: accept REF_RE match only if prefix is 2+ real letters (not B15, C17 etc)
+      var isPatternRef = !isKnownRef && REF_RE.test(firstToken) && (function(){
+        var prefix = firstToken.split('-')[0];
+        // Reject: single letter + digits (address codes like B15, C17)
+        if (/^[A-Z]\d+$/i.test(prefix)) return false;
+        // Reject: known footer strings
+        if (DN_FOOTER_RE.test(prefix)) return false;
+        // Reject: pure numbers
+        if (/^\d+$/.test(prefix)) return false;
+        // Accept: 2+ letter prefix
+        return /^[A-Z]{2}/i.test(prefix);
+      })();
+      if (isKnownRef || isPatternRef) {
+        currentRef = firstToken.toUpperCase() === firstToken ? firstToken : firstToken;
         if (!refMap[currentRef]) refMap[currentRef] = 0;
         continue;
       }

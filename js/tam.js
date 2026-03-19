@@ -2887,7 +2887,7 @@
       ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
       : '';
 
-    var COL_S = ['Referencia', 'Armazém', 'Qtd.'];
+    var COL_S = ['Referencia', 'Armazém', 'IVA', 'Preço', 'Qtd.'];
     var stockCopyBar =
       '<div class="tam-guia-copy-bar">' +
         '<span class="tam-guia-copy-label">copiar coluna:</span>' +
@@ -2950,14 +2950,16 @@
     /* ── Copy column (stock) ── */
     var stockCopyMsg   = modal.querySelector('#tam-stock-copy-msg');
     var stockCopyTimer = null;
-    var stockColKeys   = ['ref', 'city', 'qty'];
+    var stockColKeys   = ['ref', 'city', 'iva', 'price', 'qty'];
     modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
         var ci  = parseInt(btn.getAttribute('data-scol'));
         var key = stockColKeys[ci];
         var vals = rows.map(function(rw){
-          if (key === 'ref')  return rw.ref;
-          if (key === 'city') return rw.city;
+          if (key === 'ref')   return rw.ref;
+          if (key === 'city')  return rw.city;
+          if (key === 'iva')   return rw.iva;
+          if (key === 'price') return tamFmtEU(rw.price);
           return String(rw.qty);
         });
         if (!vals.length) return;

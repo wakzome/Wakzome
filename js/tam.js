@@ -3027,12 +3027,18 @@
   ══════════════════════════════════════════════════════════════ */
 
   function tamExtractDNListFromRows(allRows) {
-    /* The first ZY code is the invoice number itself. All subsequent ones are
-       delivery-note references listed at the footer of the invoice. */
+    /* The invoice ZY code appears in every page header (once per page).
+       DN references appear only once each, at the invoice footer.
+       Strategy: the most-frequent ZY is the invoice itself — exclude it. */
     var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
     var matches = fullText.match(/ZY-\d{8}/g);
     if (!matches) return [];
-    var invoiceZY = matches[0]; // skip this one — it's the invoice itself
+    var freq = {};
+    matches.forEach(function(zy){ freq[zy] = (freq[zy] || 0) + 1; });
+    var invoiceZY = matches[0], maxFreq = 0;
+    Object.keys(freq).forEach(function(zy) {
+      if (freq[zy] > maxFreq) { maxFreq = freq[zy]; invoiceZY = zy; }
+    });
     var seen = {}, codes = [];
     matches.forEach(function(zy) {
       if (zy !== invoiceZY && !seen[zy]) { seen[zy] = true; codes.push(zy); }
@@ -4815,7 +4821,7 @@
       '#tam-dn-modal { position:fixed; inset:0; z-index:10001; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-dn-modal.tam-dn-visible { opacity:1; pointer-events:auto; }',
       '#tam-dn-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.5); }',
-      '#tam-dn-panel { position:relative; z-index:1; width:min(700px,96vw); max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
+      '#tam-dn-panel { position:relative; z-index:1; width:min(700px,96vw); max-width:96vw; max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
       '#tam-dn-modal.tam-dn-visible #tam-dn-panel { transform:translateY(0); }',
       '#tam-dn-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
       '#tam-dn-title { display:flex; flex-direction:column; gap:2px; }',
@@ -4828,21 +4834,22 @@
       '.tam-dn-close { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
       '.tam-dn-close:hover { background:#c62828; color:#fff; border-color:#c62828; }',
       '#tam-dn-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
-      '#tam-dn-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; }',
+      '#tam-dn-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; table-layout:auto; }',
       '#tam-dn-table thead { position:sticky; top:0; z-index:2; }',
       '.tam-dn-th { padding:8px 12px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666; border-bottom:2px solid #ddd; text-align:left; }',
       '.tam-dn-th-f { color:#1565c0; background:#e8f0fe; }',
       '.tam-dn-th-p { color:#c62828; background:#fce4ec; }',
       '.tam-dn-row td { padding:7px 12px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
-      '.tam-dn-ref { font-weight:bold; color:#222; white-space:nowrap; }',
-      '.tam-dn-total { text-align:center; color:#555; font-weight:bold; }',
-      '.tam-dn-cell { text-align:center; }',
+      '.tam-dn-ref { font-weight:bold; color:#222; white-space:nowrap; width:1%; }',  /* shrink to longest ref */
+      '.tam-dn-total { text-align:center; color:#555; font-weight:bold; white-space:nowrap; width:1%; }',
+      '.tam-dn-cell { text-align:center; white-space:nowrap; width:1%; }',
       /* No spinners on DN inputs */
-      '.tam-dn-inp { width:62px; padding:5px 6px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-dn-inp { width:58px; min-width:44px; padding:5px 4px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; }',
       '.tam-dn-inp::-webkit-inner-spin-button,.tam-dn-inp::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }',
       '.tam-dn-inp-f:focus { border-color:#1565c0; }',
       '.tam-dn-inp-p:focus { border-color:#c62828; }',
-      '.tam-dn-btns { display:flex; gap:4px; align-items:center; }',
+      '.tam-dn-btns { display:flex; gap:4px; align-items:center; white-space:nowrap; }',
+      '.tam-dn-btns-cell { width:1%; white-space:nowrap; }',  /* shrink buttons col */
       '.tam-dn-qbtn { padding:4px 9px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:7px; border:1.5px solid #ccc; background:#f5f5f5; color:#555; transition:background .12s,color .12s; white-space:nowrap; }',
       '.tam-dn-f100 { border-color:#1565c0!important; color:#1565c0!important; }',
       '.tam-dn-f100:hover { background:#1565c0!important; color:#fff!important; }',

@@ -22,9 +22,9 @@
   var tamRefCompletingTimers = {};        // { ref: timeoutId } - per-ref 3s timers
   var tamRefDone            = new Set();  // refs that have ALREADY completed animation — no re-flash
   var tamUndoStack          = [];         // array of JSON snapshots of boxes+quickDistrib
-  var tamRedoStack          = [];         // redo stack (cleared on new action)
   var tamDeliveryNotes      = {};         // ZY-code -> { zyCode, refs:[{ref,qty}], fileName }
   var tamDNtoInvIdx         = {};         // ZY-dn-code -> invIdx
+  var tamRedoStack          = [];         // redo stack (cleared on new action)
 
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var TAM_UNDO_MAX          = 50;         // max undo steps
@@ -261,6 +261,7 @@
       tamRebuildDNMap();
       tamRenderAll();
       document.getElementById('tam-export-btn').classList.add('show');
+      tamShowDNBarButtons();
       tamStartAutoSave();
 
     } catch(err) {
@@ -1150,9 +1151,8 @@
 
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
-    // Progressive: show only the active (first pending) box + all completed boxes
-    var visiblePendingBoxes = pendingBoxes.length > 0 ? [pendingBoxes[0]] : [];
-    var sortedBoxes    = visiblePendingBoxes.concat(completedBoxes);
+    var visiblePending = pendingBoxes.length > 0 ? [pendingBoxes[0]] : [];
+    var sortedBoxes    = visiblePending.concat(completedBoxes);
 
     // Only refs needing manual work
     var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
@@ -2209,8 +2209,9 @@
     var payload = {
       name:     tamSession.name,
       savedAt:  Date.now(),
-      boxes:    tamSession.boxes,
-      sentRefs: tamSession.sentRefs || {},
+      boxes:         tamSession.boxes,
+      sentRefs:      tamSession.sentRefs || {},
+      deliveryNotes: tamDeliveryNotes || {},
       invoices: tamInvoices.map(function(r){
         return {
           invoiceNo:     r.invoiceNo,
@@ -2222,6 +2223,7 @@
           subtotalGoods: r.subtotalGoods || 0,
           grandTotal:    r.grandTotal    || 0,
           invoiceSubtotal: r.invoiceSubtotal || null,
+          dnList:        r.dnList        || [],
           grouped:       r.grouped
         };
       })
@@ -2417,6 +2419,7 @@
     var s = sessionData || tamLoadAllSessionsLocal()[key];
     if (!s) return;
     tamSession = { name: s.name, boxes: s.boxes, createdAt: s.savedAt, sentRefs: s.sentRefs || {} };
+    tamDeliveryNotes = s.deliveryNotes || {};
     if (s.invoices && s.invoices.length) {
       tamInvoices = s.invoices.map(function(inv, idx){
         // Recalculate shipPerPiece for restored grouped items
@@ -2447,6 +2450,7 @@
           subtotalGoods:  subtotalGoods,
           grandTotal:     grandTotal,
           invoiceSubtotal: inv.invoiceSubtotal || null,
+          dnList:         inv.dnList         || [],
           grouped:        grouped,
           xv: { fullyAgree: true, confirmed: grouped.length, conflicts: [],
                 engines: [{label:'A',refs:grouped.length,units:totalPieces},
@@ -2460,8 +2464,10 @@
       document.getElementById('tam-export-btn').classList.add('show');
       document.getElementById('tam-file-name').textContent = s.invoices.length + ' fatura(s) — sessão carregada';
       document.getElementById('tam-status-msg').textContent = 'sessão: ' + s.name;
+      tamRebuildDNMap();
       tamRenderAll();
       tamStartAutoSave();
+      tamShowDNBarButtons();
     }
   }
 
@@ -2891,12 +2897,12 @@
       ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
       : '';
 
-    var COL_S = ['Referencia', 'Armazém', 'IVA', 'Preço', 'Qtd.'];
+    var COL_S = ['Referencia', 'Armaz\u00e9m', 'IVA', 'Pre\u00e7o', 'Qtd.'];
     var stockCopyBar =
       '<div class="tam-guia-copy-bar">' +
         '<span class="tam-guia-copy-label">copiar coluna:</span>' +
         COL_S.map(function(lbl, ci){
-          return '<button class="tam-guia-copy-btn tam-stock-copy-btn" data-scol="' + ci + '">⧉ ' + lbl + '</button>';
+          return '<button class="tam-guia-copy-btn tam-stock-copy-btn" data-scol="' + ci + '">&#x29c9; ' + lbl + '</button>';
         }).join('') +
         '<span class="tam-guia-copy-msg" id="tam-stock-copy-msg"></span>' +
       '</div>';
@@ -2951,44 +2957,44 @@
       if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc); }
     });
 
-    /* ── Copy column (stock) ── */
-    var stockCopyMsg   = modal.querySelector('#tam-stock-copy-msg');
+    /* -- Copy column (stock) -- */
+    var stockCopyMsg = modal.querySelector('#tam-stock-copy-msg');
     var stockCopyTimer = null;
-    var stockColKeys   = ['ref', 'city', 'iva', 'price', 'qty'];
+    var stockColKeys = ['ref','city','iva','price','qty'];
     modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var ci  = parseInt(btn.getAttribute('data-scol'));
+        var ci = parseInt(btn.getAttribute('data-scol'));
         var key = stockColKeys[ci];
         var vals = rows.map(function(rw){
-          if (key === 'ref')   return rw.ref;
-          if (key === 'city')  return rw.city;
-          if (key === 'iva')   return rw.iva;
-          if (key === 'price') return tamFmtEU(rw.price);
+          if (key==='ref')   return rw.ref;
+          if (key==='city')  return rw.city;
+          if (key==='iva')   return rw.iva;
+          if (key==='price') return tamFmtEU(rw.price);
           return String(rw.qty);
         });
         if (!vals.length) return;
         modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
         btn.classList.add('tam-guia-copy-active');
         var text = vals.join('\n');
-        function showStockMsg(ok){
+        function showMsg(ok){
           if (!stockCopyMsg) return;
-          stockCopyMsg.textContent = ok ? '✓ ' + COL_S[ci] + ' copiado!' : '⚠ copie manualmente';
+          stockCopyMsg.textContent = ok ? '\u2713 ' + COL_S[ci] + ' copiado!' : '\u26a0 copie manualmente';
           stockCopyMsg.style.color = ok ? '#2e7d32' : '#b05000';
           if (stockCopyTimer) clearTimeout(stockCopyTimer);
           stockCopyTimer = setTimeout(function(){
-            stockCopyMsg.textContent = '';
+            stockCopyMsg.textContent='';
             modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
           }, 2000);
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function(){ showStockMsg(true); }).catch(function(){ showStockMsg(false); });
+          navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
         } else {
           try {
-            var ta = document.createElement('textarea');
-            ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+            var ta=document.createElement('textarea'); ta.value=text;
+            ta.style.cssText='position:fixed;top:-9999px;opacity:0;';
             document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-            document.body.removeChild(ta); showStockMsg(true);
-          } catch(e){ showStockMsg(false); }
+            document.body.removeChild(ta); showMsg(true);
+          } catch(e2){ showMsg(false); }
         }
       });
     });
@@ -3010,35 +3016,43 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     DN ↔ INVOICE MAPPING
+     EXPORT CSV — todas las facturas (botón global)
+  ══════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     DN MAP + DELIVERY NOTES FUNCTIONS
   ══════════════════════════════════════════════════════════════ */
 
   function tamExtractDNListFromRows(allRows) {
-    var codes = [];
-    var fullText = allRows.map(function(tokens){ return tokens.join(' '); }).join(' ');
+    var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
     var matches = fullText.match(/ZY-\d{8}/g);
-    if (!matches) return codes;
-    var seen = {};
-    matches.forEach(function(zy, i) {
-      if (i === 0) return; // first ZY is the invoice number itself
-      if (!seen[zy]) { seen[zy] = true; codes.push(zy); }
-    });
+    if (!matches) return [];
+    var seen = {}, codes = [];
+    matches.forEach(function(zy, i){ if (i > 0 && !seen[zy]) { seen[zy]=true; codes.push(zy); } });
     return codes;
   }
 
   function tamRebuildDNMap() {
     tamDNtoInvIdx = {};
-    tamInvoices.forEach(function(inv, invIdx) {
-      if (!inv.dnList) return;
-      inv.dnList.forEach(function(zyDN) {
-        tamDNtoInvIdx[zyDN] = invIdx;
-      });
+    tamInvoices.forEach(function(inv, idx){
+      (inv.dnList || []).forEach(function(zy){ tamDNtoInvIdx[zy] = idx; });
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     DELIVERY NOTES — Parser, Câmara, Modal de Distribuição
-  ══════════════════════════════════════════════════════════════ */
+  function tamShowDNBarButtons() {
+    var loadBtn = document.getElementById('tam-dn-load-bar-btn');
+    var camBtn  = document.getElementById('tam-dn-cam-bar-btn');
+    if (loadBtn) loadBtn.style.display = 'inline-flex';
+    if (camBtn)  camBtn.style.display  = 'inline-flex';
+    tamUpdateDNCount();
+  }
+
+  function tamUpdateDNCount() {
+    var el = document.getElementById('tam-dn-count');
+    if (!el) return;
+    var n = Object.keys(tamDeliveryNotes).length;
+    el.textContent = n > 0 ? n + ' DN' : '';
+    el.style.display = n > 0 ? 'inline-block' : 'none';
+  }
 
   async function tamHandleDeliveryNoteFiles(files) {
     var count = 0;
@@ -3058,17 +3072,16 @@
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
     tamUpdateDNCount();
-    console.log('Delivery notes loaded:', count, Object.keys(tamDeliveryNotes));
+    tamScheduleSave();
+    console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
   }
 
   function tamParseDNText(text, fileName) {
     var zyMatch = text.match(/ZY-\d{8}/);
     if (!zyMatch) return null;
     var zyCode = zyMatch[0];
-    var refs = [];
-    var seenRefs = {};
-    var lines = text.split(/\n/);
-    lines.forEach(function(line) {
+    var refs = [], seenRefs = {};
+    text.split(/\n/).forEach(function(line) {
       var refMatch = line.match(/([A-Z][A-Z0-9]+-[A-Z0-9][A-Z0-9-]+)/g);
       if (!refMatch) return;
       refMatch.forEach(function(ref) {
@@ -3080,54 +3093,42 @@
           var n = parseInt(nums[ni]);
           if (n >= 1 && n <= 999) { qty = n; break; }
         }
-        if (!qty) return;
-        if (!seenRefs[ref]) { seenRefs[ref] = true; refs.push({ ref: ref, qty: qty }); }
+        if (!qty || seenRefs[ref]) return;
+        seenRefs[ref] = true;
+        refs.push({ ref: ref, qty: qty });
       });
     });
     return { zyCode: zyCode, refs: refs, fileName: fileName };
   }
 
-  function tamUpdateDNCount() {
-    var el = document.getElementById('tam-dn-count');
-    if (!el) return;
-    var n = Object.keys(tamDeliveryNotes).length;
-    el.textContent = n > 0 ? n + ' DN' : '';
-    el.style.display = n > 0 ? 'inline-block' : 'none';
-  }
-
   async function tamHandleDNCameraPhoto(imageFile) {
-    var lbl = document.querySelector('.tam-dn-cam-btn');
-    if (lbl) { lbl.classList.add('tam-dn-loading'); lbl.textContent = '\u23f3 a processar...'; }
+    var lbl = document.getElementById('tam-dn-cam-bar-btn');
+    if (lbl) { lbl.classList.add('tam-dn-loading'); lbl.childNodes[0].textContent = '\u23f3 a processar...'; }
     try {
       if (typeof Tesseract === 'undefined') {
         await new Promise(function(resolve, reject) {
           var s = document.createElement('script');
           s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-          s.onload = resolve;
-          s.onerror = function(){ reject(new Error('Tesseract.js n\u00e3o p\u00f4de ser carregado')); };
+          s.onload = resolve; s.onerror = function(){ reject(new Error('Tesseract.js n\u00e3o carregado')); };
           document.head.appendChild(s);
         });
       }
       var imgBitmap = await createImageBitmap(imageFile);
       var canvas = document.createElement('canvas');
       var scale = Math.min(1, 1200 / imgBitmap.width);
-      canvas.width  = Math.round(imgBitmap.width  * scale);
+      canvas.width = Math.round(imgBitmap.width * scale);
       canvas.height = Math.round(imgBitmap.height * scale);
       var ctx = canvas.getContext('2d');
       ctx.filter = 'grayscale(100%) contrast(180%)';
       ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
       var result = await Tesseract.recognize(canvas, 'eng', {
-        logger: function(m){
-          if (m.status === 'recognizing text' && lbl)
-            lbl.textContent = '\u23f3 OCR ' + Math.round((m.progress||0)*100) + '%';
-        }
+        logger: function(m){ if (m.status==='recognizing text' && lbl) lbl.childNodes[0].textContent = '\u23f3 OCR ' + Math.round((m.progress||0)*100) + '%'; }
       });
       var text = result.data.text || '';
       var match = text.match(/ZY-\d{8}/);
       var zyCode = match ? match[0] : null;
       if (!zyCode) {
-        var cleaned = text.replace(/[OI]/g, function(c){ return c==='O'?'0':'1'; });
-        var m2 = cleaned.match(/ZY-\d{8}/);
+        var m2 = text.replace(/[OI]/g, function(c){ return c==='O'?'0':'1'; }).match(/ZY-\d{8}/);
         if (m2) zyCode = m2[0];
       }
       if (!zyCode) { tamShowDNError('C\u00f3digo ZY n\u00e3o encontrado. Tente com melhor luz.'); return; }
@@ -3136,17 +3137,11 @@
       tamShowDNDistribModal(dn);
     } catch(e) {
       console.error('DN camera error', e);
-      tamShowDNError('Erro ao processar a imagem: ' + e.message);
+      tamShowDNError('Erro ao processar imagem: ' + e.message);
     } finally {
       if (lbl) {
         lbl.classList.remove('tam-dn-loading');
-        lbl.innerHTML = '&#x1F4F7; fotografar caixa<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">';
-        var newInp = lbl.querySelector('#tam-dn-cam-input');
-        if (newInp) newInp.addEventListener('change', function(e){
-          var file = e.target.files[0];
-          if (file) tamHandleDNCameraPhoto(file);
-          e.target.value = '';
-        });
+        lbl.childNodes[0].textContent = '\ud83d\udcf7 fotografar caixa';
       }
       tamUpdateDNCount();
     }
@@ -3160,10 +3155,7 @@
     t.textContent = '\u26a0\ufe0f ' + msg;
     document.body.appendChild(t);
     setTimeout(function(){ t.classList.add('tam-dn-toast-show'); }, 10);
-    setTimeout(function(){
-      t.classList.remove('tam-dn-toast-show');
-      setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 400);
-    }, 3500);
+    setTimeout(function(){ t.classList.remove('tam-dn-toast-show'); setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 400); }, 3500);
   }
 
   function tamShowDNDistribModal(dn) {
@@ -3171,33 +3163,29 @@
     if (old) old.parentNode.removeChild(old);
     var modal = document.createElement('div');
     modal.id = 'tam-dn-modal';
-
+    var invIdx = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
+    var invLabel = (invIdx >= 0 && tamInvoices[invIdx]) ? ' \u2192 ' + tamInvoices[invIdx].invoiceNo : '';
     var rowsHtml = dn.refs.map(function(r) {
-      var safeRef = r.ref.replace(/[^a-z0-9]/gi, '_');
+      var safeRef = r.ref.replace(/[^a-z0-9]/gi,'_');
       return '<tr class="tam-dn-row">' +
         '<td class="tam-dn-ref">' + tamEsc(r.ref) + '</td>' +
         '<td class="tam-dn-total">' + r.qty + '</td>' +
-        '<td class="tam-dn-cell"><input type="number" class="tam-dn-inp tam-dn-inp-f" id="tam-dn-f-' + safeRef + '" data-ref="' + tamEsc(r.ref) + '" data-qty="' + r.qty + '" min="0" max="' + r.qty + '" placeholder="0"></td>' +
-        '<td class="tam-dn-cell"><input type="number" class="tam-dn-inp tam-dn-inp-p" id="tam-dn-p-' + safeRef + '" data-ref="' + tamEsc(r.ref) + '" data-qty="' + r.qty + '" min="0" max="' + r.qty + '" placeholder="0"></td>' +
+        '<td class="tam-dn-cell"><input type="number" class="tam-dn-inp tam-dn-inp-f" id="tam-dn-f-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" min="0" max="'+r.qty+'" placeholder="0"></td>' +
+        '<td class="tam-dn-cell"><input type="number" class="tam-dn-inp tam-dn-inp-p" id="tam-dn-p-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" min="0" max="'+r.qty+'" placeholder="0"></td>' +
         '<td class="tam-dn-btns">' +
-          '<button class="tam-dn-qbtn tam-dn-f100" data-ref="' + tamEsc(r.ref) + '" data-qty="' + r.qty + '">F 100%</button>' +
-          '<button class="tam-dn-qbtn tam-dn-p100" data-ref="' + tamEsc(r.ref) + '" data-qty="' + r.qty + '">PS 100%</button>' +
-          '<button class="tam-dn-qbtn tam-dn-split" data-ref="' + tamEsc(r.ref) + '" data-qty="' + r.qty + '">&frac12;</button>' +
+          '<button class="tam-dn-qbtn tam-dn-f100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">F 100%</button>' +
+          '<button class="tam-dn-qbtn tam-dn-p100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">PS 100%</button>' +
+          '<button class="tam-dn-qbtn tam-dn-split" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">&frac12;</button>' +
         '</td>' +
       '</tr>';
     }).join('');
-
-    // Show which invoice this DN belongs to
-    var invIdx = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
-    var invLabel = (invIdx >= 0 && tamInvoices[invIdx]) ? ' \u2192 ' + tamInvoices[invIdx].invoiceNo : '';
-
     modal.innerHTML =
       '<div id="tam-dn-backdrop"></div>' +
       '<div id="tam-dn-panel">' +
         '<div id="tam-dn-header">' +
           '<div id="tam-dn-title">' +
             '<span id="tam-dn-zy">' + tamEsc(dn.zyCode) + invLabel + '</span>' +
-            '<span id="tam-dn-sub">Delivery Note \u00b7 distribuir por loja</span>' +
+            '<span id="tam-dn-sub">Delivery Note &middot; distribuir por loja</span>' +
           '</div>' +
           '<button id="tam-dn-close-btn" class="tam-dn-close">&times;</button>' +
         '</div>' +
@@ -3218,7 +3206,6 @@
           '<button id="tam-dn-cancel-btn" class="tam-dn-cancel-btn">Cancelar</button>' +
         '</div>' +
       '</div>';
-
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-dn-visible'); });
 
@@ -3232,73 +3219,64 @@
 
     modal.querySelectorAll('.tam-dn-f100').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var ref = btn.getAttribute('data-ref'), qty = parseInt(btn.getAttribute('data-qty'));
-        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-        var fi = modal.querySelector('#tam-dn-f-'+safeRef), pi = modal.querySelector('#tam-dn-p-'+safeRef);
-        if (fi) fi.value = qty; if (pi) pi.value = 0; tamDNHighlightRow(btn);
+        var ref=btn.getAttribute('data-ref'), qty=parseInt(btn.getAttribute('data-qty'));
+        var s=ref.replace(/[^a-z0-9]/gi,'_');
+        var fi=modal.querySelector('#tam-dn-f-'+s), pi=modal.querySelector('#tam-dn-p-'+s);
+        if(fi) fi.value=qty; if(pi) pi.value=0; tamDNHighlightRow(btn);
       });
     });
     modal.querySelectorAll('.tam-dn-p100').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var ref = btn.getAttribute('data-ref'), qty = parseInt(btn.getAttribute('data-qty'));
-        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-        var fi = modal.querySelector('#tam-dn-f-'+safeRef), pi = modal.querySelector('#tam-dn-p-'+safeRef);
-        if (fi) fi.value = 0; if (pi) pi.value = qty; tamDNHighlightRow(btn);
+        var ref=btn.getAttribute('data-ref'), qty=parseInt(btn.getAttribute('data-qty'));
+        var s=ref.replace(/[^a-z0-9]/gi,'_');
+        var fi=modal.querySelector('#tam-dn-f-'+s), pi=modal.querySelector('#tam-dn-p-'+s);
+        if(fi) fi.value=0; if(pi) pi.value=qty; tamDNHighlightRow(btn);
       });
     });
     modal.querySelectorAll('.tam-dn-split').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var ref = btn.getAttribute('data-ref'), qty = parseInt(btn.getAttribute('data-qty'));
-        var half = Math.floor(qty/2);
-        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-        var fi = modal.querySelector('#tam-dn-f-'+safeRef), pi = modal.querySelector('#tam-dn-p-'+safeRef);
-        if (fi) fi.value = half; if (pi) pi.value = qty-half; tamDNHighlightRow(btn);
+        var ref=btn.getAttribute('data-ref'), qty=parseInt(btn.getAttribute('data-qty')), half=Math.floor(qty/2);
+        var s=ref.replace(/[^a-z0-9]/gi,'_');
+        var fi=modal.querySelector('#tam-dn-f-'+s), pi=modal.querySelector('#tam-dn-p-'+s);
+        if(fi) fi.value=half; if(pi) pi.value=qty-half; tamDNHighlightRow(btn);
       });
     });
 
     modal.querySelector('#tam-dn-confirm-btn').addEventListener('click', function(){
       if (!tamSession) { tamShowDNError('Sem sess\u00e3o activa.'); return; }
-
-      var targetBox = null, targetBi = -1;
+      var targetBox=null, targetBi=-1;
       var knownInvIdx = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
-
       if (knownInvIdx >= 0) {
-        for (var bi = 0; bi < tamSession.boxes.length; bi++) {
-          var b = tamSession.boxes[bi];
-          if (b.invIdx === knownInvIdx && !b.locked) { targetBox = b; targetBi = bi; break; }
+        for (var bi=0; bi<tamSession.boxes.length; bi++) {
+          var b=tamSession.boxes[bi];
+          if (b.invIdx===knownInvIdx && !b.locked) { targetBox=b; targetBi=bi; break; }
         }
         if (!targetBox) {
-          var invNo = (tamInvoices[knownInvIdx] && tamInvoices[knownInvIdx].invoiceNo) || '';
+          var invNo=(tamInvoices[knownInvIdx]&&tamInvoices[knownInvIdx].invoiceNo)||'';
           tamShowDNError('Todas as caixas da fatura ' + invNo + ' j\u00e1 est\u00e3o fechadas.');
           return;
         }
       } else {
-        for (var bi = 0; bi < tamSession.boxes.length; bi++) {
-          var b = tamSession.boxes[bi];
-          if (!b.locked) { targetBox = b; targetBi = bi; break; }
+        for (var bi=0; bi<tamSession.boxes.length; bi++) {
+          var b=tamSession.boxes[bi];
+          if (!b.locked) { targetBox=b; targetBi=bi; break; }
         }
         if (!targetBox) { tamShowDNError('N\u00e3o h\u00e1 caixas dispon\u00edveis.'); return; }
       }
-
       var totalQty = dn.refs.reduce(function(s,r){ return s+r.qty; }, 0);
       if (!targetBox.total) targetBox.total = totalQty;
-
       tamPushUndo();
       dn.refs.forEach(function(r){
-        var safeRef = r.ref.replace(/[^a-z0-9]/gi,'_');
-        var fi = modal.querySelector('#tam-dn-f-'+safeRef);
-        var pi = modal.querySelector('#tam-dn-p-'+safeRef);
-        var fVal = fi ? (parseInt(fi.value)||0) : 0;
-        var pVal = pi ? (parseInt(pi.value)||0) : 0;
-        if (fVal > 0 || pVal > 0) {
-          if (!targetBox.refs[r.ref]) targetBox.refs[r.ref] = { f:0, p:0 };
-          targetBox.refs[r.ref].f = fVal;
-          targetBox.refs[r.ref].p = pVal;
+        var safe=r.ref.replace(/[^a-z0-9]/gi,'_');
+        var fi=modal.querySelector('#tam-dn-f-'+safe), pi=modal.querySelector('#tam-dn-p-'+safe);
+        var fVal=fi?(parseInt(fi.value)||0):0, pVal=pi?(parseInt(pi.value)||0):0;
+        if (fVal>0||pVal>0) {
+          if (!targetBox.refs[r.ref]) targetBox.refs[r.ref]={f:0,p:0};
+          targetBox.refs[r.ref].f=fVal; targetBox.refs[r.ref].p=pVal;
         }
       });
-
       tamRenderAll();
-      tamScheduleSave();
+      tamSaveSession(true);  // immediate silent save
       tamCheckBoxLock(targetBi);
       closeModal();
     });
@@ -3311,9 +3289,6 @@
     setTimeout(function(){ row.classList.remove('tam-dn-row-filled'); }, 600);
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     EXPORT CSV — todas las facturas (botón global)
-  ══════════════════════════════════════════════════════════════ */
   function tamExportCSV() {
     if (!tamInvoices.length) return;
     var lines = ['\uFEFF' + ['Fatura','Referência','Tipo · Nome','UND','P.Unit c/ Envio (€)','Total (€)','Funchal','Porto Santo'].join(';')];
@@ -4368,14 +4343,7 @@
       '.tam-anom-high { color:#1565c0!important; }',
 
 
-      /* ── Delivery Notes toolbar ── */
-      '#tam-dn-toolbar { display:flex; align-items:center; gap:10px; padding:10px 16px; flex-wrap:wrap; }',
-      '.tam-dn-load-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1565c0; border-radius:10px; background:#e8f0fe; color:#1565c0; transition:background .13s,color .13s; user-select:none; }',
-      '.tam-dn-load-btn:hover { background:#1565c0; color:#fff; }',
-      '.tam-dn-cam-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #2e7d32; border-radius:10px; background:#e8f5e9; color:#2e7d32; transition:background .13s,color .13s; user-select:none; }',
-      '.tam-dn-cam-btn:hover,.tam-dn-loading { background:#2e7d32!important; color:#fff!important; }',
-      '#tam-dn-count { padding:3px 10px; font-size:.75rem; font-weight:bold; font-family:MontserratLight,sans-serif; background:#1565c0; color:#fff; border-radius:20px; }',
-      /* ── DN modal ── */
+      /* -- DN modal -- */
       '#tam-dn-modal { position:fixed; inset:0; z-index:10001; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-dn-modal.tam-dn-visible { opacity:1; pointer-events:auto; }',
       '#tam-dn-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.5); }',
@@ -4415,6 +4383,8 @@
       '.tam-dn-cancel-btn:hover { background:#ddd; }',
       '#tam-dn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:#333; color:#fff; padding:10px 20px; border-radius:10px; font-size:.84rem; font-family:MontserratLight,sans-serif; opacity:0; transition:opacity .3s,transform .3s; z-index:20000; pointer-events:none; }',
       '#tam-dn-toast.tam-dn-toast-show { opacity:1; transform:translateX(-50%) translateY(0); }',
+      /* -- DN bar button loading state -- */
+      '.tam-dn-loading { background:#2e7d32!important; color:#fff!important; }',
 
       /* Dark mode anomaly */
       '@media(prefers-color-scheme:dark){',
@@ -4499,7 +4469,16 @@
         '<div class="tam-sessions-dropdown-wrap">' +
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
-        '</div>';
+        '</div>' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" style="display:none">' +
+          '\ud83d\udce6 delivery notes' +
+          '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
+        '</label>' +
+        '<span id="tam-dn-count" style="display:none"></span>' +
+        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" style="display:none">' +
+          '\ud83d\udcf7 fotografar caixa' +
+          '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
+        '</label>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
@@ -4519,6 +4498,20 @@
       if (sesBtn2) sesBtn2.addEventListener('click', function(e){
         e.stopPropagation();
         tamOpenSessionsModal();
+      });
+
+      // DN buttons listeners
+      var dnBarI = bar.querySelector('#tam-dn-file-input');
+      if (dnBarI) dnBarI.addEventListener('change', function(e){
+        var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
+        if (files.length) tamHandleDeliveryNoteFiles(files);
+        e.target.value = '';
+      });
+      var dnBarC = bar.querySelector('#tam-dn-cam-input');
+      if (dnBarC) dnBarC.addEventListener('change', function(e){
+        var file = e.target.files[0];
+        if (file) tamHandleDNCameraPhoto(file);
+        e.target.value = '';
       });
 
       // Close dropdown when clicking outside
@@ -4553,36 +4546,6 @@
 
     // Inject styles immediately — always fresh
     tamEnsureStyles();
-
-    // Delivery Notes toolbar
-    if (!document.getElementById('tam-dn-toolbar')) {
-      var dnt = document.createElement('div');
-      dnt.id = 'tam-dn-toolbar';
-      dnt.innerHTML =
-        '<label class="tam-dn-load-btn" for="tam-dn-file-input">' +
-          '&#x1F4E6; delivery notes' +
-          '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
-        '</label>' +
-        '<span id="tam-dn-count" style="display:none"></span>' +
-        '<label class="tam-dn-cam-btn" for="tam-dn-cam-input">' +
-          '&#x1F4F7; fotografar caixa' +
-          '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
-        '</label>';
-      var anomArea = document.getElementById('tam-anomaly-area');
-      if (anomArea && anomArea.nextSibling) anomArea.parentNode.insertBefore(dnt, anomArea.nextSibling);
-      else if (anomArea) anomArea.parentNode.appendChild(dnt);
-      else tab.appendChild(dnt);
-      dnt.querySelector('#tam-dn-file-input').addEventListener('change', function(e){
-        var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
-        if (files.length) tamHandleDeliveryNoteFiles(files);
-        e.target.value = '';
-      });
-      dnt.querySelector('#tam-dn-cam-input').addEventListener('change', function(e){
-        var file = e.target.files[0];
-        if (file) tamHandleDNCameraPhoto(file);
-        e.target.value = '';
-      });
-    }
   })();
 
 })();

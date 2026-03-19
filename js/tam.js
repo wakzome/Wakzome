@@ -3081,8 +3081,16 @@
               console.warn('\u26a0\ufe0f DN ' + dn.zyCode + ': parsed=' + dn.parsedTotal + ' gesamtTotal=' + dn.gesamtTotal);
             }
           }
+        } else {
+          console.warn('DN n\u00e3o reconhecida ou sem refs: ' + file.name);
+          var statusEl = document.getElementById('tam-status-msg');
+          if (statusEl) statusEl.textContent = 'Aviso: "' + file.name + '" n\u00e3o foi reconhecida como delivery note v\u00e1lida (sem c\u00f3digo ZY ou refer\u00eancias).';
         }
-      } catch(e) { console.warn('DN parse error', file.name, e); }
+      } catch(e) {
+        console.warn('DN parse error', file.name, e);
+        var statusEl = document.getElementById('tam-status-msg');
+        if (statusEl) statusEl.textContent = 'Erro ao processar "' + file.name + '": ' + e.message;
+      }
     }
     tamUpdateDNCount();
     tamScheduleSave();
@@ -4696,7 +4704,9 @@
       if (dnLoadBtn && dnFileInput) {
         dnLoadBtn.addEventListener('click', function(){ dnFileInput.click(); });
         dnFileInput.addEventListener('change', function(e){
-          var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
+          var files = Array.from(e.target.files).filter(function(f){
+            return f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+          });
           if (files.length) tamHandleDeliveryNoteFiles(files);
           e.target.value = '';
         });

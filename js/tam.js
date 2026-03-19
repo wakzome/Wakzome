@@ -1146,7 +1146,9 @@
 
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
-    var sortedBoxes    = pendingBoxes.concat(completedBoxes);
+    // Progressive display: only show the active (first pending) box + completed boxes
+    var visiblePendingBoxes = pendingBoxes.length > 0 ? [pendingBoxes[0]] : [];
+    var sortedBoxes    = visiblePendingBoxes.concat(completedBoxes);
 
     // Only refs needing manual work
     var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
@@ -2885,6 +2887,16 @@
       ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
       : '';
 
+    var COL_S = ['Referencia', 'Armazém', 'Qtd.'];
+    var stockCopyBar =
+      '<div class="tam-guia-copy-bar">' +
+        '<span class="tam-guia-copy-label">copiar coluna:</span>' +
+        COL_S.map(function(lbl, ci){
+          return '<button class="tam-guia-copy-btn tam-stock-copy-btn" data-scol="' + ci + '">⧉ ' + lbl + '</button>';
+        }).join('') +
+        '<span class="tam-guia-copy-msg" id="tam-stock-copy-msg"></span>' +
+      '</div>';
+
     modal.innerHTML =
       '<div id="tam-stock-backdrop"></div>' +
       '<div id="tam-stock-panel">' +
@@ -2898,6 +2910,7 @@
             '<button id="tam-stock-close-btn" class="tam-stock-close-btn" title="fechar">✕</button>' +
           '</div>' +
         '</div>' +
+        stockCopyBar +
         '<div id="tam-stock-scroll">' +
           '<table id="tam-stock-table">' +
             '<thead>' +
@@ -2932,6 +2945,46 @@
     modal.querySelector('#tam-stock-close-btn').addEventListener('click', closeModal);
     document.addEventListener('keydown', function esc(e){
       if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc); }
+    });
+
+    /* ── Copy column (stock) ── */
+    var stockCopyMsg   = modal.querySelector('#tam-stock-copy-msg');
+    var stockCopyTimer = null;
+    var stockColKeys   = ['ref', 'city', 'qty'];
+    modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var ci  = parseInt(btn.getAttribute('data-scol'));
+        var key = stockColKeys[ci];
+        var vals = rows.map(function(rw){
+          if (key === 'ref')  return rw.ref;
+          if (key === 'city') return rw.city;
+          return String(rw.qty);
+        });
+        if (!vals.length) return;
+        modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
+        btn.classList.add('tam-guia-copy-active');
+        var text = vals.join('\n');
+        function showStockMsg(ok){
+          if (!stockCopyMsg) return;
+          stockCopyMsg.textContent = ok ? '✓ ' + COL_S[ci] + ' copiado!' : '⚠ copie manualmente';
+          stockCopyMsg.style.color = ok ? '#2e7d32' : '#b05000';
+          if (stockCopyTimer) clearTimeout(stockCopyTimer);
+          stockCopyTimer = setTimeout(function(){
+            stockCopyMsg.textContent = '';
+            modal.querySelectorAll('.tam-stock-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
+          }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function(){ showStockMsg(true); }).catch(function(){ showStockMsg(false); });
+        } else {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta); showStockMsg(true);
+          } catch(e){ showStockMsg(false); }
+        }
+      });
     });
 
     // Export to CSV (Excel-compatible)

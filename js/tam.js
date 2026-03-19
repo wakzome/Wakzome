@@ -25,6 +25,7 @@
   var tamDeliveryNotes      = {};         // ZY-code -> { zyCode, refs:[{ref,qty}], fileName }
   var tamDNtoInvIdx         = {};         // ZY-dn-code -> invIdx
   var tamRedoStack          = [];         // redo stack (cleared on new action)
+  var tamDNVerifyState      = {};         // { zyCode: { dnConfirmed: bool } } — escalation state
 
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var TAM_UNDO_MAX          = 50;         // max undo steps
@@ -487,6 +488,7 @@
     tamRenderInvoices();
     tamRenderReception();
     tamRenderAnomalies();
+    tamRenderDNVerification();
     tamRenderSessionBar();
   }
 
@@ -2212,6 +2214,7 @@
       boxes:         tamSession.boxes,
       sentRefs:      tamSession.sentRefs || {},
       deliveryNotes: tamDeliveryNotes || {},
+      dnVerifyState: tamDNVerifyState  || {},
       invoices: tamInvoices.map(function(r){
         return {
           invoiceNo:     r.invoiceNo,
@@ -2419,7 +2422,8 @@
     var s = sessionData || tamLoadAllSessionsLocal()[key];
     if (!s) return;
     tamSession = { name: s.name, boxes: s.boxes, createdAt: s.savedAt, sentRefs: s.sentRefs || {} };
-    tamDeliveryNotes = s.deliveryNotes || {};
+    tamDeliveryNotes  = s.deliveryNotes  || {};
+    tamDNVerifyState  = s.dnVerifyState  || {};
     if (s.invoices && s.invoices.length) {
       tamInvoices = s.invoices.map(function(inv, idx){
         // Recalculate shipPerPiece for restored grouped items
@@ -3023,11 +3027,16 @@
   ══════════════════════════════════════════════════════════════ */
 
   function tamExtractDNListFromRows(allRows) {
+    /* The first ZY code is the invoice number itself. All subsequent ones are
+       delivery-note references listed at the footer of the invoice. */
     var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
     var matches = fullText.match(/ZY-\d{8}/g);
     if (!matches) return [];
+    var invoiceZY = matches[0]; // skip this one — it's the invoice itself
     var seen = {}, codes = [];
-    matches.forEach(function(zy, i){ if (i > 0 && !seen[zy]) { seen[zy]=true; codes.push(zy); } });
+    matches.forEach(function(zy) {
+      if (zy !== invoiceZY && !seen[zy]) { seen[zy] = true; codes.push(zy); }
+    });
     return codes;
   }
 
@@ -3452,6 +3461,8 @@
           targetBox.refs[r.ref].f=fVal; targetBox.refs[r.ref].p=pVal;
         }
       });
+      /* Mark DN as user-confirmed (distribution is final) */
+      if (tamDeliveryNotes[dn.zyCode]) tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
       tamRenderAll();
       tamSaveSession(true);  // immediate silent save
       tamCheckBoxLock(targetBi);
@@ -3464,6 +3475,286 @@
     if (!row) return;
     row.classList.add('tam-dn-row-filled');
     setTimeout(function(){ row.classList.remove('tam-dn-row-filled'); }, 600);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     DN CROSS-VALIDATION
+     Compares parsed DN quantities (ref by ref) against invoice.
+     Escalation: parser error → user correction → invoice error.
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Build map: ref → total pieces across all DNs belonging to an invoice */
+  function tamDNTotalsForInv(invIdx) {
+    var inv = tamInvoices[invIdx];
+    if (!inv) return {};
+    var totals = {};
+    (inv.dnList || []).forEach(function(zyCode) {
+      var dn = tamDeliveryNotes[zyCode];
+      if (!dn) return;
+      (dn.refs || []).forEach(function(r) {
+        totals[r.ref] = (totals[r.ref] || 0) + r.qty;
+      });
+    });
+    return totals;
+  }
+
+  function tamRenderDNVerification() {
+    var area = document.getElementById('tam-dn-verify-area');
+    if (!area) return;
+
+    var blocks = [];
+
+    tamInvoices.forEach(function(inv, invIdx) {
+      var dnList = inv.dnList || [];
+      if (!dnList.length) return; // invoice has no associated DNs listed
+
+      var totalDNs    = dnList.length;
+      var loadedDNs   = dnList.filter(function(zy){ return tamDeliveryNotes[zy]; });
+      var missingDNs  = dnList.filter(function(zy){ return !tamDeliveryNotes[zy]; });
+      var allLoaded   = missingDNs.length === 0;
+
+      /* ── Progress indicator ── */
+      var progressHtml;
+      if (!allLoaded) {
+        progressHtml =
+          '<div class="tam-dnv-progress tam-dnv-partial">' +
+            '<span class="tam-dnv-prog-icon">📦</span>' +
+            '<span class="tam-dnv-prog-text">' +
+              tamEsc(inv.invoiceNo) + ' &mdash; ' +
+              '<strong>' + loadedDNs.length + ' / ' + totalDNs + '</strong> delivery notes carregadas' +
+              (missingDNs.length ? ' &middot; falta: <span class="tam-dnv-missing">' + missingDNs.map(tamEsc).join(', ') + '</span>' : '') +
+            '</span>' +
+          '</div>';
+      } else {
+        /* All loaded — compare ref by ref */
+        var dnTotals   = tamDNTotalsForInv(invIdx);
+        var invTotals  = {};
+        inv.grouped.forEach(function(g){ invTotals[g.ref] = g.pieces; });
+
+        /* Union of all refs */
+        var allRefs = Object.keys(invTotals);
+        Object.keys(dnTotals).forEach(function(r){ if (allRefs.indexOf(r) < 0) allRefs.push(r); });
+
+        var diffs = [];
+        allRefs.forEach(function(ref) {
+          var inv_qty = invTotals[ref] || 0;
+          var dn_qty  = dnTotals[ref]  || 0;
+          var diff    = dn_qty - inv_qty;
+          if (diff !== 0) {
+            /* Which DNs contain this ref? */
+            var sourceDNs = dnList.filter(function(zy){
+              var dn = tamDeliveryNotes[zy];
+              return dn && dn.refs.some(function(r){ return r.ref === ref; });
+            });
+            diffs.push({ ref:ref, inv_qty:inv_qty, dn_qty:dn_qty, diff:diff, sourceDNs:sourceDNs });
+          }
+        });
+
+        if (!diffs.length) {
+          /* Perfect match */
+          var dnTotal = Object.values ? Object.keys(dnTotals).reduce(function(s,k){return s+dnTotals[k];},0) : 0;
+          progressHtml =
+            '<div class="tam-dnv-progress tam-dnv-ok">' +
+              '<span class="tam-dnv-prog-icon">✓</span>' +
+              '<span class="tam-dnv-prog-text">' +
+                tamEsc(inv.invoiceNo) + ' &mdash; todas as ' + totalDNs + ' DNs carregadas &middot; ' +
+                '<strong>quantidades confirmadas</strong> (' + inv.totalPieces + ' pcs)' +
+              '</span>' +
+            '</div>';
+        } else {
+          /* Build diff rows with escalation UI */
+          var diffRows = diffs.map(function(d) {
+            var diffTxt = d.diff > 0
+              ? '+' + d.diff + ' (DN tem a mais)'
+              : d.diff + ' (DN tem a menos)';
+            var diffCls = 'tam-dnv-diff-' + (d.diff > 0 ? 'high' : 'low');
+            var escalated = tamDNVerifyState[d.sourceDNs[0]] && tamDNVerifyState[d.sourceDNs[0]].dnConfirmed;
+
+            var actionHtml;
+            if (!escalated) {
+              actionHtml =
+                '<div class="tam-dnv-actions">' +
+                  d.sourceDNs.map(function(zy){
+                    return '<button class="tam-dnv-btn tam-dnv-btn-edit" ' +
+                      'data-inv="'+invIdx+'" data-ref="'+tamEsc(d.ref)+'" data-zy="'+tamEsc(zy)+'">' +
+                      '✏ Editar DN ' + tamEsc(zy) + '</button>';
+                  }).join('') +
+                  '<button class="tam-dnv-btn tam-dnv-btn-confirm-dn" ' +
+                    'data-inv="'+invIdx+'" data-ref="'+tamEsc(d.ref)+'" ' +
+                    'data-zys="'+d.sourceDNs.map(tamEsc).join(',')+'">' +
+                    'DN está correcta →</button>' +
+                '</div>';
+            } else {
+              actionHtml =
+                '<div class="tam-dnv-invoice-alert">' +
+                  '🔴 Verifica a fatura <strong>' + tamEsc(inv.invoiceNo) + '</strong> na referência <strong>' + tamEsc(d.ref) + '</strong>' +
+                  ' &mdash; fatura diz ' + d.inv_qty + ' pcs, DNs somam ' + d.dn_qty + ' pcs' +
+                  '<button class="tam-dnv-btn tam-dnv-btn-reopen" ' +
+                    'data-inv="'+invIdx+'" data-ref="'+tamEsc(d.ref)+'" ' +
+                    'data-zys="'+d.sourceDNs.map(tamEsc).join(',') + '">' +
+                    '↩ rever DN</button>' +
+                '</div>';
+            }
+
+            return '<tr class="tam-dnv-row">' +
+              '<td class="tam-dnv-ref"><strong>' + tamEsc(d.ref) + '</strong></td>' +
+              '<td class="tam-dnv-num">' + d.inv_qty + '</td>' +
+              '<td class="tam-dnv-num">' + d.dn_qty + '</td>' +
+              '<td class="tam-dnv-num ' + diffCls + '">' + diffTxt + '</td>' +
+              '<td class="tam-dnv-action-cell">' + actionHtml + '</td>' +
+              '</tr>';
+          }).join('');
+
+          progressHtml =
+            '<div class="tam-dnv-block">' +
+              '<div class="tam-dnv-block-hdr">' +
+                '⚠ ' + tamEsc(inv.invoiceNo) + ' &mdash; ' + totalDNs + ' DNs carregadas &middot; ' +
+                diffs.length + ' diferença(s) detectada(s)' +
+              '</div>' +
+              '<div class="tam-dnv-hint">Verifica visualmente as delivery notes assinaladas. Se a DN estiver correcta, clica em "DN está correcta →" para escalar o alerta para a fatura.</div>' +
+              '<div class="tam-dnv-scroll">' +
+              '<table class="tam-dnv-table">' +
+              '<thead><tr>' +
+                '<th>Referência</th>' +
+                '<th>Fatura</th>' +
+                '<th>DNs somam</th>' +
+                '<th>Diferença</th>' +
+                '<th>Acção</th>' +
+              '</tr></thead>' +
+              '<tbody>' + diffRows + '</tbody>' +
+              '</table></div>' +
+            '</div>';
+        }
+      }
+      blocks.push(progressHtml);
+    });
+
+    if (!blocks.length) { area.innerHTML = ''; return; }
+    area.innerHTML = '<div class="tam-dnv-area">' + blocks.join('') + '</div>';
+
+    /* ── Bind actions ── */
+    area.querySelectorAll('.tam-dnv-btn-edit').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var zy = btn.getAttribute('data-zy');
+        var dn = tamDeliveryNotes[zy];
+        if (dn) tamShowDNEditModal(dn, parseInt(btn.getAttribute('data-inv')));
+      });
+    });
+
+    area.querySelectorAll('.tam-dnv-btn-confirm-dn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var zys = btn.getAttribute('data-zys').split(',');
+        zys.forEach(function(zy) {
+          if (!tamDNVerifyState[zy]) tamDNVerifyState[zy] = {};
+          tamDNVerifyState[zy].dnConfirmed = true;
+        });
+        tamRenderDNVerification();
+        tamScheduleSave();
+      });
+    });
+
+    area.querySelectorAll('.tam-dnv-btn-reopen').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var zys = btn.getAttribute('data-zys').split(',');
+        zys.forEach(function(zy) {
+          if (tamDNVerifyState[zy]) tamDNVerifyState[zy].dnConfirmed = false;
+        });
+        tamRenderDNVerification();
+        tamScheduleSave();
+      });
+    });
+  }
+
+  /* Opens a DN for editing its parsed quantities (NOT the F/PS distribution) */
+  function tamShowDNEditModal(dn, invIdx) {
+    var old = document.getElementById('tam-dn-edit-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'tam-dn-edit-modal';
+    modal.className = 'tam-dn-edit-modal';
+
+    var inv = tamInvoices[invIdx];
+    var invRefs = {};
+    if (inv) inv.grouped.forEach(function(g){ invRefs[g.ref] = g.pieces; });
+
+    /* Merge: show all refs from both DN and invoice so user can add missing ones */
+    var allRefs = [];
+    var seen = {};
+    (dn.refs || []).forEach(function(r){ if (!seen[r.ref]) { seen[r.ref]=true; allRefs.push(r.ref); } });
+    Object.keys(invRefs).forEach(function(ref){ if (!seen[ref]) { seen[ref]=true; allRefs.push(ref); } });
+
+    var rowsHtml = allRefs.map(function(ref) {
+      var dnQty  = 0;
+      var dnRef = (dn.refs || []).find(function(r){ return r.ref === ref; });
+      if (dnRef) dnQty = dnRef.qty;
+      var invQty = invRefs[ref] || 0;
+      var mismatch = invQty > 0 && dnQty !== invQty;
+      return '<tr class="' + (mismatch ? 'tam-dne-row-mismatch' : '') + '">' +
+        '<td class="tam-dne-ref"><strong>' + tamEsc(ref) + '</strong></td>' +
+        '<td class="tam-dne-inv">' + (invQty || '—') + '</td>' +
+        '<td class="tam-dne-qty">' +
+          '<input type="text" inputmode="numeric" class="tam-dne-inp" ' +
+            'id="tam-dne-' + ref.replace(/[^a-z0-9]/gi,'_') + '" ' +
+            'data-ref="' + tamEsc(ref) + '" value="' + dnQty + '" autocomplete="off">' +
+        '</td>' +
+        '</tr>';
+    }).join('');
+
+    modal.innerHTML =
+      '<div id="tam-dn-edit-backdrop"></div>' +
+      '<div id="tam-dn-edit-panel">' +
+        '<div id="tam-dne-header">' +
+          '<div id="tam-dne-title">' +
+            '<span id="tam-dne-zy">' + tamEsc(dn.zyCode) + '</span>' +
+            '<span id="tam-dne-sub">Correção manual de quantidades · DN</span>' +
+          '</div>' +
+          '<button id="tam-dne-close" class="tam-dn-close">&times;</button>' +
+        '</div>' +
+        '<div class="tam-dne-hint">Corrige as quantidades lidas da DN. A coluna <strong>Fatura</strong> mostra o esperado.</div>' +
+        '<div id="tam-dne-scroll">' +
+          '<table id="tam-dne-table">' +
+            '<thead><tr>' +
+              '<th class="tam-dn-th">Referência</th>' +
+              '<th class="tam-dn-th">Fatura</th>' +
+              '<th class="tam-dn-th">Qtd. DN</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rowsHtml + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div id="tam-dne-footer">' +
+          '<button id="tam-dne-save" class="tam-dn-action-btn">✓ Guardar corrección</button>' +
+          '<button id="tam-dne-cancel" class="tam-dn-cancel-btn">Cancelar</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(function(){ modal.classList.add('tam-dn-visible'); });
+
+    function closeModal() {
+      modal.classList.remove('tam-dn-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 250);
+    }
+    modal.querySelector('#tam-dn-edit-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#tam-dne-close').addEventListener('click', closeModal);
+    modal.querySelector('#tam-dne-cancel').addEventListener('click', closeModal);
+
+    modal.querySelector('#tam-dne-save').addEventListener('click', function() {
+      /* Rebuild dn.refs from inputs */
+      var newRefs = [];
+      allRefs.forEach(function(ref) {
+        var inp = modal.querySelector('#tam-dne-' + ref.replace(/[^a-z0-9]/gi,'_'));
+        var qty = inp ? (parseInt(inp.value) || 0) : 0;
+        if (qty > 0) newRefs.push({ ref:ref, qty:qty });
+      });
+      /* Update DN object — mark as user-corrected, clear escalation state */
+      dn.refs = newRefs;
+      dn.userCorrected = true;
+      if (tamDNVerifyState[dn.zyCode]) tamDNVerifyState[dn.zyCode].dnConfirmed = false;
+      tamRenderDNVerification();
+      tamScheduleSave();
+      closeModal();
+    });
   }
 
   function tamExportCSV() {
@@ -4580,6 +4871,96 @@
       /* -- DN bar button loading state -- */
       '.tam-dn-loading { background:#2e7d32!important; color:#fff!important; }',
 
+      /* ── DN Verification area ── */
+      '#tam-dn-verify-area { width:100%; max-width:960px; margin-top:16px; }',
+      '.tam-dnv-area { display:flex; flex-direction:column; gap:10px; font-family:MontserratLight,sans-serif; }',
+
+      /* Progress bars */
+      '.tam-dnv-progress { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:.84rem; font-weight:600; }',
+      '.tam-dnv-prog-icon { font-size:1.1rem; flex-shrink:0; }',
+      '.tam-dnv-prog-text { color:#555; }',
+      '.tam-dnv-partial { background:#fffbe6; border:1px solid #ffe082; }',
+      '.tam-dnv-partial .tam-dnv-prog-text { color:#7a5a00; }',
+      '.tam-dnv-missing { color:#c05000; font-weight:bold; }',
+      '.tam-dnv-ok { background:#f0faf0; border:1px solid #a5d6a7; }',
+      '.tam-dnv-ok .tam-dnv-prog-text { color:#1b5e20; }',
+
+      /* Diff block */
+      '.tam-dnv-block { border:1.5px solid #ffe082; border-radius:14px; overflow:hidden; background:#fff; }',
+      '.tam-dnv-block-hdr { padding:10px 16px; background:#fffbe6; font-size:.78rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#7a5a00; border-bottom:1px solid #ffe082; }',
+      '.tam-dnv-hint { padding:8px 16px; font-size:.78rem; color:#888; border-bottom:1px solid #f5f5f5; background:#fafafa; }',
+      '.tam-dnv-scroll { overflow-x:auto; }',
+      '.tam-dnv-table { width:100%; border-collapse:collapse; font-size:.83rem; }',
+      '.tam-dnv-table thead th { padding:7px 12px; background:#f5f5f5; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; color:#888; border-bottom:1px solid #e6e6e6; white-space:nowrap; }',
+      '.tam-dnv-row td { padding:8px 12px; border-bottom:1px solid #f5f5f5; vertical-align:middle; }',
+      '.tam-dnv-row:last-child td { border-bottom:none; }',
+      '.tam-dnv-ref { font-weight:bold; color:#222; white-space:nowrap; min-width:130px; }',
+      '.tam-dnv-num { text-align:center; font-variant-numeric:tabular-nums; font-weight:bold; color:#555; white-space:nowrap; }',
+      '.tam-dnv-diff-low  { color:#c62828!important; }',
+      '.tam-dnv-diff-high { color:#1565c0!important; }',
+      '.tam-dnv-action-cell { padding:6px 12px!important; }',
+
+      /* Action buttons inside table */
+      '.tam-dnv-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }',
+      '.tam-dnv-btn { padding:4px 11px; font-size:.73rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#f5f5f5; color:#444; transition:background .12s,color .12s; white-space:nowrap; }',
+      '.tam-dnv-btn-edit { border-color:#1565c0!important; color:#1565c0!important; }',
+      '.tam-dnv-btn-edit:hover { background:#1565c0!important; color:#fff!important; }',
+      '.tam-dnv-btn-confirm-dn { border-color:#2e7d32!important; color:#2e7d32!important; }',
+      '.tam-dnv-btn-confirm-dn:hover { background:#2e7d32!important; color:#fff!important; }',
+      '.tam-dnv-btn-reopen { border-color:#888!important; color:#888!important; font-size:.68rem!important; }',
+      '.tam-dnv-btn-reopen:hover { background:#555!important; color:#fff!important; border-color:#555!important; }',
+
+      /* Invoice alert row */
+      '.tam-dnv-invoice-alert { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 10px; background:#fff0f0; border:1.5px solid #ef9a9a; border-radius:8px; font-size:.78rem; font-weight:bold; color:#c62828; }',
+      '.tam-dne-row-mismatch td { background:#fffbe6!important; }',
+
+      /* DN Edit modal */
+      '.tam-dn-edit-modal { position:fixed; inset:0; z-index:10002; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '.tam-dn-edit-modal.tam-dn-visible { opacity:1; pointer-events:auto; }',
+      '#tam-dn-edit-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.5); }',
+      '#tam-dn-edit-panel { position:relative; z-index:1; width:min(520px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
+      '.tam-dn-edit-modal.tam-dn-visible #tam-dn-edit-panel { transform:translateY(0); }',
+      '#tam-dne-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
+      '#tam-dne-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-dne-zy { font-size:1rem; font-weight:bold; color:#111; font-family:MontserratLight,sans-serif; }',
+      '#tam-dne-sub { font-size:.68rem; color:#888; font-family:MontserratLight,sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      '.tam-dne-hint { padding:8px 16px; font-size:.78rem; color:#888; background:#fafafa; border-bottom:1px solid #f0f0f0; flex-shrink:0; }',
+      '#tam-dne-scroll { overflow:auto; flex:1; }',
+      '#tam-dne-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; }',
+      '#tam-dne-table thead { position:sticky; top:0; z-index:2; }',
+      '.tam-dne-ref { font-weight:bold; color:#222; white-space:nowrap; padding:7px 12px; border-bottom:1px solid #f2f2f2; }',
+      '.tam-dne-inv { text-align:center; color:#888; font-weight:bold; padding:7px 12px; border-bottom:1px solid #f2f2f2; }',
+      '.tam-dne-qty { text-align:center; padding:5px 10px; border-bottom:1px solid #f2f2f2; }',
+      '.tam-dne-inp { width:68px; padding:5px 6px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-dne-inp::-webkit-inner-spin-button,.tam-dne-inp::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }',
+      '.tam-dne-inp:focus { border-color:#1565c0; }',
+      '#tam-dne-footer { display:flex; align-items:center; gap:10px; padding:12px 20px; border-top:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
+
+      /* Dark mode DNV */
+      '@media(prefers-color-scheme:dark){',
+      '.tam-dnv-partial{background:#1a1400!important;border-color:#3a2a00!important;}',
+      '.tam-dnv-partial .tam-dnv-prog-text{color:#c8a000!important;}',
+      '.tam-dnv-ok{background:#0d1f0d!important;border-color:#2a4a2a!important;}',
+      '.tam-dnv-ok .tam-dnv-prog-text{color:#4caf50!important;}',
+      '.tam-dnv-block{background:#111!important;border-color:#3a2a00!important;}',
+      '.tam-dnv-block-hdr{background:#1a1400!important;border-color:#3a2a00!important;color:#c8a000!important;}',
+      '.tam-dnv-hint{background:#161616!important;color:#555!important;border-color:#222!important;}',
+      '.tam-dnv-table thead th{background:#1a1a1a!important;border-color:#2a2a2a!important;}',
+      '.tam-dnv-row td{border-color:#1e1e1e!important;color:#e0e0e0!important;}',
+      '.tam-dnv-ref{color:#e8e8e8!important;}',
+      '.tam-dnv-num{color:#aaa!important;}',
+      '.tam-dnv-invoice-alert{background:#2a0808!important;border-color:#c62828!important;color:#f48!important;}',
+      '.tam-dne-row-mismatch td{background:#1a1400!important;}',
+      '#tam-dn-edit-panel{background:#111!important;}',
+      '#tam-dne-header{background:#161616!important;border-color:#2a2a2a!important;}',
+      '.tam-dne-hint{background:#161616!important;color:#555!important;}',
+      '.tam-dne-ref{color:#e8e8e8!important;border-color:#1e1e1e!important;}',
+      '.tam-dne-inv{color:#555!important;border-color:#1e1e1e!important;}',
+      '.tam-dne-qty{border-color:#1e1e1e!important;}',
+      '.tam-dne-inp{background:#111!important;border-color:#333!important;color:#e8e8e8!important;}',
+      '#tam-dne-footer{background:#161616!important;border-color:#2a2a2a!important;}',
+      '}',
+
       /* Dark mode anomaly */
       '@media(prefers-color-scheme:dark){',
       '.tam-th-anomaly{background:#1a1a1a!important;color:#555!important;}',
@@ -4736,6 +5117,15 @@
       if (recArea && recArea.nextSibling) recArea.parentNode.insertBefore(aa, recArea.nextSibling);
       else if (recArea) recArea.parentNode.appendChild(aa);
       else tab.appendChild(aa);
+    }
+    // DN verification area — injected after anomaly area
+    if (!document.getElementById('tam-dn-verify-area')) {
+      var dva = document.createElement('div');
+      dva.id = 'tam-dn-verify-area';
+      var anomArea = document.getElementById('tam-anomaly-area');
+      if (anomArea && anomArea.nextSibling) anomArea.parentNode.insertBefore(dva, anomArea.nextSibling);
+      else if (anomArea) anomArea.parentNode.appendChild(dva);
+      else tab.appendChild(dva);
     }
 
     // Inject styles immediately — always fresh

@@ -3101,10 +3101,22 @@
     return { zyCode: zyCode, refs: refs, fileName: fileName, gesamtPcs: null };
   }
 
-  /* ── Row-based DN parser v2 — B2B-order-number as primary data-row signal ── */
+  /* ── Row-based DN parser v3 ─────────────────────────────────────
+     Key insights from TAM Lieferschein format:
+       REF row  : "KY-201-0132  98508  khaki  100% Viscose ..."
+                   -> product ref  +  5-8 digit COLOR CODE on same row
+       DATA row : "Modell: Shirt Mariella  4063942674360  S  2  B2B-...  19,99"
+                   -> contains SIZE token (XS/S/M/L/XL/XXL) + integer QTY (1-99)
+       pdfjs may split B2B and EAN into separate rows due to column layout,
+       so we do NOT rely on B2B or EAN as primary signals.
+     Approach:
+       1. Tag every row as REF (has known ref + color code) or DATA (has SIZE + qty).
+       2. For each DATA row, look backward for nearest REF -> accumulate pieces.
+       3. Refs that accumulate 0 pieces are dropped (address fragments, etc.).
+  ──────────────────────────────────────────────────────────────── */
   function tamParseDNFromRows(allRows, fileName) {
 
-    /* ── 1. ZY code ──────────────────────────────────────────────── */
+    /* 1. ZY code */
     var zyCode = null;
     for (var i = 0; i < allRows.length; i++) {
       var m = allRows[i].join(' ').match(/ZY-\d{8}/);
@@ -3112,11 +3124,11 @@
     }
     if (!zyCode) return null;
 
-    /* ── 2. Gesamtstückzahl (declared total) ─────────────────────── */
+    /* 2. Gesamtstuckzahl (declared total) */
     var gesamtPcs = null;
     for (var i = 0; i < allRows.length; i++) {
       var joined = allRows[i].join(' ');
-      if (/Gesamtst[üu]ckzahl/i.test(joined)) {
+      if (/Gesamtst[\xfc u]ckzahl/i.test(joined) || /Gesamtst.ckzahl/i.test(joined)) {
         var allNums = joined.match(/\d+/g) || [];
         for (var ni = 0; ni < allNums.length; ni++) {
           var n = parseInt(allNums[ni]);
@@ -3133,150 +3145,72 @@
       }
     }
 
-    /* ── 3. Tag every row ─────────────────────────────────────────
-       TAM Delivery Note format per article:
-         REF_ROW  :  KY-201-0132  98508  <color>  <material>  ...
-         LOT_ROW  :  Lot-Nr./Anzahl:  10100591 / 2
-         BRAND    :  Zabaione  61099020
-         DATA_ROW :  [Modell: <type> <name>]  <EAN13>  <SIZE>  <QTY>  B2B-X-EN-<num>  <price>
-                     (one row per size; B2B order-number is ALWAYS on product data rows)
+    /* 3. Tag rows */
+    var SIZE_SET   = new Set(['XS','S','M','L','XL','XXL','XXXL','XS/S','S/M','M/L','L/XL']);
+    var COLOR_CODE = /\b\d{5,8}\b/;
+    var BAD_REF    = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|ITA|CHN|BGD|EUR|USP)/i;
+    /* Address-number refs: letter(s)+digits+dash+digits with NO letters after the dash */
+    var ADDR_REF   = /^[A-Za-z]{1,2}\d+-\d+$/;
 
-       Strategy: use B2B-X-EN- as the definitive DATA_ROW signal.
-       Then look BACKWARD for the nearest valid product REF.
-    ──────────────────────────────────────────────────────────────── */
-
-    /* Patterns that mark noise / structural / address rows */
-    var NOISE_DN = /Kunden|Konto|Datum\/|Seite\s*\/|Page\s+\d|TAM FASHION|Wakzome|Hauptsitz|IBAN|Fon \+|Fax \+|eMail|Lieferschein|Versand|Daimler|Volksbank|gelten ausschl|AGB|Gesch[äa]fts|Michael|Thomas R|Alexander R|Kontakt|Bankver|HRB\s|UST-ID|Essener|Valvo|Michelfeld|DE-22419|DE-74545|Herkunft|Gesamtst|Gesamtpaket|Brutto|Netto|the total-look|Kunden Nr|Konto Nr|Karton Nr|Auftr\.-Nr\.|GLS|DHL|DPD|Versandart|Despatched|Shipment|Lot-Nr|Lot-Num|Anzahl/i;
-
-    /* B2B order-number pattern — appears on every product data line */
-    var B2B_RE  = /\bB2B-\d+-[A-Z]{2}-\d+/i;
-    /* EAN: 13-digit number, word-bounded */
-    var EAN_RE  = /\b\d{13}\b/;
-    /* Sizes TAM uses */
-    var SIZE_SET = new Set(['XS','S','M','L','XL','XXL','XXXL','XS/S','S/M','M/L','L/XL']);
-    /* Prefixes that are never product refs */
-    var BAD_REF = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|ITA|CHN|BGD|EUR|USP)/i;
-    /* Building/address fragments that must never be a ref */
-    var ADDR_TOKEN = /^(B\d+|Valvo|Park|Essener|Michelfeld|Hamburg|Stuttgart)$/i;
-
-    /* Tag each row */
     var tagged = allRows.map(function(tokens, idx) {
-      var joined = tokens.join(' ');
 
-      /* Hard noise/address filter */
-      if (NOISE_DN.test(joined)) return { idx:idx, type:'NOISE' };
+      /* DATA row: SIZE token followed within 4 tokens by a plain integer 1-99 */
+      for (var ti = 0; ti < tokens.length; ti++) {
+        if (!SIZE_SET.has(tokens[ti].toUpperCase())) continue;
+        for (var tj = ti + 1; tj < Math.min(ti + 5, tokens.length); tj++) {
+          var tok = tokens[tj];
+          if (/^\d{1,2}$/.test(tok)) {
+            var n = parseInt(tok);
+            if (n >= 1 && n <= 99) return { idx:idx, type:'DATA', qty:n };
+          }
+          /* Stop if we hit price (comma), B2B code, or EAN */
+          if (/,/.test(tok) || /B2B/i.test(tok) || /^\d{13}$/.test(tok)) break;
+        }
+      }
 
-      /* DATA row: has B2B order-number (primary) OR has EAN-13 (secondary) */
-      if (B2B_RE.test(joined) || EAN_RE.test(joined)) {
-        /* Extract qty: find SIZE token, take next integer */
-        var qty = null;
-        for (var ti = 0; ti < tokens.length; ti++) {
-          if (SIZE_SET.has(tokens[ti].toUpperCase())) {
-            for (var tj = ti + 1; tj < Math.min(ti + 5, tokens.length); tj++) {
-              var raw = tokens[tj].replace(',','.');  // handle "2,00" edge case
-              var n   = parseInt(raw);
-              /* Must be a plausible piece-count, NOT a price (prices have comma/dot + 2 decimals) */
-              if (!isNaN(n) && n >= 1 && n <= 500 && !/[,.]/.test(tokens[tj])) {
-                qty = n; break;
-              }
-            }
-            if (qty !== null) break;
+      /* REF row: has COLOR_CODE (5-8 digit number) on same row as a valid ref */
+      if (COLOR_CODE.test(tokens.join(' '))) {
+        var candidates = [];
+        for (var ci = 0; ci < tokens.length; ci++) {
+          var t = tokens[ci];
+          if (tamIsRef(t) && !BAD_REF.test(t) && !ADDR_REF.test(t)) candidates.push(t);
+          if (ci < tokens.length - 1) {
+            var j2 = t + '-' + tokens[ci + 1];
+            if (KNOWN_REFS.has(j2.toUpperCase()) && !BAD_REF.test(t) && !ADDR_REF.test(t)) candidates.push(j2);
           }
         }
-        /* Fallback: EAN position → SIZE is token after EAN → QTY is token after that */
-        if (qty === null && EAN_RE.test(joined)) {
-          for (var ti = 0; ti < tokens.length; ti++) {
-            if (EAN_RE.test(tokens[ti])) {
-              /* token[ti+1] = SIZE, token[ti+2] = QTY */
-              if (ti + 2 < tokens.length) {
-                var n2 = parseInt(tokens[ti + 2]);
-                if (!isNaN(n2) && n2 >= 1 && n2 <= 500 && !/[,.]/.test(tokens[ti + 2])) {
-                  qty = n2;
-                }
-              }
-              break;
-            }
-          }
-        }
-        return { idx:idx, type:'DATA', qty: qty };
+        candidates.sort(function(a, b){ return b.length - a.length; });
+        if (candidates[0]) return { idx:idx, type:'REF', ref:candidates[0] };
       }
 
-      /* REF row: look for a product reference code */
-      var candidate = null;
-      /* Check first token directly */
-      if (tamIsRef(tokens[0]) && !BAD_REF.test(tokens[0]) && !ADDR_TOKEN.test(tokens[0])) {
-        candidate = tokens[0];
-      }
-      /* Try joining consecutive tokens (handles refs with space-separated parts in pdfjs) */
-      if (!candidate) {
-        for (var i = 0; i < tokens.length - 1 && !candidate; i++) {
-          var j1 = tokens[i] + ' ' + tokens[i+1];
-          var j2 = tokens[i] + '-' + tokens[i+1];
-          if (KNOWN_REFS.has(j1.toUpperCase()) && !BAD_REF.test(tokens[i]) && !ADDR_TOKEN.test(tokens[i])) candidate = j1;
-          else if (KNOWN_REFS.has(j2.toUpperCase()) && !BAD_REF.test(tokens[i]) && !ADDR_TOKEN.test(tokens[i])) candidate = j2;
-        }
-      }
-      /* Scan remaining tokens */
-      if (!candidate) {
-        for (var i = 1; i < tokens.length && !candidate; i++) {
-          if (tamIsRef(tokens[i]) && !BAD_REF.test(tokens[i]) && !ADDR_TOKEN.test(tokens[i])) {
-            candidate = tokens[i];
-          }
-        }
-      }
-      /* Final validation: reject address-looking refs */
-      if (candidate && (BAD_REF.test(candidate) || ADDR_TOKEN.test(candidate))) candidate = null;
-      /* Reject standalone building codes like "B15-17" that appear in address context:
-         if the SAME row has a plain number <= 30 as the ONLY other non-ref token, 
-         and no EAN, it's likely an address fragment → skip */
-      if (candidate && tokens.length <= 3) {
-        var hasAddressNumber = tokens.some(function(t){
-          return /^-?\d{1,3}$/.test(t) && parseInt(t) <= 50 && t !== candidate;
-        });
-        var hasColorCode = tokens.some(function(t){ return /^\d{5,8}$/.test(t); });
-        /* A real ref row for TAM always has a 5-8 digit color code on the same row */
-        if (hasAddressNumber && !hasColorCode) candidate = null;
-      }
-
-      if (candidate) return { idx:idx, type:'REF', ref:candidate };
       return { idx:idx, type:'OTHER' };
     });
 
-    /* ── 4. Associate DATA rows → nearest preceding REF ─────────── */
-    var refAccum = {};   // ref → total pieces
-    var refOrder = [];   // insertion order for final list
-
+    /* 4. Associate DATA -> nearest preceding REF (within 80 rows) */
+    var refAccum = {};
+    var refOrder = [];
     for (var i = 0; i < tagged.length; i++) {
-      if (tagged[i].type !== 'DATA' || tagged[i].qty === null) continue;
-
-      /* Look backward for nearest REF within 60 rows */
+      if (tagged[i].type !== 'DATA') continue;
       var nearestRef = null;
-      for (var j = i - 1; j >= Math.max(0, i - 60); j--) {
+      for (var j = i - 1; j >= Math.max(0, i - 80); j--) {
         if (tagged[j].type === 'REF') { nearestRef = tagged[j].ref; break; }
       }
       if (!nearestRef) continue;
-
-      if (!refAccum.hasOwnProperty(nearestRef)) {
-        refAccum[nearestRef] = 0;
-        refOrder.push(nearestRef);
-      }
+      if (!refAccum.hasOwnProperty(nearestRef)) { refAccum[nearestRef] = 0; refOrder.push(nearestRef); }
       refAccum[nearestRef] += tagged[i].qty;
     }
 
     var refs = refOrder
-      .map(function(ref){ return { ref: ref, qty: refAccum[ref] }; })
+      .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
       .filter(function(r){ return r.qty > 0; });
 
     if (!refs.length) return null;
 
-    /* ── 5. Sanity-check sum vs Gesamtstückzahl ───────────────────
-       Log a warning to console; the badge in the modal will show the discrepancy visually */
     var computedSum = refs.reduce(function(s, r){ return s + r.qty; }, 0);
     if (gesamtPcs !== null && computedSum !== gesamtPcs) {
-      console.warn('TAM DN parser: computed', computedSum, '≠ Gesamtstückzahl', gesamtPcs, 'for', zyCode);
+      console.warn('TAM DN parser v3: computed', computedSum, 'vs Gesamtstuckzahl', gesamtPcs, 'for', zyCode);
     }
-
-    return { zyCode: zyCode, refs: refs, fileName: fileName, gesamtPcs: gesamtPcs };
+    return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs };
   }
 
   async function tamHandleDNCameraPhoto(imageFile) {

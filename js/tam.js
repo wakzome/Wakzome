@@ -27,6 +27,11 @@
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var tamDNVerifyState      = {};         // { zyCode: { dnConfirmed: bool } } — escalation state
 
+  /* ── Motor D ── */
+  var TAM_MOTOR_D_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/functions/v1/Motor-D';
+  var TAM_MOTOR_D_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
+  var tamMotorDCost   = 0;
+
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var TAM_UNDO_MAX          = 50;         // max undo steps
 
@@ -146,6 +151,95 @@
   /* ══════════════════════════════════════════════════════════════
      MAIN HANDLER — procesa uno o varios PDFs
   ══════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     MOTOR D — Claude API proxy
+     Rules:
+       invoice → only when A/B/C have conflicts
+       dn      → only when verification detects divergence
+       photo   → ALWAYS (reads ZY + manuscript F|PS columns)
+     Falls back gracefully — never breaks the UI on failure.
+  ══════════════════════════════════════════════════════════════ */
+  async function tamMotorDCall(payload) {
+    try {
+      var res = await fetch(TAM_MOTOR_D_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + TAM_MOTOR_D_KEY,
+          'apikey': TAM_MOTOR_D_KEY
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) { console.warn('TAM Motor D HTTP', res.status); return null; }
+      var data = await res.json();
+      if (!data.ok) { console.warn('TAM Motor D error', data.error, data.raw || ''); return null; }
+      /* Track cost */
+      var cost = payload.mode === 'photo' ? 0.010 : payload.mode === 'invoice' ? 0.014 : 0.006;
+      tamMotorDCost = Math.round((tamMotorDCost + cost) * 1000) / 1000;
+      console.log('TAM Motor D coste acumulado: $' + tamMotorDCost.toFixed(3));
+      var sb = tamSB();
+      if (sb) sb.from('tam_motor_d_cost')
+        .upsert({ id: 1, cost: tamMotorDCost, updated_at: new Date().toISOString() })
+        .then(function(){}).catch(function(){});
+      return data.result;
+    } catch(e) {
+      console.warn('TAM Motor D failed', e.message);
+      return null;
+    }
+  }
+
+  function tamMotorDSpinner(msg) {
+    var el = document.getElementById('tam-motord-spin');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tam-motord-spin';
+      document.body.appendChild(el);
+    }
+    if (msg) {
+      el.textContent = '🤖 ' + msg;
+      el.className = 'tam-motord-spin tam-motord-spin-on';
+    } else {
+      el.className = 'tam-motord-spin';
+    }
+  }
+
+  /* Apply Motor D invoice result — resolves CONFLICT refs */
+  function tamApplyMotorDInvoice(result, md) {
+    if (!md || !md.refs || !md.refs.length) return result;
+    var mdMap = {};
+    md.refs.forEach(function(r) { mdMap[r.ref.toUpperCase()] = r; });
+    var shipPerPiece = result.shipPerPiece || 0;
+    var resolved = result.grouped.map(function(g) {
+      if (g.confidence !== 'CONFLICT') return g;
+      var mdr = mdMap[g.ref.toUpperCase()];
+      if (!mdr) return g;
+      var pieces    = mdr.pieces    || g.pieces;
+      var totalCost = mdr.totalCost || g.totalCost;
+      var base      = pieces > 0 ? totalCost / pieces : 0;
+      return Object.assign({}, g, {
+        pieces:            pieces,
+        totalCost:         tamRound2(totalCost),
+        unitPriceWithShip: tamRound2(base + shipPerPiece),
+        grandTotal:        tamRound2((base + shipPerPiece) * pieces),
+        confidence:        'MOTOR_D'
+      });
+    });
+    var stillConflicts = resolved.filter(function(g) { return g.confidence === 'CONFLICT'; });
+    var totalPieces    = resolved.reduce(function(s, g) { return s + g.pieces; }, 0);
+    var subtotalGoods  = tamRound2(resolved.reduce(function(s, g) { return s + g.totalCost; }, 0));
+    return Object.assign({}, result, {
+      grouped:       resolved,
+      totalPieces:   totalPieces,
+      subtotalGoods: subtotalGoods,
+      grandTotal:    tamRound2(subtotalGoods + (result.shipping || 0)),
+      xv: Object.assign({}, result.xv, {
+        conflicts:  stillConflicts.map(function(g) { return { ref: g.ref }; }),
+        fullyAgree: stillConflicts.length === 0,
+        motorDUsed: true
+      })
+    });
+  }
+
   async function tamHandleFiles(files) {
     document.getElementById('tam-status-msg').textContent = 'a processar…';
     tamEnsureStyles();
@@ -174,6 +268,18 @@
         result._fileKey  = key;
         result._fileName = file.name;
         result.dnList = tamExtractDNListFromRows(allRows);
+
+        /* ── Motor D: only if A/B/C have unresolved conflicts ── */
+        if (!result.xv.fullyAgree && result.xv.conflicts && result.xv.conflicts.length > 0) {
+          try {
+            tamMotorDSpinner('a verificar fatura…');
+            var invText = allRows.map(function(t) { return t.join(' '); }).join('\n');
+            var mdInv = await tamMotorDCall({ mode: 'invoice', text: invText });
+            if (mdInv) result = tamApplyMotorDInvoice(result, mdInv);
+          } catch(emd) { console.warn('Motor D invoice', emd); }
+          finally { tamMotorDSpinner(null); }
+        }
+
         parsed.push(result);
         tamLearnRefsFromResult(result);
       }
@@ -1000,7 +1106,7 @@
     r.grouped.forEach(function(g, i){
       var conf     = g.confidence || 'CONFIRMED';
       var typeNome = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'—');
-      var badge    = conf === 'CONFLICT' ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : '';
+      var badge    = conf === 'CONFLICT' ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : conf === 'MOTOR_D' ? '<span class="tam-badge tam-badge-motord" title="Resolvido pelo Motor D">🤖</span>' : '';
 
       var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
       var fVal    = distrib.f || 0;
@@ -3213,42 +3319,84 @@
 
   async function tamHandleDNCameraPhoto(imageFile) {
     var lbl = document.getElementById('tam-dn-cam-bar-btn');
-    if (lbl) { lbl.classList.add('tam-dn-loading'); lbl.childNodes[0].textContent = '\u23f3 a processar...'; }
+    if (lbl) { lbl.classList.add('tam-dn-loading'); lbl.childNodes[0].textContent = '\u23f3 Motor D...'; }
     try {
-      if (typeof Tesseract === 'undefined') {
-        await new Promise(function(resolve, reject) {
-          var s = document.createElement('script');
-          s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-          s.onload = resolve; s.onerror = function(){ reject(new Error('Tesseract.js n\u00e3o carregado')); };
-          document.head.appendChild(s);
-        });
-      }
-      var imgBitmap = await createImageBitmap(imageFile);
-      var canvas = document.createElement('canvas');
-      var scale = Math.min(1, 1200 / imgBitmap.width);
-      canvas.width = Math.round(imgBitmap.width * scale);
-      canvas.height = Math.round(imgBitmap.height * scale);
-      var ctx = canvas.getContext('2d');
-      ctx.filter = 'grayscale(100%) contrast(180%)';
-      ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
-      var result = await Tesseract.recognize(canvas, 'eng', {
-        logger: function(m){ if (m.status==='recognizing text' && lbl) lbl.childNodes[0].textContent = '\u23f3 OCR ' + Math.round((m.progress||0)*100) + '%'; }
+      /* Convert image to base64 */
+      var base64 = await new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload  = function() { resolve(reader.result.split(',')[1]); };
+        reader.onerror = reject;
+        reader.readAsDataURL(imageFile);
       });
-      var text = result.data.text || '';
-      var match = text.match(/ZY-\d{8}/);
-      var zyCode = match ? match[0] : null;
+
+      /* ── Call Motor D photo mode ── */
+      tamMotorDSpinner('a ler foto...');
+      var mdResult = await tamMotorDCall({
+        mode:        'photo',
+        imageBase64: base64,
+        mediaType:   imageFile.type || 'image/jpeg',
+        refs:        []
+      });
+      tamMotorDSpinner(null);
+
+      /* Extract ZY code */
+      var zyCode = mdResult && mdResult.zyCode ? mdResult.zyCode : null;
+
+      /* ── Fallback to Tesseract if Motor D didn't find ZY ── */
       if (!zyCode) {
-        var m2 = text.replace(/[OI]/g, function(c){ return c==='O'?'0':'1'; }).match(/ZY-\d{8}/);
-        if (m2) zyCode = m2[0];
+        if (lbl) lbl.childNodes[0].textContent = '\u23f3 OCR...';
+        try {
+          if (typeof Tesseract === 'undefined') {
+            await new Promise(function(res, rej) {
+              var s = document.createElement('script');
+              s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+              s.onload = res; s.onerror = function() { rej(new Error('Tesseract n/d')); };
+              document.head.appendChild(s);
+            });
+          }
+          var bmp = await createImageBitmap(imageFile);
+          var cv  = document.createElement('canvas');
+          var sc  = Math.min(1, 1200 / bmp.width);
+          cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+          var ctx = cv.getContext('2d');
+          ctx.filter = 'grayscale(100%) contrast(180%)';
+          ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+          var tr = await Tesseract.recognize(cv, 'eng', {});
+          var tt = tr.data.text || '';
+          var tm = tt.match(/ZY-\d{8}/);
+          if (tm) zyCode = tm[0];
+          if (!zyCode) {
+            var tm2 = tt.replace(/[OI]/g, function(c) { return c==='O'?'0':'1'; }).match(/ZY-\d{8}/);
+            if (tm2) zyCode = tm2[0];
+          }
+        } catch(eTess) { console.warn('Tesseract fallback', eTess); }
       }
-      if (!zyCode) { tamShowDNError('C\u00f3digo ZY n\u00e3o encontrado. Tente com melhor luz.'); return; }
+
+      /* ── RULE 1: PDF must be loaded first ── */
+      if (!zyCode) {
+        tamShowDNError('C\u00f3digo ZY n\u00e3o encontrado. Tente com melhor ilumina\u00e7\u00e3o.');
+        return;
+      }
       var dn = tamDeliveryNotes[zyCode];
-      if (!dn) { tamShowDNError('Delivery note ' + zyCode + ' n\u00e3o est\u00e1 carregada. Carregue o PDF primeiro.'); return; }
-      tamShowDNDistribModal(dn);
+      if (!dn) {
+        tamShowDNError(
+          'Carrega primeiro o PDF da ' + zyCode + ' antes de fotografar.'
+        );
+        return;
+      }
+
+      /* ── RULE 2/3: Distribution present → pre-fill. Absent → empty modal ── */
+      var distribution = mdResult && mdResult.distribution && mdResult.distribution.length
+        ? mdResult.distribution : null;
+      var confidence   = mdResult && mdResult.confidence ? mdResult.confidence : null;
+
+      tamShowDNDistribModal(dn, distribution, confidence);
+
     } catch(e) {
       console.error('DN camera error', e);
       tamShowDNError('Erro ao processar imagem: ' + e.message);
     } finally {
+      tamMotorDSpinner(null);
       if (lbl) {
         lbl.classList.remove('tam-dn-loading');
         lbl.childNodes[0].textContent = '\ud83d\udcf7 fotografar caixa';
@@ -3257,7 +3405,7 @@
     }
   }
 
-  function tamShowDNError(msg) {
+    function tamShowDNError(msg) {
     var old = document.getElementById('tam-dn-toast');
     if (old) old.parentNode.removeChild(old);
     var t = document.createElement('div');
@@ -3268,7 +3416,7 @@
     setTimeout(function(){ t.classList.remove('tam-dn-toast-show'); setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 400); }, 3500);
   }
 
-  function tamShowDNDistribModal(dn) {
+  function tamShowDNDistribModal(dn, motorDDistrib, motorDConf) {
     var old = document.getElementById('tam-dn-modal');
     if (old) old.parentNode.removeChild(old);
     var modal = document.createElement('div');
@@ -3335,6 +3483,45 @@
       '</div>';
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-dn-visible'); });
+
+    /* ── Motor D pre-fill ── */
+    if (motorDDistrib && motorDDistrib.length) {
+      /* Confidence banner */
+      var subEl = modal.querySelector('#tam-dn-sub');
+      if (subEl && motorDConf) {
+        var confLabel = motorDConf === 'high'   ? '<span class="tam-dn-md-high">🤖 Motor D · alta confiança</span>'
+                      : motorDConf === 'medium' ? '<span class="tam-dn-md-med">🤖 Motor D · verifica os valores</span>'
+                      :                           '<span class="tam-dn-md-low">🤖 Motor D · verifica com atenção</span>';
+        subEl.innerHTML = 'Delivery Note &middot; distribuir por loja &middot; ' + confLabel;
+      }
+      /* Fill inputs — null/undefined → empty + red border */
+      motorDDistrib.forEach(function(d) {
+        if (!d || !d.ref) return;
+        var safe = d.ref.replace(/[^a-z0-9]/gi, '_');
+        var fi = modal.querySelector('#tam-dn-f-' + safe);
+        var pi = modal.querySelector('#tam-dn-p-' + safe);
+        var row = fi ? fi.closest('tr') : null;
+        if (fi) {
+          if (d.f != null) {
+            fi.value = d.f;
+            fi.classList.add('tam-dn-inp-prefilled');
+          } else {
+            fi.value = '';
+            fi.classList.add('tam-dn-inp-unclear');
+          }
+        }
+        if (pi) {
+          if (d.p != null) {
+            pi.value = d.p;
+            pi.classList.add('tam-dn-inp-prefilled');
+          } else {
+            pi.value = '';
+            pi.classList.add('tam-dn-inp-unclear');
+          }
+        }
+        if (row) row.classList.add('tam-dn-row-prefilled');
+      });
+    }
 
     function closeModal() {
       modal.classList.remove('tam-dn-visible');
@@ -3583,7 +3770,10 @@
                   d.sourceDNs.map(function(zy){
                     return '<button class="tam-dnv-btn tam-dnv-btn-edit" ' +
                       'data-inv="'+invIdx+'" data-ref="'+tamEsc(d.ref)+'" data-zy="'+tamEsc(zy)+'">' +
-                      '✏ Editar DN ' + tamEsc(zy) + '</button>';
+                      '✏ Editar</button>' +
+                      '<button class="tam-dnv-btn tam-dnv-btn-motord" ' +
+                      'data-inv="'+invIdx+'" data-ref="'+tamEsc(d.ref)+'" data-zy="'+tamEsc(zy)+'">' +
+                      '🤖 Motor D</button>';
                   }).join('') +
                   '<button class="tam-dnv-btn tam-dnv-btn-confirm-dn" ' +
                     'data-inv="'+invIdx+'" data-ref="'+tamEsc(d.ref)+'" ' +
@@ -3644,6 +3834,39 @@
         var zy = btn.getAttribute('data-zy');
         var dn = tamDeliveryNotes[zy];
         if (dn) tamShowDNEditModal(dn, parseInt(btn.getAttribute('data-inv')));
+      });
+    });
+
+    area.querySelectorAll('.tam-dnv-btn-motord').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var zy     = btn.getAttribute('data-zy');
+        var invIdx = parseInt(btn.getAttribute('data-inv'));
+        var dn     = tamDeliveryNotes[zy];
+        if (!dn) return;
+        var origText = btn.textContent;
+        btn.disabled    = true;
+        btn.textContent = '🤖 a analisar…';
+        try {
+          var dnText = 'Delivery Note ' + zy + '\n' +
+            (dn.refs || []).map(function(r) { return r.ref + ': ' + r.qty + ' pcs'; }).join('\n');
+          tamMotorDSpinner('Motor D a reanalisar DN…');
+          var mdRes = await tamMotorDCall({ mode: 'dn', text: dnText });
+          if (mdRes && mdRes.refs && mdRes.refs.length) {
+            dn.refs          = mdRes.refs;
+            dn.userCorrected = true;
+            if (mdRes.gesamtPcs) dn.gesamtPcs = mdRes.gesamtPcs;
+            if (tamDNVerifyState[zy]) tamDNVerifyState[zy].dnConfirmed = false;
+            tamRenderDNVerification();
+            tamScheduleSave();
+          } else {
+            tamShowDNError('Motor D não encontrou dados. Usa ✏ Editar para corrigir.');
+          }
+        } catch(e) { tamShowDNError('Motor D: ' + e.message); }
+        finally {
+          tamMotorDSpinner(null);
+          btn.disabled    = false;
+          btn.textContent = origText;
+        }
       });
     });
 
@@ -4877,6 +5100,30 @@
       '#tam-dn-toast.tam-dn-toast-show { opacity:1; transform:translateX(-50%) translateY(0); }',
       /* -- DN bar button loading state -- */
       '.tam-dn-loading { background:#2e7d32!important; color:#fff!important; }',
+
+      /* ── Motor D ── */
+      '#tam-motord-spin { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(16px); background:#1a0a2e; color:#c4b5fd; padding:9px 20px; border-radius:12px; font-size:.82rem; font-family:MontserratLight,sans-serif; font-weight:bold; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:20001; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,.45); }',
+      '#tam-motord-spin.tam-motord-spin-on { opacity:1; transform:translateX(-50%) translateY(0); }',
+      '.tam-badge-motord { background:#7c3aed; }',
+      /* Pre-filled inputs from Motor D */
+      '.tam-dn-inp-prefilled { border-color:#7c3aed!important; background:#f5f3ff!important; }',
+      '.tam-dn-inp-unclear   { border-color:#c62828!important; background:#fff0f0!important; }',
+      '.tam-dn-row-prefilled td { background:#faf7ff!important; }',
+      /* Confidence banners */
+      '.tam-dn-md-high { font-size:.7rem; font-weight:bold; color:#059669; }',
+      '.tam-dn-md-med  { font-size:.7rem; font-weight:bold; color:#b45309; }',
+      '.tam-dn-md-low  { font-size:.7rem; font-weight:bold; color:#c62828; }',
+      /* Motor D button in DN verification */
+      '.tam-dnv-btn-motord { border-color:#7c3aed!important; color:#7c3aed!important; }',
+      '.tam-dnv-btn-motord:hover { background:#7c3aed!important; color:#fff!important; }',
+      '@media(prefers-color-scheme:dark){',
+      '#tam-motord-spin{background:#2d1b69!important;color:#c4b5fd!important;}',
+      '.tam-dn-inp-prefilled{border-color:#a78bfa!important;background:#1e1b3a!important;}',
+      '.tam-dn-inp-unclear{border-color:#ef5350!important;background:#2a0808!important;}',
+      '.tam-dn-row-prefilled td{background:#18133a!important;}',
+      '.tam-dnv-btn-motord{border-color:#a78bfa!important;color:#a78bfa!important;}',
+      '.tam-dnv-btn-motord:hover{background:#7c3aed!important;color:#fff!important;}',
+      '}',
 
       /* ── DN Verification area ── */
       '#tam-dn-verify-area { width:100%; max-width:960px; margin-top:16px; }',

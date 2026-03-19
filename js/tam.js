@@ -3061,12 +3061,26 @@
       try {
         var buf = await file.arrayBuffer();
         var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-        var allRows = [];
+        /* Collect raw text items with page-adjusted Y (top-to-bottom) */
+        var allPageItems = [];
+        var PAGE_OFFSET = 1200; /* large enough to separate A4 pages (841pt) */
         for (var p = 1; p <= pdf.numPages; p++) {
-          var page = await pdf.getPage(p);
-          allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
+          var page   = await pdf.getPage(p);
+          var vp     = page.getViewport({ scale: 1 });
+          var pageH  = vp.height;
+          var offset = (p - 1) * PAGE_OFFSET;
+          var tc     = await page.getTextContent();
+          tc.items.forEach(function(item) {
+            var s = (item.str || '').trim();
+            if (!s) return;
+            allPageItems.push({
+              str: s,
+              x: item.transform[4],
+              y: pageH - item.transform[5] + offset   /* top-to-bottom, page-adjusted */
+            });
+          });
         }
-        var dn = tamParseDNFromRows(allRows, file.name);
+        var dn = tamParseDNFromItems(allPageItems, file.name);
         if (dn) { tamDeliveryNotes[dn.zyCode] = dn; count++; }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
@@ -3075,130 +3089,99 @@
     console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
   }
 
-  /* ── Legacy text-based parser (kept for fallback / camera OCR path) ── */
+
+  /* ── Legacy text-based parser — used by camera OCR path (ZY code only) ── */
   function tamParseDNText(text, fileName) {
     var zyMatch = text.match(/ZY-\d{8}/);
     if (!zyMatch) return null;
-    var zyCode = zyMatch[0];
-    var refs = [], seenRefs = {};
-    text.split(/\n/).forEach(function(line) {
-      var refMatch = line.match(/([A-Z][A-Z0-9]+-[A-Z0-9][A-Z0-9-]+)/g);
-      if (!refMatch) return;
-      refMatch.forEach(function(ref) {
-        if (/^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC)/.test(ref)) return;
-        var nums = line.match(/\b(\d{1,4})\b/g);
-        if (!nums) return;
-        var qty = null;
-        for (var ni = 0; ni < nums.length; ni++) {
-          var n = parseInt(nums[ni]);
-          if (n >= 1 && n <= 999) { qty = n; break; }
-        }
-        if (!qty || seenRefs[ref]) return;
-        seenRefs[ref] = true;
-        refs.push({ ref: ref, qty: qty });
-      });
-    });
-    return { zyCode: zyCode, refs: refs, fileName: fileName, gesamtPcs: null };
+    return { zyCode: zyMatch[0], refs: [], fileName: fileName, gesamtPcs: null };
   }
 
-  /* ── Row-based DN parser v3 ─────────────────────────────────────
-     Key insights from TAM Lieferschein format:
-       REF row  : "KY-201-0132  98508  khaki  100% Viscose ..."
-                   -> product ref  +  5-8 digit COLOR CODE on same row
-       DATA row : "Modell: Shirt Mariella  4063942674360  S  2  B2B-...  19,99"
-                   -> contains SIZE token (XS/S/M/L/XL/XXL) + integer QTY (1-99)
-       pdfjs may split B2B and EAN into separate rows due to column layout,
-       so we do NOT rely on B2B or EAN as primary signals.
-     Approach:
-       1. Tag every row as REF (has known ref + color code) or DATA (has SIZE + qty).
-       2. For each DATA row, look backward for nearest REF -> accumulate pieces.
-       3. Refs that accumulate 0 pieces are dropped (address fragments, etc.).
-  ──────────────────────────────────────────────────────────────── */
-  function tamParseDNFromRows(allRows, fileName) {
+  /* ── Item-based DN parser v4 ─────────────────────────────────────────────
+     Uses raw pdfjs text items with X/Y coordinates — no tamGroupByRows.
+     Column layout verified on real TAM Lieferschein PDFs:
+       REF  col : x ≈  71  (left column)
+       EAN  col : x ≈ 266  (13-digit barcode)
+       SIZE col : x ≈ 341  (XS/S/M/L/XL/XXL)
+       QTY  col : x ≈ 392  (piece count per size, 1-99)
+     Strategy:
+       QTY items  = x ∈ [370,420]  AND  1-2 digit int 1-99  AND  EAN within 2pt in Y
+       REF items  = x < 150        AND  tamIsRef            AND  not BAD/ADDR ref
+       For each QTY → nearest preceding REF (largest y < qty.y) → accumulate.
+  ─────────────────────────────────────────────────────────────────────────── */
+  function tamParseDNFromItems(allPageItems, fileName) {
+    var EAN_RE   = /^\d{13}$/;
+    var BAD_REF  = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD)/i;
+    /* Address-style codes: letter(s)+digits+dash+digits only, e.g. B15-17, A4-12 */
+    var ADDR_REF = /^[A-Za-z]{1,2}\d+-\d+$/;
+    var QTY_X_MIN = 370, QTY_X_MAX = 420, REF_X_MAX = 150, EAN_Y_TOL = 2;
 
     /* 1. ZY code */
     var zyCode = null;
-    for (var i = 0; i < allRows.length; i++) {
-      var m = allRows[i].join(' ').match(/ZY-\d{8}/);
+    for (var i = 0; i < allPageItems.length; i++) {
+      var m = allPageItems[i].str.match(/ZY-\d{8}/);
       if (m) { zyCode = m[0]; break; }
     }
     if (!zyCode) return null;
 
-    /* 2. Gesamtstuckzahl (declared total) */
+    /* 2. Gesamtstückzahl */
     var gesamtPcs = null;
-    for (var i = 0; i < allRows.length; i++) {
-      var joined = allRows[i].join(' ');
-      if (/Gesamtst[\xfc u]ckzahl/i.test(joined) || /Gesamtst.ckzahl/i.test(joined)) {
-        var allNums = joined.match(/\d+/g) || [];
-        for (var ni = 0; ni < allNums.length; ni++) {
-          var n = parseInt(allNums[ni]);
-          if (n >= 10 && n <= 9999) { gesamtPcs = n; break; }
-        }
-        if (gesamtPcs === null && i + 1 < allRows.length) {
-          var nextNums = allRows[i + 1].join(' ').match(/\d+/g) || [];
-          for (var ni = 0; ni < nextNums.length; ni++) {
-            var n = parseInt(nextNums[ni]);
-            if (n >= 10 && n <= 9999) { gesamtPcs = n; break; }
-          }
+    for (var i = 0; i < allPageItems.length; i++) {
+      if (/Gesamtst/i.test(allPageItems[i].str)) {
+        for (var j = i + 1; j < Math.min(i + 6, allPageItems.length); j++) {
+          var n = parseInt(allPageItems[j].str);
+          if (!isNaN(n) && n >= 10 && n <= 9999) { gesamtPcs = n; break; }
         }
         break;
       }
     }
 
-    /* 3. Tag rows */
-    var SIZE_SET   = new Set(['XS','S','M','L','XL','XXL','XXXL','XS/S','S/M','M/L','L/XL']);
-    var COLOR_CODE = /\b\d{5,8}\b/;
-    var BAD_REF    = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|ITA|CHN|BGD|EUR|USP)/i;
-    /* Address-number refs: letter(s)+digits+dash+digits with NO letters after the dash */
-    var ADDR_REF   = /^[A-Za-z]{1,2}\d+-\d+$/;
+    /* 3. Build EAN Y-position lookup for fast proximity check */
+    var eanYList = allPageItems
+      .filter(function(it){ return EAN_RE.test(it.str); })
+      .map(function(it){ return it.y; });
 
-    var tagged = allRows.map(function(tokens, idx) {
-
-      /* DATA row: SIZE token followed within 4 tokens by a plain integer 1-99 */
-      for (var ti = 0; ti < tokens.length; ti++) {
-        if (!SIZE_SET.has(tokens[ti].toUpperCase())) continue;
-        for (var tj = ti + 1; tj < Math.min(ti + 5, tokens.length); tj++) {
-          var tok = tokens[tj];
-          if (/^\d{1,2}$/.test(tok)) {
-            var n = parseInt(tok);
-            if (n >= 1 && n <= 99) return { idx:idx, type:'DATA', qty:n };
-          }
-          /* Stop if we hit price (comma), B2B code, or EAN */
-          if (/,/.test(tok) || /B2B/i.test(tok) || /^\d{13}$/.test(tok)) break;
-        }
+    function hasNearbyEAN(y) {
+      for (var k = 0; k < eanYList.length; k++) {
+        if (Math.abs(eanYList[k] - y) <= EAN_Y_TOL) return true;
       }
+      return false;
+    }
 
-      /* REF row: has COLOR_CODE (5-8 digit number) on same row as a valid ref */
-      if (COLOR_CODE.test(tokens.join(' '))) {
-        var candidates = [];
-        for (var ci = 0; ci < tokens.length; ci++) {
-          var t = tokens[ci];
-          if (tamIsRef(t) && !BAD_REF.test(t) && !ADDR_REF.test(t)) candidates.push(t);
-          if (ci < tokens.length - 1) {
-            var j2 = t + '-' + tokens[ci + 1];
-            if (KNOWN_REFS.has(j2.toUpperCase()) && !BAD_REF.test(t) && !ADDR_REF.test(t)) candidates.push(j2);
-          }
-        }
-        candidates.sort(function(a, b){ return b.length - a.length; });
-        if (candidates[0]) return { idx:idx, type:'REF', ref:candidates[0] };
-      }
-
-      return { idx:idx, type:'OTHER' };
+    /* 4. Collect REF items (left column) */
+    var refItems = allPageItems.filter(function(it) {
+      return it.x <= REF_X_MAX
+          && tamIsRef(it.str)
+          && !BAD_REF.test(it.str)
+          && !ADDR_REF.test(it.str);
     });
 
-    /* 4. Associate DATA -> nearest preceding REF (within 80 rows) */
-    var refAccum = {};
-    var refOrder = [];
-    for (var i = 0; i < tagged.length; i++) {
-      if (tagged[i].type !== 'DATA') continue;
-      var nearestRef = null;
-      for (var j = i - 1; j >= Math.max(0, i - 80); j--) {
-        if (tagged[j].type === 'REF') { nearestRef = tagged[j].ref; break; }
+    /* 5. For each QTY item, find nearest preceding REF and accumulate */
+    var refAccum = {}, refOrder = [];
+
+    allPageItems.forEach(function(it) {
+      if (it.x < QTY_X_MIN || it.x > QTY_X_MAX) return;
+      if (!/^\d{1,2}$/.test(it.str)) return;
+      var qty = parseInt(it.str);
+      if (qty < 1 || qty > 99) return;
+      if (!hasNearbyEAN(it.y)) return;
+
+      /* Nearest REF = largest y that is still < (it.y - 2) */
+      var nearRef = null, nearRefY = -Infinity;
+      refItems.forEach(function(r) {
+        if (r.y < it.y - 2 && r.y > nearRefY) {
+          nearRefY = r.y;
+          nearRef  = r.str;
+        }
+      });
+      if (!nearRef) return;
+
+      if (!refAccum.hasOwnProperty(nearRef)) {
+        refAccum[nearRef] = 0;
+        refOrder.push(nearRef);
       }
-      if (!nearestRef) continue;
-      if (!refAccum.hasOwnProperty(nearestRef)) { refAccum[nearestRef] = 0; refOrder.push(nearestRef); }
-      refAccum[nearestRef] += tagged[i].qty;
-    }
+      refAccum[nearRef] += qty;
+    });
 
     var refs = refOrder
       .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
@@ -3206,9 +3189,9 @@
 
     if (!refs.length) return null;
 
-    var computedSum = refs.reduce(function(s, r){ return s + r.qty; }, 0);
+    var computedSum = refs.reduce(function(s,r){ return s + r.qty; }, 0);
     if (gesamtPcs !== null && computedSum !== gesamtPcs) {
-      console.warn('TAM DN parser v3: computed', computedSum, 'vs Gesamtstuckzahl', gesamtPcs, 'for', zyCode);
+      console.warn('TAM DN v4:', computedSum, 'computed vs', gesamtPcs, 'declared for', zyCode);
     }
     return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs };
   }

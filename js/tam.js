@@ -3067,17 +3067,7 @@
           allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
         }
         var dn = tamParseDNRows(allRows, file.name);
-        if (dn) {
-          tamDeliveryNotes[dn.zyCode] = dn;
-          count++;
-          if (dn.gesamtTotal !== null) {
-            if (dn.validated) {
-              console.log('\u2705 DN ' + dn.zyCode + ': ' + dn.parsedTotal + ' pe\u00e7as OK');
-            } else {
-              console.warn('\u26a0\ufe0f DN ' + dn.zyCode + ': parsed=' + dn.parsedTotal + ' gesamtTotal=' + dn.gesamtTotal);
-            }
-          }
-        }
+        if (dn) { tamDeliveryNotes[dn.zyCode] = dn; count++; }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
     tamUpdateDNCount();
@@ -3103,23 +3093,6 @@
     }
     if (!zyCode) return null;
 
-    // Extract Gesamtstueckzahl for validation
-    var gesamtTotal = null;
-    for (var i = 0; i < allRows.length; i++) {
-      var joined = allRows[i].join(' ');
-      var gm = joined.match(/Gesamtst[\u00fc]ckzahl\s+(\d+)/i);
-      if (!gm) gm = joined.match(/Gesamtst.ckzahl\s+(\d+)/i);
-      if (gm) { gesamtTotal = parseInt(gm[1]); break; }
-      // Sometimes split across two tokens
-      if (/Gesamtst/i.test(joined)) {
-        var nm = joined.match(/(\d+)\s*$/);
-        if (nm) { gesamtTotal = parseInt(nm[1]); break; }
-      }
-    }
-
-    // Known footer/address strings that must never be treated as refs
-    var DN_FOOTER_RE = /^(B15|Valvo|Daimler|Essener|Hamburg|Stuttgart|Backnang|Michelfeld)$/i;
-
     // Accumulate quantities per ref (sum across tallas and colors)
     var refMap = {};
     var currentRef = null;
@@ -3128,37 +3101,25 @@
       var tokens = allRows[i];
       var joined = tokens.join(' ');
 
-      // Skip header/footer rows — broad pattern covers all TAM document boilerplate
-      if (/Lieferschein|Versandanschrift|Shipment|TAM Fashion|Wakzome|Hauptsitz|Verwaltung|Gesamtstückzahl|Gesamtst.ckzahl|Gesamtpaket|Bruttogewicht|Nettogewicht|Modell.*Farbe|Lot-Nr|Auftr|B2B-|IBAN|BIC|HRB|UST-ID|Fon |Fax |eMail|Valvo-Park|Daimlerstra|Essener|the total-look|Volksbank|AGB der TAM/i.test(joined)) {
+      // Skip header/footer rows
+      if (/Lieferschein|Versandanschrift|Shipment|TAM Fashion|Wakzome|Hauptsitz|Verwaltung|Gesamtstückzahl|Gesamtpaket|Bruttogewicht|Nettogewicht|Modell.*Farbe|Lot-Nr|Auftr|B2B-|IBAN|BIC|HRB|UST|Fon|Fax|eMail/i.test(joined)) {
         continue;
       }
 
-      // Skip rows that are clearly page headers (contain Seite/Page)
-      if (/Seite\/Page|Kunden Nr|Konto Nr|Datum\/Date|Versandart/i.test(joined)) {
-        continue;
-      }
-
-      // Detect reference row: first token is a valid ref AND not a footer fragment
-      var firstToken = tokens[0] || '';
-      if (tamIsRef(firstToken) && !DN_FOOTER_RE.test(firstToken) && !/^B\d{2}-\d{2}$/.test(firstToken)) {
-        // Extra guard: real refs must have at least one letter prefix before the dash
-        // and the part before first dash must be 2+ chars that are not purely address-like
-        var refParts = firstToken.split('-');
-        var prefix = refParts[0];
-        // Skip if prefix looks like an address code (single letter + digits like B15)
-        if (/^[A-Z]\d+$/.test(prefix) && prefix.length <= 4) {
-          continue;
-        }
-        currentRef = firstToken;
+      // Detect reference row: first token is a ref code (e.g. LA-101-0076)
+      if (tokens.length >= 1 && tamIsRef(tokens[0])) {
+        currentRef = tokens[0];
         if (!refMap[currentRef]) refMap[currentRef] = 0;
         continue;
       }
 
-      // Detect size/quantity row: contains EAN (13 digits) — most reliable signal
+      // Detect size/quantity row: contains EAN (13 digits) and a small quantity
+      // Pattern: ArticleName  EAN(13digits)  SIZE  QTY  OrderRef  PVP
       if (currentRef) {
+        // Look for a 13-digit EAN in the row
         var eanMatch = joined.match(/\b(\d{13})\b/);
         if (eanMatch) {
-          // Quantity is the first small integer (1-999) AFTER the EAN
+          // Find quantity: small integer (1-999) that appears AFTER the EAN
           var afterEan = joined.slice(joined.indexOf(eanMatch[0]) + 13);
           var qtyMatch = afterEan.match(/\b(\d{1,3})\b/);
           if (qtyMatch) {
@@ -3170,16 +3131,17 @@
           continue;
         }
 
-        // Fallback: row with size keyword + quantity (no EAN visible)
+        // Fallback: row with size keyword (XS/S/M/L/XL/XXL/XXXL) + small number
         var sizeMatch = joined.match(/\b(XXL|XXXL|XL|XS|[SMLX])\b/);
         if (sizeMatch) {
-          // Quantity should be right after the size
-          var afterSize = joined.slice(joined.indexOf(sizeMatch[0]) + sizeMatch[0].length);
-          var qm2 = afterSize.match(/^\s*(\d{1,3})\b/);
-          if (qm2) {
-            var qty2 = parseInt(qm2[1]);
-            if (qty2 >= 1 && qty2 <= 999) {
-              refMap[currentRef] += qty2;
+          var nums = joined.match(/\b(\d{1,3})\b/g);
+          if (nums) {
+            for (var ni = 0; ni < nums.length; ni++) {
+              var n = parseInt(nums[ni]);
+              if (n >= 1 && n <= 999) {
+                refMap[currentRef] += n;
+                break;
+              }
             }
           }
         }
@@ -3192,17 +3154,7 @@
       .map(function(ref){ return { ref: ref, qty: refMap[ref] }; });
 
     if (!refs.length) return null;
-
-    // Validate against Gesamtstueckzahl
-    var parsedTotal = refs.reduce(function(s, r){ return s + r.qty; }, 0);
-    var validated = gesamtTotal !== null && parsedTotal === gesamtTotal;
-    if (gesamtTotal !== null && !validated) {
-      console.warn('DN parse warning: parsed total ' + parsedTotal + ' != Gesamtstueckzahl ' + gesamtTotal + ' for ' + zyCode);
-    } else if (validated) {
-      console.log('DN parse OK: ' + zyCode + ' total=' + parsedTotal + ' matches Gesamtstueckzahl');
-    }
-
-    return { zyCode: zyCode, refs: refs, fileName: fileName, parsedTotal: parsedTotal, gesamtTotal: gesamtTotal, validated: validated };
+    return { zyCode: zyCode, refs: refs, fileName: fileName };
   }
 
   /* Legacy text-based parser — kept as fallback, tamParseDNRows is preferred */
@@ -3365,10 +3317,7 @@
         '<div id="tam-dn-header">' +
           '<div id="tam-dn-title">' +
             '<span id="tam-dn-zy">' + tamEsc(dn.zyCode) + invLabel + '</span>' +
-            '<span id="tam-dn-sub">Delivery Note &middot; distribuir por loja' +
-              (dn.validated ? ' <span style="color:#2e7d32">\u2705 ' + dn.parsedTotal + ' pe\u00e7as verificadas</span>' :
-               dn.gesamtTotal !== null ? ' <span style="color:#c62828">\u26a0\ufe0f ' + dn.parsedTotal + '/' + dn.gesamtTotal + ' pe\u00e7as</span>' : '') +
-            '</span>' +
+            '<span id="tam-dn-sub">Delivery Note &middot; distribuir por loja</span>' +
           '</div>' +
           '<button id="tam-dn-close-btn" class="tam-dn-close">&times;</button>' +
         '</div>' +

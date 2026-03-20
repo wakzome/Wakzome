@@ -2526,50 +2526,61 @@
     }
   }
 
-  /* Pending save queue — ensures the LAST state always reaches Supabase */
-  var tamSBSavePending = null;
-
   async function tamSaveSessionSupabase(payload) {
     var sb = tamSB();
-    if (!sb) return;
-
-    tamSBSavePending = payload;
-    if (tamSaveInFlight) return;
-
-    while (tamSBSavePending) {
-      var toSave = tamSBSavePending;
-      tamSBSavePending = null;
-      tamSaveInFlight = true;
-      try {
-        var row = {
-          session_name: toSave.name,
-          saved_at:     new Date(toSave.savedAt).toISOString(),
-          data:         JSON.stringify(toSave)
-        };
-        /* Check if row already exists */
-        var check = await sb.from(TAM_SESSIONS_TABLE)
-          .select('session_name')
-          .eq('session_name', toSave.name)
-          .limit(1);
-        var exists = check.data && check.data.length > 0;
-        var res;
-        if (exists) {
-          res = await sb.from(TAM_SESSIONS_TABLE)
-            .update({ saved_at: row.saved_at, data: row.data })
-            .eq('session_name', toSave.name);
-        } else {
-          res = await sb.from(TAM_SESSIONS_TABLE).insert(row);
-        }
-        if (res && res.error) console.warn('TAM Supabase:', res.error.message);
-      } catch(e) {
-        console.warn('TAM Supabase save:', e.message || e);
-      } finally {
-        tamSaveInFlight = false;
+    if (!sb || tamSaveInFlight) return;
+    tamSaveInFlight = true;
+    try {
+      var row = {
+        session_name: payload.name,
+        saved_at:     new Date(payload.savedAt).toISOString(),
+        data:         JSON.stringify(payload)
+      };
+      var check = await sb.from(TAM_SESSIONS_TABLE)
+        .select('session_name').eq('session_name', payload.name).limit(1);
+      if (check.data && check.data.length > 0) {
+        await sb.from(TAM_SESSIONS_TABLE)
+          .update({ saved_at: row.saved_at, data: row.data })
+          .eq('session_name', payload.name);
+      } else {
+        await sb.from(TAM_SESSIONS_TABLE).insert(row);
       }
-    }
+    } catch(e) { /* Supabase opcional — localStorage es el fallback */ }
+    tamSaveInFlight = false;
   }
 
+  /* Cargar desde localStorage */
+  function tamLoadAllSessionsLocal() {
+    try {
+      var raw = localStorage.getItem('tam_sessions');
+      return raw ? JSON.parse(raw) : {};
+    } catch(e) { return {}; }
+  }
 
+  /* Cargar fusionando localStorage + Supabase */
+  async function tamLoadAllSessionsMerged() {
+    var local = tamLoadAllSessionsLocal();
+    var sb = tamSB();
+    if (!sb) return local;
+    try {
+      var res = await sb.from(TAM_SESSIONS_TABLE).select('session_name, saved_at, data').order('saved_at', { ascending: false });
+      if (res.data && res.data.length) {
+        res.data.forEach(function(row){
+          try {
+            var parsed = JSON.parse(row.data);
+            var localEntry = local[parsed.name];
+            // Usar el más reciente entre local y remoto
+            if (!localEntry || (parsed.savedAt > (localEntry.savedAt || 0))) {
+              local[parsed.name] = parsed;
+            }
+          } catch(e) {}
+        });
+        // Actualizar localStorage con versión fusionada
+        localStorage.setItem('tam_sessions', JSON.stringify(local));
+      }
+    } catch(e) {}
+    return local;
+  }
 
   function tamLoadAllSessions() {
     return tamLoadAllSessionsLocal();
@@ -4713,14 +4724,8 @@
 
       /* ── Multi-factura: bloques ── */
             /* ── Collapse toggle button ── */
-            /* ── Collapse toggle button ── */
-            /* ── Sync badge ── */
-      '.tam-sync-ok   { background:#e8f5e9; color:#2a8a2a; }',
-      '.tam-sync-err  { background:#ffebee; color:#c62828; }',
-      '.tam-sync-offline { background:#f5f5f5; color:#999; }',
-      '.tam-sync-loading { background:#fff8e1; color:#e65100; }',
-
-
+      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#aaa; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
+      '.tam-inv-toggle-btn:hover { color:#000; }',
 
       /* ── Invoice block collapsed state ── */
       '.tam-inv-collapsed .tam-inv-banner { display:none!important; }',
@@ -5564,8 +5569,6 @@
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
 
-
-
       // Bind sessions button here, not in the separate listener block above
       var sesBtn2 = bar.querySelector('#tam-sessions-btn');
       if (sesBtn2) sesBtn2.addEventListener('click', function(e){
@@ -5628,49 +5631,6 @@
 
     // Inject styles immediately — always fresh
     tamEnsureStyles();
-
-    // Auto-sync from Supabase when TAM tab is first activated on a new device
-    (function(){
-      function tryAutoSync() {
-        if (tamSession || tamInvoices.length) return; // already loaded
-        var sb = tamSB();
-        if (!sb) return;
-        tamLoadAllSessionsMerged().then(function(sessions){
-          // Update localStorage; next time user clicks sessions they see cloud data
-          // If there's exactly one recent session from today/this week, offer to load it
-          var keys = Object.keys(sessions).sort(function(a,b){ return (sessions[b].savedAt||0)-(sessions[a].savedAt||0); });
-          if (!keys.length) return;
-          var newest = sessions[keys[0]];
-          var age = Date.now() - (newest.savedAt || 0);
-          var oneWeek = 7 * 24 * 60 * 60 * 1000;
-          if (age < oneWeek && newest.invoices && newest.invoices.length) {
-            // Show a subtle banner inviting to load
-            var bar = document.getElementById('tam-session-bar');
-            if (!bar || document.getElementById('tam-autosync-banner')) return;
-            var banner = document.createElement('div');
-            banner.id = 'tam-autosync-banner';
-            banner.className = 'tam-autosync-banner';
-            banner.innerHTML =
-              '☁ sessão encontrada na nuvem: <strong>' + tamEsc(newest.name) + '</strong>' +
-              ' <button id="tam-autosync-load-btn">carregar</button>' +
-              ' <button id="tam-autosync-dismiss-btn">×</button>';
-            var tab = document.getElementById('tab-tam');
-            var uz = document.getElementById('tam-upload-zone');
-            if (uz) uz.parentNode.insertBefore(banner, uz);
-            else if (tab) tab.insertBefore(banner, tab.firstChild);
-            banner.querySelector('#tam-autosync-load-btn').addEventListener('click', function(){
-              tamLoadSession(keys[0], newest);
-              banner.parentNode && banner.parentNode.removeChild(banner);
-            });
-            banner.querySelector('#tam-autosync-dismiss-btn').addEventListener('click', function(){
-              banner.parentNode && banner.parentNode.removeChild(banner);
-            });
-          }
-        }).catch(function(){});
-      }
-      // Try after a short delay so Supabase client is ready
-      setTimeout(tryAutoSync, 1500);
-    })();
   })();
 
 })();

@@ -84,6 +84,7 @@ select, select option {
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <link rel="preload" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <style>
 /* ─── INDEX: reset y base ─── */
 @font-face {
@@ -1907,6 +1908,148 @@ tr { transition: background 0.15s ease; }
 /* keep all login content above bubbles */
 #login-screen > *:not(.login-bubble) { position: relative; z-index: 1; }
 
+/* ══════════════════════════════════════════
+   WOW EFFECTS — cursor trail, gradient text,
+   glassmorphism overlay, staggered rows
+══════════════════════════════════════════ */
+
+/* ── Cursor trail canvas ── */
+#cursor-trail-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 9996;
+  opacity: 1;
+}
+
+/* ── Animated gradient on intro text & logo ── */
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+#dynamic-text .char {
+  background: linear-gradient(135deg, #000 0%, #555 40%, #111 70%, #333 100%);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent !important;
+  animation: gradientShift 6s ease infinite;
+}
+@media (prefers-color-scheme: dark) {
+  #dynamic-text .char {
+    background: linear-gradient(135deg, #ccc 0%, #888 40%, #eee 70%, #aaa 100%);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* ── Logo animated gradient on hover ── */
+.logo-text {
+  background: linear-gradient(135deg, #000 0%, #555 50%, #000 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transition: background-position 0.6s ease, letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1) !important;
+}
+.logo-text:hover {
+  background-position: 100% 100%;
+  letter-spacing: .18em !important;
+}
+@media (prefers-color-scheme: dark) {
+  .logo-text {
+    background: linear-gradient(135deg, #e8e8e8 0%, #888 50%, #e8e8e8 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* ── Glassmorphism recibos overlay ── */
+#recibos-overlay {
+  backdrop-filter: blur(0px) !important;
+  -webkit-backdrop-filter: blur(0px) !important;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1),
+              backdrop-filter 0.6s ease !important;
+}
+#recibos-overlay.visible {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+#recibos-overlay-bar {
+  backdrop-filter: blur(20px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.6) !important;
+  background: rgba(255,255,255,0.85) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+}
+@media (prefers-color-scheme: dark) {
+  #recibos-overlay-bar {
+    background: rgba(13,13,13,0.85) !important;
+    border-bottom-color: rgba(255,255,255,0.05) !important;
+  }
+}
+
+/* ── Table row staggered entrance ── */
+@keyframes rowSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+tr.row-animate {
+  animation: rowSlideIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* ── Table row hover lift ── */
+tbody tr {
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.2s cubic-bezier(0.22,1,0.36,1),
+              background 0.15s ease !important;
+}
+tbody tr:hover {
+  transform: scale(1.012) translateZ(0);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Dark mode: deep midnight blue-green tint ── */
+@media (prefers-color-scheme: dark) {
+  html, body {
+    background: #080c10 !important;
+  }
+  #glow-layer-1 {
+    background:
+      radial-gradient(circle at 22% 28%, rgba(40,80,120,0.06) 0%, transparent 50%),
+      radial-gradient(circle at 78% 72%, rgba(20,60,80,0.04) 0%, transparent 50%),
+      #080c10 !important;
+  }
+  #glow-layer-2 {
+    background:
+      radial-gradient(circle at 65% 18%, rgba(30,70,100,0.04) 0%, transparent 38%),
+      radial-gradient(circle at 30% 80%, rgba(20,50,70,0.03) 0%, transparent 38%) !important;
+  }
+  #intro-screen, #login-screen, #admin-app {
+    background: #080c10 !important;
+  }
+  td { background: #0a0e12 !important; }
+  td.bold-row { background: #0e1318 !important; }
+  th { background: #111820 !important; }
+  body::before { opacity: 0.045 !important; }
+}
+
+/* ── Intro shatter — chars split on exit ── */
+.char-shatter {
+  will-change: transform, opacity, filter;
+}
+
+/* ── Cinematic intro screen exit ── */
+#intro-screen.cinematic-exit {
+  transition: none !important;
+}
+
 /* ══ HAMBURGER MENU (mobile/tablet ≤1024px) ══ */
 #admin-menu-btn {
   display: none;
@@ -2114,6 +2257,9 @@ tr { transition: background 0.15s ease; }
 </style>
 </head>
 <body>
+
+<!-- cursor trail canvas -->
+<canvas id="cursor-trail-canvas"></canvas>
 
 <!-- glow layers — animated background -->
 <div id="glow-layer-1"></div>
@@ -2475,6 +2621,189 @@ tr { transition: background 0.15s ease; }
   </div>
 </div>
 
+<script>
+/* ══════════════════════════════════════════════════════════
+   WOW EFFECTS — cursor trail, staggered rows,
+   GSAP intro shatter, table row animation
+══════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  /* ── 1. CURSOR TRAIL ── */
+  const canvas = document.getElementById('cursor-trail-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H;
+
+  function resizeCanvas() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  const isDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const trail = [];
+  const MAX_POINTS = 28;
+  let mouse = { x: -999, y: -999 };
+  let lastMouse = { x: -999, y: -999 };
+  let raf;
+
+  window.addEventListener('mousemove', function (e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  function drawTrail() {
+    ctx.clearRect(0, 0, W, H);
+
+    if (mouse.x !== lastMouse.x || mouse.y !== lastMouse.y) {
+      trail.push({ x: mouse.x, y: mouse.y, age: 0 });
+      if (trail.length > MAX_POINTS) trail.shift();
+      lastMouse.x = mouse.x;
+      lastMouse.y = mouse.y;
+    }
+
+    for (let i = 0; i < trail.length; i++) {
+      trail[i].age++;
+    }
+
+    const dark = isDark();
+    for (let i = 1; i < trail.length; i++) {
+      const t = i / trail.length;
+      const alpha = t * 0.18 * (1 - trail[i].age / 60);
+      if (alpha <= 0) continue;
+
+      const r = t * 3.5;
+      ctx.beginPath();
+      ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI * 2);
+      ctx.fillStyle = dark
+        ? `rgba(200, 210, 230, ${alpha})`
+        : `rgba(30, 30, 40, ${alpha})`;
+      ctx.fill();
+    }
+
+    // remove aged out points
+    while (trail.length && trail[0].age > 55) trail.shift();
+
+    raf = requestAnimationFrame(drawTrail);
+  }
+  drawTrail();
+
+  /* ── 2. STAGGERED TABLE ROW ENTRANCE ── */
+  function staggerTableRows(tableOrContainer) {
+    const rows = (tableOrContainer || document).querySelectorAll('tbody tr:not(.row-animated)');
+    rows.forEach(function (tr, i) {
+      tr.classList.add('row-animate', 'row-animated');
+      tr.style.animationDelay = (i * 38) + 'ms';
+    });
+  }
+
+  // Observe DOM mutations to catch dynamically inserted tables
+  const tableObserver = new MutationObserver(function (mutations) {
+    mutations.forEach(function (m) {
+      m.addedNodes.forEach(function (node) {
+        if (node.nodeType !== 1) return;
+        if (node.tagName === 'TABLE' || node.querySelector && node.querySelector('table')) {
+          setTimeout(function () { staggerTableRows(node); }, 30);
+        }
+        if (node.tagName === 'TR') {
+          node.classList.add('row-animate');
+          node.style.animationDelay = '0ms';
+        }
+      });
+    });
+  });
+  tableObserver.observe(document.body, { childList: true, subtree: true });
+
+  /* ── 3. GSAP INTRO SHATTER EXIT ── */
+  // Override the click-to-enter behaviour to add a shatter effect
+  // We hook into the existing intro logic by patching intro-screen dismissal
+  function patchIntroExit() {
+    if (typeof gsap === 'undefined') return;
+
+    const introScreen = document.getElementById('intro-screen');
+    if (!introScreen) return;
+
+    // Listen for the moment intro-screen starts to fade (opacity transition)
+    // We use a MutationObserver on its style attribute
+    const introStyleObs = new MutationObserver(function () {
+      const op = window.getComputedStyle(introScreen).opacity;
+      if (parseFloat(op) < 0.9 && !introScreen.dataset.shattered) {
+        introScreen.dataset.shattered = '1';
+        const chars = introScreen.querySelectorAll('.char');
+        if (!chars.length) return;
+
+        chars.forEach(function (ch, i) {
+          const dir = (i % 2 === 0 ? -1 : 1);
+          gsap.to(ch, {
+            duration: 0.55,
+            x: dir * (30 + Math.random() * 80),
+            y: -20 - Math.random() * 60,
+            rotation: dir * (15 + Math.random() * 35),
+            scale: 0.4 + Math.random() * 0.3,
+            opacity: 0,
+            filter: 'blur(6px)',
+            ease: 'power2.in',
+            delay: i * 0.04
+          });
+        });
+      }
+    });
+    introStyleObs.observe(introScreen, { attributes: true, attributeFilter: ['style'] });
+  }
+
+  // Wait for GSAP to be available
+  if (typeof gsap !== 'undefined') {
+    patchIntroExit();
+  } else {
+    window.addEventListener('load', patchIntroExit);
+  }
+
+  /* ── 4. ENHANCED GLASSMORPHISM OVERLAY ENTRANCE ── */
+  // Animate recibos-overlay content rows when overlay opens
+  const recibosMutObs = new MutationObserver(function () {
+    const overlay = document.getElementById('recibos-overlay');
+    if (!overlay) return;
+    if (overlay.classList.contains('visible')) {
+      setTimeout(function () {
+        staggerTableRows(document.getElementById('recibos-tbody'));
+      }, 200);
+    }
+  });
+  const reciOverlay = document.getElementById('recibos-overlay');
+  if (reciOverlay) {
+    recibosMutObs.observe(reciOverlay, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* ── 5. LOGIN ITEM STAGGER via GSAP ── */
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof gsap === 'undefined') return;
+    const loginScreen = document.getElementById('login-screen');
+    if (!loginScreen) return;
+
+    const loginScreenObs = new MutationObserver(function () {
+      if (loginScreen.classList.contains('visible')) {
+        const items = loginScreen.querySelectorAll('.login-item');
+        gsap.to(items, {
+          opacity: 1,
+          y: 0,
+          duration: 0.7,
+          ease: 'power3.out',
+          stagger: 0.1,
+          onStart: function () {
+            items.forEach(function (el) {
+              el.style.animationPlayState = 'running';
+            });
+          }
+        });
+      }
+    });
+    loginScreenObs.observe(loginScreen, { attributes: true, attributeFilter: ['class'] });
+  });
+
+})();
+</script>
 <script src="js/shared.js"></script>
 <script src="js/admin-init.js"></script>
 <script src="js/salarios.js"></script>

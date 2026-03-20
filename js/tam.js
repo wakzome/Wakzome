@@ -3233,6 +3233,21 @@
        DN references appear only once each, at the invoice footer.
        Strategy: the most-frequent ZY is the invoice itself — exclude it. */
     var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
+
+    /* ── Fix ZY codes split across PDF text-wrap lines ──
+       PDF line wrapping produces fragments joined with a space, e.g.:
+         "ZY-8501 5399"   → ZY-85015399
+         "ZY -85015450"   → ZY-85015450
+         "ZY-850154 85"   → ZY-85015485
+         "ZY-8 5015566"   → ZY-85015566
+       Merge any "ZY[-space]DIGITS[space]DIGITS" where the combined
+       digit string is exactly 8 characters. */
+    fullText = fullText.replace(/\bZY\s*-\s*(\d{0,7})\s+(\d{1,8})\b/g, function(m, p1, p2) {
+      var combined = p1 + p2;
+      if (combined.length === 8 && /^\d{8}$/.test(combined)) return 'ZY-' + combined;
+      return m;
+    });
+
     var matches = fullText.match(/ZY-\d{8}/g);
     if (!matches) return [];
     var freq = {};

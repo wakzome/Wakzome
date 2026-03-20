@@ -2509,19 +2509,15 @@
     /* 2 — Supabase: asíncrono, sin bloquear UI */
     tamSaveSessionSupabase(payload);
 
-    /* Indicador visual */
+    /* Indicador visual — local save confirmed immediately */
     if (!silent) {
       var stEl = document.getElementById('tam-session-status');
       var saveBtn = document.getElementById('tam-save-btn');
       if (saveBtn) saveBtn.classList.add('visible');
       if (stEl) {
-        stEl.textContent = '✓ guardado';
-        stEl.classList.add('saved');
+        stEl.textContent = '☁️ a guardar…';
+        stEl.classList.remove('saved');
         clearTimeout(stEl._hideTimer);
-        stEl._hideTimer = setTimeout(function(){
-          stEl.textContent = '';
-          stEl.classList.remove('saved');
-        }, 2500);
       }
     }
   }
@@ -2530,6 +2526,7 @@
     var sb = tamSB();
     if (!sb || tamSaveInFlight) return;
     tamSaveInFlight = true;
+    var ok = false;
     try {
       var row = {
         session_name: payload.name,
@@ -2538,15 +2535,29 @@
       };
       var check = await sb.from(TAM_SESSIONS_TABLE)
         .select('session_name').eq('session_name', payload.name).limit(1);
+      var res;
       if (check.data && check.data.length > 0) {
-        await sb.from(TAM_SESSIONS_TABLE)
+        res = await sb.from(TAM_SESSIONS_TABLE)
           .update({ saved_at: row.saved_at, data: row.data })
           .eq('session_name', payload.name);
       } else {
-        await sb.from(TAM_SESSIONS_TABLE).insert(row);
+        res = await sb.from(TAM_SESSIONS_TABLE).insert(row);
       }
-    } catch(e) { /* Supabase opcional — localStorage es el fallback */ }
+      ok = !(res && res.error);
+    } catch(e) { ok = false; }
     tamSaveInFlight = false;
+
+    /* Update the status indicator with cloud result */
+    var stEl = document.getElementById('tam-session-status');
+    if (stEl) {
+      stEl.textContent = ok ? '✓ guardado' : '✓ local';
+      stEl.className = ok ? 'saved' : 'local';
+      clearTimeout(stEl._hideTimer);
+      stEl._hideTimer = setTimeout(function(){
+        stEl.textContent = '';
+        stEl.className = '';
+      }, 2500);
+    }
   }
 
   /* Cargar desde localStorage */
@@ -4628,6 +4639,7 @@
       '#tam-session-name::placeholder { color:#ccc; }',
       '#tam-session-status { font-size:.68rem; font-weight:bold; color:#aaa; white-space:nowrap; }',
       '#tam-session-status.saved { color:#2a8a2a; }',
+      '#tam-session-status.local { color:#aaa; }',
       /* Save button hidden until session active */
       '#tam-save-btn { display:none; padding:5px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #2a8a2a; border-radius:8px; background:#fff; color:#2a8a2a; transition:background .15s,color .15s; white-space:nowrap; }',
       '#tam-save-btn:hover { background:#2a8a2a; color:#fff; }',

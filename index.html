@@ -2524,75 +2524,8 @@ tr { transition: background 0.15s ease; }
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════
-   SESSION — 10-min sliding window
-   On page load: set window.__wkzAutoLogin = true BEFORE
-   triggering the click, so shared.js skips animations.
-═══════════════════════════════════════════════════════════ */
-(function() {
-  var KEY = 'wkz_adm_s';
-  var TTL = 10 * 60 * 1000;
-
-  function save(pw) {
-    try { localStorage.setItem(KEY, JSON.stringify({ k: btoa(unescape(encodeURIComponent(pw))), t: Date.now() })); } catch(e) {}
-  }
-  function load() {
-    try {
-      var s = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (s && s.k && (Date.now() - s.t) < TTL) return decodeURIComponent(escape(atob(s.k)));
-    } catch(e) {}
-    return null;
-  }
-  function refresh() {
-    try {
-      var s = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (s && s.k) { s.t = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); }
-    } catch(e) {}
-  }
-
-  /* Save password when user manually logs in */
-  function bindSave() {
-    var btn = document.getElementById('key-submit');
-    var inp = document.getElementById('key-input');
-    if (btn) btn.addEventListener('click', function() {
-      if (inp && inp.value) save(inp.value);
-    }, true);
-    if (inp) inp.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && inp.value) save(inp.value);
-    }, true);
-  }
-
-  /* Auto-login: set flag + click as soon as login screen appears */
-  function watchLogin() {
-    var pw = load();
-    if (!pw) return;
-    var ls = document.getElementById('login-screen');
-    if (!ls) return;
-    var done = false;
-    var obs = new MutationObserver(function() {
-      if (!done && ls.classList.contains('visible')) {
-        done = true;
-        obs.disconnect();
-        var inp = document.getElementById('key-input');
-        var btn = document.getElementById('key-submit');
-        if (!inp || !btn) return;
-        inp.value = pw;
-        /* Tell shared.js to skip animations */
-        window.__wkzAutoLogin = true;
-        setTimeout(function() { btn.click(); }, 60);
-      }
-    });
-    obs.observe(ls, { attributes: true, attributeFilter: ['class'] });
-  }
-
-  ['click','keydown','touchstart'].forEach(function(ev) {
-    document.addEventListener(ev, refresh, { passive: true });
-  });
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { bindSave(); watchLogin(); });
-  } else { bindSave(); watchLogin(); }
-})();
+/* Clear any saved session — always require login on reload */
+try { localStorage.removeItem('wkz_adm_s'); } catch(_) {}
 
 /* ═══════════════════════════════════════════════════════════
    HAMBURGER + COMPACT HEADER

@@ -3292,6 +3292,19 @@
        DN references appear only once each, at the invoice footer.
        Strategy: the most-frequent ZY is the invoice itself — exclude it. */
     var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
+
+    /* ── Repair ZY codes split by PDF line-wrap ──
+       pdfjs joins each visual line with a space, fragmenting codes:
+         Case B/C: "ZY -85015450" or "ZY- 85015450"  → ZY-85015450
+         Case A:   "ZY-8501 5399" / "ZY-850154 85"   → ZY-85015399/85
+       Run B/C first (8 digits already together), then A (split digits). */
+    fullText = fullText.replace(/\bZY\s+-\s*(\d{8})\b/g, 'ZY-$1');
+    fullText = fullText.replace(/\bZY-(\d{1,7})\s+(\d{1,7})\b/g, function(m, p1, p2) {
+      var combined = p1 + p2;
+      if (combined.length === 8) return 'ZY-' + combined;
+      return m;
+    });
+
     var matches = fullText.match(/ZY-\d{8}/g);
     if (!matches) return [];
     var freq = {};
@@ -3857,19 +3870,33 @@
       if (!dnList.length) return; // invoice has no associated DNs listed
 
       var totalDNs    = dnList.length;
+      var expectedDNs = inv.shipPkgs || totalDNs;   // authoritative: packages declared in invoice
+      var parsedShort = totalDNs < expectedDNs;      // fewer codes found than declared
       var loadedDNs   = dnList.filter(function(zy){ return tamDeliveryNotes[zy]; });
       var missingDNs  = dnList.filter(function(zy){ return !tamDeliveryNotes[zy]; });
-      var allLoaded   = missingDNs.length === 0;
+      var allLoaded   = missingDNs.length === 0 && !parsedShort;
 
       /* ── Progress indicator ── */
       var progressHtml;
+
+      /* ── Warning: invoice declares more packages than DN codes parsed ── */
+      var parsedShortHtml = parsedShort
+        ? '<div class="tam-dnv-progress tam-dnv-partial" style="background:#fff3cd;border-color:#e0a800;">'
+            + '<span class="tam-dnv-prog-icon">⚠️</span>'
+            + '<span class="tam-dnv-prog-text">'
+            + tamEsc(inv.invoiceNo) + ' &mdash; a fatura declara <strong>' + expectedDNs + ' pacotes</strong>'
+            + ' mas apenas <strong>' + totalDNs + ' códigos DN</strong> foram encontrados no PDF.'
+            + ' Verifica se o ficheiro está completo.'
+            + '</span></div>'
+        : '';
+
       if (!allLoaded) {
-        progressHtml =
+        progressHtml = parsedShortHtml +
           '<div class="tam-dnv-progress tam-dnv-partial">' +
             '<span class="tam-dnv-prog-icon">📦</span>' +
             '<span class="tam-dnv-prog-text">' +
               tamEsc(inv.invoiceNo) + ' &mdash; ' +
-              '<strong>' + loadedDNs.length + ' / ' + totalDNs + '</strong> delivery notes carregadas' +
+              '<strong>' + loadedDNs.length + ' / ' + expectedDNs + '</strong> delivery notes carregadas' +
               (missingDNs.length ? ' &middot; falta: <span class="tam-dnv-missing">' + missingDNs.map(tamEsc).join(', ') + '</span>' : '') +
             '</span>' +
           '</div>';
@@ -3905,7 +3932,7 @@
             '<div class="tam-dnv-progress tam-dnv-ok">' +
               '<span class="tam-dnv-prog-icon">✓</span>' +
               '<span class="tam-dnv-prog-text">' +
-                tamEsc(inv.invoiceNo) + ' &mdash; todas as ' + totalDNs + ' DNs carregadas &middot; ' +
+                tamEsc(inv.invoiceNo) + ' &mdash; todas as ' + expectedDNs + ' DNs carregadas &middot; ' +
                 '<strong>quantidades confirmadas</strong> (' + inv.totalPieces + ' pcs)' +
               '</span>' +
             '</div>';

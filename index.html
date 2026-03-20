@@ -1491,7 +1491,24 @@ input, textarea { cursor: text !important; }
   #admin-header #admin-date { font-size: .8rem; }
   #admin-header .loading-dots { margin-top: 3px; margin-bottom: 3px; }
 
-  /* tab-nav hidden on mobile — hamburger handles navigation */
+  /* ── Tabs ── */
+  #tab-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: #fff;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    margin-bottom: 0; max-width: 100%;
+    scrollbar-width: none;
+    border-bottom: 2px solid #e6e6e6;
+  }
+  #tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn { padding: 8px 16px; font-size: .78rem; white-space: nowrap; }
+
+  /* push content below the fixed nav */
+  #admin-header { margin-top: 54px; }
 
   /* ── Tab panels ── */
   .tab-panel.active { overflow: visible !important; flex: none !important; min-height: 0; }
@@ -1830,10 +1847,10 @@ tr { transition: background 0.15s ease; }
 .login-bubble {
   position: absolute;
   border-radius: 50%;
-  border: 1.5px solid rgba(0,0,0,0.14);
+  border: 1.5px solid rgba(0,0,0,0.07);
   background: radial-gradient(circle at 35% 35%,
-    rgba(180,180,195,0.28),
-    rgba(160,160,180,0.10) 60%,
+    rgba(255,255,255,0.55),
+    rgba(200,200,210,0.08) 60%,
     transparent 100%);
   pointer-events: none;
   transform: scale(0);
@@ -1880,10 +1897,10 @@ tr { transition: background 0.15s ease; }
 }
 @media (prefers-color-scheme: dark) {
   .login-bubble {
-    border-color: rgba(255,255,255,0.11);
+    border-color: rgba(255,255,255,0.05);
     background: radial-gradient(circle at 35% 35%,
-      rgba(255,255,255,0.13),
-      rgba(200,200,220,0.05) 60%,
+      rgba(255,255,255,0.06),
+      rgba(180,180,200,0.02) 60%,
       transparent 100%);
   }
 }
@@ -1997,149 +2014,6 @@ tr { transition: background 0.15s ease; }
 }
 .tam-chk-ok  { color: #2a6a2a; }
 .tam-chk-err { color: #c00; }
-
-/* ══ ADMIN HEADER LAYOUT ══ */
-#admin-header-top {
-  display: flex; align-items: center;
-  justify-content: center; position: relative; width: 100%;
-}
-
-/* ══ HAMBURGER ══ */
-#admin-hamburger {
-  display: none; position: absolute; left: 0;
-  flex-direction: column; justify-content: center; align-items: center;
-  gap: 5px; width: 38px; height: 38px;
-  background: none; border: none; cursor: pointer;
-  padding: 6px; border-radius: 9px; color: #000; z-index: 1;
-  transition: background 0.15s;
-}
-#admin-hamburger span {
-  display: block; width: 18px; height: 1.5px;
-  background: currentColor; border-radius: 2px;
-}
-#admin-hamburger:hover { background: rgba(0,0,0,0.06); }
-
-@media (pointer: coarse), (max-width: 1024px) and (pointer: fine) {
-  #admin-hamburger { display: flex; }
-  #tab-nav { display: none !important; }
-}
-
-/* ══ COMPACT STICKY HEADER (touch/mobile) ══ */
-@media (pointer: coarse) {
-  html, body { overflow-y: auto !important; overflow-x: hidden; }
-
-  #admin-app {
-    position: static !important; height: auto !important;
-    min-height: 100vh; overflow: visible !important;
-    padding: 0 10px 60px;
-  }
-
-  /* sticky in flow — sticks to top as window scrolls */
-  #admin-header {
-    position: sticky !important;
-    top: 0 !important;
-    width: 100%; z-index: 200 !important;
-    background: #fff !important;
-    margin-top: 0 !important; margin-bottom: 16px !important;
-    padding: 12px 0 8px;
-    border-bottom: 1px solid transparent;
-    box-shadow: none;
-    /* ensure it's never hidden by the opacity animation */
-    opacity: 1 !important;
-    transition: padding 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  #admin-header.compact {
-    padding: 6px 0 5px !important;
-    border-color: rgba(0,0,0,0.08) !important;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.07) !important;
-  }
-  #admin-header.compact .logo-text {
-    font-size: 1.2rem !important;
-    line-height: 1 !important;
-    margin: 0 !important;
-  }
-  #admin-header.compact #admin-time,
-  #admin-header.compact #admin-date,
-  #admin-header.compact .loading-dots { display: none !important; }
-
-  /* tab panels flow naturally — window does the scrolling */
-  .tab-panel.active { overflow: visible !important; flex: none !important; }
-  #tab-horarios.active { overflow: visible !important; flex: none !important; }
-  #h-table-area {
-    overflow-x: auto !important; overflow-y: visible !important;
-    max-height: none !important; flex: none !important;
-    -webkit-overflow-scrolling: touch;
-  }
-  #h-dashboard, #saft-reminder, #r-conferir-fixed { display: none !important; }
-
-  @media (prefers-color-scheme: dark) {
-    #admin-header { background: #0d0d0d !important; }
-    #admin-header.compact {
-      border-color: rgba(255,255,255,0.08) !important;
-      box-shadow: 0 2px 14px rgba(0,0,0,0.3) !important;
-    }
-    #admin-hamburger { color: #e8e8e8 !important; }
-    #admin-hamburger:hover { background: rgba(255,255,255,0.08) !important; }
-  }
-}
-
-/* ══ MOBILE DRAWER ══ */
-#admin-mobile-menu {
-  display: none; position: fixed; inset: 0; z-index: 9000;
-}
-#admin-mobile-menu.open { display: block; }
-#admin-mobile-menu-backdrop {
-  position: absolute; inset: 0; background: rgba(0,0,0,0.45);
-  opacity: 0; transition: opacity 0.28s ease;
-}
-#admin-mobile-menu.open #admin-mobile-menu-backdrop { opacity: 1; }
-#admin-mobile-menu-panel {
-  position: absolute; top: 0; left: 0;
-  width: min(270px, 80vw); height: 100%;
-  background: #fff; box-shadow: 6px 0 40px rgba(0,0,0,0.14);
-  transform: translateX(-100%);
-  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-#admin-mobile-menu.open #admin-mobile-menu-panel { transform: translateX(0); }
-#admin-mobile-menu-hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 22px 20px 16px; border-bottom: 1px solid #efefef; flex-shrink: 0;
-}
-#admin-mobile-menu-logo {
-  font-size: 1.4rem; font-weight: 100; text-transform: lowercase;
-  letter-spacing: .08em; font-family: 'MontserratLight', sans-serif; color: #000;
-}
-#admin-mobile-menu-close {
-  width: 30px; height: 30px; display: flex; align-items: center;
-  justify-content: center; font-size: 1rem; background: none;
-  border: 1.5px solid #ddd; border-radius: 8px; cursor: pointer; color: #555;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-#admin-mobile-menu-close:hover { background: #555; color: #fff; border-color: #555; }
-#admin-mobile-menu-items {
-  flex: 1; display: flex; flex-direction: column; padding: 8px 0; overflow-y: auto;
-}
-.mobile-tab-btn {
-  display: flex; align-items: center; width: 100%; padding: 14px 24px;
-  font-size: .95rem; font-weight: 600; font-family: 'MontserratLight', sans-serif;
-  text-transform: lowercase; letter-spacing: .03em;
-  color: #000; background: none; border: none; cursor: pointer;
-  border-left: 3px solid transparent;
-  transition: background 0.15s, padding-left 0.2s;
-}
-.mobile-tab-btn:hover { background: #f5f5f5; padding-left: 30px; }
-.mobile-tab-btn.mobile-tab-active { background: #f0f0f0; border-left-color: #000; padding-left: 21px; }
-@media (prefers-color-scheme: dark) {
-  #admin-mobile-menu-panel { background: #111 !important; }
-  #admin-mobile-menu-hdr { border-color: #2a2a2a !important; }
-  #admin-mobile-menu-logo { color: #e8e8e8 !important; }
-  #admin-mobile-menu-close { border-color: #333 !important; color: #888 !important; }
-  #admin-mobile-menu-close:hover { background: #555 !important; color: #fff !important; border-color: #555 !important; }
-  .mobile-tab-btn { color: #aaa !important; }
-  .mobile-tab-btn:hover { background: #1a1a1a !important; color: #e8e8e8 !important; }
-  .mobile-tab-btn.mobile-tab-active { background: #1e1e1e !important; border-left-color: #e8e8e8 !important; color: #e8e8e8 !important; }
-}
 </style>
 </head>
 <body>
@@ -2210,12 +2084,7 @@ tr { transition: background 0.15s ease; }
 <!-- ═══ VISTA ADMIN (salários + recibos) ═══ -->
 <div id="admin-app">
   <div id="admin-header" class="reveal-item">
-    <div id="admin-header-top">
-      <button id="admin-hamburger" aria-label="abrir menu" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
-      <div class="logo-text" id="admin-logo" style="cursor:pointer;">wakzome</div>
-    </div>
+    <div class="logo-text" id="admin-logo" style="cursor:pointer;">wakzome</div>
     <div id="admin-time"></div>
     <div id="admin-date"></div>
     <div class="loading-dots"><span></span><span></span><span></span></div>
@@ -2503,100 +2372,5 @@ tr { transition: background 0.15s ease; }
 <script src="js/editor-pdf.js"></script>
 <script src="js/tam.js"></script>
 <script src="js/saft-reminder.js"></script>
-
-<!-- ═══ ADMIN MOBILE MENU ═══ -->
-<div id="admin-mobile-menu" aria-hidden="true">
-  <div id="admin-mobile-menu-backdrop"></div>
-  <nav id="admin-mobile-menu-panel">
-    <div id="admin-mobile-menu-hdr">
-      <span id="admin-mobile-menu-logo">wakzome</span>
-      <button id="admin-mobile-menu-close" aria-label="fechar">&times;</button>
-    </div>
-    <div id="admin-mobile-menu-items">
-      <button class="mobile-tab-btn mobile-tab-active" data-tab="salarios">salários</button>
-      <button class="mobile-tab-btn" data-tab="recibos">recibos</button>
-      <button class="mobile-tab-btn" data-tab="horarios">horários</button>
-      <button class="mobile-tab-btn" data-tab="ferias">férias</button>
-      <button class="mobile-tab-btn" data-tab="editor">editor pdf</button>
-      <button class="mobile-tab-btn" data-tab="tam">tam</button>
-    </div>
-  </nav>
-</div>
-
-<script>
-/* Clear any saved session — always require login on reload */
-try { localStorage.removeItem('wkz_adm_s'); } catch(_) {}
-
-/* ═══════════════════════════════════════════════════════════
-   HAMBURGER + COMPACT HEADER
-═══════════════════════════════════════════════════════════ */
-(function() {
-  var isTouch = window.matchMedia('(pointer: coarse)').matches;
-
-  function initHamburger() {
-    var burger   = document.getElementById('admin-hamburger');
-    var menu     = document.getElementById('admin-mobile-menu');
-    var backdrop = document.getElementById('admin-mobile-menu-backdrop');
-    var closeBtn = document.getElementById('admin-mobile-menu-close');
-    if (!burger || !menu) return;
-
-    function open()  {
-      menu.classList.add('open');
-      burger.setAttribute('aria-expanded','true');
-      document.body.style.overflow = 'hidden';
-    }
-    function close() {
-      menu.classList.remove('open');
-      burger.setAttribute('aria-expanded','false');
-      document.body.style.overflow = '';
-    }
-
-    burger.addEventListener('click', open);
-    closeBtn  && closeBtn.addEventListener('click', close);
-    backdrop  && backdrop.addEventListener('click', close);
-    document.addEventListener('keydown', function(e){ if(e.key==='Escape') close(); });
-
-    document.querySelectorAll('.mobile-tab-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var tab = btn.getAttribute('data-tab');
-        var desk = document.querySelector('.tab-btn[data-tab="'+tab+'"]');
-        if (desk) desk.click();
-        document.querySelectorAll('.mobile-tab-btn').forEach(function(b){
-          b.classList.toggle('mobile-tab-active', b===btn);
-        });
-        close();
-      });
-    });
-    document.querySelectorAll('.tab-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var tab = btn.getAttribute('data-tab');
-        document.querySelectorAll('.mobile-tab-btn').forEach(function(b){
-          b.classList.toggle('mobile-tab-active', b.getAttribute('data-tab')===tab);
-        });
-      });
-    });
-  }
-
-  function initCompact() {
-    if (!isTouch) return;
-    var hdr = document.getElementById('admin-header');
-    if (!hdr) return;
-    function check() { hdr.classList.toggle('compact', window.scrollY > 80); }
-    window.addEventListener('scroll', check, { passive: true });
-    /* Also re-check when admin-app becomes visible */
-    var app = document.getElementById('admin-app');
-    if (app) {
-      new MutationObserver(function(){
-        if (app.classList.contains('show')) check();
-      }).observe(app, { attributes: true, attributeFilter: ['class'] });
-    }
-    check();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function(){ initHamburger(); initCompact(); });
-  } else { initHamburger(); initCompact(); }
-})();
-</script>
 </body>
 </html>

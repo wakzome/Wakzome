@@ -1908,19 +1908,16 @@ tr { transition: background 0.15s ease; }
 #login-screen > *:not(.login-bubble) { position: relative; z-index: 1; }
 
 /* ══ HAMBURGER MENU (mobile/tablet ≤1024px) ══ */
-#admin-header { position: relative; }
-
 #admin-menu-btn {
   display: none;
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  position: fixed;
+  left: 14px;
+  top: 14px;
   background: none;
   border: none;
   cursor: pointer !important;
-  padding: 6px 8px;
-  z-index: 10;
+  padding: 7px 8px;
+  z-index: 998;
   flex-direction: column;
   gap: 5px;
   align-items: center;
@@ -2183,10 +2180,11 @@ tr { transition: background 0.15s ease; }
 
 <!-- ═══ VISTA ADMIN (salários + recibos) ═══ -->
 <div id="admin-app">
+  <button id="admin-menu-btn" aria-label="menu" title="menu">
+    <span></span><span></span><span></span>
+  </button>
+
   <div id="admin-header" class="reveal-item">
-    <button id="admin-menu-btn" aria-label="menu" title="menu">
-      <span></span><span></span><span></span>
-    </button>
     <div class="logo-text" id="admin-logo" style="cursor:pointer;">wakzome</div>
     <div id="admin-time"></div>
     <div id="admin-date"></div>

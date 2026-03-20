@@ -34,6 +34,7 @@
 
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var TAM_UNDO_MAX          = 50;         // max undo steps
+  var tamCollapseState      = {};         // { inv_N: true (collapsed), distrib: true }
 
   /* ── Undo/Redo helpers ── */
   function tamSnapshotBoxes() {
@@ -114,6 +115,28 @@
     if (undoBtn) undoBtn.disabled = !tamUndoStack.length;
     if (redoBtn) redoBtn.disabled = !tamRedoStack.length;
   }
+
+  /* ── Collapse / expand invoice blocks and distribution area ── */
+  function tamApplyCollapseState() {
+    // Multi-invoice blocks
+    tamInvoices.forEach(function(_, idx) {
+      var block = document.getElementById('tam-invoice-block-' + idx);
+      if (!block) return;
+      var collapsed = !!tamCollapseState['inv_' + idx];
+      block.classList.toggle('tam-inv-collapsed', collapsed);
+      var btn = block.querySelector('.tam-inv-toggle-btn');
+      if (btn) btn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
+    });
+    // Single invoice
+    var singleWrap = document.getElementById('tam-results-wrap');
+    var singleToggleBtn = document.getElementById('tam-single-toggle-btn');
+    if (singleWrap) {
+      var sc = !!tamCollapseState['inv_0'];
+      singleWrap.classList.toggle('tam-single-inv-collapsed', sc);
+      if (singleToggleBtn) singleToggleBtn.innerHTML = sc ? '&#9654;' : '&#9660;';
+    }
+  }
+
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -737,6 +760,17 @@
       });
       meta.appendChild(singleQuick);
 
+      var singleToggle = document.createElement('button');
+      singleToggle.className = 'tam-inv-toggle-btn tam-single-toggle-btn';
+      singleToggle.id = 'tam-single-toggle-btn';
+      singleToggle.title = 'expandir / minimizar';
+      singleToggle.innerHTML = tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;';
+      singleToggle.addEventListener('click', function(){
+        tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
+        tamApplyCollapseState();
+      });
+      meta.appendChild(singleToggle);
+
       var singleEdit = document.createElement('button');
       singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
       singleEdit.textContent = tamEditMode[0] ? '✓ fechar edição' : '✏ editar tabela';
@@ -764,6 +798,7 @@
       } else {
         tamRenderInvoiceTable(tamInvoices[0], wrap, 0);
       }
+      tamApplyCollapseState();
     } else {
       meta.style.display = 'none';
       ban.style.display  = 'none';
@@ -790,6 +825,7 @@
             '</div>';
 
         hdr.innerHTML =
+          '<button class="tam-inv-toggle-btn" data-inv="' + idx + '" title="expandir / minimizar">&#9660;</button>' +
           '<span class="tam-inv-num">' + tamEsc(r.invoiceNo) + '</span>' +
           '<span class="tam-inv-meta">' + tamEsc(r.invoiceDate) + ' · ' +
           r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
@@ -810,6 +846,11 @@
             var mode = btn.getAttribute('data-mode');
             tamQuickDistribInvoice(i, mode);
           });
+        });
+        hdr.querySelector('.tam-inv-toggle-btn').addEventListener('click', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-toggle-btn').getAttribute('data-inv'));
+          tamCollapseState['inv_' + i] = !tamCollapseState['inv_' + i];
+          tamApplyCollapseState();
         });
         hdr.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-edit-btn').getAttribute('data-inv'));
@@ -855,6 +896,7 @@
           wrap.appendChild(sep);
         }
       });
+      tamApplyCollapseState();
     }
   }
 
@@ -1545,16 +1587,33 @@
         '<button class="tam-quick-btn tam-guia-all-btn" id="tam-guia-all-btn">📋 Guía consolidada</button>' +
       '</div>';
 
+    var distribCollapsed = !!tamCollapseState['distrib'];
     area.innerHTML =
       '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
-      '<div class="tam-rec-area">' +
+      '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
         '<div class="tam-rec-area-title">' +
+          '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" title="expandir / minimizar" style="margin-right:8px;">' +
+            (distribCollapsed ? '&#9654;' : '&#9660;') +
+          '</button>' +
           tamInvoices.length + ' fatura(s) · ' + consolidatedForSummary.length + ' referências' +
           (quickCount > 0 ? ' · ' + quickCount + ' com distribuição rápida' : '') +
         '</div>' +
-        globalBar +
-        tableHtml +
+        '<div class="tam-rec-collapsible">' +
+          globalBar +
+          tableHtml +
+        '</div>' +
       '</div>';
+
+    // ── BIND DISTRIBUTION TOGGLE ─────────────────────────────────
+    (function(){
+      var recToggleBtn = area.querySelector('#tam-rec-toggle-btn');
+      if (recToggleBtn) recToggleBtn.addEventListener('click', function(){
+        tamCollapseState['distrib'] = !tamCollapseState['distrib'];
+        var recArea2 = area.querySelector('.tam-rec-area');
+        if (recArea2) recArea2.classList.toggle('tam-rec-collapsed', !!tamCollapseState['distrib']);
+        recToggleBtn.innerHTML = tamCollapseState['distrib'] ? '&#9654;' : '&#9660;';
+      });
+    })();
 
     // ── BIND GUIA CONSOLIDADA ────────────────────────────────
     (function(){
@@ -3233,19 +3292,6 @@
        DN references appear only once each, at the invoice footer.
        Strategy: the most-frequent ZY is the invoice itself — exclude it. */
     var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
-
-    /* ── Repair ZY codes split by PDF line-wrap ──
-       pdfjs joins each visual line with a space, fragmenting codes:
-         Case B/C: "ZY -85015450" or "ZY- 85015450"  → ZY-85015450
-         Case A:   "ZY-8501 5399" / "ZY-850154 85"   → ZY-85015399/85
-       Run B/C first (8 digits already together), then A (split digits). */
-    fullText = fullText.replace(/\bZY\s+-\s*(\d{8})\b/g, 'ZY-$1');
-    fullText = fullText.replace(/\bZY-(\d{1,7})\s+(\d{1,7})\b/g, function(m, p1, p2) {
-      var combined = p1 + p2;
-      if (combined.length === 8) return 'ZY-' + combined;
-      return m;
-    });
-
     var matches = fullText.match(/ZY-\d{8}/g);
     if (!matches) return [];
     var freq = {};
@@ -3811,33 +3857,19 @@
       if (!dnList.length) return; // invoice has no associated DNs listed
 
       var totalDNs    = dnList.length;
-      var expectedDNs = inv.shipPkgs || totalDNs;   // authoritative: packages declared in invoice
-      var parsedShort = totalDNs < expectedDNs;      // fewer codes found than declared
       var loadedDNs   = dnList.filter(function(zy){ return tamDeliveryNotes[zy]; });
       var missingDNs  = dnList.filter(function(zy){ return !tamDeliveryNotes[zy]; });
-      var allLoaded   = missingDNs.length === 0 && !parsedShort;
+      var allLoaded   = missingDNs.length === 0;
 
       /* ── Progress indicator ── */
       var progressHtml;
-
-      /* ── Warning: invoice declares more packages than DN codes parsed ── */
-      var parsedShortHtml = parsedShort
-        ? '<div class="tam-dnv-progress tam-dnv-partial" style="background:#fff3cd;border-color:#e0a800;">'
-            + '<span class="tam-dnv-prog-icon">⚠️</span>'
-            + '<span class="tam-dnv-prog-text">'
-            + tamEsc(inv.invoiceNo) + ' &mdash; a fatura declara <strong>' + expectedDNs + ' pacotes</strong>'
-            + ' mas apenas <strong>' + totalDNs + ' códigos DN</strong> foram encontrados no PDF.'
-            + ' Verifica se o ficheiro está completo.'
-            + '</span></div>'
-        : '';
-
       if (!allLoaded) {
-        progressHtml = parsedShortHtml +
+        progressHtml =
           '<div class="tam-dnv-progress tam-dnv-partial">' +
             '<span class="tam-dnv-prog-icon">📦</span>' +
             '<span class="tam-dnv-prog-text">' +
               tamEsc(inv.invoiceNo) + ' &mdash; ' +
-              '<strong>' + loadedDNs.length + ' / ' + expectedDNs + '</strong> delivery notes carregadas' +
+              '<strong>' + loadedDNs.length + ' / ' + totalDNs + '</strong> delivery notes carregadas' +
               (missingDNs.length ? ' &middot; falta: <span class="tam-dnv-missing">' + missingDNs.map(tamEsc).join(', ') + '</span>' : '') +
             '</span>' +
           '</div>';
@@ -3873,7 +3905,7 @@
             '<div class="tam-dnv-progress tam-dnv-ok">' +
               '<span class="tam-dnv-prog-icon">✓</span>' +
               '<span class="tam-dnv-prog-text">' +
-                tamEsc(inv.invoiceNo) + ' &mdash; todas as ' + expectedDNs + ' DNs carregadas &middot; ' +
+                tamEsc(inv.invoiceNo) + ' &mdash; todas as ' + totalDNs + ' DNs carregadas &middot; ' +
                 '<strong>quantidades confirmadas</strong> (' + inv.totalPieces + ' pcs)' +
               '</span>' +
             '</div>';
@@ -4650,7 +4682,26 @@
       '.tam-conflict-ref { font-weight:bold; color:#c00; }',
 
       /* ── Multi-factura: bloques ── */
-      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:8px; border:1px solid #e6e6e6; border-radius:14px; overflow:visible; }',
+            /* ── Collapse toggle button ── */
+      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#aaa; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
+      '.tam-inv-toggle-btn:hover { color:#000; }',
+
+      /* ── Invoice block collapsed state ── */
+      '.tam-inv-collapsed .tam-inv-banner { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap thead { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap tbody { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
+
+      /* ── Single invoice collapsed state ── */
+      '.tam-single-inv-collapsed thead { display:none!important; }',
+      '.tam-single-inv-collapsed tbody { display:none!important; }',
+      '.tam-single-inv-collapsed tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
+
+      /* ── Distribution area collapsed state ── */
+      '.tam-rec-area-title { display:flex; align-items:center; }',
+      '.tam-rec-collapsed .tam-rec-collapsible { display:none!important; }',
+
+'.tam-invoice-block { width:100%; max-width:960px; margin-bottom:8px; border:1px solid #e6e6e6; border-radius:14px; overflow:visible; }',
       '.tam-invoice-block-header { display:flex; align-items:center; gap:16px; padding:10px 16px; background:#f8f8f8; border-bottom:1px solid #e6e6e6; flex-wrap:wrap; }',
       '.tam-inv-num { font-size:.88rem; font-weight:bold; color:#000; }',
       '.tam-inv-meta { font-size:.75rem; color:#aaa; font-weight:600; flex:1; }',
@@ -5420,7 +5471,9 @@
       '.tam-ref-over td{background:#2a0808!important;}',
       '.tam-ref-over .tam-rec-ref-col,.tam-ref-over .tam-rec-total-col{background:#3a0a0a!important;}',
       '.tam-ref-over td strong{color:#f48!important;}',
-      '.tam-invoice-block{border-color:#2a2a2a!important;background:#111!important;}',
+            '.tam-inv-toggle-btn{color:#444!important;}',
+      '.tam-inv-toggle-btn:hover{color:#e8e8e8!important;}',
+'.tam-invoice-block{border-color:#2a2a2a!important;background:#111!important;}',
       '.tam-invoice-block-header{background:#161616!important;border-color:#2a2a2a!important;}',
       '.tam-inv-num,.tam-inv-total{color:#e8e8e8!important;}',
       '}'

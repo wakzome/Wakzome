@@ -2509,15 +2509,19 @@
     /* 2 — Supabase: asíncrono, sin bloquear UI */
     tamSaveSessionSupabase(payload);
 
-    /* Indicador visual — local save confirmed immediately */
+    /* Indicador visual */
     if (!silent) {
       var stEl = document.getElementById('tam-session-status');
       var saveBtn = document.getElementById('tam-save-btn');
       if (saveBtn) saveBtn.classList.add('visible');
       if (stEl) {
-        stEl.textContent = '☁️ a guardar…';
-        stEl.classList.remove('saved');
+        stEl.textContent = '✓ guardado';
+        stEl.classList.add('saved');
         clearTimeout(stEl._hideTimer);
+        stEl._hideTimer = setTimeout(function(){
+          stEl.textContent = '';
+          stEl.classList.remove('saved');
+        }, 2500);
       }
     }
   }
@@ -2526,7 +2530,6 @@
     var sb = tamSB();
     if (!sb || tamSaveInFlight) return;
     tamSaveInFlight = true;
-    var ok = false;
     try {
       var row = {
         session_name: payload.name,
@@ -2535,6 +2538,7 @@
       };
       var check = await sb.from(TAM_SESSIONS_TABLE)
         .select('session_name').eq('session_name', payload.name).limit(1);
+      if (check.error) { console.error('TAM sessions SELECT:', check.error); }
       var res;
       if (check.data && check.data.length > 0) {
         res = await sb.from(TAM_SESSIONS_TABLE)
@@ -2543,21 +2547,10 @@
       } else {
         res = await sb.from(TAM_SESSIONS_TABLE).insert(row);
       }
-      ok = !(res && res.error);
-    } catch(e) { ok = false; }
+      if (res && res.error) { console.error('TAM sessions WRITE:', res.error); }
+      else { console.log('TAM sessions: guardado en Supabase OK —', payload.name); }
+    } catch(e) { console.error('TAM sessions EXCEPTION:', e); }
     tamSaveInFlight = false;
-
-    /* Update the status indicator with cloud result */
-    var stEl = document.getElementById('tam-session-status');
-    if (stEl) {
-      stEl.textContent = ok ? '✓ guardado' : '✓ local';
-      stEl.className = ok ? 'saved' : 'local';
-      clearTimeout(stEl._hideTimer);
-      stEl._hideTimer = setTimeout(function(){
-        stEl.textContent = '';
-        stEl.className = '';
-      }, 2500);
-    }
   }
 
   /* Cargar desde localStorage */
@@ -2575,6 +2568,7 @@
     if (!sb) return local;
     try {
       var res = await sb.from(TAM_SESSIONS_TABLE).select('session_name, saved_at, data').order('saved_at', { ascending: false });
+      if (res.error) { console.error('TAM sessions READ:', res.error); }
       if (res.data && res.data.length) {
         res.data.forEach(function(row){
           try {
@@ -2828,8 +2822,10 @@
       var rows = newRefs.map(function(r){
         return { ref: r.toUpperCase(), first_seen: new Date().toISOString(), source: 'auto' };
       });
-      await sb.from(TAM_REFS_TABLE).upsert(rows, { onConflict: 'ref', ignoreDuplicates: true });
-    } catch(e) {}
+      var rRes = await sb.from(TAM_REFS_TABLE).upsert(rows, { onConflict: 'ref', ignoreDuplicates: true });
+      if (rRes && rRes.error) { console.error('TAM refs WRITE:', rRes.error); }
+      else { console.log('TAM refs: guardado OK —', rows.length, 'refs'); }
+    } catch(e) { console.error('TAM refs EXCEPTION:', e); }
   }
 
   // Cargar referencias aprendidas al inicializar el módulo
@@ -4639,7 +4635,6 @@
       '#tam-session-name::placeholder { color:#ccc; }',
       '#tam-session-status { font-size:.68rem; font-weight:bold; color:#aaa; white-space:nowrap; }',
       '#tam-session-status.saved { color:#2a8a2a; }',
-      '#tam-session-status.local { color:#aaa; }',
       /* Save button hidden until session active */
       '#tam-save-btn { display:none; padding:5px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #2a8a2a; border-radius:8px; background:#fff; color:#2a8a2a; transition:background .15s,color .15s; white-space:nowrap; }',
       '#tam-save-btn:hover { background:#2a8a2a; color:#fff; }',

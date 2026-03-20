@@ -2311,9 +2311,54 @@ html.wz-night #glow-layer-2 {
     radial-gradient(circle at 65% 20%, rgba(30,50,120,0.06) 0%, transparent 40%),
     radial-gradient(circle at 25% 80%, rgba(20,40,100,0.04) 0%, transparent 40%) !important;
 }
-/* Night mode: subtle blue tint on text */
-html.wz-night .logo-text  { color: #c8d4f0 !important; }
-html.wz-night #current-time { color: #c8d4f0 !important; }
+/* ── Night mode: full contrast overrides (dark bg → light text) ── */
+html.wz-night *:not(script):not(style) {
+  color: #d0d8e8 !important;
+  border-color: #1e2a3a !important;
+}
+/* Backgrounds that need to invert */
+html.wz-night #login-screen,
+html.wz-night #admin-app,
+html.wz-night #intro-screen  { background: #080c14 !important; }
+html.wz-night table           { background: transparent !important; }
+html.wz-night th              { background: #111a28 !important; color: #a8b8d0 !important; }
+html.wz-night td              { background: #0c1420 !important; color: #d0d8e8 !important; }
+html.wz-night tr:hover td     { background: #131e30 !important; }
+html.wz-night .today-col      { background: #1a2840 !important; }
+html.wz-night .tab-btn        { color: #607090 !important; background: transparent !important; }
+html.wz-night .tab-btn.active { color: #c8d4f0 !important; border-bottom-color: #c8d4f0 !important; }
+html.wz-night #tab-nav        { border-bottom-color: #1e2a3a !important; }
+html.wz-night button:not(.tab-btn),
+html.wz-night .upload-box,
+html.wz-night #key-submit     { background: #0c1420 !important; border-color: #2a3a54 !important; color: #c0ccde !important; }
+html.wz-night #key-input      { color: #d0d8e8 !important; border-bottom-color: #3a4a64 !important; background: transparent !important; }
+html.wz-night #key-input::placeholder { color: #3a4a64 !important; }
+html.wz-night .logo-text      { color: #c8d4f0 !important; }
+html.wz-night #current-time,
+html.wz-night #current-time-main,
+html.wz-night #current-date,
+html.wz-night #current-date-main,
+html.wz-night #admin-time,
+html.wz-night #admin-date     { color: #7890b0 !important; }
+html.wz-night .loading-dots span { background: #3a4a64 !important; }
+html.wz-night #login-divider  { background: #2a3a54 !important; opacity: 1 !important; }
+html.wz-night .dash-card      { background: #0e1826 !important; border-color: #1e2a3a !important; }
+html.wz-night .f-card         { background: #0e1826 !important; border-color: #1e2a3a !important; }
+html.wz-night #r-config-section { border-color: #1e2a3a !important; background: transparent !important; }
+html.wz-night #r-config-fields input,
+html.wz-night #ed-export-filename { background: #0c1420 !important; border-color: #2a3a54 !important; }
+html.wz-night #recibos-overlay,
+html.wz-night #recibos-overlay-bar { background: #080c14 !important; }
+html.wz-night #ed-toolbar     { background: #0e1826 !important; border-bottom-color: #1e2a3a !important; }
+html.wz-night #ed-toolbar button,
+html.wz-night #ed-toolbar label[for] { background: #0c1420 !important; border-color: #2a3a54 !important; color: #a0b0c8 !important; }
+html.wz-night #ed-canvas-wrap { background: #060a10 !important; }
+html.wz-night #admin-menu-drawer { background: #080c14 !important; }
+html.wz-night .drawer-tab-btn { color: #6070a0 !important; }
+html.wz-night .drawer-tab-btn.active { border-left-color: #c8d4f0 !important; color: #c8d4f0 !important; }
+html.wz-night #admin-menu-btn span { background: #c8d4f0 !important; }
+html.wz-night body::before    { opacity: 0.055 !important; }
+html.wz-night #sweep-line     { background: #c8d4f0 !important; }
 
 /* ─── 8. MATERIAL DEPTH / PARALLAX ─── */
 /* Soft inner-shadow on tables for depth */

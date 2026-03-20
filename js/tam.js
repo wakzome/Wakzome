@@ -118,22 +118,27 @@
 
   /* ── Collapse / expand invoice blocks and distribution area ── */
   function tamApplyCollapseState() {
-    // Multi-invoice blocks
-    tamInvoices.forEach(function(_, idx) {
-      var block = document.getElementById('tam-invoice-block-' + idx);
-      if (!block) return;
-      var collapsed = !!tamCollapseState['inv_' + idx];
-      block.classList.toggle('tam-inv-collapsed', collapsed);
-      var btn = block.querySelector('.tam-inv-toggle-btn');
-      if (btn) btn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
-    });
-    // Single invoice
-    var singleWrap = document.getElementById('tam-results-wrap');
-    var singleToggleBtn = document.getElementById('tam-single-toggle-btn');
-    if (singleWrap) {
-      var sc = !!tamCollapseState['inv_0'];
-      singleWrap.classList.toggle('tam-single-inv-collapsed', sc);
-      if (singleToggleBtn) singleToggleBtn.innerHTML = sc ? '&#9654;' : '&#9660;';
+    if (tamInvoices.length === 1) {
+      // Single invoice — toggle class on the results wrap (contains one table)
+      var singleWrap = document.getElementById('tam-results-wrap');
+      var singleToggleBtn = document.getElementById('tam-single-toggle-btn');
+      if (singleWrap) {
+        var sc = !!tamCollapseState['inv_0'];
+        singleWrap.classList.toggle('tam-single-inv-collapsed', sc);
+        if (singleToggleBtn) singleToggleBtn.innerHTML = sc ? '&#9654;' : '&#9660;';
+      }
+    } else {
+      // Multi-invoice — each block is independent; ensure wrap never has single-mode class
+      var wrap = document.getElementById('tam-results-wrap');
+      if (wrap) wrap.classList.remove('tam-single-inv-collapsed');
+      tamInvoices.forEach(function(_, idx) {
+        var block = document.getElementById('tam-invoice-block-' + idx);
+        if (!block) return;
+        var collapsed = !!tamCollapseState['inv_' + idx];
+        block.classList.toggle('tam-inv-collapsed', collapsed);
+        var btn = block.querySelector('.tam-inv-toggle-btn');
+        if (btn) btn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
+      });
     }
   }
 

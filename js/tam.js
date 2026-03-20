@@ -170,9 +170,29 @@
         },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) { console.warn('TAM Motor D HTTP', res.status); return null; }
+      if (!res.ok) {
+        /* Try to detect model deprecation from the response body */
+        try {
+          var errBody = await res.clone().json();
+          var errTxt  = JSON.stringify(errBody).toLowerCase();
+          if (/model_not_found|deprecated|not_supported|invalid_model|model.*retired/i.test(errTxt)) {
+            tamMotorDSetDeprecated(true);
+          }
+        } catch(_) {}
+        console.warn('TAM Motor D HTTP', res.status);
+        return null;
+      }
       var data = await res.json();
-      if (!data.ok) { console.warn('TAM Motor D error', data.error, data.raw || ''); return null; }
+      if (!data.ok) {
+        var rawTxt = (data.error || '') + (data.raw || '');
+        if (/model_not_found|deprecated|not_supported|invalid_model|model.*retired/i.test(rawTxt)) {
+          tamMotorDSetDeprecated(true);
+        }
+        console.warn('TAM Motor D error', data.error, data.raw || '');
+        return null;
+      }
+      /* Success — clear any deprecation warning */
+      tamMotorDSetDeprecated(false);
       /* Track cost */
       var cost = payload.mode === 'photo' ? 0.010 : payload.mode === 'invoice' ? 0.014 : 0.006;
       tamMotorDCost = Math.round((tamMotorDCost + cost) * 1000) / 1000;
@@ -202,6 +222,82 @@
       el.className = 'tam-motord-spin';
     }
   }
+
+  /* Show/hide the "update Motor D model" badge in the session bar */
+  function tamMotorDSetDeprecated(isDeprecated) {
+    /* Persist state so the badge survives re-renders */
+    try { localStorage.setItem('tam_motord_deprecated', isDeprecated ? '1' : '0'); } catch(_) {}
+    var badge = document.getElementById('tam-motord-update-badge');
+    if (isDeprecated) {
+      if (!badge) {
+        badge = document.createElement('button');
+        badge.id = 'tam-motord-update-badge';
+        badge.className = 'tam-motord-update-badge';
+        badge.innerHTML = '⚠ Motor D · actualizar modelo';
+        badge.title = 'O modelo Claude configurado foi descontinuado. Clica para instruções.';
+        badge.addEventListener('click', tamMotorDShowUpdateInstructions);
+        var bar = document.getElementById('tam-session-bar');
+        if (bar) bar.appendChild(badge);
+      }
+      badge.style.display = 'inline-flex';
+    } else {
+      if (badge) badge.style.display = 'none';
+    }
+  }
+
+  function tamMotorDShowUpdateInstructions() {
+    var old = document.getElementById('tam-motord-update-modal');
+    if (old) old.parentNode.removeChild(old);
+    var modal = document.createElement('div');
+    modal.id = 'tam-motord-update-modal';
+    modal.innerHTML =
+      '<div id="tam-motord-update-backdrop"></div>' +
+      '<div id="tam-motord-update-panel">' +
+        '<div id="tam-motord-update-hdr">' +
+          '<span>🤖 Motor D · actualizar modelo</span>' +
+          '<button id="tam-motord-update-close">&times;</button>' +
+        '</div>' +
+        '<div id="tam-motord-update-body">' +
+          '<p>O modelo Claude configurado foi <strong>descontinuado</strong> pela Anthropic.</p>' +
+          '<p>Para corrigir, segue estes passos:</p>' +
+          '<ol>' +
+            '<li>Abre <a href="https://supabase.com/dashboard" target="_blank">supabase.com/dashboard</a></li>' +
+            '<li>Edge Functions → <strong>Motor-D</strong> → Code</li>' +
+            '<li>Localiza a linha:<br><code>model: claude-sonnet-4-...</code></li>' +
+            '<li>Substitui pelo modelo mais recente disponível em<br>' +
+              '<a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → Models</li>' +
+            '<li>Clica <strong>Deploy function</strong></li>' +
+          '</ol>' +
+          '<p style="margin-top:12px;font-size:.78rem;color:#888;">Enquanto não for atualizado, os motores A/B/C continuam a funcionar normalmente.</p>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    requestAnimationFrame(function(){ modal.classList.add('tam-motord-update-visible'); });
+    function close() {
+      modal.classList.remove('tam-motord-update-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 250);
+    }
+    modal.querySelector('#tam-motord-update-backdrop').addEventListener('click', close);
+    modal.querySelector('#tam-motord-update-close').addEventListener('click', close);
+    document.addEventListener('keydown', function esc(e){
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+    });
+  }
+
+  /* Restore badge state on load */
+  (function() {
+    try {
+      if (localStorage.getItem('tam_motord_deprecated') === '1') {
+        /* Wait for DOM to be ready */
+        var t = setInterval(function() {
+          if (document.getElementById('tam-session-bar')) {
+            clearInterval(t);
+            tamMotorDSetDeprecated(true);
+          }
+        }, 200);
+      }
+    } catch(_) {}
+  })();
 
   /* Apply Motor D invoice result — resolves CONFLICT refs */
   function tamApplyMotorDInvoice(result, md) {
@@ -5103,6 +5199,36 @@
 
       /* ── Motor D ── */
       '#tam-motord-spin { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(16px); background:#1a0a2e; color:#c4b5fd; padding:9px 20px; border-radius:12px; font-size:.82rem; font-family:MontserratLight,sans-serif; font-weight:bold; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:20001; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,.45); }',
+
+      /* ── Motor D update badge ── */
+      '.tam-motord-update-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; font-size:.7rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #c05000; border-radius:8px; background:#fff8f0; color:#c05000; transition:background .13s,color .13s; white-space:nowrap; }',
+      '.tam-motord-update-badge:hover { background:#c05000; color:#fff; }',
+
+      /* ── Motor D update modal ── */
+      '#tam-motord-update-modal { position:fixed; inset:0; z-index:10100; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#tam-motord-update-modal.tam-motord-update-visible { opacity:1; pointer-events:auto; }',
+      '#tam-motord-update-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.5); }',
+      '#tam-motord-update-panel { position:relative; z-index:1; width:min(480px,94vw); background:#fff; border-radius:16px; box-shadow:0 16px 60px rgba(0,0,0,.28); overflow:hidden; transform:translateY(10px); transition:transform .22s ease; font-family:MontserratLight,sans-serif; }',
+      '#tam-motord-update-modal.tam-motord-update-visible #tam-motord-update-panel { transform:translateY(0); }',
+      '#tam-motord-update-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fff8f0; border-bottom:1px solid #f0d0b0; font-size:.84rem; font-weight:bold; color:#c05000; }',
+      '#tam-motord-update-close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:1rem; background:none; border:1.5px solid #e0a080; border-radius:7px; cursor:pointer; color:#c05000; transition:background .12s; }',
+      '#tam-motord-update-close:hover { background:#c05000; color:#fff; border-color:#c05000; }',
+      '#tam-motord-update-body { padding:20px 22px; font-size:.85rem; font-weight:600; color:#333; line-height:1.7; }',
+      '#tam-motord-update-body p { margin:0 0 10px; }',
+      '#tam-motord-update-body ol { margin:0 0 0 18px; padding:0; }',
+      '#tam-motord-update-body li { margin-bottom:8px; }',
+      '#tam-motord-update-body code { background:#f5f5f5; border:1px solid #e0e0e0; border-radius:5px; padding:2px 7px; font-family:monospace; font-size:.82rem; color:#555; }',
+      '#tam-motord-update-body a { color:#1565c0; font-weight:bold; }',
+      '@media(prefers-color-scheme:dark){',
+      '.tam-motord-update-badge{background:#1a0800!important;border-color:#c05000!important;color:#e07040!important;}',
+      '.tam-motord-update-badge:hover{background:#c05000!important;color:#fff!important;}',
+      '#tam-motord-update-panel{background:#111!important;}',
+      '#tam-motord-update-hdr{background:#1a0800!important;border-color:#3a1800!important;color:#e07040!important;}',
+      '#tam-motord-update-close{border-color:#3a1800!important;color:#e07040!important;}',
+      '#tam-motord-update-close:hover{background:#c05000!important;color:#fff!important;border-color:#c05000!important;}',
+      '#tam-motord-update-body{color:#e0e0e0!important;}',
+      '#tam-motord-update-body code{background:#1a1a1a!important;border-color:#2a2a2a!important;color:#aaa!important;}',
+      '}',
       '#tam-motord-spin.tam-motord-spin-on { opacity:1; transform:translateX(-50%) translateY(0); }',
       '.tam-badge-motord { background:#7c3aed; }',
       /* Pre-filled inputs from Motor D */

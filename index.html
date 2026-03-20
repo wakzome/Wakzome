@@ -1491,7 +1491,7 @@ input, textarea { cursor: text !important; }
   #admin-header #admin-date { font-size: .8rem; }
   #admin-header .loading-dots { margin-top: 3px; margin-bottom: 3px; }
 
-  /* ── Tabs: hidden on touch/mobile — hamburger handles navigation ── */
+  /* Tab-nav hidden on mobile — hamburger handles navigation */
   .tab-btn { padding: 8px 16px; font-size: .78rem; white-space: nowrap; }
 
   /* ── Tab panels ── */
@@ -1593,7 +1593,9 @@ input, textarea { cursor: text !important; }
   .upload-box { min-height: 90px; }
 }
 
-/* MOBILE LANDSCAPE — now handled by the pointer:coarse block above */
+/* MOBILE LANDSCAPE — handled by pointer:coarse block */
+
+}
 
 /* ══════════════════════════════════════════════════════════
    REVEAL ANIMATIONS
@@ -1967,99 +1969,128 @@ tr { transition: background 0.15s ease; }
 .tam-chk-ok  { color: #2a6a2a; }
 .tam-chk-err { color: #c00; }
 
-/* ══ ADMIN HEADER — sticky compact on scroll ══ */
-#admin-header {
-  width: 100%;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  transition: padding 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
-}
-#admin-app.header-compact #admin-header {
-  padding: 6px 16px;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 1px 12px rgba(0,0,0,0.07);
-  margin-bottom: 8px;
-}
-@media (prefers-color-scheme: dark) {
-  #admin-app.header-compact #admin-header {
-    background: rgba(13,13,13,0.92) !important;
-    box-shadow: 0 1px 12px rgba(0,0,0,0.3) !important;
-  }
-}
-/* Compact: hide time/date/dots, shrink logo */
-#admin-app.header-compact #admin-time,
-#admin-app.header-compact #admin-date,
-#admin-app.header-compact .loading-dots {
-  display: none !important;
-}
-#admin-app.header-compact #admin-header .logo-text {
-  font-size: 1.4rem !important;
-}
-#admin-app.header-compact #admin-header-top {
-  margin-bottom: 0 !important;
-}
-
-/* ══ ADMIN HEADER TOP ROW ══ */
+/* ══ ADMIN HEADER TOP ROW (hamburger + logo) ══ */
 #admin-header-top {
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   width: 100%;
-  margin-bottom: 4px;
 }
 
-/* ══ HAMBURGER — touch devices (phones + tablets, any orientation) ══ */
+/* ══ HAMBURGER — touch devices & tablets ══ */
 #admin-hamburger {
   display: none;
-  position: absolute;
-  left: 0;
+  position: absolute; left: 0;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  justify-content: center; align-items: center;
   gap: 5px;
   width: 38px; height: 38px;
   background: none; border: none;
   cursor: pointer; padding: 6px;
   border-radius: 9px;
-  transition: background 0.15s;
   color: #000;
   z-index: 1;
+  transition: background 0.15s;
 }
 #admin-hamburger span {
   display: block; width: 18px; height: 1.5px;
   background: currentColor; border-radius: 2px;
-  transition: transform 0.25s, opacity 0.25s;
 }
 #admin-hamburger:hover { background: rgba(0,0,0,0.06); }
 
-/* Show hamburger + hide tab-nav on ALL touch devices (any orientation) */
-@media (pointer: coarse) {
-  #admin-hamburger { display: flex; }
-  #tab-nav { display: none !important; }
-  /* Remove the fixed-top tab nav that was for mobile portrait */
-  #admin-header { margin-top: 0 !important; }
-}
-/* Also cover non-touch devices up to 1024px (small laptops) */
-@media (max-width: 1024px) and (pointer: fine) {
+/* Show hamburger + hide tab-nav on touch devices */
+@media (pointer: coarse), (max-width: 1024px) {
   #admin-hamburger { display: flex; }
   #tab-nav { display: none !important; }
 }
 
-/* ── Mobile drawer ── */
+/* ══ FIXED HEADER on mobile — always on top, solid background ══ */
+@media (pointer: coarse) {
+  /* Body scrolls, admin-app is a normal flow container */
+  html, body { overflow-y: auto !important; overflow-x: hidden; }
+  #admin-app {
+    position: static !important;
+    height: auto !important; min-height: 100vh;
+    overflow: visible !important;
+    padding: 0 10px 60px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  /* Header: FIXED at top, always solid white */
+  #admin-header {
+    position: fixed !important;
+    top: 0; left: 0; right: 0;
+    z-index: 300;
+    background: #fff;
+    border-bottom: 1px solid transparent;
+    padding: 12px 16px 8px;
+    margin-bottom: 0 !important;
+    display: flex; flex-direction: column; align-items: center;
+    transition: padding 0.28s ease, border-color 0.28s ease,
+                box-shadow 0.28s ease;
+    /* Ensure content is never hidden behind header */
+    box-sizing: border-box;
+  }
+
+  /* Spacer so content starts below the fixed header */
+  #admin-header-spacer {
+    width: 100%;
+    height: 120px; /* approx full header height */
+    flex-shrink: 0;
+    transition: height 0.28s ease;
+  }
+
+  /* COMPACT state — triggered by JS when scrolled */
+  #admin-header.compact {
+    padding: 8px 16px;
+    border-color: rgba(0,0,0,0.08);
+    box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  }
+  #admin-header.compact #admin-time,
+  #admin-header.compact #admin-date,
+  #admin-header.compact .loading-dots { display: none !important; }
+  #admin-header.compact .logo-text { font-size: 1.3rem !important; margin-bottom: 0 !important; }
+  #admin-header.compact #admin-header-top { margin-bottom: 0 !important; }
+
+  /* Spacer shrinks when compact */
+  #admin-header-spacer.compact { height: 52px; }
+
+  /* Tab panels scroll naturally */
+  .tab-panel.active { overflow: visible !important; flex: none !important; }
+  #tab-horarios.active { overflow: visible !important; flex: none !important; }
+  #h-table-area {
+    overflow-x: auto !important; overflow-y: visible !important;
+    max-height: none !important; flex: none !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  #h-dashboard { display: none !important; }
+  #saft-reminder { display: none !important; }
+  #r-conferir-fixed { display: none !important; }
+
+  @media (prefers-color-scheme: dark) {
+    #admin-header { background: #0d0d0d !important; }
+    #admin-header.compact { border-color: rgba(255,255,255,0.08) !important; box-shadow: 0 2px 16px rgba(0,0,0,0.3) !important; }
+    #admin-hamburger { color: #e8e8e8 !important; }
+    #admin-hamburger:hover { background: rgba(255,255,255,0.08) !important; }
+  }
+}
+
+/* Also handle landscape on touch devices */
+@media (pointer: coarse) and (orientation: landscape) {
+  #admin-header-spacer { height: 80px; }
+  #admin-header-spacer.compact { height: 46px; }
+}
+
+/* ══ MOBILE DRAWER MENU ══ */
 #admin-mobile-menu {
-  display: none;
-  position: fixed; inset: 0; z-index: 9000;
+  display: none; position: fixed; inset: 0; z-index: 9000;
 }
 #admin-mobile-menu.open { display: block; }
 #admin-mobile-menu-backdrop {
   position: absolute; inset: 0;
   background: rgba(0,0,0,0.45);
-  opacity: 0;
-  transition: opacity 0.28s ease;
+  opacity: 0; transition: opacity 0.28s ease;
 }
 #admin-mobile-menu.open #admin-mobile-menu-backdrop { opacity: 1; }
 #admin-mobile-menu-panel {
@@ -2109,13 +2140,9 @@ tr { transition: background 0.15s ease; }
 }
 .mobile-tab-btn:hover { background: #f5f5f5; padding-left: 30px; }
 .mobile-tab-btn.mobile-tab-active {
-  background: #f0f0f0;
-  border-left-color: #000;
-  padding-left: 21px;
+  background: #f0f0f0; border-left-color: #000; padding-left: 21px;
 }
 @media (prefers-color-scheme: dark) {
-  #admin-hamburger { color: #e8e8e8 !important; }
-  #admin-hamburger:hover { background: rgba(255,255,255,0.08) !important; }
   #admin-mobile-menu-panel { background: #111 !important; box-shadow: 6px 0 40px rgba(0,0,0,0.5) !important; }
   #admin-mobile-menu-hdr { border-color: #2a2a2a !important; }
   #admin-mobile-menu-logo { color: #e8e8e8 !important; }
@@ -2124,32 +2151,6 @@ tr { transition: background 0.15s ease; }
   .mobile-tab-btn { color: #aaa !important; }
   .mobile-tab-btn:hover { background: #1a1a1a !important; color: #e8e8e8 !important; }
   .mobile-tab-btn.mobile-tab-active { background: #1e1e1e !important; border-left-color: #e8e8e8 !important; color: #e8e8e8 !important; }
-}
-
-/* ══ LANDSCAPE + ALL MOBILE: full scroll ══ */
-@media (pointer: coarse), (max-width: 1024px) and (orientation: landscape) {
-  html, body { overflow-y: auto !important; overflow-x: hidden; }
-  #admin-app {
-    position: static !important;
-    height: auto !important; min-height: 100vh;
-    overflow-y: visible !important; overflow-x: hidden;
-    padding: 0 10px 60px;
-  }
-  #admin-header {
-    position: sticky; top: 0; z-index: 200;
-    padding: 10px 0 6px;
-    margin-bottom: 16px !important;
-  }
-  .tab-panel.active { overflow: visible !important; flex: none !important; }
-  #tab-horarios.active { overflow: visible !important; flex: none !important; }
-  #h-table-area {
-    overflow-x: auto !important; overflow-y: visible !important;
-    max-height: none !important; flex: none !important;
-    -webkit-overflow-scrolling: touch;
-  }
-  #h-dashboard { display: none !important; }
-  #saft-reminder { display: none !important; }
-  #r-conferir-fixed { display: none !important; }
 }
 </style>
 </head>
@@ -2231,6 +2232,8 @@ tr { transition: background 0.15s ease; }
     <div id="admin-date"></div>
     <div class="loading-dots"><span></span><span></span><span></span></div>
   </div>
+  <!-- Spacer pushes content below fixed header on mobile -->
+  <div id="admin-header-spacer"></div>
 
   <div id="tab-nav" class="reveal-item" style="opacity:0;">
     <button class="tab-btn active" data-tab="salarios">salários</button>
@@ -2515,7 +2518,7 @@ tr { transition: background 0.15s ease; }
 <script src="js/tam.js"></script>
 <script src="js/saft-reminder.js"></script>
 
-<!-- ═══ ADMIN MOBILE MENU ═══ -->
+<!-- ═══ ADMIN MOBILE MENU DRAWER ═══ -->
 <div id="admin-mobile-menu" aria-hidden="true">
   <div id="admin-mobile-menu-backdrop"></div>
   <nav id="admin-mobile-menu-panel">
@@ -2535,37 +2538,54 @@ tr { transition: background 0.15s ease; }
 </div>
 
 <script>
-/* ── Hamburger menu ── */
+/* ── Hamburger menu + compact header on scroll ── */
 (function() {
+  function isTouchDevice() {
+    return window.matchMedia('(pointer: coarse)').matches ||
+           window.matchMedia('(max-width: 1024px)').matches;
+  }
+
   function init() {
     var hamburger = document.getElementById('admin-hamburger');
     var menu      = document.getElementById('admin-mobile-menu');
     var backdrop  = document.getElementById('admin-mobile-menu-backdrop');
     var closeBtn  = document.getElementById('admin-mobile-menu-close');
-    var adminApp  = document.getElementById('admin-app');
+    var header    = document.getElementById('admin-header');
+    var spacer    = document.getElementById('admin-header-spacer');
+
+    /* ── Compact header on scroll ── */
+    function updateCompact() {
+      if (!isTouchDevice()) return;
+      var scrolled = window.scrollY > 80;
+      if (header)  header.classList.toggle('compact', scrolled);
+      if (spacer)  spacer.classList.toggle('compact', scrolled);
+    }
+    window.addEventListener('scroll', updateCompact, { passive: true });
+    updateCompact(); /* run once on load */
+
     if (!hamburger || !menu) return;
 
     function openMenu() {
       menu.classList.add('open');
-      menu.setAttribute('aria-hidden','false');
-      hamburger.setAttribute('aria-expanded','true');
+      menu.setAttribute('aria-hidden', 'false');
+      hamburger.setAttribute('aria-expanded', 'true');
       document.body.style.overflow = 'hidden';
     }
     function closeMenu() {
       menu.classList.remove('open');
-      menu.setAttribute('aria-hidden','true');
-      hamburger.setAttribute('aria-expanded','false');
+      menu.setAttribute('aria-hidden', 'true');
+      hamburger.setAttribute('aria-expanded', 'false');
       document.body.style.overflow = '';
     }
 
     hamburger.addEventListener('click', openMenu);
-    closeBtn.addEventListener('click', closeMenu);
-    backdrop.addEventListener('click', closeMenu);
+    closeBtn && closeBtn.addEventListener('click', closeMenu);
+    backdrop && backdrop.addEventListener('click', closeMenu);
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && menu.classList.contains('open')) closeMenu();
     });
 
-    /* Mirror mobile tab clicks to desktop tab buttons */
+    /* Mirror mobile tab → desktop tab */
     document.querySelectorAll('.mobile-tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var tab = btn.getAttribute('data-tab');
@@ -2578,7 +2598,7 @@ tr { transition: background 0.15s ease; }
       });
     });
 
-    /* Sync active state when desktop tabs are clicked */
+    /* Sync active when desktop tab clicked */
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var tab = btn.getAttribute('data-tab');
@@ -2587,17 +2607,6 @@ tr { transition: background 0.15s ease; }
         });
       });
     });
-
-    /* Sticky compact header on scroll */
-    function onScroll() {
-      if (!adminApp) return;
-      var scrollEl = (adminApp.style.position === 'static' || getComputedStyle(adminApp).position === 'static')
-        ? (document.documentElement.scrollTop > 60 || document.body.scrollTop > 60)
-        : adminApp.scrollTop > 60;
-      adminApp.classList.toggle('header-compact', scrollEl);
-    }
-    adminApp && adminApp.addEventListener('scroll', onScroll, { passive: true });
-    document.addEventListener('scroll', onScroll, { passive: true });
   }
 
   if (document.readyState === 'loading') {
@@ -2609,7 +2618,6 @@ tr { transition: background 0.15s ease; }
 (function() {
   var KEY = 'wkz_adm_s';
   var TTL = 10 * 60 * 1000;
-
   function save(pw) {
     try { localStorage.setItem(KEY, JSON.stringify({ k: btoa(unescape(encodeURIComponent(pw))), t: Date.now() })); } catch(e) {}
   }
@@ -2626,16 +2634,12 @@ tr { transition: background 0.15s ease; }
       if (s && s.k) { s.t = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); }
     } catch(e) {}
   }
-
-  /* Save password on login submit */
   function bindSave() {
     var btn = document.getElementById('key-submit');
     var inp = document.getElementById('key-input');
     if (btn) btn.addEventListener('click', function() { if (inp && inp.value) save(inp.value); }, true);
     if (inp) inp.addEventListener('keydown', function(e) { if (e.key === 'Enter' && inp.value) save(inp.value); }, true);
   }
-
-  /* Try auto-login when login screen becomes visible */
   function tryAutoLogin() {
     var pw = load();
     if (!pw) return;
@@ -2643,24 +2647,17 @@ tr { transition: background 0.15s ease; }
     var btn = document.getElementById('key-submit');
     if (inp && btn) { inp.value = pw; btn.click(); }
   }
-
   function watchLoginScreen() {
     var ls = document.getElementById('login-screen');
     if (!ls) return;
     var obs = new MutationObserver(function() {
-      if (ls.classList.contains('visible')) {
-        obs.disconnect();
-        setTimeout(tryAutoLogin, 300);
-      }
+      if (ls.classList.contains('visible')) { obs.disconnect(); setTimeout(tryAutoLogin, 300); }
     });
     obs.observe(ls, { attributes: true, attributeFilter: ['class'] });
   }
-
-  /* Refresh timer on any user interaction */
   ['click','keydown','touchstart','scroll'].forEach(function(ev) {
     document.addEventListener(ev, refresh, { passive: true });
   });
-
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() { bindSave(); watchLoginScreen(); });
   } else { bindSave(); watchLoginScreen(); }

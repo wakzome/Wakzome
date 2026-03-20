@@ -2531,12 +2531,9 @@
 
   async function tamSaveSessionSupabase(payload) {
     var sb = tamSB();
-    if (!sb) { tamUpdateSyncBadge('offline'); return; }
+    if (!sb) return;
 
-    /* Always update the pending payload — we always want the latest version */
     tamSBSavePending = payload;
-
-    /* If a save is already in flight, the in-flight one will check pending on finish */
     if (tamSaveInFlight) return;
 
     while (tamSBSavePending) {
@@ -2544,71 +2541,35 @@
       tamSBSavePending = null;
       tamSaveInFlight = true;
       try {
-        var res = await sb.from(TAM_SESSIONS_TABLE).upsert({
+        var row = {
           session_name: toSave.name,
           saved_at:     new Date(toSave.savedAt).toISOString(),
           data:         JSON.stringify(toSave)
-        }, { onConflict: 'session_name' });
-        if (res.error) throw res.error;
-        tamUpdateSyncBadge('ok');
+        };
+        /* Check if row already exists */
+        var check = await sb.from(TAM_SESSIONS_TABLE)
+          .select('session_name')
+          .eq('session_name', toSave.name)
+          .limit(1);
+        var exists = check.data && check.data.length > 0;
+        var res;
+        if (exists) {
+          res = await sb.from(TAM_SESSIONS_TABLE)
+            .update({ saved_at: row.saved_at, data: row.data })
+            .eq('session_name', toSave.name);
+        } else {
+          res = await sb.from(TAM_SESSIONS_TABLE).insert(row);
+        }
+        if (res && res.error) console.warn('TAM Supabase:', res.error.message);
       } catch(e) {
-        tamUpdateSyncBadge('error');
-        console.warn('TAM Supabase save error:', e.message || e);
+        console.warn('TAM Supabase save:', e.message || e);
       } finally {
         tamSaveInFlight = false;
       }
     }
   }
 
-  function tamUpdateSyncBadge(state) {
-    var el = document.getElementById('tam-sync-badge');
-    if (!el) return;
-    if (state === 'ok') {
-      el.textContent = '☁ sincronizado';
-      el.className = 'tam-sync-badge tam-sync-ok';
-    } else if (state === 'error') {
-      el.textContent = '☁ erro ao sincronizar';
-      el.className = 'tam-sync-badge tam-sync-err';
-    } else {
-      el.textContent = '☁ offline';
-      el.className = 'tam-sync-badge tam-sync-offline';
-    }
-    clearTimeout(el._hideT);
-    el._hideT = setTimeout(function(){ el.textContent = ''; el.className = 'tam-sync-badge'; }, 4000);
-  }
 
-  /* Cargar desde localStorage */
-  function tamLoadAllSessionsLocal() {
-    try {
-      var raw = localStorage.getItem('tam_sessions');
-      return raw ? JSON.parse(raw) : {};
-    } catch(e) { return {}; }
-  }
-
-  /* Cargar fusionando localStorage + Supabase */
-  async function tamLoadAllSessionsMerged() {
-    var local = tamLoadAllSessionsLocal();
-    var sb = tamSB();
-    if (!sb) return local;
-    try {
-      var res = await sb.from(TAM_SESSIONS_TABLE).select('session_name, saved_at, data').order('saved_at', { ascending: false });
-      if (res.data && res.data.length) {
-        res.data.forEach(function(row){
-          try {
-            var parsed = JSON.parse(row.data);
-            var localEntry = local[parsed.name];
-            // Usar el más reciente entre local y remoto
-            if (!localEntry || (parsed.savedAt > (localEntry.savedAt || 0))) {
-              local[parsed.name] = parsed;
-            }
-          } catch(e) {}
-        });
-        // Actualizar localStorage con versión fusionada
-        localStorage.setItem('tam_sessions', JSON.stringify(local));
-      }
-    } catch(e) {}
-    return local;
-  }
 
   function tamLoadAllSessions() {
     return tamLoadAllSessionsLocal();
@@ -4752,22 +4713,14 @@
 
       /* ── Multi-factura: bloques ── */
             /* ── Collapse toggle button ── */
+            /* ── Collapse toggle button ── */
             /* ── Sync badge ── */
-      '.tam-sync-badge { font-size:.72rem; font-weight:bold; letter-spacing:.03em; padding:2px 8px; border-radius:10px; transition:opacity .3s; }',
       '.tam-sync-ok   { background:#e8f5e9; color:#2a8a2a; }',
       '.tam-sync-err  { background:#ffebee; color:#c62828; }',
       '.tam-sync-offline { background:#f5f5f5; color:#999; }',
       '.tam-sync-loading { background:#fff8e1; color:#e65100; }',
 
-      /* ── Auto-sync banner ── */
-      '.tam-autosync-banner { display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%; max-width:960px; margin:0 auto 12px; padding:10px 16px; border-radius:12px; background:#e3f2fd; border:1px solid #90caf9; font-size:.85rem; font-weight:bold; color:#1565c0; box-sizing:border-box; }',
-      '.tam-autosync-banner button { padding:4px 14px; font-size:.78rem; font-weight:bold; font-family:inherit; cursor:pointer!important; border-radius:8px; border:1px solid #1565c0; background:#fff; color:#1565c0; transition:background .15s; }',
-      '.tam-autosync-banner button:hover { background:#1565c0; color:#fff; }',
-      '.tam-autosync-banner #tam-autosync-dismiss-btn { border-color:#90caf9; color:#90caf9; }',
-      '.tam-autosync-banner #tam-autosync-dismiss-btn:hover { background:#90caf9; color:#fff; }',
 
-'.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#aaa; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
-      '.tam-inv-toggle-btn:hover { color:#000; }',
 
       /* ── Invoice block collapsed state ── */
       '.tam-inv-collapsed .tam-inv-banner { display:none!important; }',
@@ -5584,8 +5537,6 @@
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾 guardar</button>' +
-        '<span id="tam-sync-badge" class="tam-sync-badge"></span>' +
-        '<button class="tam-session-btn" id="tam-cloud-sync-btn" title="sincronizar com a nuvem">☁ sincronizar</button>' +
         '<div class="tam-sessions-dropdown-wrap">' +
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
@@ -5613,26 +5564,7 @@
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
 
-      var cloudSyncBtn = bar.querySelector('#tam-cloud-sync-btn');
-      if (cloudSyncBtn) cloudSyncBtn.addEventListener('click', function(){
-        var badge = document.getElementById('tam-sync-badge');
-        if (badge) { badge.textContent = '☁ a sincronizar…'; badge.className = 'tam-sync-badge tam-sync-loading'; }
-        tamLoadAllSessionsMerged().then(function(sessions){
-          // Update dropdown if open
-          var dd = document.getElementById('tam-sessions-dropdown');
-          if (dd && dd.classList.contains('open')) tamRenderSessionsList(sessions);
-          // If no session loaded yet, open the sessions panel so user can pick
-          if (!tamSession) {
-            tamOpenSessionsModal();
-          } else {
-            if (badge) { badge.textContent = '☁ sincronizado'; badge.className = 'tam-sync-badge tam-sync-ok'; }
-            clearTimeout(badge && badge._hideT);
-            if (badge) badge._hideT = setTimeout(function(){ badge.textContent = ''; badge.className = 'tam-sync-badge'; }, 3000);
-          }
-        }).catch(function(){
-          if (badge) { badge.textContent = '☁ erro'; badge.className = 'tam-sync-badge tam-sync-err'; }
-        });
-      });
+
 
       // Bind sessions button here, not in the separate listener block above
       var sesBtn2 = bar.querySelector('#tam-sessions-btn');

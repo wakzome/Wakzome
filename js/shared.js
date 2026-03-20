@@ -73,19 +73,36 @@
 
       if (data.rol === 'admin') {
         // ── LOGIN ADMIN ──
-        sweepThen(function() {
+        if (window.__wkzAutoLogin) {
+          // Silent auto-login — no sweep, no greeting, instant show
+          window.__wkzAutoLogin = false;
           document.getElementById('login-screen').style.display = 'none';
-          showGreeting('administração', function() {
-            const adminApp = document.getElementById('admin-app');
-            adminApp.classList.add('show');
-            const adminHdr = document.getElementById('admin-header');
-            adminHdr.classList.add('show');
-            updateAdminClock();
-            rLoadConfig();
-            animateReveal(adminApp.querySelectorAll('.reveal-item'), 130);
-            initSaftReminder();
+          const adminApp = document.getElementById('admin-app');
+          adminApp.classList.add('show');
+          const adminHdr = document.getElementById('admin-header');
+          adminHdr.classList.add('show');
+          updateAdminClock();
+          rLoadConfig();
+          // Show elements immediately without animation
+          adminApp.querySelectorAll('.reveal-item').forEach(function(el) {
+            el.style.opacity = '1';
           });
-        });
+          initSaftReminder();
+        } else {
+          sweepThen(function() {
+            document.getElementById('login-screen').style.display = 'none';
+            showGreeting('administração', function() {
+              const adminApp = document.getElementById('admin-app');
+              adminApp.classList.add('show');
+              const adminHdr = document.getElementById('admin-header');
+              adminHdr.classList.add('show');
+              updateAdminClock();
+              rLoadConfig();
+              animateReveal(adminApp.querySelectorAll('.reveal-item'), 130);
+              initSaftReminder();
+            });
+          });
+        }
 
       } else {
         // ── LOGIN TIENDA ──

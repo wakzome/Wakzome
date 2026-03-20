@@ -1491,8 +1491,7 @@ input, textarea { cursor: text !important; }
   #admin-header #admin-date { font-size: .8rem; }
   #admin-header .loading-dots { margin-top: 3px; margin-bottom: 3px; }
 
-  /* Tab-nav hidden on mobile — hamburger handles navigation */
-  .tab-btn { padding: 8px 16px; font-size: .78rem; white-space: nowrap; }
+  /* Tab-nav hidden on mobile — hamburger used instead */
 
   /* ── Tab panels ── */
   .tab-panel.active { overflow: visible !important; flex: none !important; min-height: 0; }
@@ -1593,8 +1592,38 @@ input, textarea { cursor: text !important; }
   .upload-box { min-height: 90px; }
 }
 
-/* MOBILE LANDSCAPE — handled by pointer:coarse block */
+/* ══════════════════════════════════════════════════════════
+   MOBILE LANDSCAPE — telemóveis em horizontal
+══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) and (orientation: landscape) {
+  /* Allow full-page scroll */
+  html, body { overflow-y: auto !important; overflow-x: hidden; }
 
+  /* Admin app: auto height, scroll freely */
+  #admin-app {
+    height: auto !important; min-height: 100vh;
+    overflow-y: auto !important; overflow-x: hidden;
+  }
+
+  /* All tab panels flow naturally so admin-app can scroll */
+  .tab-panel.active { flex: none; overflow: visible; min-height: 0; }
+  #tab-horarios.active { flex: 1; overflow: hidden; min-height: 50vh; }
+
+  /* Hide active-persons dashboard in landscape — takes too much space */
+  #h-dashboard { display: none !important; }
+
+  /* Hide saft reminder and conferir button — already hidden by 1024px rule above but be explicit */
+  #saft-reminder { display: none !important; }
+  #r-conferir-fixed { display: none !important; }
+
+  /* Employee schedule view: ensure table scrolls horizontally */
+  #container-tables { overflow-x: hidden; overflow-y: auto; }
+  #table-container { justify-content: flex-start; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-wrap { justify-content: flex-start; width: 100%; }
+
+  /* Admin horarios: ensure table scrolls */
+  #tab-horarios.active { flex: none !important; overflow: visible !important; }
+  #h-table-area { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; max-height: 60vh; flex: none !important; }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1969,28 +1998,19 @@ tr { transition: background 0.15s ease; }
 .tam-chk-ok  { color: #2a6a2a; }
 .tam-chk-err { color: #c00; }
 
-/* ══ ADMIN HEADER TOP ROW (hamburger + logo) ══ */
+/* ══ ADMIN HEADER LAYOUT ══ */
 #admin-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 100%;
+  display: flex; align-items: center;
+  justify-content: center; position: relative; width: 100%;
 }
 
-/* ══ HAMBURGER — touch devices & tablets ══ */
+/* ══ HAMBURGER BUTTON ══ */
 #admin-hamburger {
-  display: none;
-  position: absolute; left: 0;
-  flex-direction: column;
-  justify-content: center; align-items: center;
-  gap: 5px;
-  width: 38px; height: 38px;
-  background: none; border: none;
-  cursor: pointer; padding: 6px;
-  border-radius: 9px;
-  color: #000;
-  z-index: 1;
+  display: none; position: absolute; left: 0;
+  flex-direction: column; justify-content: center; align-items: center;
+  gap: 5px; width: 38px; height: 38px;
+  background: none; border: none; cursor: pointer;
+  padding: 6px; border-radius: 9px; color: #000; z-index: 1;
   transition: background 0.15s;
 }
 #admin-hamburger span {
@@ -1999,62 +2019,57 @@ tr { transition: background 0.15s ease; }
 }
 #admin-hamburger:hover { background: rgba(0,0,0,0.06); }
 
-/* Show hamburger + hide tab-nav on touch devices */
-@media (pointer: coarse), (max-width: 1024px) {
+/* Show hamburger + hide tab-nav on touch/tablet */
+@media (pointer: coarse), (max-width: 1024px) and (pointer: fine) {
   #admin-hamburger { display: flex; }
   #tab-nav { display: none !important; }
 }
 
-/* ══ FIXED HEADER on mobile — always on top, solid background ══ */
+/* ══ COMPACT STICKY HEADER (mobile / touch) ══
+   On mobile admin-app is position:static, so body scrolls.
+   We make the header sticky so it sticks to top as user scrolls.
+   JS adds .compact class when window.scrollY > 80.
+*/
 @media (pointer: coarse) {
-  /* Body scrolls, admin-app is a normal flow container */
-  html, body { overflow-y: auto !important; overflow-x: hidden; }
+  /* admin-app flows naturally */
   #admin-app {
-    position: static !important;
-    height: auto !important; min-height: 100vh;
-    overflow: visible !important;
+    position: static !important; height: auto !important;
+    min-height: 100vh; overflow: visible !important;
     padding: 0 10px 60px;
     display: flex; flex-direction: column; align-items: center;
   }
 
-  /* Header: FIXED at top, always solid white */
+  /* Header: sticky in flow, solid background */
   #admin-header {
-    position: fixed !important;
-    top: 0; left: 0; right: 0;
-    z-index: 300;
-    background: #fff;
+    position: sticky !important;
+    top: 0 !important; left: 0 !important; right: 0 !important;
+    width: 100%; z-index: 200 !important;
+    background: #fff !important;
+    margin-bottom: 16px !important; margin-top: 0 !important;
+    padding: 10px 0 8px;
     border-bottom: 1px solid transparent;
-    padding: 12px 16px 8px;
-    margin-bottom: 0 !important;
-    display: flex; flex-direction: column; align-items: center;
-    transition: padding 0.28s ease, border-color 0.28s ease,
+    transition: padding 0.28s ease,
+                border-color 0.28s ease,
                 box-shadow 0.28s ease;
-    /* Ensure content is never hidden behind header */
-    box-sizing: border-box;
+    /* Must override opacity animation from .show — header visible when compact */
+    opacity: 1 !important;
   }
 
-  /* Spacer so content starts below the fixed header */
-  #admin-header-spacer {
-    width: 100%;
-    height: 120px; /* approx full header height */
-    flex-shrink: 0;
-    transition: height 0.28s ease;
-  }
-
-  /* COMPACT state — triggered by JS when scrolled */
+  /* Compact state: logo only, no time/date/dots */
   #admin-header.compact {
-    padding: 8px 16px;
-    border-color: rgba(0,0,0,0.08);
-    box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+    padding: 7px 0 6px !important;
+    border-color: rgba(0,0,0,0.09) !important;
+    box-shadow: 0 2px 18px rgba(0,0,0,0.07) !important;
+  }
+  #admin-header.compact .logo-text {
+    font-size: 1.25rem !important;
+    margin-bottom: 0 !important;
+    line-height: 1 !important;
   }
   #admin-header.compact #admin-time,
   #admin-header.compact #admin-date,
   #admin-header.compact .loading-dots { display: none !important; }
-  #admin-header.compact .logo-text { font-size: 1.3rem !important; margin-bottom: 0 !important; }
   #admin-header.compact #admin-header-top { margin-bottom: 0 !important; }
-
-  /* Spacer shrinks when compact */
-  #admin-header-spacer.compact { height: 52px; }
 
   /* Tab panels scroll naturally */
   .tab-panel.active { overflow: visible !important; flex: none !important; }
@@ -2070,34 +2085,29 @@ tr { transition: background 0.15s ease; }
 
   @media (prefers-color-scheme: dark) {
     #admin-header { background: #0d0d0d !important; }
-    #admin-header.compact { border-color: rgba(255,255,255,0.08) !important; box-shadow: 0 2px 16px rgba(0,0,0,0.3) !important; }
+    #admin-header.compact {
+      border-color: rgba(255,255,255,0.09) !important;
+      box-shadow: 0 2px 18px rgba(0,0,0,0.3) !important;
+    }
     #admin-hamburger { color: #e8e8e8 !important; }
     #admin-hamburger:hover { background: rgba(255,255,255,0.08) !important; }
   }
 }
 
-/* Also handle landscape on touch devices */
-@media (pointer: coarse) and (orientation: landscape) {
-  #admin-header-spacer { height: 80px; }
-  #admin-header-spacer.compact { height: 46px; }
-}
-
-/* ══ MOBILE DRAWER MENU ══ */
+/* ══ MOBILE DRAWER ══ */
 #admin-mobile-menu {
   display: none; position: fixed; inset: 0; z-index: 9000;
 }
 #admin-mobile-menu.open { display: block; }
 #admin-mobile-menu-backdrop {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,0.45);
+  position: absolute; inset: 0; background: rgba(0,0,0,0.45);
   opacity: 0; transition: opacity 0.28s ease;
 }
 #admin-mobile-menu.open #admin-mobile-menu-backdrop { opacity: 1; }
 #admin-mobile-menu-panel {
   position: absolute; top: 0; left: 0;
   width: min(270px, 80vw); height: 100%;
-  background: #fff;
-  box-shadow: 6px 0 40px rgba(0,0,0,0.14);
+  background: #fff; box-shadow: 6px 0 40px rgba(0,0,0,0.14);
   transform: translateX(-100%);
   transition: transform 0.3s cubic-bezier(0.22,1,0.36,1);
   display: flex; flex-direction: column; overflow: hidden;
@@ -2105,43 +2115,33 @@ tr { transition: background 0.15s ease; }
 #admin-mobile-menu.open #admin-mobile-menu-panel { transform: translateX(0); }
 #admin-mobile-menu-hdr {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 22px 20px 16px;
-  border-bottom: 1px solid #efefef; flex-shrink: 0;
+  padding: 22px 20px 16px; border-bottom: 1px solid #efefef; flex-shrink: 0;
 }
 #admin-mobile-menu-logo {
-  font-size: 1.4rem; font-weight: 100;
-  text-transform: lowercase; letter-spacing: .08em;
-  font-family: 'MontserratLight', sans-serif; color: #000;
+  font-size: 1.4rem; font-weight: 100; text-transform: lowercase;
+  letter-spacing: .08em; font-family: 'MontserratLight', sans-serif; color: #000;
 }
 #admin-mobile-menu-close {
-  width: 30px; height: 30px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1rem; background: none;
+  width: 30px; height: 30px; display: flex; align-items: center;
+  justify-content: center; font-size: 1rem; background: none;
   border: 1.5px solid #ddd; border-radius: 8px;
-  cursor: pointer; color: #555;
-  font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #555; font-family: 'MontserratLight', sans-serif;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 #admin-mobile-menu-close:hover { background: #555; color: #fff; border-color: #555; }
 #admin-mobile-menu-items {
-  flex: 1; display: flex; flex-direction: column;
-  padding: 8px 0; overflow-y: auto;
+  flex: 1; display: flex; flex-direction: column; padding: 8px 0; overflow-y: auto;
 }
 .mobile-tab-btn {
-  display: flex; align-items: center;
-  width: 100%; padding: 14px 24px;
+  display: flex; align-items: center; width: 100%; padding: 14px 24px;
   text-align: left; font-size: .95rem; font-weight: 600;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: lowercase; letter-spacing: .03em;
-  color: #000; background: none; border: none;
-  cursor: pointer;
+  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
+  letter-spacing: .03em; color: #000; background: none; border: none; cursor: pointer;
   border-left: 3px solid transparent;
   transition: background 0.15s, border-color 0.15s, padding-left 0.2s;
 }
 .mobile-tab-btn:hover { background: #f5f5f5; padding-left: 30px; }
-.mobile-tab-btn.mobile-tab-active {
-  background: #f0f0f0; border-left-color: #000; padding-left: 21px;
-}
+.mobile-tab-btn.mobile-tab-active { background: #f0f0f0; border-left-color: #000; padding-left: 21px; }
 @media (prefers-color-scheme: dark) {
   #admin-mobile-menu-panel { background: #111 !important; box-shadow: 6px 0 40px rgba(0,0,0,0.5) !important; }
   #admin-mobile-menu-hdr { border-color: #2a2a2a !important; }
@@ -2232,8 +2232,6 @@ tr { transition: background 0.15s ease; }
     <div id="admin-date"></div>
     <div class="loading-dots"><span></span><span></span><span></span></div>
   </div>
-  <!-- Spacer pushes content below fixed header on mobile -->
-  <div id="admin-header-spacer"></div>
 
   <div id="tab-nav" class="reveal-item" style="opacity:0;">
     <button class="tab-btn active" data-tab="salarios">salários</button>
@@ -2518,7 +2516,7 @@ tr { transition: background 0.15s ease; }
 <script src="js/tam.js"></script>
 <script src="js/saft-reminder.js"></script>
 
-<!-- ═══ ADMIN MOBILE MENU DRAWER ═══ -->
+<!-- ═══ ADMIN MOBILE MENU ═══ -->
 <div id="admin-mobile-menu" aria-hidden="true">
   <div id="admin-mobile-menu-backdrop"></div>
   <nav id="admin-mobile-menu-panel">
@@ -2538,54 +2536,131 @@ tr { transition: background 0.15s ease; }
 </div>
 
 <script>
-/* ── Hamburger menu + compact header on scroll ── */
+/* ═══════════════════════════════════════════════════════════
+   SESSION PERSISTENCE — 10-minute sliding window
+   Strategy to avoid the flash:
+   - Fill the password field as soon as the DOM is ready
+   - When login screen becomes visible, auto-click immediately
+   - The faster the click, the less visible the transition
+═══════════════════════════════════════════════════════════ */
 (function() {
-  function isTouchDevice() {
-    return window.matchMedia('(pointer: coarse)').matches ||
-           window.matchMedia('(max-width: 1024px)').matches;
+  var KEY = 'wkz_adm_s';
+  var TTL = 10 * 60 * 1000;
+
+  function save(pw) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        k: btoa(unescape(encodeURIComponent(pw))),
+        t: Date.now()
+      }));
+    } catch(e) {}
+  }
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (s && s.k && (Date.now() - s.t) < TTL)
+        return decodeURIComponent(escape(atob(s.k)));
+    } catch(e) {}
+    return null;
+  }
+  function refresh() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (s && s.k) { s.t = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); }
+    } catch(e) {}
   }
 
-  function init() {
+  /* Pre-fill password immediately when DOM is ready */
+  function prefill() {
+    var pw = load();
+    if (!pw) return;
+    var inp = document.getElementById('key-input');
+    if (inp) inp.value = pw;
+  }
+
+  /* Save on login */
+  function bindSave() {
+    var btn = document.getElementById('key-submit');
+    var inp = document.getElementById('key-input');
+    if (btn) btn.addEventListener('click', function() {
+      if (inp && inp.value) save(inp.value);
+    }, true);
+    if (inp) inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && inp.value) save(inp.value);
+    }, true);
+  }
+
+  /* Auto-click as soon as login screen becomes visible */
+  function watchLogin() {
+    var pw = load();
+    if (!pw) return;
+    var ls = document.getElementById('login-screen');
+    if (!ls) return;
+    var clicked = false;
+    var obs = new MutationObserver(function() {
+      if (!clicked && ls.classList.contains('visible')) {
+        clicked = true;
+        obs.disconnect();
+        /* Fill again (in case admin-init clears it) and click immediately */
+        var inp = document.getElementById('key-input');
+        var btn = document.getElementById('key-submit');
+        if (inp) inp.value = pw;
+        if (btn) {
+          /* Small delay so admin-init.js has registered its listeners */
+          setTimeout(function() { btn.click(); }, 80);
+        }
+      }
+    });
+    obs.observe(ls, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* Refresh on activity */
+  ['click','keydown','touchstart'].forEach(function(ev) {
+    document.addEventListener(ev, refresh, { passive: true });
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      prefill(); bindSave(); watchLogin();
+    });
+  } else {
+    prefill(); bindSave(); watchLogin();
+  }
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   HAMBURGER MENU + COMPACT HEADER
+═══════════════════════════════════════════════════════════ */
+(function() {
+  var isTouch = window.matchMedia('(pointer: coarse)').matches;
+
+  function initHamburger() {
     var hamburger = document.getElementById('admin-hamburger');
     var menu      = document.getElementById('admin-mobile-menu');
     var backdrop  = document.getElementById('admin-mobile-menu-backdrop');
     var closeBtn  = document.getElementById('admin-mobile-menu-close');
-    var header    = document.getElementById('admin-header');
-    var spacer    = document.getElementById('admin-header-spacer');
-
-    /* ── Compact header on scroll ── */
-    function updateCompact() {
-      if (!isTouchDevice()) return;
-      var scrolled = window.scrollY > 80;
-      if (header)  header.classList.toggle('compact', scrolled);
-      if (spacer)  spacer.classList.toggle('compact', scrolled);
-    }
-    window.addEventListener('scroll', updateCompact, { passive: true });
-    updateCompact(); /* run once on load */
 
     if (!hamburger || !menu) return;
 
     function openMenu() {
       menu.classList.add('open');
-      menu.setAttribute('aria-hidden', 'false');
       hamburger.setAttribute('aria-expanded', 'true');
       document.body.style.overflow = 'hidden';
     }
     function closeMenu() {
       menu.classList.remove('open');
-      menu.setAttribute('aria-hidden', 'true');
       hamburger.setAttribute('aria-expanded', 'false');
       document.body.style.overflow = '';
     }
 
     hamburger.addEventListener('click', openMenu);
-    closeBtn && closeBtn.addEventListener('click', closeMenu);
-    backdrop && backdrop.addEventListener('click', closeMenu);
+    closeBtn  && closeBtn.addEventListener('click', closeMenu);
+    backdrop  && backdrop.addEventListener('click', closeMenu);
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && menu.classList.contains('open')) closeMenu();
+      if (e.key === 'Escape') closeMenu();
     });
 
-    /* Mirror mobile tab → desktop tab */
+    /* Mobile tab → desktop tab */
     document.querySelectorAll('.mobile-tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var tab = btn.getAttribute('data-tab');
@@ -2597,8 +2672,7 @@ tr { transition: background 0.15s ease; }
         closeMenu();
       });
     });
-
-    /* Sync active when desktop tab clicked */
+    /* Sync active state from desktop clicks */
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var tab = btn.getAttribute('data-tab');
@@ -2609,58 +2683,32 @@ tr { transition: background 0.15s ease; }
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else { init(); }
-})();
+  /* Compact header — only on touch devices where body scrolls */
+  function initCompact() {
+    if (!isTouch) return;
+    var header = document.getElementById('admin-header');
+    if (!header) return;
+    function check() {
+      header.classList.toggle('compact', window.scrollY > 80);
+    }
+    window.addEventListener('scroll', check, { passive: true });
+    /* Re-check whenever admin-app becomes visible */
+    var adminApp = document.getElementById('admin-app');
+    if (adminApp) {
+      new MutationObserver(function() {
+        if (adminApp.classList.contains('show')) check();
+      }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+    }
+    check();
+  }
 
-/* ── Session persistence — 10-minute sliding window ── */
-(function() {
-  var KEY = 'wkz_adm_s';
-  var TTL = 10 * 60 * 1000;
-  function save(pw) {
-    try { localStorage.setItem(KEY, JSON.stringify({ k: btoa(unescape(encodeURIComponent(pw))), t: Date.now() })); } catch(e) {}
-  }
-  function load() {
-    try {
-      var s = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (s && s.k && (Date.now() - s.t) < TTL) return decodeURIComponent(escape(atob(s.k)));
-    } catch(e) {}
-    return null;
-  }
-  function refresh() {
-    try {
-      var s = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (s && s.k) { s.t = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); }
-    } catch(e) {}
-  }
-  function bindSave() {
-    var btn = document.getElementById('key-submit');
-    var inp = document.getElementById('key-input');
-    if (btn) btn.addEventListener('click', function() { if (inp && inp.value) save(inp.value); }, true);
-    if (inp) inp.addEventListener('keydown', function(e) { if (e.key === 'Enter' && inp.value) save(inp.value); }, true);
-  }
-  function tryAutoLogin() {
-    var pw = load();
-    if (!pw) return;
-    var inp = document.getElementById('key-input');
-    var btn = document.getElementById('key-submit');
-    if (inp && btn) { inp.value = pw; btn.click(); }
-  }
-  function watchLoginScreen() {
-    var ls = document.getElementById('login-screen');
-    if (!ls) return;
-    var obs = new MutationObserver(function() {
-      if (ls.classList.contains('visible')) { obs.disconnect(); setTimeout(tryAutoLogin, 300); }
-    });
-    obs.observe(ls, { attributes: true, attributeFilter: ['class'] });
-  }
-  ['click','keydown','touchstart','scroll'].forEach(function(ev) {
-    document.addEventListener(ev, refresh, { passive: true });
-  });
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { bindSave(); watchLoginScreen(); });
-  } else { bindSave(); watchLoginScreen(); }
+    document.addEventListener('DOMContentLoaded', function() {
+      initHamburger(); initCompact();
+    });
+  } else {
+    initHamburger(); initCompact();
+  }
 })();
 </script>
 </body>

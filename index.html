@@ -83,8 +83,8 @@ select, select option {
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<link rel="preload" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<link rel="preload" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
 <style>
 /* ─── INDEX: reset y base ─── */
 @font-face {
@@ -1908,148 +1908,6 @@ tr { transition: background 0.15s ease; }
 /* keep all login content above bubbles */
 #login-screen > *:not(.login-bubble) { position: relative; z-index: 1; }
 
-/* ══════════════════════════════════════════
-   WOW EFFECTS — cursor trail, gradient text,
-   glassmorphism overlay, staggered rows
-══════════════════════════════════════════ */
-
-/* ── Cursor trail canvas ── */
-#cursor-trail-canvas {
-  position: fixed; inset: 0;
-  pointer-events: none;
-  z-index: 9996;
-  opacity: 1;
-}
-
-/* ── Animated gradient on intro text & logo ── */
-@keyframes gradientShift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-#dynamic-text .char {
-  background: linear-gradient(135deg, #000 0%, #555 40%, #111 70%, #333 100%);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent !important;
-  animation: gradientShift 6s ease infinite;
-}
-@media (prefers-color-scheme: dark) {
-  #dynamic-text .char {
-    background: linear-gradient(135deg, #ccc 0%, #888 40%, #eee 70%, #aaa 100%);
-    background-size: 300% 300%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-}
-
-/* ── Logo animated gradient on hover ── */
-.logo-text {
-  background: linear-gradient(135deg, #000 0%, #555 50%, #000 100%);
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  transition: background-position 0.6s ease, letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1) !important;
-}
-.logo-text:hover {
-  background-position: 100% 100%;
-  letter-spacing: .18em !important;
-}
-@media (prefers-color-scheme: dark) {
-  .logo-text {
-    background: linear-gradient(135deg, #e8e8e8 0%, #888 50%, #e8e8e8 100%);
-    background-size: 200% 200%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-}
-
-/* ── Glassmorphism recibos overlay ── */
-#recibos-overlay {
-  backdrop-filter: blur(0px) !important;
-  -webkit-backdrop-filter: blur(0px) !important;
-  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1),
-              backdrop-filter 0.6s ease !important;
-}
-#recibos-overlay.visible {
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-}
-#recibos-overlay-bar {
-  backdrop-filter: blur(20px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(1.6) !important;
-  background: rgba(255,255,255,0.85) !important;
-  border-bottom: 1px solid rgba(0,0,0,0.06) !important;
-}
-@media (prefers-color-scheme: dark) {
-  #recibos-overlay-bar {
-    background: rgba(13,13,13,0.85) !important;
-    border-bottom-color: rgba(255,255,255,0.05) !important;
-  }
-}
-
-/* ── Table row staggered entrance ── */
-@keyframes rowSlideIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-tr.row-animate {
-  animation: rowSlideIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
-}
-
-/* ── Table row hover lift ── */
-tbody tr {
-  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
-              box-shadow 0.2s cubic-bezier(0.22,1,0.36,1),
-              background 0.15s ease !important;
-}
-tbody tr:hover {
-  transform: scale(1.012) translateZ(0);
-  box-shadow: 0 4px 18px rgba(0,0,0,0.07);
-  position: relative;
-  z-index: 1;
-}
-
-/* ── Dark mode: deep midnight blue-green tint ── */
-@media (prefers-color-scheme: dark) {
-  html, body {
-    background: #080c10 !important;
-  }
-  #glow-layer-1 {
-    background:
-      radial-gradient(circle at 22% 28%, rgba(40,80,120,0.06) 0%, transparent 50%),
-      radial-gradient(circle at 78% 72%, rgba(20,60,80,0.04) 0%, transparent 50%),
-      #080c10 !important;
-  }
-  #glow-layer-2 {
-    background:
-      radial-gradient(circle at 65% 18%, rgba(30,70,100,0.04) 0%, transparent 38%),
-      radial-gradient(circle at 30% 80%, rgba(20,50,70,0.03) 0%, transparent 38%) !important;
-  }
-  #intro-screen, #login-screen, #admin-app {
-    background: #080c10 !important;
-  }
-  td { background: #0a0e12 !important; }
-  td.bold-row { background: #0e1318 !important; }
-  th { background: #111820 !important; }
-  body::before { opacity: 0.045 !important; }
-}
-
-/* ── Intro shatter — chars split on exit ── */
-.char-shatter {
-  will-change: transform, opacity, filter;
-}
-
-/* ── Cinematic intro screen exit ── */
-#intro-screen.cinematic-exit {
-  transition: none !important;
-}
-
 /* ══ HAMBURGER MENU (mobile/tablet ≤1024px) ══ */
 #admin-menu-btn {
   display: none;
@@ -2254,12 +2112,380 @@ tbody tr:hover {
 }
 .tam-chk-ok  { color: #2a6a2a; }
 .tam-chk-err { color: #c00; }
+
+/* ══════════════════════════════════════════════════════════
+   ✦ WOW SYSTEM — 10 experiential upgrades
+   1. Cinematic intro (glitch + chromatic aberration)
+   2. Smart contextual cursor
+   3. Table micro-interactions (blur unfocused rows, glow active)
+   4. Focus mode (spotlight / vignette)
+   5. Wipe transition (sweep upgrade)
+   6. Minimal sound system (Web Audio)
+   7. Time-aware UI (day/night ambience)
+   8. Material depth (parallax shadows)
+   9. Easter eggs
+   10. Ultra-minimal mode
+══════════════════════════════════════════════════════════ */
+
+/* ─── 1. CINEMATIC INTRO ─── */
+#intro-screen {
+  background: #000 !important;
+}
+@media (prefers-color-scheme: dark) {
+  #intro-screen { background: #000 !important; }
+}
+
+/* Chromatic aberration layers on intro text */
+#dynamic-text {
+  position: relative;
+}
+#dynamic-text::before,
+#dynamic-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#dynamic-text.chromatic::before {
+  color: rgba(255,60,60,0.55);
+  transform: translateX(-3px);
+  opacity: 1;
+  animation: chromaShiftR 3s ease-in-out infinite;
+}
+#dynamic-text.chromatic::after {
+  color: rgba(0,200,255,0.45);
+  transform: translateX(3px);
+  opacity: 1;
+  animation: chromaShiftB 3s ease-in-out infinite;
+}
+@keyframes chromaShiftR {
+  0%,100% { transform: translateX(-3px) translateY(0); opacity: 0.5; }
+  25%      { transform: translateX(-5px) translateY(1px); opacity: 0.7; }
+  50%      { transform: translateX(-2px) translateY(-1px); opacity: 0.4; }
+  75%      { transform: translateX(-4px) translateY(0.5px); opacity: 0.6; }
+}
+@keyframes chromaShiftB {
+  0%,100% { transform: translateX(3px) translateY(0); opacity: 0.4; }
+  25%      { transform: translateX(2px) translateY(-1px); opacity: 0.6; }
+  50%      { transform: translateX(4px) translateY(1px); opacity: 0.35; }
+  75%      { transform: translateX(3px) translateY(-0.5px); opacity: 0.5; }
+}
+
+/* Glitch keyframe for chars */
+@keyframes glitchChar {
+  0%,90%,100% { clip-path: none; transform: translate(0,0) skewX(0); }
+  91%  { clip-path: polygon(0 15%,100% 15%,100% 40%,0 40%); transform: translate(-4px,0) skewX(-3deg); }
+  92%  { clip-path: polygon(0 60%,100% 60%,100% 80%,0 80%); transform: translate(4px,0) skewX(2deg); }
+  93%  { clip-path: none; transform: translate(0,0) skewX(0); }
+  94%  { clip-path: polygon(0 25%,100% 25%,100% 55%,0 55%); transform: translate(-2px,1px); }
+  95%  { clip-path: none; transform: translate(0,0); }
+}
+.char-glitch {
+  animation: glitchChar 7s linear infinite;
+}
+
+/* Intro char color — white on black */
+#intro-screen #dynamic-text .char {
+  color: #fff !important;
+}
+#intro-line {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent) !important;
+}
+
+/* ─── 2. SMART CURSOR ─── */
+* { cursor: none !important; }
+input, textarea { cursor: none !important; }
+
+#wz-cursor {
+  position: fixed;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #000;
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%,-50%);
+  transition: width 0.2s cubic-bezier(0.22,1,0.36,1),
+              height 0.2s cubic-bezier(0.22,1,0.36,1),
+              border-radius 0.2s,
+              background 0.2s,
+              opacity 0.3s;
+  mix-blend-mode: difference;
+  will-change: transform;
+}
+#wz-cursor-ring {
+  position: fixed;
+  width: 36px; height: 36px;
+  border: 1px solid rgba(0,0,0,0.3);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99998;
+  transform: translate(-50%,-50%);
+  transition: width 0.35s cubic-bezier(0.22,1,0.36,1),
+              height 0.35s cubic-bezier(0.22,1,0.36,1),
+              border-radius 0.35s,
+              border-color 0.2s,
+              opacity 0.3s;
+  will-change: transform;
+}
+/* Expanded state on buttons/links */
+#wz-cursor.expand   { width: 40px !important; height: 40px !important; background: transparent !important; border: 1.5px solid #000; mix-blend-mode: normal; }
+#wz-cursor.on-table { width: 6px !important; height: 24px !important; border-radius: 3px !important; }
+#wz-cursor.on-input { width: 2px !important; height: 22px !important; border-radius: 1px !important; background: #000 !important; mix-blend-mode: normal; }
+/* Dark mode cursor */
+@media (prefers-color-scheme: dark) {
+  #wz-cursor { background: #fff; }
+  #wz-cursor-ring { border-color: rgba(255,255,255,0.3); }
+  #wz-cursor.expand { background: transparent !important; border-color: #fff; }
+  #wz-cursor.on-input { background: #fff !important; }
+}
+
+/* ─── 3. TABLE MICRO-INTERACTIONS ─── */
+/* Hover row: lift + blur siblings */
+tbody:has(tr:hover) tr:not(:hover) td {
+  opacity: 0.5;
+  filter: blur(0.5px);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+tbody tr:hover td {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none;
+}
+/* Glow on active-now row */
+.tr-active-now {
+  position: relative;
+}
+.tr-active-now td:first-child::before {
+  content: '';
+  position: absolute;
+  left: -2px; top: 20%; height: 60%;
+  width: 3px;
+  background: linear-gradient(180deg, transparent, #2a8a2a, transparent);
+  border-radius: 2px;
+  animation: activeGlow 2s ease-in-out infinite;
+}
+@keyframes activeGlow {
+  0%,100% { opacity: 0.4; box-shadow: 0 0 6px rgba(42,138,42,0.4); }
+  50%      { opacity: 1; box-shadow: 0 0 14px rgba(42,138,42,0.8); }
+}
+
+/* Staggered row entrance */
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+tr.wz-row-enter {
+  animation: rowIn 0.38s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* ─── 4. FOCUS MODE (vignette) ─── */
+#wz-vignette {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 190;
+  opacity: 0;
+  background: radial-gradient(ellipse at center,
+    transparent 40%,
+    rgba(0,0,0,0.12) 70%,
+    rgba(0,0,0,0.3) 100%);
+  transition: opacity 0.8s ease;
+}
+#wz-vignette.active { opacity: 1; }
+
+/* Focus-mode: non-focused panels dim */
+.wz-unfocus {
+  opacity: 0.35 !important;
+  filter: blur(1px) !important;
+  pointer-events: none !important;
+  transition: opacity 0.5s ease, filter 0.5s ease !important;
+}
+
+/* ─── 5. WIPE TRANSITION (upgraded sweep) ─── */
+#wz-wipe {
+  position: fixed; inset: 0;
+  z-index: 9990;
+  pointer-events: none;
+  transform-origin: left;
+  transform: scaleX(0);
+  background: #000;
+}
+#wz-wipe.wipe-in  { animation: wipeIn  0.45s cubic-bezier(0.76,0,0.24,1) forwards; }
+#wz-wipe.wipe-out { animation: wipeOut 0.45s cubic-bezier(0.76,0,0.24,1) forwards; }
+@keyframes wipeIn  { from{transform:scaleX(0)} to{transform:scaleX(1)} }
+@keyframes wipeOut {
+  0%   { transform: scaleX(1); transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; }
+}
+@media (prefers-color-scheme: dark) {
+  #wz-wipe { background: #fff; }
+}
+
+/* ─── 7. TIME-AWARE AMBIENCE ─── */
+/* Applied via JS class on <html> */
+html.wz-morning #glow-layer-1 {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,200,100,0.07) 0%, transparent 50%),
+    radial-gradient(circle at 70% 60%, rgba(255,170,60,0.04) 0%, transparent 50%),
+    #fafafa !important;
+}
+html.wz-evening #glow-layer-1 {
+  background:
+    radial-gradient(circle at 60% 30%, rgba(200,100,80,0.07) 0%, transparent 50%),
+    radial-gradient(circle at 20% 70%, rgba(150,80,120,0.04) 0%, transparent 50%),
+    #fafafa !important;
+}
+html.wz-night #glow-layer-1 {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(40,60,120,0.1) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(20,40,100,0.07) 0%, transparent 50%),
+    #080c14 !important;
+}
+html.wz-night, html.wz-night body {
+  background: #080c14 !important;
+  color: #d0d8e8 !important;
+}
+html.wz-night #glow-layer-2 {
+  background:
+    radial-gradient(circle at 65% 20%, rgba(30,50,120,0.06) 0%, transparent 40%),
+    radial-gradient(circle at 25% 80%, rgba(20,40,100,0.04) 0%, transparent 40%) !important;
+}
+/* Night mode: subtle blue tint on text */
+html.wz-night .logo-text  { color: #c8d4f0 !important; }
+html.wz-night #current-time { color: #c8d4f0 !important; }
+
+/* ─── 8. MATERIAL DEPTH / PARALLAX ─── */
+/* Soft inner-shadow on tables for depth */
+#table-container, .results-wrap, #recibos-overlay-content {
+  position: relative;
+}
+#table-container::before, .results-wrap::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 2;
+  box-shadow: inset 0 12px 20px -10px rgba(0,0,0,0.04),
+              inset 0 -12px 20px -10px rgba(0,0,0,0.03);
+  border-radius: 16px;
+}
+
+/* Mouse-parallax: applied via JS transform */
+#main-header-center, #admin-header {
+  will-change: transform;
+  transition: transform 0.5s cubic-bezier(0.22,1,0.36,1);
+}
+
+/* ─── 9. EASTER EGGS ─── */
+/* Konami / wakzome mode — activated via JS */
+html.wz-egg body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 48px,
+      rgba(0,0,0,0.012) 48px,
+      rgba(0,0,0,0.012) 50px
+    );
+  animation: eggGrid 20s linear infinite;
+}
+@keyframes eggGrid {
+  from { background-position: 0 0; }
+  to   { background-position: 100px 100px; }
+}
+/* Logo triple-click burst */
+@keyframes logoBurst {
+  0%   { letter-spacing: -0.02em; opacity: 1; }
+  30%  { letter-spacing: 0.5em; opacity: 0.4; }
+  60%  { letter-spacing: 0.2em; opacity: 0.8; }
+  100% { letter-spacing: inherit; opacity: 1; }
+}
+.logo-text.burst {
+  animation: logoBurst 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+
+/* ─── 10. ULTRA-MINIMAL MODE ─── */
+html.wz-minimal #main-header .logo-text,
+html.wz-minimal #admin-header .logo-text { opacity: 0.15; transition: opacity 0.5s; }
+html.wz-minimal #main-header .logo-text:hover,
+html.wz-minimal #admin-header .logo-text:hover { opacity: 1; }
+html.wz-minimal #main-nav  { opacity: 0; transition: opacity 0.5s; }
+html.wz-minimal #main-nav:hover { opacity: 1; }
+html.wz-minimal #saft-reminder { opacity: 0 !important; transition: opacity 0.5s !important; }
+html.wz-minimal #saft-reminder:hover { opacity: 1 !important; }
+html.wz-minimal #shift-countdown { opacity: 0; transition: opacity 0.5s; }
+html.wz-minimal #shift-countdown:hover { opacity: 1; }
+html.wz-minimal #current-time-main,
+html.wz-minimal #current-date-main { opacity: 0.08; transition: opacity 0.5s; }
+html.wz-minimal #current-time-main:hover,
+html.wz-minimal #current-date-main:hover { opacity: 1; }
+
+/* Minimal mode toggle indicator */
+#wz-minimal-btn {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: transparent;
+  cursor: none !important;
+  z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.2s, background 0.2s, opacity 0.3s;
+  opacity: 0.3;
+}
+#wz-minimal-btn:hover { opacity: 1; border-color: rgba(0,0,0,0.5); }
+#wz-minimal-btn::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #000;
+  transition: background 0.2s;
+}
+html.wz-minimal #wz-minimal-btn::before { background: transparent; border: 1.5px solid #000; width: 8px; height: 8px; }
+@media (prefers-color-scheme: dark) {
+  #wz-minimal-btn { border-color: rgba(255,255,255,0.12); }
+  #wz-minimal-btn::before { background: #fff; }
+  html.wz-minimal #wz-minimal-btn::before { border-color: #fff; background: transparent; }
+}
+
+/* ─── Sound ripple visual feedback ─── */
+@keyframes soundRipple {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+.wz-ripple {
+  position: fixed;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.25);
+  pointer-events: none;
+  z-index: 99990;
+  margin: -10px 0 0 -10px;
+  animation: soundRipple 0.5s ease-out forwards;
+}
+@media (prefers-color-scheme: dark) {
+  .wz-ripple { border-color: rgba(255,255,255,0.25); }
+}
 </style>
 </head>
 <body>
 
-<!-- cursor trail canvas -->
-<canvas id="cursor-trail-canvas"></canvas>
+<!-- ✦ WOW SYSTEM elements -->
+<div id="wz-cursor"></div>
+<div id="wz-cursor-ring"></div>
+<div id="wz-vignette"></div>
+<div id="wz-wipe"></div>
+<button id="wz-minimal-btn" title="ultra-minimal mode" aria-label="toggle minimal mode"></button>
 
 <!-- glow layers — animated background -->
 <div id="glow-layer-1"></div>
@@ -2621,189 +2847,6 @@ tbody tr:hover {
   </div>
 </div>
 
-<script>
-/* ══════════════════════════════════════════════════════════
-   WOW EFFECTS — cursor trail, staggered rows,
-   GSAP intro shatter, table row animation
-══════════════════════════════════════════════════════════ */
-(function () {
-  'use strict';
-
-  /* ── 1. CURSOR TRAIL ── */
-  const canvas = document.getElementById('cursor-trail-canvas');
-  const ctx    = canvas.getContext('2d');
-  let W, H;
-
-  function resizeCanvas() {
-    W = canvas.width  = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-  }
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-
-  const isDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-  const trail = [];
-  const MAX_POINTS = 28;
-  let mouse = { x: -999, y: -999 };
-  let lastMouse = { x: -999, y: -999 };
-  let raf;
-
-  window.addEventListener('mousemove', function (e) {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-  });
-
-  function drawTrail() {
-    ctx.clearRect(0, 0, W, H);
-
-    if (mouse.x !== lastMouse.x || mouse.y !== lastMouse.y) {
-      trail.push({ x: mouse.x, y: mouse.y, age: 0 });
-      if (trail.length > MAX_POINTS) trail.shift();
-      lastMouse.x = mouse.x;
-      lastMouse.y = mouse.y;
-    }
-
-    for (let i = 0; i < trail.length; i++) {
-      trail[i].age++;
-    }
-
-    const dark = isDark();
-    for (let i = 1; i < trail.length; i++) {
-      const t = i / trail.length;
-      const alpha = t * 0.18 * (1 - trail[i].age / 60);
-      if (alpha <= 0) continue;
-
-      const r = t * 3.5;
-      ctx.beginPath();
-      ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI * 2);
-      ctx.fillStyle = dark
-        ? `rgba(200, 210, 230, ${alpha})`
-        : `rgba(30, 30, 40, ${alpha})`;
-      ctx.fill();
-    }
-
-    // remove aged out points
-    while (trail.length && trail[0].age > 55) trail.shift();
-
-    raf = requestAnimationFrame(drawTrail);
-  }
-  drawTrail();
-
-  /* ── 2. STAGGERED TABLE ROW ENTRANCE ── */
-  function staggerTableRows(tableOrContainer) {
-    const rows = (tableOrContainer || document).querySelectorAll('tbody tr:not(.row-animated)');
-    rows.forEach(function (tr, i) {
-      tr.classList.add('row-animate', 'row-animated');
-      tr.style.animationDelay = (i * 38) + 'ms';
-    });
-  }
-
-  // Observe DOM mutations to catch dynamically inserted tables
-  const tableObserver = new MutationObserver(function (mutations) {
-    mutations.forEach(function (m) {
-      m.addedNodes.forEach(function (node) {
-        if (node.nodeType !== 1) return;
-        if (node.tagName === 'TABLE' || node.querySelector && node.querySelector('table')) {
-          setTimeout(function () { staggerTableRows(node); }, 30);
-        }
-        if (node.tagName === 'TR') {
-          node.classList.add('row-animate');
-          node.style.animationDelay = '0ms';
-        }
-      });
-    });
-  });
-  tableObserver.observe(document.body, { childList: true, subtree: true });
-
-  /* ── 3. GSAP INTRO SHATTER EXIT ── */
-  // Override the click-to-enter behaviour to add a shatter effect
-  // We hook into the existing intro logic by patching intro-screen dismissal
-  function patchIntroExit() {
-    if (typeof gsap === 'undefined') return;
-
-    const introScreen = document.getElementById('intro-screen');
-    if (!introScreen) return;
-
-    // Listen for the moment intro-screen starts to fade (opacity transition)
-    // We use a MutationObserver on its style attribute
-    const introStyleObs = new MutationObserver(function () {
-      const op = window.getComputedStyle(introScreen).opacity;
-      if (parseFloat(op) < 0.9 && !introScreen.dataset.shattered) {
-        introScreen.dataset.shattered = '1';
-        const chars = introScreen.querySelectorAll('.char');
-        if (!chars.length) return;
-
-        chars.forEach(function (ch, i) {
-          const dir = (i % 2 === 0 ? -1 : 1);
-          gsap.to(ch, {
-            duration: 0.55,
-            x: dir * (30 + Math.random() * 80),
-            y: -20 - Math.random() * 60,
-            rotation: dir * (15 + Math.random() * 35),
-            scale: 0.4 + Math.random() * 0.3,
-            opacity: 0,
-            filter: 'blur(6px)',
-            ease: 'power2.in',
-            delay: i * 0.04
-          });
-        });
-      }
-    });
-    introStyleObs.observe(introScreen, { attributes: true, attributeFilter: ['style'] });
-  }
-
-  // Wait for GSAP to be available
-  if (typeof gsap !== 'undefined') {
-    patchIntroExit();
-  } else {
-    window.addEventListener('load', patchIntroExit);
-  }
-
-  /* ── 4. ENHANCED GLASSMORPHISM OVERLAY ENTRANCE ── */
-  // Animate recibos-overlay content rows when overlay opens
-  const recibosMutObs = new MutationObserver(function () {
-    const overlay = document.getElementById('recibos-overlay');
-    if (!overlay) return;
-    if (overlay.classList.contains('visible')) {
-      setTimeout(function () {
-        staggerTableRows(document.getElementById('recibos-tbody'));
-      }, 200);
-    }
-  });
-  const reciOverlay = document.getElementById('recibos-overlay');
-  if (reciOverlay) {
-    recibosMutObs.observe(reciOverlay, { attributes: true, attributeFilter: ['class'] });
-  }
-
-  /* ── 5. LOGIN ITEM STAGGER via GSAP ── */
-  document.addEventListener('DOMContentLoaded', function () {
-    if (typeof gsap === 'undefined') return;
-    const loginScreen = document.getElementById('login-screen');
-    if (!loginScreen) return;
-
-    const loginScreenObs = new MutationObserver(function () {
-      if (loginScreen.classList.contains('visible')) {
-        const items = loginScreen.querySelectorAll('.login-item');
-        gsap.to(items, {
-          opacity: 1,
-          y: 0,
-          duration: 0.7,
-          ease: 'power3.out',
-          stagger: 0.1,
-          onStart: function () {
-            items.forEach(function (el) {
-              el.style.animationPlayState = 'running';
-            });
-          }
-        });
-      }
-    });
-    loginScreenObs.observe(loginScreen, { attributes: true, attributeFilter: ['class'] });
-  });
-
-})();
-</script>
 <script src="js/shared.js"></script>
 <script src="js/admin-init.js"></script>
 <script src="js/salarios.js"></script>
@@ -2860,6 +2903,444 @@ tbody tr:hover {
     const tabBtn = e.target.closest('.tab-btn');
     if (tabBtn) syncActive(tabBtn.dataset.tab);
   });
+})();
+</script>
+<script>
+/* ════════════════════════════════════════════════════════
+   ✦ WOW SYSTEM v2 — wakzome
+   Ten experiential upgrades, zero regressions
+════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  /* ── helpers ── */
+  const $ = id => document.getElementById(id);
+  const isDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const html = document.documentElement;
+
+  /* ══════════════════════════════════
+     1. CINEMATIC INTRO — glitch chars
+  ══════════════════════════════════ */
+  function initCinematicIntro () {
+    const screen = $('intro-screen');
+    const dynText = $('dynamic-text');
+    if (!screen || !dynText) return;
+
+    // Ensure intro is black
+    screen.style.background = '#000';
+
+    // Apply chromatic aberration once chars are assembled
+    // (intro.js populates chars — we observe)
+    let chromaApplied = false;
+    const charObs = new MutationObserver(() => {
+      const chars = dynText.querySelectorAll('.char');
+      if (chars.length && !chromaApplied) {
+        chromaApplied = true;
+        // Set the data-text attribute so ::before/::after pseudo-elements
+        // can mirror the text for chromatic effect
+        dynText.dataset.text = dynText.textContent;
+        // Add glitch to random chars after a delay
+        setTimeout(() => {
+          chars.forEach((ch, i) => {
+            if (Math.random() > 0.5) {
+              ch.classList.add('char-glitch');
+              ch.style.animationDelay = (Math.random() * 4) + 's';
+            }
+          });
+          setTimeout(() => dynText.classList.add('chromatic'), 600);
+        }, 800);
+        charObs.disconnect();
+      }
+    });
+    charObs.observe(dynText, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+
+    // GSAP shatter on intro exit
+    const introExitObs = new MutationObserver(() => {
+      const op = parseFloat(window.getComputedStyle(screen).opacity);
+      if (op < 0.95 && !screen.dataset.shattered && typeof gsap !== 'undefined') {
+        screen.dataset.shattered = '1';
+        const chars = dynText.querySelectorAll('.char');
+        chars.forEach((ch, i) => {
+          const dir = i % 2 === 0 ? -1 : 1;
+          gsap.to(ch, {
+            x: dir * (20 + Math.random() * 90),
+            y: -(10 + Math.random() * 80),
+            rotation: dir * (10 + Math.random() * 40),
+            scale: 0.2 + Math.random() * 0.4,
+            opacity: 0,
+            filter: 'blur(8px)',
+            duration: 0.6,
+            ease: 'power2.in',
+            delay: i * 0.035
+          });
+        });
+        gsap.to($('intro-line'), { scaleX: 0, opacity: 0, duration: 0.3, ease: 'power2.in' });
+      }
+    });
+    introExitObs.observe(screen, { attributes: true, attributeFilter: ['style'] });
+  }
+
+  /* ══════════════════════════════════
+     2. SMART CONTEXTUAL CURSOR
+  ══════════════════════════════════ */
+  function initSmartCursor () {
+    const cur  = $('wz-cursor');
+    const ring = $('wz-cursor-ring');
+    if (!cur || !ring) return;
+
+    let mx = -200, my = -200;
+    let rx = -200, ry = -200;
+    let rafId;
+
+    document.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+      cur.style.left  = mx + 'px';
+      cur.style.top   = my + 'px';
+    });
+
+    // Smooth ring lerp
+    function animateRing () {
+      rx += (mx - rx) * 0.12;
+      ry += (my - ry) * 0.12;
+      ring.style.left = rx + 'px';
+      ring.style.top  = ry + 'px';
+      rafId = requestAnimationFrame(animateRing);
+    }
+    animateRing();
+
+    // Context detection
+    document.addEventListener('mouseover', e => {
+      const el = e.target;
+      cur.classList.remove('expand', 'on-table', 'on-input');
+      ring.style.transform = 'translate(-50%,-50%)';
+
+      const isBtn = el.closest('button, a, [role=button], .tab-btn, label[for], summary, #recibos-link');
+      const isTd  = el.closest('td, th');
+      const isInp = el.matches('input, textarea, select');
+
+      if (isBtn) {
+        cur.classList.add('expand');
+        ring.style.width  = '60px';
+        ring.style.height = '60px';
+      } else if (isInp) {
+        cur.classList.add('on-input');
+        ring.style.width  = '28px';
+        ring.style.height = '28px';
+        ring.style.borderRadius = '3px';
+      } else if (isTd) {
+        cur.classList.add('on-table');
+        ring.style.width  = '4px';
+        ring.style.height = '32px';
+        ring.style.borderRadius = '2px';
+      } else {
+        ring.style.width  = '36px';
+        ring.style.height = '36px';
+        ring.style.borderRadius = '50%';
+      }
+    });
+
+    document.addEventListener('mousedown', () => {
+      cur.style.transform = 'translate(-50%,-50%) scale(0.6)';
+      spawnRipple(mx, my);
+    });
+    document.addEventListener('mouseup', () => {
+      cur.style.transform = 'translate(-50%,-50%) scale(1)';
+    });
+
+    // Hide on leave
+    document.addEventListener('mouseleave', () => {
+      cur.style.opacity = '0';
+      ring.style.opacity = '0';
+    });
+    document.addEventListener('mouseenter', () => {
+      cur.style.opacity = '1';
+      ring.style.opacity = '1';
+    });
+  }
+
+  /* ══════════════════════════════════
+     3. TABLE ROW STAGGER ENTRANCE
+  ══════════════════════════════════ */
+  function staggerRows (root) {
+    const rows = (root || document).querySelectorAll('tbody tr:not(.wz-entered)');
+    rows.forEach((tr, i) => {
+      tr.classList.add('wz-entered', 'wz-row-enter');
+      tr.style.animationDelay = (i * 40) + 'ms';
+    });
+  }
+
+  const mutObs = new MutationObserver(muts => {
+    muts.forEach(m => {
+      m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.tagName === 'TABLE' || n.querySelector?.('table')) {
+          setTimeout(() => staggerRows(n), 20);
+        }
+      });
+    });
+  });
+  mutObs.observe(document.body, { childList: true, subtree: true });
+
+  /* ══════════════════════════════════
+     4. FOCUS MODE / VIGNETTE
+  ══════════════════════════════════ */
+  const vignette = $('wz-vignette');
+
+  function setFocusMode (on) {
+    if (!vignette) return;
+    vignette.classList.toggle('active', on);
+  }
+
+  // Watch for overlay / modal openings
+  const focusTargets = ['recibos-overlay','r-modal-overlay','ed-export-modal'];
+  focusTargets.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    new MutationObserver(() => {
+      const open = el.classList.contains('open') ||
+                   el.classList.contains('show') ||
+                   el.classList.contains('visible') ||
+                   el.style.display === 'flex';
+      setFocusMode(open);
+    }).observe(el, { attributes: true, attributeFilter: ['class','style'] });
+  });
+
+  /* ══════════════════════════════════
+     5. WIPE TRANSITION HELPER
+     (augments existing sweep-line)
+  ══════════════════════════════════ */
+  const wipeEl = $('wz-wipe');
+
+  window.wzWipe = function (cb) {
+    if (!wipeEl) { cb && cb(); return; }
+    wipeEl.classList.remove('wipe-out');
+    void wipeEl.offsetWidth;
+    wipeEl.classList.add('wipe-in');
+    wipeEl.addEventListener('animationend', function handler () {
+      wipeEl.removeEventListener('animationend', handler);
+      if (cb) cb();
+      setTimeout(() => {
+        wipeEl.classList.remove('wipe-in');
+        void wipeEl.offsetWidth;
+        wipeEl.classList.add('wipe-out');
+        wipeEl.addEventListener('animationend', function h2 () {
+          wipeEl.removeEventListener('animationend', h2);
+          wipeEl.classList.remove('wipe-out');
+        }, { once: true });
+      }, 80);
+    }, { once: true });
+  };
+
+  /* ══════════════════════════════════
+     6. MINIMAL SOUND SYSTEM (Web Audio)
+  ══════════════════════════════════ */
+  let audioCtx = null;
+  function getAudioCtx () {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function playTone (freq, type, duration, gain, attack, release) {
+    try {
+      const ac = getAudioCtx();
+      const osc = ac.createOscillator();
+      const gainNode = ac.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(ac.destination);
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, ac.currentTime);
+      gainNode.gain.setValueAtTime(0, ac.currentTime);
+      gainNode.gain.linearRampToValueAtTime(gain || 0.05, ac.currentTime + (attack || 0.008));
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + (duration || 0.18));
+      osc.start(ac.currentTime);
+      osc.stop(ac.currentTime + (duration || 0.2));
+    } catch(e) {}
+  }
+
+  const SFX = {
+    click:    () => playTone(820, 'sine',     0.08, 0.04, 0.004, 0.07),
+    hover:    () => playTone(640, 'sine',     0.05, 0.02, 0.003, 0.04),
+    error:    () => playTone(160, 'sawtooth', 0.22, 0.06, 0.005, 0.2),
+    success:  () => { playTone(880,'sine',0.12,0.04,0.005,0.1); setTimeout(()=>playTone(1100,'sine',0.15,0.035,0.005,0.12), 80); },
+    wipe:     () => playTone(200, 'sine',     0.35, 0.03, 0.01,  0.3),
+    egg:      () => { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.18,0.04,0.006,0.15),i*80)); }
+  };
+  window.WZ_SFX = SFX;
+
+  // Wire sounds to interactions
+  document.addEventListener('click', e => {
+    const isBtn = e.target.closest('button, a, .tab-btn, label[for], #recibos-link');
+    if (isBtn) SFX.click();
+  }, { passive: true });
+
+  document.addEventListener('mouseover', e => {
+    if (e.target.closest('button, .tab-btn, #recibos-link, a')) SFX.hover();
+  }, { passive: true });
+
+  // Success / error hook: observe status message changes
+  const statusEl = $('r-status-msg') || $('s-status-msg');
+  if (statusEl) {
+    new MutationObserver(() => {
+      const t = statusEl.textContent.toLowerCase();
+      if (t.includes('erro') || t.includes('falhou') || t.includes('inválid')) SFX.error();
+      if (t.includes('concluí') || t.includes('guardado') || t.includes('sucesso')) SFX.success();
+    }).observe(statusEl, { characterData: true, childList: true, subtree: true });
+  }
+
+  /* ══════════════════════════════════
+     7. TIME-AWARE UI
+  ══════════════════════════════════ */
+  function applyTimeAmbience () {
+    const h = new Date().getHours();
+    html.classList.remove('wz-morning','wz-evening','wz-night');
+    if (h >= 6  && h < 12) html.classList.add('wz-morning');
+    else if (h >= 18 && h < 21) html.classList.add('wz-evening');
+    else if (h >= 21 || h < 6)  html.classList.add('wz-night');
+  }
+  applyTimeAmbience();
+  setInterval(applyTimeAmbience, 60000);
+
+  /* ══════════════════════════════════
+     8. MATERIAL DEPTH — mouse parallax
+  ══════════════════════════════════ */
+  let pmx = 0, pmy = 0;
+  document.addEventListener('mousemove', e => {
+    pmx = (e.clientX / window.innerWidth  - 0.5) * 2; // -1…1
+    pmy = (e.clientY / window.innerHeight - 0.5) * 2;
+  }, { passive: true });
+
+  (function parallaxLoop () {
+    const targets = [
+      { el: $('main-header-center'), dx: 6,  dy: 4  },
+      { el: $('admin-header'),       dx: 5,  dy: 3  },
+    ];
+    targets.forEach(({ el, dx, dy }) => {
+      if (!el) return;
+      el.style.transform = `translate(${pmx * dx}px, ${pmy * dy}px)`;
+    });
+    requestAnimationFrame(parallaxLoop);
+  })();
+
+  /* ══════════════════════════════════
+     9. EASTER EGGS
+  ══════════════════════════════════ */
+  // a) Triple-click logo → burst animation + secret sound
+  let clickCount = 0, clickTimer;
+  document.addEventListener('click', e => {
+    const logo = e.target.closest('.logo-text');
+    if (!logo) return;
+    clickCount++;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      if (clickCount >= 3) {
+        logo.classList.remove('burst');
+        void logo.offsetWidth;
+        logo.classList.add('burst');
+        SFX.egg();
+        spawnEggParticles(e.clientX, e.clientY);
+        html.classList.toggle('wz-egg');
+        setTimeout(() => logo.classList.remove('burst'), 700);
+      }
+      clickCount = 0;
+    }, 350);
+  });
+
+  function spawnEggParticles (x, y) {
+    for (let i = 0; i < 12; i++) {
+      const p = document.createElement('div');
+      p.style.cssText = `
+        position:fixed; left:${x}px; top:${y}px;
+        width:4px; height:4px; border-radius:50%;
+        background:${isDark()?'#fff':'#000'};
+        pointer-events:none; z-index:99999;
+        transform:translate(-50%,-50%);
+      `;
+      document.body.appendChild(p);
+      const angle = (i / 12) * Math.PI * 2;
+      const dist  = 40 + Math.random() * 60;
+      if (typeof gsap !== 'undefined') {
+        gsap.to(p, {
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist,
+          opacity: 0,
+          scale: 0,
+          duration: 0.6 + Math.random() * 0.3,
+          ease: 'power2.out',
+          onComplete: () => p.remove()
+        });
+      } else {
+        setTimeout(() => p.remove(), 700);
+      }
+    }
+  }
+
+  // b) Konami code → ultra-secret grid mode
+  const KONAMI = [38,38,40,40,37,39,37,39,66,65];
+  let konamiIdx = 0;
+  document.addEventListener('keydown', e => {
+    if (e.keyCode === KONAMI[konamiIdx]) {
+      konamiIdx++;
+      if (konamiIdx === KONAMI.length) {
+        konamiIdx = 0;
+        html.classList.toggle('wz-egg');
+        SFX.egg();
+      }
+    } else {
+      konamiIdx = 0;
+    }
+  });
+
+  // c) Midnight special — if user is active exactly at 00:00
+  function checkMidnight () {
+    const now = new Date();
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
+      const el = $('current-time') || $('current-time-main');
+      if (el) {
+        if (typeof gsap !== 'undefined') {
+          gsap.to(el, { scale: 1.3, opacity: 0.3, yoyo: true, repeat: 3, duration: 0.4, ease: 'power2.inOut' });
+        }
+        SFX.egg();
+      }
+    }
+  }
+  setInterval(checkMidnight, 30000);
+
+  /* ══════════════════════════════════
+     10. ULTRA-MINIMAL MODE toggle
+  ══════════════════════════════════ */
+  const minBtn = $('wz-minimal-btn');
+  if (minBtn) {
+    minBtn.addEventListener('click', () => {
+      html.classList.toggle('wz-minimal');
+      SFX.click();
+      const on = html.classList.contains('wz-minimal');
+      minBtn.title = on ? 'modo normal' : 'ultra-minimal';
+    });
+  }
+
+  /* ══════════════════════════════════
+     UTILITY: sound ripple visual
+  ══════════════════════════════════ */
+  function spawnRipple (x, y) {
+    const r = document.createElement('div');
+    r.className = 'wz-ripple';
+    r.style.left = x + 'px';
+    r.style.top  = y + 'px';
+    document.body.appendChild(r);
+    r.addEventListener('animationend', () => r.remove());
+  }
+
+  /* ── Init ── */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initSmartCursor();
+      initCinematicIntro();
+    });
+  } else {
+    initSmartCursor();
+    initCinematicIntro();
+  }
+
 })();
 </script>
 </body>

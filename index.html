@@ -2201,53 +2201,6 @@ tr { transition: background 0.15s ease; }
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent) !important;
 }
 
-/* ─── 2. SMART CURSOR ─── */
-* { cursor: none !important; }
-input, textarea { cursor: none !important; }
-
-#wz-cursor {
-  position: fixed;
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: #000;
-  pointer-events: none;
-  z-index: 99999;
-  transform: translate(-50%,-50%);
-  transition: width 0.2s cubic-bezier(0.22,1,0.36,1),
-              height 0.2s cubic-bezier(0.22,1,0.36,1),
-              border-radius 0.2s,
-              background 0.2s,
-              opacity 0.3s;
-  mix-blend-mode: difference;
-  will-change: transform;
-}
-#wz-cursor-ring {
-  position: fixed;
-  width: 36px; height: 36px;
-  border: 1px solid rgba(0,0,0,0.3);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 99998;
-  transform: translate(-50%,-50%);
-  transition: width 0.35s cubic-bezier(0.22,1,0.36,1),
-              height 0.35s cubic-bezier(0.22,1,0.36,1),
-              border-radius 0.35s,
-              border-color 0.2s,
-              opacity 0.3s;
-  will-change: transform;
-}
-/* Expanded state on buttons/links */
-#wz-cursor.expand   { width: 40px !important; height: 40px !important; background: transparent !important; border: 1.5px solid #000; mix-blend-mode: normal; }
-#wz-cursor.on-table { width: 6px !important; height: 24px !important; border-radius: 3px !important; }
-#wz-cursor.on-input { width: 2px !important; height: 22px !important; border-radius: 1px !important; background: #000 !important; mix-blend-mode: normal; }
-/* Dark mode cursor */
-@media (prefers-color-scheme: dark) {
-  #wz-cursor { background: #fff; }
-  #wz-cursor-ring { border-color: rgba(255,255,255,0.3); }
-  #wz-cursor.expand { background: transparent !important; border-color: #fff; }
-  #wz-cursor.on-input { background: #fff !important; }
-}
-
 /* ─── 3. TABLE MICRO-INTERACTIONS ─── */
 /* Hover row: lift + blur siblings */
 tbody:has(tr:hover) tr:not(:hover) td {
@@ -2437,7 +2390,7 @@ html.wz-minimal #current-date-main:hover { opacity: 1; }
   border-radius: 50%;
   border: 1px solid rgba(0,0,0,0.12);
   background: transparent;
-  cursor: none !important;
+  cursor: crosshair !important;
   z-index: 300;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.2s, background 0.2s, opacity 0.3s;
@@ -2481,8 +2434,6 @@ html.wz-minimal #wz-minimal-btn::before { background: transparent; border: 1.5px
 <body>
 
 <!-- ✦ WOW SYSTEM elements -->
-<div id="wz-cursor"></div>
-<div id="wz-cursor-ring"></div>
 <div id="wz-vignette"></div>
 <div id="wz-wipe"></div>
 <button id="wz-minimal-btn" title="ultra-minimal mode" aria-label="toggle minimal mode"></button>
@@ -2981,84 +2932,6 @@ html.wz-minimal #wz-minimal-btn::before { background: transparent; border: 1.5px
   }
 
   /* ══════════════════════════════════
-     2. SMART CONTEXTUAL CURSOR
-  ══════════════════════════════════ */
-  function initSmartCursor () {
-    const cur  = $('wz-cursor');
-    const ring = $('wz-cursor-ring');
-    if (!cur || !ring) return;
-
-    let mx = -200, my = -200;
-    let rx = -200, ry = -200;
-    let rafId;
-
-    document.addEventListener('mousemove', e => {
-      mx = e.clientX; my = e.clientY;
-      cur.style.left  = mx + 'px';
-      cur.style.top   = my + 'px';
-    });
-
-    // Smooth ring lerp
-    function animateRing () {
-      rx += (mx - rx) * 0.12;
-      ry += (my - ry) * 0.12;
-      ring.style.left = rx + 'px';
-      ring.style.top  = ry + 'px';
-      rafId = requestAnimationFrame(animateRing);
-    }
-    animateRing();
-
-    // Context detection
-    document.addEventListener('mouseover', e => {
-      const el = e.target;
-      cur.classList.remove('expand', 'on-table', 'on-input');
-      ring.style.transform = 'translate(-50%,-50%)';
-
-      const isBtn = el.closest('button, a, [role=button], .tab-btn, label[for], summary, #recibos-link');
-      const isTd  = el.closest('td, th');
-      const isInp = el.matches('input, textarea, select');
-
-      if (isBtn) {
-        cur.classList.add('expand');
-        ring.style.width  = '60px';
-        ring.style.height = '60px';
-      } else if (isInp) {
-        cur.classList.add('on-input');
-        ring.style.width  = '28px';
-        ring.style.height = '28px';
-        ring.style.borderRadius = '3px';
-      } else if (isTd) {
-        cur.classList.add('on-table');
-        ring.style.width  = '4px';
-        ring.style.height = '32px';
-        ring.style.borderRadius = '2px';
-      } else {
-        ring.style.width  = '36px';
-        ring.style.height = '36px';
-        ring.style.borderRadius = '50%';
-      }
-    });
-
-    document.addEventListener('mousedown', () => {
-      cur.style.transform = 'translate(-50%,-50%) scale(0.6)';
-      spawnRipple(mx, my);
-    });
-    document.addEventListener('mouseup', () => {
-      cur.style.transform = 'translate(-50%,-50%) scale(1)';
-    });
-
-    // Hide on leave
-    document.addEventListener('mouseleave', () => {
-      cur.style.opacity = '0';
-      ring.style.opacity = '0';
-    });
-    document.addEventListener('mouseenter', () => {
-      cur.style.opacity = '1';
-      ring.style.opacity = '1';
-    });
-  }
-
-  /* ══════════════════════════════════
      3. TABLE ROW STAGGER ENTRANCE
   ══════════════════════════════════ */
   function staggerRows (root) {
@@ -3333,11 +3206,9 @@ html.wz-minimal #wz-minimal-btn::before { background: transparent; border: 1.5px
   /* ── Init ── */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      initSmartCursor();
       initCinematicIntro();
     });
   } else {
-    initSmartCursor();
     initCinematicIntro();
   }
 

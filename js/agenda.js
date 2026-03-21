@@ -307,7 +307,7 @@ var AG_HTML = `
   <div id="ag-mb">
     <div id="ag-mt">nova fatura</div>
     <div class="ag-fg2">
-      <div class="ag-fr"><label>Fornecedor</label><select class="ag-in" id="ag-f-forn"><option value="TAM">TAM</option><option value="GIT">GIT</option><option value="BESTSELLER">BESTSELLER</option><option value="CHLAMYS">CHLAMYS</option></select></div>
+      <div class="ag-fr"><label>Fornecedor</label><input class="ag-in" id="ag-f-forn" type="text" placeholder="ex: TAM, GIT…" list="ag-forn-list"><datalist id="ag-forn-list"><option value="TAM"><option value="GIT"><option value="BESTSELLER"><option value="CHLAMYS"></datalist></div>
       <div class="ag-fr"><label>Nº Fatura</label><input class="ag-in" id="ag-f-fat" type="text" placeholder="ZY-26000000"></div>
       <div class="ag-fr"><label>Valor (€)</label><input class="ag-in" id="ag-f-val" type="number" step="0.01" placeholder="0.00"></div>
       <div class="ag-fr"><label>Estado</label><select class="ag-in" id="ag-f-est"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="nc">Nota de Crédito</option></select></div>

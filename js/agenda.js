@@ -370,7 +370,7 @@ function agBindLogic() {
 
   var activeYear = CURRENT_YEAR;
   var agF = [], agFilter = 'all', agForn = null, agQ = '';
-  var agSort = {col:'vencimento',dir:'asc'}, agEditId = null;
+  var agSort = {col:'data',dir:'asc'}, agEditId = null;
   var TODAY = new Date(); TODAY.setHours(0,0,0,0);
   var _editOnceActive = false;
 
@@ -645,8 +645,8 @@ function agBindLogic() {
   }
   function rSum(){
     var geral=0,pago=0,pend=0,venc=0;
-    agF.forEach(function(f){var e=est(f);geral+=f.valor;if(e==='pago'||e==='nc')pago+=f.valor;else if(e==='vencida')venc+=f.valor;else pend+=f.valor;});
-    var cards=[{id:'cg',l:'total '+activeYear,v:geral,cc:'cb',vc:''},{id:'cp',l:'pago',v:pago,cc:'cg',vc:'vg'},{id:'ce',l:'pendente',v:pend,cc:'ca',vc:'va'},{id:'cv',l:'vencido',v:venc,cc:'cr',vc:venc>0?'vr':''}];
+    agF.forEach(function(f){var e=est(f);geral+=f.valor;if(e==='pago'||e==='nc')pago+=f.valor;else{pend+=f.valor;if(e==='vencida')venc+=f.valor;}});
+    var cards=[{id:'cg',l:'total '+activeYear,v:geral,cc:'cb',vc:''},{id:'cp',l:'pago',v:pago,cc:'cg',vc:'vg'},{id:'ce',l:'pendente',v:pend,cc:'ca',vc:'va'},{id:'cv',l:'em atraso',v:venc,cc:'cr',vc:venc>0?'vr':''}];
     var el=document.getElementById('ag-summary');
     if(!document.getElementById('cg')){el.innerHTML=cards.map(function(c){return'<div class="ag-card '+c.cc+'" id="'+c.id+'"><div class="ag-card-label">'+c.l+'</div><div class="ag-card-value '+c.vc+'" id="'+c.id+'-v">'+fmt(c.v)+'</div></div>';}).join('');cards.forEach(function(c){_pv[c.id]=c.v;});}
     else{document.getElementById('cg').querySelector('.ag-card-label').textContent='total '+activeYear;cards.forEach(function(c){var ve=document.getElementById(c.id+'-v');if(ve&&_pv[c.id]!==c.v){animVal(ve,_pv[c.id]||0,c.v,480);_pv[c.id]=c.v;}});}

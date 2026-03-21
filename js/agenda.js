@@ -389,15 +389,142 @@ function agBindLogic() {
   function nid(){return agF.length?Math.max.apply(null,agF.map(function(f){return f.id;}))+1:1}
   function est(f){if(f.estado==='pago'||f.estado==='nc')return f.estado;var d=dd(f.vencimento);return(d!==null&&d<0)?'vencida':'pendente'}
 
+  /* ══════════════════════════════════════════════
+     SUPABASE CONFIG
+     Substitui os valores abaixo pelos do teu projeto.
+     Project URL  → Supabase Dashboard → Settings → API
+     Anon Key     → Supabase Dashboard → Settings → API
+  ══════════════════════════════════════════════ */
+  var SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
+  var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
+
+  /* ── Sync status indicator ── */
+  var _syncEl = null;
+  function getSyncEl(){
+    if(_syncEl) return _syncEl;
+    _syncEl = document.getElementById('ag-sync-status');
+    if(!_syncEl){
+      _syncEl = document.createElement('div');
+      _syncEl.id = 'ag-sync-status';
+      _syncEl.style.cssText = 'position:fixed;bottom:22px;left:22px;z-index:800;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:#fff;border:1px solid #e6e6e6;font-size:.75rem;font-weight:bold;font-family:"MontserratLight",sans-serif;color:#000;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.07)';
+      document.body.appendChild(_syncEl);
+    }
+    return _syncEl;
+  }
+  function setSyncStatus(state, msg){
+    var el = getSyncEl();
+    var icons = { syncing:'⟳', ok:'✓', error:'⚠', offline:'◌' };
+    var colors = { syncing:'#1565c0', ok:'#2e7d32', error:'#c62828', offline:'#e65100' };
+    el.style.color = colors[state] || '#000';
+    el.style.borderColor = colors[state] || '#e6e6e6';
+    el.innerHTML = '<span style="font-size:.85rem">' + (icons[state]||'·') + '</span> ' + msg;
+    el.style.opacity = '1';
+    if(state === 'ok'){
+      clearTimeout(el._hideTimer);
+      el._hideTimer = setTimeout(function(){ el.style.opacity = '0'; }, 2500);
+    }
+  }
+
+  /* ── Supabase REST helpers ── */
+  function sbHeaders(){
+    return { 'Content-Type':'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+  }
+  function sbFetch(path, opts){
+    return fetch(SB_URL + '/rest/v1/' + path, Object.assign({ headers: sbHeaders() }, opts||{}));
+  }
+
+  /* ── SAVE (async, upsert) ── */
+  var _saveDebounce = null;
+  var _pendingSave = false;
+  var _autoSaveInterval = null;
+
   function save(){
-    if(isReadonly())return;
-    try{localStorage.setItem(dataKey(activeYear),JSON.stringify(agF));}catch(e){}
+    if(isReadonly()) return;
+    /* Guarda também em localStorage como fallback offline */
+    try{ localStorage.setItem(dataKey(activeYear), JSON.stringify(agF)); }catch(e){}
+    /* Debounce: agrupa mudanças rápidas num único pedido */
+    _pendingSave = true;
+    clearTimeout(_saveDebounce);
+    _saveDebounce = setTimeout(function(){ _flushSave(); }, 800);
   }
+
+  function _flushSave(){
+    if(!_pendingSave) return;
+    _pendingSave = false;
+    if(isReadonly()) return;
+    setSyncStatus('syncing', 'a guardar…');
+    var payload = { ano: activeYear, faturas: JSON.stringify(agF), updated_at: new Date().toISOString() };
+    sbFetch('ag_agenda?ano=eq.' + activeYear, {
+      method: 'POST',
+      headers: Object.assign(sbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(payload)
+    }).then(function(r){
+      if(r.ok){ setSyncStatus('ok', 'guardado'); }
+      else{ r.text().then(function(t){ console.error('AG save error', t); setSyncStatus('error', 'erro ao guardar'); }); }
+    }).catch(function(e){ console.error('AG save network error', e); setSyncStatus('offline', 'offline — guardado localmente'); });
+  }
+
+  /* ── LOAD (async) ── */
   function load(y){
-    try{var s=localStorage.getItem(dataKey(y));if(s){agF=JSON.parse(s);return;}}catch(e){}
-    agF=[];
-    if(y===CURRENT_YEAR) save();
+    /* Carrega imediatamente do localStorage enquanto Supabase responde */
+    try{
+      var cached = localStorage.getItem(dataKey(y));
+      if(cached){ agF = JSON.parse(cached); rAll(); }
+      else{ agF = []; }
+    }catch(e){ agF = []; }
+
+    setSyncStatus('syncing', 'a carregar…');
+    sbFetch('ag_agenda?ano=eq.' + y + '&select=faturas', { method:'GET' })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(data && data.length && data[0].faturas){
+          var remote = JSON.parse(data[0].faturas);
+          agF = remote;
+          try{ localStorage.setItem(dataKey(y), JSON.stringify(agF)); }catch(e){}
+          setSyncStatus('ok', 'sincronizado');
+          rAll();
+        } else {
+          /* Nenhum registo remoto ainda — se há dados locais faz upload inicial */
+          setSyncStatus('ok', 'pronto');
+          if(agF.length > 0) _flushSave();
+          else rAll();
+        }
+      })
+      .catch(function(e){
+        console.error('AG load error', e);
+        setSyncStatus('offline', 'offline — dados locais');
+        rAll();
+      });
   }
+
+  /* ── AUTOGUARDADO a cada 15 segundos ── */
+  function startAutoSave(){
+    stopAutoSave();
+    _autoSaveInterval = setInterval(function(){
+      if(!isReadonly() && _pendingSave){ _flushSave(); }
+      else if(!isReadonly()){
+        /* Ping silencioso para confirmar sync */
+        setSyncStatus('syncing','a verificar…');
+        sbFetch('ag_agenda?ano=eq.'+activeYear+'&select=updated_at',{method:'GET'})
+          .then(function(r){return r.json();})
+          .then(function(){ setSyncStatus('ok','em dia'); })
+          .catch(function(){ setSyncStatus('offline','offline'); });
+      }
+    }, 15000);
+  }
+  function stopAutoSave(){ clearInterval(_autoSaveInterval); }
+
+  /* Inicia o autoguardado quando o overlay abre */
+  (function(){
+    var ov = document.getElementById('agenda-overlay');
+    if(ov){
+      var obs = new MutationObserver(function(){
+        if(ov.classList.contains('open')) startAutoSave();
+        else stopAutoSave();
+      });
+      obs.observe(ov, { attributes:true, attributeFilter:['class'] });
+    }
+  })();
 
   var _st;
   function snack(ic,msg){
@@ -468,7 +595,7 @@ function agBindLogic() {
     document.querySelectorAll('.ag-fb').forEach(function(b){b.classList.remove('active');});
     document.querySelectorAll('.ag-filter-btn').forEach(function(b){b.classList.remove('active');});
     document.querySelector('.ag-filter-btn[data-filter="all"]').classList.add('active');
-    load(y);rYearNav();rReadonlyBanner();rEditOnce();rToolbarState();rAll();snack('•','exercício '+y);
+    load(y);rYearNav();rReadonlyBanner();rEditOnce();rToolbarState();snack('•','exercício '+y);
   }
   function rReadonlyBanner(){
     var banner=document.getElementById('ag-readonly-banner');
@@ -486,6 +613,9 @@ function agBindLogic() {
   function closeYear(){
     if(isLocked(CURRENT_YEAR))return;
     if(!confirm('Fechar o exercício '+CURRENT_YEAR+'?\n\nÁ partir deste momento não poderá ser editado. Esta ação é irreversível.'))return;
+    /* Faz flush imediato para Supabase antes de bloquear */
+    _pendingSave = true;
+    _flushSave();
     localStorage.setItem(lockedKey(CURRENT_YEAR),'1');
     snack('⊘','exercício '+CURRENT_YEAR+' fechado');
     rYearNav();rReadonlyBanner();rToolbarState();
@@ -680,7 +810,7 @@ function agBindLogic() {
 
   load(activeYear);
   setTimeout(function(){
-    rYearNav();rReadonlyBanner();rEditOnce();rToolbarState();rAll();
+    rYearNav();rReadonlyBanner();rEditOnce();rToolbarState();
     document.getElementById('ag-today').textContent=TODAY.toLocaleDateString('pt-PT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toLowerCase();
   },0);
 }

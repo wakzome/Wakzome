@@ -782,7 +782,7 @@ function agBindLogic() {
     if(isReadonly())return;
     var fat=document.getElementById('ag-f-fat').value.trim(),val=parseVal(document.getElementById('ag-f-val').value),forn=document.getElementById('ag-f-forn').value.trim(),estado=document.getElementById('ag-f-est').value,dat=document.getElementById('ag-f-dat').value,vec=document.getElementById('ag-f-vec').value;
     if(!fat){document.getElementById('ag-f-fat').focus();return;}
-    if(isNaN(val)||val<=0){document.getElementById('ag-f-val').focus();snack('⚠','valor inválido');return;}
+    if(isNaN(val)||val===0){document.getElementById('ag-f-val').focus();snack('⚠','valor inválido');return;}
     if(agEditId){var i=agF.findIndex(function(x){return x.id===agEditId;});if(i>=0)agF[i]={id:agEditId,fornecedor:forn,factura:fat,valor:val,estado:estado,data:dat,vencimento:vec};}
     else agF.push({id:nid(),fornecedor:forn,factura:fat,valor:val,estado:estado,data:dat,vencimento:vec});
     save();closeM();rAll();snack('✓','fatura guardada');

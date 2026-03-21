@@ -309,7 +309,7 @@ var AG_HTML = `
     <div class="ag-fg2">
       <div class="ag-fr"><label>Fornecedor</label><input class="ag-in" id="ag-f-forn" type="text" placeholder="ex: TAM, GIT…" list="ag-forn-list"><datalist id="ag-forn-list"><option value="TAM"><option value="GIT"><option value="BESTSELLER"><option value="CHLAMYS"></datalist></div>
       <div class="ag-fr"><label>Nº Fatura</label><input class="ag-in" id="ag-f-fat" type="text" placeholder="ZY-26000000"></div>
-      <div class="ag-fr"><label>Valor (€)</label><input class="ag-in" id="ag-f-val" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="ag-fr"><label>Valor (€)</label><input class="ag-in" id="ag-f-val" type="text" inputmode="decimal" placeholder="3.609,19"></div>
       <div class="ag-fr"><label>Estado</label><select class="ag-in" id="ag-f-est"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="nc">Nota de Crédito</option></select></div>
       <div class="ag-fr"><label>Data Fatura</label><input class="ag-in" id="ag-f-dat" type="date"></div>
       <div class="ag-fr"><label>Vencimento</label><input class="ag-in" id="ag-f-vec" type="date"></div>
@@ -753,21 +753,36 @@ function agBindLogic() {
   }
   function rAll(){rHero();rSum();rAlerts();rInsights();rFornBtns();rBadges();rBanner();rCharts();rTable();rForn();}
 
+  function parseVal(s){
+    /* Aceita: 3.609,19 / 3609,19 / 3609.19 / 3.609.19 */
+    var str = s.trim().replace(/[€\s]/g,'');
+    /* Se tem vírgula como decimal (formato PT): remove pontos de milhar, troca vírgula por ponto */
+    if(/,\d{1,2}$/.test(str)){
+      str = str.replace(/\./g,'').replace(',','.');
+    } else {
+      /* Remove pontos de milhar (ex: 3.609) */
+      str = str.replace(/\.(?=\d{3})/g,'');
+    }
+    return parseFloat(str);
+  }
   function openM(id){
     if(isReadonly()){snack('⊘','exercício fechado — leitura apenas');return;}
     agEditId=id||null;
     document.getElementById('ag-mt').textContent=id?'editar fatura':'nova fatura';
-    if(id){var f=agF.find(function(x){return x.id===id;});if(!f)return;document.getElementById('ag-f-forn').value=f.fornecedor;document.getElementById('ag-f-fat').value=f.factura;document.getElementById('ag-f-val').value=f.valor;document.getElementById('ag-f-est').value=f.estado;document.getElementById('ag-f-dat').value=f.data||'';document.getElementById('ag-f-vec').value=f.vencimento||'';}
-    else{document.getElementById('ag-f-forn').value=agForn||'TAM';document.getElementById('ag-f-fat').value='';document.getElementById('ag-f-val').value='';document.getElementById('ag-f-est').value='pendente';document.getElementById('ag-f-dat').value=activeYear+'-'+(('0'+(TODAY.getMonth()+1)).slice(-2))+'-'+(('0'+TODAY.getDate()).slice(-2));document.getElementById('ag-f-vec').value='';}
+    if(id){var f=agF.find(function(x){return x.id===id;});if(!f)return;document.getElementById('ag-f-forn').value=f.fornecedor;document.getElementById('ag-f-fat').value=f.factura;
+      /* Mostra o valor formatado PT ao editar */
+      document.getElementById('ag-f-val').value=new Intl.NumberFormat('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(f.valor);
+      document.getElementById('ag-f-est').value=f.estado;document.getElementById('ag-f-dat').value=f.data||'';document.getElementById('ag-f-vec').value=f.vencimento||'';}
+    else{document.getElementById('ag-f-forn').value=agForn||'';document.getElementById('ag-f-fat').value='';document.getElementById('ag-f-val').value='';document.getElementById('ag-f-est').value='pendente';document.getElementById('ag-f-dat').value=activeYear+'-'+(('0'+(TODAY.getMonth()+1)).slice(-2))+'-'+(('0'+TODAY.getDate()).slice(-2));document.getElementById('ag-f-vec').value='';}
     document.getElementById('ag-mo').classList.add('open');
     setTimeout(function(){document.getElementById('ag-f-fat').focus();},50);
   }
   function closeM(){document.getElementById('ag-mo').classList.remove('open');agEditId=null;}
   function saveM(){
     if(isReadonly())return;
-    var fat=document.getElementById('ag-f-fat').value.trim(),val=parseFloat(document.getElementById('ag-f-val').value),forn=document.getElementById('ag-f-forn').value,estado=document.getElementById('ag-f-est').value,dat=document.getElementById('ag-f-dat').value,vec=document.getElementById('ag-f-vec').value;
+    var fat=document.getElementById('ag-f-fat').value.trim(),val=parseVal(document.getElementById('ag-f-val').value),forn=document.getElementById('ag-f-forn').value.trim(),estado=document.getElementById('ag-f-est').value,dat=document.getElementById('ag-f-dat').value,vec=document.getElementById('ag-f-vec').value;
     if(!fat){document.getElementById('ag-f-fat').focus();return;}
-    if(isNaN(val)){document.getElementById('ag-f-val').focus();return;}
+    if(isNaN(val)||val<=0){document.getElementById('ag-f-val').focus();snack('⚠','valor inválido');return;}
     if(agEditId){var i=agF.findIndex(function(x){return x.id===agEditId;});if(i>=0)agF[i]={id:agEditId,fornecedor:forn,factura:fat,valor:val,estado:estado,data:dat,vencimento:vec};}
     else agF.push({id:nid(),fornecedor:forn,factura:fat,valor:val,estado:estado,data:dat,vencimento:vec});
     save();closeM();rAll();snack('✓','fatura guardada');

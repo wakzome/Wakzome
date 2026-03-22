@@ -197,6 +197,38 @@ body {
   transition: color .2s, border-color .2s, background .2s;
 }
 #recibos-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
+#agenda-link {
+  display: inline-block;
+  padding: 6px 16px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: uppercase;
+  color: #000;
+  text-decoration: none;
+  letter-spacing: .04em;
+  border: 1.5px solid #ccc;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+#agenda-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
+#rotulos-link {
+  display: inline-block;
+  padding: 6px 16px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: uppercase;
+  color: #000;
+  text-decoration: none;
+  letter-spacing: .04em;
+  border: 1.5px solid #ccc;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+#rotulos-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
 @media (max-width: 768px) { #main-nav { display: none; } }
 
 /* ─── RECIBOS OVERLAY ─── */
@@ -301,6 +333,84 @@ body {
   .recibos-nota strong { color: #777 !important; }
 }
 
+/* ─── AGENDA OVERLAY ─── */
+#agenda-overlay {
+  display: none; position: fixed; inset: 0;
+  background: #fff; z-index: 200;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+#agenda-overlay.open { display: flex; }
+#agenda-overlay.visible { opacity: 1; }
+#agenda-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#agenda-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#agenda-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #000; background: none; border: none;
+  padding: 4px 10px; border-radius: 8px;
+  transition: background .15s, color .15s; text-transform: lowercase; letter-spacing: .03em;
+}
+#agenda-overlay-back:hover { background: #555; color: #fff; }
+#agenda-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0; font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+@media (prefers-color-scheme: dark) {
+  #agenda-overlay { background: #0d0d0d !important; }
+  #agenda-overlay-bar { background: #0d0d0d !important; border-bottom-color: #2a2a2a !important; }
+  #agenda-overlay-title { color: #444 !important; }
+  #agenda-overlay-back { color: #888 !important; }
+  #agenda-overlay-back:hover { background: #f0f0f0 !important; color: #0d0d0d !important; }
+}
+
+/* ─── RÓTULOS OVERLAY ─── */
+#rotulos-overlay {
+  display: none; position: fixed; inset: 0;
+  background: #fff; z-index: 200;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+#rotulos-overlay.open { display: flex; }
+#rotulos-overlay.visible { opacity: 1; }
+#rotulos-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#rotulos-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#rotulos-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #000; background: none; border: none;
+  padding: 4px 10px; border-radius: 8px;
+  transition: background .15s, color .15s; text-transform: lowercase; letter-spacing: .03em;
+}
+#rotulos-overlay-back:hover { background: #555; color: #fff; }
+#rotulos-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0; font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+@media (prefers-color-scheme: dark) {
+  #rotulos-overlay { background: #0d0d0d !important; }
+  #rotulos-overlay-bar { background: #0d0d0d !important; border-bottom-color: #2a2a2a !important; }
+  #rotulos-overlay-title { color: #444 !important; }
+  #rotulos-overlay-back { color: #888 !important; }
+  #rotulos-overlay-back:hover { background: #f0f0f0 !important; color: #0d0d0d !important; }
+}
+
 /* ─── INDEX: tablas de horarios ─── */
 /* summary-wrap: kept in DOM for JS but NEVER shown */
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
@@ -332,7 +442,7 @@ body {
 @media (max-width: 768px) {
   #legal-notice { display: none !important; }
 }
-@media (prefers-color-scheme: dark) { #legal-notice { color: #2e2e2e !important; } }
+@media (prefers-color-scheme: dark) { #legal-notice { color: #555 !important; } }
 
 /* Table container — fits content, scrolls horizontally if needed */
 #table-container {
@@ -935,7 +1045,7 @@ input, textarea { cursor: text !important; }
   font-size: .82rem; font-weight: 600; color: #000;
   letter-spacing: .04em; margin-top: 8px; padding: 4px 0;
 }
-@media (prefers-color-scheme: dark) { #shift-countdown { color: #555 !important; } }
+@media (prefers-color-scheme: dark) { #shift-countdown { color: #888 !important; } }
 
 /* ══ MINI DASHBOARD ══ */
 #h-dashboard {
@@ -1816,6 +1926,56 @@ button:active:not(:disabled), .tab-btn:active,
     box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
   }
   .f-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important; }
+
+  /* ── Modal recibos ── */
+  #r-modal-overlay { background: rgba(0,0,0,0.65) !important; }
+  #r-modal-box { background: #161616 !important; border: 1px solid #2a2a2a !important; }
+  #r-modal-box .modal-title { color: #555 !important; }
+  #r-modal-box .modal-name { color: #e8e8e8 !important; }
+  #r-modal-box .modal-info { color: #aaa !important; }
+  #r-modal-pwd-input { background: #111 !important; border-color: #333 !important; color: #e8e8e8 !important; }
+  .modal-btn { background: #111 !important; border-color: #333 !important; color: #888 !important; }
+  .modal-btn:hover { background: #f0f0f0 !important; color: #0d0d0d !important; border-color: #f0f0f0 !important; }
+
+  /* ── Warnings / status ── */
+  #r-warnings-box { background: #1a0e00 !important; border-color: #5a3a00 !important; }
+  #r-warnings-box .warn-title { color: #e09040 !important; }
+  #r-warnings-box ul li { color: #e09040 !important; }
+  #r-status-msg, #s-status-msg, #r-progress-detail { color: #aaa !important; }
+  #r-upload-progress { background: #1e1e1e !important; }
+  #r-upload-progress-bar { background: #888 !important; }
+
+  /* ── Navegación empleado ── */
+  #recibos-link, #agenda-link, #rotulos-link {
+    color: #aaa !important; border-color: #2a2a2a !important;
+  }
+  #recibos-link:hover { color: #e8e8e8 !important; border-color: #888 !important; background: #1a1a1a !important; }
+
+  /* ── TAM tab ── */
+  #tam-invoice-meta { background: #161616 !important; color: #aaa !important; }
+  #tam-upload-label { border-color: #2a2a2a !important; color: #666 !important; background: transparent !important; }
+  #tam-upload-label:hover { border-color: #888 !important; background: #111 !important; color: #ccc !important; }
+  #tam-file-name, #tam-status-msg { color: #888 !important; }
+  #tam-export-btn { background: #111 !important; border-color: #444 !important; color: #aaa !important; }
+  #tam-export-btn:hover { background: #888 !important; color: #111 !important; }
+  #tam-results-wrap { color: #e8e8e8 !important; }
+  .tam-table th { background: #1e1e1e !important; color: #ccc !important; border-color: #2a2a2a !important; }
+  .tam-table td { border-color: #1e1e1e !important; color: #e8e8e8 !important; background: #111 !important; }
+  .tam-table tbody tr:hover td { background: #1a1a1a !important; }
+  .tam-table tfoot td { background: #1a1a1a !important; border-top-color: #333 !important; }
+  .tam-table tfoot tr.tam-tr-ship td { background: #161616 !important; color: #aaa !important; }
+  .tam-table tfoot tr.tam-tr-grand td { background: #222 !important; border-top-color: #444 !important; }
+  #tam-validation-banner.ok  { background: #0a1f0a !important; color: #4aaa4a !important; }
+  #tam-validation-banner.err { background: #1f0a0a !important; color: #cc4444 !important; }
+
+  /* ── Config section ── */
+  #r-config-saved { color: #4aaa4a !important; }
+
+  /* ── Conferir fixed ── */
+  #r-conferir-note { color: #c08000 !important; }
+
+  /* ── Drawer menu ── */
+  #admin-menu-drawer { background: #0d0d0d !important; }
 }
 
 /* ── Tab transitions — crossfade between panels ── */
@@ -2173,12 +2333,7 @@ tr { transition: background 0.15s ease; }
 .char-glitch { animation: glitchChar 7s linear infinite; }
 
 /* ─── 2. TABLE MICRO-INTERACTIONS ─── */
-tbody:has(tr:hover) tr:not(:hover) td {
-  opacity: 0.45;
-  filter: blur(0.4px);
-  transition: opacity 0.18s ease, filter 0.18s ease;
-}
-tbody tr:hover td { opacity:1 !important; filter:none !important; }
+/* Efecto de opacidad/blur eliminado */
 
 /* Glow bar on active-now row */
 .tr-active-now { position: relative; }
@@ -2390,6 +2545,8 @@ html.wz-minimal #wz-minimal-btn::before {
   <div id="tab-nav" class="reveal-item" style="opacity:0;">
     <button class="tab-btn active" data-tab="salarios">salários</button>
     <button class="tab-btn" data-tab="recibos">recibos</button>
+    <button class="tab-btn" data-tab="agenda">agenda</button>
+    <button class="tab-btn" data-tab="rotulos">rótulos</button>
     <button class="tab-btn" data-tab="horarios">horários</button>
     <button class="tab-btn" data-tab="ferias">férias</button>
     <button class="tab-btn" data-tab="editor">editor pdf</button>
@@ -2401,6 +2558,8 @@ html.wz-minimal #wz-minimal-btn::before {
   <div id="admin-menu-drawer">
     <button class="drawer-tab-btn active" data-tab="salarios">salários</button>
     <button class="drawer-tab-btn" data-tab="recibos">recibos</button>
+    <button class="drawer-tab-btn" data-tab="agenda">agenda</button>
+    <button class="drawer-tab-btn" data-tab="rotulos">rótulos</button>
     <button class="drawer-tab-btn" data-tab="horarios">horários</button>
     <button class="drawer-tab-btn" data-tab="ferias">férias</button>
     <button class="drawer-tab-btn" data-tab="editor">editor pdf</button>
@@ -2487,6 +2646,9 @@ html.wz-minimal #wz-minimal-btn::before {
 
   </div>
   <!-- TAB HORÁRIOS -->
+  <div id="tab-agenda" class="tab-panel"></div>
+  <div id="tab-rotulos" class="tab-panel"></div>
+
   <div id="tab-horarios" class="tab-panel">
     <div id="h-store-selector">
       <label>loja</label>
@@ -2624,6 +2786,28 @@ html.wz-minimal #wz-minimal-btn::before {
 <div id="page-name-popup"></div>
 
 <!-- RECIBOS OVERLAY -->
+<!-- AGENDA OVERLAY -->
+<div id="agenda-overlay">
+  <div id="agenda-overlay-bar">
+    <button id="agenda-overlay-back" onclick="closeAgendaOverlay()">← voltar</button>
+    <div id="agenda-overlay-title">agenda faturas</div>
+  </div>
+  <div id="agenda-overlay-content">
+    <div id="ag-root" style="width:100%;"></div>
+  </div>
+</div>
+
+<!-- RÓTULOS OVERLAY -->
+<div id="rotulos-overlay">
+  <div id="rotulos-overlay-bar">
+    <button id="rotulos-overlay-back" onclick="closeRotulosOverlay()">← voltar</button>
+    <div id="rotulos-overlay-title">rótulos</div>
+  </div>
+  <div id="rotulos-overlay-content">
+    <div id="rt-root" style="width:100%;"></div>
+  </div>
+</div>
+
 <div id="recibos-overlay">
   <div id="recibos-overlay-bar">
     <button id="recibos-overlay-back" onclick="closeRecibosOverlay()">← voltar</button>
@@ -2671,6 +2855,8 @@ html.wz-minimal #wz-minimal-btn::before {
   </div>
 </div>
 
+<script src="js/agenda.js"></script>
+<script src="js/rotulos.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/admin-init.js"></script>
 <script src="js/salarios.js"></script>
@@ -2944,6 +3130,53 @@ html.wz-minimal #wz-minimal-btn::before {
   else
     initCinematicIntro();
 
+})();
+</script>
+
+<script>
+/* ── Intercepta tabs de agenda e rótulos ── */
+(function () {
+  var _lastTab = 'salarios';
+
+  function interceptOverlayTabs() {
+    document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (btn) {
+      if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos') return;
+      if (btn.dataset._overlayBound) return;
+      btn.dataset._overlayBound = '1';
+
+      btn.addEventListener('click', function (e) {
+        /* Cancela a activação do painel vazio e abre o overlay */
+        e.stopImmediatePropagation();
+
+        /* Volta a activar o tab anterior visualmente */
+        document.querySelectorAll('.tab-btn').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.tab === _lastTab);
+        });
+        document.querySelectorAll('.drawer-tab-btn').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.tab === _lastTab);
+        });
+
+        if (btn.dataset.tab === 'agenda')  openAgendaOverlay();
+        if (btn.dataset.tab === 'rotulos') openRotulosOverlay();
+      }, true); /* capture = true → executa antes do listener do admin-init */
+    });
+  }
+
+  /* Guarda o último tab activo real (não agenda/rotulos) */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.tab-btn, .drawer-tab-btn');
+    if (!btn) return;
+    if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos') {
+      _lastTab = btn.dataset.tab;
+    }
+  }, true);
+
+  /* Corre depois de admin-init.js ter registado os seus listeners */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', interceptOverlayTabs);
+  } else {
+    interceptOverlayTabs();
+  }
 })();
 </script>
 </body>

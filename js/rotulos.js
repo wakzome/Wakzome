@@ -179,6 +179,20 @@ var RT_CSS = `
 #rt-sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; display: inline-block; margin-left: 8px; transition: background .3s; }
 #rt-sync-dot.syncing { background: #e65100; }
 #rt-sync-dot.ok { background: #2e7d32; }
+
+/* ── Delete shipment button ── */
+.rt-del-btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #e6e6e6; background: #fff; color: #bbb; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .15s; margin-left: 6px; }
+.rt-del-btn:hover { border-color: #c00; color: #c00; background: #fff5f5; }
+
+/* ── Delete confirmation modal ── */
+#rt-del-modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 960; display: none; align-items: center; justify-content: center; }
+#rt-del-modal.open { display: flex; }
+#rt-del-box { background: #fff; border-radius: 16px; padding: 28px; width: min(360px, 92vw); box-shadow: 0 24px 80px rgba(0,0,0,.2); }
+#rt-del-box h3 { font-size: .92rem; font-weight: bold; text-transform: lowercase; margin-bottom: 8px; }
+#rt-del-box p { font-size: .82rem; color: #666; font-weight: bold; margin-bottom: 22px; line-height: 1.5; }
+.rt-del-act { display: flex; gap: 8px; }
+.rt-del-confirm { flex: 1; padding: 10px; background: #c00; border: none; border-radius: 20px; color: #fff; cursor: pointer; font-size: .84rem; font-weight: bold; text-transform: lowercase; font-family: 'MontserratLight', sans-serif; transition: background .15s; }
+.rt-del-confirm:hover { background: #a00; }
 `;
 
 var RT_HTML = `
@@ -332,6 +346,17 @@ var RT_HTML = `
 </div>
 <div class="rt-toast" id="rt-toast"></div>
 <div id="rt-print-area"></div>
+<!-- Delete confirmation modal -->
+<div id="rt-del-modal">
+  <div id="rt-del-box">
+    <h3>eliminar envio</h3>
+    <p id="rt-del-msg">tem a certeza que quer eliminar este envio? esta acção não pode ser desfeita.</p>
+    <div class="rt-del-act">
+      <button class="rt-btn-cnc" onclick="rtCloseDelModal()" style="flex:1">cancelar</button>
+      <button class="rt-del-confirm" id="rt-del-ok">eliminar</button>
+    </div>
+  </div>
+</div>
 `;
 
 var _rtStyleInjected = false;
@@ -735,6 +760,7 @@ function rtBindLogic() {
           '<button class="rt-reprint-btn" onclick="rtReprintShipment('+sh.id+',event)">'+
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>'+
             ' reimprimir</button>'+
+          '<button class="rt-del-btn" onclick="rtOpenDelModal('+sh.id+',\''+sh.date+'\',event)" title="eliminar envio">✕</button>'+
         '</div>'+
         '<div class="rt-sg-bx">'+rows+'</div>';
       el.appendChild(div);
@@ -750,6 +776,35 @@ function rtBindLogic() {
     var sp=document.getElementById('rtsp_'+shId); if(sp) sp.textContent=del+'/'+sh.boxes.length+' entregues';
     rtRSum(); rtToast(cb.checked?'caixa entregue ✓':'caixa desmarcada',cb.checked?'ok':'');
   };
+
+  /* ── Delete shipment ── */
+  var _delPendingId = null;
+  window.rtOpenDelModal = function(shId, dateStr, evt){
+    if(evt) evt.stopPropagation();
+    _delPendingId = shId;
+    var msg = document.getElementById('rt-del-msg');
+    if(msg) msg.textContent = 'tem a certeza que quer eliminar o envio de ' + dateStr + '? esta acção não pode ser desfeita.';
+    document.getElementById('rt-del-modal').classList.add('open');
+  };
+  window.rtCloseDelModal = function(){
+    _delPendingId = null;
+    document.getElementById('rt-del-modal').classList.remove('open');
+  };
+  window.rtConfirmDel = function(){
+    if(!_delPendingId) return;
+    D.shipments = D.shipments.filter(function(s){ return s.id != _delPendingId; });
+    /* Recalculate acc from scratch based on remaining shipments */
+    var newAcc = {};
+    D.shipments.forEach(function(sh){
+      sh.boxes.forEach(function(b){ newAcc[b.storeId] = (newAcc[b.storeId]||0) + 1; });
+    });
+    D.acc = newAcc;
+    saveData();
+    rtCloseDelModal();
+    rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
+    rtToast('envio eliminado','ok');
+  };
+
   window.rtFCtrl = function(f,btn){
     CF=f; document.querySelectorAll('.rt-fb').forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); rtRCtrl();
   };
@@ -817,11 +872,14 @@ function rtBindLogic() {
 
   document.addEventListener('keydown',function(e){
     var ov=document.getElementById('rotulos-overlay'); if(!ov||!ov.classList.contains('open')) return;
-    if(e.key==='Escape'){ rtClosePrintModal(); rtCloseAdd(); rtCloseHistModal(); }
+    if(e.key==='Escape'){ rtClosePrintModal(); rtCloseAdd(); rtCloseHistModal(); rtCloseDelModal(); }
   });
   document.getElementById('rt-modal-print').addEventListener('click',function(e){ if(e.target===this) rtClosePrintModal(); });
   document.getElementById('rt-mm-add').addEventListener('click',function(e){ if(e.target===this) rtCloseAdd(); });
   document.getElementById('rt-hist-modal').addEventListener('click',function(e){ if(e.target===this) rtCloseHistModal(); });
+  document.getElementById('rt-del-modal').addEventListener('click',function(e){ if(e.target===this) rtCloseDelModal(); });
+  var delOk = document.getElementById('rt-del-ok');
+  if(delOk) delOk.addEventListener('click', rtConfirmDel);
 
   rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
 }

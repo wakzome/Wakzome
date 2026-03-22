@@ -367,9 +367,128 @@ body {
 @media (prefers-color-scheme: dark) {
   #agenda-overlay { background: #0d0d0d !important; }
   #agenda-overlay-bar { background: #0d0d0d !important; border-bottom-color: #2a2a2a !important; }
-  #agenda-overlay-title { color: #444 !important; }
+  #agenda-overlay-title { color: #888 !important; }
   #agenda-overlay-back { color: #888 !important; }
   #agenda-overlay-back:hover { background: #f0f0f0 !important; color: #0d0d0d !important; }
+
+  /* ── Todo el contenido inyectado por agenda.js ── */
+  #agenda-overlay-content { background: #0d0d0d !important; color: #e8e8e8 !important; }
+  #agenda-overlay-content * { color: inherit; }
+
+  /* Títulos y texto general */
+  #agenda-overlay-content h1,
+  #agenda-overlay-content h2,
+  #agenda-overlay-content h3,
+  #agenda-overlay-content h4,
+  #agenda-overlay-content p,
+  #agenda-overlay-content span,
+  #agenda-overlay-content label,
+  #agenda-overlay-content div { color: #e8e8e8 !important; }
+
+  /* Texto secundario / etiquetas */
+  #agenda-overlay-content [class*="label"],
+  #agenda-overlay-content [class*="title"],
+  #agenda-overlay-content [class*="sub"],
+  #agenda-overlay-content [class*="date"],
+  #agenda-overlay-content [class*="meta"],
+  #agenda-overlay-content small { color: #aaa !important; }
+
+  /* Cards / cajas */
+  #agenda-overlay-content [class*="card"],
+  #agenda-overlay-content [class*="box"],
+  #agenda-overlay-content [class*="panel"],
+  #agenda-overlay-content [class*="block"],
+  #agenda-overlay-content [class*="stat"],
+  #agenda-overlay-content [class*="widget"] {
+    background: #161616 !important;
+    border-color: #2a2a2a !important;
+    color: #e8e8e8 !important;
+  }
+
+  /* Valores monetarios / números grandes */
+  #agenda-overlay-content [class*="total"],
+  #agenda-overlay-content [class*="amount"],
+  #agenda-overlay-content [class*="valor"],
+  #agenda-overlay-content [class*="value"] { color: #f0f0f0 !important; }
+
+  /* Alertas y badges */
+  #agenda-overlay-content [class*="alert"],
+  #agenda-overlay-content [class*="warn"],
+  #agenda-overlay-content [class*="badge"],
+  #agenda-overlay-content [class*="tag"] {
+    background: #1a1200 !important;
+    border-color: #4a3a00 !important;
+    color: #e0a030 !important;
+  }
+
+  /* Filas de alerta roja (vencidas) */
+  #agenda-overlay-content [class*="overdue"],
+  #agenda-overlay-content [class*="vencid"],
+  #agenda-overlay-content [class*="danger"],
+  #agenda-overlay-content [class*="late"] {
+    background: #1f0a0a !important;
+    border-color: #5a1a1a !important;
+    color: #ff6b6b !important;
+  }
+
+  /* Tablas */
+  #agenda-overlay-content table { color: #e8e8e8 !important; }
+  #agenda-overlay-content th {
+    background: #1e1e1e !important;
+    color: #ccc !important;
+    border-color: #2a2a2a !important;
+  }
+  #agenda-overlay-content td {
+    background: #111 !important;
+    border-color: #1e1e1e !important;
+    color: #e8e8e8 !important;
+  }
+  #agenda-overlay-content tr:hover td { background: #1a1a1a !important; }
+
+  /* Botones */
+  #agenda-overlay-content button {
+    background: #1a1a1a !important;
+    border-color: #333 !important;
+    color: #aaa !important;
+  }
+  #agenda-overlay-content button:hover {
+    background: #f0f0f0 !important;
+    color: #0d0d0d !important;
+    border-color: #f0f0f0 !important;
+  }
+
+  /* Selectores de año / pill buttons */
+  #agenda-overlay-content [class*="year"],
+  #agenda-overlay-content [class*="period"],
+  #agenda-overlay-content [class*="pill"],
+  #agenda-overlay-content [class*="tab"] {
+    background: #1a1a1a !important;
+    border-color: #333 !important;
+    color: #888 !important;
+  }
+  #agenda-overlay-content [class*="active"],
+  #agenda-overlay-content [class*="selected"] {
+    background: #2a2a2a !important;
+    color: #f0f0f0 !important;
+    border-color: #555 !important;
+  }
+
+  /* Separadores */
+  #agenda-overlay-content hr,
+  #agenda-overlay-content [class*="divider"],
+  #agenda-overlay-content [class*="separator"] {
+    border-color: #2a2a2a !important;
+    background: #2a2a2a !important;
+  }
+
+  /* Inputs */
+  #agenda-overlay-content input,
+  #agenda-overlay-content select,
+  #agenda-overlay-content textarea {
+    background: #111 !important;
+    border-color: #333 !important;
+    color: #e8e8e8 !important;
+  }
 }
 
 /* ─── RÓTULOS OVERLAY ─── */
@@ -406,9 +525,135 @@ body {
 @media (prefers-color-scheme: dark) {
   #rotulos-overlay { background: #0d0d0d !important; }
   #rotulos-overlay-bar { background: #0d0d0d !important; border-bottom-color: #2a2a2a !important; }
-  #rotulos-overlay-title { color: #444 !important; }
+  #rotulos-overlay-title { color: #888 !important; }
   #rotulos-overlay-back { color: #888 !important; }
   #rotulos-overlay-back:hover { background: #f0f0f0 !important; color: #0d0d0d !important; }
+
+  /* ── Todo el contenido inyectado por rotulos.js ── */
+  #rotulos-overlay-content { background: #0d0d0d !important; color: #e8e8e8 !important; }
+
+  /* Títulos y texto general */
+  #rotulos-overlay-content h1,
+  #rotulos-overlay-content h2,
+  #rotulos-overlay-content h3,
+  #rotulos-overlay-content h4,
+  #rotulos-overlay-content p,
+  #rotulos-overlay-content span,
+  #rotulos-overlay-content label,
+  #rotulos-overlay-content div { color: #e8e8e8 !important; }
+
+  /* Texto secundario */
+  #rotulos-overlay-content [class*="label"],
+  #rotulos-overlay-content [class*="title"],
+  #rotulos-overlay-content [class*="sub"],
+  #rotulos-overlay-content [class*="date"],
+  #rotulos-overlay-content small { color: #aaa !important; }
+
+  /* Cards / cajas blancas → forzar a oscuro */
+  #rotulos-overlay-content [class*="card"],
+  #rotulos-overlay-content [class*="box"],
+  #rotulos-overlay-content [class*="panel"],
+  #rotulos-overlay-content [class*="section"],
+  #rotulos-overlay-content [class*="block"],
+  #rotulos-overlay-content [class*="config"],
+  #rotulos-overlay-content [class*="form"],
+  #rotulos-overlay-content [class*="wrap"] {
+    background: #161616 !important;
+    border-color: #2a2a2a !important;
+    color: #e8e8e8 !important;
+  }
+
+  /* Tablas de resumen / historial */
+  #rotulos-overlay-content table { color: #e8e8e8 !important; }
+  #rotulos-overlay-content th {
+    background: #1e1e1e !important;
+    color: #ccc !important;
+    border-color: #2a2a2a !important;
+  }
+  #rotulos-overlay-content td {
+    background: #111 !important;
+    border-color: #1e1e1e !important;
+    color: #e8e8e8 !important;
+  }
+  #rotulos-overlay-content tr:hover td { background: #1a1a1a !important; }
+
+  /* Inputs numéricos y de texto */
+  #rotulos-overlay-content input[type="number"],
+  #rotulos-overlay-content input[type="text"],
+  #rotulos-overlay-content input[type="date"],
+  #rotulos-overlay-content select,
+  #rotulos-overlay-content textarea {
+    background: #111 !important;
+    border-color: #333 !important;
+    color: #e8e8e8 !important;
+  }
+  #rotulos-overlay-content input::placeholder { color: #555 !important; }
+
+  /* Toggles / switches */
+  #rotulos-overlay-content input[type="checkbox"],
+  #rotulos-overlay-content input[type="radio"] {
+    accent-color: #888 !important;
+  }
+
+  /* Botones */
+  #rotulos-overlay-content button {
+    background: #1a1a1a !important;
+    border-color: #333 !important;
+    color: #aaa !important;
+  }
+  #rotulos-overlay-content button:hover {
+    background: #f0f0f0 !important;
+    color: #0d0d0d !important;
+    border-color: #f0f0f0 !important;
+  }
+
+  /* Botón gerar rótulos (suele ser oscuro/primario) */
+  #rotulos-overlay-content [class*="primary"],
+  #rotulos-overlay-content [class*="generate"],
+  #rotulos-overlay-content [class*="gerar"],
+  #rotulos-overlay-content [class*="submit"] {
+    background: #e8e8e8 !important;
+    color: #0d0d0d !important;
+    border-color: #e8e8e8 !important;
+  }
+  #rotulos-overlay-content [class*="primary"]:hover,
+  #rotulos-overlay-content [class*="gerar"]:hover {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Tabs (gerar rótulos / controlo de entregas) */
+  #rotulos-overlay-content [class*="tab"] {
+    background: transparent !important;
+    color: #555 !important;
+    border-color: #2a2a2a !important;
+  }
+  #rotulos-overlay-content [class*="tab"][class*="active"],
+  #rotulos-overlay-content [class*="tab"].active {
+    color: #f0f0f0 !important;
+    border-color: #f0f0f0 !important;
+  }
+
+  /* Separadores */
+  #rotulos-overlay-content hr,
+  #rotulos-overlay-content [class*="divider"] {
+    border-color: #2a2a2a !important;
+    background: #2a2a2a !important;
+  }
+
+  /* Texto de placeholders como "0000" */
+  #rotulos-overlay-content [class*="placeholder"],
+  #rotulos-overlay-content [class*="empty"],
+  #rotulos-overlay-content [class*="hint"] { color: #444 !important; }
+
+  /* Badges de estado */
+  #rotulos-overlay-content [class*="badge"],
+  #rotulos-overlay-content [class*="status"],
+  #rotulos-overlay-content [class*="tag"] {
+    background: #1e1e1e !important;
+    color: #aaa !important;
+    border-color: #333 !important;
+  }
 }
 
 /* ─── INDEX: tablas de horarios ─── */

@@ -1486,18 +1486,8 @@
         '</th>';
     });
 
-    // Ref rows — refs in tamRefCompleting stay at top (3s hold) even if complete
-    var pending2  = [], completed2 = [];
-    consolidatedForSummary.forEach(function(c){
-      var t = tamGetRefTotals(c.ref);
-      var recv = t.f + t.p;
-      var done = recv >= c.totalPieces && c.totalPieces > 0;
-      var over = recv > c.totalPieces  && c.totalPieces > 0;
-      // Refs in the completing set: keep at top for the 3s animation window
-      var sortAsDone = (done || over) && !tamRefCompleting.has(c.ref);
-      if (sortAsDone) completed2.push(c); else pending2.push(c);
-    });
-    var sortedRefs = pending2.concat(completed2);
+    // Ref rows — keep original invoice order regardless of completion state
+    var sortedRefs = consolidatedForSummary;
 
     var rowsHtml = '';
     sortedRefs.forEach(function(c){

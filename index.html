@@ -2806,6 +2806,106 @@ html.wz-minimal #wz-minimal-btn::before {
   z-index:99990; margin:-10px 0 0 -10px;
   animation: soundRipple 0.5s ease-out forwards;
 }
+
+/* ══════════════════════════════════════════════════════════
+   DARK MODE NUCLEAR — #tab-tam completo
+   Fuerza legibilidad de TODO lo inyectado por tam.js
+   sin depender de nombres de clase específicos
+══════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+
+  /* Fondo base del tab */
+  #tab-tam { background: #0d0d0d !important; color: #e8e8e8 !important; }
+
+  /* TODOS los elementos dentro del tab → texto claro por defecto */
+  #tab-tam * { color: #e8e8e8 !important; }
+
+  /* TODOS los fondos blancos/claros → oscuro */
+  #tab-tam *:not(svg):not(path):not(circle):not(line):not(polyline) {
+    background-color: transparent !important;
+  }
+
+  /* Contenedores con fondo propio */
+  #tab-tam div, #tab-tam section, #tab-tam article,
+  #tab-tam header, #tab-tam footer, #tab-tam aside {
+    background-color: transparent !important;
+    border-color: #2a2a2a !important;
+  }
+
+  /* Botones — incluye "distribuição" y "100% funchal" etc */
+  #tab-tam button {
+    background-color: #1e1e1e !important;
+    border-color: #444 !important;
+    color: #e8e8e8 !important;
+  }
+  #tab-tam button:hover {
+    background-color: #2a2a2a !important;
+    border-color: #888 !important;
+    color: #fff !important;
+  }
+
+  /* Celdas de referencia (fondo blanco redondeado con texto casi invisible) */
+  #tab-tam td {
+    background-color: #111 !important;
+    border-color: #1e1e1e !important;
+    color: #e8e8e8 !important;
+  }
+  #tab-tam th {
+    background-color: #1e1e1e !important;
+    border-color: #2a2a2a !important;
+    color: #ccc !important;
+  }
+  #tab-tam tr:hover td {
+    background-color: #1a1a1a !important;
+  }
+  #tab-tam tfoot td {
+    background-color: #1a1a1a !important;
+    color: #e8e8e8 !important;
+  }
+
+  /* Inputs / filtro */
+  #tab-tam input, #tab-tam select, #tab-tam textarea {
+    background-color: #111 !important;
+    border-color: #333 !important;
+    color: #e8e8e8 !important;
+  }
+  #tab-tam input::placeholder { color: #555 !important; }
+
+  /* Elementos con estilo inline background blanco — máxima prioridad */
+  #tab-tam [style*="background: #fff"],
+  #tab-tam [style*="background:#fff"],
+  #tab-tam [style*="background: white"],
+  #tab-tam [style*="background-color: #fff"],
+  #tab-tam [style*="background-color:#fff"],
+  #tab-tam [style*="background-color: white"] {
+    background-color: #161616 !important;
+  }
+
+  /* Elementos con color inline oscuro sobre fondo oscuro */
+  #tab-tam [style*="color: #000"],
+  #tab-tam [style*="color:#000"],
+  #tab-tam [style*="color: black"],
+  #tab-tam [style*="color: #111"],
+  #tab-tam [style*="color: #222"],
+  #tab-tam [style*="color: #333"] {
+    color: #e8e8e8 !important;
+  }
+
+  /* Separadores */
+  #tab-tam hr { border-color: #2a2a2a !important; }
+
+  /* Texto secundario más tenue */
+  #tab-tam small, #tab-tam em, #tab-tam [class*="sub"],
+  #tab-tam [class*="label"], #tab-tam [class*="meta"] {
+    color: #aaa !important;
+  }
+
+  /* Colores de estado — no tocar */
+  #tab-tam .tam-chk-ok  { color: #4aaa4a !important; }
+  #tab-tam .tam-chk-err { color: #ff6b6b !important; }
+  #tab-tam #tam-validation-banner.ok  { background-color: #0a1f0a !important; color: #4aaa4a !important; }
+  #tab-tam #tam-validation-banner.err { background-color: #1f0a0a !important; color: #cc4444 !important; }
+}
 </style>
 </head>
 <body>

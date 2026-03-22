@@ -1,6 +1,9 @@
 /* ══════════════════════════════════════════════════════
-   RÓTULOS — módulo completo
-   Injecta CSS + HTML no overlay #rt-root e gere estado
+   RÓTULOS — módulo completo  v2
+   · Bug fix: shipments ya no se borran al abrir
+   · Supabase sync (tabla rotulos_data: id text PK, payload jsonb)
+   · Campo de fecha en "gerar rótulos" (por defecto hoy)
+   · Modal "registar envio passado" en controlo de entregas
 ══════════════════════════════════════════════════════ */
 
 (function () {
@@ -144,12 +147,44 @@ var RT_CSS = `
 .rt-toast.ok { background: #2e7d32; }
 .rt-es { text-align: center; padding: 50px 20px; font-size: .84rem; }
 @media (max-width: 900px) { #rt-gen-layout { grid-template-columns: 1fr; } .rt-lbl-grid { grid-template-columns: 1fr; } }
+
+/* ── Date picker row ── */
+.rt-date-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e6e6e6; }
+.rt-date-lbl { font-size: .68rem; font-weight: bold; text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; }
+.rt-date-inp { flex: 1; border: 1px solid #e6e6e6; border-radius: 20px; padding: 5px 12px; font-size: .82rem; font-weight: bold; outline: none; transition: border-color .15s; font-family: 'MontserratLight', sans-serif; background: #fff; color: #000; }
+.rt-date-inp:focus { border-color: #000; }
+.rt-past-badge { font-size: .66rem; font-weight: bold; background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; border-radius: 20px; padding: 2px 8px; white-space: nowrap; display: none; }
+.rt-past-badge.show { display: inline-block; }
+
+/* ── Historical shipment modal ── */
+#rt-hist-modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 950; display: none; align-items: center; justify-content: center; }
+#rt-hist-modal.open { display: flex; }
+#rt-hist-box { background: #fff; border-radius: 16px; padding: 28px; width: min(480px, 94vw); max-height: 85vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,.2); }
+#rt-hist-box h3 { font-size: .95rem; font-weight: bold; text-transform: lowercase; margin-bottom: 6px; }
+.rt-hist-sub { font-size: .75rem; color: #888; font-weight: bold; margin-bottom: 20px; }
+.rt-hist-date-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.rt-hist-date-row label { font-size: .68rem; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+#rt-hist-date { flex: 1; border: 1px solid #e6e6e6; border-radius: 20px; padding: 7px 14px; font-size: .88rem; font-weight: bold; outline: none; font-family: 'MontserratLight', sans-serif; transition: border-color .15s; }
+#rt-hist-date:focus { border-color: #000; }
+.rt-hist-sec-lbl { font-size: .66rem; font-weight: bold; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.rt-hist-stores { margin-bottom: 16px; }
+.rt-hist-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rt-hist-row label { flex: 1; font-size: .84rem; }
+.rt-hist-row .rt-acc-n { font-size: .7rem; font-weight: bold; min-width: 36px; text-align: right; font-family: monospace; }
+.rt-hist-act { display: flex; gap: 8px; margin-top: 20px; }
+.rt-btn-hist { padding: 5px 14px; font-size: .76rem; font-weight: bold; cursor: pointer; border: 1px solid #e6e6e6; border-radius: 20px; background: #fff; color: #000; text-transform: lowercase; transition: all .15s; font-family: 'MontserratLight', sans-serif; margin-left: auto; }
+.rt-btn-hist:hover { border-color: #000; background: #000; color: #fff; }
+
+/* ── Sync indicator ── */
+#rt-sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; display: inline-block; margin-left: 8px; transition: background .3s; }
+#rt-sync-dot.syncing { background: #e65100; }
+#rt-sync-dot.ok { background: #2e7d32; }
 `;
 
 var RT_HTML = `
 <div id="rt-app">
   <div id="rt-hd">
-    <div id="rt-hd-title">wakzome rótulos</div>
+    <div id="rt-hd-title">wakzome rótulos <span id="rt-sync-dot" title="estado sync"></span></div>
     <div id="rt-hd-date"></div>
   </div>
   <div id="rt-sum-section">
@@ -175,6 +210,12 @@ var RT_HTML = `
       <div>
         <div class="rt-card">
           <div class="rt-card-title">configurar envio</div>
+          <!-- DATE PICKER -->
+          <div class="rt-date-row">
+            <span class="rt-date-lbl">data</span>
+            <input type="date" class="rt-date-inp" id="rt-gen-date" />
+            <span class="rt-past-badge" id="rt-past-badge">data passada</span>
+          </div>
           <div class="rt-dest-sec">
             <div class="rt-dest-lbl"><span class="rt-ddot"></span>funchal</div>
             <div id="rt-stores-f"></div>
@@ -226,6 +267,7 @@ var RT_HTML = `
       <button class="rt-fb" onclick="rtFCtrl('done',this)">completos</button>
       <button class="rt-fb" onclick="rtFCtrl('f',this)">funchal</button>
       <button class="rt-fb" onclick="rtFCtrl('p',this)">porto santo</button>
+      <button class="rt-btn-hist" onclick="rtOpenHistModal()">+ registar envio passado</button>
     </div>
     <div class="rt-sl" id="rt-sl"></div>
   </div>
@@ -253,6 +295,7 @@ var RT_HTML = `
     <div class="rt-mp-body" id="rt-mp-body"></div>
   </div>
 </div>
+<!-- New store modal -->
 <div class="rt-mm" id="rt-mm-add">
   <div class="rt-mm-b">
     <h3>nova loja</h3>
@@ -265,6 +308,25 @@ var RT_HTML = `
     <div class="rt-mm-act">
       <button class="rt-btn-cnc" onclick="rtCloseAdd()">cancelar</button>
       <button class="rt-btn-cnf" onclick="rtConfirmAdd()">adicionar</button>
+    </div>
+  </div>
+</div>
+<!-- Historical shipment modal -->
+<div id="rt-hist-modal">
+  <div id="rt-hist-box">
+    <h3>registar envio passado</h3>
+    <p class="rt-hist-sub">introduza a data e as quantidades enviadas. o acumulador será actualizado.</p>
+    <div class="rt-hist-date-row">
+      <label>data do envio</label>
+      <input type="date" id="rt-hist-date" />
+    </div>
+    <div class="rt-hist-sec-lbl"><span class="rt-ddot"></span>funchal</div>
+    <div class="rt-hist-stores" id="rt-hist-stores-f"></div>
+    <div class="rt-hist-sec-lbl" style="margin-top:10px"><span class="rt-ddot"></span>porto santo</div>
+    <div class="rt-hist-stores" id="rt-hist-stores-p"></div>
+    <div class="rt-hist-act">
+      <button class="rt-btn-cnc" onclick="rtCloseHistModal()" style="flex:1">cancelar</button>
+      <button class="rt-btn-cnf" onclick="rtConfirmHist()" style="flex:1">registar</button>
     </div>
   </div>
 </div>
@@ -308,8 +370,8 @@ window.closeRotulosOverlay = function () {
 };
 
 function rtBindLogic() {
-  var YEAR = new Date().getFullYear();
-  var SK   = 'wkz_rt_' + YEAR;
+  var YEAR    = new Date().getFullYear();
+  var SK      = 'wkz_rt_' + YEAR;
   var BASE_IDS = ['fcn','av','mc','sh','mx'];
 
   var DEFAULT_STORES = {
@@ -322,59 +384,134 @@ function rtBindLogic() {
     ]
   };
 
-  function loadData(){
-    var stores=JSON.parse(JSON.stringify(DEFAULT_STORES));
-    try{var raw=localStorage.getItem(SK);if(raw){var saved=JSON.parse(raw);['f','p'].forEach(function(d){var customs=((saved.stores||{})[d]||[]).filter(function(s){return BASE_IDS.indexOf(s.id)===-1;});stores[d]=stores[d].concat(customs);});return{stores:stores,shipments:saved.shipments||[],acc:saved.acc||{}};}}catch(e){}
-    return{stores:stores,shipments:[],acc:{}};
+  /* ── Helpers ── */
+  function rtSB() { return (typeof sbClient !== 'undefined') ? sbClient : null; }
+
+  function setSyncDot(state) {
+    var d = document.getElementById('rt-sync-dot');
+    if (!d) return;
+    d.className = state; // '', 'syncing', 'ok'
   }
-  function saveData(){localStorage.setItem(SK,JSON.stringify(D));}
 
-  /* Dados começa com shipments vazios */
-  var D  = loadData();
-  /* Limpa shipments para começar vazio */
-  D.shipments = [];
-  D.acc = {};
-  saveData();
-  D = loadData();
+  function mergeStores(saved) {
+    var stores = JSON.parse(JSON.stringify(DEFAULT_STORES));
+    ['f','p'].forEach(function(dest) {
+      var customs = ((saved.stores||{})[dest]||[]).filter(function(s){ return BASE_IDS.indexOf(s.id)===-1; });
+      stores[dest] = stores[dest].concat(customs);
+    });
+    return stores;
+  }
 
-  var CL = [];
-  var CF = 'all';
+  /* ── loadData: Supabase first, fallback localStorage ── */
+  function loadDataLocal() {
+    var stores = JSON.parse(JSON.stringify(DEFAULT_STORES));
+    try {
+      var raw = localStorage.getItem(SK);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        stores = mergeStores(saved);
+        return { stores: stores, shipments: saved.shipments||[], acc: saved.acc||{} };
+      }
+    } catch(e) {}
+    return { stores: stores, shipments: [], acc: {} };
+  }
+
+  /* ── saveData: localStorage + Supabase async ── */
+  function saveData() {
+    localStorage.setItem(SK, JSON.stringify(D));
+    var sb = rtSB();
+    if (!sb) return;
+    setSyncDot('syncing');
+    sb.from('rotulos_data')
+      .upsert({ id: SK, payload: D }, { onConflict: 'id' })
+      .then(function(res) {
+        setSyncDot(res.error ? '' : 'ok');
+        if (res.error) console.warn('RT Supabase save error', res.error);
+        setTimeout(function(){ setSyncDot(''); }, 2000);
+      });
+  }
+
+  /* ── Initial load: try Supabase, fall back to localStorage ── */
+  var D = loadDataLocal();
+  /* NOTE: bug fix — removed the lines that wiped D.shipments and D.acc on every open */
+
+  var sb = rtSB();
+  if (sb) {
+    setSyncDot('syncing');
+    sb.from('rotulos_data').select('payload').eq('id', SK).single()
+      .then(function(res) {
+        setSyncDot('');
+        if (!res.error && res.data && res.data.payload) {
+          var saved = res.data.payload;
+          D.stores    = mergeStores(saved);
+          D.shipments = saved.shipments || [];
+          D.acc       = saved.acc || {};
+          localStorage.setItem(SK, JSON.stringify(D)); // keep local in sync
+          rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
+          rtToast('sincronizado ✓', 'ok');
+        }
+      })
+      .catch(function(e) { setSyncDot(''); console.warn('RT Supabase load error', e); });
+  }
+
+  var CL     = [];
+  var CF     = 'all';
   var PITEMS = [];
 
-  function allS(){return[].concat(D.stores.f||[],D.stores.p||[]);}
+  /* ── Active date for "gerar" tab ── */
+  var ACTIVE_DATE = new Date();
 
-  document.getElementById('rt-hd-date').textContent=new Date().toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toLowerCase();
+  function allS(){ return [].concat(D.stores.f||[], D.stores.p||[]); }
 
-  window.rtSwitchTab = function(n,btn){
-    document.querySelectorAll('.rt-tab-btn').forEach(function(b){b.classList.remove('active');});
+  /* Set up date picker default = today */
+  (function initDatePicker(){
+    var inp = document.getElementById('rt-gen-date');
+    if (!inp) return;
+    var t = new Date();
+    inp.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    inp.addEventListener('change', function(){
+      if (!inp.value) { ACTIVE_DATE = new Date(); return; }
+      var parts = inp.value.split('-');
+      ACTIVE_DATE = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+      var today = new Date(); today.setHours(0,0,0,0);
+      var ad = new Date(ACTIVE_DATE); ad.setHours(0,0,0,0);
+      var badge = document.getElementById('rt-past-badge');
+      if (badge) badge.classList.toggle('show', ad < today);
+    });
+  })();
+
+  document.getElementById('rt-hd-date').textContent = new Date().toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toLowerCase();
+
+  window.rtSwitchTab = function(n, btn){
+    document.querySelectorAll('.rt-tab-btn').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
-    document.querySelectorAll('.rt-tab-panel').forEach(function(p){p.classList.remove('active');});
+    document.querySelectorAll('.rt-tab-panel').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('rt-tab-'+n).classList.add('active');
-    if(n==='ctrl')rtRCtrl();
+    if (n==='ctrl') rtRCtrl();
   };
 
-  function rtRStores(){rtRSec('f','rt-stores-f');rtRSec('p','rt-stores-p');}
-  function rtRSec(dest,cid){
-    var el=document.getElementById(cid);el.innerHTML='';
+  function rtRStores(){ rtRSec('f','rt-stores-f'); rtRSec('p','rt-stores-p'); }
+  function rtRSec(dest, cid){
+    var el = document.getElementById(cid); el.innerHTML='';
     (D.stores[dest]||[]).forEach(function(s){
-      var row=document.createElement('div');row.className='rt-store-row';
+      var row = document.createElement('div'); row.className='rt-store-row';
       row.innerHTML='<label>'+s.name+'</label><span class="rt-acc-n">'+String(D.acc[s.id]||0).padStart(4,'0')+'</span><input class="rt-qty-inp" type="number" min="0" id="rtq_'+s.id+'" />';
       el.appendChild(row);
     });
   }
   function rtRAcc(){
-    document.getElementById('rt-acc-info').innerHTML=allS().map(function(s){
-      return'<div class="rt-acc-row"><span>'+s.name+'</span><span class="rt-acc-val">'+String(D.acc[s.id]||0).padStart(4,'0')+'</span></div>';
+    document.getElementById('rt-acc-info').innerHTML = allS().map(function(s){
+      return '<div class="rt-acc-row"><span>'+s.name+'</span><span class="rt-acc-val">'+String(D.acc[s.id]||0).padStart(4,'0')+'</span></div>';
     }).join('');
   }
 
   window.rtOpenAdd = function(dest){
-    ['rt-ns-nm','rt-ns-cd','rt-ns-ab','rt-ns-ad','rt-ns-cp'].forEach(function(i){document.getElementById(i).value='';});
+    ['rt-ns-nm','rt-ns-cd','rt-ns-ab','rt-ns-ad','rt-ns-cp'].forEach(function(i){ document.getElementById(i).value=''; });
     document.getElementById('rt-ns-dt').value=dest;
     document.getElementById('rt-mm-add').classList.add('open');
-    setTimeout(function(){document.getElementById('rt-ns-nm').focus();},50);
+    setTimeout(function(){ document.getElementById('rt-ns-nm').focus(); }, 50);
   };
-  window.rtCloseAdd = function(){document.getElementById('rt-mm-add').classList.remove('open');};
+  window.rtCloseAdd = function(){ document.getElementById('rt-mm-add').classList.remove('open'); };
   window.rtConfirmAdd = function(){
     var nm=document.getElementById('rt-ns-nm').value.trim().toUpperCase();
     var cd=document.getElementById('rt-ns-cd').value.trim().toUpperCase();
@@ -382,100 +519,212 @@ function rtBindLogic() {
     var ad=document.getElementById('rt-ns-ad').value.trim().toUpperCase();
     var cp=document.getElementById('rt-ns-cp').value.trim().toUpperCase();
     var dt=document.getElementById('rt-ns-dt').value;
-    if(!nm||!ab){rtToast('preencha nome e abreviatura');return;}
+    if(!nm||!ab){ rtToast('preencha nome e abreviatura'); return; }
     var id=ab.toLowerCase()+'_'+Date.now();
-    if(!D.stores[dt])D.stores[dt]=[];
+    if(!D.stores[dt]) D.stores[dt]=[];
     D.stores[dt].push({id:id,name:nm,code:cd||ab,abr:ab,addr:ad,cp:cp,dest:dt});
-    saveData();rtCloseAdd();rtRStores();rtRAcc();rtRSum();
+    saveData(); rtCloseAdd(); rtRStores(); rtRAcc(); rtRSum();
     rtToast('loja "'+nm+'" adicionada','ok');
   };
 
-  function mkCode(s,accBox,boxNum,total,extraN){
-    var now=new Date();
-    var dd=String(now.getDate()).padStart(2,'0');
-    var mm=String(now.getMonth()+1).padStart(2,'0');
-    var yy=String(YEAR).slice(-2);
-    var base=dd+mm+'LJ-'+s.code+'-'+s.abr+'-'+yy+'/'+String(accBox).padStart(4,'0')+'*** '+boxNum+'-'+total+' CX';
-    if(extraN)base+=' (EXTRA '+extraN+')';
+  /* ── mkCode: accepts optional dateObj, defaults to ACTIVE_DATE ── */
+  function mkCode(s, accBox, boxNum, total, extraN, dateObj){
+    var d   = dateObj || ACTIVE_DATE;
+    var dd  = String(d.getDate()).padStart(2,'0');
+    var mm  = String(d.getMonth()+1).padStart(2,'0');
+    var yy  = String(d.getFullYear()).slice(-2);
+    var base = dd+mm+'LJ-'+s.code+'-'+s.abr+'-'+yy+'/'+String(accBox).padStart(4,'0')+'*** '+boxNum+'-'+total+' CX';
+    if(extraN) base+=' (EXTRA '+extraN+')';
     return base;
   }
-  function todayStr(){return new Date().toLocaleDateString('pt-PT');}
-  function hasTodayShipment(sid){var t=todayStr();return D.shipments.some(function(sh){return sh.date===t&&sh.boxes.some(function(b){return b.storeId===sid&&!b.isExtra;});});}
-  function extraCount(sid){var t=todayStr(),n=0;D.shipments.forEach(function(sh){if(sh.date===t)sh.boxes.forEach(function(b){if(b.storeId===sid&&b.isExtra)n++;});});return n;}
+
+  function dateToStr(d){ return d.toLocaleDateString('pt-PT'); }
+
+  function hasDateShipment(sid, dateStr){
+    return D.shipments.some(function(sh){ return sh.date===dateStr && sh.boxes.some(function(b){ return b.storeId===sid && !b.isExtra; }); });
+  }
+  function extraCountForDate(sid, dateStr){
+    var n=0;
+    D.shipments.forEach(function(sh){ if(sh.date===dateStr) sh.boxes.forEach(function(b){ if(b.storeId===sid&&b.isExtra) n++; }); });
+    return n;
+  }
 
   window.rtGenerate = function(){
-    var items=[];
-    allS().forEach(function(s){var el=document.getElementById('rtq_'+s.id);var qty=parseInt(el&&el.value)||0;if(qty>0){var acc=D.acc[s.id]||0;var isX=hasTodayShipment(s.id);var xBase=extraCount(s.id);for(var i=1;i<=qty;i++)items.push({s:s,boxNum:i,total:qty,accBox:acc+i,isExtra:isX,extraN:isX?(xBase+i):0});}});
-    if(!items.length){rtToast('introduza quantidades para pelo menos uma loja');return;}
-    CL=items;rtRPreview(items);
+    var items = [];
+    var ds = dateToStr(ACTIVE_DATE);
+    allS().forEach(function(s){
+      var el  = document.getElementById('rtq_'+s.id);
+      var qty = parseInt(el && el.value) || 0;
+      if(qty > 0){
+        var acc  = D.acc[s.id] || 0;
+        var isX  = hasDateShipment(s.id, ds);
+        var xBase= extraCountForDate(s.id, ds);
+        for(var i=1;i<=qty;i++) items.push({s:s, boxNum:i, total:qty, accBox:acc+i, isExtra:isX, extraN:isX?(xBase+i):0});
+      }
+    });
+    if(!items.length){ rtToast('introduza quantidades para pelo menos uma loja'); return; }
+    CL=items; rtRPreview(items);
   };
 
   function rtRPreview(items){
     document.getElementById('rt-prev-empty').style.display='none';
     document.getElementById('rt-prev-panel').style.display='block';
     document.getElementById('rt-prev-title').textContent=items.length+' rótulo'+(items.length>1?'s':'')+' gerado'+(items.length>1?'s':'');
-    var g=document.getElementById('rt-lbl-grid');g.innerHTML='';
+    var g=document.getElementById('rt-lbl-grid'); g.innerHTML='';
     items.forEach(function(it){
       var code=mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0);
-      var d=document.createElement('div');d.className='rt-lp';
+      var d=document.createElement('div'); d.className='rt-lp';
       d.innerHTML='<div class="rt-lp-send">WAKZOME</div><div class="rt-lp-st">'+it.s.name+'</div><div class="rt-lp-ad">'+(it.s.addr||'')+'</div><div class="rt-lp-cp">'+(it.s.cp||'')+'</div><div class="rt-lp-cd">'+code+'</div>';
       g.appendChild(d);
     });
   }
 
   window.rtSaveShipment = function(){
-    if(!CL.length){rtToast('gere rótulos primeiro');return;}
-    var now=new Date(),ds=now.toLocaleDateString('pt-PT');
-    CL.forEach(function(it){D.acc[it.s.id]=(D.acc[it.s.id]||0)+1;});
-    D.shipments.push({id:Date.now(),date:ds,iso:now.toISOString(),boxes:CL.map(function(it){return{code:mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0),storeId:it.s.id,storeName:it.s.name,dest:it.s.dest,delivered:false,isExtra:it.isExtra||false,extraN:it.extraN||0};})});
-    saveData();CL=[];
-    allS().forEach(function(s){var e=document.getElementById('rtq_'+s.id);if(e)e.value='';});
+    if(!CL.length){ rtToast('gere rótulos primeiro'); return; }
+    var ds  = dateToStr(ACTIVE_DATE);
+    var iso = ACTIVE_DATE.toISOString();
+    CL.forEach(function(it){ D.acc[it.s.id]=(D.acc[it.s.id]||0)+1; });
+    D.shipments.push({
+      id: Date.now(), date: ds, iso: iso,
+      boxes: CL.map(function(it){
+        return {
+          code:      mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0),
+          storeId:   it.s.id, storeName: it.s.name, dest: it.s.dest,
+          delivered: false, isExtra: it.isExtra||false, extraN: it.extraN||0
+        };
+      })
+    });
+    saveData(); CL=[];
+    allS().forEach(function(s){ var e=document.getElementById('rtq_'+s.id); if(e) e.value=''; });
     document.getElementById('rt-prev-empty').style.display='flex';
     document.getElementById('rt-prev-panel').style.display='none';
-    rtRStores();rtRAcc();rtRSum();rtToast('envio guardado ✓','ok');
+    rtRStores(); rtRAcc(); rtRSum();
+    rtToast('envio guardado ✓','ok');
   };
 
+  /* ══════════════════════════════════════════════════════
+     HISTORICAL SHIPMENT MODAL
+  ══════════════════════════════════════════════════════ */
+  window.rtOpenHistModal = function(){
+    /* Populate date = yesterday by default */
+    var yest = new Date(); yest.setDate(yest.getDate()-1);
+    var di = document.getElementById('rt-hist-date');
+    if(di) di.value = yest.getFullYear()+'-'+String(yest.getMonth()+1).padStart(2,'0')+'-'+String(yest.getDate()).padStart(2,'0');
+
+    /* Render store qty inputs */
+    ['f','p'].forEach(function(dest){
+      var el = document.getElementById('rt-hist-stores-'+dest); if(!el) return;
+      el.innerHTML='';
+      (D.stores[dest]||[]).forEach(function(s){
+        var row=document.createElement('div'); row.className='rt-hist-row';
+        row.innerHTML='<label>'+s.name+'</label>'+
+          '<span class="rt-acc-n">'+String(D.acc[s.id]||0).padStart(4,'0')+'</span>'+
+          '<input class="rt-qty-inp" type="number" min="0" id="rthq_'+s.id+'" />';
+        el.appendChild(row);
+      });
+    });
+    document.getElementById('rt-hist-modal').classList.add('open');
+  };
+
+  window.rtCloseHistModal = function(){
+    document.getElementById('rt-hist-modal').classList.remove('open');
+  };
+
+  window.rtConfirmHist = function(){
+    var di = document.getElementById('rt-hist-date');
+    if(!di||!di.value){ rtToast('selecione uma data'); return; }
+
+    var parts  = di.value.split('-');
+    var histDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    var ds     = dateToStr(histDate);
+    var iso    = histDate.toISOString();
+
+    var items = [];
+    allS().forEach(function(s){
+      var el  = document.getElementById('rthq_'+s.id);
+      var qty = parseInt(el && el.value) || 0;
+      if(qty > 0){
+        var acc = D.acc[s.id] || 0;
+        for(var i=1;i<=qty;i++) items.push({s:s, boxNum:i, total:qty, accBox:acc+i, isExtra:false, extraN:0});
+      }
+    });
+
+    if(!items.length){ rtToast('introduza pelo menos uma quantidade'); return; }
+
+    /* Update acc and save shipment */
+    items.forEach(function(it){ D.acc[it.s.id]=(D.acc[it.s.id]||0)+1; });
+    D.shipments.push({
+      id: Date.now(), date: ds, iso: iso, historical: true,
+      boxes: items.map(function(it){
+        return {
+          code:      mkCode(it.s, it.accBox, it.boxNum, it.total, 0, histDate),
+          storeId:   it.s.id, storeName: it.s.name, dest: it.s.dest,
+          delivered: false, isExtra: false, extraN: 0
+        };
+      })
+    });
+
+    /* Sort shipments chronologically */
+    D.shipments.sort(function(a,b){ return new Date(a.iso)-new Date(b.iso); });
+
+    saveData();
+    rtCloseHistModal();
+    rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
+    rtToast('envio de '+ds+' registado ✓','ok');
+  };
+
+  /* ══════════════════════════════════════════════════════
+     SUMMARY TABLE
+  ══════════════════════════════════════════════════════ */
   function rtRSum(){
-    var body=document.getElementById('rt-sum-body'),foot=document.getElementById('rt-sum-foot');
+    var body=document.getElementById('rt-sum-body'), foot=document.getElementById('rt-sum-foot');
     var stores=allS();
-    var extras=stores.filter(function(s){return BASE_IDS.indexOf(s.id)===-1;});
+    var extras=stores.filter(function(s){ return BASE_IDS.indexOf(s.id)===-1; });
     var thead=document.querySelector('#rt-sum-table thead tr');
-    while(thead.cells.length>8)thead.deleteCell(-1);
-    extras.forEach(function(s){var th=document.createElement('th');th.textContent=s.abr.toLowerCase();thead.appendChild(th);});
-    if(!D.shipments.length){body.innerHTML='<tr><td colspan="'+(8+extras.length)+'" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr>';foot.innerHTML='';return;}
-    var tot={f:0,p:0};stores.forEach(function(s){tot[s.id]=0;});
+    while(thead.cells.length>8) thead.deleteCell(-1);
+    extras.forEach(function(s){ var th=document.createElement('th'); th.textContent=s.abr.toLowerCase(); thead.appendChild(th); });
+    if(!D.shipments.length){
+      body.innerHTML='<tr><td colspan="'+(8+extras.length)+'" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr>';
+      foot.innerHTML=''; return;
+    }
+    var tot={f:0,p:0}; stores.forEach(function(s){ tot[s.id]=0; });
     body.innerHTML=D.shipments.map(function(sh){
-      var fc=sh.boxes.filter(function(b){return b.dest==='f';}).length;
-      var ps=sh.boxes.filter(function(b){return b.dest==='p';}).length;
-      tot.f+=fc;tot.p+=ps;
-      var cols=stores.map(function(s){var c=sh.boxes.filter(function(b){return b.storeId===s.id;}).length;tot[s.id]+=c;return c?'<td class="rt-num">'+c+'</td>':'<td>—</td>';}).join('');
-      return'<tr><td>'+sh.date+'</td><td class="rt-num">'+(fc||'—')+'</td><td class="rt-num">'+(ps||'—')+'</td>'+cols+'</tr>';
+      var fc=sh.boxes.filter(function(b){ return b.dest==='f'; }).length;
+      var ps=sh.boxes.filter(function(b){ return b.dest==='p'; }).length;
+      tot.f+=fc; tot.p+=ps;
+      var cols=stores.map(function(s){ var c=sh.boxes.filter(function(b){ return b.storeId===s.id; }).length; tot[s.id]+=c; return c?'<td class="rt-num">'+c+'</td>':'<td>—</td>'; }).join('');
+      var pastMark = sh.historical ? ' <span style="font-size:.64rem;color:#e65100;font-weight:bold">hist</span>' : '';
+      return '<tr><td>'+sh.date+pastMark+'</td><td class="rt-num">'+(fc||'—')+'</td><td class="rt-num">'+(ps||'—')+'</td>'+cols+'</tr>';
     }).join('');
-    var tc=stores.map(function(s){var t=tot[s.id]||0;return t?'<td class="rt-num">'+t+'</td>':'<td>—</td>';}).join('');
+    var tc=stores.map(function(s){ var t=tot[s.id]||0; return t?'<td class="rt-num">'+t+'</td>':'<td>—</td>'; }).join('');
     foot.innerHTML='<tr><td style="font-weight:bold">total</td><td class="rt-num">'+tot.f+'</td><td class="rt-num">'+tot.p+'</td>'+tc+'</tr>';
   }
 
+  /* ══════════════════════════════════════════════════════
+     DELIVERY CONTROL
+  ══════════════════════════════════════════════════════ */
   function rtRCtrl(){
     var el=document.getElementById('rt-sl');
     var list=D.shipments.slice().reverse();
-    if(CF==='pending')list=list.filter(function(s){return s.boxes.some(function(b){return !b.delivered;});});
-    else if(CF==='done')list=list.filter(function(s){return s.boxes.every(function(b){return b.delivered;});});
-    else if(CF==='f')list=list.filter(function(s){return s.boxes.some(function(b){return b.dest==='f';});});
-    else if(CF==='p')list=list.filter(function(s){return s.boxes.some(function(b){return b.dest==='p';});});
-    if(!list.length){el.innerHTML='<div class="rt-es"><p>nenhum envio encontrado.</p></div>';return;}
+    if(CF==='pending') list=list.filter(function(s){ return s.boxes.some(function(b){ return !b.delivered; }); });
+    else if(CF==='done') list=list.filter(function(s){ return s.boxes.every(function(b){ return b.delivered; }); });
+    else if(CF==='f') list=list.filter(function(s){ return s.boxes.some(function(b){ return b.dest==='f'; }); });
+    else if(CF==='p') list=list.filter(function(s){ return s.boxes.some(function(b){ return b.dest==='p'; }); });
+    if(!list.length){ el.innerHTML='<div class="rt-es"><p>nenhum envio encontrado.</p></div>'; return; }
     el.innerHTML='';
     list.forEach(function(sh){
-      var del=sh.boxes.filter(function(b){return b.delivered;}).length,tot=sh.boxes.length,allDone=del===tot;
-      var div=document.createElement('div');div.className='rt-sg';div.id='rtsg_'+sh.id;
+      var del=sh.boxes.filter(function(b){ return b.delivered; }).length, tot=sh.boxes.length, allDone=del===tot;
+      var div=document.createElement('div'); div.className='rt-sg'; div.id='rtsg_'+sh.id;
       var rows=sh.boxes.map(function(b,i){
-        return'<div class="rt-bx'+(b.delivered?' done':'')+'" id="rtbr_'+sh.id+'_'+i+'">'+
+        return '<div class="rt-bx'+(b.delivered?' done':'')+'" id="rtbr_'+sh.id+'_'+i+'">'+
           '<input type="checkbox" class="rt-bx-chk"'+(b.delivered?' checked':'')+' onchange="rtTogDel('+sh.id+','+i+',this)" />'+
           '<div class="rt-bx-dot"></div><div class="rt-bx-cd">'+b.code+'</div><div class="rt-bx-st">'+b.storeName+'</div></div>';
       }).join('');
+      var histTag = sh.historical ? ' <span style="font-size:.64rem;color:#e65100;border:1px solid #ffcc80;border-radius:10px;padding:1px 6px;background:#fff3e0">hist</span>' : '';
       div.innerHTML=
         '<div class="rt-sg-hd">'+
           '<div class="rt-sg-t-wrap" onclick="rtTogGrp(\'rtsg_'+sh.id+'\')">'+
-            '<div class="rt-sg-t">'+sh.date+'</div>'+
+            '<div class="rt-sg-t">'+sh.date+histTag+'</div>'+
             '<div class="rt-sg-m">'+
               '<span class="rt-sg-pr" id="rtsp_'+sh.id+'">'+del+'/'+tot+' entregues</span>'+
               '<span class="rt-sg-b">'+tot+' cx</span>'+
@@ -492,86 +741,89 @@ function rtBindLogic() {
     });
   }
 
-  window.rtTogGrp = function(id){var el=document.getElementById(id);if(el)el.classList.toggle('col');};
+  window.rtTogGrp = function(id){ var el=document.getElementById(id); if(el) el.classList.toggle('col'); };
   window.rtTogDel = function(shId,idx,cb){
-    var sh=D.shipments.find(function(s){return s.id==shId;});if(!sh)return;
-    sh.boxes[idx].delivered=cb.checked;saveData();
-    var row=document.getElementById('rtbr_'+shId+'_'+idx);if(row)row.classList.toggle('done',cb.checked);
-    var del=sh.boxes.filter(function(b){return b.delivered;}).length;
-    var sp=document.getElementById('rtsp_'+shId);if(sp)sp.textContent=del+'/'+sh.boxes.length+' entregues';
-    rtRSum();rtToast(cb.checked?'caixa entregue ✓':'caixa desmarcada',cb.checked?'ok':'');
+    var sh=D.shipments.find(function(s){ return s.id==shId; }); if(!sh) return;
+    sh.boxes[idx].delivered=cb.checked; saveData();
+    var row=document.getElementById('rtbr_'+shId+'_'+idx); if(row) row.classList.toggle('done',cb.checked);
+    var del=sh.boxes.filter(function(b){ return b.delivered; }).length;
+    var sp=document.getElementById('rtsp_'+shId); if(sp) sp.textContent=del+'/'+sh.boxes.length+' entregues';
+    rtRSum(); rtToast(cb.checked?'caixa entregue ✓':'caixa desmarcada',cb.checked?'ok':'');
   };
   window.rtFCtrl = function(f,btn){
-    CF=f;document.querySelectorAll('.rt-fb').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');rtRCtrl();
+    CF=f; document.querySelectorAll('.rt-fb').forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); rtRCtrl();
   };
   window.rtReprintShipment = function(shId,evt){
-    if(evt)evt.stopPropagation();
-    var sh=D.shipments.find(function(s){return s.id==shId;});if(!sh){rtToast('envio não encontrado');return;}
-    var items=sh.boxes.map(function(b){var store=allS().find(function(s){return s.id===b.storeId;})||{id:b.storeId,name:b.storeName,code:'',abr:'',addr:'',cp:'',dest:b.dest};return{s:store,boxNum:0,total:0,accBox:0,isExtra:b.isExtra||false,extraN:b.extraN||0,_preCode:b.code};});
+    if(evt) evt.stopPropagation();
+    var sh=D.shipments.find(function(s){ return s.id==shId; }); if(!sh){ rtToast('envio não encontrado'); return; }
+    var items=sh.boxes.map(function(b){ var store=allS().find(function(s){ return s.id===b.storeId; })||{id:b.storeId,name:b.storeName,code:'',abr:'',addr:'',cp:'',dest:b.dest}; return{s:store,boxNum:0,total:0,accBox:0,isExtra:b.isExtra||false,extraN:b.extraN||0,_preCode:b.code}; });
     rtShowPrintModal(items,'reimprimir — '+sh.date);
   };
-  window.rtOpenPrintModal = function(){if(!CL.length){rtToast('gere rótulos primeiro');return;}rtShowPrintModal(CL,'prévia de impressão');};
+  window.rtOpenPrintModal = function(){ if(!CL.length){ rtToast('gere rótulos primeiro'); return; } rtShowPrintModal(CL,'prévia de impressão'); };
+
   function rtShowPrintModal(items,title){
     PITEMS=items.slice();
     document.getElementById('rt-mp-title').textContent=(title||'prévia')+' — '+items.length+' rótulo'+(items.length>1?'s':'');
-    var body=document.getElementById('rt-mp-body');body.innerHTML='';
+    var body=document.getElementById('rt-mp-body'); body.innerHTML='';
     var cs=8;
     for(var i=0;i<items.length;i+=cs){
       var chunk=items.slice(i,i+cs);
-      var pg=Math.floor(i/cs)+1,pages=Math.ceil(items.length/cs);
-      var lbl=document.createElement('div');lbl.className='rt-pg-lbl';
+      var pg=Math.floor(i/cs)+1, pages=Math.ceil(items.length/cs);
+      var lbl=document.createElement('div'); lbl.className='rt-pg-lbl';
       lbl.textContent='folha '+pg+(pages>1?' / '+pages:'')+' — '+chunk.length+' rótulo'+(chunk.length>1?'s':'');
       body.appendChild(lbl);
-      var sheet=document.createElement('div');sheet.className='rt-psheet';
+      var sheet=document.createElement('div'); sheet.className='rt-psheet';
       chunk.forEach(function(it){
         var code=it._preCode||mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0);
-        var d=document.createElement('div');d.className='rt-rot';
+        var d=document.createElement('div'); d.className='rt-rot';
         d.innerHTML='<div class="rs">WAKZOME</div><div class="rn">'+(it.s.name||'')+'</div><div class="ra">'+(it.s.addr||'')+'</div><div class="rc">'+(it.s.cp||'')+'</div><div class="rk">'+code+'</div>';
         sheet.appendChild(d);
       });
-      while(sheet.children.length<8){var e=document.createElement('div');e.className='rt-rot empty';sheet.appendChild(e);}
+      while(sheet.children.length<8){ var e=document.createElement('div'); e.className='rt-rot empty'; sheet.appendChild(e); }
       body.appendChild(sheet);
     }
     document.getElementById('rt-modal-print').style.display='flex';
   }
-  window.rtClosePrintModal = function(){document.getElementById('rt-modal-print').style.display='none';};
+
+  window.rtClosePrintModal = function(){ document.getElementById('rt-modal-print').style.display='none'; };
   window.rtDoPrint = function(){
-    if(!PITEMS.length){rtToast('sem rótulos');return;}
-    var pa=document.getElementById('rt-print-area');pa.innerHTML='';
+    if(!PITEMS.length){ rtToast('sem rótulos'); return; }
+    var pa=document.getElementById('rt-print-area'); pa.innerHTML='';
     var cs=8;
     for(var i=0;i<PITEMS.length;i+=cs){
       var chunk=PITEMS.slice(i,i+cs);
-      var page=document.createElement('div');page.className='rt-pp';
+      var page=document.createElement('div'); page.className='rt-pp';
       chunk.forEach(function(it){
         var code=it._preCode||mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0);
-        var d=document.createElement('div');d.className='rt-pp-r';
+        var d=document.createElement('div'); d.className='rt-pp-r';
         d.innerHTML='<div class="rt-pp-send">WAKZOME</div><div class="rt-pp-st">'+(it.s.name||'').toUpperCase()+'</div><div class="rt-pp-ad">'+(it.s.addr||'').toUpperCase()+'</div><div class="rt-pp-cp">'+(it.s.cp||'').toUpperCase()+'</div><div class="rt-pp-cd">'+code+'</div>';
         page.appendChild(d);
       });
-      while(page.children.length<8){var e=document.createElement('div');e.className='rt-pp-r';page.appendChild(e);}
+      while(page.children.length<8){ var e=document.createElement('div'); e.className='rt-pp-r'; page.appendChild(e); }
       pa.appendChild(page);
     }
-    pa.style.display='block';window.print();setTimeout(function(){pa.style.display='none';pa.innerHTML='';},1500);
+    pa.style.display='block'; window.print(); setTimeout(function(){ pa.style.display='none'; pa.innerHTML=''; },1500);
   };
-  window.rtExportPDF = function(){rtToast('selecione "guardar como pdf" no diálogo de impressão','ok');setTimeout(rtDoPrint,400);};
-  window.rtSendEmail = function(){rtToast('funcionalidade de email será configurada em breve');};
+  window.rtExportPDF = function(){ rtToast('selecione "guardar como pdf" no diálogo de impressão','ok'); setTimeout(rtDoPrint,400); };
+  window.rtSendEmail = function(){ rtToast('funcionalidade de email será configurada em breve'); };
 
   var _tt;
   function rtToast(msg,type){
     var t=document.getElementById('rt-toast');
     t.className='rt-toast'+(type?' '+type:'');
-    t.textContent=msg;t.classList.add('show');
-    clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('show');},3000);
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(_tt); _tt=setTimeout(function(){ t.classList.remove('show'); },3000);
   }
 
   document.addEventListener('keydown',function(e){
-    var ov=document.getElementById('rotulos-overlay');if(!ov||!ov.classList.contains('open'))return;
-    if(e.key==='Escape'){rtClosePrintModal();rtCloseAdd();}
+    var ov=document.getElementById('rotulos-overlay'); if(!ov||!ov.classList.contains('open')) return;
+    if(e.key==='Escape'){ rtClosePrintModal(); rtCloseAdd(); rtCloseHistModal(); }
   });
-  document.getElementById('rt-modal-print').addEventListener('click',function(e){if(e.target===this)rtClosePrintModal();});
-  document.getElementById('rt-mm-add').addEventListener('click',function(e){if(e.target===this)rtCloseAdd();});
+  document.getElementById('rt-modal-print').addEventListener('click',function(e){ if(e.target===this) rtClosePrintModal(); });
+  document.getElementById('rt-mm-add').addEventListener('click',function(e){ if(e.target===this) rtCloseAdd(); });
+  document.getElementById('rt-hist-modal').addEventListener('click',function(e){ if(e.target===this) rtCloseHistModal(); });
 
-  rtRStores();rtRAcc();rtRSum();rtRCtrl();
+  rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
 }
 
 })();

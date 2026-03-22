@@ -2198,20 +2198,123 @@ button:active:not(:disabled), .tab-btn:active,
 
   /* ── TAM tab ── */
   #tam-invoice-meta { background: #161616 !important; color: #aaa !important; }
+  #tam-invoice-meta .tam-mi em { color: #555 !important; }
   #tam-upload-label { border-color: #2a2a2a !important; color: #666 !important; background: transparent !important; }
   #tam-upload-label:hover { border-color: #888 !important; background: #111 !important; color: #ccc !important; }
   #tam-file-name, #tam-status-msg { color: #888 !important; }
   #tam-export-btn { background: #111 !important; border-color: #444 !important; color: #aaa !important; }
   #tam-export-btn:hover { background: #888 !important; color: #111 !important; }
-  #tam-results-wrap { color: #e8e8e8 !important; }
+  #tam-validation-banner.ok  { background: #0a1f0a !important; color: #4aaa4a !important; }
+  #tam-validation-banner.err { background: #1f0a0a !important; color: #cc4444 !important; }
+
+  /* ── TAM tabla base ── */
   .tam-table th { background: #1e1e1e !important; color: #ccc !important; border-color: #2a2a2a !important; }
   .tam-table td { border-color: #1e1e1e !important; color: #e8e8e8 !important; background: #111 !important; }
   .tam-table tbody tr:hover td { background: #1a1a1a !important; }
-  .tam-table tfoot td { background: #1a1a1a !important; border-top-color: #333 !important; }
+  .tam-table tfoot td { background: #1a1a1a !important; border-top-color: #333 !important; color: #e8e8e8 !important; }
   .tam-table tfoot tr.tam-tr-ship td { background: #161616 !important; color: #aaa !important; }
-  .tam-table tfoot tr.tam-tr-grand td { background: #222 !important; border-top-color: #444 !important; }
-  #tam-validation-banner.ok  { background: #0a1f0a !important; color: #4aaa4a !important; }
-  #tam-validation-banner.err { background: #1f0a0a !important; color: #cc4444 !important; }
+  .tam-table tfoot tr.tam-tr-grand td { background: #222 !important; border-top-color: #444 !important; color: #f0f0f0 !important; }
+  .tam-row-num { color: #555 !important; }
+  .tam-chk-ok  { color: #4aaa4a !important; }
+  .tam-chk-err { color: #ff6b6b !important; }
+
+  /* ── Todo el contenido inyectado por tam.js en #tam-results-wrap ── */
+  #tam-results-wrap { color: #e8e8e8 !important; background: transparent !important; }
+
+  /* Texto general */
+  #tam-results-wrap * { color: #e8e8e8 !important; }
+
+  /* Fondos blancos/claros → oscuro */
+  #tam-results-wrap div,
+  #tam-results-wrap section,
+  #tam-results-wrap article { background: transparent !important; }
+
+  /* Botones de distribución y otros (gris sobre gris) */
+  #tam-results-wrap button {
+    background: #1e1e1e !important;
+    border-color: #333 !important;
+    color: #ccc !important;
+  }
+  #tam-results-wrap button:hover {
+    background: #2a2a2a !important;
+    border-color: #888 !important;
+    color: #f0f0f0 !important;
+  }
+
+  /* Botones primarios/acción (100% funchal, 100% porto santo) */
+  #tam-results-wrap [class*="btn-primary"],
+  #tam-results-wrap [class*="action"],
+  #tam-results-wrap [class*="dist"],
+  #tam-results-wrap [class*="split"],
+  #tam-results-wrap [class*="fill"] {
+    background: #2a2a2a !important;
+    color: #e8e8e8 !important;
+    border-color: #555 !important;
+  }
+
+  /* Input de filtro */
+  #tam-results-wrap input[type="text"],
+  #tam-results-wrap input[type="search"],
+  #tam-results-wrap input[type="number"],
+  #tam-results-wrap select {
+    background: #111 !important;
+    border-color: #333 !important;
+    color: #e8e8e8 !important;
+  }
+  #tam-results-wrap input::placeholder { color: #555 !important; }
+
+  /* Celdas de referencia con fondo blanco */
+  #tam-results-wrap td,
+  #tam-results-wrap th { background: #111 !important; border-color: #1e1e1e !important; color: #e8e8e8 !important; }
+  #tam-results-wrap thead th { background: #1e1e1e !important; color: #ccc !important; }
+  #tam-results-wrap tfoot td { background: #1a1a1a !important; color: #e8e8e8 !important; }
+  #tam-results-wrap tr:hover td { background: #1a1a1a !important; }
+
+  /* Labels / títulos de sección */
+  #tam-results-wrap label,
+  #tam-results-wrap span,
+  #tam-results-wrap p,
+  #tam-results-wrap small { color: #aaa !important; }
+
+  /* Separadores */
+  #tam-results-wrap hr { border-color: #2a2a2a !important; }
+
+  /* Badges / chips de estado */
+  #tam-results-wrap [class*="badge"],
+  #tam-results-wrap [class*="chip"],
+  #tam-results-wrap [class*="tag"],
+  #tam-results-wrap [class*="pill"] {
+    background: #1e1e1e !important;
+    color: #aaa !important;
+    border-color: #333 !important;
+  }
+
+  /* Contadores (50/50, etc.) */
+  #tam-results-wrap [class*="counter"],
+  #tam-results-wrap [class*="count"],
+  #tam-results-wrap [class*="total"] {
+    background: #1e3a6e !important;
+    color: #6ab0ff !important;
+    border-color: #2a5a9e !important;
+  }
+
+  /* Sección/card de distribución (barra invisible) */
+  #tam-results-wrap [class*="distrib"],
+  #tam-results-wrap [class*="summary"],
+  #tam-results-wrap [class*="resumen"],
+  #tam-results-wrap [class*="section"],
+  #tam-results-wrap [class*="header"],
+  #tam-results-wrap [class*="group"],
+  #tam-results-wrap [class*="block"] {
+    background: #161616 !important;
+    border-color: #2a2a2a !important;
+    color: #e8e8e8 !important;
+  }
+
+  /* Texto dentro de esas secciones */
+  #tam-results-wrap [class*="distrib"] *,
+  #tam-results-wrap [class*="summary"] *,
+  #tam-results-wrap [class*="section"] * { color: #e8e8e8 !important; }
 
   /* ── Config section ── */
   #r-config-saved { color: #4aaa4a !important; }

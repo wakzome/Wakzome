@@ -18,15 +18,15 @@ var RT_CSS = `
 #rt-sum-section { margin-bottom: 28px; }
 #rt-sum-wrap { border: 1px solid #e6e6e6; border-radius: 14px; overflow: hidden; overflow-x: auto; }
 #rt-sum-table { width: 100%; border-collapse: collapse; font-size: .82rem; white-space: nowrap; color: #000; font-weight: 600; }
-#rt-sum-table thead th { background: #f5f5f5; padding: 9px 14px; text-align: center; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #e6e6e6; border-right: 1px solid #e6e6e6; color: #000; }
+#rt-sum-table thead th { background: #f5f5f5; padding: 5px 14px; text-align: center; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #e6e6e6; border-right: 1px solid #e6e6e6; color: #000; }
 #rt-sum-table thead th:first-child { text-align: left; }
 #rt-sum-table thead th:last-child { border-right: none; }
-#rt-sum-table tbody td { padding: 7px 14px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; text-align: center; color: #000; font-weight: 600; }
+#rt-sum-table tbody td { padding: 4px 14px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; text-align: center; color: #000; font-weight: 600; }
 #rt-sum-table tbody td:first-child { text-align: left; }
 #rt-sum-table tbody td:last-child { border-right: none; }
 #rt-sum-table tbody tr:last-child td { border-bottom: none; }
 #rt-sum-table tbody tr:hover td { background: #fafafa; }
-#rt-sum-table tfoot td { padding: 8px 14px; background: #f5f5f5; font-weight: 800; border-top: 2px solid #e6e6e6; border-right: 1px solid #e6e6e6; text-align: center; color: #000; }
+#rt-sum-table tfoot td { padding: 5px 14px; background: #f5f5f5; font-weight: 800; border-top: 2px solid #e6e6e6; border-right: 1px solid #e6e6e6; text-align: center; color: #000; }
 #rt-sum-table tfoot td:first-child { text-align: left; }
 #rt-sum-table tfoot td:last-child { border-right: none; }
 .rt-num { font-weight: 800; color: #000; }
@@ -91,8 +91,8 @@ var RT_CSS = `
 .rt-bx-chk:checked { background: #000; border-color: #000; }
 .rt-bx-chk:checked::after { content: '✓'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-52%); color: #fff; font-size: 8px; font-weight: bold; }
 .rt-bx-dot { width: 6px; height: 6px; border-radius: 50%; background: #000; flex-shrink: 0; }
-.rt-bx-cd { font-family: monospace; font-size: .76rem; flex: 1; color: #000; font-weight: 700; }
-.rt-bx-st { font-size: .76rem; font-weight: 800; white-space: nowrap; color: #000; }
+.rt-bx-cd { font-family: monospace; font-size: .9rem; flex: 1; color: #000; font-weight: 700; }
+.rt-bx-st { font-size: .88rem; font-weight: 800; white-space: nowrap; color: #000; }
 .rt-bx.done .rt-bx-cd { text-decoration: line-through; opacity: .5; }
 .rt-reprint-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid #000; border-radius: 20px; background: #fff; color: #000; font-size: .74rem; font-weight: 700; text-transform: lowercase; cursor: pointer; flex-shrink: 0; transition: all .15s; white-space: nowrap; font-family: inherit; }
 .rt-reprint-btn:hover { background: #000; color: #fff; }

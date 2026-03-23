@@ -131,7 +131,7 @@ var RT_CSS = `
   @page { size: A4 portrait; margin: 0; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; visibility: hidden; }
   #rt-print-area, #rt-print-area * { visibility: visible; }
-  #rt-print-area { display: block !important; position: fixed; top: 0; left: 0; width: 210mm; margin: 0; padding: 0; }
+  #rt-print-area { display: block !important; position: static; width: 210mm; margin: 0; padding: 0; }
   .rt-pp { display: flex; flex-direction: column; width: 210mm; height: 297mm; max-height: 297mm; overflow: hidden; page-break-after: always; break-after: page; margin: 0; padding: 0; }
   .rt-pp:last-child { page-break-after: avoid; break-after: avoid; }
   .rt-pp-r { flex: 0 0 calc(297mm / 8); height: calc(297mm / 8); max-height: calc(297mm / 8); overflow: hidden; padding: 2mm 12mm; border-bottom: 0.5pt solid #000; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; page-break-inside: avoid; break-inside: avoid; }
@@ -862,12 +862,17 @@ function rtBindLogic() {
     var originalParent = pa.parentNode;
     document.body.appendChild(pa);
     pa.style.display='block';
-    window.print();
-    setTimeout(function(){
-      pa.style.display='none';
-      pa.innerHTML='';
-      if(originalParent) originalParent.appendChild(pa);
-    },1500);
+    /* Wait for browser to paint before triggering print */
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        window.print();
+        setTimeout(function(){
+          pa.style.display='none';
+          pa.innerHTML='';
+          if(originalParent) originalParent.appendChild(pa);
+        },1500);
+      });
+    });
   };
   window.rtExportPDF = function(){ rtToast('selecione "guardar como pdf" no diálogo de impressão','ok'); setTimeout(rtDoPrint,400); };
   window.rtSendEmail = function(){ rtToast('funcionalidade de email será configurada em breve'); };

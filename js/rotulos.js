@@ -129,18 +129,6 @@ var RT_CSS = `
 #rt-print-area { display: none; }
 @media print {
   @page { size: A4 portrait; margin: 0; }
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; visibility: hidden; }
-  #rt-print-area, #rt-print-area * { visibility: visible; }
-  #rt-print-area { display: block !important; position: static; width: 210mm; margin: 0; padding: 0; }
-  .rt-pp { display: flex; flex-direction: column; width: 210mm; height: 297mm; max-height: 297mm; overflow: hidden; page-break-after: always; break-after: page; margin: 0; padding: 0; }
-  .rt-pp:last-child { page-break-after: avoid; break-after: avoid; }
-  .rt-pp-r { flex: 0 0 calc(297mm / 8); height: calc(297mm / 8); max-height: calc(297mm / 8); overflow: hidden; padding: 2mm 12mm; border-bottom: 0.5pt solid #000; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; page-break-inside: avoid; break-inside: avoid; }
-  .rt-pp-r:last-child { border-bottom: none; }
-  .rt-pp-send { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1mm; color: #000; font-weight: bold; }
-  .rt-pp-st { font-size: 16pt; font-weight: 900; text-transform: uppercase; margin-bottom: 1.5mm; line-height: 1.1; color: #000; }
-  .rt-pp-ad { font-size: 9pt; line-height: 1.3; color: #000; font-weight: 600; }
-  .rt-pp-cp { font-size: 9pt; margin-bottom: 1.5mm; color: #000; font-weight: 600; }
-  .rt-pp-cd { font-size: 9pt; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 1.5mm 2.5mm; border-left: 3pt solid #000; display: inline-block; color: #000; }
 }
 .rt-toast { position: fixed; bottom: 24px; right: 24px; background: #000; color: #fff; border-radius: 20px; padding: 9px 18px; font-size: .8rem; font-weight: 700; z-index: 99999; opacity: 0; transform: translateY(20px); transition: all .25s; pointer-events: none; font-family: inherit; }
 .rt-toast.show { opacity: 1; transform: translateY(0); }
@@ -843,36 +831,50 @@ function rtBindLogic() {
   window.rtClosePrintModal = function(){ document.getElementById('rt-modal-print').style.display='none'; };
   window.rtDoPrint = function(){
     if(!PITEMS.length){ rtToast('sem rótulos'); return; }
-    var pa=document.getElementById('rt-print-area'); pa.innerHTML='';
-    var cs=8;
-    for(var i=0;i<PITEMS.length;i+=cs){
-      var chunk=PITEMS.slice(i,i+cs);
-      var page=document.createElement('div'); page.className='rt-pp';
+    var cs = 8;
+    var pagesHtml = '';
+    for(var i=0; i<PITEMS.length; i+=cs){
+      var chunk = PITEMS.slice(i, i+cs);
+      var rowsHtml = '';
       chunk.forEach(function(it){
-        var code=it._preCode||mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0);
-        var d=document.createElement('div'); d.className='rt-pp-r';
-        d.innerHTML='<div class="rt-pp-send">WAKZOME</div><div class="rt-pp-st">'+(it.s.name||'').toUpperCase()+'</div><div class="rt-pp-ad">'+(it.s.addr||'').toUpperCase()+'</div><div class="rt-pp-cp">'+(it.s.cp||'').toUpperCase()+'</div><div class="rt-pp-cd">'+code+'</div>';
-        page.appendChild(d);
+        var code = it._preCode || mkCode(it.s, it.accBox, it.boxNum, it.total, it.extraN||0);
+        rowsHtml += '<div class="row">'
+          + '<div class="send">WAKZOME</div>'
+          + '<div class="st">' + (it.s.name||'').toUpperCase() + '</div>'
+          + '<div class="ad">' + (it.s.addr||'').toUpperCase() + '</div>'
+          + '<div class="cp">' + (it.s.cp||'').toUpperCase() + '</div>'
+          + '<div class="cd">' + code + '</div>'
+          + '</div>';
       });
-      while(page.children.length<8){ var e=document.createElement('div'); e.className='rt-pp-r'; page.appendChild(e); }
-      pa.appendChild(page);
+      // pad to 8 rows
+      for(var j=chunk.length; j<8; j++) rowsHtml += '<div class="row empty"></div>';
+      pagesHtml += '<div class="page">' + rowsHtml + '</div>';
     }
-    /* Move #rt-print-area to body so the browser prints ALL pages,
-       not just the first viewport slice from inside the overlay */
-    var originalParent = pa.parentNode;
-    document.body.appendChild(pa);
-    pa.style.display='block';
-    /* Wait for browser to paint before triggering print */
-    requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        window.print();
-        setTimeout(function(){
-          pa.style.display='none';
-          pa.innerHTML='';
-          if(originalParent) originalParent.appendChild(pa);
-        },1500);
-      });
-    });
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+      + '<title>rótulos</title>'
+      + '<style>'
+      + '* { margin:0; padding:0; box-sizing:border-box; }'
+      + 'body { background:#fff; }'
+      + '@page { size: A4 portrait; margin: 0; }'
+      + '.page { width:210mm; height:297mm; display:flex; flex-direction:column; page-break-after:always; break-after:page; overflow:hidden; }'
+      + '.page:last-child { page-break-after:avoid; break-after:avoid; }'
+      + '.row { flex: 0 0 calc(297mm / 8); height:calc(297mm / 8); padding:2mm 12mm; border-bottom:0.5pt solid #ccc; display:flex; flex-direction:column; justify-content:center; font-family:Arial,sans-serif; overflow:hidden; }'
+      + '.row:last-child { border-bottom:none; }'
+      + '.row.empty { background:#fafafa; }'
+      + '.send { font-size:6.5pt; text-transform:uppercase; letter-spacing:1px; margin-bottom:1mm; color:#000; font-weight:700; }'
+      + '.st { font-size:16pt; font-weight:900; text-transform:uppercase; margin-bottom:1.5mm; line-height:1.1; color:#000; }'
+      + '.ad { font-size:9pt; line-height:1.3; color:#000; font-weight:600; }'
+      + '.cp { font-size:9pt; margin-bottom:1.5mm; color:#000; font-weight:600; }'
+      + '.cd { font-size:9pt; font-weight:800; font-family:\'Courier New\',monospace; background:#e8e8e8; padding:1.5mm 2.5mm; border-left:3pt solid #000; display:inline-block; color:#000; }'
+      + '</style></head><body>'
+      + pagesHtml
+      + '<script>window.onload=function(){ window.focus(); window.print(); setTimeout(function(){ window.close(); }, 1000); };<\/script>'
+      + '</body></html>';
+    var w = window.open('', '_blank', 'width=900,height=700');
+    if(!w){ rtToast('permita popups para imprimir'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
   window.rtExportPDF = function(){ rtToast('selecione "guardar como pdf" no diálogo de impressão','ok'); setTimeout(rtDoPrint,400); };
   window.rtSendEmail = function(){ rtToast('funcionalidade de email será configurada em breve'); };

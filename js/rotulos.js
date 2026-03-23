@@ -121,26 +121,26 @@ var RT_CSS = `
 .rt-rot { padding: 10px 20px; border-bottom: 1px solid #ccc; font-family: Arial,sans-serif; background: #fff; }
 .rt-rot:last-child { border-bottom: none; }
 .rt-rot.empty { background: #fafafa; min-height: 50px; }
-.rt-rot .rs { font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 3px; }
-.rt-rot .rn { font-size: 15px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; }
-.rt-rot .ra,.rt-rot .rc { font-size: 10px; }
+.rt-rot .rs { font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 3px; color: #000; font-weight: 700; }
+.rt-rot .rn { font-size: 15px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; color: #000; }
+.rt-rot .ra,.rt-rot .rc { font-size: 10px; color: #000; font-weight: 600; }
 .rt-rot .rc { margin-bottom: 6px; }
-.rt-rot .rk { font-size: 10px; font-weight: 700; font-family: 'Courier New',monospace; background: #f2f2f2; padding: 5px 8px; border-radius: 3px; border-left: 3px solid #000; display: inline-block; word-break: break-all; }
+.rt-rot .rk { font-size: 10px; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 5px 8px; border-radius: 3px; border-left: 3px solid #000; display: inline-block; word-break: break-all; color: #000; }
 #rt-print-area { display: none; }
 @media print {
   @page { size: A4 portrait; margin: 0; }
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  body > * { display: none !important; }
-  #rt-print-area { display: block !important; margin: 0; padding: 0; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; visibility: hidden; }
+  #rt-print-area, #rt-print-area * { visibility: visible; }
+  #rt-print-area { display: block !important; position: fixed; top: 0; left: 0; width: 210mm; margin: 0; padding: 0; }
   .rt-pp { display: flex; flex-direction: column; width: 210mm; height: 297mm; max-height: 297mm; overflow: hidden; page-break-after: always; break-after: page; margin: 0; padding: 0; }
   .rt-pp:last-child { page-break-after: avoid; break-after: avoid; }
-  .rt-pp-r { flex: 0 0 calc(297mm / 8); height: calc(297mm / 8); max-height: calc(297mm / 8); overflow: hidden; padding: 2mm 12mm; border-bottom: 0.3pt solid #ccc; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; page-break-inside: avoid; break-inside: avoid; }
+  .rt-pp-r { flex: 0 0 calc(297mm / 8); height: calc(297mm / 8); max-height: calc(297mm / 8); overflow: hidden; padding: 2mm 12mm; border-bottom: 0.5pt solid #000; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; page-break-inside: avoid; break-inside: avoid; }
   .rt-pp-r:last-child { border-bottom: none; }
-  .rt-pp-send { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1mm; color: #999; }
-  .rt-pp-st { font-size: 16pt; font-weight: 900; text-transform: uppercase; margin-bottom: 1.5mm; line-height: 1.1; }
-  .rt-pp-ad { font-size: 9pt; line-height: 1.3; }
-  .rt-pp-cp { font-size: 9pt; margin-bottom: 1.5mm; }
-  .rt-pp-cd { font-size: 9pt; font-weight: 700; font-family: 'Courier New',monospace; background: #f2f2f2; padding: 1.5mm 2.5mm; border-left: 2.5pt solid #000; display: inline-block; }
+  .rt-pp-send { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1mm; color: #000; font-weight: bold; }
+  .rt-pp-st { font-size: 16pt; font-weight: 900; text-transform: uppercase; margin-bottom: 1.5mm; line-height: 1.1; color: #000; }
+  .rt-pp-ad { font-size: 9pt; line-height: 1.3; color: #000; font-weight: 600; }
+  .rt-pp-cp { font-size: 9pt; margin-bottom: 1.5mm; color: #000; font-weight: 600; }
+  .rt-pp-cd { font-size: 9pt; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 1.5mm 2.5mm; border-left: 3pt solid #000; display: inline-block; color: #000; }
 }
 .rt-toast { position: fixed; bottom: 24px; right: 24px; background: #000; color: #fff; border-radius: 20px; padding: 9px 18px; font-size: .8rem; font-weight: bold; z-index: 99999; opacity: 0; transform: translateY(20px); transition: all .25s; pointer-events: none; font-family: 'MontserratLight', sans-serif; }
 .rt-toast.show { opacity: 1; transform: translateY(0); }

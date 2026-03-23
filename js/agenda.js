@@ -89,8 +89,9 @@ input,textarea{cursor:text!important}
 .ag-fbs-l{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000}
 .ag-fbs-v{font-size:1rem;font-weight:bold;color:#000}
 .ag-fbs-v.r{color:#c62828}.ag-fbs-v.a{color:#e65100}
-#ag-table-wrap{background:#fff;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden}
-#ag-table{width:100%;border-collapse:collapse;font-family:'MontserratLight',sans-serif;font-size:.95rem}
+#ag-table-outer{text-align:center;margin-bottom:0}
+#ag-table-wrap{background:#fff;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden;display:inline-block;width:auto;text-align:left}
+#ag-table{width:auto;border-collapse:collapse;font-family:'MontserratLight',sans-serif;font-size:.95rem;white-space:nowrap}
 #ag-table thead th{background:#f0f0f0;padding:11px 14px;text-align:left;font-size:.75rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;color:#000;border-bottom:1px solid #e6e6e6;position:sticky;top:0;z-index:2}
 #ag-table thead th[data-sort]{cursor:crosshair!important}
 .ag-thr{text-align:right}.ag-thc{text-align:center}
@@ -249,7 +250,7 @@ var AG_HTML = `
   <div id="ag-fb-name"></div>
   <div id="ag-fb-stats"></div>
 </div>
-<div id="ag-table-wrap">
+<div id="ag-table-outer"><div id="ag-table-wrap">
   <table id="ag-table">
     <thead><tr>
       <th class="ag-thc" style="width:30px">#</th>
@@ -265,7 +266,7 @@ var AG_HTML = `
     <tbody id="ag-tbody"></tbody>
   </table>
   <div id="ag-empty">nenhuma fatura encontrada</div>
-</div>
+</div></div>
 <div class="ag-sl">por fornecedor</div>
 <div id="ag-by-forn"></div>
 </div>

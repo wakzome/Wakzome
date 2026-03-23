@@ -103,7 +103,7 @@ input,textarea{cursor:text!important}
 .ag-tr-p{opacity:.5}.ag-tr-p:hover{opacity:1!important;background:#f5faf5!important}
 @keyframes paidOut{0%{background:rgba(46,125,50,.1)}60%{opacity:.5;transform:translateX(4px)}100%{opacity:.4;transform:none}}
 .ag-tr-paying{animation:paidOut .48s cubic-bezier(0.22,1,0.36,1) forwards!important}
-#ag-table td{padding:11px 14px;color:#000;vertical-align:middle;font-weight:bold}
+#ag-table td{padding:5px 14px;color:#000;vertical-align:middle;font-weight:bold}
 .ag-tdc{text-align:center}.ag-tdr{text-align:right;font-variant-numeric:tabular-nums}.ag-tdn{font-size:.88rem;color:#000;font-weight:bold}
 .ag-sec-tr td{padding:7px 12px!important;font-size:.75rem!important;font-weight:bold!important;text-transform:uppercase!important;letter-spacing:.09em!important;border:none!important;border-bottom:1px solid #e6e6e6!important}
 .ag-sec-v td{color:#c62828!important;background:#fff5f5!important}
@@ -144,7 +144,7 @@ input,textarea{cursor:text!important}
 .ag-fb-BESTSELLER .ag-fb-hdr{color:#880e4f;background:#fce4ec}
 .ag-fb-CHLAMYS .ag-fb-hdr{color:#2e7d32;background:#e8f5e9}
 .ag-fb-row{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-top:1px solid #f5f5f5;font-size:.72rem}
-.ag-fb-rl{color:#000;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+.ag-fb-rl{color:#000;font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em}
 .ag-fb-rv{font-weight:bold;font-variant-numeric:tabular-nums;color:#000;font-size:.88rem}
 .ag-fb-rv.g{color:#2e7d32}.ag-fb-rv.r{color:#c62828}
 .ag-sl{font-size:.75rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;padding:18px 0 8px}

@@ -11,16 +11,6 @@
     font-style: normal;
     font-display: block;
 }
-@font-face {
-    font-family: 'Baskervville';
-    src: url('Baskervville-VariableFont_wght.ttf') format('truetype');
-    font-weight: 100 900; font-style: normal; font-display: block;
-}
-@font-face {
-    font-family: 'Baskervville';
-    src: url('Baskervville-Italic-VariableFont_wght.ttf') format('truetype');
-    font-weight: 100 900; font-style: italic; font-display: block;
-}
 
 /* ===== Intro screen ===== */
 #intro-screen {
@@ -46,8 +36,6 @@
   justify-content: center;
   line-height: 1;
   letter-spacing: -0.02em;
-  font-family: 'Baskervville', Georgia, serif;
-  font-style: italic;
 }
 
 #dynamic-text .char {
@@ -104,16 +92,6 @@ select, select option {
   font-family: 'MontserratLight';
   src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
   font-weight: 100; font-style: normal; font-display: block;
-}
-@font-face {
-  font-family: 'Baskervville';
-  src: url('Baskervville-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900; font-style: normal; font-display: block;
-}
-@font-face {
-  font-family: 'Baskervville';
-  src: url('Baskervville-Italic-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900; font-style: italic; font-display: block;
 }
 html, body {
   margin:0; padding:0; height:100%;
@@ -404,105 +382,7 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* ═══════════════════════════════════════════════
-   BASKERVVILLE — tipografia elegante em pontos-chave
-   Contraste intencional: serif clássico vs sans-serif moderno
-═══════════════════════════════════════════════ */
-
-/* Logótipo principal — toda a instância de .logo-text */
-.logo-text {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-}
-
-/* Greeting overlay — a saudação que aparece ao entrar */
-#greeting-text {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-weight: 300;
-  font-style: italic;
-}
-#greeting-sub {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-weight: 300;
-  letter-spacing: 0.22em;
-}
-
-/* Relógio grande no login — número elegante */
-#login-screen #current-time {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-weight: 300;
-  letter-spacing: 0.02em;
-}
-
-/* Texto legal — leitura mais clássica e formal */
-#legal-notice {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-weight: 400;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  line-height: 1.85;
-}
-
-/* Títulos dos overlays (recibos, agenda, rótulos) */
-#recibos-overlay-title,
-#agenda-overlay-title,
-#rotulos-overlay-title {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: 0.05em;
-  font-size: 1rem !important;
-}
-
-/* Secções de férias */
-.f-section-title {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-}
-
-/* Banner de hoje nas férias */
-#f-today-banner .f-banner-title {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-}
-
-/* SAFT — label pequeno em cima do countdown */
-#saft-label {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-  font-weight: 400;
-  text-transform: lowercase !important;
-  letter-spacing: 0.08em;
-}
-
-/* Dash cards — label das métricas */
-.dash-card .dash-label {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-  text-transform: lowercase !important;
-  letter-spacing: 0.05em;
-}
-
-/* recibos-nota — texto lateral elegante */
-.recibos-nota strong {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 0.9rem !important;
-}
-
-/* Cabeçalhos de tabela — toque clássico */
-th {
-  font-family: 'Baskervville', Georgia, serif !important;
-  font-style: italic;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
+/* ─── INDEX: tablas de horarios ─── */
 /* summary-wrap: kept in DOM for JS but NEVER shown */
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
 

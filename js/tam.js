@@ -1308,8 +1308,7 @@
     if (r._externalShipping) {
       var ext = r._externalShipping;
       var extPkgs = ext.pkgs || r.shipPkgs || 0;
-      shipLabel = '🚚 transporte externo · ' + (extPkgs ? extPkgs + ' pac.' : '') +
-        (ext.fileName ? ' · <em>' + tamEsc(ext.fileName) + '</em>' : '');
+      shipLabel = '🚚 transporte externo' + (extPkgs ? ' · ' + extPkgs + ' pac.' : '');
     } else {
       shipLabel = 'transporte · ' + r.shipPkgs + ' pac. × 17,50 €';
     }

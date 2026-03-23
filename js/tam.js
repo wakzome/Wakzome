@@ -2705,9 +2705,12 @@
     dd.querySelectorAll('.tam-dd-del-btn').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        tamDeleteSession(btn.getAttribute('data-key'));
-        var updatedSessions = tamLoadAllSessionsLocal();
-        tamRenderSessionsList(updatedSessions);
+        var key = btn.getAttribute('data-key');
+        tamConfirmDeleteSession(key, function(){
+          tamDeleteSession(key);
+          var updatedSessions = tamLoadAllSessionsLocal();
+          tamRenderSessionsList(updatedSessions);
+        });
       });
     });
   }
@@ -2769,6 +2772,35 @@
       tamStartAutoSave();
       tamShowDNBarButtons();
     }
+  }
+
+  function tamConfirmDeleteSession(key, onConfirm) {
+    var old = document.getElementById('tam-session-dialog');
+    if (old) old.parentNode.removeChild(old);
+
+    var dialog = document.createElement('div');
+    dialog.id = 'tam-session-dialog';
+    dialog.innerHTML =
+      '<div id="tam-session-dialog-box">' +
+        '<div class="tam-dialog-title">apagar sessão</div>' +
+        '<div class="tam-dialog-body">' +
+          'Tem a certeza que quer apagar a sessão<br><strong>' + tamEsc(key) + '</strong>?<br>' +
+          '<small style="color:#888">Esta ação é irreversível.</small>' +
+        '</div>' +
+        '<div class="tam-dialog-btns">' +
+          '<button class="tam-dialog-btn tam-dialog-btn-new">🗑 sim, apagar</button>' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add">cancelar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(dialog);
+
+    dialog.querySelector('.tam-dialog-btn-new').addEventListener('click', function(){
+      dialog.parentNode.removeChild(dialog);
+      onConfirm();
+    });
+    dialog.querySelector('.tam-dialog-btn-add').addEventListener('click', function(){
+      dialog.parentNode.removeChild(dialog);
+    });
   }
 
   function tamDeleteSession(key) {

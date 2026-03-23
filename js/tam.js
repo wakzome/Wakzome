@@ -551,7 +551,8 @@
           return { invoiceNo: r.invoiceNo, invoiceDate: r.invoiceDate, fileName: r._fileName,
                    totalPieces: r.totalPieces, shipPkgs: r.shipPkgs, shipping: r.shipping,
                    subtotalGoods: r.subtotalGoods, grandTotal: r.grandTotal,
-                   invoiceSubtotal: r.invoiceSubtotal, grouped: r.grouped };
+                   invoiceSubtotal: r.invoiceSubtotal, grouped: r.grouped,
+                   shipPerPiece: r.shipPerPiece, _externalShipping: r._externalShipping || null };
         })
       };
       // Remove old unsuffixed entry, save as (1)
@@ -1157,6 +1158,12 @@
         }
       });
     });
+
+    // Freight alert — shown when shipping = 0 or external shipping was applied
+    var _freightIdx = tamInvoices.findIndex(function(inv){ return inv === r; });
+    if (_freightIdx >= 0 && (tamDetectMissingShipping(r) || r._externalShipping)) {
+      tamRenderFreightAlert(_freightIdx, el);
+    }
   }
 
   function tamRenderSingleMeta(r, el) {
@@ -1216,6 +1223,12 @@
         }
       });
     });
+
+    // Freight alert for single-invoice layout
+    var _si = tamInvoices.findIndex(function(inv){ return inv === r; });
+    if (_si >= 0 && (tamDetectMissingShipping(r) || r._externalShipping)) {
+      tamRenderFreightAlert(_si, el);
+    }
   }
 
   /* ──────────────────────────────────────────────────────────────
@@ -1291,6 +1304,15 @@
 
     // Tfoot spans depend on anomaly col
     var extraTd = showAnomalyCol ? '<td class="tam-td"></td>' : '';
+    var shipLabel;
+    if (r._externalShipping) {
+      var ext = r._externalShipping;
+      var extPkgs = ext.pkgs || r.shipPkgs || 0;
+      shipLabel = '🚚 transporte externo · ' + (extPkgs ? extPkgs + ' pac.' : '') +
+        (ext.fileName ? ' · <em>' + tamEsc(ext.fileName) + '</em>' : '');
+    } else {
+      shipLabel = 'transporte · ' + r.shipPkgs + ' pac. × 17,50 €';
+    }
     html +=
       '</tbody><tfoot>' +
       '<tr class="tam-tr-sub">' +
@@ -1301,9 +1323,9 @@
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.subtotalGoods) + '</strong></td>' +
         '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
-      '<tr class="tam-tr-ship">' +
+      '<tr class="tam-tr-ship' + (r._externalShipping ? ' tam-tr-ship-ext' : '') + '">' +
         '<td class="tam-td"></td>' +
-        '<td class="tam-td" colspan="2">transporte · ' + r.shipPkgs + ' pac. × 17,50 €</td>' +
+        '<td class="tam-td" colspan="2">' + shipLabel + '</td>' +
         '<td class="tam-td"></td><td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(r.shipping) + '</td>' +
         '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
@@ -2483,7 +2505,9 @@
           grandTotal:    r.grandTotal    || 0,
           invoiceSubtotal: r.invoiceSubtotal || null,
           dnList:        r.dnList        || [],
-          grouped:       r.grouped
+          grouped:       r.grouped,
+          shipPerPiece:  r.shipPerPiece  || 0,
+          _externalShipping: r._externalShipping || null
         };
       })
     };
@@ -2726,6 +2750,8 @@
           invoiceSubtotal: inv.invoiceSubtotal || null,
           dnList:         inv.dnList         || [],
           grouped:        grouped,
+          shipPerPiece:   inv.shipPerPiece   || (totalPieces > 0 ? tamRound2(shipping / totalPieces) : 0),
+          _externalShipping: inv._externalShipping || null,
           xv: { fullyAgree: true, confirmed: grouped.length, conflicts: [],
                 engines: [{label:'A',refs:grouped.length,units:totalPieces},
                           {label:'B',refs:grouped.length,units:totalPieces}],
@@ -4419,6 +4445,192 @@
              invoiceNo:invNoRow ? invNoRow.value : '—', invoiceDate };
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     TRANSPORTE EXTERNO — factura de frete separada
+     Activado quando shipping === 0 após o parse normal.
+     Conserva os motores A/B/C e o fluxo Versandkosten existente.
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Detecta se uma fatura não tem transporte incluído */
+  function tamDetectMissingShipping(r) {
+    return r && r.totalPieces > 0 && (!r.shipping || r.shipping === 0) && !r._externalShipping;
+  }
+
+  /* Parseia uma factura de transporte separada (tipo 2979445).
+     Estratégia: procura "Total Amount" seguido de valor,
+     ou o último valor do documento como fallback.
+     Devolve { cost, pkgs, pricePerPkg } ou null. */
+  function tamParseFreightInvoice(allRows) {
+    var allText = allRows.map(function(r){ return r.join(' '); }).join('\n');
+
+    // 1. Padrão "Total Amount X.XXX,XX" ou "Total Amount X,XX"
+    var totalM = allText.match(/Total\s+Amount\s+([\d.]*\d+[,.][\d]{2})/i);
+    if (totalM) {
+      var cost = tamParseEU(totalM[1]);
+      if (cost > 0) {
+        // Tenta extrair nº de pacotes: "19 pieces" ou "19 Stück"
+        var pkgM = allText.match(/(\d+)\s+(?:pieces?|Stück|pcs?|boxes?|caixas?)/i);
+        var pkgs = pkgM ? parseInt(pkgM[1]) : 0;
+        // Tenta preço por pacote: "17,50" junto de pkgs
+        var pppM = allText.match(/(\d+)\s+(?:pieces?|Stück|pcs?)\s+[\d]+\s+([\d.]*\d+[,.][\d]{2})/i);
+        var ppp  = pppM ? tamParseEU(pppM[2]) : (pkgs > 0 ? tamRound2(cost/pkgs) : 0);
+        return { cost: cost, pkgs: pkgs, pricePerPkg: ppp };
+      }
+    }
+
+    // 2. Fallback: "Gesamt/Total" seguido de valor
+    var gesM = allText.match(/(?:Gesamt|Total)\s*[€]?\s*([\d.]*\d+[,.][\d]{2})\s*$/im);
+    if (gesM) {
+      var cost2 = tamParseEU(gesM[1]);
+      if (cost2 > 0) return { cost: cost2, pkgs: 0, pricePerPkg: 0 };
+    }
+
+    // 3. Último valor numérico do documento como último recurso
+    var allNums = [];
+    allText.replace(/([\d.]*\d+,\d{2})/g, function(_, n){ allNums.push(tamParseEU(n)); });
+    var lastVal = allNums.filter(function(n){ return n > 0 && n < 99999; }).pop();
+    if (lastVal) return { cost: lastVal, pkgs: 0, pricePerPkg: 0 };
+
+    return null;
+  }
+
+  /* Aplica o custo de transporte externo a uma fatura:
+     recalcula shipPerPiece, unitPriceWithShip e grandTotal para cada ref */
+  function tamApplyExternalShipping(invIdx, shippingCost, pkgs, fileName) {
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+    var totalPieces = r.totalPieces;
+    if (!totalPieces) return;
+
+    var shipPerPiece = shippingCost / totalPieces;
+    r.grouped.forEach(function(g) {
+      var base            = g.pieces > 0 ? g.totalCost / g.pieces : 0;
+      g.unitPriceWithShip = tamRound2(base + shipPerPiece);
+      g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+    });
+
+    r.shipping         = shippingCost;
+    r.shipPkgs         = pkgs || r.shipPkgs || 0;
+    r.shipPerPiece     = tamRound2(shipPerPiece);
+    r.grandTotal       = tamRound2(r.subtotalGoods + shippingCost);
+    r._externalShipping = { cost: shippingCost, pkgs: pkgs, fileName: fileName };
+
+    // Update engine cache shipping so engine-switch preserves it
+    var cache = tamEngineCache[r._fileKey];
+    if (cache) {
+      ['A','B','C'].forEach(function(lbl){
+        if (cache[lbl]) cache[lbl].shipping = shippingCost;
+      });
+    }
+
+    tamRenderAll();
+    tamScheduleSave();
+  }
+
+  /* Mostra o alerta de transporte em falta dentro do banner de fatura.
+     Cria um input[type=file] oculto e um botão visível. */
+  function tamRenderFreightAlert(invIdx, containerEl) {
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+
+    // Se já foi aplicado, mostra confirmação
+    if (r._externalShipping) {
+      var ext = r._externalShipping;
+      var alertEl = document.createElement('div');
+      alertEl.className = 'tam-freight-applied';
+      alertEl.innerHTML =
+        '🚚 <strong>transporte externo aplicado:</strong> ' + tamFmtEU(ext.cost) + ' € ' +
+        '(' + (ext.pkgs || r.shipPkgs) + ' pac.) · ' +
+        tamFmtEU(r.shipPerPiece) + ' €/un' +
+        (ext.fileName ? ' · <em>' + tamEsc(ext.fileName) + '</em>' : '') +
+        ' <button class="tam-freight-remove-btn" data-inv="' + invIdx + '">✕ remover</button>';
+      containerEl.appendChild(alertEl);
+
+      alertEl.querySelector('.tam-freight-remove-btn').addEventListener('click', function(){
+        tamRemoveExternalShipping(invIdx);
+      });
+      return;
+    }
+
+    // Se transporte = 0 → mostra alerta com botão
+    if (!tamDetectMissingShipping(r)) return;
+
+    var alertEl = document.createElement('div');
+    alertEl.className = 'tam-freight-alert';
+
+    var fileInputId = 'tam-freight-input-' + invIdx;
+    alertEl.innerHTML =
+      '<span class="tam-freight-icon">🚚</span>' +
+      '<span class="tam-freight-msg">Transporte não detetado na fatura · ' +
+        '<strong>' + tamFmtEU(r.subtotalGoods) + ' €</strong> (só mercadoria)</span>' +
+      '<label class="tam-freight-btn" for="' + fileInputId + '">' +
+        '📎 Carregar fatura de transporte' +
+        '<input type="file" id="' + fileInputId + '" accept="application/pdf" style="display:none">' +
+      '</label>';
+
+    containerEl.appendChild(alertEl);
+
+    alertEl.querySelector('#' + fileInputId).addEventListener('change', async function(e){
+      var file = e.target.files[0];
+      if (!file) return;
+      e.target.value = '';
+
+      var btn = alertEl.querySelector('label.tam-freight-btn');
+      if (btn) btn.textContent = '⏳ a processar…';
+
+      try {
+        var buf = await file.arrayBuffer();
+        var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        var allRows = [];
+        for (var p = 1; p <= pdf.numPages; p++) {
+          var page = await pdf.getPage(p);
+          allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
+        }
+        var freight = tamParseFreightInvoice(allRows);
+        if (!freight || !freight.cost) {
+          alertEl.querySelector('.tam-freight-msg').innerHTML =
+            '<span style="color:#c00">⚠ Não foi possível extrair o valor do transporte. Tenta outro ficheiro.</span>';
+          if (btn) btn.textContent = '📎 Carregar fatura de transporte';
+          return;
+        }
+
+        // Se temos pkgs na fatura de frete, verificar consistência com shipPkgs da fatura principal
+        var pkgs = freight.pkgs || r.shipPkgs || 0;
+        tamApplyExternalShipping(invIdx, freight.cost, pkgs, file.name);
+      } catch(err) {
+        console.error('TAM freight parse error', err);
+        if (btn) {
+          btn.innerHTML =
+            '<span style="color:#c00">⚠ Erro: ' + tamEsc(err.message) + '</span>';
+        }
+      }
+    });
+  }
+
+  /* Remove o transporte externo e repõe shipping = 0 */
+  function tamRemoveExternalShipping(invIdx) {
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+    delete r._externalShipping;
+    r.shipping     = 0;
+    r.shipPerPiece = 0;
+    r.grandTotal   = r.subtotalGoods;
+    r.grouped.forEach(function(g) {
+      var base            = g.pieces > 0 ? g.totalCost / g.pieces : 0;
+      g.unitPriceWithShip = tamRound2(base);
+      g.grandTotal        = tamRound2(base * g.pieces);
+    });
+    // Restore engine cache
+    var cache = tamEngineCache[r._fileKey];
+    if (cache) {
+      ['A','B','C'].forEach(function(lbl){
+        if (cache[lbl]) cache[lbl].shipping = 0;
+      });
+    }
+    tamRenderAll();
+    tamScheduleSave();
+  }
+
   /* ── ENGINES ─────────────────────────────────────────────── */
   function tamEngineA(allRows) {
     var tagged = allRows.map(function(tokens, idx){
@@ -4596,7 +4808,16 @@
     var s = document.createElement('style');
     s.id = 'tam-v9-styles';
     s.textContent = [
-      /* ── Upload zone compacto cuando ya hay facturas ── */
+      /* ── Freight alert — transporte não incluído ── */
+      '.tam-freight-alert { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; padding:8px 12px; background:#fff8e1; border:1.5px solid #ffc107; border-radius:9px; font-size:.8rem; color:#6d4c00; }',
+      '.tam-freight-icon { font-size:1.1rem; }',
+      '.tam-freight-msg { flex:1; min-width:180px; }',
+      '.tam-freight-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; background:#ff8f00; color:#fff; border:none; border-radius:7px; font-size:.78rem; font-weight:bold; font-family:MontserratLight,sans-serif; cursor:pointer; white-space:nowrap; transition:background .14s; }',
+      '.tam-freight-btn:hover { background:#e65100; }',
+      '.tam-freight-applied { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:7px 12px; background:#e8f5e9; border:1.5px solid #81c784; border-radius:9px; font-size:.78rem; color:#1b5e20; }',
+      '.tam-freight-remove-btn { margin-left:auto; padding:3px 9px; background:transparent; border:1.5px solid #a5d6a7; border-radius:6px; font-size:.72rem; color:#388e3c; cursor:pointer; font-family:MontserratLight,sans-serif; transition:background .12s,color .12s; }',
+      '.tam-freight-remove-btn:hover { background:#c8e6c9; color:#1b5e20; }',
+      '.tam-tr-ship-ext td { color:#e65100!important; font-style:italic; }',
       '#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
       '#tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display:none!important; }',
 

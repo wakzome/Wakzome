@@ -702,28 +702,35 @@ td, th { border-radius:10px; margin:2px; }
 #adm-back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 14px 6px 10px;
+  gap: 8px;
+  padding: 7px 16px 7px 12px;
   font-size: .78rem;
   font-weight: 700;
   font-family: 'MontserratLight', sans-serif;
   text-transform: lowercase;
   letter-spacing: .06em;
-  color: #000;
-  background: transparent;
-  border: 1px solid #ddd;
-  border-radius: 20px;
+  color: #fff;
+  background: #000;
+  border: 1.5px solid #000;
+  border-radius: 10px;
   cursor: pointer;
-  transition: border-color .2s, background .2s, color .2s;
+  transition: background .2s, color .2s, border-color .2s, transform .15s, box-shadow .15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
 #adm-back-btn:hover {
-  border-color: #000;
-  background: #000;
+  background: #333;
+  border-color: #333;
   color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+}
+#adm-back-btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 #adm-back-btn svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
   transition: transform .2s;
 }
@@ -2471,7 +2478,7 @@ html, body,
 .tab-panel, #adm-dashboard,
 .adm-mod-name, .adm-mod-desc, .adm-mod-arrow,
 #adm-dash-greeting .adm-brand, #adm-dash-greeting .adm-tagline,
-#adm-module-bar-title, #adm-back-btn,
+#adm-module-bar-title,
 th, td, .tab-btn, .drawer-tab-btn,
 input, button, select, textarea,
 .f-card .f-name, .f-card .f-dates, .f-card .f-badge, .f-section-title,
@@ -2488,6 +2495,9 @@ input, button, select, textarea,
 #rotulos-overlay-title, #processamento-overlay-title {
   color: #000 !important;
 }
+
+/* Back button keeps white text — override the global rule above */
+#adm-back-btn { color: #fff !important; }
 
 /* Textos secundários / decorativos: preto suave mas ainda profundo */
 .adm-mod-desc, #adm-dash-greeting .adm-tagline,

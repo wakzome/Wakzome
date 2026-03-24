@@ -218,6 +218,31 @@
   var rowCounts     = {};
   var _procInited   = false;
 
+  /* ── 2a. SUPABASE CONFIG ── */
+  var PROC_SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
+  var PROC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
+
+  function procSbHeaders() {
+    return { 'Content-Type': 'application/json', 'apikey': PROC_SB_KEY, 'Authorization': 'Bearer ' + PROC_SB_KEY };
+  }
+  function procSbFetch(path, opts) {
+    return fetch(PROC_SB_URL + '/rest/v1/' + path, Object.assign({ headers: procSbHeaders() }, opts || {}));
+  }
+
+  /* ── 2b. SYNC STATUS ── */
+  function procSetSyncStatus(state, msg) {
+    var el = document.getElementById('proc-saveStatus');
+    if (!el) return;
+    var icons = { syncing: '↻', ok: '✓', error: '⚠', offline: '⊘' };
+    el.textContent = (icons[state] || '') + ' ' + msg;
+    el.style.opacity = '1';
+    el.style.color = state === 'error' ? '#c00' : state === 'offline' ? '#e67e00' : '#2a8a2a';
+    clearTimeout(el._t);
+    if (state === 'ok') {
+      el._t = setTimeout(function() { el.style.opacity = '0'; }, 3000);
+    }
+  }
+
   /* ── 2b. PROVIDER LIST ── */
   var PROVIDERS = [
     'TAM','REN KE ZHONG','MEMORIAS INFINITAS','AMORADO','JOLIE','PARFOIS','BORBOLETA VISTOSA',
@@ -419,6 +444,8 @@
   }
 
   /* ── 4. SAVE / LOAD ── */
+  var _procSaveDebounce = null;
+
   function procSaveSession(manual) {
     var key = _activeSessionKey || getSessionKey();
     _activeSessionKey = key;
@@ -436,44 +463,62 @@
         };
       })
     };
-    try {
-      localStorage.setItem(key, JSON.stringify(payload));
-      if (manual) procShowSaveStatus('\u2713 guardado');
-    } catch(e) {
-      if (manual) procShowSaveStatus('\u26a0 erro ao guardar');
-    }
+
+    /* Always save to localStorage as offline fallback */
+    try { localStorage.setItem(key, JSON.stringify(payload)); } catch(e) {}
+    if (manual) procSetSyncStatus('syncing', 'a guardar…');
+
+    /* Debounce remote saves */
+    clearTimeout(_procSaveDebounce);
+    _procSaveDebounce = setTimeout(function() {
+      procSbFetch('proc_sessoes', {
+        method: 'POST',
+        headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify({ session_key: key, dados: JSON.stringify(payload), updated_at: payload.savedAt })
+      }).then(function(r) {
+        if (r.ok) { procSetSyncStatus('ok', 'guardado'); }
+        else { r.text().then(function(t) { console.error('PROC save error', t); procSetSyncStatus('error', 'erro ao guardar remotamente'); }); }
+      }).catch(function() { procSetSyncStatus('offline', 'offline — guardado localmente'); });
+    }, manual ? 0 : 800);
   }
 
-  function procShowSaveStatus(msg) {
-    var el = document.getElementById('proc-saveStatus');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.opacity = '1';
-    clearTimeout(el._t);
-    el._t = setTimeout(function() { el.style.opacity = '0'; }, 2600);
-  }
+  function procShowSaveStatus(msg) { procSetSyncStatus('ok', msg); }
 
-  function procLoadSession(key) {
-    var raw = localStorage.getItem(key);
-    if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
+  function procApplySessionData(key, raw, callback) {
     var data;
     try { data = JSON.parse(raw); } catch(e) {
       procFloatModal({ title: 'Erro ao interpretar sess\u00e3o.', buttons: [{ label: 'OK', cb: null }] });
       return;
     }
-
     var cont = document.getElementById('proc-faturasContainer');
     if (cont) cont.innerHTML = '';
     faturaCount   = 0;
     activeFaturas = [];
     Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
     _activeSessionKey = key;
-
     var faturas = data.faturas || [];
     if (!faturas.length) { procAddFatura(null); }
     else faturas.forEach(function(fd) { procAddFatura(fd); });
-    procShowSaveStatus('\u2713 sess\u00e3o carregada');
+    if (callback) callback();
+  }
+
+  function procLoadSession(key) {
+    procSetSyncStatus('syncing', 'a carregar…');
     procCloseSessionMenu();
+    procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key) + '&select=dados', { method: 'GET' })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(key);
+        if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
+        /* Update local cache */
+        try { localStorage.setItem(key, raw); } catch(e) {}
+        procApplySessionData(key, raw, function() { procSetSyncStatus('ok', 'sess\u00e3o carregada'); });
+      })
+      .catch(function() {
+        var raw = localStorage.getItem(key);
+        if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
+        procApplySessionData(key, raw, function() { procSetSyncStatus('offline', 'carregado localmente'); });
+      });
   }
 
   function procDeleteSession(key) {
@@ -485,6 +530,7 @@
         { label: '\u274c Eliminar definitivamente',
           style: 'background:#fff0f0;border:1px solid #ffd7d7;color:#c00;font-weight:700;',
           cb: function() {
+            procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key), { method: 'DELETE' }).catch(function(){});
             try { localStorage.removeItem(key); } catch(e) {}
             if (_activeSessionKey === key) _activeSessionKey = null;
             procRenderSessionMenu();
@@ -495,70 +541,69 @@
     });
   }
 
-  /* ── 4b. SESSION CONFLICT DETECTION ── */
-  function procCheckWeekConflict(onClear) {
-    /* Called at init — if there's already a saved session this week, ask the user */
-    var weekKeys = getWeekKeys();
-    if (!weekKeys.length) { _activeSessionKey = getSessionKey(); onClear(); return; }
-
-    /* Build session summary for the modal */
-    var existing = weekKeys[0]; /* most recent */
-    var data = null;
-    try { data = JSON.parse(localStorage.getItem(existing)); } catch(e) {}
-    var nFaturas = data && data.faturas ? data.faturas.length : '?';
-    var savedAt  = '';
-    if (data && data.savedAt) {
-      var dt = new Date(data.savedAt);
-      savedAt = dt.toLocaleDateString('pt-PT') + ' \u00e0s ' + dt.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit' });
-    }
-    var extraInfo = weekKeys.length > 1 ? ' (' + weekKeys.length + ' sess\u00f5es esta semana)' : '';
-
-    procFloatModal({
-      label: 'Sess\u00e3o em curso detectada',
-      title: 'J\u00e1 tens trabalho guardado esta semana',
-      body: labelFromKey(existing) + extraInfo + '<br>'
-          + (savedAt ? 'Guardado: ' + savedAt + '<br>' : '')
-          + nFaturas + ' fatura(s) registada(s).<br><br>'
-          + 'Queres adicionar esta nova fatura \u00e0 sess\u00e3o existente?',
-      buttons: [
-        { label: '\u2714 Sim \u2014 adicionar \u00e0 sess\u00e3o existente',
-          style: 'background:#f0faf0;border:1px solid #b2dfb2;color:#1a6a1a;font-weight:700;',
-          cb: function() {
-            /* Load existing session then add a blank fatura at the end */
-            procLoadSessionSilent(existing, function() {
-              procAddFatura(null);
-              _activeSessionKey = existing;
-              procShowSaveStatus('\u2713 sess\u00e3o carregada');
-            });
-          }
-        },
-        { label: '\u2716 N\u00e3o \u2014 criar sess\u00e3o separada',
-          style: 'background:#fff;border:1px solid #e0e0e0;color:#000;',
-          cb: function() {
-            _activeSessionKey = getNextWeekKey();
-            onClear();
-          }
+  /* ── 4b. REMOTE KEY SYNC ── */
+  function procLoadRemoteKeys(callback) {
+    procSbFetch('proc_sessoes?select=session_key,updated_at&order=updated_at.desc', { method: 'GET' })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        if (rows && rows.length) {
+          rows.forEach(function(row) {
+            if (!localStorage.getItem(row.session_key)) {
+              try { localStorage.setItem(row.session_key, JSON.stringify({ savedAt: row.updated_at, faturas: [] })); } catch(e) {}
+            }
+          });
         }
-      ]
+        if (callback) callback();
+      })
+      .catch(function() { if (callback) callback(); });
+  }
+
+  /* ── 4c. SESSION CONFLICT DETECTION ── */
+  function procCheckWeekConflict(onClear) {
+    /* Sync remote keys first, then check for conflicts */
+    procLoadRemoteKeys(function() {
+      var weekKeys = getWeekKeys();
+      if (!weekKeys.length) { _activeSessionKey = getSessionKey(); onClear(); return; }
+
+      var existing = weekKeys[0];
+      var data = null;
+      try { data = JSON.parse(localStorage.getItem(existing)); } catch(e) {}
+      var nFaturas = data && data.faturas ? data.faturas.length : '?';
+      var savedAt  = '';
+      if (data && data.savedAt) {
+        var dt = new Date(data.savedAt);
+        savedAt = dt.toLocaleDateString('pt-PT') + ' \u00e0s ' + dt.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit' });
+      }
+      var extraInfo = weekKeys.length > 1 ? ' (' + weekKeys.length + ' sess\u00f5es esta semana)' : '';
+
+      procFloatModal({
+        label: 'Sess\u00e3o em curso detectada',
+        title: 'J\u00e1 tens trabalho guardado esta semana',
+        body: labelFromKey(existing) + extraInfo + '<br>'
+            + (savedAt ? 'Guardado: ' + savedAt + '<br>' : '')
+            + nFaturas + ' fatura(s) registada(s).<br><br>'
+            + 'Queres adicionar esta nova fatura \u00e0 sess\u00e3o existente?',
+        buttons: [
+          { label: '\u2714 Sim \u2014 adicionar \u00e0 sess\u00e3o existente',
+            style: 'background:#f0faf0;border:1px solid #b2dfb2;color:#1a6a1a;font-weight:700;',
+            cb: function() {
+              procLoadSession(existing);
+              setTimeout(function() { procAddFatura(null); }, 600);
+            }
+          },
+          { label: '\u2716 N\u00e3o \u2014 criar sess\u00e3o separada',
+            style: 'background:#fff;border:1px solid #e0e0e0;color:#000;',
+            cb: function() { _activeSessionKey = getNextWeekKey(); onClear(); }
+          }
+        ]
+      });
     });
   }
 
   function procLoadSessionSilent(key, callback) {
     var raw = localStorage.getItem(key);
-    if (!raw) { callback(); return; }
-    var data;
-    try { data = JSON.parse(raw); } catch(e) { callback(); return; }
-
-    var cont = document.getElementById('proc-faturasContainer');
-    if (cont) cont.innerHTML = '';
-    faturaCount   = 0;
-    activeFaturas = [];
-    Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-
-    var faturas = data.faturas || [];
-    if (!faturas.length) { procAddFatura(null); }
-    else faturas.forEach(function(fd) { procAddFatura(fd); });
-    if (callback) callback();
+    if (!raw) { if(callback) callback(); return; }
+    procApplySessionData(key, raw, callback);
   }
 
   /* ── 5. SESSION DROPDOWN ── */

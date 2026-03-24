@@ -87,7 +87,7 @@
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:700; padding:4px 6px; border-radius:6px; width:100%; color:#000; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:52px; }',
       '#proc-content .proc-table-wrap td input.proc-ref-input { width:90px; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { width:140px; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { width:100px; font-size:.78rem; }',
       '#proc-content .proc-table-wrap td input[type="text"]:not(.proc-ref-input):not(.proc-desc-input) { width:80px; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
       '#proc-content .proc-table-wrap td.center-col { text-align:center; }',
@@ -147,9 +147,9 @@
 
       /* OBS tooltip cell */
       '#proc-content .proc-obs-cell { position:relative; }',
-      '#proc-content .proc-obs-tip { display:none; position:absolute; bottom:calc(100% + 6px); right:0; min-width:160px; max-width:280px; background:#000; color:#fff; font-size:.75rem; font-weight:600; padding:7px 10px; border-radius:8px; white-space:pre-wrap; word-break:break-word; z-index:400; pointer-events:none; line-height:1.5; }',
-      '#proc-content .proc-obs-tip::after { content:""; position:absolute; top:100%; right:18px; border:5px solid transparent; border-top-color:#000; }',
-      '#proc-content .proc-obs-cell:hover .proc-obs-tip { display:block; }',
+      '#proc-content .proc-obs-tip { visibility:hidden; opacity:0; position:absolute; bottom:calc(100% + 8px); right:0; min-width:180px; max-width:300px; background:#1a1a1a; color:#fff; font-size:.78rem; font-weight:600; padding:8px 12px; border-radius:8px; white-space:pre-wrap; word-break:break-word; z-index:9999; pointer-events:none; line-height:1.6; transition:opacity .15s, visibility .15s; box-shadow:0 4px 14px rgba(0,0,0,.25); }',
+      '#proc-content .proc-obs-tip::after { content:""; position:absolute; top:100%; right:14px; border:6px solid transparent; border-top-color:#1a1a1a; }',
+      '#proc-content .proc-obs-cell:hover .proc-obs-tip.has-text { visibility:visible; opacity:1; }',
 
       /* Add fatura */
       '#proc-content .proc-add-fatura-wrap { display:flex; justify-content:center; margin:8px 0 14px; }',
@@ -556,7 +556,6 @@
       +   '<th>D / +1\u20ac</th>'
       +   '<th>PVP \u20ac</th>'
       +   '<th>Margem</th>'
-      +   '<th>Total</th>'
       +   '<th class="left">OBS</th>'
       +   '</tr></thead>'
       +   '<tbody id="proc-tableBody-' + fid + '"></tbody>'
@@ -639,7 +638,6 @@
         + '</div></td>'
         + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
-        + '<td class="proc-cell-computed" id="proc-total-' + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-obs-cell">'
         +   '<input type="text" class="proc-obs-input" placeholder="Obs\u2026"'
         +   ' oninput="procObsSync(this)" id="proc-obs-' + f + '-' + r + '">'
@@ -728,17 +726,6 @@
         margEl.className = cls;
       } else {
         margEl.textContent = '\u2014'; margEl.className = 'proc-cell-computed';
-      }
-    }
-
-    var totalEl = document.getElementById('proc-total-' + fid + '-' + id);
-    if (totalEl) {
-      if (preco && pecas) {
-        var lineTotal = pecas * pc * (1 - desc / 100);
-        totalEl.textContent = lineTotal.toFixed(2) + ' \u20ac';
-        totalEl.className = 'proc-cell-computed has-val';
-      } else {
-        totalEl.textContent = '\u2014'; totalEl.className = 'proc-cell-computed';
       }
     }
 
@@ -1122,7 +1109,11 @@
     var tip = input.parentElement ? input.parentElement.querySelector('.proc-obs-tip') : null;
     if (!tip) return;
     tip.textContent = input.value || '';
-    tip.style.display = input.value ? '' : 'none'; /* solo mostrar si hay texto */
+    if (input.value.trim()) {
+      tip.classList.add('has-text');
+    } else {
+      tip.classList.remove('has-text');
+    }
   }
 
 })();

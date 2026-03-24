@@ -2457,6 +2457,89 @@ html.wz-minimal #wz-minimal-btn::before {
   animation: soundRipple 0.5s ease-out forwards;
 }
 </style>
+<style>
+/* ══ TYPOGRAPHY GLOBAL UPGRADE ══
+   Tamanho base aumentado + negro profundo (#0a0a0a) para
+   máximo contraste e presença visual em todo o dashboard
+══════════════════════════════════════════════════════ */
+
+/* --- Base font-size global aumentado ---  */
+html { font-size: 16.5px; }
+
+html, body,
+#admin-app, #login-screen, #main-header,
+.tab-panel, #adm-dashboard,
+.adm-mod-name, .adm-mod-desc, .adm-mod-arrow,
+#adm-dash-greeting .adm-brand, #adm-dash-greeting .adm-tagline,
+#adm-module-bar-title, #adm-back-btn,
+th, td, .tab-btn, .drawer-tab-btn,
+input, button, select, textarea,
+.f-card .f-name, .f-card .f-dates, .f-card .f-badge, .f-section-title,
+#f-today-banner .f-banner-title, #f-today-banner .f-banner-names,
+.dash-card .dash-val, .dash-card .dash-label,
+#h-status-msg, #s-status-msg, #r-status-msg,
+#r-progress-detail, #saft-title, #saft-countdown,
+.r-inline-hint, .upload-box, #s-upload-label,
+#r-config-section, #r-config-fields label,
+.results-wrap, .tam-table th, .tam-table td,
+#login-screen .logo-text, #login-screen #current-time,
+#login-screen #current-date,
+#recibos-overlay-title, #agenda-overlay-title,
+#rotulos-overlay-title, #processamento-overlay-title {
+  color: #0a0a0a !important;
+}
+
+/* Textos secundários / decorativos: preto suave mas ainda profundo */
+.adm-mod-desc, #adm-dash-greeting .adm-tagline,
+#adm-module-bar-title, .f-card .f-dates,
+.f-card .f-badge.past, .dash-card .dash-label,
+.adm-mod-arrow, #saft-label, #saft-countdown-label,
+#saft-recibos-label, #saft-recibos-mes,
+#r-warnings-box .warn-title, #r-warnings-box ul li {
+  color: #0a0a0a !important;
+  opacity: 0.68;
+}
+
+/* Textos de estado / placeholder que eram muito claros */
+.adm-mod-desc { opacity: 0.55; }
+#adm-dash-greeting .adm-tagline { opacity: 0.45; letter-spacing: .18em; }
+
+/* Sizes: ligeiro aumento nos elementos de UI do admin */
+.adm-mod-name        { font-size: .90rem !important; }
+.adm-mod-desc        { font-size: .74rem !important; }
+#adm-module-bar-title{ font-size: .82rem !important; }
+#adm-back-btn        { font-size: .84rem !important; }
+
+.tab-btn             { font-size: .95rem !important; }
+.drawer-tab-btn      { font-size: .98rem !important; }
+
+th                   { font-size: 1.05rem !important; }
+td                   { font-size: .96rem !important; }
+
+.f-card .f-name      { font-size: .94rem !important; }
+.f-card .f-dates     { font-size: .78rem !important; }
+.f-card .f-badge     { font-size: .75rem !important; }
+.f-section-title     { font-size: .78rem !important; }
+
+#s-status-msg, #r-status-msg, #h-status-msg {
+  font-size: .96rem !important;
+}
+
+/* Admin module cards — ligeiramente maiores */
+.adm-mod-icon        { font-size: 1.75rem !important; }
+
+/* Dashboard greeting */
+#adm-dash-greeting .adm-brand {
+  font-size: clamp(1.55rem, 3.2vw, 2.15rem) !important;
+}
+
+/* Inputs e botoes */
+input, select, textarea { font-size: .92rem !important; }
+button { font-size: .88rem !important; }
+
+/* Borders/separators permanecem discretos */
+#adm-module-bar-title { opacity: 0.45; }
+</style>
 </head>
 <body>
 <!-- ✦ WOW elements -->
@@ -2968,6 +3051,30 @@ html.wz-minimal #wz-minimal-btn::before {
 <script src="js/recibos.js"></script>
 <script src="js/admin-horarios.js"></script>
 <script src="js/ferias.js"></script>
+<script>
+/* ══ FÉRIAS compatibility bridge ══ */
+(function () {
+  "use strict";
+  function tryInitFerias() {
+    if (typeof window.initFerias    === "function") { window.initFerias();    return true; }
+    if (typeof window.loadFerias    === "function") { window.loadFerias();    return true; }
+    if (typeof window.renderFerias  === "function") { window.renderFerias();  return true; }
+    if (typeof window.refreshFerias === "function") { window.refreshFerias(); return true; }
+    var btn = document.querySelector(".tab-btn[data-tab=ferias]");
+    if (btn) { var nav=document.getElementById("tab-nav"),pd=nav?nav.style.display:null; if(nav)nav.style.display=""; btn.click(); if(nav&&pd!==null)nav.style.display=pd; return true; }
+    return false;
+  }
+  document.addEventListener("ferias:open", function () { setTimeout(tryInitFerias, 40); });
+  document.addEventListener("DOMContentLoaded", function () {
+    var _orig = window.openModule;
+    if (typeof _orig === "function") {
+      window.openModule = function (tab) { _orig(tab); if (tab === "ferias") setTimeout(tryInitFerias, 40); };
+    }
+    var panel = document.getElementById("tab-ferias");
+    if (panel && panel.classList.contains("active")) setTimeout(tryInitFerias, 80);
+  });
+})();
+</script>
 <script src="js/editor-pdf.js"></script>
 <script src="js/tam.js"></script>
 <script src="js/saft-reminder.js"></script>
@@ -3280,6 +3387,26 @@ html.wz-minimal #wz-minimal-btn::before {
     if (tab === 'agenda'        && typeof openAgendaOverlay        === 'function') { openAgendaOverlay();        adminApp.classList.remove('module-open'); }
     if (tab === 'rotulos'       && typeof openRotulosOverlay       === 'function') { openRotulosOverlay();       adminApp.classList.remove('module-open'); }
     if (tab === 'processamento' && typeof openProcessamentoOverlay === 'function') { openProcessamentoOverlay(); adminApp.classList.remove('module-open'); }
+
+    // Férias: trigger initialization if ferias.js exposes an init function,
+    // otherwise dispatch a synthetic tab-change event so ferias.js can listen for it.
+    if (tab === 'ferias') {
+      if (typeof initFerias === 'function') {
+        initFerias();
+      } else if (typeof loadFerias === 'function') {
+        loadFerias();
+      } else if (typeof renderFerias === 'function') {
+        renderFerias();
+      } else {
+        // Fallback: dispatch a custom event that ferias.js can listen to
+        document.dispatchEvent(new CustomEvent('ferias:open'));
+        // Also fire a synthetic click on the tab button so legacy listeners fire
+        var feriasBtns = document.querySelectorAll('.tab-btn[data-tab="ferias"], .drawer-tab-btn[data-tab="ferias"]');
+        feriasBtns.forEach(function(b) {
+          b.dispatchEvent(new CustomEvent('ferias:tabactivated', { bubbles: true }));
+        });
+      }
+    }
   }
 
   function goToDashboard() {

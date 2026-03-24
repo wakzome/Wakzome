@@ -2269,7 +2269,6 @@ html.wz-minimal #wz-minimal-btn::before {
 <div id="main-header">
   <div id="main-nav">
     <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
-    <a id="processamento-link" href="#" onclick="openProcessamentoOverlay(); return false;">PROCESSAMENTO</a>
   </div>
   <div id="main-header-center" class="reveal-item">
     <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
@@ -2917,7 +2916,7 @@ html.wz-minimal #wz-minimal-btn::before {
 
   function interceptOverlayTabs() {
     document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (btn) {
-      if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos') return;
+      if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos' && btn.dataset.tab !== 'processamento') return;
       if (btn.dataset._overlayBound) return;
       btn.dataset._overlayBound = '1';
 
@@ -2933,8 +2932,9 @@ html.wz-minimal #wz-minimal-btn::before {
           b.classList.toggle('active', b.dataset.tab === _lastTab);
         });
 
-        if (btn.dataset.tab === 'agenda')  openAgendaOverlay();
-        if (btn.dataset.tab === 'rotulos') openRotulosOverlay();
+        if (btn.dataset.tab === 'agenda')         openAgendaOverlay();
+        if (btn.dataset.tab === 'rotulos')        openRotulosOverlay();
+        if (btn.dataset.tab === 'processamento')  openProcessamentoOverlay();
       }, true); /* capture = true → executa antes do listener do admin-init */
     });
   }
@@ -2943,7 +2943,7 @@ html.wz-minimal #wz-minimal-btn::before {
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.tab-btn, .drawer-tab-btn');
     if (!btn) return;
-    if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos') {
+    if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos' && btn.dataset.tab !== 'processamento') {
       _lastTab = btn.dataset.tab;
     }
   }, true);

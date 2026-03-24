@@ -2996,7 +2996,7 @@ button { font-size: .88rem !important; }
   <div id="saft-divider2" style="width:100%;height:1px;background:#e8e8e8;margin:10px 0;"></div>
   <div id="saft-faturas-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;">faturas</div>
   <div id="saft-faturas-count" style="font-size:1.5rem;font-weight:100;color:#000;line-height:1;letter-spacing:-.01em;">—</div>
-  <div id="saft-faturas-count-label" style="font-size:.62rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;margin-top:-2px;">a vencer em 30 dias</div>
+  <div id="saft-faturas-count-label" style="font-size:.62rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;margin-top:-2px;">a vencer esta semana</div>
   <div id="saft-faturas-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;"></div>
   <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
 </div>
@@ -3571,68 +3571,52 @@ button { font-size: .88rem !important; }
   }
 
   function renderFaturasWidget() {
-    var countEl  = document.getElementById('saft-faturas-count');
-    var listEl   = document.getElementById('saft-faturas-list');
+    var countEl = document.getElementById('saft-faturas-count');
+    var listEl  = document.getElementById('saft-faturas-list');
     if (!countEl || !listEl) return;
 
     var faturas = loadFaturas();
+
+    /* Limites da semana corrente: segunda-feira 00:00 → domingo 23:59 */
     var hoje = new Date(); hoje.setHours(0,0,0,0);
+    var diaSemana = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1; /* 0=seg … 6=dom */
+    var seg = new Date(hoje); seg.setDate(hoje.getDate() - diaSemana);
+    var dom = new Date(seg);  dom.setDate(seg.getDate() + 6); dom.setHours(23,59,59,999);
 
-    /* Filtra: só pendentes/não pagas, com vencimento definido, vencidas ou a vencer em ≤30 dias */
-    var relevantes = faturas.filter(function (f) {
+    /* Filtra: pendentes, vencimento dentro desta semana */
+    var semana = faturas.filter(function (f) {
       if (f.estado === 'pago' || f.estado === 'nc') return false;
-      var d = diasPara(f.vencimento);
-      if (d === null) return false;
-      return d <= 30; /* inclui vencidas (d<0) e próximas (0≤d≤30) */
+      if (!f.vencimento) return false;
+      var d = new Date(f.vencimento); d.setHours(0,0,0,0);
+      return d >= seg && d <= dom;
     });
 
-    /* Ordena: vencidas primeiro, depois por dias asc */
-    relevantes.sort(function (a, b) {
-      return diasPara(a.vencimento) - diasPara(b.vencimento);
-    });
+    var total = semana.length;
+    var montante = semana.reduce(function (acc, f) { return acc + (f.valor || 0); }, 0);
+    var vencidas = semana.filter(function (f) { return diasPara(f.vencimento) < 0; }).length;
 
-    var total = relevantes.length;
-    var vencidas = relevantes.filter(function(f){ return diasPara(f.vencimento) < 0; }).length;
-
-    /* Contador principal */
+    /* Contador */
     countEl.textContent = total > 0 ? total : '0';
     countEl.className = '';
-    if (vencidas > 0)      countEl.classList.add('danger');
-    else if (total > 0)    countEl.classList.add('warn');
+    if (vencidas > 0)   countEl.classList.add('danger');
+    else if (total > 0) countEl.classList.add('warn');
 
-    /* Lista — máx 4 ítems para no colapsar el panel */
+    /* Monto total */
     listEl.innerHTML = '';
     if (total === 0) {
-      listEl.innerHTML = '<div style="font-size:.65rem;font-weight:bold;color:#000;opacity:.5;">sem faturas próximas</div>';
+      listEl.innerHTML = '<div style="font-size:.65rem;font-weight:bold;color:#000;opacity:.45;">sem vencimentos esta semana</div>';
       return;
     }
 
-    relevantes.slice(0, 4).forEach(function (f) {
-      var d = diasPara(f.vencimento);
-      var cls = d < 0 ? 'vencida' : (d <= 7 ? 'urgente' : '');
-      var diasTxt = d < 0
-        ? 'vencida há ' + Math.abs(d) + ' dia' + (Math.abs(d) !== 1 ? 's' : '')
-        : d === 0 ? 'vence hoje'
-        : 'vence em ' + d + ' dia' + (d !== 1 ? 's' : '');
+    var montoEl = document.createElement('div');
+    montoEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:-.01em;line-height:1.2;';
+    montoEl.textContent = fmtVal(montante);
+    listEl.appendChild(montoEl);
 
-      var forn = f.fornecedor ? f.fornecedor : '—';
-      var item = document.createElement('div');
-      item.className = 'saft-fat-item' + (cls ? ' ' + cls : '');
-      item.innerHTML =
-        '<span style="display:flex;justify-content:space-between;gap:4px;">' +
-          '<span>' + forn + '</span>' +
-          '<span>' + fmtVal(f.valor) + '</span>' +
-        '</span>' +
-        '<span class="saft-fat-dias">' + diasTxt + ' · ' + fmtDate(f.vencimento) + '</span>';
-      listEl.appendChild(item);
-    });
-
-    if (total > 4) {
-      var more = document.createElement('div');
-      more.style.cssText = 'font-size:.6rem;font-weight:bold;color:#000;opacity:.5;text-align:center;margin-top:2px;';
-      more.textContent = '+ ' + (total - 4) + ' mais';
-      listEl.appendChild(more);
-    }
+    var subEl = document.createElement('div');
+    subEl.style.cssText = 'font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;opacity:.5;margin-top:1px;';
+    subEl.textContent = 'total a liquidar';
+    listEl.appendChild(subEl);
   }
 
   /* Corre quando o saft-reminder fica visível e depois a cada minuto */

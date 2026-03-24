@@ -622,21 +622,21 @@
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
           '<td class="proc-row-num">' + r + '</td>'
-        + '<td class="td-ref"><input type="text" class="proc-ref-input" placeholder="REF\u2026"'
+        + '<td class="td-ref"><input type="text" class="proc-ref-input"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td class="td-desc"><input type="text" class="proc-desc-input" placeholder="Descri\u00e7\u00e3o\u2026"'
+        + '<td class="td-desc"><input type="text" class="proc-desc-input"'
         + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td><input type="number" min="0" step="1" placeholder="0"'
+        + '<td><input type="number" min="0" step="1"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td><input type="number" min="0" step="1" placeholder="0"'
+        + '<td><input type="number" min="0" step="1"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td><input type="number" min="0" step="1" placeholder="0"'
+        + '<td><input type="number" min="0" step="1"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
         + '<td class="center-col"><button class="proc-split-btn" onclick="procAutoSplit(' + f + ',' + r + ')"'
         + ' title="Dividir Qtd. FT entre Funchal e Porto Santo">\u00f7</button></td>'
-        + '<td><input type="number" min="0" step="0.01" placeholder="0.00"'
+        + '<td><input type="number" min="0" step="0.01"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')" style="width:68px"></td>'
-        + '<td><input type="number" min="0" max="100" step="0.1" placeholder="0"'
+        + '<td><input type="number" min="0" max="100" step="0.1"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')" style="width:46px"></td>'
         + '<td class="proc-cell-status" id="proc-status-' + f + '-' + r + '">\u2014</td>'
         + '<td style="white-space:nowrap;text-align:center;padding:2px 4px">'
@@ -651,7 +651,7 @@
         + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-obs-cell">'
-        +   '<input type="text" class="proc-obs-input" placeholder="Obs\u2026" id="proc-obs-' + f + '-' + r + '">'
+        +   '<input type="text" class="proc-obs-input" id="proc-obs-' + f + '-' + r + '">'
         +   '<div class="proc-obs-tip" id="proc-obs-tip-' + f + '-' + r + '"></div>'
         + '</td>';
       tbody.appendChild(tr);
@@ -671,31 +671,56 @@
     var qtdFt  = parseInt(inputs[0].value) || 0;
     if (!qtdFt) return;
 
-    var a4, a5;
-    if (qtdFt % 2 === 0) {
-      /* Par — divide igualmente */
-      a4 = a5 = qtdFt / 2;
-    } else {
-      /* Ímpar — pergunta para onde vai o extra */
-      var resp = confirm(
-        'A quantidade \u00e9 \u00edmpar (' + qtdFt + ').\n\n' +
-        'Clica OK para colocar a pe\u00e7a extra em FUNCHAL (' + Math.ceil(qtdFt/2) + '+' + Math.floor(qtdFt/2) + ').\n' +
-        'Clica Cancelar para coloc\u00e1-la em PORTO SANTO (' + Math.floor(qtdFt/2) + '+' + Math.ceil(qtdFt/2) + ').'
-      );
-      if (resp) {
-        a4 = Math.ceil(qtdFt / 2);
-        a5 = Math.floor(qtdFt / 2);
-      } else {
-        a4 = Math.floor(qtdFt / 2);
-        a5 = Math.ceil(qtdFt / 2);
-      }
+    function applySplit(a4, a5) {
+      inputs[1].value = a4;
+      inputs[2].value = a5;
+      var btn = tr.querySelector('.proc-split-btn');
+      if (btn) { btn.classList.add('active'); setTimeout(function() { btn.classList.remove('active'); }, 800); }
+      procRecalcRow(fid, id);
+      procCheckAutoExpand(fid, id);
     }
-    inputs[1].value = a4;
-    inputs[2].value = a5;
-    var btn = tr.querySelector('.proc-split-btn');
-    if (btn) { btn.classList.add('active'); setTimeout(function() { btn.classList.remove('active'); }, 800); }
-    procRecalcRow(fid, id);
-    procCheckAutoExpand(fid, id);
+
+    if (qtdFt % 2 === 0) {
+      /* Par — divide directamente */
+      applySplit(qtdFt / 2, qtdFt / 2);
+      return;
+    }
+
+    /* Ímpar — modal elegante */
+    var half = Math.floor(qtdFt / 2);
+    var ref  = (tr.querySelector('.proc-ref-input') || {}).value || '';
+    var fF   = Math.ceil(qtdFt / 2);  /* Funchal com extra */
+    var fPS  = Math.ceil(qtdFt / 2);  /* Porto Santo com extra */
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'background:#fff;border-radius:16px;padding:28px 28px 22px;max-width:420px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.18);font-family:\'MontserratLight\',sans-serif;';
+
+    var label = '<div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#000;opacity:.5;margin-bottom:10px">PE\u00c7A \u00cdMPAR \u2014 1 DE 1</div>';
+    var refLine = ref ? '<div style="font-size:.95rem;font-weight:700;color:#000;margin-bottom:4px">Refer\u00eancia ' + ref + '</div>' : '';
+    var info = '<div style="font-size:.85rem;font-weight:600;color:#000;margin-bottom:4px">Total: ' + qtdFt + ' pe\u00e7as &nbsp;\u00b7&nbsp; Funchal: ' + half + ' &nbsp;\u00b7&nbsp; Porto Santo: ' + half + '</div>';
+    var question = '<div style="font-size:.88rem;font-weight:700;color:#000;margin-bottom:18px;">Sobra 1 pe\u00e7a. Para onde vai?</div>';
+
+    function btn(text, cb) {
+      var b = document.createElement('button');
+      b.style.cssText = 'display:block;width:100%;padding:11px 16px;margin-bottom:8px;text-align:left;font-size:.88rem;font-weight:600;font-family:\'MontserratLight\',sans-serif;background:#fff;border:1px solid #e0e0e0;border-radius:10px;cursor:pointer;transition:background .12s,border-color .12s;color:#000;';
+      b.innerHTML = text;
+      b.onmouseenter = function(){ b.style.background='#f5f5f5'; b.style.borderColor='#bbb'; };
+      b.onmouseleave = function(){ b.style.background='#fff'; b.style.borderColor='#e0e0e0'; };
+      b.onclick = function(){ document.body.removeChild(overlay); cb(); };
+      return b;
+    }
+
+    panel.innerHTML = label + refLine + info + question;
+    panel.appendChild(btn('\u2192 Funchal (' + (half+1) + 'F / ' + half + 'PS)', function(){ applySplit(half+1, half); }));
+    panel.appendChild(btn('\u2192 Porto Santo (' + half + 'F / ' + (half+1) + 'PS)', function(){ applySplit(half, half+1); }));
+    panel.appendChild(btn('deixar pendente', function(){ /* não aplica split */ }));
+
+    overlay.appendChild(panel);
+    overlay.addEventListener('click', function(e){ if(e.target===overlay){ document.body.removeChild(overlay); } });
+    document.body.appendChild(overlay);
   }
 
   /* ── 8b. EXCEL-LIKE KEYBOARD NAVIGATION ── */

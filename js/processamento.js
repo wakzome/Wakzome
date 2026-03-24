@@ -161,6 +161,63 @@
       /* Disclaimer */
       '#proc-content .proc-disclaimer-msg { margin:4px 0 6px; padding:10px 16px; background:#fff8e1; border:1.5px solid #f0c040; border-radius:10px; font-size:.75rem; font-weight:700; color:#7a5800; letter-spacing:.03em; text-align:center; }',
 
+      /* ── GUIA MODAL ── */
+      '#proc-guia-modal { position:fixed; inset:0; z-index:5000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#proc-guia-modal.proc-guia-visible { opacity:1; pointer-events:auto; }',
+      '#proc-guia-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#proc-guia-panel { position:relative; z-index:1; width:min(720px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.28); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#proc-guia-modal.proc-guia-visible #proc-guia-panel { transform:translateY(0); }',
+      '#proc-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
+      '#proc-guia-title { display:flex; flex-direction:column; gap:2px; }',
+      '#proc-guia-title-main { font-size:.95rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
+      '#proc-guia-title-sub { font-size:.68rem; color:#000; opacity:.5; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      '#proc-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
+      '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:#f5f5f5; color:#000; transition:background .13s,color .13s; white-space:nowrap; }',
+      '.proc-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
+      '.proc-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
+      '.proc-guia-confirm { border-color:#2e7d32!important; color:#2e7d32!important; background:#e8f5e9!important; }',
+      '.proc-guia-confirm:hover:not(:disabled) { background:#2e7d32!important; color:#fff!important; border-color:#2e7d32!important; }',
+      '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#000; transition:background .12s; }',
+      '.proc-guia-close-btn:hover { background:#c62828; color:#fff; border-color:#c62828; }',
+      '.proc-guia-copy-bar { display:flex; align-items:center; gap:6px; padding:8px 16px; background:#f8f8f8; border-bottom:1px solid #eee; flex-wrap:wrap; flex-shrink:0; }',
+      '.proc-guia-copy-label { font-size:.7rem; font-weight:700; color:#000; opacity:.4; text-transform:uppercase; letter-spacing:.05em; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
+      '.proc-guia-copy-btn { padding:4px 11px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#fff; color:#000; transition:background .12s,color .12s; white-space:nowrap; }',
+      '.proc-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.proc-guia-copy-active { background:#1565c0!important; color:#fff!important; border-color:#1565c0!important; }',
+      '.proc-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; margin-left:4px; }',
+      '#proc-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
+      '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
+      '.proc-guia-th { padding:9px 14px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border-bottom:2px solid #ddd; text-align:center; }',
+      '.proc-guia-th-f { background:#e8f0fe; color:#1565c0; }',
+      '.proc-guia-th-p { background:#fce4ec; color:#880e4f; }',
+      '.proc-guia-th-sep { width:16px; background:#f5f5f5; border-bottom:2px solid #ddd; }',
+      '.proc-guia-th2 { padding:7px 14px; background:#f0f0f0; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; }',
+      '.proc-guia-td { padding:7px 14px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
+      '.proc-guia-ref-f { font-weight:700; color:#1565c0; min-width:120px; }',
+      '.proc-guia-qty-f { text-align:center; font-weight:700; color:#1565c0; font-variant-numeric:tabular-nums; }',
+      '.proc-guia-sep-td { width:16px; background:#f9f9f9; border-bottom:1px solid #f2f2f2; }',
+      '.proc-guia-ref-p { font-weight:700; color:#880e4f; min-width:120px; }',
+      '.proc-guia-qty-p { text-align:center; font-weight:700; color:#880e4f; font-variant-numeric:tabular-nums; }',
+      '.proc-guia-row-even td { background:#fff; }',
+      '.proc-guia-row-odd td { background:#fafafa; }',
+      '.proc-guia-row-sent td { background:#f0faf0; }',
+      '.proc-guia-row-sent .proc-guia-ref-f,.proc-guia-row-sent .proc-guia-ref-p { color:#aaa; }',
+      '.proc-guia-row-sent .proc-guia-qty-f,.proc-guia-row-sent .proc-guia-qty-p { color:#aaa; }',
+      '#proc-guia-table tbody tr:hover td { background:#e8f0fe!important; }',
+      '.proc-guia-sent-hdr td { padding:6px 14px; background:#f0faf0; font-size:.72rem; font-weight:700; color:#2e7d32; text-transform:uppercase; letter-spacing:.04em; border-top:2px solid #c8e6c9; border-bottom:1px solid #c8e6c9; }',
+      '.proc-guia-empty { padding:24px; color:#bbb; font-style:italic; text-align:center; }',
+      '#proc-guia-footer { padding:8px 20px; font-size:.72rem; color:#000; opacity:.6; border-top:1px solid #eee; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; }',
+      '#proc-guia-confirm-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.9); border-radius:16px; }',
+      '#proc-guia-confirm-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.18); padding:24px 28px; width:min(380px,90%); font-family:\'MontserratLight\',sans-serif; }',
+      '.proc-gc-title { font-size:.9rem; font-weight:700; color:#c05000; margin-bottom:12px; }',
+      '.proc-gc-body { font-size:.82rem; color:#000; line-height:1.6; margin-bottom:18px; }',
+      '.proc-gc-btns { display:flex; gap:8px; }',
+      '.proc-gc-btn { padding:8px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border-radius:8px; cursor:pointer; border:1.5px solid #ccc; background:#fff; color:#000; transition:background .12s; }',
+      '.proc-gc-ok { border-color:#2e7d32!important; color:#2e7d32!important; background:#e8f5e9!important; }',
+      '.proc-gc-ok:hover { background:#2e7d32!important; color:#fff!important; }',
+      '.proc-gc-cancel:hover { background:#f5f5f5; }',
+
       /* Provider autocomplete */
       '#proc-content .proc-forn-wrap { position:relative; }',
       '#proc-content .proc-forn-suggestions { position:absolute; top:calc(100% + 3px); left:0; right:0; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:500; overflow:hidden; max-height:220px; overflow-y:auto; }',
@@ -1373,6 +1430,7 @@
       +         '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
       +       '</div>'
       +       '<button class="proc-btn primary" id="proc-saveBtn">&#128190; guardar</button>'
+      +       '<button class="proc-btn" id="proc-guiaBtn" style="border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
       +     '</div>'
       +   '</div>'
       +   '<div id="proc-faturasContainer"></div>'
@@ -1396,6 +1454,7 @@
     document.getElementById('proc-saveBtn').addEventListener('click', function() { procSaveSession(true); });
     document.getElementById('proc-sessionMenuBtn').addEventListener('click', function(e) { procToggleSessionMenu(e); });
     document.getElementById('proc-addFaturaBtn').addEventListener('click', function() { procAddFatura(null); });
+    document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
 
     /* close session menu on outside click */
     document.addEventListener('click', function() { procCloseSessionMenu(); });
@@ -1444,7 +1503,285 @@
     setTimeout(function() { overlay.classList.remove('open'); }, 600);
   }
 
-  /* ── 19. EXPOSE GLOBALS ── */
+  /* ── 19. GUIA DE TRANSPORTE ── */
+
+  /* sentRefs: { "ref___fid": [{data, f, p}] } stored in session */
+  function procSentKey(ref, fid) { return ref + '___' + fid; }
+
+  function procSentQty(ref, fid) {
+    if (!_procSentRefs) return { f:0, p:0 };
+    var key  = procSentKey(ref, fid);
+    var lots = _procSentRefs[key] || [];
+    var f = 0, p = 0;
+    lots.forEach(function(l){ f += l.f||0; p += l.p||0; });
+    return { f:f, p:p };
+  }
+
+  /* Build rows from all active faturas that have a4 or a5 > 0 */
+  function procBuildGuiaRows() {
+    var rows = [];
+    activeFaturas.forEach(function(fid) {
+      var fatRows = procCollectRows(fid);
+      var pEl = document.getElementById('proc-proveedor-' + fid);
+      var forn = pEl ? (pEl.value || 'Fatura ' + fid) : 'Fatura ' + fid;
+      fatRows.forEach(function(r) {
+        if (!r.ref) return;
+        if ((r.a4 || 0) === 0 && (r.a5 || 0) === 0) return;
+        var sent  = procSentQty(r.ref, fid);
+        var pendF = Math.max(0, (r.a4||0) - sent.f);
+        var pendP = Math.max(0, (r.a5||0) - sent.p);
+        rows.push({
+          ref:    r.ref,
+          forn:   forn,
+          fid:    fid,
+          totalF: r.a4 || 0,
+          totalP: r.a5 || 0,
+          pendF:  pendF,
+          pendP:  pendP,
+          sentF:  sent.f,
+          sentP:  sent.p,
+          done:   pendF === 0 && pendP === 0
+        });
+      });
+    });
+    return rows;
+  }
+
+  function procConfirmGuiaEnvio(pendRows) {
+    var today = new Date().toISOString().slice(0,10);
+    pendRows.forEach(function(row) {
+      if (row.done) return;
+      var key = procSentKey(row.ref, row.fid);
+      if (!_procSentRefs[key]) _procSentRefs[key] = [];
+      _procSentRefs[key].push({ data: today, f: row.pendF, p: row.pendP });
+    });
+    procSaveSession(false);
+  }
+
+  function procShowGuiaModal() {
+    var allRows  = procBuildGuiaRows();
+    var pendRows = allRows.filter(function(r){ return !r.done; });
+    var sentRows = allRows.filter(function(r){ return  r.done; });
+
+    if (!allRows.length) {
+      procFloatModal({
+        title: 'Sem distribuição',
+        body:  'Nenhuma fatura tem pe\u00e7as distribu\u00eddas por armazém. Preenche as colunas Funchal e Porto Santo primeiro.',
+        buttons: [{ label: 'OK', cb: null }]
+      });
+      return;
+    }
+
+    var old = document.getElementById('proc-guia-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    var nFaturas = activeFaturas.length;
+    var title    = 'Guia Consolidada \u00b7 ' + nFaturas + ' fatura' + (nFaturas !== 1 ? 's' : '');
+    var fPend    = pendRows.reduce(function(s,r){ return s+r.pendF; }, 0);
+    var pPend    = pendRows.reduce(function(s,r){ return s+r.pendP; }, 0);
+    var fSent    = sentRows.reduce(function(s,r){ return s+r.totalF; }, 0);
+    var pSent    = sentRows.reduce(function(s,r){ return s+r.totalP; }, 0);
+
+    var COL_G = ['Ref. Funchal', 'Qtd. F', 'Ref. Porto Santo', 'Qtd. PS'];
+
+    function buildTableRows(rowList) {
+      if (!rowList.length) return '<tr><td colspan="5" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
+      return rowList.map(function(row, i) {
+        var cls  = row.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
+        var fQty = row.done ? row.totalF : row.pendF;
+        var pQty = row.done ? row.totalP : row.pendP;
+        return '<tr class="proc-guia-tr' + cls + '">'
+          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + (fQty>0 ? row.ref : '') + '</td>'
+          + '<td class="proc-guia-td proc-guia-qty-f" data-gcol="1">' + (fQty>0 ? fQty  : '') + '</td>'
+          + '<td class="proc-guia-td proc-guia-sep-td"></td>'
+          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + (pQty>0 ? row.ref : '') + '</td>'
+          + '<td class="proc-guia-td proc-guia-qty-p" data-gcol="3">' + (pQty>0 ? pQty  : '') + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    var copyBar = '<div class="proc-guia-copy-bar">'
+      + '<span class="proc-guia-copy-label">copiar coluna:</span>'
+      + COL_G.map(function(lbl,ci){
+          return '<button class="proc-guia-copy-btn" data-gcol="' + ci + '">\u29c9 ' + lbl + '</button>';
+        }).join('')
+      + '<span class="proc-guia-copy-msg" id="proc-guia-copy-msg"></span>'
+      + '</div>';
+
+    var sentSection = sentRows.length
+      ? '<tr class="proc-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado ('
+        + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>'
+        + buildTableRows(sentRows)
+      : '';
+
+    var modal = document.createElement('div');
+    modal.id  = 'proc-guia-modal';
+    modal.innerHTML =
+      '<div id="proc-guia-backdrop"></div>'
+      + '<div id="proc-guia-panel">'
+      +   '<div id="proc-guia-header">'
+      +     '<div id="proc-guia-title">'
+      +       '<span id="proc-guia-title-main">' + title + '</span>'
+      +       '<span id="proc-guia-title-sub">Guia de transporte \u00b7 Processamento de Faturas</span>'
+      +     '</div>'
+      +     '<div id="proc-guia-header-btns">'
+      +       '<button id="proc-guia-confirm-btn" class="proc-guia-action-btn proc-guia-confirm"'
+      +         (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>'
+      +       '<button id="proc-guia-export-btn" class="proc-guia-action-btn">\u2b07 Exportar CSV</button>'
+      +       '<button id="proc-guia-close-btn" class="proc-guia-close-btn">\u00d7</button>'
+      +     '</div>'
+      +   '</div>'
+      +   copyBar
+      +   '<div id="proc-guia-scroll">'
+      +     '<table id="proc-guia-table">'
+      +       '<thead><tr>'
+      +         '<th class="proc-guia-th proc-guia-th-f" colspan="2">\ud83d\udd35 FUNCHAL (A4) \u00b7 ' + fPend + ' un. pendentes</th>'
+      +         '<th class="proc-guia-th proc-guia-th-sep"></th>'
+      +         '<th class="proc-guia-th proc-guia-th-p" colspan="2">\ud83d\udd34 PORTO SANTO (A5) \u00b7 ' + pPend + ' un. pendentes</th>'
+      +       '</tr><tr>'
+      +         '<th class="proc-guia-th2">Refer\u00eancia</th>'
+      +         '<th class="proc-guia-th2" style="text-align:center">Qtd.</th>'
+      +         '<th class="proc-guia-th-sep"></th>'
+      +         '<th class="proc-guia-th2">Refer\u00eancia</th>'
+      +         '<th class="proc-guia-th2" style="text-align:center">Qtd.</th>'
+      +       '</tr></thead>'
+      +       '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>'
+      +     '</table>'
+      +   '</div>'
+      +   '<div id="proc-guia-footer">'
+      +     pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. Funchal \u00b7 ' + pPend + ' un. Porto Santo'
+      +     (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
+      +   '</div>'
+      + '</div>';
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(function(){ modal.classList.add('proc-guia-visible'); });
+
+    function closeModal() {
+      modal.classList.remove('proc-guia-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
+    }
+
+    /* Copy column */
+    var copyMsg = modal.querySelector('#proc-guia-copy-msg');
+    var copyTimer = null;
+    modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var ci   = parseInt(btn.getAttribute('data-gcol'));
+        var vals = Array.from(modal.querySelectorAll('td[data-gcol="'+ci+'"]'))
+                       .map(function(td){ return td.textContent.trim(); })
+                       .filter(function(v){ return v && v !== '\u2014'; });
+        if (!vals.length) return;
+        modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(b){ b.classList.remove('proc-guia-copy-active'); });
+        btn.classList.add('proc-guia-copy-active');
+        var text = vals.join('\n');
+        function showMsg(ok) {
+          if (!copyMsg) return;
+          copyMsg.textContent = ok ? '\u2713 ' + COL_G[ci] + ' copiado!' : '\u26a0 copie manualmente';
+          copyMsg.style.color = ok ? '#2e7d32' : '#b05000';
+          clearTimeout(copyTimer);
+          copyTimer = setTimeout(function(){
+            copyMsg.textContent = '';
+            modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(b){ b.classList.remove('proc-guia-copy-active'); });
+          }, 2200);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
+        } else {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta); showMsg(true);
+          } catch(e){ showMsg(false); }
+        }
+      });
+    });
+
+    /* Confirmar envio */
+    modal.querySelector('#proc-guia-confirm-btn').addEventListener('click', function(){
+      if (!pendRows.length) return;
+      var confirmDiv = document.createElement('div');
+      confirmDiv.id = 'proc-guia-confirm-overlay';
+      confirmDiv.innerHTML =
+        '<div id="proc-guia-confirm-box">'
+        + '<div class="proc-gc-title">\u26a0 Confirmar envio</div>'
+        + '<div class="proc-gc-body">'
+        + 'Vais marcar <strong>' + pendRows.length + ' refer\u00eancias</strong> como enviadas hoje ('
+        + new Date().toLocaleDateString('pt-PT') + ').<br>'
+        + '<strong>' + fPend + '</strong> un. Funchal \u00b7 <strong>' + pPend + '</strong> un. Porto Santo<br><br>'
+        + 'Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.'
+        + '</div>'
+        + '<div class="proc-gc-btns">'
+        + '<button class="proc-gc-btn proc-gc-ok">\u2713 Confirmar</button>'
+        + '<button class="proc-gc-btn proc-gc-cancel">Cancelar</button>'
+        + '</div>'
+        + '</div>';
+      modal.querySelector('#proc-guia-panel').appendChild(confirmDiv);
+      confirmDiv.querySelector('.proc-gc-cancel').addEventListener('click', function(){
+        confirmDiv.parentNode.removeChild(confirmDiv);
+      });
+      confirmDiv.querySelector('.proc-gc-ok').addEventListener('click', function(){
+        procConfirmGuiaEnvio(pendRows);
+        confirmDiv.parentNode.removeChild(confirmDiv);
+        closeModal();
+        setTimeout(function(){ procShowGuiaModal(); }, 280);
+      });
+    });
+
+    /* Export CSV */
+    modal.querySelector('#proc-guia-export-btn').addEventListener('click', function(){
+      var fRows = pendRows.filter(function(r){ return r.pendF>0; });
+      var pRows = pendRows.filter(function(r){ return r.pendP>0; });
+      var lines = ['\uFEFF' + 'Referencia;Qtd Funchal;Referencia;Qtd Porto Santo'];
+      for (var li = 0; li < Math.max(fRows.length, pRows.length); li++) {
+        var fc = fRows[li] ? fRows[li].ref + ';' + fRows[li].pendF : ';';
+        var pc = pRows[li] ? pRows[li].ref + ';' + pRows[li].pendP : ';';
+        lines.push(fc + ';' + pc);
+      }
+      var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href   = url;
+      a.download = 'Guia_' + new Date().toISOString().slice(0,10) + '.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    });
+
+    modal.querySelector('#proc-guia-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#proc-guia-close-btn').addEventListener('click', closeModal);
+    document.addEventListener('keydown', function escG(e){
+      if (e.key==='Escape'){ closeModal(); document.removeEventListener('keydown', escG); }
+    });
+  }
+
+  /* ── 19b. SENT REFS STATE (persisted in session) ── */
+  var _procSentRefs = {};   /* loaded/saved with session */
+
+  /* Override procApplySessionData to also restore sentRefs */
+  var _origApplySessionData = procApplySessionData;
+  procApplySessionData = function(key, raw, callback) {
+    try {
+      var data = JSON.parse(raw);
+      _procSentRefs = data.sentRefs || {};
+    } catch(e) { _procSentRefs = {}; }
+    _origApplySessionData(key, raw, callback);
+  };
+
+  /* Override procSaveSession payload to include sentRefs */
+  var _origSaveSession = procSaveSession;
+  procSaveSession = function(manual) {
+    /* Inject sentRefs into payload by patching the save temporarily */
+    _origSaveSession(manual);
+    /* Re-save with sentRefs included */
+    var key = _activeSessionKey;
+    if (!key) return;
+    try {
+      var stored = JSON.parse(localStorage.getItem(key) || '{}');
+      stored.sentRefs = _procSentRefs;
+      localStorage.setItem(key, JSON.stringify(stored));
+    } catch(e) {}
+  };
   window.openProcessamentoOverlay  = openProcessamentoOverlay;
   window.closeProcessamentoOverlay = closeProcessamentoOverlay;
 
@@ -1463,6 +1800,7 @@
   window.procSaveSession         = procSaveSession;
   window.procUpdateTableLock     = procUpdateTableLock;
   window.procObsSync             = procObsSync;
+  window.procShowGuiaModal       = procShowGuiaModal;
 
   function procObsSync(input) {
     /* Busca el tip como hermano siguiente del input dentro del mismo td */

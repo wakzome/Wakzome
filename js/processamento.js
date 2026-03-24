@@ -86,11 +86,13 @@
       /* TD inputs */
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:700; padding:4px 6px; border-radius:6px; width:100%; color:#000; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:52px; }',
-      '#proc-content .proc-table-wrap td input.proc-ref-input { width:90px; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { width:140px; font-size:.8rem; }',
+      '#proc-content .proc-table-wrap td input.proc-ref-input { width:100%; min-width:110px; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { width:100%; min-width:160px; font-size:.8rem; }',
       '#proc-content .proc-table-wrap td input[type="text"]:not(.proc-ref-input):not(.proc-desc-input) { width:80px; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
       '#proc-content .proc-table-wrap td.center-col { text-align:center; }',
+      '#proc-content .proc-table-wrap td.td-ref { min-width:120px; }',
+      '#proc-content .proc-table-wrap td.td-desc { min-width:170px; }',
 
       /* Row misc */
       '#proc-content .proc-row-num { color:#000; font-size:.72rem; text-align:center; width:28px; user-select:none; font-weight:700; opacity:0.4; }',
@@ -601,6 +603,15 @@
   function procAddRows(fid, n) {
     var tbody = document.getElementById('proc-tableBody-' + fid);
     if (!tbody) return;
+    /* Delegate OBS input once per tbody */
+    if (!tbody._obsListening) {
+      tbody._obsListening = true;
+      tbody.addEventListener('input', function(e) {
+        if (e.target && e.target.classList.contains('proc-obs-input')) {
+          procObsSync(e.target);
+        }
+      });
+    }
     for (var i = 0; i < n; i++) {
       rowCounts[fid]++;
       var id = rowCounts[fid];
@@ -610,9 +621,9 @@
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
           '<td class="proc-row-num">' + r + '</td>'
-        + '<td><input type="text" class="proc-ref-input" placeholder="REF\u2026"'
+        + '<td class="td-ref"><input type="text" class="proc-ref-input" placeholder="REF\u2026"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td><input type="text" class="proc-desc-input" placeholder="Descri\u00e7\u00e3o\u2026"'
+        + '<td class="td-desc"><input type="text" class="proc-desc-input" placeholder="Descri\u00e7\u00e3o\u2026"'
         + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')"></td>'
         + '<td><input type="number" min="0" step="1" placeholder="0"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
@@ -639,8 +650,7 @@
         + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-obs-cell">'
-        +   '<input type="text" class="proc-obs-input" placeholder="Obs\u2026"'
-        +   ' oninput="procObsSync(this)" id="proc-obs-' + f + '-' + r + '">'
+        +   '<input type="text" class="proc-obs-input" placeholder="Obs\u2026" id="proc-obs-' + f + '-' + r + '">'
         +   '<div class="proc-obs-tip" id="proc-obs-tip-' + f + '-' + r + '"></div>'
         + '</td>';
       tbody.appendChild(tr);

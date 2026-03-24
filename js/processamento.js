@@ -87,7 +87,7 @@
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:700; padding:4px 6px; border-radius:6px; width:100%; color:#000; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:52px; }',
       '#proc-content .proc-table-wrap td input.proc-ref-input { width:90px; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { width:100px; font-size:.78rem; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { width:140px; font-size:.8rem; }',
       '#proc-content .proc-table-wrap td input[type="text"]:not(.proc-ref-input):not(.proc-desc-input) { width:80px; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
       '#proc-content .proc-table-wrap td.center-col { text-align:center; }',
@@ -932,7 +932,7 @@
             + '<td>' + l.ref + '</td>'
             + '<td class="center" style="font-weight:700;letter-spacing:.05em">' + l.cod + '</td>'
             + '<td class="center">' + l.iva + '</td>'
-            + '<td class="right">' + l.precio.toFixed(2) + ' \u20ac</td>'
+            + '<td class="right">' + l.precio.toFixed(2) + '</td>'
             + '<td class="center">' + l.qty + '</td>'
             + '</tr>';
         }).join('')
@@ -971,7 +971,7 @@
       +   '</div>'
       +   '<div class="proc-or-panel-footer">'
       +     lines.length + ' linhas \u00b7 ' + totalFunchal + ' un. Funchal \u00b7 ' + totalPortoSanto + ' un. Porto Santo'
-      +     ' \u00b7 <strong style="color:#000">Total: ' + totalStock.toFixed(2) + ' \u20ac</strong>'
+      +     ' \u00b7 <strong style="color:#000;font-size:1rem;letter-spacing:-.01em">Total: ' + totalStock.toFixed(2) + '</strong>'
       +   '</div>'
       + '</div>';
 
@@ -1106,7 +1106,9 @@
   window.procObsSync             = procObsSync;
 
   function procObsSync(input) {
-    var tip = input.parentElement ? input.parentElement.querySelector('.proc-obs-tip') : null;
+    /* Busca el tip como hermano siguiente del input dentro del mismo td */
+    var cell = input.closest ? input.closest('.proc-obs-cell') : input.parentElement;
+    var tip  = cell ? cell.querySelector('.proc-obs-tip') : null;
     if (!tip) return;
     tip.textContent = input.value || '';
     if (input.value.trim()) {

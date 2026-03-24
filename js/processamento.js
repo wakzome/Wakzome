@@ -560,49 +560,39 @@
 
   /* ── 4c. SESSION CONFLICT DETECTION ── */
   function procCheckWeekConflict(onClear) {
-    /* Sync remote keys first, then check for conflicts */
+    /* Sync remote keys first, then check for existing session this week */
     procLoadRemoteKeys(function() {
       var weekKeys = getWeekKeys();
+
+      /* No session this week → start clean */
       if (!weekKeys.length) { _activeSessionKey = getSessionKey(); onClear(); return; }
 
+      /* Session exists this week → load it silently, no questions asked */
       var existing = weekKeys[0];
-      var data = null;
-      try { data = JSON.parse(localStorage.getItem(existing)); } catch(e) {}
-      var nFaturas = data && data.faturas ? data.faturas.length : '?';
-      var savedAt  = '';
-      if (data && data.savedAt) {
-        var dt = new Date(data.savedAt);
-        savedAt = dt.toLocaleDateString('pt-PT') + ' \u00e0s ' + dt.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit' });
-      }
-      var extraInfo = weekKeys.length > 1 ? ' (' + weekKeys.length + ' sess\u00f5es esta semana)' : '';
-
-      procFloatModal({
-        label: 'Sess\u00e3o em curso detectada',
-        title: 'J\u00e1 tens trabalho guardado esta semana',
-        body: labelFromKey(existing) + extraInfo + '<br>'
-            + (savedAt ? 'Guardado: ' + savedAt + '<br>' : '')
-            + nFaturas + ' fatura(s) registada(s).<br><br>'
-            + 'Queres adicionar esta nova fatura \u00e0 sess\u00e3o existente?',
-        buttons: [
-          { label: '\u2714 Sim \u2014 adicionar \u00e0 sess\u00e3o existente',
-            style: 'background:#f0faf0;border:1px solid #b2dfb2;color:#1a6a1a;font-weight:700;',
-            cb: function() {
-              procLoadSession(existing);
-              setTimeout(function() { procAddFatura(null); }, 600);
-            }
-          },
-          { label: '\u2716 N\u00e3o \u2014 criar sess\u00e3o separada',
-            style: 'background:#fff;border:1px solid #e0e0e0;color:#000;',
-            cb: function() { _activeSessionKey = getNextWeekKey(); onClear(); }
-          }
-        ]
-      });
+      procSetSyncStatus('syncing', 'a carregar sess\u00e3o\u2026');
+      procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(existing) + '&select=dados', { method: 'GET' })
+        .then(function(r) { return r.json(); })
+        .then(function(rows) {
+          var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(existing);
+          if (!raw) { _activeSessionKey = getSessionKey(); onClear(); return; }
+          try { localStorage.setItem(existing, raw); } catch(e) {}
+          procApplySessionData(existing, raw, function() {
+            procSetSyncStatus('ok', 'sess\u00e3o carregada');
+          });
+        })
+        .catch(function() {
+          var raw = localStorage.getItem(existing);
+          if (!raw) { _activeSessionKey = getSessionKey(); onClear(); return; }
+          procApplySessionData(existing, raw, function() {
+            procSetSyncStatus('offline', 'sess\u00e3o carregada localmente');
+          });
+        });
     });
   }
 
   function procLoadSessionSilent(key, callback) {
     var raw = localStorage.getItem(key);
-    if (!raw) { if(callback) callback(); return; }
+    if (!raw) { if (callback) callback(); return; }
     procApplySessionData(key, raw, callback);
   }
 

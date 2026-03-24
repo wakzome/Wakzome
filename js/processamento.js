@@ -169,10 +169,10 @@
       '#proc-guia-modal.proc-guia-visible #proc-guia-panel { transform:translateY(0); }',
       '#proc-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
       '#proc-guia-title { display:flex; flex-direction:column; gap:2px; }',
-      '#proc-guia-title-main { font-size:.95rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
-      '#proc-guia-title-sub { font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      '#proc-guia-title-main { font-size:.95rem; font-weight:700; color:#000!important; font-family:'MontserratLight',sans-serif; }',
+      '#proc-guia-title-sub { font-size:.68rem; color:#000!important; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
       '#proc-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
-      '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:#f5f5f5; color:#000; transition:background .13s,color .13s; white-space:nowrap; }',
+      '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:#f5f5f5; color:#000!important; transition:background .13s,color .13s; white-space:nowrap; }',
       '.proc-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
       '.proc-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
       '.proc-guia-confirm { border-color:#2e7d32!important; color:#2e7d32!important; background:#e8f5e9!important; }',
@@ -180,11 +180,11 @@
       '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#000; transition:background .12s; }',
       '.proc-guia-close-btn:hover { background:#c62828; color:#fff; border-color:#c62828; }',
       '.proc-guia-copy-bar { display:flex; align-items:center; gap:6px; padding:8px 16px; background:#f8f8f8; border-bottom:1px solid #eee; flex-wrap:wrap; flex-shrink:0; }',
-      '.proc-guia-copy-label { font-size:.7rem; font-weight:700; color:#000; text-transform:uppercase; letter-spacing:.05em; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
+      '.proc-guia-copy-label { font-size:.7rem; font-weight:700; color:#000!important; text-transform:uppercase; letter-spacing:.05em; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
       '.proc-guia-copy-btn { padding:4px 11px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#fff; color:#000; transition:background .12s,color .12s; white-space:nowrap; }',
       '.proc-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
       '.proc-guia-copy-active { background:#1565c0!important; color:#fff!important; border-color:#1565c0!important; }',
-      '.proc-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; margin-left:4px; }',
+      '.proc-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; margin-left:4px; color:#000!important; }',
       '#proc-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
       '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
@@ -207,7 +207,7 @@
       '#proc-guia-table tbody tr:hover td { background:#e8f0fe!important; }',
       '.proc-guia-sent-hdr td { padding:6px 14px; background:#f0faf0; font-size:.72rem; font-weight:700; color:#2e7d32; text-transform:uppercase; letter-spacing:.04em; border-top:2px solid #c8e6c9; border-bottom:1px solid #c8e6c9; }',
       '.proc-guia-empty { padding:24px; color:#000; font-style:italic; text-align:center; }',
-      '#proc-guia-footer { padding:8px 20px; font-size:.72rem; color:#000; border-top:1px solid #eee; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; }',
+      '#proc-guia-footer { padding:8px 20px; font-size:.72rem; font-weight:700; color:#000!important; border-top:1px solid #eee; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; }',
       '#proc-guia-confirm-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.9); border-radius:16px; }',
       '#proc-guia-confirm-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.18); padding:24px 28px; width:min(380px,90%); font-family:\'MontserratLight\',sans-serif; }',
       '.proc-gc-title { font-size:.9rem; font-weight:700; color:#c05000; margin-bottom:12px; }',
@@ -217,6 +217,13 @@
       '.proc-gc-ok { border-color:#2e7d32!important; color:#2e7d32!important; background:#e8f5e9!important; }',
       '.proc-gc-ok:hover { background:#2e7d32!important; color:#fff!important; }',
       '.proc-gc-cancel:hover { background:#f5f5f5; }',
+
+      /* Address chips in guia header */
+      '.proc-guia-addr-bar { display:flex; align-items:center; gap:5px; flex-wrap:wrap; justify-content:flex-end; padding:0 20px 10px; flex-shrink:0; }',
+      '.proc-guia-addr-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; font-size:.72rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; cursor:pointer; transition:background .12s,border-color .12s; user-select:none; }',
+      '.proc-guia-addr-chip:hover { background:#f0f0f0; border-color:#bbb; }',
+      '.proc-guia-addr-chip.proc-addr-copied { background:#f0faf0!important; border-color:#2e7d32!important; color:#2e7d32!important; }',
+      '.proc-guia-addr-clip { font-size:.8rem; }',,
 
       /* Provider autocomplete */
       '#proc-content .proc-forn-wrap { position:relative; }',
@@ -239,8 +246,8 @@
       '.proc-or-modal.visible .proc-or-panel { transform:translateY(0); }',
       '.proc-or-panel-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
       '.proc-or-panel-title { display:flex; flex-direction:column; gap:2px; }',
-      '.proc-or-panel-title-main { font-size:1rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
-      '.proc-or-panel-title-sub { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000; font-family:\'MontserratLight\',sans-serif; }',
+      '.proc-or-panel-title-main { font-size:1rem; font-weight:700; color:#000!important; font-family:'MontserratLight',sans-serif; }',
+      '.proc-or-panel-title-sub { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:'MontserratLight',sans-serif; }',
       '.proc-or-panel-header-btns { display:flex; gap:8px; align-items:center; }',
       '.proc-or-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.proc-or-close-btn:hover { border-color:#c00; color:#c00; background:#fff0f0; }',
@@ -1369,6 +1376,20 @@
       +       '<button class="proc-or-close-btn">\u2715</button>'
       +     '</div>'
       +   '</div>'
+      +   '<div class="proc-guia-addr-bar" id="proc-guia-addr-bar">
+      +     '<button class="proc-guia-addr-chip" data-addr="CALÇADA DA QUINTINHA 17 B">'
+      +       '<span class="proc-guia-addr-clip">&#x29c9;</span>CALÇADA DA QUINTINHA 17 B'
+      +     '</button>'
+      +     '<button class="proc-guia-addr-chip" data-addr="29-FV-30">'
+      +       '<span class="proc-guia-addr-clip">&#x29c9;</span>29-FV-30'
+      +     '</button>'
+      +     '<button class="proc-guia-addr-chip" data-addr="EDIFÍCIO ILHA DOURADA LOJA-1">'
+      +       '<span class="proc-guia-addr-clip">&#x29c9;</span>EDIFÍCIO ILHA DOURADA LOJA-1'
+      +     '</button>'
+      +     '<button class="proc-guia-addr-chip" data-addr="RUA DE SÃO FRANCISCO Nº 20">'
+      +       '<span class="proc-guia-addr-clip">&#x29c9;</span>RUA DE SÃO FRANCISCO Nº 20'
+      +     '</button>'
+      +   '</div>'
       +   copyBar
       +   '<div class="proc-or-scroll">'
       +     '<table class="proc-or-table"><thead><tr>'
@@ -1661,6 +1682,20 @@
       modal.classList.remove('proc-guia-visible');
       setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
     }
+
+    /* Address chip copy */
+    modal.querySelectorAll('.proc-guia-addr-chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        var text = chip.getAttribute('data-addr');
+        function flash(){ chip.classList.add('proc-addr-copied'); setTimeout(function(){ chip.classList.remove('proc-addr-copied'); }, 1600); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(flash).catch(flash);
+        } else {
+          try { var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;top:-9999px;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch(e){}
+          flash();
+        }
+      });
+    });
 
     /* Copy column */
     var copyMsg = modal.querySelector('#proc-guia-copy-msg');

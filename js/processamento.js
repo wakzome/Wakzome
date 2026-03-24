@@ -170,7 +170,7 @@
       '#proc-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
       '#proc-guia-title { display:flex; flex-direction:column; gap:2px; }',
       '#proc-guia-title-main { font-size:.95rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
-      '#proc-guia-title-sub { font-size:.68rem; color:#000!important; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      '#proc-guia-title-sub { display:block; font-size:.68rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
       '#proc-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
       '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:#f5f5f5; color:#000!important; transition:background .13s,color .13s; white-space:nowrap; }',
       '.proc-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
@@ -219,15 +219,8 @@
       '.proc-gc-cancel:hover { background:#f5f5f5; }',
 
       /* Address chips in guia header */
-      '.proc-guia-addr-bar { display:flex; align-items:center; gap:5px; flex-wrap:wrap; justify-content:flex-end; padding:6px 20px 8px; flex-shrink:0; border-bottom:1px solid #eee; background:#fafafa; }',
-      '.proc-guia-addr-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; font-size:.72rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; cursor:pointer; transition:background .12s,border-color .12s; user-select:none; }',
-      '.proc-guia-addr-chip:hover { background:#f0f0f0; border-color:#bbb; }',
-      '.proc-guia-addr-chip.proc-addr-copied { background:#f0faf0!important; border-color:#2e7d32!important; color:#2e7d32!important; }',
-      '.proc-guia-addr-clip { font-size:.8rem; margin-right:2px; }',
-
-      /* Address chips in guia header */
       '.proc-guia-addr-bar { display:flex; align-items:center; gap:5px; flex-wrap:wrap; justify-content:flex-end; padding:0 20px 10px; flex-shrink:0; }',
-      '.proc-guia-addr-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; font-size:.72rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; cursor:pointer; transition:background .12s,border-color .12s; user-select:none; }',
+      '.proc-guia-addr-chip { display:flex; align-items:center; gap:6px; padding:7px 12px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; font-size:.75rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; cursor:pointer; transition:background .12s,border-color .12s; user-select:none; width:100%; box-sizing:border-box; justify-content:space-between; }',
       '.proc-guia-addr-chip:hover { background:#f0f0f0; border-color:#bbb; }',
       '.proc-guia-addr-chip.proc-addr-copied { background:#f0faf0!important; border-color:#2e7d32!important; color:#2e7d32!important; }',
       '.proc-guia-addr-clip { font-size:.8rem; }',,
@@ -1645,12 +1638,6 @@
       +       '<button id="proc-guia-close-btn" class="proc-guia-close-btn">\u00d7</button>'
       +     '</div>'
       +   '</div>'
-      +   '<div class="proc-guia-addr-bar">'
-      +     '<button class="proc-guia-addr-chip" data-addr="CALÇADA DA QUINTINHA 17 B"><span class="proc-guia-addr-clip">⧉</span>CALÇADA DA QUINTINHA 17 B</button>'
-      +     '<button class="proc-guia-addr-chip" data-addr="29-FV-30"><span class="proc-guia-addr-clip">⧉</span>29-FV-30</button>'
-      +     '<button class="proc-guia-addr-chip" data-addr="EDIFÍCIO ILHA DOURADA LOJA-1"><span class="proc-guia-addr-clip">⧉</span>EDIFÍCIO ILHA DOURADA LOJA-1</button>'
-      +     '<button class="proc-guia-addr-chip" data-addr="RUA DE SÃO FRANCISCO Nº 20"><span class="proc-guia-addr-clip">⧉</span>RUA DE SÃO FRANCISCO Nº 20</button>'
-      +   '</div>'
       +   copyBar
       +   '<div id="proc-guia-scroll">'
       +     '<table id="proc-guia-table">'
@@ -1691,28 +1678,6 @@
           navigator.clipboard.writeText(text).then(flash).catch(flash);
         } else {
           try { var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;top:-9999px;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch(e){}
-          flash();
-        }
-      });
-    });
-
-    /* Address chip copy */
-    modal.querySelectorAll('.proc-guia-addr-chip').forEach(function(chip) {
-      chip.addEventListener('click', function() {
-        var text = chip.getAttribute('data-addr');
-        function flash() {
-          chip.classList.add('proc-addr-copied');
-          setTimeout(function() { chip.classList.remove('proc-addr-copied'); }, 1600);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(flash).catch(flash);
-        } else {
-          try {
-            var ta = document.createElement('textarea');
-            ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
-            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-            document.body.removeChild(ta);
-          } catch(e) {}
           flash();
         }
       });

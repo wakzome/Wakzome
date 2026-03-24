@@ -1379,6 +1379,22 @@ input, textarea { cursor: text !important; }
 #saft-reminder.urgent #saft-countdown { color: #c05000; }
 #saft-reminder.urgent #saft-title { color: #c05000; }
 #saft-reminder.urgent #saft-countdown-label { color: #e08050; }
+
+/* Faturas próximas a vencer */
+.saft-fat-item {
+  font-size: .65rem; font-weight: bold; line-height: 1.3;
+  padding: 4px 7px; border-radius: 7px;
+  border: 1px solid #e6e6e6; background: #fafafa;
+  color: #000; width: 100%; box-sizing: border-box;
+}
+.saft-fat-item.vencida { background: #fff5f5; border-color: #ffd7d7; color: #c62828; }
+.saft-fat-item.urgente { background: #fff8f0; border-color: #ffd7b0; color: #c05000; }
+.saft-fat-item .saft-fat-dias {
+  font-size: .6rem; opacity: .75; display: block; margin-top: 1px;
+}
+#saft-faturas-count.danger { color: #c62828; }
+#saft-faturas-count.warn   { color: #c05000; }
+#saft-agenda-btn:hover { border-color: #555; color: #000; background: #f7f7f7; }
 @media (max-width: 1024px) { #saft-reminder { display: none !important; } }
 
 /* ══ EDITOR PDF TAB ══ */
@@ -2977,6 +2993,12 @@ button { font-size: .88rem !important; }
   <button id="saft-recibos-btn" onclick="openRecibosOverlay()">recibos</button>
   <div id="saft-recibos-label">últimos recibos<br>carregados</div>
   <div id="saft-recibos-mes">—</div>
+  <div id="saft-divider2" style="width:100%;height:1px;background:#e8e8e8;margin:10px 0;"></div>
+  <div id="saft-faturas-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;">faturas</div>
+  <div id="saft-faturas-count" style="font-size:1.5rem;font-weight:100;color:#000;line-height:1;letter-spacing:-.01em;">—</div>
+  <div id="saft-faturas-count-label" style="font-size:.62rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;margin-top:-2px;">a vencer em 30 dias</div>
+  <div id="saft-faturas-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;"></div>
+  <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
 </div>
 
 <!-- POPUP compartido -->
@@ -3505,6 +3527,135 @@ button { font-size: .88rem !important; }
     document.addEventListener('DOMContentLoaded', interceptOverlayTabs);
   } else {
     interceptOverlayTabs();
+  }
+})();
+</script>
+
+<script>
+/* ══ SAFT REMINDER — facturas próximas a vencer ══ */
+(function () {
+  var FIRST_YEAR = 2023;
+
+  function dataKey(y) { return 'ag_faturas_' + y; }
+
+  function diasPara(dateStr) {
+    if (!dateStr) return null;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var d = new Date(dateStr); d.setHours(0,0,0,0);
+    return Math.round((d - today) / 86400000);
+  }
+
+  function fmtDate(dateStr) {
+    if (!dateStr) return '';
+    var p = dateStr.split('-');
+    return p[2] + '/' + p[1];
+  }
+
+  function fmtVal(v) {
+    return v.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+
+  function loadFaturas() {
+    var allFat = [];
+    var currentYear = new Date().getFullYear();
+    for (var y = FIRST_YEAR; y <= currentYear; y++) {
+      try {
+        var raw = localStorage.getItem(dataKey(y));
+        if (raw) {
+          var arr = JSON.parse(raw);
+          arr.forEach(function (f) { allFat.push(f); });
+        }
+      } catch (e) {}
+    }
+    return allFat;
+  }
+
+  function renderFaturasWidget() {
+    var countEl  = document.getElementById('saft-faturas-count');
+    var listEl   = document.getElementById('saft-faturas-list');
+    if (!countEl || !listEl) return;
+
+    var faturas = loadFaturas();
+    var hoje = new Date(); hoje.setHours(0,0,0,0);
+
+    /* Filtra: só pendentes/não pagas, com vencimento definido, vencidas ou a vencer em ≤30 dias */
+    var relevantes = faturas.filter(function (f) {
+      if (f.estado === 'pago' || f.estado === 'nc') return false;
+      var d = diasPara(f.vencimento);
+      if (d === null) return false;
+      return d <= 30; /* inclui vencidas (d<0) e próximas (0≤d≤30) */
+    });
+
+    /* Ordena: vencidas primeiro, depois por dias asc */
+    relevantes.sort(function (a, b) {
+      return diasPara(a.vencimento) - diasPara(b.vencimento);
+    });
+
+    var total = relevantes.length;
+    var vencidas = relevantes.filter(function(f){ return diasPara(f.vencimento) < 0; }).length;
+
+    /* Contador principal */
+    countEl.textContent = total > 0 ? total : '0';
+    countEl.className = '';
+    if (vencidas > 0)      countEl.classList.add('danger');
+    else if (total > 0)    countEl.classList.add('warn');
+
+    /* Lista — máx 4 ítems para no colapsar el panel */
+    listEl.innerHTML = '';
+    if (total === 0) {
+      listEl.innerHTML = '<div style="font-size:.65rem;font-weight:bold;color:#000;opacity:.5;">sem faturas próximas</div>';
+      return;
+    }
+
+    relevantes.slice(0, 4).forEach(function (f) {
+      var d = diasPara(f.vencimento);
+      var cls = d < 0 ? 'vencida' : (d <= 7 ? 'urgente' : '');
+      var diasTxt = d < 0
+        ? 'vencida há ' + Math.abs(d) + ' dia' + (Math.abs(d) !== 1 ? 's' : '')
+        : d === 0 ? 'vence hoje'
+        : 'vence em ' + d + ' dia' + (d !== 1 ? 's' : '');
+
+      var forn = f.fornecedor ? f.fornecedor : '—';
+      var item = document.createElement('div');
+      item.className = 'saft-fat-item' + (cls ? ' ' + cls : '');
+      item.innerHTML =
+        '<span style="display:flex;justify-content:space-between;gap:4px;">' +
+          '<span>' + forn + '</span>' +
+          '<span>' + fmtVal(f.valor) + '</span>' +
+        '</span>' +
+        '<span class="saft-fat-dias">' + diasTxt + ' · ' + fmtDate(f.vencimento) + '</span>';
+      listEl.appendChild(item);
+    });
+
+    if (total > 4) {
+      var more = document.createElement('div');
+      more.style.cssText = 'font-size:.6rem;font-weight:bold;color:#000;opacity:.5;text-align:center;margin-top:2px;';
+      more.textContent = '+ ' + (total - 4) + ' mais';
+      listEl.appendChild(more);
+    }
+  }
+
+  /* Corre quando o saft-reminder fica visível e depois a cada minuto */
+  function init() {
+    renderFaturasWidget();
+    setInterval(renderFaturasWidget, 60000);
+
+    /* Actualiza também quando a agenda fecha (pode ter havido mudanças) */
+    document.addEventListener('agendaClosed', renderFaturasWidget);
+    /* Fallback: observer no classList do overlay */
+    var agOv = document.getElementById('agenda-overlay');
+    if (agOv) {
+      var obs = new MutationObserver(function () {
+        if (!agOv.classList.contains('open')) renderFaturasWidget();
+      });
+      obs.observe(agOv, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 })();
 </script>

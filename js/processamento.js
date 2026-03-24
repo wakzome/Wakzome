@@ -274,6 +274,7 @@
     var unlocked = procTableIsUnlocked(fid);
     lock.style.display  = unlocked ? 'none'  : 'flex';
     block.style.display = unlocked ? 'block' : 'none';
+    if (unlocked) procInitTableKeyboard(fid);
   }
 
   function procInitProviderInput(fid) {
@@ -669,13 +670,138 @@
     var inputs = tr.querySelectorAll('input[type="number"]');
     var qtdFt  = parseInt(inputs[0].value) || 0;
     if (!qtdFt) return;
-    var half = Math.floor(qtdFt / 2);
-    inputs[1].value = qtdFt - half;
-    inputs[2].value = half;
+
+    var a4, a5;
+    if (qtdFt % 2 === 0) {
+      /* Par — divide igualmente */
+      a4 = a5 = qtdFt / 2;
+    } else {
+      /* Ímpar — pergunta para onde vai o extra */
+      var resp = confirm(
+        'A quantidade \u00e9 \u00edmpar (' + qtdFt + ').\n\n' +
+        'Clica OK para colocar a pe\u00e7a extra em FUNCHAL (' + Math.ceil(qtdFt/2) + '+' + Math.floor(qtdFt/2) + ').\n' +
+        'Clica Cancelar para coloc\u00e1-la em PORTO SANTO (' + Math.floor(qtdFt/2) + '+' + Math.ceil(qtdFt/2) + ').'
+      );
+      if (resp) {
+        a4 = Math.ceil(qtdFt / 2);
+        a5 = Math.floor(qtdFt / 2);
+      } else {
+        a4 = Math.floor(qtdFt / 2);
+        a5 = Math.ceil(qtdFt / 2);
+      }
+    }
+    inputs[1].value = a4;
+    inputs[2].value = a5;
     var btn = tr.querySelector('.proc-split-btn');
     if (btn) { btn.classList.add('active'); setTimeout(function() { btn.classList.remove('active'); }, 800); }
     procRecalcRow(fid, id);
     procCheckAutoExpand(fid, id);
+  }
+
+  /* ── 8b. EXCEL-LIKE KEYBOARD NAVIGATION ── */
+  function procGetAllInputs(fid) {
+    /* Returns ordered list of all focusable inputs in the table for fid */
+    var block = document.getElementById('proc-table-block-' + fid);
+    if (!block) return [];
+    return Array.prototype.slice.call(
+      block.querySelectorAll('tbody input[type="text"], tbody input[type="number"]')
+    );
+  }
+
+  function procGetCellCoords(input, fid) {
+    /* Returns { row, col } of the input within the tbody grid */
+    var tr = input.closest('tr');
+    if (!tr) return null;
+    var allRows = Array.prototype.slice.call(
+      document.querySelectorAll('#proc-tableBody-' + fid + ' tr')
+    );
+    var row = allRows.indexOf(tr);
+    var inputs = Array.prototype.slice.call(tr.querySelectorAll('input[type="text"], input[type="number"]'));
+    var col = inputs.indexOf(input);
+    return { row: row, col: col };
+  }
+
+  function procNavigate(input, fid, direction) {
+    var coords = procGetCellCoords(input, fid);
+    if (!coords) return;
+    var allRows = Array.prototype.slice.call(
+      document.querySelectorAll('#proc-tableBody-' + fid + ' tr')
+    );
+    var targetRow, targetCol, targetInputs, targetInput;
+
+    if (direction === 'down' || direction === 'enter') {
+      /* Move to same column, next row */
+      targetRow = coords.row + 1;
+      if (targetRow >= allRows.length) return;
+      targetInputs = Array.prototype.slice.call(
+        allRows[targetRow].querySelectorAll('input[type="text"], input[type="number"]')
+      );
+      targetInput = targetInputs[Math.min(coords.col, targetInputs.length - 1)];
+    } else if (direction === 'up') {
+      targetRow = coords.row - 1;
+      if (targetRow < 0) return;
+      targetInputs = Array.prototype.slice.call(
+        allRows[targetRow].querySelectorAll('input[type="text"], input[type="number"]')
+      );
+      targetInput = targetInputs[Math.min(coords.col, targetInputs.length - 1)];
+    } else if (direction === 'right') {
+      var allInputs = Array.prototype.slice.call(
+        allRows[coords.row].querySelectorAll('input[type="text"], input[type="number"]')
+      );
+      targetInput = allInputs[coords.col + 1] || null;
+      if (!targetInput) {
+        /* Wrap to first input of next row */
+        if (coords.row + 1 < allRows.length) {
+          targetInput = allRows[coords.row + 1].querySelector('input[type="text"], input[type="number"]');
+        }
+      }
+    } else if (direction === 'left') {
+      var rowInputs = Array.prototype.slice.call(
+        allRows[coords.row].querySelectorAll('input[type="text"], input[type="number"]')
+      );
+      targetInput = rowInputs[coords.col - 1] || null;
+      if (!targetInput && coords.row > 0) {
+        /* Wrap to last input of previous row */
+        var prevInputs = Array.prototype.slice.call(
+          allRows[coords.row - 1].querySelectorAll('input[type="text"], input[type="number"]')
+        );
+        targetInput = prevInputs[prevInputs.length - 1] || null;
+      }
+    }
+
+    if (targetInput) {
+      targetInput.focus();
+      if (targetInput.select) targetInput.select();
+    }
+  }
+
+  function procInitTableKeyboard(fid) {
+    var block = document.getElementById('proc-table-block-' + fid);
+    if (!block || block._keyboardInited) return;
+    block._keyboardInited = true;
+    block.addEventListener('keydown', function(e) {
+      var input = e.target;
+      if (input.tagName !== 'INPUT') return;
+      if (!input.closest('#proc-table-block-' + fid)) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        procNavigate(input, fid, 'enter');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        procNavigate(input, fid, 'down');
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        procNavigate(input, fid, 'up');
+      } else if (e.key === 'ArrowRight') {
+        /* Solo navega si el cursor está al final del valor */
+        var atEnd = input.selectionStart === (input.value || '').length;
+        if (atEnd) { e.preventDefault(); procNavigate(input, fid, 'right'); }
+      } else if (e.key === 'ArrowLeft') {
+        var atStart = input.selectionStart === 0;
+        if (atStart) { e.preventDefault(); procNavigate(input, fid, 'left'); }
+      }
+    });
   }
 
   /* ── 9. RECALC ── */

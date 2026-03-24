@@ -15,8 +15,8 @@
       '#proc-content *, #proc-content *::before, #proc-content *::after { box-sizing: border-box; margin: 0; padding: 0; }',
 
       /* Wrapper */
-      '#proc-content { width:100%; min-height:100%; background:#fff; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:\'MontserratLight\', sans-serif; font-size:14px; font-weight:600; color:#000; }',
-      '#proc-content .page-wrap { width:100%; max-width:1100px; }',
+      '#proc-content { width:100%; min-height:100%; background:#fff; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:\'MontserratLight\', sans-serif; font-size:14px; font-weight:600; color:#000; overflow-x:visible; }',
+      '#proc-content .page-wrap { width:100%; max-width:none; }',
 
       /* Top bar */
       '#proc-content .proc-top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }',
@@ -70,9 +70,9 @@
       '#proc-content .proc-total-box .proc-amount { font-size:1.15rem; font-weight:700; color:#000; }',
 
       /* Table block */
-      '#proc-content .proc-table-block { background:#fff; border:1px solid #e6e6e6; border-radius:14px; overflow:hidden; margin-bottom:10px; }',
-      '#proc-content .proc-table-wrap { overflow-x:visible; width:100%; }',
-      '#proc-content .proc-table-wrap table { border-collapse:collapse; white-space:nowrap; border-radius:0; border-spacing:0; width:100%; table-layout:auto; }',
+      '#proc-content .proc-table-block { background:#fff; border:1px solid #e6e6e6; border-radius:14px; overflow:visible; margin-bottom:10px; }',
+      '#proc-content .proc-table-wrap { overflow:visible; width:100%; }',
+      '#proc-content .proc-table-wrap table { border-collapse:collapse; white-space:nowrap; border-radius:0; border-spacing:0; width:100%; table-layout:fixed; }',
       '#proc-content .proc-table-wrap thead tr { background:#f2f2f2; border-bottom:2px solid #e0e0e0; }',
       '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; border-radius:0; }',
       '#proc-content .proc-table-wrap thead th.left { text-align:left; padding-left:10px; }',

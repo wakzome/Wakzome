@@ -329,12 +329,50 @@
     m.setDate(d.getDate() + diff);
     return m.toISOString().slice(0, 10);
   }
-  function getSessionKey()   { return SESSION_PREFIX + getMondayISO(); }
-  function labelFromKey(key) {
-    var iso = key.replace(SESSION_PREFIX, '');
-    var p   = iso.split('-');
-    return 'Semana ' + p[2] + '/' + p[1] + '/' + p[0];
+
+  /* Returns all keys for the current week (e.g. proc_fatura_2026-03-24, proc_fatura_2026-03-24_2, ...) */
+  function getWeekKeys() {
+    var monday = getMondayISO();
+    var base   = SESSION_PREFIX + monday;
+    var all    = getAllSessionKeys();
+    return all.filter(function(k) { return k === base || k.indexOf(base + '_') === 0; });
   }
+
+  /* Primary key for new saves this week (slot 1) */
+  function getSessionKey() { return SESSION_PREFIX + getMondayISO(); }
+
+  /* Next available key for this week */
+  function getNextWeekKey() {
+    var base  = SESSION_PREFIX + getMondayISO();
+    var taken = getWeekKeys();
+    if (!taken.length) return base;
+    /* find highest suffix */
+    var max = 1;
+    taken.forEach(function(k) {
+      if (k === base) { if (max < 1) max = 1; return; }
+      var n = parseInt(k.replace(base + '_', ''), 10);
+      if (!isNaN(n) && n >= max) max = n + 1;
+    });
+    if (taken.indexOf(base) === -1) return base;
+    return base + '_' + max;
+  }
+
+  /* Current active save key (set when a session is loaded or a new one starts) */
+  var _activeSessionKey = null;
+
+  function labelFromKey(key) {
+    var stripped = key.replace(SESSION_PREFIX, '');
+    /* detect suffix like _2, _3 */
+    var suffix = '';
+    var match  = stripped.match(/_(\d+)$/);
+    if (match) {
+      suffix  = ' (' + match[1] + ')';
+      stripped = stripped.replace(/_\d+$/, '');
+    }
+    var p = stripped.split('-');
+    return 'Semana ' + p[2] + '/' + p[1] + '/' + p[0] + suffix;
+  }
+
   function getAllSessionKeys() {
     var keys = [];
     try {
@@ -346,8 +384,44 @@
     return keys.sort().reverse();
   }
 
+  /* ── GENERIC FLOATING MODAL HELPER ── */
+  function procFloatModal(opts) {
+    /* opts: { title, body, buttons: [{label, style, cb}] } */
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.38);backdrop-filter:blur(3px);';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'background:#fff;border-radius:16px;padding:28px 28px 20px;max-width:440px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.2);font-family:\'MontserratLight\',sans-serif;';
+
+    var html = '';
+    if (opts.label) html += '<div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#000;opacity:.45;margin-bottom:10px">' + opts.label + '</div>';
+    if (opts.title) html += '<div style="font-size:1rem;font-weight:700;color:#000;margin-bottom:8px;line-height:1.3">' + opts.title + '</div>';
+    if (opts.body)  html += '<div style="font-size:.85rem;font-weight:600;color:#000;opacity:.75;margin-bottom:20px;line-height:1.6">' + opts.body + '</div>';
+    panel.innerHTML = html;
+
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+
+    opts.buttons.forEach(function(b) {
+      var btn = document.createElement('button');
+      var base = 'display:block;width:100%;padding:11px 16px;margin-bottom:8px;text-align:left;font-size:.88rem;font-weight:700;font-family:\'MontserratLight\',sans-serif;border-radius:10px;cursor:pointer;transition:background .12s,border-color .12s;';
+      btn.style.cssText = base + (b.style || 'background:#fff;border:1px solid #e0e0e0;color:#000;');
+      btn.innerHTML = b.label;
+      btn.onmouseenter = function(){ btn.style.filter='brightness(0.95)'; };
+      btn.onmouseleave = function(){ btn.style.filter=''; };
+      btn.onclick = function(){ close(); if (b.cb) b.cb(); };
+      panel.appendChild(btn);
+    });
+
+    overlay.appendChild(panel);
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
+    document.body.appendChild(overlay);
+    return { close: close };
+  }
+
   /* ── 4. SAVE / LOAD ── */
   function procSaveSession(manual) {
+    var key = _activeSessionKey || getSessionKey();
+    _activeSessionKey = key;
     var payload = {
       savedAt: new Date().toISOString(),
       faturas: activeFaturas.map(function(fid) {
@@ -363,7 +437,7 @@
       })
     };
     try {
-      localStorage.setItem(getSessionKey(), JSON.stringify(payload));
+      localStorage.setItem(key, JSON.stringify(payload));
       if (manual) procShowSaveStatus('\u2713 guardado');
     } catch(e) {
       if (manual) procShowSaveStatus('\u26a0 erro ao guardar');
@@ -381,9 +455,99 @@
 
   function procLoadSession(key) {
     var raw = localStorage.getItem(key);
-    if (!raw) { alert('Sessão não encontrada.'); return; }
+    if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
     var data;
-    try { data = JSON.parse(raw); } catch(e) { alert('Erro ao interpretar sessão.'); return; }
+    try { data = JSON.parse(raw); } catch(e) {
+      procFloatModal({ title: 'Erro ao interpretar sess\u00e3o.', buttons: [{ label: 'OK', cb: null }] });
+      return;
+    }
+
+    var cont = document.getElementById('proc-faturasContainer');
+    if (cont) cont.innerHTML = '';
+    faturaCount   = 0;
+    activeFaturas = [];
+    Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+    _activeSessionKey = key;
+
+    var faturas = data.faturas || [];
+    if (!faturas.length) { procAddFatura(null); }
+    else faturas.forEach(function(fd) { procAddFatura(fd); });
+    procShowSaveStatus('\u2713 sess\u00e3o carregada');
+    procCloseSessionMenu();
+  }
+
+  function procDeleteSession(key) {
+    procFloatModal({
+      label: 'Eliminar sess\u00e3o',
+      title: 'Tens a certeza?',
+      body: 'Vais eliminar <strong>' + labelFromKey(key) + '</strong>. Esta a\u00e7\u00e3o \u00e9 irrevers\u00edvel.',
+      buttons: [
+        { label: '\u274c Eliminar definitivamente',
+          style: 'background:#fff0f0;border:1px solid #ffd7d7;color:#c00;font-weight:700;',
+          cb: function() {
+            try { localStorage.removeItem(key); } catch(e) {}
+            if (_activeSessionKey === key) _activeSessionKey = null;
+            procRenderSessionMenu();
+          }
+        },
+        { label: 'Cancelar', style: 'background:#fff;border:1px solid #e0e0e0;color:#000;', cb: null }
+      ]
+    });
+  }
+
+  /* ── 4b. SESSION CONFLICT DETECTION ── */
+  function procCheckWeekConflict(onClear) {
+    /* Called at init — if there's already a saved session this week, ask the user */
+    var weekKeys = getWeekKeys();
+    if (!weekKeys.length) { _activeSessionKey = getSessionKey(); onClear(); return; }
+
+    /* Build session summary for the modal */
+    var existing = weekKeys[0]; /* most recent */
+    var data = null;
+    try { data = JSON.parse(localStorage.getItem(existing)); } catch(e) {}
+    var nFaturas = data && data.faturas ? data.faturas.length : '?';
+    var savedAt  = '';
+    if (data && data.savedAt) {
+      var dt = new Date(data.savedAt);
+      savedAt = dt.toLocaleDateString('pt-PT') + ' \u00e0s ' + dt.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit' });
+    }
+    var extraInfo = weekKeys.length > 1 ? ' (' + weekKeys.length + ' sess\u00f5es esta semana)' : '';
+
+    procFloatModal({
+      label: 'Sess\u00e3o em curso detectada',
+      title: 'J\u00e1 tens trabalho guardado esta semana',
+      body: labelFromKey(existing) + extraInfo + '<br>'
+          + (savedAt ? 'Guardado: ' + savedAt + '<br>' : '')
+          + nFaturas + ' fatura(s) registada(s).<br><br>'
+          + 'Queres adicionar esta nova fatura \u00e0 sess\u00e3o existente?',
+      buttons: [
+        { label: '\u2714 Sim \u2014 adicionar \u00e0 sess\u00e3o existente',
+          style: 'background:#f0faf0;border:1px solid #b2dfb2;color:#1a6a1a;font-weight:700;',
+          cb: function() {
+            /* Load existing session then add a blank fatura at the end */
+            procLoadSessionSilent(existing, function() {
+              procAddFatura(null);
+              _activeSessionKey = existing;
+              procShowSaveStatus('\u2713 sess\u00e3o carregada');
+            });
+          }
+        },
+        { label: '\u2716 N\u00e3o \u2014 criar sess\u00e3o separada',
+          style: 'background:#fff;border:1px solid #e0e0e0;color:#000;',
+          cb: function() {
+            _activeSessionKey = getNextWeekKey();
+            onClear();
+          }
+        }
+      ]
+    });
+  }
+
+  function procLoadSessionSilent(key, callback) {
+    var raw = localStorage.getItem(key);
+    if (!raw) { callback(); return; }
+    var data;
+    try { data = JSON.parse(raw); } catch(e) { callback(); return; }
 
     var cont = document.getElementById('proc-faturasContainer');
     if (cont) cont.innerHTML = '';
@@ -394,14 +558,7 @@
     var faturas = data.faturas || [];
     if (!faturas.length) { procAddFatura(null); }
     else faturas.forEach(function(fd) { procAddFatura(fd); });
-    procShowSaveStatus('\u2713 sessão carregada');
-    procCloseSessionMenu();
-  }
-
-  function procDeleteSession(key) {
-    if (!confirm('Eliminar ' + labelFromKey(key) + '?')) return;
-    try { localStorage.removeItem(key); } catch(e) {}
-    procRenderSessionMenu();
+    if (callback) callback();
   }
 
   /* ── 5. SESSION DROPDOWN ── */
@@ -424,27 +581,29 @@
     var menu = document.getElementById('proc-sessionMenuDropdown');
     if (!menu) return;
     var keys = getAllSessionKeys();
-    var cur  = getSessionKey();
+    var cur  = _activeSessionKey || getSessionKey();
     if (!keys.length) {
-      menu.innerHTML = '<div class="proc-session-menu-empty">Nenhuma sessão guardada</div>';
+      menu.innerHTML = '<div class="proc-session-menu-empty">Nenhuma sess\u00e3o guardada</div>';
       return;
     }
     menu.innerHTML = keys.map(function(key) {
       var savedAt = '';
+      var nFat = '';
       try {
         var d = JSON.parse(localStorage.getItem(key));
         if (d && d.savedAt) {
           var dt = new Date(d.savedAt);
           savedAt = dt.toLocaleDateString('pt-PT') + ' ' + dt.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit' });
         }
+        if (d && d.faturas) nFat = ' · ' + d.faturas.length + ' fat.';
       } catch(e) {}
       var isCur  = key === cur;
-      var badge  = isCur ? ' <span class="proc-session-current-badge">atual</span>' : '';
+      var badge  = isCur ? ' <span class="proc-session-current-badge">ativa</span>' : '';
       var curCls = isCur ? ' current' : '';
       return '<div class="proc-session-menu-item' + curCls + '" onclick="event.stopPropagation()">'
         + '<div class="proc-session-menu-item-info">'
         + '<span class="proc-session-menu-item-label">' + labelFromKey(key) + badge + '</span>'
-        + (savedAt ? '<span class="proc-session-menu-item-date">' + savedAt + '</span>' : '')
+        + (savedAt ? '<span class="proc-session-menu-item-date">' + savedAt + nFat + '</span>' : '')
         + '</div>'
         + '<div class="proc-session-menu-item-actions">'
         + '<button class="proc-session-load-btn" onclick="procLoadSession(\'' + key + '\')">carregar</button>'
@@ -1218,7 +1377,11 @@
     Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
 
     buildOverlayContent(container);
-    procAddFatura(null);
+
+    /* Check for existing session this week before starting fresh */
+    procCheckWeekConflict(function() {
+      procAddFatura(null);
+    });
 
     /* auto-save every 10 s */
     setInterval(function() { procSaveSession(false); }, 10000);

@@ -151,7 +151,20 @@
       '#proc-content .proc-add-fatura-btn:hover { background:#1565c0; color:#fff; border-style:solid; }',
 
       /* Disclaimer */
-      '#proc-content .proc-disclaimer-msg { margin:4px 0 20px; padding:10px 16px; background:#fff8e1; border:1.5px solid #f0c040; border-radius:10px; font-size:.75rem; font-weight:700; color:#7a5800; letter-spacing:.03em; text-align:center; }',
+      '#proc-content .proc-disclaimer-msg { margin:4px 0 6px; padding:10px 16px; background:#fff8e1; border:1.5px solid #f0c040; border-radius:10px; font-size:.75rem; font-weight:700; color:#7a5800; letter-spacing:.03em; text-align:center; }',
+
+      /* Provider autocomplete */
+      '#proc-content .proc-forn-wrap { position:relative; }',
+      '#proc-content .proc-forn-suggestions { position:absolute; top:calc(100% + 3px); left:0; right:0; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:500; overflow:hidden; max-height:220px; overflow-y:auto; }',
+      '#proc-content .proc-forn-suggestions.hidden { display:none; }',
+      '#proc-content .proc-forn-item { padding:8px 12px; font-size:.85rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; }',
+      '#proc-content .proc-forn-item:last-child { border-bottom:none; }',
+      '#proc-content .proc-forn-item:hover { background:#f0f0f0; }',
+      '#proc-content .proc-forn-item.corrected { color:#1565c0; }',
+
+      /* Table lock overlay */
+      '#proc-content .proc-table-lock { display:flex; align-items:center; justify-content:center; padding:22px 16px; background:#fafafa; border:1px solid #e6e6e6; border-radius:14px; margin-bottom:10px; font-size:.88rem; font-weight:700; color:#000; text-align:center; gap:10px; }',
+      '#proc-content .proc-table-lock span { font-size:1.2rem; }',
 
       /* Modals */
       '.proc-or-modal { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.22s ease; pointer-events:none; }',
@@ -196,6 +209,105 @@
   var activeFaturas = [];
   var rowCounts     = {};
   var _procInited   = false;
+
+  /* ── 2b. PROVIDER LIST ── */
+  var PROVIDERS = [
+    'TAM','REN KE ZHONG','MEMORIAS INFINITAS','AMORADO','JOLIE','PARFOIS','BORBOLETA VISTOSA',
+    'DALUN CHENG','SEMPRE NATURAL','MODA GY','XU HAIDONG','KAMRUZZAMAN','LOSAN','EUROPA&MING',
+    'VEGOTEX','CHEN XIANG','YOUHE YANG','BLISSED','PICKBEAUTY','MODA EUROPA','VILA & SAAVEDRA',
+    'MUKIT','ALCOTT','CHUXUAN SUN','MELODYSTATION','MUNDO FAVORITO','MING TA','ARITA','ALDATEX',
+    'GOOD E GOOD','BLUE ROYAL','EXOTICO & CINTILANTE','SKY LOVERS','ZHUO QIUHUI','BESTSELLER',
+    'FARZANA','BIJUTERIA XU HAIDONG','NOVA MODA','XIANDENG ZHANG','WAVINGMOON','ERRUI CHEN',
+    'YINGLONG'
+  ];
+
+  function procNormalize(s) {
+    return s.trim().toUpperCase().replace(/\s+/g,' ');
+  }
+
+  function procFindMatches(query) {
+    var q = procNormalize(query);
+    if (!q) return [];
+    return PROVIDERS.filter(function(p) {
+      return p.indexOf(q) !== -1 || q.indexOf(p) !== -1 ||
+             p.split(' ').some(function(w) { return w.indexOf(q) === 0; });
+    });
+  }
+
+  /* Encuentra el proveedor exacto si el valor escrito coincide suficientemente */
+  function procFindExact(query) {
+    var q = procNormalize(query);
+    /* Coincidencia exacta */
+    for (var i = 0; i < PROVIDERS.length; i++) {
+      if (PROVIDERS[i] === q) return PROVIDERS[i];
+    }
+    /* Coincidencia 80%+: el query contiene todas las palabras significativas del proveedor */
+    for (var j = 0; j < PROVIDERS.length; j++) {
+      var words = PROVIDERS[j].split(' ').filter(function(w){ return w.length > 2; });
+      if (words.length && words.every(function(w){ return q.indexOf(w) !== -1; })) {
+        return PROVIDERS[j];
+      }
+    }
+    return null;
+  }
+
+  function procTableIsUnlocked(fid) {
+    var pEl = document.getElementById('proc-proveedor-' + fid);
+    var vEl = document.getElementById('proc-valorFactura-' + fid);
+    var pVal = pEl ? pEl.value.trim() : '';
+    var vVal = vEl ? parseFloat(vEl.value) : 0;
+    return pVal.length > 0 && vVal > 0;
+  }
+
+  function procUpdateTableLock(fid) {
+    var lock  = document.getElementById('proc-table-lock-' + fid);
+    var block = document.getElementById('proc-table-block-' + fid);
+    if (!lock || !block) return;
+    var unlocked = procTableIsUnlocked(fid);
+    lock.style.display  = unlocked ? 'none'  : 'flex';
+    block.style.display = unlocked ? 'block' : 'none';
+  }
+
+  function procInitProviderInput(fid) {
+    var input = document.getElementById('proc-proveedor-' + fid);
+    var sugg  = document.getElementById('proc-forn-sugg-' + fid);
+    if (!input || !sugg) return;
+
+    input.addEventListener('input', function() {
+      procUpdateBannerProvider(fid);
+      procUpdateTableLock(fid);
+      var q = input.value.trim();
+      if (!q) { sugg.classList.add('hidden'); return; }
+      var matches = procFindMatches(q);
+      if (!matches.length) { sugg.classList.add('hidden'); return; }
+      sugg.innerHTML = matches.map(function(p) {
+        return '<div class="proc-forn-item" data-val="' + p + '">' + p + '</div>';
+      }).join('');
+      sugg.classList.remove('hidden');
+    });
+
+    input.addEventListener('blur', function() {
+      setTimeout(function() {
+        sugg.classList.add('hidden');
+        /* Corrección automática si hay coincidencia suficiente */
+        var exact = procFindExact(input.value);
+        if (exact && procNormalize(input.value) !== exact) {
+          input.value = exact;
+          procUpdateBannerProvider(fid);
+          procUpdateTableLock(fid);
+        }
+      }, 180);
+    });
+
+    sugg.addEventListener('mousedown', function(e) {
+      var item = e.target.closest('.proc-forn-item');
+      if (!item) return;
+      input.value = item.dataset.val;
+      sugg.classList.add('hidden');
+      procUpdateBannerProvider(fid);
+      procUpdateTableLock(fid);
+    });
+  }
 
   /* ── 3. SESSION HELPERS ── */
   var SESSION_PREFIX = 'proc_fatura_';
@@ -348,6 +460,10 @@
     container.appendChild(wrap);
     procUpdateBannerNumbers();
 
+    /* Init autocomplete + lock */
+    procInitProviderInput(fid);
+    procUpdateTableLock(fid);
+
     var dataRows = (data && data.rows) ? data.rows : [];
     var nRows    = Math.max(dataRows.length + 1, 2);
     procAddRows(fid, nRows);
@@ -358,6 +474,7 @@
       if (pEl) pEl.value = data.proveedor    || '';
       if (vEl) vEl.value = data.valorFactura || '';
       procUpdateBannerProvider(fid);
+      procUpdateTableLock(fid);
       dataRows.forEach(function(row, idx) {
         var rid = idx + 1;
         var tr  = document.getElementById('proc-row-' + fid + '-' + rid);
@@ -398,42 +515,55 @@
       +   '<button class="proc-remove-fatura-btn" id="proc-remove-btn-' + fid + '" onclick="procRemoveFatura(' + fid + ')" style="display:none">\u2715 remover</button>'
       + '</div>'
       + '<div class="proc-header-card">'
-      +   '<div class="proc-field-group"><div class="proc-field-label">Fornecedor</div>'
-      +     '<input type="text" id="proc-proveedor-' + fid + '" placeholder="Nome do fornecedor\u2026" oninput="procUpdateBannerProvider(' + fid + ')"></div>'
-      +   '<div class="proc-field-group"><div class="proc-field-label">Valor Fatura (\u20ac)</div>'
-      +     '<input type="number" id="proc-valorFactura-' + fid + '" placeholder="0.00" step="0.01" oninput="procUpdateHeader(' + fid + ')"></div>'
+      +   '<div class="proc-field-group">'
+      +     '<div class="proc-field-label">Fornecedor</div>'
+      +     '<div class="proc-forn-wrap">'
+      +       '<input type="text" id="proc-proveedor-' + fid + '" placeholder="Nome do fornecedor\u2026" autocomplete="off">'
+      +       '<div id="proc-forn-sugg-' + fid + '" class="proc-forn-suggestions hidden"></div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="proc-field-group"><div class="proc-field-label">Valor Fatura s/IVA (\u20ac)</div>'
+      +     '<input type="number" id="proc-valorFactura-' + fid + '" placeholder="0.00" step="0.01" oninput="procUpdateHeader(' + fid + ');procUpdateTableLock(' + fid + ')"></div>'
       +   '<div class="proc-field-group"><div class="proc-field-label">Total Calculado (\u20ac)</div>'
       +     '<div class="proc-total-box"><div class="proc-field-label" style="font-size:.6rem">soma das linhas</div>'
       +     '<div class="proc-amount" id="proc-totalCalc-' + fid + '">0.00</div></div></div>'
       + '</div>'
-      + '<div class="proc-table-block"><div class="proc-table-wrap"><table id="proc-mainTable-' + fid + '">'
-      + '<thead><tr>'
-      + '<th>N</th>'
-      + '<th class="left">Refer\u00eancia</th>'
-      + '<th class="left">Descri\u00e7\u00e3o</th>'
-      + '<th>Qtd. FT</th>'
-      + '<th class="th-a4">Funchal</th>'
-      + '<th class="th-a5">Porto Santo</th>'
-      + '<th title="Dividir Qtd. FT igualmente">\u00f7</th>'
-      + '<th>Pre\u00e7o \u20ac</th>'
-      + '<th>%Desc.</th>'
-      + '<th>!</th>'
-      + '<th>D / +1\u20ac</th>'
-      + '<th>PVP \u20ac</th>'
-      + '<th>Margem</th>'
-      + '<th>Total Linha</th>'
-      + '<th class="left">OBS</th>'
-      + '</tr></thead>'
-      + '<tbody id="proc-tableBody-' + fid + '"></tbody>'
-      + '</table></div></div>'
-      + '<div class="proc-table-footer">'
-      +   '<div class="proc-summary-line">'
-      +     '<span>Linhas: <strong id="proc-lineCount-' + fid + '">0</strong></span>'
-      +     '<span>Pe\u00e7as totais: <strong id="proc-totalPiezas-' + fid + '">0</strong></span>'
-      +     '<span>Diferen\u00e7a: <span id="proc-diffChip-' + fid + '" class="proc-diff-chip zero">\u00b1 0.00 \u20ac</span></span>'
-      +   '</div>'
-      +   '<div class="proc-footer-actions">'
-      +     '<button class="proc-btn primary" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
+      /* Lock message */
+      + '<div class="proc-table-lock" id="proc-table-lock-' + fid + '">'
+      +   '<span>\u26a0\ufe0f</span>'
+      +   '<span>Para come\u00e7ar a preencher a tabela, introduz primeiro o <strong>nome do fornecedor</strong> e o <strong>valor da fatura sem IVA</strong>.</span>'
+      + '</div>'
+      /* Table (hidden until unlocked) */
+      + '<div id="proc-table-block-' + fid + '" style="display:none">'
+      +   '<div class="proc-table-block"><div class="proc-table-wrap"><table id="proc-mainTable-' + fid + '">'
+      +   '<thead><tr>'
+      +   '<th>N</th>'
+      +   '<th class="left">Refer\u00eancia</th>'
+      +   '<th class="left">Descri\u00e7\u00e3o</th>'
+      +   '<th>Qtd. FT</th>'
+      +   '<th class="th-a4">Funchal</th>'
+      +   '<th class="th-a5">Porto Santo</th>'
+      +   '<th title="Dividir Qtd. FT igualmente">\u00f7</th>'
+      +   '<th>Pre\u00e7o \u20ac</th>'
+      +   '<th>%Desc.</th>'
+      +   '<th>!</th>'
+      +   '<th>D / +1\u20ac</th>'
+      +   '<th>PVP \u20ac</th>'
+      +   '<th>Margem</th>'
+      +   '<th>Total Linha</th>'
+      +   '<th class="left">OBS</th>'
+      +   '</tr></thead>'
+      +   '<tbody id="proc-tableBody-' + fid + '"></tbody>'
+      +   '</table></div></div>'
+      +   '<div class="proc-table-footer">'
+      +     '<div class="proc-summary-line">'
+      +       '<span>Linhas: <strong id="proc-lineCount-' + fid + '">0</strong></span>'
+      +       '<span>Pe\u00e7as totais: <strong id="proc-totalPiezas-' + fid + '">0</strong></span>'
+      +       '<span>Diferen\u00e7a: <span id="proc-diffChip-' + fid + '" class="proc-diff-chip zero">\u00b1 0.00 \u20ac</span></span>'
+      +     '</div>'
+      +     '<div class="proc-footer-actions">'
+      +       '<button class="proc-btn primary" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
+      +     '</div>'
       +   '</div>'
       + '</div>';
   }
@@ -898,7 +1028,15 @@
       +     '<button class="proc-add-fatura-btn proc-btn" id="proc-addFaturaBtn">&#65291; adicionar fatura</button>'
       +   '</div>'
       +   '<div class="proc-disclaimer-msg">'
-      +     '&#9888;&#65039; SE OS ITENS TIVEREM DESCONTO DEVES INSERIR O PRE&#199;O NORMAL E, NA COLUNA DE %, INSERIR O VALOR DO DESCONTO (%).'
+      +     '&#9888;&#65039; SE OS ITENS TIVEREM DESCONTO DEVES INSERIR O PRE\u00c7O NORMAL E, NA COLUNA DE %, INSERIR O VALOR DO DESCONTO (%).'
+      +   '</div>'
+      +   '<div class="proc-disclaimer-msg" style="margin-top:6px">'
+      +     '&#10133; SE FOR NECESS\u00c1RIO ADICIONAR 1\u20ac POR TRANSPORTE, ACTIVA O BOT\u00c3O <strong>+1\u20ac</strong> NA LINHA DA REFER\u00caNCIA CORRESPONDENTE.'
+      +   '</div>'
+      +   '<div class="proc-disclaimer-msg" style="margin-top:6px;margin-bottom:20px">'
+      +     '&#9432;&#65039; <strong>BOT\u00c3O D \u2014 DILUI\u00c7\u00c3O DE PRE\u00c7O:</strong> '
+      +     'Se faltarem pe\u00e7as e forem satisfeitas noutra fatura, ou se vierem pe\u00e7as a mais, activa o <strong>D</strong> para diluir o pre\u00e7o e fazer coincidir os c\u00e1lculos com a fatura. '
+      +     'Se aguardas repositi\u00e7\u00e3o do fornecedor, n\u00e3o actives nada.'
       +   '</div>'
       + '</div>';
 
@@ -967,5 +1105,6 @@
   window.procLoadSession         = procLoadSession;
   window.procDeleteSession       = procDeleteSession;
   window.procSaveSession         = procSaveSession;
+  window.procUpdateTableLock     = procUpdateTableLock;
 
 })();

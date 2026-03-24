@@ -71,7 +71,7 @@
 
       /* Table block */
       '#proc-content .proc-table-block { background:#fff; border:1px solid #e6e6e6; border-radius:14px; overflow:hidden; margin-bottom:10px; }',
-      '#proc-content .proc-table-wrap { overflow-x:auto; width:100%; }',
+      '#proc-content .proc-table-wrap { overflow-x:hidden; width:100%; }',
       '#proc-content .proc-table-wrap table { border-collapse:collapse; white-space:nowrap; border-radius:0; border-spacing:0; width:100%; table-layout:auto; }',
       '#proc-content .proc-table-wrap thead tr { background:#f2f2f2; border-bottom:2px solid #e0e0e0; }',
       '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; border-radius:0; }',
@@ -143,7 +143,13 @@
       '#proc-content .proc-btn.primary:hover { background:#1565c0; color:#fff; border-color:#1565c0; }',
 
       /* OBS input */
-      '#proc-content .proc-table-wrap td input.proc-obs-input { width:90px; }',
+      '#proc-content .proc-table-wrap td input.proc-obs-input { width:70px; }',
+
+      /* OBS tooltip cell */
+      '#proc-content .proc-obs-cell { position:relative; }',
+      '#proc-content .proc-obs-tip { display:none; position:absolute; bottom:calc(100% + 6px); right:0; min-width:160px; max-width:280px; background:#000; color:#fff; font-size:.75rem; font-weight:600; padding:7px 10px; border-radius:8px; white-space:pre-wrap; word-break:break-word; z-index:400; pointer-events:none; line-height:1.5; }',
+      '#proc-content .proc-obs-tip::after { content:""; position:absolute; top:100%; right:18px; border:5px solid transparent; border-top-color:#000; }',
+      '#proc-content .proc-obs-cell:hover .proc-obs-tip { display:block; }',
 
       /* Add fatura */
       '#proc-content .proc-add-fatura-wrap { display:flex; justify-content:center; margin:8px 0 14px; }',
@@ -550,7 +556,7 @@
       +   '<th>D / +1\u20ac</th>'
       +   '<th>PVP \u20ac</th>'
       +   '<th>Margem</th>'
-      +   '<th>Total Linha</th>'
+      +   '<th>Total</th>'
       +   '<th class="left">OBS</th>'
       +   '</tr></thead>'
       +   '<tbody id="proc-tableBody-' + fid + '"></tbody>'
@@ -634,7 +640,11 @@
         + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-cell-computed" id="proc-total-' + f + '-' + r + '">\u2014</td>'
-        + '<td><input type="text" class="proc-obs-input" placeholder="Obs\u2026"></td>';
+        + '<td class="proc-obs-cell">'
+        +   '<input type="text" class="proc-obs-input" placeholder="Obs\u2026"'
+        +   ' oninput="procObsSync(this)" id="proc-obs-' + f + '-' + r + '">'
+        +   '<div class="proc-obs-tip" id="proc-obs-tip-' + f + '-' + r + '"></div>'
+        + '</td>';
       tbody.appendChild(tr);
     }
     procUpdateSummary(fid);
@@ -1106,5 +1116,13 @@
   window.procDeleteSession       = procDeleteSession;
   window.procSaveSession         = procSaveSession;
   window.procUpdateTableLock     = procUpdateTableLock;
+  window.procObsSync             = procObsSync;
+
+  function procObsSync(input) {
+    var tip = input.parentElement ? input.parentElement.querySelector('.proc-obs-tip') : null;
+    if (!tip) return;
+    tip.textContent = input.value || '';
+    tip.style.display = input.value ? '' : 'none'; /* solo mostrar si hay texto */
+  }
 
 })();

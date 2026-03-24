@@ -274,12 +274,13 @@ body {
 }
 #recibos-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #000; background: none; border: none;
-  padding: 4px 10px; border-radius: 8px;
-  transition: background .15s, color .15s;
+  cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
   text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
-#recibos-overlay-back:hover { background: #555; color: #fff; }
+#recibos-overlay-back:hover { background: #333; border-color: #333; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
 #recibos-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column;
@@ -354,11 +355,13 @@ body {
 }
 #agenda-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #000; background: none; border: none;
-  padding: 4px 10px; border-radius: 8px;
-  transition: background .15s, color .15s; text-transform: lowercase; letter-spacing: .03em;
+  cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
-#agenda-overlay-back:hover { background: #555; color: #fff; }
+#agenda-overlay-back:hover { background: #333; border-color: #333; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
 #agenda-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; align-items: center;
@@ -386,11 +389,13 @@ body {
 }
 #rotulos-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #000; background: none; border: none;
-  padding: 4px 10px; border-radius: 8px;
-  transition: background .15s, color .15s; text-transform: lowercase; letter-spacing: .03em;
+  cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
-#rotulos-overlay-back:hover { background: #555; color: #fff; }
+#rotulos-overlay-back:hover { background: #333; border-color: #333; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
 #rotulos-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; align-items: center;
@@ -418,11 +423,13 @@ body {
 }
 #processamento-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #000; background: none; border: none;
-  padding: 4px 10px; border-radius: 8px;
-  transition: background .15s, color .15s; text-transform: lowercase; letter-spacing: .03em;
+  cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
-#processamento-overlay-back:hover { background: #555; color: #fff; }
+#processamento-overlay-back:hover { background: #333; border-color: #333; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
 #processamento-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; align-items: center;
@@ -2497,7 +2504,11 @@ input, button, select, textarea,
 }
 
 /* Back button keeps white text — override the global rule above */
-#adm-back-btn { color: #fff !important; }
+#adm-back-btn,
+#agenda-overlay-back,
+#rotulos-overlay-back,
+#processamento-overlay-back,
+#recibos-overlay-back { color: #fff !important; }
 
 /* Textos secundários / decorativos: preto suave mas ainda profundo */
 .adm-mod-desc, #adm-dash-greeting .adm-tagline,

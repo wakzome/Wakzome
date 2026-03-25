@@ -828,6 +828,35 @@ td, th { border-radius:10px; margin:2px; }
   box-sizing: border-box;
 }
 
+/* —— TABLET/MOBILE: module-open must lock back to fixed so the
+   back bar stays visible. Mirrors how agenda/rótulos overlays work. —— */
+@media (max-width: 1024px) {
+  #admin-app.module-open {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  #admin-app.module-open #adm-module-bar {
+    flex-shrink: 0;
+    position: relative !important;
+    top: auto !important;
+    z-index: 101;
+    background: #fff;
+  }
+  #admin-app.module-open .tab-panel.active {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0 !important;
+    padding: 20px 16px 32px !important;
+  }
+}
+
 /* ── Mobile adjustments ── */
 @media (max-width: 600px) {
   #adm-module-grid {
@@ -1779,13 +1808,7 @@ input, textarea { cursor: text !important; }
   #admin-app.module-open {
     padding-top: 0 !important;
   }
-  /* Fix: back bar must stay visible on tablet — make it sticky */
-  #admin-app.module-open #adm-module-bar {
-    position: sticky;
-    top: 0;
-    z-index: 101;
-    background: #fff;
-  }
+  /* back bar visibility handled by the @media (max-width:1024px) module-open rule above */
   #admin-header { margin-bottom: 12px; }
   #admin-header .logo-text { font-size: 2rem; }
   #admin-header #admin-time { font-size: .95rem; }

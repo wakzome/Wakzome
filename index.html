@@ -6,8 +6,22 @@
 <style>
 @font-face {
     font-family: 'MontserratLight';
-    src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
+    src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-VariableFont_wght.ttf') format('truetype');
     font-weight: 300;
+    font-style: normal;
+    font-display: block;
+}
+@font-face {
+    font-family: 'GFSDidot';
+    src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/GFSDidot-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Baskervville';
+    src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Baskervville-VariableFont_wght.ttf') format('truetype');
+    font-weight: 400;
     font-style: normal;
     font-display: block;
 }
@@ -30,6 +44,7 @@
 
 #dynamic-text {
   font-size: 20vw;
+  font-family: 'GFSDidot', serif;
   text-transform: lowercase;
   text-align: center;
   display: flex;
@@ -87,13 +102,25 @@ select, select option {
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<link rel="preload" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-VariableFont_wght.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/GFSDidot-Regular.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="https://raw.githubusercontent.com/wakzome/Wakzome/main/Baskervville-VariableFont_wght.ttf" as="font" type="font/ttf" crossorigin>
 <style>
 /* ─── INDEX: reset y base ─── */
 @font-face {
   font-family: 'MontserratLight';
-  src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
+  src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Montserrat-VariableFont_wght.ttf') format('truetype');
   font-weight: 300; font-style: normal; font-display: block;
+}
+@font-face {
+  font-family: 'GFSDidot';
+  src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/GFSDidot-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: block;
+}
+@font-face {
+  font-family: 'Baskervville';
+  src: url('https://raw.githubusercontent.com/wakzome/Wakzome/main/Baskervville-VariableFont_wght.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: block;
 }
 html, body {
   margin:0; padding:0; height:100%;
@@ -130,9 +157,10 @@ body {
 }
 #login-screen.visible { opacity:1; transform: translateY(0); }
 #login-screen .logo-text {
-  font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 100;
+  font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 400;
+  font-family: 'GFSDidot', serif;
   text-transform: lowercase; color: #000;
-  letter-spacing: .1em; margin-bottom: 20px;
+  letter-spacing: .02em; margin-bottom: 20px;
 }
 #login-screen #current-time {
   font-size: clamp(3rem, 10vw, 5.5rem); font-weight: 100;
@@ -140,9 +168,11 @@ body {
   line-height: 1; margin-top: 0;
 }
 #login-screen #current-date {
-  font-size: 0.82rem; font-weight: 600;
+  font-size: 0.82rem; font-weight: 400;
+  font-family: 'Baskervville', serif;
+  font-style: italic;
   text-transform: lowercase; color: #000;
-  letter-spacing: .07em; margin-top: 10px;
+  letter-spacing: .04em; margin-top: 10px;
 }
 #login-screen .loading-dots { display:flex; gap:8px; justify-content:center; margin-top:18px; }
 #login-screen .loading-dots span { width:5px; height:5px; background:#000; border-radius:50%; opacity:0; animation:blink 7s infinite; }
@@ -174,9 +204,9 @@ body {
 #main-header { display:flex; flex-direction:row; align-items:flex-start; justify-content:center; margin-bottom:10px; opacity:0; transition: opacity 1s ease; position:relative; width:100%; }
 #main-header.show { opacity:1; }
 #main-header-center { display:flex; flex-direction:column; align-items:center; }
-#main-header .logo-text { font-size:3rem; text-transform:lowercase; margin-bottom:0px; line-height:1;}
+#main-header .logo-text { font-size:3rem; font-family:'GFSDidot', serif; font-weight:400; text-transform:lowercase; margin-bottom:0px; line-height:1; letter-spacing:.01em;}
 #main-header #current-time-main { font-size:1.2rem; font-weight:bold; }
-#main-header #current-date-main { font-size:1rem; font-weight:bold; }
+#main-header #current-date-main { font-size:1rem; font-weight:400; font-family:'Baskervville', serif; font-style:italic; }
 #main-header .loading-dots { display:flex; gap:10px; justify-content:center; margin-top:5px; margin-bottom: 5px; }
 #main-nav {
   position: absolute;
@@ -274,8 +304,8 @@ body {
   flex-shrink: 0;
 }
 #recibos-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
+  font-size: .82rem; font-weight: 400; font-family: 'Baskervville', serif; font-style: italic;
+  text-transform: lowercase; letter-spacing: .04em; color: #000;
 }
 #recibos-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
@@ -355,8 +385,8 @@ body {
   background: #fff; flex-shrink: 0;
 }
 #agenda-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
+  font-size: .82rem; font-weight: 400; font-family: 'Baskervville', serif; font-style: italic;
+  text-transform: lowercase; letter-spacing: .04em; color: #000;
 }
 #agenda-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
@@ -389,8 +419,8 @@ body {
   background: #fff; flex-shrink: 0;
 }
 #rotulos-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
+  font-size: .82rem; font-weight: 400; font-family: 'Baskervville', serif; font-style: italic;
+  text-transform: lowercase; letter-spacing: .04em; color: #000;
 }
 #rotulos-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
@@ -423,8 +453,8 @@ body {
   background: #fff; flex-shrink: 0;
 }
 #processamento-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
+  font-size: .82rem; font-weight: 400; font-family: 'Baskervville', serif; font-style: italic;
+  text-transform: lowercase; letter-spacing: .04em; color: #000;
 }
 #processamento-overlay-back {
   font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
@@ -526,11 +556,12 @@ td, th { border-radius:10px; margin:2px; }
 }
 #admin-header.show { opacity: 1; }
 #admin-header .logo-text {
-  font-size: 3rem; text-transform: lowercase;
-  cursor: pointer; line-height: 1;
+  font-size: 3rem; font-family: 'GFSDidot', serif; font-weight: 400;
+  text-transform: lowercase;
+  cursor: pointer; line-height: 1; letter-spacing: .01em;
 }
 #admin-header #admin-time { font-size: 1.2rem; font-weight: bold; margin-top: 2px; }
-#admin-header #admin-date { font-size: 1rem; font-weight: bold; }
+#admin-header #admin-date { font-size: 1rem; font-weight: 400; font-family: 'Baskervville', serif; font-style: italic; }
 #admin-header .loading-dots { margin-top: 5px; margin-bottom: 5px; }
 
 /* Tabs */
@@ -588,16 +619,19 @@ td, th { border-radius:10px; margin:2px; }
 }
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.4rem, 3vw, 2rem);
-  font-weight: 100;
+  font-family: 'GFSDidot', serif;
+  font-weight: 400;
   text-transform: lowercase;
-  letter-spacing: .12em;
+  letter-spacing: .04em;
   color: #000;
   line-height: 1;
   margin-bottom: 6px;
 }
 #adm-dash-greeting .adm-tagline {
   font-size: .72rem;
-  font-weight: 600;
+  font-weight: 400;
+  font-family: 'Baskervville', serif;
+  font-style: italic;
   letter-spacing: .18em;
   text-transform: uppercase;
   color: #000;
@@ -661,17 +695,20 @@ td, th { border-radius:10px; margin:2px; }
 }
 .adm-mod-name {
   font-size: .82rem;
-  font-weight: 700;
+  font-family: 'GFSDidot', serif;
+  font-weight: 400;
   text-transform: lowercase;
-  letter-spacing: .08em;
+  letter-spacing: .04em;
   color: #000;
   line-height: 1.2;
 }
 .adm-mod-desc {
   font-size: .68rem;
-  font-weight: 600;
+  font-weight: 400;
+  font-family: 'Baskervville', serif;
+  font-style: italic;
   text-transform: lowercase;
-  letter-spacing: .03em;
+  letter-spacing: .02em;
   color: #000;
   margin-top: 5px;
   line-height: 1.5;
@@ -749,8 +786,10 @@ td, th { border-radius:10px; margin:2px; }
 #adm-back-btn:hover svg { transform: translateX(-2px); }
 #adm-module-bar-title {
   font-size: .75rem;
-  font-weight: 700;
-  letter-spacing: .12em;
+  font-weight: 400;
+  font-family: 'Baskervville', serif;
+  font-style: italic;
+  letter-spacing: .06em;
   text-transform: lowercase;
   color: #000;
 }
@@ -1213,14 +1252,16 @@ input, textarea { cursor: text !important; }
 
 #greeting-overlay.show { opacity: 1; }
 #greeting-text {
-  font-size: clamp(4.5rem, 11vw, 8rem); font-weight: 100;
-  text-transform: lowercase; color: #000; letter-spacing: .06em;
+  font-size: clamp(4.5rem, 11vw, 8rem); font-weight: 400;
+  font-family: 'GFSDidot', serif;
+  text-transform: lowercase; color: #000; letter-spacing: .02em;
   transform: translateY(20px); transition: transform 0.6s cubic-bezier(0.22,1,0.36,1);
 }
 #greeting-overlay.show #greeting-text { transform: translateY(0); }
 #greeting-sub {
-  font-size: clamp(1.3rem, 3.5vw, 2rem); font-weight: 100;
-  letter-spacing: .18em; text-transform: lowercase; color: #000; margin-top: 16px;
+  font-size: clamp(1.3rem, 3.5vw, 2rem); font-weight: 400;
+  font-family: 'Baskervville', serif; font-style: italic;
+  letter-spacing: .06em; text-transform: lowercase; color: #000; margin-top: 16px;
   opacity: 0; transition: opacity 0.5s ease 0.3s;
 }
 #greeting-overlay.show #greeting-sub { opacity: 1; }
@@ -1338,7 +1379,7 @@ input, textarea { cursor: text !important; }
   font-size: .78rem; font-weight: bold; color: #000; line-height: 1.3;
 }
 #saft-countdown {
-  font-size: 1.5rem; font-weight: 100; color: #000; line-height: 1;
+  font-size: 1.5rem; font-weight: 400; font-family: 'GFSDidot', serif; color: #000; line-height: 1;
   letter-spacing: -.01em;
 }
 #saft-countdown-label {
@@ -2050,7 +2091,7 @@ tr { transition: background 0.15s ease; }
   transition: letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1),
               opacity 0.2s !important;
 }
-.logo-text:hover { letter-spacing: .18em !important; opacity: 0.7; }
+.logo-text:hover { letter-spacing: .08em !important; opacity: 0.65; }
 
 /* ── Greeting overlay richer motion ── */
 #greeting-overlay {
@@ -2170,8 +2211,9 @@ tr { transition: background 0.15s ease; }
   width: 100%;
   padding: 14px 24px;
   font-size: .92rem;
-  font-weight: 600;
-  font-family: 'MontserratLight', sans-serif;
+  font-weight: 400;
+  font-family: 'Baskervville', serif;
+  font-style: italic;
   text-transform: lowercase;
   letter-spacing: .04em;
   background: none;
@@ -2183,7 +2225,7 @@ tr { transition: background 0.15s ease; }
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 #admin-menu-drawer .drawer-tab-btn:hover { background: #f5f5f5; }
-#admin-menu-drawer .drawer-tab-btn.active { border-left-color: #000; font-weight: bold; }
+#admin-menu-drawer .drawer-tab-btn.active { border-left-color: #000; font-style: normal; font-family: 'GFSDidot', serif; }
 #admin-menu-overlay {
   display: none;
   position: fixed;
@@ -2639,23 +2681,82 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 input, select, textarea { font-size: .92rem !important; font-weight: 300 !important; }
 button { font-size: .88rem !important; }
 
-/* Sizes UI admin */
-.adm-mod-name        { font-size: .90rem !important; }
-.adm-mod-desc        { font-size: .74rem !important; }
-#adm-module-bar-title{ font-size: .82rem !important; }
+/* ── Sizes UI admin */
+.adm-mod-name        { font-size: .90rem !important; font-family: 'GFSDidot', serif !important; font-weight: 400 !important; }
+.adm-mod-desc        { font-size: .74rem !important; font-family: 'Baskervville', serif !important; font-style: italic !important; font-weight: 400 !important; }
+#adm-module-bar-title{ font-size: .82rem !important; font-family: 'Baskervville', serif !important; font-style: italic !important; font-weight: 400 !important; }
 #adm-back-btn        { font-size: .84rem !important; }
 .tab-btn             { font-size: .95rem !important; }
 .drawer-tab-btn      { font-size: .98rem !important; }
 th                   { font-size: 1.05rem !important; }
 td                   { font-size: .96rem !important; }
 .f-card .f-name      { font-size: .94rem !important; }
-.f-card .f-dates     { font-size: .78rem !important; }
+.f-card .f-dates     { font-size: .78rem !important; font-family: 'Baskervville', serif !important; font-style: italic !important; }
 .f-card .f-badge     { font-size: .75rem !important; }
 .f-section-title     { font-size: .78rem !important; }
 #s-status-msg, #r-status-msg, #h-status-msg { font-size: .96rem !important; }
 .adm-mod-icon        { font-size: 1.75rem !important; }
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.55rem, 3.2vw, 2.15rem) !important;
+  font-family: 'GFSDidot', serif !important;
+  font-weight: 400 !important;
+}
+#adm-dash-greeting .adm-tagline {
+  font-family: 'Baskervville', serif !important;
+  font-style: italic !important;
+  font-weight: 400 !important;
+}
+#login-screen .logo-text {
+  font-family: 'GFSDidot', serif !important;
+  font-weight: 400 !important;
+}
+#login-screen #current-date {
+  font-family: 'Baskervville', serif !important;
+  font-style: italic !important;
+  font-weight: 400 !important;
+}
+#main-header .logo-text,
+#admin-header .logo-text,
+.logo-text {
+  font-family: 'GFSDidot', serif !important;
+  font-weight: 400 !important;
+}
+#main-header #current-date-main,
+#admin-header #admin-date {
+  font-family: 'Baskervville', serif !important;
+  font-style: italic !important;
+  font-weight: 400 !important;
+}
+#recibos-overlay-title,
+#agenda-overlay-title,
+#rotulos-overlay-title,
+#processamento-overlay-title {
+  font-family: 'Baskervville', serif !important;
+  font-style: italic !important;
+  font-weight: 400 !important;
+}
+#dynamic-text {
+  font-family: 'GFSDidot', serif !important;
+}
+#saft-countdown {
+  font-family: 'GFSDidot', serif !important;
+  font-weight: 400 !important;
+}
+.f-section-title {
+  font-family: 'Baskervville', serif !important;
+  font-style: italic !important;
+  font-weight: 400 !important;
+  text-transform: lowercase !important;
+  letter-spacing: .04em !important;
+}
+#greeting-text {
+  font-family: 'GFSDidot', serif !important;
+  font-weight: 400 !important;
+}
+#greeting-sub {
+  font-family: 'Baskervville', serif !important;
+  font-style: italic !important;
+  font-weight: 400 !important;
 }
 </style>
 </head>

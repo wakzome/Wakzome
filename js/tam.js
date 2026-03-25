@@ -5595,9 +5595,9 @@
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
 
-      var closeSessionBtn = bar.querySelector('#tam-close-session-btn');
-      if (closeSessionBtn) closeSessionBtn.addEventListener('click', function(){
-        // Save current session first
+      /* ── Helper: perform actual session close (called after confirmation) ── */
+      function tamDoCloseSession() {
+        // Save current session first, then close after save completes
         tamSaveSession(false);
         // Reset state
         tamInvoices      = [];
@@ -5648,6 +5648,97 @@
         if (statusMsg) statusMsg.textContent = '';
         var fileName = document.getElementById('tam-file-name');
         if (fileName) fileName.textContent = '';
+      }
+
+      /* ── Confirmation modal for closing session ── */
+      function tamShowCloseConfirmModal() {
+        // Remove any existing modal
+        var existing = document.getElementById('tam-close-confirm-modal');
+        if (existing) existing.remove();
+
+        var overlay = document.createElement('div');
+        overlay.id = 'tam-close-confirm-modal';
+        overlay.style.cssText = [
+          'position:fixed',
+          'inset:0',
+          'z-index:99999',
+          'display:flex',
+          'align-items:center',
+          'justify-content:center',
+          'background:rgba(0,0,0,0.35)',
+          'backdrop-filter:blur(2px)',
+          '-webkit-backdrop-filter:blur(2px)'
+        ].join(';');
+
+        var box = document.createElement('div');
+        box.style.cssText = [
+          'background:#fff',
+          'border-radius:16px',
+          'padding:32px 28px 24px',
+          'max-width:420px',
+          'width:calc(100% - 48px)',
+          'box-shadow:0 8px 40px rgba(0,0,0,0.18)',
+          'display:flex',
+          'flex-direction:column',
+          'gap:8px',
+          'font-family:inherit'
+        ].join(';');
+
+        box.innerHTML =
+          '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:#888;text-transform:uppercase;margin-bottom:4px">FECHAR SESSÃO</div>' +
+          '<div style="font-size:20px;font-weight:700;color:#111;margin-bottom:4px">Guardar e fechar a sessão activa?</div>' +
+          '<div style="font-size:14px;color:#555;margin-bottom:18px">A sessão será guardada. Podes retomar a qualquer momento.</div>' +
+          '<button id="tam-close-confirm-yes" style="' +
+            'display:flex;align-items:center;justify-content:center;gap:10px;' +
+            'padding:14px 20px;border-radius:10px;border:none;cursor:pointer;' +
+            'background:#fdf0ef;color:#c0392b;font-size:15px;font-weight:600;' +
+            'transition:background .15s;margin-bottom:8px' +
+          '">💾 Guardar e fechar</button>' +
+          '<button id="tam-close-confirm-no" style="' +
+            'display:flex;align-items:center;justify-content:center;' +
+            'padding:14px 20px;border-radius:10px;border:1.5px solid #e0e0e0;' +
+            'background:#fff;color:#333;font-size:15px;font-weight:500;cursor:pointer;' +
+            'transition:background .15s' +
+          '">Cancelar</button>';
+
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        // Hover effects
+        var yesBtn = box.querySelector('#tam-close-confirm-yes');
+        var noBtn  = box.querySelector('#tam-close-confirm-no');
+        yesBtn.addEventListener('mouseenter', function(){ this.style.background = '#fad7d4'; });
+        yesBtn.addEventListener('mouseleave', function(){ this.style.background = '#fdf0ef'; });
+        noBtn.addEventListener('mouseenter',  function(){ this.style.background = '#f5f5f5'; });
+        noBtn.addEventListener('mouseleave',  function(){ this.style.background = '#fff'; });
+
+        // Confirm: save + close
+        yesBtn.addEventListener('click', function(){
+          overlay.remove();
+          tamDoCloseSession();
+        });
+
+        // Cancel: just close modal
+        noBtn.addEventListener('click', function(){
+          overlay.remove();
+        });
+
+        // Click outside to cancel
+        overlay.addEventListener('click', function(e){
+          if (e.target === overlay) overlay.remove();
+        });
+
+        // Escape key to cancel
+        function onKeyDown(e) {
+          if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKeyDown); }
+        }
+        document.addEventListener('keydown', onKeyDown);
+        overlay.addEventListener('remove', function(){ document.removeEventListener('keydown', onKeyDown); });
+      }
+
+      var closeSessionBtn = bar.querySelector('#tam-close-session-btn');
+      if (closeSessionBtn) closeSessionBtn.addEventListener('click', function(){
+        tamShowCloseConfirmModal();
       });
 
       // Bind sessions button here, not in the separate listener block above

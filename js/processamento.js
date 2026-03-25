@@ -310,15 +310,6 @@
 
   function procMarkSynced() {
     _isSynced = true;
-    var btn = document.getElementById('proc-saveBtn');
-    if (btn) {
-      btn.disabled = false;
-      btn.title    = '';
-      btn.style.opacity = '';
-      btn.style.cursor  = '';
-    }
-    var closeBtn = document.getElementById('proc-closeSessionBtn');
-    if (closeBtn) closeBtn.style.display = '';
   }
 
   /* ── 2b. PROVIDER LIST ── */
@@ -592,14 +583,21 @@
       .then(function(rows) {
         var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(key);
         if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
-        /* Update local cache */
         try { localStorage.setItem(key, raw); } catch(e) {}
-        procApplySessionData(key, raw, function() { procMarkSynced(); procSetSyncStatus('ok', 'sess\u00e3o carregada'); });
+        procApplySessionData(key, raw, function() {
+          procMarkSynced();
+          procShowMainArea(key);
+          procSetSyncStatus('ok', 'sess\u00e3o carregada');
+        });
       })
       .catch(function() {
         var raw = localStorage.getItem(key);
         if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
-        procApplySessionData(key, raw, function() { procMarkSynced(); procSetSyncStatus('offline', 'carregado localmente'); });
+        procApplySessionData(key, raw, function() {
+          procMarkSynced();
+          procShowMainArea(key);
+          procSetSyncStatus('offline', 'carregado localmente');
+        });
       });
   }
 
@@ -1564,63 +1562,196 @@
     container.id = 'proc-content';
     container.innerHTML =
         '<div class="page-wrap">'
-      +   '<div class="proc-top-bar">'
-      +     '<h1 class="proc-app-title">Processamento de Faturas</h1>'
-      +     '<div class="proc-top-actions">'
-      +       '<span id="proc-saveStatus" class="proc-save-status"></span>'
-      +       '<div class="proc-session-menu-wrap">'
-      +         '<button class="proc-btn" id="proc-sessionMenuBtn">&#128194; sess&#245;es &#x25be;</button>'
-      +         '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
+      /* ── Session bar — always visible, never blocking ── */
+      +   '<div id="proc-session-bar">'
+      +     '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;"></span>'
+      +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1"></span>'
+      +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
+      +     '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
+      +     '<button class="proc-btn primary" id="proc-saveBtn">&#128190; guardar</button>'
+      +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#c00;color:#c00;background:#fff0f0;">&#x23CF;&#xFE0F; fechar</button>'
+      +     '<button class="proc-btn" id="proc-guiaBtn" style="border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
+      +   '</div>'
+      /* ── Session start panel — visible only before a session is active ── */
+      +   '<div id="proc-session-start">'
+      +     '<div id="proc-session-start-inner">'
+      +       '<div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:10px;">PROCESSAMENTO DE FATURAS</div>'
+      +       '<div style="font-size:1rem;font-weight:700;color:#000;margin-bottom:6px;">Escolhe uma sess\u00e3o ou inicia uma nova</div>'
+      +       '<div style="font-size:.78rem;font-weight:600;color:#555;margin-bottom:20px;line-height:1.5;">Para evitar sobreescrever dados, selecciona sempre a sess\u00e3o correcta.</div>'
+      +       '<div id="proc-start-sessions-list"></div>'
+      +       '<div style="border-top:1px solid #f0f0f0;margin-top:16px;padding-top:16px;">'
+      +         '<button class="proc-btn primary" id="proc-start-new-btn" style="width:100%;padding:11px 16px;font-size:.88rem;justify-content:flex-start;">&#11088; Iniciar nova sess\u00e3o</button>'
       +       '</div>'
-      +       '<button class="proc-btn primary" id="proc-saveBtn" disabled title="A aguardar sincronização…" style="opacity:.45;cursor:not-allowed;">&#128190; guardar</button>'
-      +       '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sessão activa" style="display:none;border-color:#c00;color:#c00;background:#fff0f0;">&#x23CF;&#xFE0F; fechar sess&#227;o</button>'
-      +       '<button class="proc-btn" id="proc-guiaBtn" style="border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
       +     '</div>'
       +   '</div>'
-      +   '<div id="proc-faturasContainer"></div>'
-      +   '<div class="proc-add-fatura-wrap">'
-      +     '<button class="proc-add-fatura-btn proc-btn" id="proc-addFaturaBtn">&#65291; adicionar fatura</button>'
-      +   '</div>'
-      +   '<div class="proc-disclaimer-msg">'
-      +     '&#9888;&#65039; SE OS ITENS TIVEREM DESCONTO DEVES INSERIR O PRE\u00c7O NORMAL E, NA COLUNA DE %, INSERIR O VALOR DO DESCONTO (%).'
-      +   '</div>'
-      +   '<div class="proc-disclaimer-msg" style="margin-top:6px">'
-      +     '&#10133; SE FOR NECESS\u00c1RIO ADICIONAR 1\u20ac POR TRANSPORTE, ACTIVA O BOT\u00c3O <strong>+1\u20ac</strong> NA LINHA DA REFER\u00caNCIA CORRESPONDENTE.'
-      +   '</div>'
-      +   '<div class="proc-disclaimer-msg" style="margin-top:6px;margin-bottom:20px">'
-      +     '&#9432;&#65039; <strong>BOT\u00c3O D \u2014 DILUI\u00c7\u00c3O DE PRE\u00c7O:</strong> '
-      +     'Se faltarem pe\u00e7as e forem satisfeitas noutra fatura, ou se vierem pe\u00e7as a mais, activa o <strong>D</strong> para diluir o pre\u00e7o e fazer coincidir os c\u00e1lculos com a fatura. '
-      +     'Se aguardas repositi\u00e7\u00e3o do fornecedor, n\u00e3o actives nada.'
+      /* ── Main work area — hidden until session active ── */
+      +   '<div id="proc-main-area" style="display:none;">'
+      +     '<div class="proc-top-bar" style="margin-bottom:16px;">'
+      +       '<h1 class="proc-app-title">Processamento de Faturas</h1>'
+      +     '</div>'
+      +     '<div id="proc-faturasContainer"></div>'
+      +     '<div class="proc-add-fatura-wrap">'
+      +       '<button class="proc-add-fatura-btn proc-btn" id="proc-addFaturaBtn">&#65291; adicionar fatura</button>'
+      +     '</div>'
+      +     '<div class="proc-disclaimer-msg">'
+      +       '&#9888;&#65039; SE OS ITENS TIVEREM DESCONTO DEVES INSERIR O PRE\u00c7O NORMAL E, NA COLUNA DE %, INSERIR O VALOR DO DESCONTO (%).'
+      +     '</div>'
+      +     '<div class="proc-disclaimer-msg" style="margin-top:6px">'
+      +       '&#10133; SE FOR NECESS\u00c1RIO ADICIONAR 1\u20ac POR TRANSPORTE, ACTIVA O BOT\u00c3O <strong>+1\u20ac</strong> NA LINHA DA REFER\u00caNCIA CORRESPONDENTE.'
+      +     '</div>'
+      +     '<div class="proc-disclaimer-msg" style="margin-top:6px;margin-bottom:20px">'
+      +       '&#9432;&#65039; <strong>BOT\u00c3O D \u2014 DILUI\u00c7\u00c3O DE PRE\u00c7O:</strong> '
+      +       'Se faltarem pe\u00e7as e forem satisfeitas noutra fatura, ou se vierem pe\u00e7as a mais, activa o <strong>D</strong> para diluir o pre\u00e7o e fazer coincidir os c\u00e1lculos com a fatura. '
+      +       'Se aguardas repositi\u00e7\u00e3o do fornecedor, n\u00e3o actives nada.'
+      +     '</div>'
       +   '</div>'
       + '</div>';
 
-    /* bind buttons */
+    /* ── Styles for new elements ── */
+    var sb = document.getElementById('proc-session-bar');
+    if (sb) sb.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 14px;border-bottom:1px solid #eee;margin-bottom:18px;position:relative;';
+
+    var ss = document.getElementById('proc-session-start');
+    if (ss) ss.style.cssText = 'display:flex;justify-content:center;padding:32px 0;';
+
+    var si = document.getElementById('proc-session-start-inner');
+    if (si) si.style.cssText = 'width:100%;max-width:460px;background:#fff;border:1px solid #e6e6e6;border-radius:16px;padding:28px 28px 22px;box-shadow:0 4px 20px rgba(0,0,0,.06);font-family:\'MontserratLight\',sans-serif;';
+
+    /* ── Bind buttons ── */
     document.getElementById('proc-saveBtn').addEventListener('click', function() { procSaveSession(true); });
     document.getElementById('proc-sessionMenuBtn').addEventListener('click', function(e) { procToggleSessionMenu(e); });
-    document.getElementById('proc-addFaturaBtn').addEventListener('click', function() { procAddFatura(null); });
     document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
     document.getElementById('proc-closeSessionBtn').addEventListener('click', function() { procCloseActiveSession(); });
+    document.getElementById('proc-start-new-btn').addEventListener('click', function() { procStartNewSession(); });
 
     /* close session menu on outside click */
     document.addEventListener('click', function() { procCloseSessionMenu(); });
   }
 
+  /* ── Render session list in the start panel ── */
+  function procRenderStartPanel() {
+    var list = document.getElementById('proc-start-sessions-list');
+    if (!list) return;
+    var keys = getAllSessionKeys();
+    if (!keys.length) {
+      list.innerHTML = '';
+      return;
+    }
+    var html = '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:8px;">Sess\u00f5es guardadas</div>';
+    keys.forEach(function(key) {
+      var label = labelFromKey(key);
+      var dateStr = '', nFat = '';
+      try {
+        var d = JSON.parse(localStorage.getItem(key));
+        if (d && d.savedAt) {
+          var dt = new Date(d.savedAt);
+          dateStr = dt.toLocaleDateString('pt-PT') + ' \u00b7 ' + dt.toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit'});
+        }
+        if (d && d.faturas) nFat = d.faturas.length + ' fat.';
+      } catch(e) {}
+      var meta = [dateStr, nFat].filter(Boolean).join(' \u00b7 ');
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;margin-bottom:6px;border:1px solid #e0e0e0;border-radius:10px;gap:8px;font-family:\'MontserratLight\',sans-serif;">'
+        + '<div style="min-width:0;">'
+        +   '<div style="font-size:.85rem;font-weight:700;color:#000;">' + label + '</div>'
+        +   (meta ? '<div style="font-size:.68rem;font-weight:600;color:#888;margin-top:2px;">' + meta + '</div>' : '')
+        + '</div>'
+        + '<div style="display:flex;gap:5px;flex-shrink:0;">'
+        +   '<button class="proc-start-load-btn" data-key="' + key + '" style="padding:5px 13px;border:1px solid #1565c0;border-radius:7px;background:#e3f2fd;color:#1565c0;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;">\u21a9 carregar</button>'
+        +   '<button class="proc-start-del-btn" data-key="' + key + '" style="padding:5px 9px;border:1px solid #ddd;border-radius:7px;background:transparent;color:#888;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;">\u2715</button>'
+        + '</div>'
+        + '</div>';
+    });
+    list.innerHTML = html;
+
+    list.querySelectorAll('.proc-start-load-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        procLoadSessionFromStart(btn.dataset.key);
+      });
+    });
+    list.querySelectorAll('.proc-start-del-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        procDeleteSession(btn.dataset.key);
+        setTimeout(procRenderStartPanel, 100);
+      });
+    });
+  }
+
+  /* Load a session from the start panel (non-blocking) */
+  function procLoadSessionFromStart(key) {
+    procSetSyncStatus('syncing', 'a carregar\u2026');
+    procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key) + '&select=dados', { method: 'GET' })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(key);
+        if (!raw) { procSetSyncStatus('error', 'sess\u00e3o n\u00e3o encontrada'); return; }
+        try { localStorage.setItem(key, raw); } catch(e) {}
+        procApplySessionData(key, raw, function() {
+          procMarkSynced();
+          procShowMainArea(key);
+          procSetSyncStatus('ok', 'sess\u00e3o carregada');
+        });
+      })
+      .catch(function() {
+        var raw = localStorage.getItem(key);
+        if (!raw) { procSetSyncStatus('error', 'sess\u00e3o n\u00e3o encontrada'); return; }
+        procApplySessionData(key, raw, function() {
+          procMarkSynced();
+          procShowMainArea(key);
+          procSetSyncStatus('offline', 'carregado localmente');
+        });
+      });
+  }
+
+  /* Start a brand-new session */
+  function procStartNewSession() {
+    _activeSessionKey = getNextWeekKey();
+    procMarkSynced();
+    procAddFatura(null);
+    procShowMainArea(_activeSessionKey);
+    procSetSyncStatus('ok', 'nova sess\u00e3o');
+  }
+
+  /* Show/hide between start panel and main work area */
+  function procShowMainArea(key) {
+    var start = document.getElementById('proc-session-start');
+    var main  = document.getElementById('proc-main-area');
+    var addBtn = document.getElementById('proc-addFaturaBtn');
+    if (start) start.style.display = 'none';
+    if (main)  main.style.display  = '';
+    if (addBtn) addBtn.addEventListener('click', function() { procAddFatura(null); });
+    /* Update label in session bar */
+    var lbl = document.getElementById('proc-session-label');
+    if (lbl && key) lbl.textContent = labelFromKey(key);
+    /* Show close button */
+    var closeBtn = document.getElementById('proc-closeSessionBtn');
+    if (closeBtn) closeBtn.style.display = '';
+  }
+
+  function procShowStartArea() {
+    var start = document.getElementById('proc-session-start');
+    var main  = document.getElementById('proc-main-area');
+    if (start) start.style.display = 'flex';
+    if (main)  main.style.display  = 'none';
+    var lbl = document.getElementById('proc-session-label');
+    if (lbl) lbl.textContent = '';
+    var closeBtn = document.getElementById('proc-closeSessionBtn');
+    if (closeBtn) closeBtn.style.display = 'none';
+    /* Reload remote keys then render */
+    procLoadRemoteKeys(procRenderStartPanel);
+  }
+
   /* ── 16b. CLOSE / RESET SESSION ── */
   function procCloseActiveSession() {
     procFloatModal({
-      label: 'Fechar sessão',
-      title: 'Guardar e fechar a sessão activa?',
-      body: 'A sessão será guardada e o módulo voltará ao ecrã inicial de selecção de sessão. Podes retomar a qualquer momento.',
+      label: 'Fechar sess\u00e3o',
+      title: 'Guardar e fechar a sess\u00e3o activa?',
+      body: 'A sess\u00e3o ser\u00e1 guardada. Podes retomar a qualquer momento.',
       buttons: [
         {
-          label: '&#x1F4BE; Guardar e fechar',
+          label: '\ud83d\udcbe Guardar e fechar',
           style: 'background:#fff0f0;border:1px solid #ffc8c8;color:#c00;font-weight:700;',
           cb: function() {
-            /* Save first, then reset */
-            if (_isSynced) {
-              procSaveSession(true);
-            }
-            /* Reset state after a short delay so save can fire */
+            if (_isSynced) procSaveSession(true);
             setTimeout(function() {
               _isSynced = false;
               _activeSessionKey = null;
@@ -1629,22 +1760,12 @@
               activeFaturas = [];
               Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
               _procSentRefs = {};
-              /* Clear faturas from UI */
               var cont = document.getElementById('proc-faturasContainer');
               if (cont) cont.innerHTML = '';
-              /* Reset UI */
-              var closeBtn = document.getElementById('proc-closeSessionBtn');
-              if (closeBtn) closeBtn.style.display = 'none';
               var saveBtn = document.getElementById('proc-saveBtn');
-              if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.title    = 'A aguardar sincronização…';
-                saveBtn.style.opacity = '.45';
-                saveBtn.style.cursor  = 'not-allowed';
-              }
-              procSetSyncStatus('ok', 'sessão fechada');
-              /* Re-show session picker */
-              procShowSessionPicker();
+              if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
+              procSetSyncStatus('ok', 'sess\u00e3o fechada');
+              procShowStartArea();
             }, 400);
           }
         },
@@ -1658,15 +1779,14 @@
     if (_procInited) return;
     _procInited = true;
 
-    /* reset state */
     faturaCount   = 0;
     activeFaturas = [];
     Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
 
     buildOverlayContent(container);
 
-    /* Show session picker — user must choose before anything is saved */
-    procShowSessionPicker();
+    /* Show start area (non-blocking) — loads remote keys then renders */
+    procShowStartArea();
 
     /* auto-save every 10 s */
     setInterval(function() { procSaveSession(false); }, 10000);
@@ -1679,15 +1799,13 @@
     overlay.classList.add('open');
     requestAnimationFrame(function() { overlay.classList.add('visible'); });
 
-    /* init on first open */
     var content = document.getElementById('proc-content');
     if (!content) {
       var root = document.getElementById('proc-root');
       if (root) initProcessamento(root);
-    } else if (!_isSynced && _procInited === false) {
-      /* Re-opened after closing session — show picker again */
-      _procInited = true;
-      procShowSessionPicker();
+    } else if (!_isSynced) {
+      /* Returned after closing session — refresh start panel */
+      procShowStartArea();
     }
   }
 

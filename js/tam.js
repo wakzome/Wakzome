@@ -815,7 +815,8 @@
 
         // ── Header row ──────────────────────────────────────
         var hdr = document.createElement('div');
-        hdr.className = 'tam-invoice-block-header';
+        var invColorIdx = idx % 6;
+        hdr.className = 'tam-invoice-block-header tam-inv-color-' + invColorIdx;
         var qd = (tamSession && tamSession.quickDistrib && tamSession.quickDistrib[idx]);
         var quickBtnsHtml = qd
           ? '<div class="tam-inv-quick-wrap">' +
@@ -2457,13 +2458,16 @@
     bar.style.display = 'flex';
     var nameEl = document.getElementById('tam-session-name');
     var saveBtn = document.getElementById('tam-save-btn');
+    var closeBtn = document.getElementById('tam-close-session-btn');
     var stEl   = document.getElementById('tam-session-status');
     if (tamSession) {
       if (nameEl) nameEl.value = tamSession.name;
       if (saveBtn) saveBtn.classList.add('visible');
+      if (closeBtn) closeBtn.style.display = 'inline-block';
     } else {
       if (nameEl) nameEl.value = '';
       if (saveBtn) saveBtn.classList.remove('visible');
+      if (closeBtn) closeBtn.style.display = 'none';
     }
     if (stEl) stEl.textContent = '';
   }
@@ -2526,7 +2530,9 @@
     if (!silent) {
       var stEl = document.getElementById('tam-session-status');
       var saveBtn = document.getElementById('tam-save-btn');
+      var closeBtnVis = document.getElementById('tam-close-session-btn');
       if (saveBtn) saveBtn.classList.add('visible');
+      if (closeBtnVis) closeBtnVis.style.display = 'inline-block';
       if (stEl) {
         stEl.textContent = '✓ guardado';
         stEl.classList.add('saved');
@@ -4958,6 +4964,30 @@
 
 '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:8px; border:1px solid #e6e6e6; border-radius:14px; overflow:visible; }',
       '.tam-invoice-block-header { display:flex; align-items:center; gap:16px; padding:10px 16px; background:#f8f8f8; border-bottom:1px solid #e6e6e6; flex-wrap:wrap; }',
+      /* ── Invoice header colour palette (6 variants, cycling) ── */
+      '.tam-inv-color-0 { background:linear-gradient(90deg,#1a237e 0%,#283593 60%,#3949ab 100%)!important; border-bottom:1px solid #1a237e!important; }',
+      '.tam-inv-color-1 { background:linear-gradient(90deg,#1b5e20 0%,#2e7d32 60%,#388e3c 100%)!important; border-bottom:1px solid #1b5e20!important; }',
+      '.tam-inv-color-2 { background:linear-gradient(90deg,#4a148c 0%,#6a1b9a 60%,#7b1fa2 100%)!important; border-bottom:1px solid #4a148c!important; }',
+      '.tam-inv-color-3 { background:linear-gradient(90deg,#b71c1c 0%,#c62828 60%,#d32f2f 100%)!important; border-bottom:1px solid #b71c1c!important; }',
+      '.tam-inv-color-4 { background:linear-gradient(90deg,#e65100 0%,#ef6c00 60%,#f57c00 100%)!important; border-bottom:1px solid #e65100!important; }',
+      '.tam-inv-color-5 { background:linear-gradient(90deg,#006064 0%,#00838f 60%,#0097a7 100%)!important; border-bottom:1px solid #006064!important; }',
+      /* Text inside coloured headers: always white and legible */
+      '.tam-inv-color-0 .tam-inv-num, .tam-inv-color-0 .tam-inv-meta, .tam-inv-color-0 .tam-inv-total { color:#fff!important; text-shadow:0 1px 2px rgba(0,0,0,.35); }',
+      '.tam-inv-color-1 .tam-inv-num, .tam-inv-color-1 .tam-inv-meta, .tam-inv-color-1 .tam-inv-total { color:#fff!important; text-shadow:0 1px 2px rgba(0,0,0,.35); }',
+      '.tam-inv-color-2 .tam-inv-num, .tam-inv-color-2 .tam-inv-meta, .tam-inv-color-2 .tam-inv-total { color:#fff!important; text-shadow:0 1px 2px rgba(0,0,0,.35); }',
+      '.tam-inv-color-3 .tam-inv-num, .tam-inv-color-3 .tam-inv-meta, .tam-inv-color-3 .tam-inv-total { color:#fff!important; text-shadow:0 1px 2px rgba(0,0,0,.35); }',
+      '.tam-inv-color-4 .tam-inv-num, .tam-inv-color-4 .tam-inv-meta, .tam-inv-color-4 .tam-inv-total { color:#fff!important; text-shadow:0 1px 2px rgba(0,0,0,.35); }',
+      '.tam-inv-color-5 .tam-inv-num, .tam-inv-color-5 .tam-inv-meta, .tam-inv-color-5 .tam-inv-total { color:#fff!important; text-shadow:0 1px 2px rgba(0,0,0,.35); }',
+      /* Collapse toggle visible on coloured bg */
+      '.tam-inv-color-0 .tam-inv-toggle-btn, .tam-inv-color-1 .tam-inv-toggle-btn, .tam-inv-color-2 .tam-inv-toggle-btn, .tam-inv-color-3 .tam-inv-toggle-btn, .tam-inv-color-4 .tam-inv-toggle-btn, .tam-inv-color-5 .tam-inv-toggle-btn { color:rgba(255,255,255,.7)!important; }',
+      /* Buttons inside coloured headers: translucent white style */
+      '.tam-invoice-block-header[class*="tam-inv-color-"] button:not(.tam-inv-toggle-btn) { background:rgba(255,255,255,.15)!important; border-color:rgba(255,255,255,.4)!important; color:#fff!important; }',
+      '.tam-invoice-block-header[class*="tam-inv-color-"] button:not(.tam-inv-toggle-btn):hover { background:rgba(255,255,255,.30)!important; }',
+      /* Quick wrap labels on coloured bg */
+      '.tam-inv-color-0 .tam-inv-quick-active, .tam-inv-color-1 .tam-inv-quick-active, .tam-inv-color-2 .tam-inv-quick-active, .tam-inv-color-3 .tam-inv-quick-active, .tam-inv-color-4 .tam-inv-quick-active, .tam-inv-color-5 .tam-inv-quick-active { color:rgba(255,255,255,.9)!important; }',
+      /* ── Close session button ── */
+      '#tam-close-session-btn { display:none; padding:5px 11px; font-size:.72rem; font-weight:bold; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #b71c1c; border-radius:8px; background:#fff; color:#b71c1c; transition:background .15s,color .15s; white-space:nowrap; }',
+      '#tam-close-session-btn:hover { background:#b71c1c; color:#fff; }',
       '.tam-inv-num { font-size:.88rem; font-weight:bold; color:#000; }',
       '.tam-inv-meta { font-size:.75rem; color:#aaa; font-weight:600; flex:1; }',
       '.tam-inv-total { font-size:.88rem; font-weight:bold; color:#000; margin-left:auto; }',
@@ -5537,6 +5567,7 @@
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾 guardar</button>' +
+        '<button class="tam-session-btn tam-close-session-btn" id="tam-close-session-btn" title="guardar e fechar sessão" style="display:none">🔒 fechar sessão</button>' +
         '<div class="tam-sessions-dropdown-wrap">' +
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
@@ -5563,6 +5594,61 @@
 
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
+
+      var closeSessionBtn = bar.querySelector('#tam-close-session-btn');
+      if (closeSessionBtn) closeSessionBtn.addEventListener('click', function(){
+        // Save current session first
+        tamSaveSession(false);
+        // Reset state
+        tamInvoices      = [];
+        tamEngineCache   = {};
+        tamActiveEngines = {};
+        tamSession       = null;
+        tamRefCompleting.clear();
+        tamRefDone.clear();
+        Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+        Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+        tamBoxLockPending = {};
+        tamUndoStack = [];
+        tamRedoStack = [];
+        if (tamAutoSaveTimer) { clearInterval(tamAutoSaveTimer); tamAutoSaveTimer = null; }
+        // Clear rendered areas
+        ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
+          var el = document.getElementById(id);
+          if (el) { el.className = ''; el.innerHTML = ''; }
+        });
+        var ra = document.getElementById('tam-reception-area');
+        if (ra) ra.innerHTML = '';
+        var aa = document.getElementById('tam-anomaly-area');
+        if (aa) aa.innerHTML = '';
+        var dva = document.getElementById('tam-dn-verify-area');
+        if (dva) dva.innerHTML = '';
+        // Reset session name field and status
+        var sn = document.getElementById('tam-session-name');
+        if (sn) sn.value = '';
+        var ss = document.getElementById('tam-session-status');
+        if (ss) ss.textContent = '';
+        // Hide buttons that require an active session
+        var expBtn = document.getElementById('tam-export-btn');
+        if (expBtn) expBtn.classList.remove('show');
+        document.getElementById('tam-save-btn').classList.remove('visible');
+        closeSessionBtn.style.display = 'none';
+        var dnLoadBtn = document.getElementById('tam-dn-load-bar-btn');
+        if (dnLoadBtn) dnLoadBtn.style.display = 'none';
+        var dnCamBtn = document.getElementById('tam-dn-cam-bar-btn');
+        if (dnCamBtn) dnCamBtn.style.display = 'none';
+        var dnCount = document.getElementById('tam-dn-count');
+        if (dnCount) dnCount.style.display = 'none';
+        // Reset upload zone
+        var lbl = document.getElementById('upload-label') || document.getElementById('tam-upload-label');
+        if (lbl) lbl.classList.remove('loaded');
+        document.getElementById('tab-tam').classList.remove('tam-loaded');
+        document.getElementById('admin-app').classList.remove('tam-loaded');
+        var statusMsg = document.getElementById('tam-status-msg');
+        if (statusMsg) statusMsg.textContent = '';
+        var fileName = document.getElementById('tam-file-name');
+        if (fileName) fileName.textContent = '';
+      });
 
       // Bind sessions button here, not in the separate listener block above
       var sesBtn2 = bar.querySelector('#tam-sessions-btn');

@@ -193,13 +193,42 @@ input,textarea{cursor:text!important}
   /* Cards por fornecedor — layout limpo em mobile */
   #ag-by-forn{grid-template-columns:1fr!important;gap:10px}
   .ag-fb-block{width:100%}
-  .ag-fb-hdr{font-size:.82rem;padding:10px 14px}
-  .ag-fb-row{padding:8px 14px}
-  .ag-fb-rl{font-size:.75rem}
-  .ag-fb-rv{font-size:.92rem}
+  .ag-fb-hdr{font-size:.88rem;padding:12px 16px;letter-spacing:.08em}
+  .ag-fb-row{padding:9px 16px}
+  .ag-fb-rl{font-size:.76rem}
+  .ag-fb-rv{font-size:.95rem}
+  /* Borde izquierdo de color en mobile para identificar proveedor */
+  .ag-fb-TAM .ag-fb-hdr{border-left:4px solid #1565c0;padding-left:12px}
+  .ag-fb-GIT .ag-fb-hdr{border-left:4px solid #6a1b9a;padding-left:12px}
+  .ag-fb-BESTSELLER .ag-fb-hdr{border-left:4px solid #880e4f;padding-left:12px}
+  .ag-fb-CHLAMYS .ag-fb-hdr{border-left:4px solid #2e7d32;padding-left:12px}
+  /* Toolbar sticky en mobile — queda fija arriba sin invadir el contenido */
+  #ag-toolbar{position:sticky;top:0;z-index:100;background:#fff;padding:10px 0 8px;margin-bottom:10px;border-bottom:1px solid #e6e6e6;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 }
 @media(max-width:480px){#ag-summary{grid-template-columns:1fr 1fr}#ag-by-forn{grid-template-columns:1fr!important}}
-@media(max-width:600px){#ag-year-nav{top:auto;bottom:80px;right:14px}}
+@media(max-width:600px){
+  /* Botones de año: dejan de flotar y se convierten en barra sticky horizontal arriba */
+  #ag-year-nav{
+    position:sticky!important;
+    top:0!important;
+    right:auto!important;
+    bottom:auto!important;
+    z-index:200;
+    flex-direction:row!important;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    align-items:center;
+    gap:6px;
+    padding:8px 12px;
+    background:#fff;
+    border-bottom:1px solid #e6e6e6;
+    box-shadow:0 2px 6px rgba(0,0,0,.07);
+    width:100%;
+    box-sizing:border-box;
+    margin-bottom:4px;
+  }
+  .ag-year-btn{font-size:.75rem;padding:5px 12px}
+}
 
 `;
 

@@ -69,7 +69,7 @@ var RT_CSS = `
 .rt-add-st-btn:hover { border-color: #000; }
 .rt-divider { height: 1px; background: #e6e6e6; margin: 14px 0; }
 .rt-btn-prim { width: 100%; padding: 11px; background: #000; color: #fff; border: none; border-radius: 20px; font-size: .88rem; font-weight: 800; text-transform: lowercase; cursor: pointer; transition: background .15s; font-family: inherit; }
-.rt-btn-prim:hover { background: #333; }
+.rt-btn-prim:hover { background: #333; color: #fff; }
 .rt-acc-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: .8rem; border-bottom: 1px solid #f5f5f5; color: #000; font-weight: 600; }
 .rt-acc-row:last-child { border-bottom: none; }
 .rt-acc-val { font-weight: 800; font-family: monospace; color: #000; }
@@ -198,7 +198,7 @@ var RT_CSS = `
 #rt-del-box p { font-size: .82rem; color: #666; font-weight: bold; margin-bottom: 22px; line-height: 1.5; }
 .rt-del-act { display: flex; gap: 8px; }
 .rt-del-confirm { flex: 1; padding: 10px; background: #c00; border: none; border-radius: 20px; color: #fff; cursor: pointer; font-size: .84rem; font-weight: 800; text-transform: lowercase; font-family: inherit; transition: background .15s; }
-.rt-del-confirm:hover { background: #a00; }
+.rt-del-confirm:hover { background: #a00; color: #fff; }
 `;
 
 var RT_HTML = `

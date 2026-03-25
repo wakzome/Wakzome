@@ -840,6 +840,13 @@ td, th { border-radius:10px; margin:2px; }
     display: flex !important;
     flex-direction: column !important;
   }
+  /* Cancel the body-scroll patterns (tam-loaded, s-loaded) on tablet —
+     scroll must happen inside the tab-panel, not on admin-app */
+  #admin-app.module-open.tam-loaded,
+  #admin-app.module-open.s-loaded {
+    overflow: hidden !important;
+    height: 100vh !important;
+  }
   #admin-app.module-open #adm-module-bar {
     flex-shrink: 0;
     position: relative !important;
@@ -847,6 +854,7 @@ td, th { border-radius:10px; margin:2px; }
     z-index: 101;
     background: #fff;
   }
+  /* All tab panels scroll internally on tablet */
   #admin-app.module-open .tab-panel.active {
     flex: 1 !important;
     overflow-y: auto !important;
@@ -854,6 +862,13 @@ td, th { border-radius:10px; margin:2px; }
     -webkit-overflow-scrolling: touch;
     min-height: 0 !important;
     padding: 20px 16px 32px !important;
+  }
+  /* TAM and Salarios: when data loaded, still scroll inside panel */
+  #admin-app.module-open #tab-tam.active.tam-loaded,
+  #admin-app.module-open #tab-salarios.active.s-loaded {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
 }
 

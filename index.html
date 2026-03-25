@@ -151,13 +151,10 @@ body {
   padding: 8px 4px; width: 170px; text-align: center;
   border: none; border-bottom: 1.5px solid #000;
   outline: none; background: transparent; color: #000;
-  -webkit-text-fill-color: #000 !important;
   transition: border-color .3s;
 }
 #key-input:focus { border-bottom-color: #000; }
-#key-input::placeholder { color: #000 !important; -webkit-text-fill-color: #000 !important; opacity: 1 !important; font-weight: 400; font-size:.9rem; }
-#key-input::-webkit-input-placeholder { color: #000 !important; -webkit-text-fill-color: #000 !important; opacity: 1 !important; font-weight: 400; font-size:.9rem; }
-#key-input::-moz-placeholder { color: #000 !important; opacity: 1 !important; font-weight: 400; font-size:.9rem; }
+#key-input::placeholder { color: #000; font-weight: 400; font-size:.9rem; }
 #key-submit {
   margin-top: 22px; padding: 8px 34px;
   font-size: .78rem; font-weight: 600;
@@ -1095,11 +1092,6 @@ body::before {
 /* ══ CURSOR ══ */
 * { cursor: crosshair !important; }
 input, textarea { cursor: text !important; }
-
-/* ══ PLACEHOLDER COLOR FIX (Firefox, Safari) ══ */
-::placeholder { color: #000 !important; opacity: 1 !important; }
-::-moz-placeholder { color: #000 !important; opacity: 1 !important; }
-th { color: #000; }
 
 /* ══ COLON BLINK en el reloj ══ */
 @keyframes colonBlink {
@@ -2053,7 +2045,7 @@ tr { transition: background 0.15s ease; }
   transition: letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1),
               opacity 0.2s !important;
 }
-.logo-text:hover { letter-spacing: .18em !important; opacity: 1; }
+.logo-text:hover { letter-spacing: .18em !important; opacity: 0.7; }
 
 /* ── Greeting overlay richer motion ── */
 #greeting-overlay {
@@ -2542,12 +2534,12 @@ input, button, select, textarea,
 #saft-recibos-label, #saft-recibos-mes,
 #r-warnings-box .warn-title, #r-warnings-box ul li {
   color: #000 !important;
-  opacity: 1;
+  opacity: 0.68;
 }
 
-/* Textos de estado / placeholder */
-.adm-mod-desc { opacity: 1; }
-#adm-dash-greeting .adm-tagline { opacity: 1; letter-spacing: .18em; }
+/* Textos de estado / placeholder que eram muito claros */
+.adm-mod-desc { opacity: 0.55; }
+#adm-dash-greeting .adm-tagline { opacity: 0.45; letter-spacing: .18em; }
 
 /* Sizes: ligeiro aumento nos elementos de UI do admin */
 .adm-mod-name        { font-size: .90rem !important; }
@@ -2583,7 +2575,7 @@ input, select, textarea { font-size: .92rem !important; }
 button { font-size: .88rem !important; }
 
 /* Borders/separators permanecem discretos */
-#adm-module-bar-title { opacity: 1; }
+#adm-module-bar-title { opacity: 0.45; }
 </style>
 </head>
 <body>
@@ -2793,7 +2785,7 @@ button { font-size: .88rem !important; }
       <label id="s-upload-label" for="s-file-input">
         <span class="upload-icon">📄</span>
         carregar pdf de salários<br>
-        <small style="font-size:.78rem;opacity:1">clique ou arraste o ficheiro aqui</small>
+        <small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro aqui</small>
       </label>
       <input type="file" id="s-file-input" accept="application/pdf">
       <div id="s-file-name"></div>
@@ -2830,14 +2822,14 @@ button { font-size: .88rem !important; }
         <label class="upload-box" id="r-label-pdf">
           <span class="upload-icon">📄</span>
           pdf de recibos<br>
-          <small style="font-size:.75rem;opacity:1">clique ou arraste</small>
+          <small style="font-size:.75rem;opacity:.6">clique ou arraste</small>
           <input type="file" id="r-input-pdf" accept="application/pdf">
           <span class="file-loaded" id="r-name-pdf"></span>
         </label>
         <label class="upload-box" id="r-label-csv">
           <span class="upload-icon">📋</span>
           csv de senhas<br>
-          <small style="font-size:.75rem;opacity:1">nome;senha</small>
+          <small style="font-size:.75rem;opacity:.6">nome;senha</small>
           <input type="file" id="r-input-csv" accept=".csv,.txt">
           <span class="file-loaded" id="r-name-csv"></span>
         </label>
@@ -2948,7 +2940,7 @@ button { font-size: .88rem !important; }
       <label id="tam-upload-label" for="tam-file-input">
         <span class="upload-icon">📦</span>
         carregar fatura tam fashion<br>
-        <small style="font-size:.78rem;opacity:1">clique ou arraste o ficheiro pdf aqui</small>
+        <small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro pdf aqui</small>
       </label>
       <input type="file" id="tam-file-input" accept="application/pdf">
       <div id="tam-file-name"></div>
@@ -3612,7 +3604,7 @@ button { font-size: .88rem !important; }
     /* Monto total */
     listEl.innerHTML = '';
     if (total === 0) {
-      listEl.innerHTML = '<div style="font-size:.65rem;font-weight:bold;color:#000;opacity:1;">sem vencimentos esta semana</div>';
+      listEl.innerHTML = '<div style="font-size:.65rem;font-weight:bold;color:#000;opacity:.45;">sem vencimentos esta semana</div>';
       return;
     }
 
@@ -3622,7 +3614,7 @@ button { font-size: .88rem !important; }
     listEl.appendChild(montoEl);
 
     var subEl = document.createElement('div');
-    subEl.style.cssText = 'font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;opacity:1;margin-top:1px;';
+    subEl.style.cssText = 'font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;opacity:.5;margin-top:1px;';
     subEl.textContent = 'total a liquidar';
     listEl.appendChild(subEl);
   }

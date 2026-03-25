@@ -729,20 +729,30 @@ function rtBindLogic() {
     while(thead.cells.length>8) thead.deleteCell(-1);
     extras.forEach(function(s){ var th=document.createElement('th'); th.textContent=s.abr.toLowerCase(); thead.appendChild(th); });
 
-    /* Pending counts (not delivered) */
+    /* Pending counts (not delivered) + oldest pending shipment date */
     var pendF=0, pendP=0;
+    var oldestF=null, oldestP=null;
     D.shipments.forEach(function(sh){
+      var shDate = sh.iso ? new Date(sh.iso) : null;
       sh.boxes.forEach(function(b){
         if(!b.delivered){
-          if(b.dest==='f') pendF++;
-          else if(b.dest==='p') pendP++;
+          if(b.dest==='f'){ pendF++; if(shDate&&(!oldestF||shDate<oldestF)) oldestF=shDate; }
+          else if(b.dest==='p'){ pendP++; if(shDate&&(!oldestP||shDate<oldestP)) oldestP=shDate; }
         }
       });
     });
+    var today=new Date(); today.setHours(0,0,0,0);
+    function daysDiff(d){ if(!d) return null; var dd=new Date(d); dd.setHours(0,0,0,0); return Math.round((today-dd)/(1000*60*60*24)); }
+    var daysF=daysDiff(oldestF), daysP=daysDiff(oldestP);
     var pFel=document.getElementById('rt-pend-fnc-val');
     var pPel=document.getElementById('rt-pend-pxo-val');
     if(pFel) pFel.textContent=pendF;
     if(pPel) pPel.textContent=pendP;
+    /* Update age sub-label in each card */
+    var pFsub=document.querySelector('.rt-pend-card.fnc .rt-pend-sub');
+    var pPsub=document.querySelector('.rt-pend-card.pxo .rt-pend-sub');
+    if(pFsub) pFsub.innerHTML='caixas pendentes'+(pendF>0&&daysF!==null?'<br><span style="font-size:.6rem;font-weight:700;color:#888;">há '+daysF+(daysF===1?' dia':' dias')+'</span>':'');
+    if(pPsub) pPsub.innerHTML='caixas pendentes'+(pendP>0&&daysP!==null?'<br><span style="font-size:.6rem;font-weight:700;color:#888;">há '+daysP+(daysP===1?' dia':' dias')+'</span>':'');
 
     if(!D.shipments.length){
       body.innerHTML='<tr><td colspan="'+(8+extras.length)+'" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr>';

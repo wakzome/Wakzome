@@ -617,85 +617,134 @@ td, th { border-radius:10px; margin:2px; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  padding: 28px 24px 22px;
-  border-radius: 18px;
-  border: 1px solid #ebebeb;
+  justify-content: flex-end;
+  padding: 0;
+  border-radius: 22px;
+  border: none;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
   transition: transform 0.22s cubic-bezier(0.22,1,0.36,1),
-              box-shadow 0.22s cubic-bezier(0.22,1,0.36,1),
-              border-color 0.2s;
-  min-height: 140px;
+              box-shadow 0.22s cubic-bezier(0.22,1,0.36,1);
+  min-height: 200px;
   text-decoration: none;
   color: #000;
   position: relative;
   overflow: hidden;
   user-select: none;
 }
-.adm-mod-card::after {
+
+/* Top gradient banner area with icon */
+.adm-mod-card::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(0,0,0,0.012) 0%, transparent 60%);
+  top: 0; left: 0; right: 0;
+  height: 55%;
+  border-radius: 22px 22px 0 0;
+  background: linear-gradient(135deg, #d0f0e8 0%, #b8e8f8 100%);
+  z-index: 0;
+}
+
+/* Sparkle dot top-right corner decoration */
+.adm-mod-card::after {
+  content: '✦';
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: .65rem;
+  color: rgba(255,255,255,0.85);
+  z-index: 1;
   pointer-events: none;
 }
+
+/* Per-module gradient colors */
+.adm-mod-card[data-module="salarios"]::before  { background: linear-gradient(135deg, #c8f0dc 0%, #a8e8c8 100%); }
+.adm-mod-card[data-module="recibos"]::before   { background: linear-gradient(135deg, #ccd8f8 0%, #b8ccf4 100%); }
+.adm-mod-card[data-module="agenda"]::before    { background: linear-gradient(135deg, #cccef8 0%, #b8b8f0 100%); }
+.adm-mod-card[data-module="rotulos"]::before   { background: linear-gradient(135deg, #f8e8c0 0%, #f4d89c 100%); }
+.adm-mod-card[data-module="horarios"]::before  { background: linear-gradient(135deg, #c8dcf8 0%, #a8c8f4 100%); }
+.adm-mod-card[data-module="ferias"]::before    { background: linear-gradient(135deg, #c4f0d4 0%, #a0e4b8 100%); }
+.adm-mod-card[data-module="editor"]::before    { background: linear-gradient(135deg, #fcd4d8 0%, #f8b8c0 100%); }
+.adm-mod-card[data-module="tam"]::before       { background: linear-gradient(135deg, #e0d0f8 0%, #ccc0f4 100%); }
+.adm-mod-card[data-module="processamento"]::before { background: linear-gradient(135deg, #d4d4f8 0%, #bcbcf0 100%); }
+
 .adm-mod-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.09);
-  border-color: #ccc;
+  transform: translateY(-5px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.11), 0 2px 8px rgba(0,0,0,0.05);
 }
 .adm-mod-card:active {
   transform: translateY(-1px) scale(0.98);
   box-shadow: 0 4px 14px rgba(0,0,0,0.06);
 }
 
+/* Icon wrapper — sits in the gradient zone, centered */
 .adm-mod-icon {
-  font-size: 1.6rem;
+  font-size: 2.6rem;
   line-height: 1;
-  margin-bottom: 18px;
-  display: block;
-  opacity: 0.85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 55%;
+  z-index: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.10));
 }
+
+/* Text content area at the bottom */
+.adm-mod-card > div:not(.adm-mod-arrow) {
+  position: relative;
+  z-index: 2;
+  padding: 14px 18px 36px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 0 0 22px 22px;
+  margin-top: auto;
+}
+
 .adm-mod-name {
-  font-size: .82rem;
+  font-size: .88rem;
   font-weight: 700;
   text-transform: lowercase;
-  letter-spacing: .08em;
-  color: #000;
+  letter-spacing: .04em;
+  color: #1a1a2e;
   line-height: 1.2;
 }
 .adm-mod-desc {
-  font-size: .68rem;
-  font-weight: 600;
+  font-size: .70rem;
+  font-weight: 500;
   text-transform: lowercase;
-  letter-spacing: .03em;
-  color: #000;
-  margin-top: 5px;
+  letter-spacing: .02em;
+  color: #555;
+  margin-top: 4px;
   line-height: 1.5;
 }
 .adm-mod-arrow {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
-  width: 22px;
-  height: 22px;
-  border: 1px solid #e0e0e0;
+  bottom: 14px;
+  right: 16px;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid #e0e0e0;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: .72rem;
-  color: #000;
-  transition: border-color .2s, color .2s, background .2s;
+  font-size: .75rem;
+  color: #888;
+  z-index: 3;
+  transition: border-color .2s, color .2s, background .2s, transform .2s;
+  background: #fff;
 }
 .adm-mod-card:hover .adm-mod-arrow {
-  border-color: #555;
-  color: #000;
-  background: #000;
+  border-color: #666;
+  background: #111;
   color: #fff;
+  transform: translateX(2px);
 }
 
 /* Module back bar (shown when inside a module) */
@@ -785,7 +834,7 @@ td, th { border-radius:10px; margin:2px; }
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
-  .adm-mod-card { min-height: 120px; padding: 20px 16px 16px; }
+  .adm-mod-card { min-height: 160px; padding: 0; }
   .adm-mod-icon { font-size: 1.3rem; margin-bottom: 12px; }
 }
 @media (min-width: 601px) and (max-width: 860px) {
@@ -2640,8 +2689,8 @@ input, select, textarea { font-size: .92rem !important; font-weight: 300 !import
 button { font-size: .88rem !important; }
 
 /* Sizes UI admin */
-.adm-mod-name        { font-size: .90rem !important; }
-.adm-mod-desc        { font-size: .74rem !important; }
+.adm-mod-name        { font-size: .88rem !important; }
+.adm-mod-desc        { font-size: .70rem !important; }
 #adm-module-bar-title{ font-size: .82rem !important; }
 #adm-back-btn        { font-size: .84rem !important; }
 .tab-btn             { font-size: .95rem !important; }
@@ -2653,7 +2702,7 @@ td                   { font-size: .96rem !important; }
 .f-card .f-badge     { font-size: .75rem !important; }
 .f-section-title     { font-size: .78rem !important; }
 #s-status-msg, #r-status-msg, #h-status-msg { font-size: .96rem !important; }
-.adm-mod-icon        { font-size: 1.75rem !important; }
+.adm-mod-icon        { font-size: 2.6rem !important; }
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.55rem, 3.2vw, 2.15rem) !important;
 }

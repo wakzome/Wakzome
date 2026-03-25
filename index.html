@@ -589,8 +589,8 @@ td, th { border-radius:10px; margin:2px; }
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.4rem, 3vw, 2rem);
   font-weight: 100;
-  text-transform: lowercase;
-  letter-spacing: .12em;
+  text-transform: uppercase;
+  letter-spacing: .22em;
   color: #000;
   line-height: 1;
   margin-bottom: 6px;
@@ -651,22 +651,22 @@ td, th { border-radius:10px; margin:2px; }
   position: absolute;
   top: 10px;
   right: 14px;
-  font-size: .65rem;
-  color: rgba(255,255,255,0.85);
+  font-size: .55rem;
+  color: rgba(255,255,255,0.25);
   z-index: 1;
   pointer-events: none;
 }
 
-/* Per-module gradient colors */
-.adm-mod-card[data-module="salarios"]::before  { background: linear-gradient(135deg, #c8f0dc 0%, #a8e8c8 100%); }
-.adm-mod-card[data-module="recibos"]::before   { background: linear-gradient(135deg, #ccd8f8 0%, #b8ccf4 100%); }
-.adm-mod-card[data-module="agenda"]::before    { background: linear-gradient(135deg, #cccef8 0%, #b8b8f0 100%); }
-.adm-mod-card[data-module="rotulos"]::before   { background: linear-gradient(135deg, #f8e8c0 0%, #f4d89c 100%); }
-.adm-mod-card[data-module="horarios"]::before  { background: linear-gradient(135deg, #c8dcf8 0%, #a8c8f4 100%); }
-.adm-mod-card[data-module="ferias"]::before    { background: linear-gradient(135deg, #c4f0d4 0%, #a0e4b8 100%); }
-.adm-mod-card[data-module="editor"]::before    { background: linear-gradient(135deg, #fcd4d8 0%, #f8b8c0 100%); }
-.adm-mod-card[data-module="tam"]::before       { background: linear-gradient(135deg, #e0d0f8 0%, #ccc0f4 100%); }
-.adm-mod-card[data-module="processamento"]::before { background: linear-gradient(135deg, #d4d4f8 0%, #bcbcf0 100%); }
+/* Per-module gradient colors — elegant, sophisticated */
+.adm-mod-card[data-module="salarios"]::before  { background: linear-gradient(145deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); }
+.adm-mod-card[data-module="recibos"]::before   { background: linear-gradient(145deg, #0d1b2a 0%, #1b2838 60%, #1e3a5f 100%); }
+.adm-mod-card[data-module="agenda"]::before    { background: linear-gradient(145deg, #1a1a2e 0%, #2d1b4e 60%, #3b1f6b 100%); }
+.adm-mod-card[data-module="rotulos"]::before   { background: linear-gradient(145deg, #1c1410 0%, #2e1f0e 60%, #4a2f10 100%); }
+.adm-mod-card[data-module="horarios"]::before  { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
+.adm-mod-card[data-module="ferias"]::before    { background: linear-gradient(145deg, #0d1f18 0%, #143322 60%, #1a4a2e 100%); }
+.adm-mod-card[data-module="editor"]::before    { background: linear-gradient(145deg, #1a1010 0%, #2e1414 60%, #3d1515 100%); }
+.adm-mod-card[data-module="tam"]::before       { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
+.adm-mod-card[data-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
 
 .adm-mod-card:hover {
   transform: translateY(-5px);
@@ -709,8 +709,8 @@ td, th { border-radius:10px; margin:2px; }
 .adm-mod-name {
   font-size: .88rem;
   font-weight: 700;
-  text-transform: lowercase;
-  letter-spacing: .04em;
+  text-transform: uppercase;
+  letter-spacing: .08em;
   color: #1a1a2e;
   line-height: 1.2;
 }
@@ -2812,27 +2812,45 @@ td                   { font-size: .96rem !important; }
   <div id="adm-dashboard">
     <div id="adm-dash-greeting">
       <div class="adm-brand">ADMINISTRAÇÃO</div>
-      <div class="adm-tagline">selecione um módulo</div>
+      <div class="adm-tagline">SELECIONE UM MÓDULO</div>
     </div>
     <div id="adm-module-grid">
       <div class="adm-mod-card" data-module="salarios" style="animation-delay:0.05s">
-        <span class="adm-mod-icon">💰</span>
+        <span class="adm-mod-icon">
+          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 7v1m0 8v1M9.5 9.5C9.5 8.67 10.67 8 12 8s2.5.67 2.5 1.5S13.33 11 12 11s-2.5.67-2.5 1.5S10.67 14 12 14s2.5.67 2.5 1.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
         <div>
-          <div class="adm-mod-name">SALARIOS</div>
+          <div class="adm-mod-name">SALÁRIOS</div>
           <div class="adm-mod-desc">processamento de salários</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="recibos" style="animation-delay:0.10s">
-        <span class="adm-mod-icon">📄</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5" y="3" width="14" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">RECIBOS</div>
-          <div class="adm-mod-desc">encriptação e publicação de recibos</div>
+          <div class="adm-mod-desc">encriptação e envio de recibos</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="agenda" style="animation-delay:0.15s">
-        <span class="adm-mod-icon">📅</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="5" width="16" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 3v4M16 3v4M4 10h16" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="9" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+            <circle cx="12" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+            <circle cx="15" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">AGENDA</div>
           <div class="adm-mod-desc">gestão de pagamento de faturas</div>
@@ -2840,7 +2858,13 @@ td                   { font-size: .96rem !important; }
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="rotulos" style="animation-delay:0.20s">
-        <span class="adm-mod-icon">🏷️</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 7a2 2 0 0 1 2-2h8.586a2 2 0 0 1 1.414.586l3.414 3.414A2 2 0 0 1 20 10.414V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <circle cx="8.5" cy="11.5" r="1.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.2"/>
+            <path d="M8 15h8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">RÓTULOS</div>
           <div class="adm-mod-desc">impressão de rótulos</div>
@@ -2848,7 +2872,12 @@ td                   { font-size: .96rem !important; }
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="horarios" style="animation-delay:0.25s">
-        <span class="adm-mod-icon">🗓️</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 8v4l2.5 2.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">HORÁRIOS</div>
           <div class="adm-mod-desc">gestão de horários por loja</div>
@@ -2856,7 +2885,14 @@ td                   { font-size: .96rem !important; }
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="ferias" style="animation-delay:0.30s">
-        <span class="adm-mod-icon">🌴</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3C12 3 7 8 7 13a5 5 0 0 0 10 0c0-5-5-10-5-10Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 13v5M9 18h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M7 9c-2 1-4 3-4 3s2 0 3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M17 9c2 1 4 3 4 3s-2 0-3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">FÉRIAS</div>
           <div class="adm-mod-desc">controlo de férias e ausências</div>
@@ -2864,7 +2900,12 @@ td                   { font-size: .96rem !important; }
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="editor" style="animation-delay:0.35s">
-        <span class="adm-mod-icon">✏️</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14.5 4.5l5 5L7 22H2v-5L14.5 4.5Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M12 7l5 5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">EDITOR DE PDF</div>
           <div class="adm-mod-desc">edição e anotação de documentos</div>
@@ -2872,15 +2913,27 @@ td                   { font-size: .96rem !important; }
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="tam" style="animation-delay:0.40s">
-        <span class="adm-mod-icon">📦</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">TAM</div>
-          <div class="adm-mod-desc">faturas tam fashion</div>
+          <div class="adm-mod-desc">faturas TAM Fashion</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
       <div class="adm-mod-card" data-module="processamento" style="animation-delay:0.45s">
-        <span class="adm-mod-icon">🧾</span>
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M15 17l1.5 1.5L19 16" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
         <div>
           <div class="adm-mod-name">FATURAS</div>
           <div class="adm-mod-desc">processamento de faturas</div>

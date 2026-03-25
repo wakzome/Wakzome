@@ -26,7 +26,7 @@
 
       /* Session dropdown */
       '#proc-content .proc-session-menu-wrap { position:relative; }',
-      '#proc-content .proc-session-dropdown { position:absolute; top:calc(100% + 6px); right:0; width:340px; background:#fff; border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.14); z-index:600; overflow:hidden; max-height:380px; overflow-y:auto; }',
+      '#proc-content .proc-session-dropdown { position:fixed; width:340px; background:#fff; border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.14); z-index:9999; overflow:hidden; max-height:380px; overflow-y:auto; }',
       '#proc-content .proc-session-dropdown.hidden { display:none; }',
       '#proc-content .proc-session-menu-empty { padding:18px 20px; text-align:center; color:#000; font-size:.78rem; font-weight:600; }',
       '#proc-content .proc-session-menu-item { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid #f2f2f2; gap:8px; }',
@@ -802,6 +802,14 @@
     if (menu.classList.contains('hidden')) {
       procRenderSessionMenu();
       menu.classList.remove('hidden');
+      /* Position dropdown relative to the trigger button using fixed coords */
+      var btn = e && e.currentTarget ? e.currentTarget : (e && e.target ? e.target : null);
+      if (btn) {
+        var rect = btn.getBoundingClientRect();
+        menu.style.top   = (rect.bottom + 6) + 'px';
+        menu.style.right = (window.innerWidth - rect.right) + 'px';
+        menu.style.left  = 'auto';
+      }
     } else {
       menu.classList.add('hidden');
     }

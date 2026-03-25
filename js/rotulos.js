@@ -18,17 +18,35 @@ var RT_CSS = `
 #rt-sum-section { margin-bottom: 28px; }
 #rt-sum-wrap { border: 1px solid #e6e6e6; border-radius: 14px; overflow: hidden; overflow-x: auto; }
 #rt-sum-table { width: 100%; border-collapse: collapse; font-size: .82rem; white-space: nowrap; color: #000; font-weight: 600; }
-#rt-sum-table thead th { background: #f5f5f5; padding: 5px 14px; text-align: center; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #e6e6e6; border-right: 1px solid #e6e6e6; color: #000; }
+#rt-sum-table thead th { background: #f5f5f5; padding: 5px 10px; text-align: center; font-size: .65rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #e6e6e6; border-right: 1px solid #e6e6e6; color: #000; }
 #rt-sum-table thead th:first-child { text-align: left; }
 #rt-sum-table thead th:last-child { border-right: none; }
-#rt-sum-table tbody td { padding: 4px 14px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; text-align: center; color: #000; font-weight: 600; }
+#rt-sum-table tbody td { padding: 3px 10px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; text-align: center; color: #000; font-weight: 600; font-size: .78rem; }
 #rt-sum-table tbody td:first-child { text-align: left; }
 #rt-sum-table tbody td:last-child { border-right: none; }
 #rt-sum-table tbody tr:last-child td { border-bottom: none; }
-#rt-sum-table tbody tr:hover td { background: #fafafa; }
-#rt-sum-table tfoot td { padding: 5px 14px; background: #f5f5f5; font-weight: 800; border-top: 2px solid #e6e6e6; border-right: 1px solid #e6e6e6; text-align: center; color: #000; }
+#rt-sum-table tbody tr:nth-child(even) td { background: #f7f7f7; }
+#rt-sum-table tbody tr:nth-child(odd) td { background: #ffffff; }
+#rt-sum-table tbody tr:hover td { background: #efefef !important; }
+/* FNC column = medium grey, PXO column = light grey */
+#rt-sum-table thead th.rt-col-fnc { background: #c8c8c8; }
+#rt-sum-table thead th.rt-col-pxo { background: #e0e0e0; }
+#rt-sum-table tbody td.rt-col-fnc { background: #d4d4d4 !important; }
+#rt-sum-table tbody td.rt-col-pxo { background: #ebebeb !important; }
+#rt-sum-table tfoot td.rt-col-fnc { background: #c0c0c0 !important; }
+#rt-sum-table tfoot td.rt-col-pxo { background: #d8d8d8 !important; }
+#rt-sum-table tfoot td { padding: 4px 10px; background: #f5f5f5; font-weight: 800; border-top: 2px solid #e6e6e6; border-right: 1px solid #e6e6e6; text-align: center; color: #000; font-size: .78rem; }
 #rt-sum-table tfoot td:first-child { text-align: left; }
 #rt-sum-table tfoot td:last-child { border-right: none; }
+/* Pending totals panel */
+#rt-sum-pending { display: flex; flex-direction: column; gap: 8px; min-width: 140px; flex-shrink: 0; }
+.rt-pend-card { border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 3px; }
+.rt-pend-card.fnc { background: #d4d4d4; border: 1px solid #bbb; }
+.rt-pend-card.pxo { background: #ebebeb; border: 1px solid #d0d0d0; }
+.rt-pend-lbl { font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #555; }
+.rt-pend-val { font-size: 1.5rem; font-weight: 900; color: #000; line-height: 1; }
+.rt-pend-sub { font-size: .66rem; font-weight: 700; color: #666; }
+#rt-sum-inner { display: flex; gap: 14px; align-items: flex-start; }
 .rt-num { font-weight: 800; color: #000; }
 #rt-tabs { display: flex; border-bottom: 1px solid #e6e6e6; margin-bottom: 24px; }
 .rt-tab-btn { padding: 10px 22px; font-size: .82rem; font-weight: 700; text-transform: lowercase; border: none; background: transparent; color: #000; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: border-color .15s; font-family: inherit; }
@@ -191,16 +209,30 @@ var RT_HTML = `
   </div>
   <div id="rt-sum-section">
     <div class="rt-slabel">resumo do ano</div>
-    <div id="rt-sum-wrap">
-      <table id="rt-sum-table">
-        <thead><tr>
-          <th style="text-align:left">data</th>
-          <th>funchal</th><th>porto santo</th>
-          <th>m.f</th><th>m.a</th><th>m.m</th><th>sh</th><th>mx</th>
-        </tr></thead>
-        <tbody id="rt-sum-body"><tr><td colspan="8" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr></tbody>
-        <tfoot id="rt-sum-foot"></tfoot>
-      </table>
+    <div id="rt-sum-inner">
+      <div id="rt-sum-wrap" style="flex:1;min-width:0">
+        <table id="rt-sum-table">
+          <thead><tr>
+            <th style="text-align:left">data</th>
+            <th class="rt-col-fnc">fnc</th><th class="rt-col-pxo">pxo</th>
+            <th>m.f</th><th>m.a</th><th>m.m</th><th>sh</th><th>mx</th>
+          </tr></thead>
+          <tbody id="rt-sum-body"><tr><td colspan="8" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr></tbody>
+          <tfoot id="rt-sum-foot"></tfoot>
+        </table>
+      </div>
+      <div id="rt-sum-pending">
+        <div class="rt-pend-card fnc">
+          <div class="rt-pend-lbl">fnc — por entregar</div>
+          <div class="rt-pend-val" id="rt-pend-fnc-val">0</div>
+          <div class="rt-pend-sub">caixas pendentes</div>
+        </div>
+        <div class="rt-pend-card pxo">
+          <div class="rt-pend-lbl">pxo — por entregar</div>
+          <div class="rt-pend-val" id="rt-pend-pxo-val">0</div>
+          <div class="rt-pend-sub">caixas pendentes</div>
+        </div>
+      </div>
     </div>
   </div>
   <div id="rt-tabs">
@@ -696,6 +728,22 @@ function rtBindLogic() {
     var thead=document.querySelector('#rt-sum-table thead tr');
     while(thead.cells.length>8) thead.deleteCell(-1);
     extras.forEach(function(s){ var th=document.createElement('th'); th.textContent=s.abr.toLowerCase(); thead.appendChild(th); });
+
+    /* Pending counts (not delivered) */
+    var pendF=0, pendP=0;
+    D.shipments.forEach(function(sh){
+      sh.boxes.forEach(function(b){
+        if(!b.delivered){
+          if(b.dest==='f') pendF++;
+          else if(b.dest==='p') pendP++;
+        }
+      });
+    });
+    var pFel=document.getElementById('rt-pend-fnc-val');
+    var pPel=document.getElementById('rt-pend-pxo-val');
+    if(pFel) pFel.textContent=pendF;
+    if(pPel) pPel.textContent=pendP;
+
     if(!D.shipments.length){
       body.innerHTML='<tr><td colspan="'+(8+extras.length)+'" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr>';
       foot.innerHTML=''; return;
@@ -707,10 +755,10 @@ function rtBindLogic() {
       tot.f+=fc; tot.p+=ps;
       var cols=stores.map(function(s){ var c=sh.boxes.filter(function(b){ return b.storeId===s.id; }).length; tot[s.id]+=c; return c?'<td class="rt-num">'+c+'</td>':'<td>—</td>'; }).join('');
       var pastMark = sh.historical ? ' <span style="font-size:.64rem;color:#e65100;font-weight:bold">hist</span>' : '';
-      return '<tr><td>'+sh.date+pastMark+'</td><td class="rt-num">'+(fc||'—')+'</td><td class="rt-num">'+(ps||'—')+'</td>'+cols+'</tr>';
+      return '<tr><td>'+sh.date+pastMark+'</td><td class="rt-num rt-col-fnc">'+(fc||'—')+'</td><td class="rt-num rt-col-pxo">'+(ps||'—')+'</td>'+cols+'</tr>';
     }).join('');
     var tc=stores.map(function(s){ var t=tot[s.id]||0; return t?'<td class="rt-num">'+t+'</td>':'<td>—</td>'; }).join('');
-    foot.innerHTML='<tr><td style="font-weight:bold">total</td><td class="rt-num">'+tot.f+'</td><td class="rt-num">'+tot.p+'</td>'+tc+'</tr>';
+    foot.innerHTML='<tr><td style="font-weight:bold">total</td><td class="rt-num rt-col-fnc">'+tot.f+'</td><td class="rt-num rt-col-pxo">'+tot.p+'</td>'+tc+'</tr>';
   }
 
   /* ══════════════════════════════════════════════════════

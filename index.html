@@ -828,47 +828,49 @@ td, th { border-radius:10px; margin:2px; }
   box-sizing: border-box;
 }
 
-/* —— TABLET/MOBILE: module-open must lock back to fixed so the
-   back bar stays visible. Mirrors how agenda/rótulos overlays work. —— */
+/* —— TABLET/MOBILE: keep back bar always visible when a module is open.
+   Strategy: admin-app becomes a tall scrollable column (height:auto, overflow-y:auto)
+   and adm-module-bar is sticky at top:0 inside it. This preserves the existing
+   tam-loaded / s-loaded body-scroll pattern without breaking it. —— */
 @media (max-width: 1024px) {
   #admin-app.module-open {
     position: fixed !important;
     top: 0 !important; left: 0 !important;
     width: 100% !important;
     height: 100vh !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  /* Cancel the body-scroll patterns (tam-loaded, s-loaded) on tablet —
-     scroll must happen inside the tab-panel, not on admin-app */
-  #admin-app.module-open.tam-loaded,
-  #admin-app.module-open.s-loaded {
-    overflow: hidden !important;
-    height: 100vh !important;
-  }
-  #admin-app.module-open #adm-module-bar {
-    flex-shrink: 0;
-    position: relative !important;
-    top: auto !important;
-    z-index: 101;
-    background: #fff;
-  }
-  /* All tab panels scroll internally on tablet */
-  #admin-app.module-open .tab-panel.active {
-    flex: 1 !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
-    min-height: 0 !important;
-    padding: 20px 16px 32px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding-top: 0 !important;
   }
-  /* TAM and Salarios: when data loaded, still scroll inside panel */
+  /* tam-loaded and s-loaded: keep admin-app scrollable, just ensure height stays full */
+  #admin-app.module-open.tam-loaded,
+  #admin-app.module-open.s-loaded {
+    overflow-y: auto !important;
+    height: 100vh !important;
+  }
+  /* Back bar sticks to top of the scrolling admin-app */
+  #admin-app.module-open #adm-module-bar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 101;
+    background: #fff;
+    flex-shrink: 0;
+  }
+  /* Tab panels flow naturally — admin-app does the scrolling */
+  #admin-app.module-open .tab-panel.active {
+    flex: none !important;
+    overflow: visible !important;
+    min-height: 0;
+    padding: 20px 16px 60px !important;
+  }
+  /* TAM and Salarios loaded state: flow naturally */
   #admin-app.module-open #tab-tam.active.tam-loaded,
   #admin-app.module-open #tab-salarios.active.s-loaded {
-    flex: 1 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
+    flex: none !important;
+    overflow: visible !important;
   }
 }
 

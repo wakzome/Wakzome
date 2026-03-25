@@ -1096,60 +1096,10 @@ body::before {
 * { cursor: crosshair !important; }
 input, textarea { cursor: text !important; }
 
-/* ══ CROSS-BROWSER TEXT COLOR FIX (Firefox, Safari) ══
-   Prevents browser-default grey on inputs, selects, placeholders and th text */
-input, select, textarea {
-  color: #000 !important;
-  -webkit-text-fill-color: #000 !important;
-  background-color: #fff;
-  -webkit-appearance: none;
-  appearance: none;
-}
-button {
-  color: inherit;
-  -webkit-appearance: none;
-  appearance: none;
-}
-select {
-  background-image: none;
-}
-input::placeholder,
-textarea::placeholder {
-  color: #000 !important;
-  -webkit-text-fill-color: #000 !important;
-  opacity: 1 !important;
-}
-input::-webkit-input-placeholder,
-textarea::-webkit-input-placeholder {
-  color: #000 !important;
-  -webkit-text-fill-color: #000 !important;
-  opacity: 1 !important;
-}
-input::-moz-placeholder,
-textarea::-moz-placeholder {
-  color: #000 !important;
-  opacity: 1 !important;
-}
-input:-ms-input-placeholder,
-textarea:-ms-input-placeholder {
-  color: #000 !important;
-}
-th {
-  color: #000 !important;
-}
-/* Black/dark-background buttons: force white text in all browsers */
-#key-submit:hover,
-#recibos-overlay-back,
-#agenda-overlay-back,
-#rotulos-overlay-back,
-#processamento-overlay-back,
-#adm-back-btn,
-#adm-back-btn:hover,
-.ed-del-btn,
-#ed-edit-native-btn.active {
-  color: #fff !important;
-  -webkit-text-fill-color: #fff !important;
-}
+/* ══ PLACEHOLDER COLOR FIX (Firefox, Safari) ══ */
+::placeholder { color: #000 !important; opacity: 1 !important; }
+::-moz-placeholder { color: #000 !important; opacity: 1 !important; }
+th { color: #000; }
 
 /* ══ COLON BLINK en el reloj ══ */
 @keyframes colonBlink {

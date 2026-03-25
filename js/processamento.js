@@ -46,8 +46,8 @@
       '#proc-content .proc-fatura-instance { margin-bottom:28px; }',
       '#proc-content .proc-fatura-banner { background:linear-gradient(90deg,#1a237e 0%,#1976d2 100%); border-radius:12px 12px 0 0; padding:11px 18px; display:flex; align-items:center; justify-content:space-between; }',
       '#proc-content .proc-fatura-banner-left { display:flex; align-items:center; gap:10px; }',
-      '#proc-content .proc-fatura-banner-num { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#ffffff; text-shadow:0 1px 3px rgba(0,0,0,.4); }',
-      '#proc-content .proc-fatura-banner-provider { font-size:.88rem; font-weight:700; color:#ffffff; text-shadow:0 1px 3px rgba(0,0,0,.4); }',
+      '#proc-content .proc-fatura-banner-num { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#ffffff !important; text-shadow:0 1px 4px rgba(0,0,0,.5); }',
+      '#proc-content .proc-fatura-banner-provider { font-size:.88rem; font-weight:700; color:#ffffff !important; text-shadow:0 1px 4px rgba(0,0,0,.5); }',
       '#proc-content .proc-remove-fatura-btn { padding:3px 11px; border:1px solid rgba(255,255,255,.35); border-radius:6px; background:transparent; color:rgba(255,255,255,.7); font-size:.68rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
       '#proc-content .proc-remove-fatura-btn:hover { border-color:#ff6b6b; color:#ff6b6b; background:rgba(255,0,0,.12); }',
 
@@ -274,7 +274,7 @@
       '.proc-or-panel-footer { padding:10px 20px; border-top:1px solid #e8e8e8; background:#fafafa; font-size:.72rem; font-weight:700; color:#000; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
 
       /* Mobile: horizontal scroll + sticky ref column */
-      '@media (max-width:768px) {',
+      '@media (max-width:1024px) {',
       '  #proc-content .proc-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
       '  #proc-content .proc-table-wrap table { min-width:700px; }',
       '  #proc-content .proc-table-wrap td.td-ref,',
@@ -910,7 +910,7 @@
         if (nums[1]) nums[1].value   = row.a4      != null ? row.a4      : '';
         if (nums[2]) nums[2].value   = row.a5      != null ? row.a5      : '';
         if (nums[3]) nums[3].value   = row.preco   != null ? row.preco   : '';
-        if (nums[4]) nums[4].value   = row.descPct != null ? row.descPct : '';
+        if (nums[4]) nums[4].value   = (row.descPct != null && row.descPct !== 0) ? row.descPct : '';
         if (dCb)     dCb.checked     = !!row.hasD;
         if (pCb)     pCb.checked     = !!row.plus1;
         if (oIn)     oIn.value       = row.obs || '';
@@ -1939,18 +1939,30 @@
 
     function buildTableRows(rowList) {
       if (!rowList.length) return '<tr><td colspan="5" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
-      return rowList.map(function(row, i) {
-        var cls  = row.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
-        var fQty = row.done ? row.totalF : row.pendF;
-        var pQty = row.done ? row.totalP : row.pendP;
-        return '<tr class="proc-guia-tr' + cls + '">'
-          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + (fQty>0 ? row.ref : '') + '</td>'
-          + '<td class="proc-guia-td proc-guia-qty-f" data-gcol="1">' + (fQty>0 ? fQty  : '') + '</td>'
+
+      /* Separate into FNC-only list and PXO-only list, then pair them row by row */
+      var fRows = rowList.filter(function(r){ return (r.done ? r.totalF : r.pendF) > 0; });
+      var pRows = rowList.filter(function(r){ return (r.done ? r.totalP : r.pendP) > 0; });
+      var maxLen = Math.max(fRows.length, pRows.length);
+      var html = '';
+      for (var i = 0; i < maxLen; i++) {
+        var fRow = fRows[i] || null;
+        var pRow = pRows[i] || null;
+        var refRow = fRow || pRow;
+        var cls = refRow.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
+        var fRef = fRow ? fRow.ref : '';
+        var fQty = fRow ? (fRow.done ? fRow.totalF : fRow.pendF) : '';
+        var pRef = pRow ? pRow.ref : '';
+        var pQty = pRow ? (pRow.done ? pRow.totalP : pRow.pendP) : '';
+        html += '<tr class="proc-guia-tr' + cls + '">'
+          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + fRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-qty-f" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
           + '<td class="proc-guia-td proc-guia-sep-td"></td>'
-          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + (pQty>0 ? row.ref : '') + '</td>'
-          + '<td class="proc-guia-td proc-guia-qty-p" data-gcol="3">' + (pQty>0 ? pQty  : '') + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + pRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-qty-p" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
           + '</tr>';
-      }).join('');
+      }
+      return html;
     }
 
     var copyBar = '<div class="proc-guia-copy-bar">'

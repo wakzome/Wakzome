@@ -186,8 +186,19 @@ input,textarea{cursor:text!important}
 #ag-btn-confirm-once.show{display:inline-block}
 .ag-edit-once-msg{font-size:.78rem;font-weight:bold;color:#000;display:none}
 .ag-edit-once-msg.show{display:block}
-@media(max-width:768px){#ag-summary{grid-template-columns:repeat(2,1fr)}#ag-by-forn{grid-template-columns:repeat(2,1fr)}#ag-filter-wrap{margin-left:0}#ag-chart-wrap{flex-direction:column}.ag-fg2{grid-template-columns:1fr}#ag-hero-value{font-size:2.2rem}}
-@media(max-width:480px){#ag-summary{grid-template-columns:1fr 1fr}#ag-by-forn{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){#ag-summary{grid-template-columns:repeat(2,1fr)}#ag-by-forn{grid-template-columns:repeat(2,1fr)}#ag-filter-wrap{margin-left:0}#ag-chart-wrap{flex-direction:column}.ag-fg2{grid-template-columns:1fr}#ag-hero-value{font-size:2.2rem}
+  /* Scroll horizontal na tabela — só mobile */
+  #ag-table-outer{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
+  #ag-table-wrap{display:block;width:max-content;min-width:100%}
+  /* Cards por fornecedor — layout limpo em mobile */
+  #ag-by-forn{grid-template-columns:1fr!important;gap:10px}
+  .ag-fb-block{width:100%}
+  .ag-fb-hdr{font-size:.82rem;padding:10px 14px}
+  .ag-fb-row{padding:8px 14px}
+  .ag-fb-rl{font-size:.75rem}
+  .ag-fb-rv{font-size:.92rem}
+}
+@media(max-width:480px){#ag-summary{grid-template-columns:1fr 1fr}#ag-by-forn{grid-template-columns:1fr!important}}
 @media(max-width:600px){#ag-year-nav{top:auto;bottom:80px;right:14px}}
 
 `;

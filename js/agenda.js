@@ -202,30 +202,18 @@ input,textarea{cursor:text!important}
   .ag-fb-GIT .ag-fb-hdr{border-left:4px solid #6a1b9a;padding-left:12px}
   .ag-fb-BESTSELLER .ag-fb-hdr{border-left:4px solid #880e4f;padding-left:12px}
   .ag-fb-CHLAMYS .ag-fb-hdr{border-left:4px solid #2e7d32;padding-left:12px}
-  /* Toolbar sticky en mobile — queda fija arriba sin invadir el contenido */
-  #ag-toolbar{position:sticky;top:0;z-index:100;background:#fff;padding:10px 0 8px;margin-bottom:10px;border-bottom:1px solid #e6e6e6;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 }
 @media(max-width:480px){#ag-summary{grid-template-columns:1fr 1fr}#ag-by-forn{grid-template-columns:1fr!important}}
 @media(max-width:600px){
-  /* Botones de año: dejan de flotar y se convierten en barra sticky horizontal arriba */
   #ag-year-nav{
-    position:sticky!important;
-    top:0!important;
+    position:relative!important;
+    top:auto!important;
     right:auto!important;
-    bottom:auto!important;
-    z-index:200;
     flex-direction:row!important;
     flex-wrap:wrap;
     justify-content:flex-end;
-    align-items:center;
     gap:6px;
-    padding:8px 12px;
-    background:#fff;
-    border-bottom:1px solid #e6e6e6;
-    box-shadow:0 2px 6px rgba(0,0,0,.07);
-    width:100%;
-    box-sizing:border-box;
-    margin-bottom:4px;
+    margin-bottom:8px;
   }
   .ag-year-btn{font-size:.75rem;padding:5px 12px}
 }
@@ -793,7 +781,7 @@ function agBindLogic() {
     container.innerHTML=keys.map(function(k){
       var d=m[k]||{p:0,e:0,t:0,n:0};
       var col=fornColor(k);
-      var hdrStyle=FC_BASE[k]?'':'style="color:'+col+';background:'+col+'18"';
+      var hdrStyle='style="color:'+col+';background:'+col+'18;border-left:4px solid '+col+'"';
       return'<div class="ag-fb-block" style="--forn-col:'+col+'"><div class="ag-fb-hdr" '+hdrStyle+'><span>'+k+'</span><span style="font-weight:bold">'+d.n+' fat.</span></div><div class="ag-fb-row"><span class="ag-fb-rl">pago</span><span class="ag-fb-rv g">'+fmt(d.p)+'</span></div><div class="ag-fb-row"><span class="ag-fb-rl">pendente</span><span class="ag-fb-rv'+(d.e>0?' r':'')+'">'+fmt(d.e)+'</span></div><div class="ag-fb-row" style="border-top:1px solid #e6e6e6"><span class="ag-fb-rl">total</span><span class="ag-fb-rv">'+fmt(d.t)+'</span></div></div>';
     }).join('');
   }

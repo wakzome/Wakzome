@@ -281,6 +281,7 @@
   var activeFaturas = [];
   var rowCounts     = {};
   var _procInited   = false;
+  var _isSynced     = false;   /* true only after remote fetch completes on init */
 
   /* ── 2a. SUPABASE CONFIG ── */
   var PROC_SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
@@ -304,6 +305,17 @@
     clearTimeout(el._t);
     if (state === 'ok') {
       el._t = setTimeout(function() { el.style.opacity = '0'; }, 3000);
+    }
+  }
+
+  function procMarkSynced() {
+    _isSynced = true;
+    var btn = document.getElementById('proc-saveBtn');
+    if (btn) {
+      btn.disabled = false;
+      btn.title    = '';
+      btn.style.opacity = '';
+      btn.style.cursor  = '';
     }
   }
 
@@ -511,6 +523,10 @@
   var _procSaveDebounce = null;
 
   function procSaveSession(manual) {
+    if (!_isSynced) {
+      if (manual) procSetSyncStatus('syncing', 'a sincronizar…');
+      return;
+    }
     var key = _activeSessionKey || getSessionKey();
     _activeSessionKey = key;
     var payload = {
@@ -576,12 +592,12 @@
         if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
         /* Update local cache */
         try { localStorage.setItem(key, raw); } catch(e) {}
-        procApplySessionData(key, raw, function() { procSetSyncStatus('ok', 'sess\u00e3o carregada'); });
+        procApplySessionData(key, raw, function() { procMarkSynced(); procSetSyncStatus('ok', 'sess\u00e3o carregada'); });
       })
       .catch(function() {
         var raw = localStorage.getItem(key);
         if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
-        procApplySessionData(key, raw, function() { procSetSyncStatus('offline', 'carregado localmente'); });
+        procApplySessionData(key, raw, function() { procMarkSynced(); procSetSyncStatus('offline', 'carregado localmente'); });
       });
   }
 
@@ -622,35 +638,152 @@
       .catch(function() { if (callback) callback(); });
   }
 
-  /* ── 4c. SESSION CONFLICT DETECTION ── */
-  function procCheckWeekConflict(onClear) {
-    /* Sync remote keys first, then check for existing session this week */
-    procLoadRemoteKeys(function() {
-      var weekKeys = getWeekKeys();
+  /* ── 4c. SESSION PICKER MODAL ── */
+  function procShowSessionPicker() {
+    var overlay = document.createElement('div');
+    overlay.id = 'proc-session-picker';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);';
 
-      /* No session this week → start clean */
-      if (!weekKeys.length) { _activeSessionKey = getSessionKey(); onClear(); return; }
+    var panel = document.createElement('div');
+    panel.style.cssText = 'background:#fff;border-radius:18px;width:min(460px,94vw);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 72px rgba(0,0,0,.22);font-family:\'MontserratLight\',sans-serif;overflow:hidden;';
 
-      /* Session exists this week → load it silently, no questions asked */
-      var existing = weekKeys[0];
-      procSetSyncStatus('syncing', 'a carregar sess\u00e3o\u2026');
-      procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(existing) + '&select=dados', { method: 'GET' })
+    panel.innerHTML =
+      '<div style="padding:22px 24px 16px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">'
+      + '<div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:6px;">PROCESSAMENTO DE FATURAS</div>'
+      + '<div style="font-size:1.05rem;font-weight:700;color:#000;line-height:1.3;">Escolhe uma sess\u00e3o para continuar</div>'
+      + '</div>'
+      + '<div id="proc-picker-body" style="padding:16px 24px 22px;overflow-y:auto;flex:1;">'
+      + '<div style="text-align:center;padding:28px 0;color:#000;font-size:.85rem;font-weight:700;opacity:.45;">\u21bb a carregar sess\u00f5es\u2026</div>'
+      + '</div>';
+
+    overlay.appendChild(panel);
+    /* Not dismissable — user must make a choice */
+    document.body.appendChild(overlay);
+
+    function close() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+
+    var BTN_BASE = 'display:block;width:100%;padding:13px 16px;margin-bottom:8px;text-align:left;'
+      + 'font-size:.88rem;font-weight:700;font-family:\'MontserratLight\',sans-serif;'
+      + 'border-radius:10px;cursor:pointer;transition:background .12s,border-color .12s,filter .12s;'
+      + 'border:1px solid #e0e0e0;background:#fff;color:#000;line-height:1.5;';
+
+    function hoverOn(b)  { b.style.filter = 'brightness(0.95)'; }
+    function hoverOff(b) { b.style.filter = ''; }
+
+    function sessionMeta(key) {
+      var label = labelFromKey(key);
+      var dateStr = '';
+      var nFat = '';
+      try {
+        var d = JSON.parse(localStorage.getItem(key));
+        if (d && d.savedAt) {
+          var dt = new Date(d.savedAt);
+          dateStr = dt.toLocaleDateString('pt-PT') + ' \u00b7 ' + dt.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+        }
+        if (d && d.faturas) nFat = d.faturas.length + ' fat.';
+      } catch(e) {}
+      return { label: label, dateStr: dateStr, nFat: nFat };
+    }
+
+    function makeBtn(style, html) {
+      var btn = document.createElement('button');
+      btn.style.cssText = BTN_BASE + (style || '');
+      btn.innerHTML = html;
+      btn.addEventListener('mouseenter', function(){ hoverOn(btn); });
+      btn.addEventListener('mouseleave', function(){ hoverOff(btn); });
+      return btn;
+    }
+
+    function metaLine(m) {
+      if (!m.dateStr && !m.nFat) return '';
+      return '<br><span style="font-size:.68rem;font-weight:600;opacity:.6;">' + [m.dateStr, m.nFat].filter(Boolean).join(' \u00b7 ') + '</span>';
+    }
+
+    function loadKeyRemote(key, onDone) {
+      procSetSyncStatus('syncing', 'a carregar\u2026');
+      procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key) + '&select=dados', { method: 'GET' })
         .then(function(r) { return r.json(); })
         .then(function(rows) {
-          var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(existing);
-          if (!raw) { _activeSessionKey = getSessionKey(); onClear(); return; }
-          try { localStorage.setItem(existing, raw); } catch(e) {}
-          procApplySessionData(existing, raw, function() {
-            procSetSyncStatus('ok', 'sess\u00e3o carregada');
-          });
+          var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(key);
+          if (!raw) { onDone(null); return; }
+          try { localStorage.setItem(key, raw); } catch(e) {}
+          onDone(raw);
         })
-        .catch(function() {
-          var raw = localStorage.getItem(existing);
-          if (!raw) { _activeSessionKey = getSessionKey(); onClear(); return; }
-          procApplySessionData(existing, raw, function() {
-            procSetSyncStatus('offline', 'sess\u00e3o carregada localmente');
+        .catch(function() { onDone(localStorage.getItem(key)); });
+    }
+
+    function renderPicker(allKeys) {
+      var bodyEl = document.getElementById('proc-picker-body');
+      if (!bodyEl) return;
+      bodyEl.innerHTML = '';
+
+      /* ── Latest session ── */
+      if (allKeys.length > 0) {
+        var latestKey = allKeys[0];
+        var lm = sessionMeta(latestKey);
+
+        var section1 = document.createElement('div');
+        section1.style.cssText = 'margin-bottom:18px;';
+        section1.innerHTML = '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:8px;">\u00daltima sess\u00e3o</div>';
+
+        var lastBtn = makeBtn(
+          'border-color:#1565c0;background:#e3f2fd;color:#1565c0;',
+          '\u21a9 Continuar \u2014 ' + lm.label + metaLine(lm)
+        );
+        lastBtn.addEventListener('click', function() {
+          close();
+          loadKeyRemote(latestKey, function(raw) {
+            if (!raw) { procMarkSynced(); procAddFatura(null); procSetSyncStatus('ok', 'nova sess\u00e3o'); return; }
+            procApplySessionData(latestKey, raw, function() {
+              procMarkSynced();
+              procSetSyncStatus('ok', 'sess\u00e3o carregada');
+            });
           });
         });
+        section1.appendChild(lastBtn);
+        bodyEl.appendChild(section1);
+
+        /* ── Older sessions ── */
+        var olderKeys = allKeys.slice(1);
+        if (olderKeys.length) {
+          var section2 = document.createElement('div');
+          section2.style.cssText = 'margin-bottom:18px;';
+          section2.innerHTML = '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:8px;">Sess\u00f5es anteriores</div>';
+          olderKeys.forEach(function(key) {
+            var om = sessionMeta(key);
+            var oldBtn = makeBtn('', om.label + metaLine(om));
+            oldBtn.addEventListener('click', function() {
+              close();
+              procLoadSession(key);
+            });
+            section2.appendChild(oldBtn);
+          });
+          bodyEl.appendChild(section2);
+        }
+      }
+
+      /* ── New session ── */
+      var section3 = document.createElement('div');
+      section3.style.cssText = allKeys.length ? 'border-top:1px solid #f0f0f0;padding-top:18px;' : '';
+      section3.innerHTML = '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:8px;">Come\u00e7ar do zero</div>';
+
+      var newBtn = makeBtn('', '\u2605 Iniciar nova sess\u00e3o');
+      newBtn.addEventListener('click', function() {
+        close();
+        _activeSessionKey = getNextWeekKey();
+        procMarkSynced();
+        procAddFatura(null);
+        procSetSyncStatus('ok', 'nova sess\u00e3o');
+      });
+      section3.appendChild(newBtn);
+      bodyEl.appendChild(section3);
+    }
+
+    /* Fetch remote keys, then render */
+    procLoadRemoteKeys(function() {
+      renderPicker(getAllSessionKeys());
     });
   }
 
@@ -1436,7 +1569,7 @@
       +         '<button class="proc-btn" id="proc-sessionMenuBtn">&#128194; sess&#245;es &#x25be;</button>'
       +         '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
       +       '</div>'
-      +       '<button class="proc-btn primary" id="proc-saveBtn">&#128190; guardar</button>'
+      +       '<button class="proc-btn primary" id="proc-saveBtn" disabled title="A aguardar sincronização…" style="opacity:.45;cursor:not-allowed;">&#128190; guardar</button>'
       +       '<button class="proc-btn" id="proc-guiaBtn" style="border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
       +     '</div>'
       +   '</div>'
@@ -1479,10 +1612,8 @@
 
     buildOverlayContent(container);
 
-    /* Check for existing session this week before starting fresh */
-    procCheckWeekConflict(function() {
-      procAddFatura(null);
-    });
+    /* Show session picker — user must choose before anything is saved */
+    procShowSessionPicker();
 
     /* auto-save every 10 s */
     setInterval(function() { procSaveSession(false); }, 10000);

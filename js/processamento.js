@@ -46,8 +46,8 @@
       '#proc-content .proc-fatura-instance { margin-bottom:28px; }',
       '#proc-content .proc-fatura-banner { background:linear-gradient(90deg,#1a237e 0%,#1976d2 100%); border-radius:12px 12px 0 0; padding:11px 18px; display:flex; align-items:center; justify-content:space-between; }',
       '#proc-content .proc-fatura-banner-left { display:flex; align-items:center; gap:10px; }',
-      '#proc-content .proc-fatura-banner-num { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:rgba(255,255,255,.9); }',
-      '#proc-content .proc-fatura-banner-provider { font-size:.88rem; font-weight:700; color:#fff; }',
+      '#proc-content .proc-fatura-banner-num { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#ffffff; text-shadow:0 1px 3px rgba(0,0,0,.4); }',
+      '#proc-content .proc-fatura-banner-provider { font-size:.88rem; font-weight:700; color:#ffffff; text-shadow:0 1px 3px rgba(0,0,0,.4); }',
       '#proc-content .proc-remove-fatura-btn { padding:3px 11px; border:1px solid rgba(255,255,255,.35); border-radius:6px; background:transparent; color:rgba(255,255,255,.7); font-size:.68rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
       '#proc-content .proc-remove-fatura-btn:hover { border-color:#ff6b6b; color:#ff6b6b; background:rgba(255,0,0,.12); }',
 
@@ -272,6 +272,16 @@
       '.proc-or-table tr:hover td { background:#f5f5f5 !important; }',
       '.proc-or-table .empty-row td { text-align:center; color:#000; padding:24px; font-style:italic; font-weight:400; }',
       '.proc-or-panel-footer { padding:10px 20px; border-top:1px solid #e8e8e8; background:#fafafa; font-size:.72rem; font-weight:700; color:#000; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
+
+      /* Mobile: horizontal scroll + sticky ref column */
+      '@media (max-width:768px) {',
+      '  #proc-content .proc-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
+      '  #proc-content .proc-table-wrap table { min-width:700px; }',
+      '  #proc-content .proc-table-wrap td.td-ref,',
+      '  #proc-content .proc-table-wrap th.left:first-of-type { position:sticky; left:0; background:#fff; z-index:2; box-shadow:2px 0 4px rgba(0,0,0,.07); }',
+      '  #proc-content .proc-table-wrap thead th.left:first-of-type { background:#f2f2f2; z-index:3; }',
+      '  #proc-content .proc-table-wrap tbody tr:hover td.td-ref { background:#fafafa !important; }',
+      '}',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -949,9 +959,9 @@
       +   '<th>N</th>'
       +   '<th class="left">Refer\u00eancia</th>'
       +   '<th class="left">Descri\u00e7\u00e3o</th>'
-      +   '<th>Qtd. FT</th>'
-      +   '<th class="th-a4">Funchal</th>'
-      +   '<th class="th-a5">Porto Santo</th>'
+      +   '<th>QTD.</th>'
+      +   '<th class="th-a4">FNC</th>'
+      +   '<th class="th-a5">PXO</th>'
       +   '<th title="Dividir Qtd. FT igualmente">\u00f7</th>'
       +   '<th>Pre\u00e7o \u20ac</th>'
       +   '<th>%Desc.</th>'
@@ -1726,7 +1736,11 @@
     var addBtn = document.getElementById('proc-addFaturaBtn');
     if (start) start.style.display = 'none';
     if (main)  main.style.display  = '';
-    if (addBtn) addBtn.addEventListener('click', function() { procAddFatura(null); });
+    if (addBtn) {
+      var newAddBtn = addBtn.cloneNode(true);
+      addBtn.parentNode.replaceChild(newAddBtn, addBtn);
+      newAddBtn.addEventListener('click', function() { procAddFatura(null); });
+    }
     /* Show save and guia buttons, switch bar alignment */
     var saveBtn = document.getElementById('proc-saveBtn');
     var guiaBtn = document.getElementById('proc-guiaBtn');

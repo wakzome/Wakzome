@@ -1779,6 +1779,13 @@ input, textarea { cursor: text !important; }
   #admin-app.module-open {
     padding-top: 0 !important;
   }
+  /* Fix: back bar must stay visible on tablet — make it sticky */
+  #admin-app.module-open #adm-module-bar {
+    position: sticky;
+    top: 0;
+    z-index: 101;
+    background: #fff;
+  }
   #admin-header { margin-bottom: 12px; }
   #admin-header .logo-text { font-size: 2rem; }
   #admin-header #admin-time { font-size: .95rem; }

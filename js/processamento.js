@@ -317,6 +317,8 @@
       btn.style.opacity = '';
       btn.style.cursor  = '';
     }
+    var closeBtn = document.getElementById('proc-closeSessionBtn');
+    if (closeBtn) closeBtn.style.display = '';
   }
 
   /* ── 2b. PROVIDER LIST ── */
@@ -650,10 +652,11 @@
     panel.innerHTML =
       '<div style="padding:22px 24px 16px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">'
       + '<div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:6px;">PROCESSAMENTO DE FATURAS</div>'
-      + '<div style="font-size:1.05rem;font-weight:700;color:#000;line-height:1.3;">Escolhe uma sess\u00e3o para continuar</div>'
+      + '<div style="font-size:1.05rem;font-weight:700;color:#000;line-height:1.3;">Continua uma sess&#227;o ou inicia uma nova</div>'
+      + '<div style="font-size:.78rem;font-weight:600;color:#555;margin-top:6px;line-height:1.5;">Para evitar sobreescrever dados existentes, escolhe sempre a sess&#227;o correcta antes de come&#231;ar.</div>'
       + '</div>'
       + '<div id="proc-picker-body" style="padding:16px 24px 22px;overflow-y:auto;flex:1;">'
-      + '<div style="text-align:center;padding:28px 0;color:#000;font-size:.85rem;font-weight:700;opacity:.45;">\u21bb a carregar sess\u00f5es\u2026</div>'
+      + '<div style="text-align:center;padding:28px 0;color:#000;font-size:.85rem;font-weight:700;opacity:.45;">&#8635; a carregar sess&#245;es&#8230;</div>'
       + '</div>';
 
     overlay.appendChild(panel);
@@ -1570,6 +1573,7 @@
       +         '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
       +       '</div>'
       +       '<button class="proc-btn primary" id="proc-saveBtn" disabled title="A aguardar sincronização…" style="opacity:.45;cursor:not-allowed;">&#128190; guardar</button>'
+      +       '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sessão activa" style="display:none;border-color:#c00;color:#c00;background:#fff0f0;">&#x23CF;&#xFE0F; fechar sess&#227;o</button>'
       +       '<button class="proc-btn" id="proc-guiaBtn" style="border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
       +     '</div>'
       +   '</div>'
@@ -1595,9 +1599,58 @@
     document.getElementById('proc-sessionMenuBtn').addEventListener('click', function(e) { procToggleSessionMenu(e); });
     document.getElementById('proc-addFaturaBtn').addEventListener('click', function() { procAddFatura(null); });
     document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
+    document.getElementById('proc-closeSessionBtn').addEventListener('click', function() { procCloseActiveSession(); });
 
     /* close session menu on outside click */
     document.addEventListener('click', function() { procCloseSessionMenu(); });
+  }
+
+  /* ── 16b. CLOSE / RESET SESSION ── */
+  function procCloseActiveSession() {
+    procFloatModal({
+      label: 'Fechar sessão',
+      title: 'Guardar e fechar a sessão activa?',
+      body: 'A sessão será guardada e o módulo voltará ao ecrã inicial de selecção de sessão. Podes retomar a qualquer momento.',
+      buttons: [
+        {
+          label: '&#x1F4BE; Guardar e fechar',
+          style: 'background:#fff0f0;border:1px solid #ffc8c8;color:#c00;font-weight:700;',
+          cb: function() {
+            /* Save first, then reset */
+            if (_isSynced) {
+              procSaveSession(true);
+            }
+            /* Reset state after a short delay so save can fire */
+            setTimeout(function() {
+              _isSynced = false;
+              _activeSessionKey = null;
+              _procInited = false;
+              faturaCount   = 0;
+              activeFaturas = [];
+              Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+              _procSentRefs = {};
+              /* Clear faturas from UI */
+              var cont = document.getElementById('proc-faturasContainer');
+              if (cont) cont.innerHTML = '';
+              /* Reset UI */
+              var closeBtn = document.getElementById('proc-closeSessionBtn');
+              if (closeBtn) closeBtn.style.display = 'none';
+              var saveBtn = document.getElementById('proc-saveBtn');
+              if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.title    = 'A aguardar sincronização…';
+                saveBtn.style.opacity = '.45';
+                saveBtn.style.cursor  = 'not-allowed';
+              }
+              procSetSyncStatus('ok', 'sessão fechada');
+              /* Re-show session picker */
+              procShowSessionPicker();
+            }, 400);
+          }
+        },
+        { label: 'Cancelar', style: 'background:#fff;border:1px solid #e0e0e0;color:#000;', cb: null }
+      ]
+    });
   }
 
   /* ── 17. INIT ── */
@@ -1631,6 +1684,10 @@
     if (!content) {
       var root = document.getElementById('proc-root');
       if (root) initProcessamento(root);
+    } else if (!_isSynced && _procInited === false) {
+      /* Re-opened after closing session — show picker again */
+      _procInited = true;
+      procShowSessionPicker();
     }
   }
 

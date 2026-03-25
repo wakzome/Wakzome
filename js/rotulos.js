@@ -215,7 +215,7 @@ var RT_HTML = `
           <thead><tr>
             <th style="text-align:left">data</th>
             <th class="rt-col-fnc">fnc</th><th class="rt-col-pxo">pxo</th>
-            <th>m.f</th><th>m.a</th><th>m.m</th><th>sh</th><th>mx</th>
+            <th>mf</th><th>ma</th><th>mm</th><th>sh</th><th>mx</th>
           </tr></thead>
           <tbody id="rt-sum-body"><tr><td colspan="8" style="text-align:center;padding:16px;font-size:.82rem">sem envios registados este ano</td></tr></tbody>
           <tfoot id="rt-sum-foot"></tfoot>

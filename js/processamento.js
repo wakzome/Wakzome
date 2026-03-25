@@ -1568,9 +1568,9 @@
       +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1"></span>'
       +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
       +     '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
-      +     '<button class="proc-btn primary" id="proc-saveBtn">&#128190; guardar</button>'
+      +     '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190; guardar</button>'
       +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#c00;color:#c00;background:#fff0f0;">&#x23CF;&#xFE0F; fechar</button>'
-      +     '<button class="proc-btn" id="proc-guiaBtn" style="border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
+      +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
       +   '</div>'
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'
@@ -1609,7 +1609,7 @@
 
     /* ── Styles for new elements ── */
     var sb = document.getElementById('proc-session-bar');
-    if (sb) sb.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 14px;border-bottom:1px solid #eee;margin-bottom:18px;position:relative;';
+    if (sb) sb.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 0 14px;border-bottom:1px solid #eee;margin-bottom:18px;position:relative;';
 
     var ss = document.getElementById('proc-session-start');
     if (ss) ss.style.cssText = 'display:flex;justify-content:center;padding:32px 0;';
@@ -1719,6 +1719,13 @@
     if (start) start.style.display = 'none';
     if (main)  main.style.display  = '';
     if (addBtn) addBtn.addEventListener('click', function() { procAddFatura(null); });
+    /* Show save and guia buttons, switch bar alignment */
+    var saveBtn = document.getElementById('proc-saveBtn');
+    var guiaBtn = document.getElementById('proc-guiaBtn');
+    if (saveBtn) saveBtn.style.display = '';
+    if (guiaBtn) guiaBtn.style.display = '';
+    var sb = document.getElementById('proc-session-bar');
+    if (sb) sb.style.justifyContent = 'space-between';
     /* Update label in session bar */
     var lbl = document.getElementById('proc-session-label');
     if (lbl && key) lbl.textContent = labelFromKey(key);
@@ -1736,6 +1743,13 @@
     if (lbl) lbl.textContent = '';
     var closeBtn = document.getElementById('proc-closeSessionBtn');
     if (closeBtn) closeBtn.style.display = 'none';
+    /* Hide save and guia, recenter bar */
+    var saveBtn = document.getElementById('proc-saveBtn');
+    var guiaBtn = document.getElementById('proc-guiaBtn');
+    if (saveBtn) saveBtn.style.display = 'none';
+    if (guiaBtn) guiaBtn.style.display = 'none';
+    var sb = document.getElementById('proc-session-bar');
+    if (sb) sb.style.justifyContent = 'center';
     /* Reload remote keys then render */
     procLoadRemoteKeys(procRenderStartPanel);
   }

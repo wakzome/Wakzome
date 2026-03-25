@@ -1564,8 +1564,8 @@
         '<div class="page-wrap">'
       /* ── Session bar — always visible, never blocking ── */
       +   '<div id="proc-session-bar">'
-      +     '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;"></span>'
-      +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1"></span>'
+      +     '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;display:none;"></span>'
+      +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1;display:none;"></span>'
       +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
       +     '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
       +     '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190; guardar</button>'
@@ -1722,13 +1722,15 @@
     /* Show save and guia buttons, switch bar alignment */
     var saveBtn = document.getElementById('proc-saveBtn');
     var guiaBtn = document.getElementById('proc-guiaBtn');
+    var saveStatus = document.getElementById('proc-saveStatus');
     if (saveBtn) saveBtn.style.display = '';
     if (guiaBtn) guiaBtn.style.display = '';
+    if (saveStatus) saveStatus.style.display = '';
     var sb = document.getElementById('proc-session-bar');
     if (sb) sb.style.justifyContent = 'space-between';
     /* Update label in session bar */
     var lbl = document.getElementById('proc-session-label');
-    if (lbl && key) lbl.textContent = labelFromKey(key);
+    if (lbl && key) { lbl.textContent = labelFromKey(key); lbl.style.display = ''; }
     /* Show close button */
     var closeBtn = document.getElementById('proc-closeSessionBtn');
     if (closeBtn) closeBtn.style.display = '';
@@ -1740,14 +1742,16 @@
     if (start) start.style.display = 'flex';
     if (main)  main.style.display  = 'none';
     var lbl = document.getElementById('proc-session-label');
-    if (lbl) lbl.textContent = '';
+    if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
     var closeBtn = document.getElementById('proc-closeSessionBtn');
     if (closeBtn) closeBtn.style.display = 'none';
     /* Hide save and guia, recenter bar */
     var saveBtn = document.getElementById('proc-saveBtn');
     var guiaBtn = document.getElementById('proc-guiaBtn');
+    var saveStatus = document.getElementById('proc-saveStatus');
     if (saveBtn) saveBtn.style.display = 'none';
     if (guiaBtn) guiaBtn.style.display = 'none';
+    if (saveStatus) saveStatus.style.display = 'none';
     var sb = document.getElementById('proc-session-bar');
     if (sb) sb.style.justifyContent = 'center';
     /* Reload remote keys then render */

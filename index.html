@@ -7,7 +7,7 @@
 @font-face {
     font-family: 'MontserratLight';
     src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
-    font-weight: 100;
+    font-weight: 300;
     font-style: normal;
     font-display: block;
 }
@@ -69,11 +69,13 @@
 
 input, button, select, textarea {
     font-family: 'MontserratLight', sans-serif !important;
-    font-weight: 600;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 select, select option {
     font-family: 'MontserratLight', sans-serif !important;
-    font-weight: 600 !important;
+    font-weight: 300 !important;
 }
 </style>
 <!-- ===== INTRO ===== -->
@@ -91,13 +93,16 @@ select, select option {
 @font-face {
   font-family: 'MontserratLight';
   src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
-  font-weight: 100; font-style: normal; font-display: block;
+  font-weight: 300; font-style: normal; font-display: block;
 }
 html, body {
   margin:0; padding:0; height:100%;
   font-family:'MontserratLight', sans-serif;
   background:#fff; color:#000; overflow:hidden;
   color-scheme: only light;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 body {
   display:flex; flex-direction:column;
@@ -2489,12 +2494,19 @@ html.wz-minimal #wz-minimal-btn::before {
 </style>
 <style>
 /* ══ TYPOGRAPHY GLOBAL UPGRADE ══
-   Tamanho base aumentado + negro profundo (#0a0a0a) para
-   máximo contraste e presença visual em todo o dashboard
+   • font-weight corregido: 300 (el peso real de Montserrat Light)
+   • Negro puro #000 en todos los fondos claros
+   • Blanco #fff preservado en fondos oscuros
+   • font-smoothing para Firefox y Safari
 ══════════════════════════════════════════════════════ */
 
 /* --- Base font-size global aumentado ---  */
 html { font-size: 16.5px; }
+
+/* ── Universal: todo texto en fondo claro = negro ── */
+*, *::before, *::after {
+  color: inherit;
+}
 
 html, body,
 #admin-app, #login-screen, #main-header,
@@ -2515,67 +2527,136 @@ input, button, select, textarea,
 #login-screen .logo-text, #login-screen #current-time,
 #login-screen #current-date,
 #recibos-overlay-title, #agenda-overlay-title,
-#rotulos-overlay-title, #processamento-overlay-title {
+#rotulos-overlay-title, #processamento-overlay-title,
+.modal-btn, .modal-title, .modal-name, .modal-counter,
+#r-modal-pwd-row label, #r-modal-box,
+#ed-export-modal-box, #ed-export-hint, #ed-export-hint span,
+#ed-folder-display, #ed-folder-pick-btn,
+.ed-modal-btn, .ed-tool-label,
+#r-conferir-btn, #r-process-btn, #r-save-config,
+#saft-btn, #saft-recibos-btn, #saft-agenda-btn,
+#saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
+#saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
+.saft-fat-item,
+#legal-notice, #page-name-popup,
+#greeting-text, #greeting-sub,
+#h-store-selector label, #h-store-select, #h-week-select,
+#h-active-badge, #h-status-msg,
+.recibos-nota, #recibos-page-title,
+#tam-status-msg, #tam-file-name,
+.tam-table, #tam-invoice-meta, #tam-invoice-meta .tam-mi em,
+#r-warnings-box .warn-title, #r-warnings-box ul li,
+#r-conferir-note,
+#adm-dash-greeting,
+.adm-mod-card,
+#admin-header, #admin-header .logo-text,
+#admin-header #admin-time, #admin-header #admin-date,
+.logo-text,
+small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
   color: #000 !important;
 }
 
-/* Back button keeps white text — override the global rule above */
+/* ── EXCEPCIONES: texto blanco sobre fondos oscuros ── */
+/* Botones de volver (fondo negro) */
 #adm-back-btn,
 #agenda-overlay-back,
 #rotulos-overlay-back,
 #processamento-overlay-back,
 #recibos-overlay-back { color: #fff !important; }
 
-/* Textos secundários / decorativos: preto suave mas ainda profundo */
+/* Hover de botones que se vuelven negros */
+#key-submit:hover,
+#recibos-link:hover,
+#agenda-link:hover,
+#rotulos-link:hover,
+#processamento-link:hover,
+.modal-btn.primary:hover,
+.ed-modal-btn.primary:hover,
+#r-process-btn:hover,
+#r-save-config:hover,
+#r-conferir-btn:hover,
+#saft-btn:hover,
+#saft-recibos-btn:hover,
+#saft-agenda-btn:hover,
+#ed-export-btn:hover,
+#tam-export-btn:hover,
+#ed-folder-pick-btn:hover,
+button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(:disabled) { color: inherit; }
+#key-submit:hover { color: #fff !important; }
+.modal-btn.primary:hover,
+.ed-modal-btn.primary:hover { color: #fff !important; }
+
+/* Intro: letras blancas sobre fondo negro */
+#intro-screen #dynamic-text .char { color: #fff !important; }
+
+/* Tabla: fila activa en verde (heredada) */
+.tr-active-now td { color: #000 !important; }
+.f-card .f-badge.active-now { color: #1a7a1a !important; }
+.f-card .f-badge.soon        { color: #a06000 !important; }
+.r-status-ok  { color: #2a8a2a !important; }
+.r-status-err { color: #c03000 !important; }
+#r-warnings-box .warn-title,
+#r-warnings-box ul li { color: #b05000 !important; opacity: 1 !important; }
+#r-config-saved { color: #2a8a2a !important; }
+#r-mes-hint { color: #e09000 !important; }
+#r-conferir-note { color: #e09000 !important; }
+.tam-chk-ok  { color: #2a6a2a !important; }
+.tam-chk-err { color: #c00 !important; }
+#saft-reminder.urgent #saft-countdown,
+#saft-reminder.urgent #saft-title { color: #c05000 !important; }
+#saft-reminder.urgent #saft-countdown-label { color: #e08050 !important; }
+.saft-fat-item.vencida { color: #c62828 !important; }
+.saft-fat-item.urgente { color: #c05000 !important; }
+#f-today-banner .f-banner-title { color: #2a8a2a !important; }
+#f-today-banner .f-banner-names { color: #1a6a1a !important; }
+#tam-validation-banner.ok  { color: #2a6a2a !important; }
+#tam-validation-banner.err { color: #a00 !important; }
+#saft-faturas-count.danger { color: #c62828 !important; }
+#saft-faturas-count.warn   { color: #c05000 !important; }
+
+/* Editor PDF: handle/delete sobre blanco */
+.ed-del-btn { color: #fff !important; }
+#ed-edit-native-btn.active { color: #fff !important; }
+
+/* Toggle minimal btn: punto negro */
+#wz-minimal-btn::before { color: transparent !important; }
+
+/* ── Textos secundários / decorativos ── */
 .adm-mod-desc, #adm-dash-greeting .adm-tagline,
 #adm-module-bar-title, .f-card .f-dates,
 .f-card .f-badge.past, .dash-card .dash-label,
 .adm-mod-arrow, #saft-label, #saft-countdown-label,
-#saft-recibos-label, #saft-recibos-mes,
-#r-warnings-box .warn-title, #r-warnings-box ul li {
-  color: #000 !important;
+#saft-recibos-label, #saft-recibos-mes {
   opacity: 0.68;
 }
-
-/* Textos de estado / placeholder que eram muito claros */
 .adm-mod-desc { opacity: 0.55; }
 #adm-dash-greeting .adm-tagline { opacity: 0.45; letter-spacing: .18em; }
+#adm-module-bar-title { opacity: 0.45; }
 
-/* Sizes: ligeiro aumento nos elementos de UI do admin */
+/* ── Font weights corregidos (300 = peso real de Montserrat Light) ── */
+/* Los "bold" y "600" que no tienen archivo de fuente se sintetizan —
+   los mantenemos para jerarquía visual pero sin forzar síntesis falsa */
+input, select, textarea { font-size: .92rem !important; font-weight: 300 !important; }
+button { font-size: .88rem !important; }
+
+/* Sizes UI admin */
 .adm-mod-name        { font-size: .90rem !important; }
 .adm-mod-desc        { font-size: .74rem !important; }
 #adm-module-bar-title{ font-size: .82rem !important; }
 #adm-back-btn        { font-size: .84rem !important; }
-
 .tab-btn             { font-size: .95rem !important; }
 .drawer-tab-btn      { font-size: .98rem !important; }
-
 th                   { font-size: 1.05rem !important; }
 td                   { font-size: .96rem !important; }
-
 .f-card .f-name      { font-size: .94rem !important; }
 .f-card .f-dates     { font-size: .78rem !important; }
 .f-card .f-badge     { font-size: .75rem !important; }
 .f-section-title     { font-size: .78rem !important; }
-
-#s-status-msg, #r-status-msg, #h-status-msg {
-  font-size: .96rem !important;
-}
-
-/* Admin module cards — ligeiramente maiores */
+#s-status-msg, #r-status-msg, #h-status-msg { font-size: .96rem !important; }
 .adm-mod-icon        { font-size: 1.75rem !important; }
-
-/* Dashboard greeting */
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.55rem, 3.2vw, 2.15rem) !important;
 }
-
-/* Inputs e botoes */
-input, select, textarea { font-size: .92rem !important; }
-button { font-size: .88rem !important; }
-
-/* Borders/separators permanecem discretos */
-#adm-module-bar-title { opacity: 0.45; }
 </style>
 </head>
 <body>

@@ -1098,10 +1098,15 @@ input, textarea { cursor: text !important; }
 
 /* ══ CROSS-BROWSER TEXT COLOR FIX (Firefox, Safari) ══
    Prevents browser-default grey on inputs, selects, placeholders and th text */
-input, select, textarea, button {
+input, select, textarea {
   color: #000 !important;
   -webkit-text-fill-color: #000 !important;
   background-color: #fff;
+  -webkit-appearance: none;
+  appearance: none;
+}
+button {
+  color: inherit;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -1132,12 +1137,18 @@ textarea:-ms-input-placeholder {
 th {
   color: #000 !important;
 }
-/* Prevent Safari/Firefox dark-mode or system-theme text overrides */
-* {
-  -webkit-text-fill-color: inherit;
-}
-input, select, textarea, button {
-  -webkit-text-fill-color: #000 !important;
+/* Black/dark-background buttons: force white text in all browsers */
+#key-submit:hover,
+#recibos-overlay-back,
+#agenda-overlay-back,
+#rotulos-overlay-back,
+#processamento-overlay-back,
+#adm-back-btn,
+#adm-back-btn:hover,
+.ed-del-btn,
+#ed-edit-native-btn.active {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
 }
 
 /* ══ COLON BLINK en el reloj ══ */

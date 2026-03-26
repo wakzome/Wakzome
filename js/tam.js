@@ -1256,8 +1256,8 @@
         '<th class="tam-th">UND</th>' +
         '<th class="tam-th">P.Unit/T</th>' +
         '<th class="tam-th">Total</th>' +
-        '<th class="tam-th tam-th-funchal">Funchal</th>' +
-        '<th class="tam-th tam-th-porto">Porto Santo</th>' +
+        '<th class="tam-th tam-th-funchal">FNC</th>' +
+        '<th class="tam-th tam-th-porto">PXO</th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
@@ -4898,6 +4898,8 @@
       '#tam-session-name:focus { color:#fff!important; box-shadow:0 0 0 2px rgba(255,255,255,.25); border-radius:6px; }',
       '#tam-session-name::placeholder { color:rgba(255,255,255,.3)!important; }',
       '#tam-session-status { font-size:.68rem; font-weight:bold; color:rgba(255,255,255,.45)!important; white-space:nowrap; }',
+      '#tam-status-msg { font-weight:bold!important; }',
+      '#tam-dn-count { color:#ffffff!important; font-weight:700!important; }',
       '#tam-session-status.saved { color:#69f0ae!important; }',
       /* Save button hidden until session active */
       '#tam-save-btn { display:none; padding:6px 14px; font-size:.72rem; font-weight:700; font-family:MontserratLight,sans-serif; text-transform:lowercase; cursor:pointer; border:1.5px solid rgba(105,240,174,.7); border-radius:8px; background:rgba(105,240,174,.12)!important; color:#69f0ae!important; transition:background .15s,color .15s,border-color .15s,box-shadow .15s; white-space:nowrap; letter-spacing:.03em; }',
@@ -4936,8 +4938,8 @@
       '#tam-results-wrap { width:100%; max-width:960px; overflow-x:auto; }',
       '.tam-table { width:100%; border-collapse:separate; border-spacing:0; border-radius:15px; overflow:visible; font-family:MontserratLight,sans-serif; }',
       '.tam-th { background:#e0e0e0; padding:5px 12px; text-align:center; font-size:.73rem; font-weight:bold; text-transform:uppercase; letter-spacing:.04em; border:1px solid #e6e6e6; white-space:nowrap; line-height:1.2; }',
-      '.tam-th-funchal { background:#1a237e!important; color:#e8eaf6!important; letter-spacing:.04em; }',
-      '.tam-th-porto   { background:#880e4f!important; color:#fce4ec!important; letter-spacing:.04em; }',
+      '.tam-th-funchal { background:#1a237e!important; color:#ffffff!important; letter-spacing:.04em; font-weight:800!important; }',
+      '.tam-th-porto   { background:#880e4f!important; color:#ffffff!important; letter-spacing:.04em; font-weight:800!important; }',
       '.tam-td { padding:3px 12px; border:1px solid #efefef; font-size:.86rem; font-weight:bold; vertical-align:middle; text-align:center; line-height:1.2; white-space:nowrap; }',
       '.tam-td-num { font-variant-numeric:tabular-nums; }',
       '.tam-cell-funchal { background:#e8eaf6; color:#1a237e; font-weight:bold; }',
@@ -5061,8 +5063,8 @@
       '.tam-rec-area { border:1px solid #e6e6e6; border-radius:16px; overflow:visible; background:#fff; }',
       '.tam-rec-area-title { padding:10px 18px; font-size:.72rem; font-weight:bold; text-transform:uppercase; letter-spacing:.07em; color:#aaa; border-bottom:1px solid #e6e6e6; background:#fafafa; }',
 
-      '.tam-th-funchal { background:#1a237e!important; color:#e8eaf6!important; letter-spacing:.04em; }',
-      '.tam-th-porto   { background:#880e4f!important; color:#fce4ec!important; letter-spacing:.04em; }',
+      '.tam-th-funchal { background:#1a237e!important; color:#ffffff!important; letter-spacing:.04em; font-weight:800!important; }',
+      '.tam-th-porto   { background:#880e4f!important; color:#ffffff!important; letter-spacing:.04em; font-weight:800!important; }',
 
       /* ── Quick distribution buttons ── */
       '.tam-rec-quick-btns { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid #e0e0e0; background:#1a1a2e!important; flex-wrap:wrap; border-radius:0; }',

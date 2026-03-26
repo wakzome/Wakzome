@@ -223,7 +223,7 @@
       '.proc-guia-addr-chip { display:flex; align-items:center; gap:6px; padding:7px 12px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; font-size:.75rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; cursor:pointer; transition:background .12s,border-color .12s; user-select:none; width:100%; box-sizing:border-box; justify-content:space-between; }',
       '.proc-guia-addr-chip:hover { background:#f0f0f0; border-color:#bbb; }',
       '.proc-guia-addr-chip.proc-addr-copied { background:#f0faf0!important; border-color:#2e7d32!important; color:#2e7d32!important; }',
-      '.proc-guia-addr-clip { font-size:.8rem; }',,
+      '.proc-guia-addr-clip { font-size:.8rem; }',
 
 
       /* Description autocomplete */

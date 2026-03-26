@@ -3634,17 +3634,12 @@
     }
 
     /* ── 5. LEVEL A — EAN-anchored REF detection ──
-       For each EAN, look upward (lower Y values in top-to-bottom coordinate space
-       means higher on the page — but we use page-adjusted Y where higher Y = lower
-       on page). So REF is at Y < ean.y (came before in reading order).
-       Scan window: from ean.y - 100pt up to ean.y - 2pt.
-       Among all items in that window, pick the one that passes tamIsDNRef,
-       preferring the one with the smallest Y (closest above the EAN). */
-    var REF_SCAN_ABOVE = 120;  /* pt above EAN to search for ref */
-
-    /* Build a sorted list of EAN Y positions for fast lookup */
-    var eanYSet = {};
-    eanItems.forEach(function(e){ eanYSet[e.y] = true; });
+       For each EAN, look upward for a ref within REF_SCAN_ABOVE pt.
+       If none found (e.g. product block split across pages), inherit the
+       last ref seen before this EAN in reading order (Y-sorted scan).
+       This handles page-break splits correctly without any page awareness.
+    */
+    var REF_SCAN_ABOVE = 120;  /* pt — normal same-page window */
 
     function hasNearbyEAN(y) {
       for (var k = 0; k < eanItems.length; k++) {
@@ -3653,18 +3648,56 @@
       return false;
     }
 
-    /* Map: eanY → ref string (the ref header for that product block) */
+    /* Sort all items top-to-bottom (ascending Y = earlier in reading order) */
+    var itemsSorted = allPageItems.slice().sort(function(a,b){ return a.y - b.y; });
+
+    /* Map: eanY → ref string.
+       Pass 1 — try normal window scan (ref within REF_SCAN_ABOVE above EAN). */
     var eanToRef = {};
     eanItems.forEach(function(ean) {
-      /* All items in the window above this EAN */
       var candidates = allPageItems.filter(function(it) {
         return it.y < ean.y && it.y >= ean.y - REF_SCAN_ABOVE && tamIsDNRef(it.str);
       });
       if (!candidates.length) return;
-      /* Pick the one closest to the EAN from above (largest Y that is still < ean.y) */
       candidates.sort(function(a,b){ return b.y - a.y; });
       eanToRef[ean.y] = candidates[0].str;
     });
+
+    /* Pass 2 — for EANs that still have no ref (cross-page split),
+       walk itemsSorted and carry the last seen ref forward.
+       A ref "resets" only when a Lot-Nr header appears (new product block). */
+    var lastRef = null;
+    var eansSortedByY = eanItems.slice().sort(function(a,b){ return a.y - b.y; });
+
+    (function() {
+      var ei = 0; /* pointer into eansSortedByY */
+      for (var si = 0; si < itemsSorted.length; si++) {
+        var it = itemsSorted[si];
+        /* Advance past EANs that are before this item */
+        while (ei < eansSortedByY.length && eansSortedByY[ei].y <= it.y) {
+          var ey = eansSortedByY[ei].y;
+          /* If this EAN still has no ref assigned, inherit lastRef */
+          if (!eanToRef[ey] && lastRef) {
+            eanToRef[ey] = lastRef;
+          }
+          ei++;
+        }
+        /* Update lastRef when we see a valid product ref */
+        if (tamIsDNRef(it.str) && !BAD_STR.test(it.str)) {
+          lastRef = it.str;
+        }
+        /* Reset lastRef on Lot-Nr boundaries (new product block starts) */
+        if (/^Lot-Nr/i.test(it.str)) {
+          lastRef = null;
+        }
+      }
+      /* Handle any remaining EANs after last item */
+      while (ei < eansSortedByY.length) {
+        var ey = eansSortedByY[ei].y;
+        if (!eanToRef[ey] && lastRef) eanToRef[ey] = lastRef;
+        ei++;
+      }
+    })();
 
     /* ── 6. Accumulate QTY per ref ── */
     var refAccum = {}, refOrder = [];

@@ -95,7 +95,12 @@
       '#proc-content .proc-table-wrap td.td-desc { min-width:170px; }',
 
       /* Row misc */
-      '#proc-content .proc-row-num { color:#000; font-size:.72rem; text-align:center; width:28px; user-select:none; font-weight:700; opacity:0.4; }',
+      /* Copy button */
+      '#proc-content .proc-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; padding:0; border:none; background:transparent; cursor:pointer; color:#aaa; font-size:.65rem; line-height:1; border-radius:3px; flex-shrink:0; transition:color .12s,background .12s; vertical-align:middle; margin-left:3px; }',
+      '#proc-content .proc-copy-btn:hover { color:#1565c0; background:#e3f2fd; }',
+      '#proc-content .proc-copy-btn.copied { color:#2a8a2a !important; }',
+      '#proc-content td.td-ref, #proc-content td.td-desc { white-space:nowrap; }',
+      '#proc-content .proc-ref-wrap, #proc-content .proc-desc-wrap { display:inline-flex; align-items:center; width:100%; }',
       '#proc-content .proc-cell-computed { padding:4px 8px; font-size:.88rem; font-weight:700; text-align:right; color:#000; white-space:nowrap; }',
       '#proc-content .proc-cell-computed.has-val { color:#000; font-weight:700; }',
       /* PVP and Margem extra bold */
@@ -226,7 +231,7 @@
       '.proc-guia-addr-clip { font-size:.8rem; }',
 
 
-      /* Description autocomplete */
+      /* Description autocomplete — global element on body */
       '#proc-content .proc-desc-wrap { position:relative; display:block; width:100%; }',
       '#proc-desc-global-sugg { position:fixed; top:0; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:99999; overflow:hidden; max-height:210px; overflow-y:auto; display:none; }',
       '#proc-desc-global-sugg .proc-desc-item { padding:7px 12px; font-size:.82rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
@@ -985,14 +990,13 @@
       + '<div id="proc-table-block-' + fid + '" style="display:none">'
       +   '<div class="proc-table-block"><div class="proc-table-wrap"><table id="proc-mainTable-' + fid + '">'
       +   '<thead><tr>'
-      +   '<th>N</th>'
       +   '<th class="left">Refer\u00eancia</th>'
       +   '<th class="left">Descri\u00e7\u00e3o</th>'
       +   '<th>QTD.</th>'
       +   '<th class="th-a4">FNC</th>'
       +   '<th class="th-a5">PXO</th>'
       +   '<th title="Dividir Qtd. FT igualmente">\u00f7</th>'
-      +   '<th>Pre\u00e7o \u20ac</th>'
+      +   '<th>PRC</th>'
       +   '<th>%Desc.</th>'
       +   '<th>!</th>'
       +   '<th>D / +1\u20ac</th>'
@@ -1048,31 +1052,30 @@
     if (!tbody._descListening) {
       tbody._descListening = true;
 
-      /* Global suggestions element — created once, lives on document.body */
+      /* Global suggestions element — lives on body, escapes all stacking contexts */
       if (!document.getElementById('proc-desc-global-sugg')) {
         var gSugg = document.createElement('div');
         gSugg.id  = 'proc-desc-global-sugg';
-        gSugg.style.cssText = 'position:fixed;top:0;left:0;min-width:220px;max-width:360px;background:#fff;border:1.5px solid #000;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:99999;overflow:hidden;max-height:210px;overflow-y:auto;display:none;';
         document.body.appendChild(gSugg);
-        /* Click handler lives directly on the global dropdown */
         gSugg.addEventListener('mousedown', function(e) {
           var item = e.target && e.target.classList.contains('proc-desc-item') ? e.target : null;
           if (!item) return;
           e.preventDefault();
-          var activeInp = document.getElementById('proc-desc-global-sugg')._activeInput;
+          var sg = document.getElementById('proc-desc-global-sugg');
+          var activeInp = sg._activeInput;
           if (activeInp) {
             activeInp.value = item.textContent;
             activeInp.dispatchEvent(new Event('input', { bubbles: true }));
           }
-          document.getElementById('proc-desc-global-sugg').style.display = 'none';
+          sg.style.display = 'none';
         });
       }
 
       tbody.addEventListener('input', function(e) {
         if (!e.target || !e.target.classList.contains('proc-desc-input')) return;
-        var inp  = e.target;
-        var sg   = document.getElementById('proc-desc-global-sugg');
-        var q    = inp.value.trim().toUpperCase().replace(/\s+/g,' ');
+        var inp = e.target;
+        var sg  = document.getElementById('proc-desc-global-sugg');
+        var q   = inp.value.trim().toUpperCase().replace(/\s+/g,' ');
         if (!q || q.length < 2) { sg.style.display = 'none'; return; }
         var matches = procFindDescMatches(q);
         if (!matches.length) { sg.style.display = 'none'; return; }
@@ -1080,9 +1083,9 @@
           return '<div class="proc-desc-item">' + m + '</div>';
         }).join('');
         var rect = inp.getBoundingClientRect();
-        sg.style.top   = (rect.bottom + 2) + 'px';
-        sg.style.left  = rect.left + 'px';
-        sg.style.width = Math.max(rect.width, 220) + 'px';
+        sg.style.top    = (rect.bottom + 2) + 'px';
+        sg.style.left   = rect.left + 'px';
+        sg.style.width  = Math.max(rect.width, 220) + 'px';
         sg.style.display = 'block';
         sg._activeInput  = inp;
       });
@@ -1111,13 +1114,17 @@
       var tr = document.createElement('tr');
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
-          '<td class="proc-row-num">' + r + '</td>'
-        + '<td class="td-ref"><input type="text" class="proc-ref-input"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
+          '<td class="td-ref">'
+        + '<div class="proc-ref-wrap">'
+        + '<input type="text" class="proc-ref-input"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
+        + '<button class="proc-copy-btn" title="Copiar refer\u00eancia" onclick="procCopyBtn(this)">&#x2398;</button>'
+        + '</div></td>'
         + '<td class="td-desc"><div class="proc-desc-wrap">'
         + '<input type="text" class="proc-desc-input"'
-        + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')"></'
-        + 'input></div></td>'
+        + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')">'
+        + '<button class="proc-copy-btn" title="Copiar descri\u00e7\u00e3o" onclick="procCopyBtn(this)">&#x2398;</button>'
+        + '</div></td>'
         + '<td><input type="number" min="0" step="1"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
         + '<td><input type="number" min="0" step="1"'
@@ -2262,6 +2269,32 @@
   window.procUpdateTableLock     = procUpdateTableLock;
   window.procObsSync             = procObsSync;
   window.procShowGuiaModal       = procShowGuiaModal;
+  window.procCopyBtn             = procCopyBtn;
+
+  function procCopyBtn(btn) {
+    /* Find the sibling input inside the same wrapper div */
+    var wrap  = btn.parentElement;
+    var input = wrap ? wrap.querySelector('input') : null;
+    var text  = input ? input.value.trim() : '';
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+    } catch(e) {}
+    btn.classList.add('copied');
+    btn.textContent = '\u2713';
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      btn.innerHTML = '&#x2398;';
+    }, 900);
+  }
 
   function procObsSync(input) {
     /* Busca el tip como hermano siguiente del input dentro del mismo td */

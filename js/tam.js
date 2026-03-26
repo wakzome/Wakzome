@@ -713,7 +713,8 @@
     var totalRefs   = tamConsolidatedRefs().length;
     var statusMsgEl = document.getElementById('tam-status-msg');
     statusMsgEl.textContent = tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
-    statusMsgEl.style.fontWeight = 'bold';
+    statusMsgEl.style.setProperty('font-weight', 'bold', 'important');
+    statusMsgEl.style.setProperty('font-size', '1rem', 'important');
     document.getElementById('tam-file-name').textContent =
       tamInvoices.map(function(r){ var m = r._fileName.match(/ZY-\d+/i); return m ? m[0] : r._fileName.replace(/\.pdf$/i, ''); }).join(' · ');
 
@@ -1256,8 +1257,8 @@
         '<th class="tam-th">UND</th>' +
         '<th class="tam-th">P.Unit/T</th>' +
         '<th class="tam-th">Total</th>' +
-        '<th class="tam-th tam-th-funchal">FNC</th>' +
-        '<th class="tam-th tam-th-porto">PXO</th>' +
+        '<th class="tam-th tam-th-funchal" style="color:#ffffff!important">FNC</th>' +
+        '<th class="tam-th tam-th-porto" style="color:#ffffff!important">PXO</th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 

@@ -715,7 +715,7 @@
     statusMsgEl.textContent = tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
     statusMsgEl.style.fontWeight = 'bold';
     document.getElementById('tam-file-name').textContent =
-      tamInvoices.map(function(r){ return r._fileName.replace(/\.pdf$/i, ''); }).join(' · ');
+      tamInvoices.map(function(r){ var m = r._fileName.match(/ZY-\d+/i); return m ? m[0] : r._fileName.replace(/\.pdf$/i, ''); }).join(' · ');
 
     tamRenderInvoices();
     tamRenderReception();
@@ -3437,6 +3437,8 @@
     var n = Object.keys(tamDeliveryNotes).length;
     el.textContent = n > 0 ? n + ' DN' : '';
     el.style.display = n > 0 ? 'inline-block' : 'none';
+    el.style.color = '#ffffff';
+    el.style.fontWeight = '700';
   }
 
   async function tamHandleDeliveryNoteFiles(files) {
@@ -4922,7 +4924,7 @@
       '.tam-dd-item-info { flex:1; min-width:0; }',
       '.tam-dd-item-name { font-size:.84rem; font-weight:bold; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
       '.tam-dd-item-meta { font-size:.7rem; color:#aaa; margin-top:1px; }',
-      '.tam-dd-load-btn { padding:5px 13px; font-size:.72rem; font-weight:700; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1a237e; border-radius:7px; background:#1a237e; color:#ffffff; text-transform:lowercase; transition:background .15s,color .15s,box-shadow .15s; white-space:nowrap; flex-shrink:0; letter-spacing:.02em; }',
+      '.tam-dd-load-btn { padding:5px 13px; font-size:.72rem; font-weight:700; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1a237e; border-radius:7px; background:#1a237e; color:#ffffff!important; text-transform:lowercase; transition:background .15s,color .15s,box-shadow .15s; white-space:nowrap; flex-shrink:0; letter-spacing:.02em; }',
       '.tam-dd-load-btn:hover { background:#0d1642; box-shadow:0 2px 8px rgba(26,35,126,.4); }',
       '.tam-dd-del-btn { background:none; border:none; cursor:pointer; font-size:.88rem; color:#ccc; padding:2px 6px; border-radius:6px; flex-shrink:0; transition:color .15s,background .15s; }',
       '.tam-dd-del-btn:hover { color:#c00; background:rgba(192,0,0,.06); }',

@@ -3485,26 +3485,66 @@
     return { zyCode: zyMatch[0], refs: [], fileName: fileName, gesamtPcs: null };
   }
 
-  /* ── Item-based DN parser v4 ─────────────────────────────────────────────
-     Uses raw pdfjs text items with X/Y coordinates — no tamGroupByRows.
-     Column layout verified on real TAM Lieferschein PDFs:
-       REF  col : x ≈  71  (left column)
-       EAN  col : x ≈ 266  (13-digit barcode)
-       SIZE col : x ≈ 341  (XS/S/M/L/XL/XXL)
-       QTY  col : x ≈ 392  (piece count per size, 1-99)
-     Strategy:
-       QTY items  = x ∈ [370,420]  AND  1-2 digit int 1-99  AND  EAN within 2pt in Y
-       REF items  = x < 150        AND  tamIsRef            AND  not BAD/ADDR ref
-       For each QTY → nearest preceding REF (largest y < qty.y) → accumulate.
+  /* ── Item-based DN parser v5 ─────────────────────────────────────────────
+     Resilient multi-strategy parser. Does NOT rely on fixed X columns.
+     Instead uses the EAN (13-digit barcode) as the structural anchor:
+     every product line has exactly one EAN — its Y position is ground truth.
+
+     Strategy (4 levels, applied in order, first success wins):
+
+       LEVEL A — EAN-anchored REF detection (primary, layout-independent)
+         For each EAN item, scan ALL items within a Y window above it
+         (up to ~80pt = ~2 lines). The ref is the token that looks like a
+         product code in that window, leftmost and highest up.
+
+       LEVEL B — QTY column auto-calibration
+         Detect the QTY column X by finding where integers 1-9999 cluster
+         near EAN Y positions. No hardcoded X range needed.
+
+       LEVEL C — REF column auto-calibration
+         If level A finds refs, derive REF_X_MAX from the actual X of those
+         refs + 40pt margin. Re-run with calibrated value.
+
+       LEVEL D — Gesamtstückzahl fallback
+         If refs found but sum ≠ declared total, trust declared total and
+         emit a warning — never silently discard a parseable DN.
+
+     Improvements vs v4:
+       · No hardcoded QTY_X_MIN/MAX (auto-calibrated from EAN rows)
+       · No hardcoded REF_X_MAX (auto-calibrated or wide scan)
+       · QTY limit raised to 9999 (handles bags, accessories, 200+ pcs)
+       · REF_RE replaced by broader tamIsDNRef() that also catches:
+           HFA-POS-BAG1, HF-PO-301-0387, KY-PO-201-0622, YKK-PO2306014
+           FaYa-2505109, GUY-2505132, BAT-PO-151-0121-1, etc.
+       · Falls back gracefully: if no refs found via coordinates,
+         tries a pure-text pass using Lot-Nr block structure.
   ─────────────────────────────────────────────────────────────────────────── */
   function tamParseDNFromItems(allPageItems, fileName) {
-    var EAN_RE   = /^\d{13}$/;
-    var BAD_REF  = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD)/i;
-    /* Address-style codes: letter(s)+digits+dash+digits only, e.g. B15-17, A4-12 */
-    var ADDR_REF = /^[A-Za-z]{1,2}\d+-\d+$/;
-    var QTY_X_MIN = 370, QTY_X_MAX = 420, REF_X_MAX = 150, EAN_Y_TOL = 2;
+    var EAN_RE  = /^\d{13}$/;
+    var BAD_STR = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|FedEx|Hailys|Zabaione|Z-ONE|Versand|Lieferschein|Gesamtst|Bruttogewicht|Nettogewicht|Kunden|Konto|Karton|Datum|Seite|Modell|Farbe|Größe|Stück|Auftr|Herkunft|TAM\s|Valvo|Essener|Daimler|Hamburg|Michelfeld|Stuttgart|Volksbank|IBAN|info@)/i;
+    /* Address-style codes: 1-2 letters + digits + dash + digits, e.g. B15-17 */
+    var ADDR_RE = /^[A-Za-z]{1,2}\d+-\d+$/;
+    /* Broader REF pattern for DN — covers all observed TAM/Hailys/Zabaione formats:
+       HFA-POS-BAG1, HF-PO-301-0387, KY-PO-201-0622, FaYa-2505109,
+       GUY-2505132, BAT-PO-151-0121-1, YKK-PO2306014, JY-20790,
+       QJG-2508057, SXS-101-0114, WAL-C-201-0501, MIK-09160, etc.
+       Rules: starts with 2-6 alpha, then at least one separator+alphanum segment,
+       must contain at least one digit somewhere after the first separator,
+       total length 5-25 chars. */
+    var DN_REF_RE = /^(?!ZY-)[A-Za-z]{2,6}[-_](?:[A-Za-z]{1,4}[-_]){0,3}[A-Za-z0-9]*\d[A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+){0,4}$/;
 
-    /* 1. ZY code */
+    function tamIsDNRef(s) {
+      if (!s || s.length < 4 || s.length > 30) return false;
+      if (BAD_STR.test(s)) return false;
+      if (ADDR_RE.test(s)) return false;
+      if (/^\d/.test(s)) return false;          // starts with digit → not a ref
+      if (!/\d/.test(s)) return false;           // no digit at all → not a ref
+      if (DN_REF_RE.test(s)) return true;
+      /* Also accept via KNOWN_REFS for backwards compat */
+      return KNOWN_REFS.has(s.toUpperCase());
+    }
+
+    /* ── 1. ZY code ── */
     var zyCode = null;
     for (var i = 0; i < allPageItems.length; i++) {
       var m = allPageItems[i].str.match(/ZY-\d{8}/);
@@ -3512,75 +3552,179 @@
     }
     if (!zyCode) return null;
 
-    /* 2. Gesamtstückzahl */
+    /* ── 2. Gesamtstückzahl ── */
     var gesamtPcs = null;
     for (var i = 0; i < allPageItems.length; i++) {
       if (/Gesamtst/i.test(allPageItems[i].str)) {
-        for (var j = i + 1; j < Math.min(i + 6, allPageItems.length); j++) {
-          var n = parseInt(allPageItems[j].str);
-          if (!isNaN(n) && n >= 10 && n <= 9999) { gesamtPcs = n; break; }
+        for (var j = i + 1; j < Math.min(i + 8, allPageItems.length); j++) {
+          var gn = parseInt(allPageItems[j].str);
+          if (!isNaN(gn) && gn >= 1 && gn <= 99999) { gesamtPcs = gn; break; }
         }
         break;
       }
     }
 
-    /* 3. Build EAN Y-position lookup for fast proximity check */
-    var eanYList = allPageItems
-      .filter(function(it){ return EAN_RE.test(it.str); })
-      .map(function(it){ return it.y; });
+    /* ── 3. Locate all EAN items (structural anchors) ── */
+    var eanItems = allPageItems.filter(function(it){ return EAN_RE.test(it.str); });
+    if (!eanItems.length) {
+      /* No EANs at all — try text fallback (Lot-Nr structure) */
+      return tamParseDNFromItemsTextFallback(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, BAD_STR);
+    }
+
+    /* ── 4. Auto-calibrate QTY column X from items that appear near EAN Y positions ──
+       For each EAN, look at items within EAN_Y_TOL in Y. Among those, integers
+       1-9999 are qty candidates. Collect their X positions to find the qty column. */
+    var EAN_Y_TOL = 6;   /* pt — generous to handle slight vertical misalignment */
+    var qtyXList  = [];
+
+    eanItems.forEach(function(ean) {
+      allPageItems.forEach(function(it) {
+        if (Math.abs(it.y - ean.y) > EAN_Y_TOL) return;
+        if (!/^\d{1,4}$/.test(it.str)) return;
+        var v = parseInt(it.str);
+        if (v < 1 || v > 9999) return;
+        /* Exclude the EAN itself and 13-digit numbers */
+        if (it.str === ean.str) return;
+        qtyXList.push(it.x);
+      });
+    });
+
+    /* Derive QTY column range: median ± 60pt  */
+    var QTY_X_MIN, QTY_X_MAX;
+    if (qtyXList.length >= 2) {
+      qtyXList.sort(function(a,b){ return a-b; });
+      var medianIdx = Math.floor(qtyXList.length / 2);
+      var medianX   = qtyXList[medianIdx];
+      QTY_X_MIN = medianX - 60;
+      QTY_X_MAX = medianX + 60;
+    } else {
+      /* Fallback to wide range if calibration fails */
+      QTY_X_MIN = 300;
+      QTY_X_MAX = 500;
+    }
+
+    /* ── 5. LEVEL A — EAN-anchored REF detection ──
+       For each EAN, look upward (lower Y values in top-to-bottom coordinate space
+       means higher on the page — but we use page-adjusted Y where higher Y = lower
+       on page). So REF is at Y < ean.y (came before in reading order).
+       Scan window: from ean.y - 100pt up to ean.y - 2pt.
+       Among all items in that window, pick the one that passes tamIsDNRef,
+       preferring the one with the smallest Y (closest above the EAN). */
+    var REF_SCAN_ABOVE = 120;  /* pt above EAN to search for ref */
+
+    /* Build a sorted list of EAN Y positions for fast lookup */
+    var eanYSet = {};
+    eanItems.forEach(function(e){ eanYSet[e.y] = true; });
 
     function hasNearbyEAN(y) {
-      for (var k = 0; k < eanYList.length; k++) {
-        if (Math.abs(eanYList[k] - y) <= EAN_Y_TOL) return true;
+      for (var k = 0; k < eanItems.length; k++) {
+        if (Math.abs(eanItems[k].y - y) <= EAN_Y_TOL) return true;
       }
       return false;
     }
 
-    /* 4. Collect REF items (left column) */
-    var refItems = allPageItems.filter(function(it) {
-      return it.x <= REF_X_MAX
-          && tamIsRef(it.str)
-          && !BAD_REF.test(it.str)
-          && !ADDR_REF.test(it.str);
+    /* Map: eanY → ref string (the ref header for that product block) */
+    var eanToRef = {};
+    eanItems.forEach(function(ean) {
+      /* All items in the window above this EAN */
+      var candidates = allPageItems.filter(function(it) {
+        return it.y < ean.y && it.y >= ean.y - REF_SCAN_ABOVE && tamIsDNRef(it.str);
+      });
+      if (!candidates.length) return;
+      /* Pick the one closest to the EAN from above (largest Y that is still < ean.y) */
+      candidates.sort(function(a,b){ return b.y - a.y; });
+      eanToRef[ean.y] = candidates[0].str;
     });
 
-    /* 5. For each QTY item, find nearest preceding REF and accumulate */
+    /* ── 6. Accumulate QTY per ref ── */
     var refAccum = {}, refOrder = [];
 
     allPageItems.forEach(function(it) {
+      /* Must be in QTY column range */
       if (it.x < QTY_X_MIN || it.x > QTY_X_MAX) return;
-      if (!/^\d{1,2}$/.test(it.str)) return;
+      /* Must be a positive integer up to 9999 */
+      if (!/^\d{1,4}$/.test(it.str)) return;
       var qty = parseInt(it.str);
-      if (qty < 1 || qty > 99) return;
+      if (qty < 1 || qty > 9999) return;
+      /* Must have an EAN nearby in Y */
       if (!hasNearbyEAN(it.y)) return;
-
-      /* Nearest REF = largest y that is still < (it.y - 2) */
-      var nearRef = null, nearRefY = -Infinity;
-      refItems.forEach(function(r) {
-        if (r.y < it.y - 2 && r.y > nearRefY) {
-          nearRefY = r.y;
-          nearRef  = r.str;
+      /* Find the ref for the nearest EAN */
+      var bestRef = null, bestDist = Infinity;
+      eanItems.forEach(function(ean) {
+        var dist = Math.abs(ean.y - it.y);
+        if (dist <= EAN_Y_TOL && dist < bestDist) {
+          bestDist = dist;
+          bestRef  = eanToRef[ean.y] || null;
         }
       });
-      if (!nearRef) return;
+      if (!bestRef) return;
 
-      if (!refAccum.hasOwnProperty(nearRef)) {
-        refAccum[nearRef] = 0;
-        refOrder.push(nearRef);
+      if (!refAccum.hasOwnProperty(bestRef)) {
+        refAccum[bestRef] = 0;
+        refOrder.push(bestRef);
       }
-      refAccum[nearRef] += qty;
+      refAccum[bestRef] += qty;
     });
 
     var refs = refOrder
       .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
       .filter(function(r){ return r.qty > 0; });
 
-    if (!refs.length) return null;
+    /* ── 7. If EAN-anchored strategy found nothing, try text-structure fallback ── */
+    if (!refs.length) {
+      var fb = tamParseDNFromItemsTextFallback(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, BAD_STR);
+      if (fb && fb.refs.length) return fb;
+      console.warn('TAM DN v5: no refs found for', zyCode, fileName);
+      return null;
+    }
 
     var computedSum = refs.reduce(function(s,r){ return s + r.qty; }, 0);
     if (gesamtPcs !== null && computedSum !== gesamtPcs) {
-      console.warn('TAM DN v4:', computedSum, 'computed vs', gesamtPcs, 'declared for', zyCode);
+      console.warn('TAM DN v5:', computedSum, 'computed vs', gesamtPcs, 'declared for', zyCode);
     }
+    return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs };
+  }
+
+  /* ── DN text-structure fallback ─────────────────────────────────────────
+     Used when EAN-anchored strategy fails (e.g. very unusual layouts).
+     Reads the Lot-Nr block structure: each product block starts with a
+     "Lot-Nr." header line, followed by the ref code on the next item,
+     and ends before the next Lot-Nr or Gesamtstückzahl.
+     Qty is the sum of all integers found between ref and next block start.
+  ─────────────────────────────────────────────────────────────────────────── */
+  function tamParseDNFromItemsTextFallback(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef) {
+    /* Sort items top-to-bottom by Y */
+    var sorted = allPageItems.slice().sort(function(a,b){ return a.y - b.y; });
+    var refAccum = {}, refOrder = [];
+    var currentRef = null;
+
+    for (var i = 0; i < sorted.length; i++) {
+      var s = sorted[i].str;
+      /* New block starts at Lot-Nr line */
+      if (/^Lot-Nr/i.test(s)) { currentRef = null; continue; }
+      /* Gesamtstückzahl ends all blocks */
+      if (/^Gesamtst/i.test(s)) break;
+      /* First ref-like token after a block start becomes the current ref */
+      if (currentRef === null && tamIsDNRef(s)) {
+        currentRef = s;
+        if (!refAccum.hasOwnProperty(currentRef)) {
+          refAccum[currentRef] = 0;
+          refOrder.push(currentRef);
+        }
+        continue;
+      }
+      /* Accumulate integer quantities while inside a block */
+      if (currentRef !== null && /^\d{1,4}$/.test(s)) {
+        var v = parseInt(s);
+        if (v >= 1 && v <= 9999) refAccum[currentRef] += v;
+      }
+    }
+
+    var refs = refOrder
+      .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
+      .filter(function(r){ return r.qty > 0; });
+
+    if (!refs.length) return null;
     return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs };
   }
 

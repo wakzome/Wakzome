@@ -3666,39 +3666,39 @@
     });
 
     /* Pass 2 — for EANs that still have no ref (cross-page split),
-       walk itemsSorted and carry the last seen ref forward.
-       A ref "resets" only when a Lot-Nr header appears (new product block). */
-    var lastRef = null;
-    var eansSortedByY = eanItems.slice().sort(function(a,b){ return a.y - b.y; });
-
+       inherit ref within the SAME Lot-Nr block only.
+       Segment items into Lot blocks, carry the block's ref to orphan EANs.
+       Never leaks across Lot boundaries. */
     (function() {
-      var ei = 0; /* pointer into eansSortedByY */
+      var blocks = [];
+      var currentBlock = null;
+
       for (var si = 0; si < itemsSorted.length; si++) {
         var it = itemsSorted[si];
-        /* Advance past EANs that are before this item */
-        while (ei < eansSortedByY.length && eansSortedByY[ei].y <= it.y) {
-          var ey = eansSortedByY[ei].y;
-          /* If this EAN still has no ref assigned, inherit lastRef */
-          if (!eanToRef[ey] && lastRef) {
-            eanToRef[ey] = lastRef;
-          }
-          ei++;
-        }
-        /* Update lastRef when we see a valid product ref */
-        if (tamIsDNRef(it.str) && !BAD_STR.test(it.str)) {
-          lastRef = it.str;
-        }
-        /* Reset lastRef on Lot-Nr boundaries (new product block starts) */
         if (/^Lot-Nr/i.test(it.str)) {
-          lastRef = null;
+          currentBlock = { ref: null, eanYs: [] };
+          blocks.push(currentBlock);
+          continue;
+        }
+        if (/^Gesamtst/i.test(it.str)) break;
+        if (!currentBlock) {
+          currentBlock = { ref: null, eanYs: [] };
+          blocks.push(currentBlock);
+        }
+        if (currentBlock.ref === null && tamIsDNRef(it.str) && !BAD_STR.test(it.str)) {
+          currentBlock.ref = it.str;
+        }
+        if (/^\d{13}$/.test(it.str)) {
+          currentBlock.eanYs.push(it.y);
         }
       }
-      /* Handle any remaining EANs after last item */
-      while (ei < eansSortedByY.length) {
-        var ey = eansSortedByY[ei].y;
-        if (!eanToRef[ey] && lastRef) eanToRef[ey] = lastRef;
-        ei++;
-      }
+
+      blocks.forEach(function(block) {
+        if (!block.ref) return;
+        block.eanYs.forEach(function(ey) {
+          if (!eanToRef[ey]) eanToRef[ey] = block.ref;
+        });
+      });
     })();
 
     /* ── 6. Accumulate QTY per ref ── */

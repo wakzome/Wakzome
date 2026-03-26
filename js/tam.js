@@ -391,7 +391,7 @@
         var result = tamCrossValidate(resA, resB, resC, null);
         result._fileKey  = key;
         result._fileName = file.name;
-        result.dnList = tamExtractDNListFromRows(allRows);
+        result.dnList = tamExtractDNListFromRows(allRows, result.invoiceNo || null);
 
         /* ── Motor D: only if A/B/C have unresolved conflicts ── */
         if (!result.xv.fullyAgree && result.xv.conflicts && result.xv.conflicts.length > 0) {
@@ -3384,17 +3384,22 @@
      DN MAP + DELIVERY NOTES FUNCTIONS
   ══════════════════════════════════════════════════════════════ */
 
-  function tamExtractDNListFromRows(allRows) {
+  function tamExtractDNListFromRows(allRows, knownInvoiceZY) {
     /* The invoice ZY code appears in every page header (once per page).
-       DN references appear only once each, at the invoice footer.
-       Strategy: the most-frequent ZY is the invoice itself — exclude it. */
+       DN (Lieferschein) codes appear only once, at the invoice footer.
+
+       Strategy v2 — 3-tier invoice ZY identification:
+         Tier 1: use knownInvoiceZY if provided by the caller (from tamTagMeta)
+         Tier 2: most-frequent ZY code (works for multi-page invoices)
+         Tier 3: among tied ZY codes, prefer ZY-2xxxxxxx (TAM invoice prefix)
+                 Lieferscheine use ZY-8xxxxxxx, invoices use ZY-2xxxxxxx.
+                 If still tied, use first appearance in text.
+
+       This fixes 1-page invoices where invoice ZY and each Lieferschein ZY
+       all appear exactly once — equal frequency made the old code pick wrong one.
+    */
     var fullText = allRows.map(function(t){ return t.join(' '); }).join(' ');
 
-    /* ── Repair ZY codes split by PDF line-wrap ──
-       pdfjs joins each visual line with a space, fragmenting codes:
-         Case B/C: "ZY -85015450" or "ZY- 85015450"  → ZY-85015450
-         Case A:   "ZY-8501 5399" / "ZY-850154 85"   → ZY-85015399/85
-       Run B/C first (8 digits already together), then A (split digits). */
     fullText = fullText.replace(/\bZY\s+-\s*(\d{8})\b/g, 'ZY-$1');
     fullText = fullText.replace(/\bZY-(\d{1,7})\s+(\d{1,7})\b/g, function(m, p1, p2) {
       var combined = p1 + p2;
@@ -3404,12 +3409,37 @@
 
     var matches = fullText.match(/ZY-\d{8}/g);
     if (!matches) return [];
-    var freq = {};
-    matches.forEach(function(zy){ freq[zy] = (freq[zy] || 0) + 1; });
-    var invoiceZY = matches[0], maxFreq = 0;
-    Object.keys(freq).forEach(function(zy) {
-      if (freq[zy] > maxFreq) { maxFreq = freq[zy]; invoiceZY = zy; }
-    });
+
+    /* Tier 1: caller already knows the invoice ZY */
+    var invoiceZY = knownInvoiceZY || null;
+
+    if (!invoiceZY) {
+      var freq = {};
+      matches.forEach(function(zy){ freq[zy] = (freq[zy] || 0) + 1; });
+      var maxFreq = 0;
+      Object.keys(freq).forEach(function(zy){ if (freq[zy] > maxFreq) maxFreq = freq[zy]; });
+      var candidates = Object.keys(freq).filter(function(zy){ return freq[zy] === maxFreq; });
+
+      if (candidates.length === 1) {
+        /* Tier 2: unique winner by frequency */
+        invoiceZY = candidates[0];
+      } else {
+        /* Tier 3: prefer ZY-2xxxxxxx (invoice number prefix) */
+        var invoicePrefixed = candidates.filter(function(zy){ return /^ZY-2/.test(zy); });
+        if (invoicePrefixed.length >= 1) {
+          /* pick first appearance among ZY-2 candidates */
+          invoiceZY = null;
+          for (var mi = 0; mi < matches.length; mi++) {
+            if (invoicePrefixed.indexOf(matches[mi]) >= 0) { invoiceZY = matches[mi]; break; }
+          }
+        }
+        if (!invoiceZY) {
+          /* Last resort: first appearance overall */
+          invoiceZY = matches[0];
+        }
+      }
+    }
+
     var seen = {}, codes = [];
     matches.forEach(function(zy) {
       if (zy !== invoiceZY && !seen[zy]) { seen[zy] = true; codes.push(zy); }
@@ -4437,7 +4467,7 @@
   ══════════════════════════════════════════════════════════════ */
   var REF_RE = /^(?!ZY-)(?:[A-Za-z]{1,5}(?:-[A-Za-z]{1,3})*)[-_.](?=[A-Za-z0-9]*\d)[A-Za-z0-9]+((?:[-_.])[A-Za-z0-9]+){0,5}$/;
   var HS_RE  = /\b(\d{8})\b/;
-  var ZY_RE  = /\b(ZY-[2][\d]{7,})\b/;
+  var ZY_RE  = /\b(ZY-[\d]{8,})\b/;
 
   var KNOWN_REFS_ARR = [
     'HFA-62502025','JUS-25562','JY-20765PTY','MOR-20125','NK-2412046','QJG-2504049',

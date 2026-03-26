@@ -228,11 +228,10 @@
 
       /* Description autocomplete */
       '#proc-content .proc-desc-wrap { position:relative; display:block; width:100%; }',
-      '#proc-content .proc-desc-suggestions { position:absolute; top:100%; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:9990; overflow:hidden; max-height:210px; overflow-y:auto; }',
-      '#proc-content .proc-desc-suggestions.hidden { display:none; }',
-      '#proc-content .proc-desc-item { padding:7px 12px; font-size:.82rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; white-space:nowrap; }',
-      '#proc-content .proc-desc-item:last-child { border-bottom:none; }',
-      '#proc-content .proc-desc-item:hover { background:#f0f0f0; }',
+      '#proc-desc-global-sugg { position:fixed; top:0; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:99999; overflow:hidden; max-height:210px; overflow-y:auto; display:none; }',
+      '#proc-desc-global-sugg .proc-desc-item { padding:7px 12px; font-size:.82rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
+      '#proc-desc-global-sugg .proc-desc-item:last-child { border-bottom:none; }',
+      '#proc-desc-global-sugg .proc-desc-item:hover { background:#f0f0f0; }',
       /* Provider autocomplete */
       '#proc-content .proc-forn-wrap { position:relative; }',
       '#proc-content .proc-forn-suggestions { position:absolute; top:calc(100% + 3px); left:0; right:0; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:500; overflow:hidden; max-height:220px; overflow-y:auto; }',
@@ -1048,40 +1047,52 @@
     /* ── Desc autocomplete delegation (once per tbody) ── */
     if (!tbody._descListening) {
       tbody._descListening = true;
+
+      /* Global suggestions element — created once, lives on document.body */
+      if (!document.getElementById('proc-desc-global-sugg')) {
+        var gSugg = document.createElement('div');
+        gSugg.id  = 'proc-desc-global-sugg';
+        gSugg.style.cssText = 'position:fixed;top:0;left:0;min-width:220px;max-width:360px;background:#fff;border:1.5px solid #000;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:99999;overflow:hidden;max-height:210px;overflow-y:auto;display:none;';
+        document.body.appendChild(gSugg);
+        /* Click handler lives directly on the global dropdown */
+        gSugg.addEventListener('mousedown', function(e) {
+          var item = e.target && e.target.classList.contains('proc-desc-item') ? e.target : null;
+          if (!item) return;
+          e.preventDefault();
+          var activeInp = document.getElementById('proc-desc-global-sugg')._activeInput;
+          if (activeInp) {
+            activeInp.value = item.textContent;
+            activeInp.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          document.getElementById('proc-desc-global-sugg').style.display = 'none';
+        });
+      }
+
       tbody.addEventListener('input', function(e) {
         if (!e.target || !e.target.classList.contains('proc-desc-input')) return;
         var inp  = e.target;
-        var wrap = inp.parentElement;
-        var sugg = wrap ? wrap.querySelector('.proc-desc-suggestions') : null;
-        if (!sugg) return;
-        var q = inp.value.trim().toUpperCase().replace(/\s+/g,' ');
-        if (!q || q.length < 2) { sugg.classList.add('hidden'); return; }
+        var sg   = document.getElementById('proc-desc-global-sugg');
+        var q    = inp.value.trim().toUpperCase().replace(/\s+/g,' ');
+        if (!q || q.length < 2) { sg.style.display = 'none'; return; }
         var matches = procFindDescMatches(q);
-        if (!matches.length) { sugg.classList.add('hidden'); return; }
-        sugg.innerHTML = matches.map(function(m) {
+        if (!matches.length) { sg.style.display = 'none'; return; }
+        sg.innerHTML = matches.map(function(m) {
           return '<div class="proc-desc-item">' + m + '</div>';
         }).join('');
-        sugg.classList.remove('hidden');
+        var rect = inp.getBoundingClientRect();
+        sg.style.top   = (rect.bottom + 2) + 'px';
+        sg.style.left  = rect.left + 'px';
+        sg.style.width = Math.max(rect.width, 220) + 'px';
+        sg.style.display = 'block';
+        sg._activeInput  = inp;
       });
+
       tbody.addEventListener('focusout', function(e) {
         if (!e.target || !e.target.classList.contains('proc-desc-input')) return;
-        var inp = e.target;
         setTimeout(function() {
-          var wrap = inp.parentElement;
-          var sugg = wrap ? wrap.querySelector('.proc-desc-suggestions') : null;
-          if (sugg) sugg.classList.add('hidden');
+          var sg = document.getElementById('proc-desc-global-sugg');
+          if (sg) { sg.style.display = 'none'; sg._activeInput = null; }
         }, 180);
-      });
-      tbody.addEventListener('mousedown', function(e) {
-        var item = e.target && e.target.classList.contains('proc-desc-item') ? e.target : null;
-        if (!item) return;
-        e.preventDefault();
-        var suggsEl = item.parentElement;                          /* .proc-desc-suggestions */
-        var wrap    = suggsEl ? suggsEl.parentElement : null;      /* .proc-desc-wrap        */
-        var inp     = wrap ? wrap.querySelector('.proc-desc-input') : null;
-        if (!inp) return;
-        inp.value = item.textContent;
-        if (suggsEl) suggsEl.classList.add('hidden');
       });
     }
     if (!tbody._obsListening) {
@@ -1106,7 +1117,7 @@
         + '<td class="td-desc"><div class="proc-desc-wrap">'
         + '<input type="text" class="proc-desc-input"'
         + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')"></'
-        + 'input><div class="proc-desc-suggestions hidden"></div></div></td>'
+        + 'input></div></td>'
         + '<td><input type="number" min="0" step="1"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
         + '<td><input type="number" min="0" step="1"'

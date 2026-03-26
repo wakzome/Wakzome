@@ -3505,6 +3505,8 @@
     tamUpdateDNCount();
     tamScheduleSave();
     console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
+    tamRenderDNVerification();
+    tamRenderAll();
   }
 
 
@@ -3876,6 +3878,8 @@
         lbl.childNodes[0].textContent = '\ud83d\udcf7 fotografar caixa';
       }
       tamUpdateDNCount();
+      tamRenderDNVerification();
+      tamRenderAll();
     }
   }
 

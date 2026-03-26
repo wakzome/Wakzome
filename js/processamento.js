@@ -83,33 +83,38 @@
       '#proc-content .proc-table-wrap tbody tr.has-data { background:#fffffe; }',
       '#proc-content .proc-table-wrap td { padding:3px 4px; vertical-align:middle; white-space:nowrap; border:none; border-radius:0; font-size:.92rem; font-weight:600; color:#000; }',
 
-      /* TD inputs */
-      '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:700; padding:4px 6px; border-radius:6px; width:100%; color:#000; }',
-      '#proc-content .proc-table-wrap td input[type="number"] { width:52px; }',
-      '#proc-content .proc-table-wrap td input.proc-ref-input { width:100%; min-width:110px; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { width:100%; min-width:160px; font-size:.8rem; }',
-      '#proc-content .proc-table-wrap td input[type="text"]:not(.proc-ref-input):not(.proc-desc-input) { width:80px; }',
+      /* TD inputs — compact, centered numbers */
+      '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.82rem; font-weight:700; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
+      '#proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }',
+      '#proc-content .proc-table-wrap td input.proc-ref-input { width:100%; min-width:100px; text-align:left; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { width:100%; min-width:140px; font-size:.73rem; text-align:left; }',
+      '#proc-content .proc-table-wrap td input.proc-preco-input { width:46px; text-align:center; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-pct-input { width:38px; text-align:center; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
       '#proc-content .proc-table-wrap td.center-col { text-align:center; }',
-      '#proc-content .proc-table-wrap td.td-ref { min-width:120px; }',
-      '#proc-content .proc-table-wrap td.td-desc { min-width:170px; }',
+      '#proc-content .proc-table-wrap td.td-ref { min-width:110px; }',
+      '#proc-content .proc-table-wrap td.td-desc { min-width:160px; }',
 
       /* Row misc */
-      /* Copy button */
-      '#proc-content .proc-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; padding:0; border:none; background:transparent; cursor:pointer; color:#aaa; font-size:.65rem; line-height:1; border-radius:3px; flex-shrink:0; transition:color .12s,background .12s; vertical-align:middle; margin-left:3px; }',
-      '#proc-content .proc-copy-btn:hover { color:#1565c0; background:#e3f2fd; }',
-      '#proc-content .proc-copy-btn.copied { color:#2a8a2a !important; }',
-      '#proc-content td.td-ref, #proc-content td.td-desc { white-space:nowrap; }',
-      '#proc-content .proc-ref-wrap, #proc-content .proc-desc-wrap { display:inline-flex; align-items:center; width:100%; }',
-      '#proc-content .proc-cell-computed { padding:4px 8px; font-size:.88rem; font-weight:700; text-align:right; color:#000; white-space:nowrap; }',
+      '#proc-content .proc-cell-computed { padding:3px 6px; font-size:.85rem; font-weight:700; text-align:center; color:#000; white-space:nowrap; }',
       '#proc-content .proc-cell-computed.has-val { color:#000; font-weight:700; }',
-      /* PVP and Margem extra bold */
-      '#proc-content td[id^="proc-pvp-"].has-val { font-size:.92rem; font-weight:700; }',
-      '#proc-content td[id^="proc-marg-"].has-val { font-size:.92rem; font-weight:700; }',
-      '#proc-content .proc-cell-status { text-align:center; font-size:.78rem; font-weight:700; padding:3px 7px; white-space:nowrap; border-radius:6px; }',
+      /* PVP and Margem centered */
+      '#proc-content td[id^="proc-pvp-"] { text-align:center !important; }',
+      '#proc-content td[id^="proc-marg-"] { text-align:center !important; }',
+      '#proc-content td[id^="proc-pvp-"].has-val { font-size:.88rem; font-weight:700; }',
+      '#proc-content td[id^="proc-marg-"].has-val { font-size:.88rem; font-weight:700; }',
+      '#proc-content .proc-cell-status { text-align:center; font-size:.75rem; font-weight:700; padding:3px 6px; white-space:nowrap; border-radius:6px; }',
       '#proc-content .proc-cell-status.ok { color:#fff; background:#2a8a2a; }',
       '#proc-content .proc-cell-status.err { color:#fff; background:#c00; }',
       '#proc-content .proc-cell-status.warn { color:#fff; background:#e67e00; }',
+
+      /* Copy button — elegant pill */
+      '#proc-content .proc-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:1px solid #d0d0d0; background:#f7f7f7; cursor:pointer; color:#888; font-size:.6rem; line-height:1; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; margin-left:4px; }',
+      '#proc-content .proc-copy-btn:hover { color:#1565c0; background:#e3f2fd; border-color:#90caf9; box-shadow:0 1px 4px rgba(21,101,192,.15); }',
+      '#proc-content .proc-copy-btn.copied { color:#2a8a2a !important; background:#f0faf0 !important; border-color:#a5d6a7 !important; }',
+      /* Ref and desc cell layout */
+      '#proc-content .proc-ref-wrap { display:inline-flex; align-items:center; width:100%; }',
+      '#proc-content .proc-desc-wrap { display:inline-flex; align-items:center; width:100%; position:relative; }',
 
       /* Toggle D */
       '#proc-content .proc-toggle-d { display:flex; justify-content:center; align-items:center; white-space:nowrap; }',
@@ -231,8 +236,8 @@
       '.proc-guia-addr-clip { font-size:.8rem; }',
 
 
-      /* Description autocomplete — global element on body */
-      '#proc-content .proc-desc-wrap { position:relative; display:block; width:100%; }',
+      /* Description autocomplete — global element lives on body */
+      '#proc-content .proc-desc-wrap { position:relative; display:inline-flex; align-items:center; width:100%; }',
       '#proc-desc-global-sugg { position:fixed; top:0; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:99999; overflow:hidden; max-height:210px; overflow-y:auto; display:none; }',
       '#proc-desc-global-sugg .proc-desc-item { padding:7px 12px; font-size:.82rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
       '#proc-desc-global-sugg .proc-desc-item:last-child { border-bottom:none; }',
@@ -1062,10 +1067,9 @@
           if (!item) return;
           e.preventDefault();
           var sg = document.getElementById('proc-desc-global-sugg');
-          var activeInp = sg._activeInput;
-          if (activeInp) {
-            activeInp.value = item.textContent;
-            activeInp.dispatchEvent(new Event('input', { bubbles: true }));
+          if (sg._activeInput) {
+            sg._activeInput.value = item.textContent;
+            sg._activeInput.dispatchEvent(new Event('input', { bubbles: true }));
           }
           sg.style.display = 'none';
         });
@@ -1118,25 +1122,30 @@
         + '<div class="proc-ref-wrap">'
         + '<input type="text" class="proc-ref-input"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
-        + '<button class="proc-copy-btn" title="Copiar refer\u00eancia" onclick="procCopyBtn(this)">&#x2398;</button>'
+        + '<button class="proc-copy-btn" title="Copiar refer\u00eancia" onclick="procCopyBtn(this)">'
+        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+        + '</button>'
         + '</div></td>'
-        + '<td class="td-desc"><div class="proc-desc-wrap">'
+        + '<td class="td-desc">'
+        + '<div class="proc-desc-wrap">'
         + '<input type="text" class="proc-desc-input"'
         + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')">'
-        + '<button class="proc-copy-btn" title="Copiar descri\u00e7\u00e3o" onclick="procCopyBtn(this)">&#x2398;</button>'
+        + '<button class="proc-copy-btn" title="Copiar descri\u00e7\u00e3o" onclick="procCopyBtn(this)">'
+        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+        + '</button>'
         + '</div></td>'
-        + '<td><input type="number" min="0" step="1"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td><input type="number" min="0" step="1"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
-        + '<td><input type="number" min="0" step="1"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"></td>'
+        + '<td><input type="number" min="0" step="1" maxlength="5"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
+        + '<td><input type="number" min="0" step="1" maxlength="5"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
+        + '<td><input type="number" min="0" step="1" maxlength="5"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
         + '<td class="center-col"><button class="proc-split-btn" onclick="procAutoSplit(' + f + ',' + r + ')"'
         + ' title="Dividir Qtd. FT entre Funchal e Porto Santo">\u00f7</button></td>'
-        + '<td><input type="number" min="0" step="0.01"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')" style="width:68px"></td>'
-        + '<td><input type="number" min="0" max="100" step="0.1"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')" style="width:46px"></td>'
+        + '<td><input type="number" min="0" step="0.01" class="proc-preco-input"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
+        + '<td><input type="number" min="0" max="100" step="0.1" class="proc-desc-pct-input"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,4)"></td>'
         + '<td class="proc-cell-status" id="proc-status-' + f + '-' + r + '">\u2014</td>'
         + '<td style="white-space:nowrap;text-align:center;padding:2px 4px">'
         + '<div style="display:flex;gap:4px;justify-content:center;align-items:center">'
@@ -2270,9 +2279,18 @@
   window.procObsSync             = procObsSync;
   window.procShowGuiaModal       = procShowGuiaModal;
   window.procCopyBtn             = procCopyBtn;
+  window.procLimitDigits         = procLimitDigits;
+
+  function procLimitDigits(input, max) {
+    var v = input.value.replace(/[^0-9.]/g,'');
+    var parts = v.split('.');
+    if (parts[0].length > max) {
+      parts[0] = parts[0].slice(0, max);
+      input.value = parts.join('.');
+    }
+  }
 
   function procCopyBtn(btn) {
-    /* Find the sibling input inside the same wrapper div */
     var wrap  = btn.parentElement;
     var input = wrap ? wrap.querySelector('input') : null;
     var text  = input ? input.value.trim() : '';
@@ -2289,10 +2307,11 @@
       }
     } catch(e) {}
     btn.classList.add('copied');
-    btn.textContent = '\u2713';
+    var origHTML = btn.innerHTML;
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     setTimeout(function() {
       btn.classList.remove('copied');
-      btn.innerHTML = '&#x2398;';
+      btn.innerHTML = origHTML;
     }, 900);
   }
 

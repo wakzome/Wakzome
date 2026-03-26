@@ -70,8 +70,8 @@
       '#proc-content .proc-total-box .proc-amount { font-size:1.15rem; font-weight:700; color:#000; }',
 
       /* Table block */
-      '#proc-content .proc-table-block { background:#fff; border:1px solid #e6e6e6; border-radius:14px; overflow:hidden; margin-bottom:10px; }',
-      '#proc-content .proc-table-wrap { overflow-x:hidden; width:100%; }',
+      '#proc-content .proc-table-block { background:#fff; border:1px solid #e6e6e6; border-radius:14px; overflow:visible; margin-bottom:10px; }',
+      '#proc-content .proc-table-wrap { overflow-x:auto; width:100%; }',
       '#proc-content .proc-table-wrap table { border-collapse:collapse; white-space:nowrap; border-radius:0; border-spacing:0; width:100%; table-layout:auto; }',
       '#proc-content .proc-table-wrap thead tr { background:#f2f2f2; border-bottom:2px solid #e0e0e0; }',
       '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; border-radius:0; }',
@@ -228,7 +228,7 @@
 
       /* Description autocomplete */
       '#proc-content .proc-desc-wrap { position:relative; display:block; width:100%; }',
-      '#proc-content .proc-desc-suggestions { position:absolute; top:calc(100% + 2px); left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:600; overflow:hidden; max-height:210px; overflow-y:auto; }',
+      '#proc-content .proc-desc-suggestions { position:fixed; top:0; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:9990; overflow:hidden; max-height:210px; overflow-y:auto; }',
       '#proc-content .proc-desc-suggestions.hidden { display:none; }',
       '#proc-content .proc-desc-item { padding:7px 12px; font-size:.82rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; white-space:nowrap; }',
       '#proc-content .proc-desc-item:last-child { border-bottom:none; }',
@@ -1061,6 +1061,11 @@
         sugg.innerHTML = matches.map(function(m) {
           return '<div class="proc-desc-item">' + m + '</div>';
         }).join('');
+        /* Position fixed relative to input */
+        var rect = inp.getBoundingClientRect();
+        sugg.style.top  = (rect.bottom + 2) + 'px';
+        sugg.style.left = rect.left + 'px';
+        sugg.style.width = Math.max(rect.width, 220) + 'px';
         sugg.classList.remove('hidden');
       });
       tbody.addEventListener('focusout', function(e) {

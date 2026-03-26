@@ -228,7 +228,7 @@
 
       /* Description autocomplete */
       '#proc-content .proc-desc-wrap { position:relative; display:block; width:100%; }',
-      '#proc-content .proc-desc-suggestions { position:fixed; top:0; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:9990; overflow:hidden; max-height:210px; overflow-y:auto; }',
+      '#proc-content .proc-desc-suggestions { position:absolute; top:100%; left:0; min-width:220px; max-width:360px; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:9990; overflow:hidden; max-height:210px; overflow-y:auto; }',
       '#proc-content .proc-desc-suggestions.hidden { display:none; }',
       '#proc-content .proc-desc-item { padding:7px 12px; font-size:.82rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; white-space:nowrap; }',
       '#proc-content .proc-desc-item:last-child { border-bottom:none; }',
@@ -1061,11 +1061,6 @@
         sugg.innerHTML = matches.map(function(m) {
           return '<div class="proc-desc-item">' + m + '</div>';
         }).join('');
-        /* Position fixed relative to input */
-        var rect = inp.getBoundingClientRect();
-        sugg.style.top  = (rect.bottom + 2) + 'px';
-        sugg.style.left = rect.left + 'px';
-        sugg.style.width = Math.max(rect.width, 220) + 'px';
         sugg.classList.remove('hidden');
       });
       tbody.addEventListener('focusout', function(e) {
@@ -1081,11 +1076,12 @@
         var item = e.target && e.target.classList.contains('proc-desc-item') ? e.target : null;
         if (!item) return;
         e.preventDefault();
-        var wrap = item.parentElement;
-        var inp  = wrap ? wrap.querySelector('.proc-desc-input') : null;
+        var suggsEl = item.parentElement;                          /* .proc-desc-suggestions */
+        var wrap    = suggsEl ? suggsEl.parentElement : null;      /* .proc-desc-wrap        */
+        var inp     = wrap ? wrap.querySelector('.proc-desc-input') : null;
         if (!inp) return;
         inp.value = item.textContent;
-        item.parentElement.classList.add('hidden');
+        if (suggsEl) suggsEl.classList.add('hidden');
       });
     }
     if (!tbody._obsListening) {

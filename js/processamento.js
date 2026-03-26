@@ -109,7 +109,7 @@
       '#proc-content .proc-cell-status.warn { color:#fff; background:#e67e00; }',
 
       /* Copy button — elegant pill */
-      '#proc-content .proc-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:1px solid #d0d0d0; background:#f7f7f7; cursor:pointer; color:#888; font-size:.6rem; line-height:1; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; margin-left:4px; }',
+      '#proc-content .proc-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:1px solid #d0d0d0; background:#f7f7f7; cursor:pointer; color:#888; font-size:.6rem; line-height:1; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; margin-right:4px; }',
       '#proc-content .proc-copy-btn:hover { color:#1565c0; background:#e3f2fd; border-color:#90caf9; box-shadow:0 1px 4px rgba(21,101,192,.15); }',
       '#proc-content .proc-copy-btn.copied { color:#2a8a2a !important; background:#f0faf0 !important; border-color:#a5d6a7 !important; }',
       /* Ref and desc cell layout */
@@ -1120,19 +1120,19 @@
       tr.innerHTML =
           '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'
-        + '<input type="text" class="proc-ref-input"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
         + '<button class="proc-copy-btn" title="Copiar refer\u00eancia" onclick="procCopyBtn(this)">'
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '</button>'
+        + '<input type="text" class="proc-ref-input"'
+        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td class="td-desc">'
         + '<div class="proc-desc-wrap">'
-        + '<input type="text" class="proc-desc-input"'
-        + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')">'
         + '<button class="proc-copy-btn" title="Copiar descri\u00e7\u00e3o" onclick="procCopyBtn(this)">'
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '</button>'
+        + '<input type="text" class="proc-desc-input"'
+        + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td><input type="number" min="0" step="1" maxlength="5"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'

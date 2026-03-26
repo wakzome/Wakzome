@@ -711,10 +711,11 @@
     tamRepairBoxInvIdx();
     var totalPieces = tamInvoices.reduce(function(s,r){ return s+r.totalPieces; },0);
     var totalRefs   = tamConsolidatedRefs().length;
-    document.getElementById('tam-status-msg').textContent =
-      tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
+    var statusMsgEl = document.getElementById('tam-status-msg');
+    statusMsgEl.textContent = tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
+    statusMsgEl.style.fontWeight = 'bold';
     document.getElementById('tam-file-name').textContent =
-      tamInvoices.map(function(r){ return r._fileName; }).join(' · ');
+      tamInvoices.map(function(r){ return r._fileName.replace(/\.pdf$/i, ''); }).join(' · ');
 
     tamRenderInvoices();
     tamRenderReception();
@@ -4921,7 +4922,7 @@
       '.tam-dd-item-info { flex:1; min-width:0; }',
       '.tam-dd-item-name { font-size:.84rem; font-weight:bold; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
       '.tam-dd-item-meta { font-size:.7rem; color:#aaa; margin-top:1px; }',
-      '.tam-dd-load-btn { padding:5px 13px; font-size:.72rem; font-weight:700; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1a237e; border-radius:7px; background:#1a237e; color:#e8eaf6; text-transform:lowercase; transition:background .15s,color .15s,box-shadow .15s; white-space:nowrap; flex-shrink:0; letter-spacing:.02em; }',
+      '.tam-dd-load-btn { padding:5px 13px; font-size:.72rem; font-weight:700; font-family:MontserratLight,sans-serif; cursor:pointer; border:1.5px solid #1a237e; border-radius:7px; background:#1a237e; color:#ffffff; text-transform:lowercase; transition:background .15s,color .15s,box-shadow .15s; white-space:nowrap; flex-shrink:0; letter-spacing:.02em; }',
       '.tam-dd-load-btn:hover { background:#0d1642; box-shadow:0 2px 8px rgba(26,35,126,.4); }',
       '.tam-dd-del-btn { background:none; border:none; cursor:pointer; font-size:.88rem; color:#ccc; padding:2px 6px; border-radius:6px; flex-shrink:0; transition:color .15s,background .15s; }',
       '.tam-dd-del-btn:hover { color:#c00; background:rgba(192,0,0,.06); }',
@@ -5601,7 +5602,7 @@
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾 guardar</button>' +
-        '<button class="tam-session-btn tam-close-session-btn" id="tam-close-session-btn" title="guardar e fechar sessão" style="display:none">🔒 fechar sessão</button>' +
+        '<button class="tam-session-btn tam-close-session-btn" id="tam-close-session-btn" title="guardar e fechar sessão" style="display:none">🔒 fechar</button>' +
         '<div class="tam-sessions-dropdown-wrap">' +
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
@@ -5610,7 +5611,7 @@
           '\ud83d\udce6 delivery notes' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
         '</label>' +
-        '<span id="tam-dn-count" style="display:none"></span>' +
+        '<span id="tam-dn-count" style="display:none;color:#fff;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" style="display:none">' +
           '\ud83d\udcf7 fotografar caixa' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +

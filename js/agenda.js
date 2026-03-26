@@ -367,6 +367,8 @@ function agBindLogic() {
   var agF = [], agFilter = 'all', agForn = null, agQ = '';
   var agSort = {col:'data',dir:'asc'}, agEditId = null;
   var TODAY = new Date(); TODAY.setHours(0,0,0,0);
+  /* Días hasta el domingo de esta semana (0 = hoy es domingo, siempre >= 0) */
+  var DAYS_TO_SUNDAY = (7 - TODAY.getDay()) % 7;
   var _editOnceActive = false;
 
   function dataKey(y)   { return 'ag_faturas_' + y; }
@@ -633,7 +635,7 @@ function agBindLogic() {
   var _hv=0;
   function rHero(){
     var pend=0,venc=0,urg=0,fp=0;
-    agF.forEach(function(f){var e=est(f);if(e==='pago'||e==='nc')return;var d=dd(f.vencimento);pend+=f.valor;fp++;if(d!==null&&d<0)venc++;else if(d!==null&&d<=7)urg++;});
+    agF.forEach(function(f){var e=est(f);if(e==='pago'||e==='nc')return;var d=dd(f.vencimento);pend+=f.valor;fp++;if(d!==null&&d<0)venc++;else if(d!==null&&d>=0&&d<=DAYS_TO_SUNDAY)urg++;});
     var hv=document.getElementById('ag-hero-value'),hs=document.getElementById('ag-hero-sub');
     var lbl=document.getElementById('ag-hero-label');
     if(lbl)lbl.textContent='total pendente '+activeYear;
@@ -644,7 +646,7 @@ function agBindLogic() {
   function rInsights(){
     var el=document.getElementById('ag-insights');if(!el)return;
     var m={},tp=0,vl=[],ul=[];
-    agF.forEach(function(f){if(!m[f.fornecedor])m[f.fornecedor]={p:0};var e=est(f);if(e==='pendente'||e==='vencida'){m[f.fornecedor].p+=f.valor;tp+=f.valor;var d=dd(f.vencimento);if(d!==null&&d<0)vl.push(f);else if(d!==null&&d<=7)ul.push(f);}});
+    agF.forEach(function(f){if(!m[f.fornecedor])m[f.fornecedor]={p:0};var e=est(f);if(e==='pendente'||e==='vencida'){m[f.fornecedor].p+=f.valor;tp+=f.valor;var d=dd(f.vencimento);if(d!==null&&d<0)vl.push(f);else if(d!==null&&d>=0&&d<=DAYS_TO_SUNDAY)ul.push(f);}});
     var ins=[];
     var topF=Object.keys(m).sort(function(a,b){return m[b].p-m[a].p;})[0];
     if(topF&&tp>0){var pct=Math.round(m[topF].p/tp*100);if(pct>40)ins.push({cls:pct>60?'warn':'',text:topF+' concentra '+pct+'% da dívida pendente — '+fmt(m[topF].p)});}
@@ -663,7 +665,7 @@ function agBindLogic() {
   }
   function rAlerts(){
     var v=[],u=[];
-    agF.forEach(function(f){if(f.estado==='pago'||f.estado==='nc')return;var d=dd(f.vencimento);if(d===null)return;if(d<0)v.push(f);else if(d<=7)u.push(f);});
+    agF.forEach(function(f){if(f.estado==='pago'||f.estado==='nc')return;var d=dd(f.vencimento);if(d===null)return;if(d<0)v.push(f);else if(d>=0&&d<=DAYS_TO_SUNDAY)u.push(f);});
     var h='';
     if(v.length)h+='<div class="ag-alert ag-av">▲ '+v.length+' fatura'+(v.length>1?'s':'')+' vencida'+(v.length>1?'s':'')+' · '+fmt(v.reduce(function(s,f){return s+f.valor;},0))+'</div>';
     if(u.length)h+='<div class="ag-alert ag-au">● '+u.length+' a vencer esta semana · '+fmt(u.reduce(function(s,f){return s+f.valor;},0))+'</div>';
@@ -712,7 +714,7 @@ function agBindLogic() {
     var e=est(f),d=dd(f.vencimento),tc=e==='vencida'?'ag-tr-v':e==='pago'||e==='nc'?'ag-tr-p':'';
     var ds=delay?(' style="animation-delay:'+delay+'ms"'):'';
     var dh='—';
-    if(f.estado!=='pago'&&f.estado!=='nc'&&d!==null){var dc=d<0?'ag-du':d<=7?'ag-dp':'ag-do',dl=d<0?Math.abs(d)+'d atraso':d===0?'hoje':d+'d';dh='<span class="ag-dias '+dc+'">'+dl+'</span>';}
+    if(f.estado!=='pago'&&f.estado!=='nc'&&d!==null){var dc=d<0?'ag-du':d<=DAYS_TO_SUNDAY?'ag-dp':'ag-do',dl=d<0?Math.abs(d)+'d atraso':d===0?'hoje':d+'d';dh='<span class="ag-dias '+dc+'">'+dl+'</span>';}
     else if(f.estado==='pago'||f.estado==='nc')dh='<span class="ag-dias ag-dd">—</span>';
     var em={pago:'<span class="ag-est ag-est-p">✓ pago</span>',pendente:'<span class="ag-est ag-est-e">● pendente</span>',vencida:'<span class="ag-est ag-est-v">▲ vencida</span>',nc:'<span class="ag-est ag-est-n">NC</span>'};
     var vc='ag-tdr'+(f.valor<0?' ag-neg':'');
@@ -753,7 +755,7 @@ function agBindLogic() {
       var pend=all.filter(function(f){return f.estado!=='pago'&&f.estado!=='nc';});
       pend.sort(function(a,b){var da=a.vencimento||'9999',db=b.vencimento||'9999';return da<db?-1:da>db?1:0;});
       var v=[],u=[],x=[],dist=[];
-      pend.forEach(function(f){var d=dd(f.vencimento);if(d===null||d<0)v.push(f);else if(d<=7)u.push(f);else if(d<=30)x.push(f);else dist.push(f);});
+      pend.forEach(function(f){var d=dd(f.vencimento);if(d===null||d<0)v.push(f);else if(d>=0&&d<=DAYS_TO_SUNDAY)u.push(f);else if(d<=30)x.push(f);else dist.push(f);});
       if(!pend.length){tb.innerHTML='';em.style.display='block';em.textContent='sem faturas pendentes · '+agForn;return;}
       em.style.display='none';var rows=[],delay=0,seq=0;
       function addSec(list,lbl,cls){if(!list.length)return;var t=list.reduce(function(s,f){return s+f.valor;},0);rows.push(secRow(lbl+' — '+list.length+' fatura'+(list.length>1?'s':''),cls));list.forEach(function(f){seq++;rows.push(bRow(f,delay,seq));delay+=32;});rows.push(subRow(list.length,t));}

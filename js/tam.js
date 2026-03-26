@@ -3621,18 +3621,25 @@
       });
     });
 
-    /* Derive QTY column range: median ± 60pt  */
+    /* Derive QTY column X using mode (most frequent X bucket, 10pt buckets).
+       Tight ±25pt margin avoids capturing the SIZE column (~50pt to the left). */
     var QTY_X_MIN, QTY_X_MAX;
     if (qtyXList.length >= 2) {
-      qtyXList.sort(function(a,b){ return a-b; });
-      var medianIdx = Math.floor(qtyXList.length / 2);
-      var medianX   = qtyXList[medianIdx];
-      QTY_X_MIN = medianX - 60;
-      QTY_X_MAX = medianX + 60;
+      var buckets = {};
+      qtyXList.forEach(function(x) {
+        var bucket = Math.round(x / 10) * 10;
+        buckets[bucket] = (buckets[bucket] || 0) + 1;
+      });
+      var modeX = null, modeCount = 0;
+      Object.keys(buckets).forEach(function(b) {
+        if (buckets[b] > modeCount) { modeCount = buckets[b]; modeX = parseFloat(b); }
+      });
+      QTY_X_MIN = modeX - 25;
+      QTY_X_MAX = modeX + 25;
     } else {
-      /* Fallback to wide range if calibration fails */
-      QTY_X_MIN = 300;
-      QTY_X_MAX = 500;
+      /* Fallback: v4 proven range */
+      QTY_X_MIN = 370;
+      QTY_X_MAX = 420;
     }
 
     /* ── 5. LEVEL A — EAN-anchored REF detection ──

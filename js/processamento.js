@@ -1065,7 +1065,7 @@
       +   '<th class="th-a4">FNC</th>'
       +   '<th class="th-a5">PXO</th>'
       +   '<th title="Dividir Qtd. FT igualmente">\u00f7</th>'
-      +   '<th>PRC</th>'
+      +   '<th>€</th>'
       +   '<th>%Desc.</th>'
       +   '<th>!</th>'
       +   '<th>D / +1\u20ac</th>'

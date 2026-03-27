@@ -169,8 +169,11 @@
       '#proc-content .proc-btn.primary { border-color:#ccc; color:#000; background:transparent; }',
       '#proc-content .proc-btn.primary:hover { background:#000; color:#fff; border-color:#000; }',
 
-      /* Session bar base */
-      '#proc-session-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0 12px; }',
+      /* Session bar — always one row, label left, buttons right */
+      '#proc-session-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0 12px; flex-wrap:nowrap; }',
+      '#proc-session-bar-left { display:flex; align-items:center; gap:6px; min-width:0; flex:1; overflow:hidden; }',
+      '#proc-session-bar-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }',
+      '#proc-session-bar .proc-session-dropdown { position:absolute; }',
 
       /* Floating action buttons — visible only when top bar scrolls out */
       '#proc-float-actions { position:fixed; right:16px; bottom:24px; display:none; flex-direction:column; gap:10px; z-index:1200; transition:opacity 0.2s; }',
@@ -329,7 +332,6 @@
       /* ── RESPONSIVE ── */
       '@media (max-width:768px) {',
       '  #proc-content { padding:10px; }',
-      '  #proc-session-bar { padding:6px 0 10px; gap:6px; }',
       '  #proc-content .proc-fatura-banner { padding:14px 14px; flex-wrap:wrap; gap:8px; }',
       '  #proc-content .proc-fatura-banner-provider { font-size:1.15rem; }',
       '  #proc-content .proc-header-card { grid-template-columns:1fr; gap:12px; padding:14px; }',
@@ -1882,13 +1884,17 @@
         '<div class="page-wrap">'
       /* ── Session bar — always visible, never blocking ── */
       +   '<div id="proc-session-bar">'
-      +     '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;display:none;"></span>'
-      +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1;display:none;"></span>'
-      +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
-      +     '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
-      +     '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
-      +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#9B4D4D;color:#9B4D4D;background:transparent;">&#x23CF;&#xFE0F;</button>'
-      +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:transparent;">&#128203;</button>'
+      +     '<div id="proc-session-bar-left">'
+      +       '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;display:none;"></span>'
+      +       '<span id="proc-saveStatus" class="proc-save-status" style="display:none;"></span>'
+      +     '</div>'
+      +     '<div id="proc-session-bar-right">'
+      +       '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
+      +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
+      +       '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
+      +       '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#9B4D4D;color:#9B4D4D;background:transparent;">&#x23CF;&#xFE0F;</button>'
+      +       '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:transparent;">&#128203;</button>'
+      +     '</div>'
       +   '</div>'
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'
@@ -1927,7 +1933,7 @@
 
     /* ── Styles for new elements ── */
     var sb = document.getElementById('proc-session-bar');
-    if (sb) sb.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 0 14px;border-bottom:1px solid #9DB6C9;margin-bottom:18px;position:relative;';
+    if (sb) sb.style.cssText = 'border-bottom:1px solid #9DB6C9;margin-bottom:18px;position:relative;';
 
     var ss = document.getElementById('proc-session-start');
     if (ss) ss.style.cssText = 'display:flex;justify-content:center;padding:32px 0;';
@@ -2058,8 +2064,6 @@
     if (saveBtn) saveBtn.style.display = '';
     if (guiaBtn) guiaBtn.style.display = '';
     if (saveStatus) saveStatus.style.display = '';
-    var sb = document.getElementById('proc-session-bar');
-    if (sb) sb.style.justifyContent = 'space-between';
     /* Update label in session bar */
     var lbl = document.getElementById('proc-session-label');
     if (lbl && key) { lbl.textContent = labelFromKey(key); lbl.style.display = ''; }
@@ -2087,8 +2091,6 @@
     if (saveBtn) saveBtn.style.display = 'none';
     if (guiaBtn) guiaBtn.style.display = 'none';
     if (saveStatus) saveStatus.style.display = 'none';
-    var sb = document.getElementById('proc-session-bar');
-    if (sb) sb.style.justifyContent = 'center';
     /* Hide floating buttons */
     procHideFloatingButtons();
     /* Reload remote keys then render */

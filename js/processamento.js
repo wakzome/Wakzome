@@ -167,7 +167,7 @@
 
       /* Floating action buttons */
       '#proc-float-actions { position:fixed; right:20px; top:50%; transform:translateY(-50%); display:none; flex-direction:column; gap:10px; z-index:1200; }',
-      '#proc-float-actions .proc-float-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:56px; height:56px; border-radius:14px; border:1.5px solid; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.58rem; font-weight:700; text-transform:lowercase; letter-spacing:.03em; line-height:1.2; transition:all 0.18s; box-shadow:0 4px 16px rgba(0,0,0,.14); }',
+      '#proc-float-actions .proc-float-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:56px; height:56px; border-radius:14px; border:1.5px solid; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.52rem; font-weight:700; text-transform:lowercase; letter-spacing:.03em; line-height:1.2; transition:all 0.18s; box-shadow:0 4px 16px rgba(0,0,0,.14); }',
       '#proc-float-actions .proc-float-btn:hover { transform:scale(1.08); box-shadow:0 6px 22px rgba(0,0,0,.22); }',
       '#proc-float-actions .proc-float-btn:active { transform:scale(0.96); }',
       '#proc-float-actions .proc-float-btn-icon { font-size:1.2rem; line-height:1; }',

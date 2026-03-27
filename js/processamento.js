@@ -1791,9 +1791,9 @@
       +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1;display:none;"></span>'
       +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
       +     '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
-      +     '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190; guardar</button>'
+      +     '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
       +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#9B4D4D;color:#9B4D4D;background:#F5EAEA;">&#x23CF;&#xFE0F;</button>'
-      +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:#E8EFF4;">&#128203; guia</button>'
+      +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:#E8EFF4;">&#128203;</button>'
       +   '</div>'
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'

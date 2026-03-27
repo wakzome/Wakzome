@@ -2929,6 +2929,91 @@
     return { f:f, p:p };
   }
 
+  /* ── Colores por sesión antigua (índice 0 = más reciente distinta a la activa) ── */
+  var TAM_SESSION_COLORS = ['#F59E0B','#8B5CF6','#3B82F6','#6B7280'];
+  function tamSessionColor(idx) {
+    return TAM_SESSION_COLORS[Math.min(idx, TAM_SESSION_COLORS.length - 1)];
+  }
+
+  /* ── Recopilar pendientes de sesiones anteriores ── */
+  function tamGetPendingFromOtherSessions() {
+    var allSessions = tamLoadAllSessionsLocal();
+    var results = []; // [{ ref, invIdx, sessionKey, sessionName, pendF, pendP }]
+    // Sort sessions by savedAt descending (most recent first), skip active
+    var keys = Object.keys(allSessions)
+      .filter(function(k){ return !tamSession || allSessions[k].name !== tamSession.name; })
+      .sort(function(a,b){ return (allSessions[b].savedAt||0) - (allSessions[a].savedAt||0); });
+
+    keys.forEach(function(key){
+      var s = allSessions[key];
+      if (!s.invoices || !s.boxes) return;
+      s.invoices.forEach(function(inv, invIdx){
+        (inv.grouped || []).forEach(function(g){
+          // Calcular distribuido en cajas de esa sesión
+          var distF = 0, distP = 0;
+          s.boxes.forEach(function(box){
+            if (box.refs && box.refs[g.ref]) {
+              distF += box.refs[g.ref].f || 0;
+              distP += box.refs[g.ref].p || 0;
+            }
+          });
+          if (distF === 0 && distP === 0) return; // nunca distribuido
+          // Calcular ya enviado en esa sesión
+          var sentKey = g.ref + '___' + invIdx;
+          var lotes = (s.sentRefs || {})[sentKey] || [];
+          var sentF = 0, sentP = 0;
+          lotes.forEach(function(l){ sentF += l.f||0; sentP += l.p||0; });
+          var pendF = Math.max(0, distF - sentF);
+          var pendP = Math.max(0, distP - sentP);
+          if (pendF > 0 || pendP > 0) {
+            results.push({
+              ref:         g.ref,
+              invIdx:      invIdx,
+              sessionKey:  key,
+              sessionName: s.name,
+              pendF:       pendF,
+              pendP:       pendP,
+              sentF:       sentF,
+              sentP:       sentP,
+              totalF:      distF,
+              totalP:      distP,
+              done:        false,
+              _fromOtherSession: true
+            });
+          }
+        });
+      });
+    });
+    return results;
+  }
+
+  /* ── Confirmar envío de pendientes de sesiones anteriores ── */
+  function tamConfirmOtherSessionsEnvio(rows) {
+    var today = new Date().toISOString().slice(0,10);
+    // Group by sessionKey
+    var bySession = {};
+    rows.forEach(function(row){
+      if (!row._fromOtherSession) return;
+      if (!bySession[row.sessionKey]) bySession[row.sessionKey] = [];
+      bySession[row.sessionKey].push(row);
+    });
+    var allSessions = tamLoadAllSessionsLocal();
+    Object.keys(bySession).forEach(function(sKey){
+      var s = allSessions[sKey];
+      if (!s) return;
+      if (!s.sentRefs) s.sentRefs = {};
+      bySession[sKey].forEach(function(row){
+        var key = row.ref + '___' + row.invIdx;
+        if (!s.sentRefs[key]) s.sentRefs[key] = [];
+        s.sentRefs[key].push({ data: today, f: row.pendF, p: row.pendP });
+      });
+      allSessions[sKey] = s;
+      // Save to Supabase too
+      tamSaveSessionSupabase(s);
+    });
+    try { localStorage.setItem('tam_sessions', JSON.stringify(allSessions)); } catch(e){}
+  }
+
   /* ── Construir linhas da guia para uma fatura ── */
   function tamBuildGuiaRows(invIdx) {
     var r = tamInvoices[invIdx];
@@ -3024,7 +3109,22 @@
       ? 'Guía Consolidada · ' + tamInvoices.length + ' fatura(s)'
       : 'Guía · ' + tamEsc(tamInvoices[invIdx].invoiceNo);
 
-    var pendRows = rows.filter(function(r){ return !r.done; });
+    /* ── Pendientes de sesiones anteriores ── */
+    var otherRows = tamGetPendingFromOtherSessions();
+
+    /* Asignar color por sesión (orden: más reciente = color[0]) */
+    var sessionColorMap = {};
+    var sessionColorIdx = 0;
+    otherRows.forEach(function(row){
+      if (!sessionColorMap[row.sessionKey]) {
+        sessionColorMap[row.sessionKey] = tamSessionColor(sessionColorIdx++);
+      }
+      row._dotColor = sessionColorMap[row.sessionKey];
+    });
+
+    /* Combinar: filas activas primero, luego otras sesiones */
+    var allPendRows = rows.filter(function(r){ return !r.done; }).concat(otherRows);
+    var pendRows = allPendRows;
     var sentRows = rows.filter(function(r){ return  r.done; });
 
     var old = document.getElementById('tam-guia-modal');
@@ -3037,18 +3137,22 @@
     var COL_G = ['Ref. Funchal','Qtd. F','Ref. Porto Santo','Qtd. PS'];
 
     function buildTableRows(rowList) {
-      if (!rowList.length) return '<tr><td colspan="4" class="tam-guia-empty">Sem referências pendentes</td></tr>';
+      if (!rowList.length) return '<tr><td colspan="5" class="tam-guia-empty">Sem referências pendentes</td></tr>';
       return rowList.map(function(row, i){
         var cls = row.done ? ' tam-guia-row-sent' : (i%2===0 ? ' tam-guia-row-even' : ' tam-guia-row-odd');
         var fQty = row.done ? row.totalF : row.pendF;
         var pQty = row.done ? row.totalP : row.pendP;
         var fDisp = fQty > 0 ? fQty : '—';
         var pDisp = pQty > 0 ? pQty : '—';
+        /* Dot: only for rows from other sessions, not copyable */
+        var dot = row._dotColor
+          ? '<span class="tam-guia-session-dot" style="color:' + row._dotColor + ';user-select:none;-webkit-user-select:none;" aria-hidden="true">●</span>'
+          : '';
         return '<tr class="tam-guia-tr' + cls + '">' +
-          '<td class="tam-guia-td tam-guia-ref-f" data-gcol="0">' + (fQty>0 ? tamEsc(row.ref) : '') + '</td>' +
+          '<td class="tam-guia-td tam-guia-ref-f" data-gcol="0">' + (fQty>0 ? dot + tamEsc(row.ref) : '') + '</td>' +
           '<td class="tam-guia-td tam-guia-qty-f" data-gcol="1">' + (fQty>0 ? fDisp : '') + '</td>' +
           '<td class="tam-guia-td tam-guia-sep"></td>' +
-          '<td class="tam-guia-td tam-guia-ref-p" data-gcol="2">' + (pQty>0 ? tamEsc(row.ref) : '') + '</td>' +
+          '<td class="tam-guia-td tam-guia-ref-p" data-gcol="2">' + (pQty>0 ? dot + tamEsc(row.ref) : '') + '</td>' +
           '<td class="tam-guia-td tam-guia-qty-p" data-gcol="3">' + (pQty>0 ? pDisp : '') + '</td>' +
         '</tr>';
       }).join('');
@@ -3071,6 +3175,22 @@
       ? '<tr class="tam-guia-sent-hdr"><td colspan="5">✓ Já enviado (' + sentRows.length + ' refs · ' + fSent + ' F · ' + pSent + ' PS)</td></tr>' +
         buildTableRows(sentRows)
       : '';
+
+    /* ── Leyenda de sesiones anteriores ── */
+    var legendHtml = '';
+    var legendKeys = Object.keys(sessionColorMap);
+    if (legendKeys.length) {
+      legendHtml = '<div id="tam-guia-session-legend">' +
+        legendKeys.map(function(k){
+          var color = sessionColorMap[k];
+          var name  = (tamLoadAllSessionsLocal()[k] || {}).name || k;
+          return '<span class="tam-guia-legend-item">' +
+            '<span style="color:' + color + ';user-select:none;-webkit-user-select:none;">●</span> ' +
+            tamEsc(name) +
+          '</span>';
+        }).join('') +
+      '</div>';
+    }
 
     modal.innerHTML =
       '<div id="tam-guia-backdrop"></div>' +
@@ -3103,24 +3223,31 @@
             '</tr></thead>' +
             '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>' +
           '</table>' +
+          legendHtml +
         '</div>' +
         '<div id="tam-guia-footer">' +
           pendRows.length + ' refs pendentes · ' + fPend + ' uds Funchal · ' + pPend + ' uds Porto Santo' +
           (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '') +
+          (otherRows.length ? ' · ' + otherRows.length + ' de sessões anteriores' : '') +
         '</div>' +
       '</div>';
 
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-guia-visible'); });
 
-    /* ── Copy column ── */
+    /* ── Copy column — extrae solo textContent de celdas, el dot tiene user-select:none ── */
     var copyMsg   = modal.querySelector('#tam-guia-copy-msg');
     var copyTimer = null;
     modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
         var ci   = parseInt(btn.getAttribute('data-gcol'));
         var vals = Array.from(modal.querySelectorAll('td[data-gcol="'+ci+'"]'))
-                       .map(function(td){ return td.textContent.trim(); })
+                       .map(function(td){
+                         /* Remove dot spans before reading text */
+                         var clone = td.cloneNode(true);
+                         clone.querySelectorAll('.tam-guia-session-dot').forEach(function(d){ d.parentNode.removeChild(d); });
+                         return clone.textContent.trim();
+                       })
                        .filter(function(v){ return v && v !== '—'; });
         if (!vals.length) return;
         modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
@@ -3172,7 +3299,10 @@
         confirmDiv.parentNode.removeChild(confirmDiv);
       });
       confirmDiv.querySelector('.tam-gc-ok').addEventListener('click', function(){
-        tamConfirmGuiaEnvio(pendRows);
+        /* Confirmar en sesión activa las filas normales */
+        tamConfirmGuiaEnvio(pendRows.filter(function(r){ return !r._fromOtherSession; }));
+        /* Confirmar en sus sesiones de origen las filas de otras sesiones */
+        tamConfirmOtherSessionsEnvio(pendRows.filter(function(r){ return r._fromOtherSession; }));
         confirmDiv.parentNode.removeChild(confirmDiv);
         closeModal();
         // Re-open to show updated state
@@ -5599,6 +5729,9 @@
       '.tam-guia-sent-hdr td { padding:6px 14px; background:#f0faf0; font-size:.72rem; font-weight:bold; color:#2e7d32; text-transform:uppercase; letter-spacing:.04em; border-top:2px solid #c8e6c9; border-bottom:1px solid #c8e6c9; }',
       '.tam-guia-empty { padding:18px 14px; color:#bbb; font-style:italic; text-align:center; }',
       '#tam-guia-footer { padding:8px 20px; font-size:.72rem; color:#888; border-top:1px solid #eee; background:#fafafa; font-family:MontserratLight,sans-serif; flex-shrink:0; }',
+      '.tam-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
+      '#tam-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#888; font-family:MontserratLight,sans-serif; border-top:1px dashed #e8e8e8; }',
+      '.tam-guia-legend-item { display:flex; align-items:center; gap:4px; }',
       /* ── Guia confirm overlay ── */
       '#tam-guia-confirm-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.88); border-radius:16px; }',
       '#tam-guia-confirm-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.22); padding:24px 28px; width:min(380px,90%); font-family:MontserratLight,sans-serif; }',

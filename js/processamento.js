@@ -142,12 +142,22 @@
       '#proc-content .proc-table-footer { background:#fafafa; border:1px solid #e6e6e6; border-radius:14px; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }',
       '#proc-content .proc-summary-line { display:flex; gap:20px; font-size:.78rem; color:#000; font-weight:700; }',
       '#proc-content .proc-summary-line strong { color:#000; }',
-      '#proc-content .proc-diff-chip { font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:20px; border:1.5px solid; display:inline-block; transition:all 0.3s ease; }',
+      '#proc-content .proc-diff-chip { font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:20px; border:1.5px solid; display:inline-flex; align-items:center; gap:5px; transition:all 0.3s ease; }',
       '#proc-content .proc-diff-chip.zero { border-color:#1a7a1a; color:#fff; background:linear-gradient(135deg,#2a8a2a,#3daf3d); font-size:.88rem; padding:5px 14px; border-radius:24px; box-shadow:0 2px 10px rgba(42,138,42,.35); letter-spacing:.02em; animation:proc-chip-pop 0.35s cubic-bezier(.36,.07,.19,.97); }',
-      '#proc-content .proc-diff-chip.pos { border-color:#e67e00; color:#e67e00; background:#fff8f0; }',
-      '#proc-content .proc-diff-chip.neg { border-color:#c00; color:#c00; background:#fff0f0; }',
+      '#proc-content .proc-diff-chip.pos { border-color:#b85c00; color:#fff; background:linear-gradient(135deg,#e67e00,#ff9a2e); font-size:.95rem; font-weight:800; padding:6px 16px; border-radius:24px; box-shadow:0 3px 14px rgba(230,126,0,.45); letter-spacing:.02em; animation:proc-chip-shake 0.4s cubic-bezier(.36,.07,.19,.97); }',
+      '#proc-content .proc-diff-chip.neg { border-color:#900; color:#fff; background:linear-gradient(135deg,#c00,#e53935); font-size:.95rem; font-weight:800; padding:6px 16px; border-radius:24px; box-shadow:0 3px 16px rgba(200,0,0,.5); letter-spacing:.02em; animation:proc-chip-shake 0.4s cubic-bezier(.36,.07,.19,.97); }',
       '@keyframes proc-chip-pop { 0%{transform:scale(.85);opacity:.6} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }',
+      '@keyframes proc-chip-shake { 0%{transform:scale(.85) rotate(-1deg);opacity:.5} 30%{transform:scale(1.1) rotate(1deg)} 60%{transform:scale(1.05) rotate(-0.5deg)} 100%{transform:scale(1) rotate(0deg);opacity:1} }',
       '#proc-content .proc-footer-actions { display:flex; gap:8px; }',
+
+      /* Flag / alert button per row */
+      '#proc-content .proc-flag-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0; border:1.5px solid #ddd; background:#f7f7f7; cursor:pointer; color:#bbb; font-size:.7rem; line-height:1; border-radius:5px; flex-shrink:0; transition:all .15s; }',
+      '#proc-content .proc-flag-btn:hover { color:#e67e00; background:#fff3e0; border-color:#e67e00; }',
+      '#proc-content .proc-flag-btn.flagged { color:#fff; background:#e53935; border-color:#c62828; box-shadow:0 1px 6px rgba(229,57,53,.5); animation:proc-flag-pulse 1.8s ease-in-out infinite; }',
+      '@keyframes proc-flag-pulse { 0%,100%{box-shadow:0 1px 6px rgba(229,57,53,.5)} 50%{box-shadow:0 2px 12px rgba(229,57,53,.8)} }',
+      /* Flagged row highlight */
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged { background:linear-gradient(90deg,rgba(229,57,53,.10) 0%,rgba(255,235,238,.45) 100%) !important; outline:2px solid rgba(229,57,53,.35); outline-offset:-1px; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover { background:linear-gradient(90deg,rgba(229,57,53,.16) 0%,rgba(255,235,238,.6) 100%) !important; }',
 
       /* Buttons */
       '#proc-content .proc-btn { padding:7px 16px; border:1px solid #ccc; border-radius:8px; background:#fff; color:#000; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; text-transform:lowercase; cursor:pointer; transition:all 0.15s; white-space:nowrap; }',
@@ -990,6 +1000,12 @@
         if (dCb)     dCb.checked     = !!row.hasD;
         if (pCb)     pCb.checked     = !!row.plus1;
         if (oIn)     oIn.value       = row.obs || '';
+        if (row.flagged) {
+          var flagBtn = document.getElementById('proc-flag-' + fid + '-' + rid);
+          var flagTr  = document.getElementById('proc-row-'  + fid + '-' + rid);
+          if (flagBtn) flagBtn.classList.add('flagged');
+          if (flagTr)  flagTr.classList.add('proc-row-flagged');
+        }
         procRecalcRow(fid, rid);
       });
       procUpdateHeader(fid);
@@ -1045,6 +1061,7 @@
       +   '<th>PVP \u20ac</th>'
       +   '<th>Margem</th>'
       +   '<th class="left">OBS</th>'
+      +   '<th title="Assinalar linha">&#9873;</th>'
       +   '</tr></thead>'
       +   '<tbody id="proc-tableBody-' + fid + '"></tbody>'
       +   '</table></div></div>'
@@ -1198,6 +1215,11 @@
         + '<td class="proc-obs-cell">'
         +   '<input type="text" class="proc-obs-input" id="proc-obs-' + f + '-' + r + '">'
         +   '<div class="proc-obs-tip" id="proc-obs-tip-' + f + '-' + r + '"></div>'
+        + '</td>'
+        + '<td style="text-align:center;padding:2px 4px;">'
+        +   '<button class="proc-flag-btn" id="proc-flag-' + f + '-' + r + '" title="Assinalar linha" onclick="procToggleFlag(' + f + ',' + r + ')">'
+        +   '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3v18M4 3h12l-3 5 3 5H4"/></svg>'
+        +   '</button>'
         + '</td>';
       tbody.appendChild(tr);
     }
@@ -1549,11 +1571,13 @@
       var hasD3 = dCb ? dCb.checked : false;
       var plus3 = pCb ? pCb.checked : false;
       var obs   = oIn ? oIn.value   : '';
+      var flagBtn = document.getElementById('proc-flag-' + fid + '-' + i);
+      var flagged = flagBtn ? flagBtn.classList.contains('flagged') : false;
       if (!ref && !preco) continue;
       var pc3 = procCalcPrecoCusto(preco, plus3, hasD3, qtdFt, a4, a5);
       result.push({ ref:ref, desc:desc, qtdFt:qtdFt, a4:a4, a5:a5,
                     preco:preco, descPct:dPct, hasD:hasD3, plus1:plus3,
-                    precoCusto:pc3, obs:obs });
+                    precoCusto:pc3, obs:obs, flagged:flagged });
     }
     return result;
   }
@@ -2328,6 +2352,7 @@
   window.procShowGuiaModal       = procShowGuiaModal;
   window.procCopyBtn             = procCopyBtn;
   window.procLimitDigits         = procLimitDigits;
+  window.procToggleFlag          = procToggleFlag;
 
   function procLimitDigits(input, max) {
     var v = input.value.replace(/[^0-9.]/g,'');
@@ -2361,6 +2386,16 @@
       btn.classList.remove('copied');
       btn.innerHTML = origHTML;
     }, 900);
+  }
+
+  function procToggleFlag(fid, id) {
+    var btn = document.getElementById('proc-flag-' + fid + '-' + id);
+    var tr  = document.getElementById('proc-row-'  + fid + '-' + id);
+    if (!btn || !tr) return;
+    var on = btn.classList.toggle('flagged');
+    if (on) { tr.classList.add('proc-row-flagged'); }
+    else    { tr.classList.remove('proc-row-flagged'); }
+    procSaveSession(false);
   }
 
   function procObsSync(input) {

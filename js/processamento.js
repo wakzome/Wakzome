@@ -1755,14 +1755,14 @@
     saveBtn.id = 'proc-float-save';
     saveBtn.className = 'proc-float-btn';
     saveBtn.title = 'Guardar sessão';
-    saveBtn.innerHTML = '<span class="proc-float-btn-icon">&#128190;</span>guardar';
+    saveBtn.innerHTML = '<span class="proc-float-btn-icon">&#128190;</span>';
     saveBtn.addEventListener('click', function() { procSaveSession(true); });
 
     var closeBtn = document.createElement('button');
     closeBtn.id = 'proc-float-close';
     closeBtn.className = 'proc-float-btn';
     closeBtn.title = 'Guardar e fechar a sessão activa';
-    closeBtn.innerHTML = '<span class="proc-float-btn-icon">&#x23CF;&#xFE0F;</span>fechar';
+    closeBtn.innerHTML = '<span class="proc-float-btn-icon">&#x23CF;&#xFE0F;</span>';
     closeBtn.addEventListener('click', function() { procCloseActiveSession(); });
 
     wrap.appendChild(saveBtn);

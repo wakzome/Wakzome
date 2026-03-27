@@ -587,7 +587,7 @@
       faturas: activeFaturas.map(function(fid) {
         var rows = procCollectRows(fid).map(function(r) {
           return { ref:r.ref, desc:r.desc, qtdFt:r.qtdFt, a4:r.a4, a5:r.a5,
-                   preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs };
+                   preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs, flagged:r.flagged };
         });
         return {
           proveedor:    (document.getElementById('proc-proveedor-'    + fid) || {}).value || '',
@@ -1573,7 +1573,7 @@
       var obs   = oIn ? oIn.value   : '';
       var flagBtn = document.getElementById('proc-flag-' + fid + '-' + i);
       var flagged = flagBtn ? flagBtn.classList.contains('flagged') : false;
-      if (!ref && !preco) continue;
+      if (!ref && !preco && !flagged) continue;
       var pc3 = procCalcPrecoCusto(preco, plus3, hasD3, qtdFt, a4, a5);
       result.push({ ref:ref, desc:desc, qtdFt:qtdFt, a4:a4, a5:a5,
                     preco:preco, descPct:dPct, hasD:hasD3, plus1:plus3,

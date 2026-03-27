@@ -47,7 +47,7 @@
       '#proc-content .proc-fatura-banner { background:transparent; border-radius:12px 12px 0 0; padding:18px 24px; display:flex; align-items:center; justify-content:space-between; border:1px solid #e0e0e0; border-bottom:none; }',
       '#proc-content .proc-fatura-banner-left { display:flex; align-items:center; gap:10px; }',
       '#proc-content .proc-fatura-banner-num { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000 !important; }',
-      '#proc-content .proc-fatura-banner-provider { font-size:1.2rem; font-weight:300; color:#000 !important; letter-spacing:.02em; }',
+      '#proc-content .proc-fatura-banner-provider { font-size:1.5rem; font-weight:800; color:#000 !important; letter-spacing:.02em; }',
       '#proc-content .proc-remove-fatura-btn { padding:3px 11px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.68rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
       '#proc-content .proc-remove-fatura-btn:hover { border-color:#c47a7a; color:#c47a7a; background:rgba(155,77,77,.12); }',
 
@@ -96,13 +96,13 @@
       '#proc-content .proc-table-wrap td.td-desc { min-width:160px; }',
 
       /* Row misc */
-      '#proc-content .proc-cell-computed { padding:3px 6px; font-size:.85rem; font-weight:700; text-align:center; color:#000; white-space:nowrap; }',
-      '#proc-content .proc-cell-computed.has-val { color:#000; font-weight:700; }',
+      '#proc-content .proc-cell-computed { padding:3px 6px; font-size:.85rem; font-weight:800; text-align:center; color:#000; white-space:nowrap; }',
+      '#proc-content .proc-cell-computed.has-val { color:#000; font-weight:800; }',
       /* PVP and Margem centered */
       '#proc-content td[id^="proc-pvp-"] { text-align:center !important; }',
       '#proc-content td[id^="proc-marg-"] { text-align:center !important; }',
-      '#proc-content td[id^="proc-pvp-"].has-val { font-size:.88rem; font-weight:700; }',
-      '#proc-content td[id^="proc-marg-"].has-val { font-size:.88rem; font-weight:700; }',
+      '#proc-content td[id^="proc-pvp-"].has-val { font-size:.88rem; font-weight:800; }',
+      '#proc-content td[id^="proc-marg-"].has-val { font-size:.88rem; font-weight:800; }',
       '#proc-content .proc-cell-status { text-align:center; font-size:.75rem; font-weight:700; padding:3px 6px; white-space:nowrap; border-radius:6px; }',
       '#proc-content .proc-cell-status.ok { color:#fff; background:#4A7C6F; }',
       '#proc-content .proc-cell-status.err { color:#fff; background:#9B4D4D; }',
@@ -191,7 +191,7 @@
       '#proc-content .proc-add-fatura-btn:hover { background:#000; color:#fff; border-style:solid; }',
 
       /* Disclaimer */
-      '#proc-content .proc-disclaimer-msg { margin:4px 0 6px; padding:10px 16px; background:transparent; border:none; border-radius:0; font-size:.75rem; font-weight:400; color:#000; letter-spacing:.03em; text-align:center; opacity:.6; }',
+      '#proc-content .proc-disclaimer-msg { margin:4px 0 6px; padding:10px 16px; background:transparent; border:none; border-radius:0; font-size:.75rem; font-weight:800; color:#000; letter-spacing:.03em; text-align:center; opacity:1; }',
 
       /* ── GUIA MODAL ── */
       '#proc-guia-modal { position:fixed; inset:0; z-index:5000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',

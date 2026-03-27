@@ -1829,19 +1829,29 @@
     });
   }
 
-  /* Load a session from the start panel (non-blocking) */
+  /* Load a session from the start panel — always forces remote fetch first */
   function procLoadSessionFromStart(key) {
-    procSetSyncStatus('syncing', 'a carregar\u2026');
+    procSetSyncStatus('syncing', 'a actualizar\u2026');
     procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key) + '&select=dados', { method: 'GET' })
       .then(function(r) { return r.json(); })
       .then(function(rows) {
-        var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : localStorage.getItem(key);
-        if (!raw) { procSetSyncStatus('error', 'sess\u00e3o n\u00e3o encontrada'); return; }
+        var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : null;
+        if (!raw) {
+          raw = localStorage.getItem(key);
+          if (!raw) { procSetSyncStatus('error', 'sess\u00e3o n\u00e3o encontrada'); return; }
+          procApplySessionData(key, raw, function() {
+            procMarkSynced();
+            procShowMainArea(key);
+            procSetSyncStatus('offline', 'sem dados remotos \u2014 carregado localmente');
+          });
+          return;
+        }
+        /* Force-overwrite localStorage with freshest remote data */
         try { localStorage.setItem(key, raw); } catch(e) {}
         procApplySessionData(key, raw, function() {
           procMarkSynced();
           procShowMainArea(key);
-          procSetSyncStatus('ok', 'sess\u00e3o carregada');
+          procSetSyncStatus('ok', '\u2713 actualizado e carregado');
         });
       })
       .catch(function() {
@@ -1850,7 +1860,7 @@
         procApplySessionData(key, raw, function() {
           procMarkSynced();
           procShowMainArea(key);
-          procSetSyncStatus('offline', 'carregado localmente');
+          procSetSyncStatus('offline', 'offline \u2014 carregado localmente');
         });
       });
   }

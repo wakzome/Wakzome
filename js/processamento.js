@@ -1788,7 +1788,16 @@
 
     /* ── Styles for new elements ── */
     var sb = document.getElementById('proc-session-bar');
-    if (sb) sb.style.cssText = 'position:sticky;top:0;z-index:200;background:#fff;border-bottom:1px solid #e0e0e0;box-shadow:0 2px 8px rgba(0,0,0,.07);padding:8px 0;width:100%;margin-bottom:18px;';
+    if (sb) sb.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:1500;background:#fff;border-bottom:1px solid #e0e0e0;box-shadow:0 2px 8px rgba(0,0,0,.1);padding:8px 0;width:100%;';
+
+    /* Measure bar height and push content down so nothing hides under it */
+    requestAnimationFrame(function() {
+      var barH = sb ? sb.offsetHeight : 52;
+      var content = document.getElementById('proc-content');
+      if (content) content.style.paddingTop = barH + 'px';
+      var pw = content ? content.querySelector('.page-wrap') : null;
+      if (pw) pw.style.paddingTop = '8px';
+    });
 
     var ss = document.getElementById('proc-session-start');
     if (ss) ss.style.cssText = 'display:flex;justify-content:center;padding:32px 0;';

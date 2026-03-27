@@ -5,16 +5,9 @@
 <!-- ===== INTRO ===== -->
 <style>
 @font-face {
-    font-family: 'RedHatDisplay';
-    src: url('RedHatDisplay-VariableFont_wght.ttf') format('truetype');
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: block;
-}
-@font-face {
-    font-family: 'DMSans';
-    src: url('DMSans-VariableFont_opsz_wght.ttf') format('truetype');
-    font-weight: 100 900;
+    font-family: 'MontserratLight';
+    src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
+    font-weight: 300;
     font-style: normal;
     font-display: block;
 }
@@ -30,7 +23,7 @@
   justify-content:center;
   align-items:center;
   z-index:9999;
-  font-family:'RedHatDisplay', sans-serif;
+  font-family:'MontserratLight', sans-serif;
   transition: opacity 1.4s cubic-bezier(0.4,0,0.2,1);
   perspective: 900px;
 }
@@ -75,16 +68,14 @@
 }
 
 input, button, select, textarea {
-    font-family: 'DMSans', sans-serif !important;
-    font-weight: 400;
-    font-style: normal;
+    font-family: 'MontserratLight', sans-serif !important;
+    font-weight: 300;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 select, select option {
-    font-family: 'DMSans', sans-serif !important;
-    font-weight: 400 !important;
-    font-style: normal !important;
+    font-family: 'MontserratLight', sans-serif !important;
+    font-weight: 300 !important;
 }
 </style>
 <!-- ===== INTRO ===== -->
@@ -96,36 +87,22 @@ select, select option {
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<link rel="preload" href="RedHatDisplay-VariableFont_wght.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="preload" href="DMSans-VariableFont_opsz_wght.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
 <style>
 /* ─── INDEX: reset y base ─── */
 @font-face {
-  font-family: 'RedHatDisplay';
-  src: url('RedHatDisplay-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: block;
-}
-@font-face {
-  font-family: 'DMSans';
-  src: url('DMSans-VariableFont_opsz_wght.ttf') format('truetype');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: block;
+  font-family: 'MontserratLight';
+  src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
+  font-weight: 300; font-style: normal; font-display: block;
 }
 html, body {
   margin:0; padding:0; height:100%;
-  font-family:'DMSans', sans-serif;
+  font-family:'MontserratLight', sans-serif;
   background:#fff; color:#000; overflow:hidden;
   color-scheme: only light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-}
-/* ─── GLOBAL: nunca itálico, nunca ─── */
-*, *::before, *::after {
-  font-style: normal !important;
 }
 body {
   display:flex; flex-direction:column;
@@ -153,8 +130,7 @@ body {
 }
 #login-screen.visible { opacity:1; transform: translateY(0); }
 #login-screen .logo-text {
-  font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 300;
-  font-family: 'RedHatDisplay', sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 100;
   text-transform: lowercase; color: #000;
   letter-spacing: .1em; margin-bottom: 20px;
 }
@@ -198,7 +174,7 @@ body {
 #main-header { display:flex; flex-direction:row; align-items:flex-start; justify-content:center; margin-bottom:10px; opacity:0; transition: opacity 1s ease; position:relative; width:100%; }
 #main-header.show { opacity:1; }
 #main-header-center { display:flex; flex-direction:column; align-items:center; }
-#main-header .logo-text { font-size:3rem; font-family:'RedHatDisplay', sans-serif; font-weight:300; text-transform:lowercase; margin-bottom:0px; line-height:1;}
+#main-header .logo-text { font-size:3rem; text-transform:lowercase; margin-bottom:0px; line-height:1;}
 #main-header #current-time-main { font-size:1.2rem; font-weight:bold; }
 #main-header #current-date-main { font-size:1rem; font-weight:bold; }
 #main-header .loading-dots { display:flex; gap:10px; justify-content:center; margin-top:5px; margin-bottom: 5px; }
@@ -217,7 +193,7 @@ body {
   padding: 6px 16px;
   font-size: 1.2rem;
   font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: uppercase;
   color: #000;
   text-decoration: none;
@@ -233,7 +209,7 @@ body {
   padding: 6px 16px;
   font-size: 1.2rem;
   font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: uppercase;
   color: #000;
   text-decoration: none;
@@ -249,7 +225,7 @@ body {
   padding: 6px 16px;
   font-size: 1.2rem;
   font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: uppercase;
   color: #000;
   text-decoration: none;
@@ -265,7 +241,7 @@ body {
   padding: 6px 16px;
   font-size: 1.2rem;
   font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: uppercase;
   color: #000;
   text-decoration: none;
@@ -302,7 +278,7 @@ body {
   letter-spacing: .06em; color: #000;
 }
 #recibos-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'DMSans', sans-serif;
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
   cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
   padding: 7px 16px 7px 12px; border-radius: 10px;
   transition: background .2s, color .2s, transform .15s, box-shadow .15s;
@@ -315,7 +291,7 @@ body {
   display: flex; flex-direction: column;
   align-items: center;
   padding: 40px 16px 60px;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   -webkit-overflow-scrolling: touch;
 }
 #recibos-overlay-loading {
@@ -341,7 +317,7 @@ body {
 #recibos-overlay-body table button {
   padding: 4px 12px; font-size: .78rem; cursor: pointer;
   border: 1px solid #ccc; border-radius: 7px; background: #fff;
-  font-family: 'DMSans', sans-serif; font-weight: 600;
+  font-family: 'MontserratLight', sans-serif; font-weight: 600;
   transition: background .15s, color .15s;
 }
 #recibos-overlay-body table button:hover { background: #555; color: #fff; border-color: #555; }
@@ -383,7 +359,7 @@ body {
   letter-spacing: .06em; color: #000;
 }
 #agenda-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'DMSans', sans-serif;
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
   cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
   padding: 7px 16px 7px 12px; border-radius: 10px;
   transition: background .2s, color .2s, transform .15s, box-shadow .15s;
@@ -394,7 +370,7 @@ body {
 #agenda-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; align-items: center;
-  padding: 0; font-family: 'DMSans', sans-serif;
+  padding: 0; font-family: 'MontserratLight', sans-serif;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -417,7 +393,7 @@ body {
   letter-spacing: .06em; color: #000;
 }
 #rotulos-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'DMSans', sans-serif;
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
   cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
   padding: 7px 16px 7px 12px; border-radius: 10px;
   transition: background .2s, color .2s, transform .15s, box-shadow .15s;
@@ -428,7 +404,7 @@ body {
 #rotulos-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; align-items: center;
-  padding: 0; font-family: 'DMSans', sans-serif;
+  padding: 0; font-family: 'MontserratLight', sans-serif;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -451,7 +427,7 @@ body {
   letter-spacing: .06em; color: #000;
 }
 #processamento-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'DMSans', sans-serif;
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
   cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
   padding: 7px 16px 7px 12px; border-radius: 10px;
   transition: background .2s, color .2s, transform .15s, box-shadow .15s;
@@ -462,7 +438,7 @@ body {
 #processamento-overlay-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; align-items: center;
-  padding: 0; font-family: 'DMSans', sans-serif;
+  padding: 0; font-family: 'MontserratLight', sans-serif;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -509,9 +485,9 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 .table-wrap { overflow-x:auto; display:flex; justify-content:center; transition: opacity 0.5s ease; }
-table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'DMSans', sans-serif; color:#000; }
+table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
 th, td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.9rem; font-weight:bold; color:#000; }
-th { background:#e0e0e0; font-family:'RedHatDisplay', sans-serif; text-transform:uppercase; font-size:1rem; position:relative; top:0; z-index:2; }
+th { background:#e0e0e0; text-transform:uppercase; font-size:1rem; position:relative; top:0; z-index:2; }
 td.name { white-space:nowrap; text-align:center; border-radius:15px 0 0 15px; }
 td.multi-line { white-space:pre-line; }
 td.bold-row { font-weight:bold; }
@@ -521,7 +497,7 @@ td, th { border-radius:10px; margin:2px; }
 .today-col:hover { background: #ffffff !important; }
 .blinking-now { animation: blinkCell 2s infinite !important; background-color: #e0e0e0 !important; }
 @keyframes blinkCell { 0%,100%{background-color:#f0f0f0;} 50%{background-color:#d0d0d0;} }
-#page-name-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1); font-size:3rem; font-weight:bold; opacity:0; pointer-events:none; transition: opacity 0.5s ease, transform 0.5s ease; color:#000; font-family:'DMSans', sans-serif; z-index:4; }
+#page-name-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1); font-size:3rem; font-weight:bold; opacity:0; pointer-events:none; transition: opacity 0.5s ease, transform 0.5s ease; color:#000; font-family:'MontserratLight', sans-serif; z-index:4; }
 
 /* ══════════════════════════════════════════════════════════
    ADMIN APP  (salários + recibos)
@@ -550,8 +526,7 @@ td, th { border-radius:10px; margin:2px; }
 }
 #admin-header.show { opacity: 1; }
 #admin-header .logo-text {
-  font-size: 3rem; font-family: 'RedHatDisplay', sans-serif; font-weight: 300;
-  text-transform: lowercase;
+  font-size: 3rem; text-transform: lowercase;
   cursor: pointer; line-height: 1;
 }
 #admin-header #admin-time { font-size: 1.2rem; font-weight: bold; margin-top: 2px; }
@@ -565,7 +540,7 @@ td, th { border-radius:10px; margin:2px; }
 }
 .tab-btn {
   padding: 10px 28px; font-size: .9rem; font-weight: 600;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   cursor: pointer; border: none; background: transparent; color: #000;
   border-bottom: 2px solid transparent; margin-bottom: -2px;
   transition: color .2s, border-color .2s; text-transform: lowercase;
@@ -613,8 +588,7 @@ td, th { border-radius:10px; margin:2px; }
 }
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.4rem, 3vw, 2rem);
-  font-family: 'RedHatDisplay', sans-serif;
-  font-weight: 300;
+  font-weight: 100;
   text-transform: uppercase;
   letter-spacing: .22em;
   color: #000;
@@ -734,7 +708,6 @@ td, th { border-radius:10px; margin:2px; }
 
 .adm-mod-name {
   font-size: .88rem;
-  font-family: 'RedHatDisplay', sans-serif;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -794,7 +767,7 @@ td, th { border-radius:10px; margin:2px; }
   padding: 7px 16px 7px 12px;
   font-size: .78rem;
   font-weight: 700;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: lowercase;
   letter-spacing: .06em;
   color: #fff;
@@ -940,7 +913,7 @@ td, th { border-radius:10px; margin:2px; }
 #s-status-msg { font-size: .9rem; font-weight: 600; color: #000; min-height: 20px; text-align: center; }
 #s-salary-table {
   width: 100%; border-collapse: separate; border-spacing: 0;
-  border-radius: 15px; overflow: hidden; font-family: 'DMSans', sans-serif;
+  border-radius: 15px; overflow: hidden; font-family: 'MontserratLight', sans-serif;
 }
 #s-salary-table th {
   background: #e0e0e0; padding: 10px 14px; text-align: left;
@@ -1048,7 +1021,7 @@ td, th { border-radius:10px; margin:2px; }
 
 /* SVG text inside shapes */
 .hint-svg-text {
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   font-weight: bold;
   font-size: 11px;
   text-anchor: middle;
@@ -1112,7 +1085,7 @@ td, th { border-radius:10px; margin:2px; }
 #r-conferir-fixed.show { display: flex; }
 #r-conferir-btn {
   padding: 9px 18px; font-size: .88rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif; text-transform: lowercase;
+  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
   cursor: pointer; border: 1.5px solid #555; border-radius: 12px;
   background: #fff; transition: background .2s, color .2s;
   pointer-events: auto;
@@ -1176,7 +1149,7 @@ td, th { border-radius:10px; margin:2px; }
 #r-modal-box {
   background: #fff; border-radius: 18px;
   padding: 28px 30px; max-width: 420px; width: 90%;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   box-shadow: 0 8px 32px rgba(0,0,0,.12);
 }
 #r-modal-box .modal-title {
@@ -1192,7 +1165,7 @@ td, th { border-radius:10px; margin:2px; }
 #r-modal-pwd-row label { font-size: .78rem; font-weight: bold; color: #000; text-transform: uppercase; }
 #r-modal-pwd-input {
   padding: 8px 12px; border: 1px solid #ccc; border-radius: 8px;
-  font-size: .9rem; outline: none; font-family: 'DMSans', sans-serif; font-weight: 600;
+  font-size: .9rem; outline: none; font-family: 'MontserratLight', sans-serif; font-weight: 600;
 }
 #r-modal-pwd-input:focus { border-color: #555; }
 .modal-btns { display: flex; flex-direction: column; gap: 8px; }
@@ -1200,7 +1173,7 @@ td, th { border-radius:10px; margin:2px; }
   padding: 10px 16px; font-size: .88rem; font-weight: 600;
   cursor: pointer; border-radius: 10px; border: 1px solid #ccc;
   background: #fff; text-align: left; transition: background .15s;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
 }
 .modal-btn:hover { background: #f5f5f5; }
 .modal-btn.primary { border-color: #555; }
@@ -1471,7 +1444,7 @@ input, textarea { cursor: text !important; }
   margin-top: 4px;
   padding: 5px 12px;
   font-size: .68rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: lowercase; letter-spacing: .04em;
   color: #000; border: 1px solid #ddd; border-radius: 20px;
   background: transparent; cursor: pointer;
@@ -1485,7 +1458,7 @@ input, textarea { cursor: text !important; }
 #saft-recibos-btn {
   padding: 5px 14px;
   font-size: .72rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: lowercase; letter-spacing: .05em;
   color: #000; border: 1px solid #ccc; border-radius: 20px;
   background: transparent; cursor: pointer;
@@ -1501,7 +1474,7 @@ input, textarea { cursor: text !important; }
 #saft-recibos-mes {
   font-size: .82rem; font-weight: 100; color: #000;
   letter-spacing: .02em; margin-top: 2px; text-align: left;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
 }
 #saft-reminder.urgent #saft-countdown { color: #c05000; }
 #saft-reminder.urgent #saft-title { color: #c05000; }
@@ -1540,7 +1513,7 @@ input, textarea { cursor: text !important; }
 #ed-toolbar button, #ed-toolbar label[for] {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 12px; font-size: .78rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif; text-transform: lowercase;
+  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
   letter-spacing: .03em; cursor: pointer; border: 1px solid #ddd;
   border-radius: 8px; background: #fff; color: #000;
   transition: border-color .15s, background .15s, color .15s;
@@ -1554,7 +1527,7 @@ input, textarea { cursor: text !important; }
 .ed-tool-label { font-size: .7rem; font-weight: bold; text-transform: uppercase; letter-spacing: .06em; color: #000; border: none !important; background: none !important; padding: 0 !important; }
 #ed-font-size {
   width: 54px; padding: 4px 6px; font-size: .82rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif; border: 1px solid #ddd;
+  font-family: 'MontserratLight', sans-serif; border: 1px solid #ddd;
   border-radius: 8px; text-align: center; outline: none;
 }
 #ed-font-size:focus { border-color: #555; }
@@ -1564,7 +1537,7 @@ input, textarea { cursor: text !important; }
 }
 #ed-page-select {
   padding: 4px 8px; font-size: .82rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif; border: 1px solid #ddd;
+  font-family: 'MontserratLight', sans-serif; border: 1px solid #ddd;
   border-radius: 8px; background: #fff; outline: none; cursor: pointer;
 }
 #ed-page-select:focus { border-color: #555; }
@@ -1651,7 +1624,7 @@ input, textarea { cursor: text !important; }
   background: transparent;
   resize: none;
   overflow: hidden;
-  font-family: 'DMSans', sans-serif !important;
+  font-family: 'MontserratLight', sans-serif !important;
   font-size: inherit;
   color: #000000 !important;
   line-height: 1.5;
@@ -1745,7 +1718,7 @@ input, textarea { cursor: text !important; }
 #ed-export-modal-box {
   background: #fff; border-radius: 18px;
   padding: 32px 34px; max-width: 440px; width: 92%;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   box-shadow: 0 8px 32px rgba(0,0,0,.14);
 }
 #ed-export-modal-box .ed-modal-title {
@@ -1754,7 +1727,7 @@ input, textarea { cursor: text !important; }
 }
 #ed-export-filename {
   width: 100%; padding: 11px 14px; font-size: 1.05rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   border: 1.5px solid #ddd; border-radius: 10px;
   outline: none; box-sizing: border-box; margin-bottom: 14px;
   transition: border-color .2s;
@@ -1766,7 +1739,7 @@ input, textarea { cursor: text !important; }
 }
 #ed-folder-display {
   flex: 1; padding: 9px 12px; font-size: .88rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   border: 1.5px solid #e6e6e6; border-radius: 10px;
   color: #000; background: #fafafa;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1775,7 +1748,7 @@ input, textarea { cursor: text !important; }
 #ed-folder-display.chosen { color: #000; border-color: #ccc; background: #f5f5f5; }
 #ed-folder-pick-btn {
   padding: 9px 14px; font-size: .82rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif; text-transform: lowercase;
+  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
   cursor: pointer; border-radius: 10px; border: 1.5px solid #ccc;
   background: #fff; white-space: nowrap;
   transition: border-color .15s, background .15s;
@@ -1791,7 +1764,7 @@ input, textarea { cursor: text !important; }
 .ed-modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
 .ed-modal-btn {
   padding: 10px 24px; font-size: .88rem; font-weight: bold;
-  font-family: 'DMSans', sans-serif; text-transform: lowercase;
+  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
   cursor: pointer; border-radius: 10px; border: 1px solid #ccc;
   background: #fff; transition: background .15s, color .15s, border-color .15s;
 }
@@ -2170,7 +2143,6 @@ tr { transition: background 0.15s ease; }
 
 /* ── Logo subtle pulse on hover ── */
 .logo-text {
-  font-family: 'RedHatDisplay', sans-serif;
   transition: letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1),
               opacity 0.2s !important;
 }
@@ -2295,7 +2267,7 @@ tr { transition: background 0.15s ease; }
   padding: 14px 24px;
   font-size: .92rem;
   font-weight: 600;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   text-transform: lowercase;
   letter-spacing: .04em;
   background: none;
@@ -2371,7 +2343,7 @@ tr { transition: background 0.15s ease; }
   display: none; margin-top: 16px; padding: 9px 28px;
   font-size: .88rem; font-weight: 600; cursor: pointer;
   border: 1px solid #555; border-radius: 12px; background: #fff;
-  font-family: 'DMSans', sans-serif;
+  font-family: 'MontserratLight', sans-serif;
   transition: background .2s, color .2s;
 }
 #tam-export-btn.show { display: inline-block; }
@@ -2404,7 +2376,7 @@ tr { transition: background 0.15s ease; }
 #tam-results-wrap { width: 100%; max-width: 960px; overflow-x: auto; }
 .tam-table {
   width: 100%; border-collapse: separate; border-spacing: 0;
-  border-radius: 15px; overflow: hidden; font-family: 'DMSans', sans-serif;
+  border-radius: 15px; overflow: hidden; font-family: 'MontserratLight', sans-serif;
 }
 .tam-table th {
   background: #e0e0e0; padding: 5px 12px; text-align: center;
@@ -2678,64 +2650,6 @@ input, button, select, textarea,
 .logo-text,
 small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
   color: #000 !important;
-}
-
-/* ── TIPOGRAFIA COERENTE: RedHatDisplay para títulos/marca, DMSans para tudo o resto ── */
-html, body,
-input, button, select, textarea,
-td, .tab-btn, .drawer-tab-btn,
-.adm-mod-desc, .adm-mod-arrow,
-#adm-dash-greeting .adm-tagline,
-.f-card .f-dates, .f-card .f-badge,
-.dash-card .dash-val, .dash-card .dash-label,
-#h-status-msg, #s-status-msg, #r-status-msg,
-#r-progress-detail, #saft-countdown,
-.r-inline-hint, .upload-box, #s-upload-label,
-#r-config-section, #r-config-fields label,
-.results-wrap, #legal-notice,
-#recibos-overlay-title, #agenda-overlay-title,
-#rotulos-overlay-title, #processamento-overlay-title,
-.modal-btn, .modal-counter,
-#r-modal-pwd-row label, #r-modal-box,
-#ed-export-modal-box, #ed-export-hint,
-#ed-folder-display, #ed-folder-pick-btn,
-.ed-modal-btn, .ed-tool-label,
-#r-conferir-btn, #r-process-btn, #r-save-config,
-#saft-btn, #saft-recibos-btn, #saft-agenda-btn,
-#saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
-#saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
-.saft-fat-item,
-#greeting-sub,
-#h-store-selector label, #h-store-select, #h-week-select,
-#h-active-badge,
-.recibos-nota,
-#tam-status-msg, #tam-file-name,
-.tam-table td,
-#r-warnings-box ul li,
-#r-conferir-note,
-#admin-header #admin-time, #admin-header #admin-date,
-small, label, p, span {
-  font-family: 'DMSans', sans-serif !important;
-}
-
-/* RedHatDisplay exclusivamente para marca, títulos e cabeçalhos */
-.logo-text,
-#login-screen .logo-text,
-#main-header .logo-text,
-#admin-header .logo-text,
-#adm-dash-greeting .adm-brand,
-.adm-mod-name,
-.f-card .f-name, .f-section-title,
-#f-today-banner .f-banner-title, #f-today-banner .f-banner-names,
-th, .tam-table th,
-.modal-title, .modal-name,
-#adm-module-bar-title,
-#page-name-popup,
-#greeting-text,
-#recibos-page-title,
-#saft-title,
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'RedHatDisplay', sans-serif !important;
 }
 
 /* ── EXCEPCIONES: texto blanco sobre fondos oscuros ── */
@@ -3314,7 +3228,7 @@ td                   { font-size: .96rem !important; }
   <div id="saft-faturas-count" style="font-size:1.5rem;font-weight:100;color:#000;line-height:1;letter-spacing:-.01em;">—</div>
   <div id="saft-faturas-count-label" style="font-size:.62rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;margin-top:-2px;">a vencer esta semana</div>
   <div id="saft-faturas-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;"></div>
-  <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'DMSans',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
+  <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
 </div>
 
 <!-- POPUP compartido -->

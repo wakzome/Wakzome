@@ -15,8 +15,8 @@
       '#proc-content *, #proc-content *::before, #proc-content *::after { box-sizing: border-box; margin: 0; padding: 0; }',
 
       /* Wrapper */
-      '#proc-content { width:100%; min-height:100%; background:#fff; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:\'MontserratLight\', sans-serif; font-size:14px; font-weight:600; color:#000; }',
-      '#proc-content .page-wrap { width:100%; max-width:1400px; margin:0 auto; }',
+      '#proc-content { width:100%; min-height:100%; background:#fff; display:flex; flex-direction:column; align-items:center; font-family:\'MontserratLight\', sans-serif; font-size:14px; font-weight:600; color:#000; }',
+      '#proc-content .page-wrap { width:100%; max-width:1400px; margin:0 auto; padding:0 20px 20px; }',
 
       /* Top bar */
       '#proc-content .proc-top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }',
@@ -1738,9 +1738,9 @@
   function buildOverlayContent(container) {
     container.id = 'proc-content';
     container.innerHTML =
-        '<div class="page-wrap">'
-      /* ── Session bar — always visible, never blocking ── */
-      +   '<div id="proc-session-bar">'
+      /* ── Session bar — sticky, full width, always on top ── */
+        '<div id="proc-session-bar">'
+      +   '<div style="width:100%;max-width:1400px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">'
       +     '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;display:none;"></span>'
       +     '<span id="proc-saveStatus" class="proc-save-status" style="flex:1;display:none;"></span>'
       +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
@@ -1749,6 +1749,8 @@
       +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#c00;color:#c00;background:#fff0f0;">&#x23CF;&#xFE0F; fechar</button>'
       +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#1565c0;color:#1565c0;background:#e3f2fd;">&#128203; guia</button>'
       +   '</div>'
+      + '</div>'
+      + '<div class="page-wrap">'
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'
       +     '<div id="proc-session-start-inner">'
@@ -1786,7 +1788,7 @@
 
     /* ── Styles for new elements ── */
     var sb = document.getElementById('proc-session-bar');
-    if (sb) sb.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 0 14px;border-bottom:1px solid #eee;margin-bottom:18px;position:relative;';
+    if (sb) sb.style.cssText = 'position:sticky;top:0;z-index:200;background:#fff;border-bottom:1px solid #e0e0e0;box-shadow:0 2px 8px rgba(0,0,0,.07);padding:8px 0;width:100%;margin-bottom:18px;';
 
     var ss = document.getElementById('proc-session-start');
     if (ss) ss.style.cssText = 'display:flex;justify-content:center;padding:32px 0;';

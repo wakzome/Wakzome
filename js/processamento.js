@@ -222,20 +222,19 @@
       '.proc-guia-confirm:hover:not(:disabled) { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:transparent; color:#000; transition:background .12s; }',
       '.proc-guia-close-btn:hover { background:#7a3535; color:#fff; border-color:#7a3535; }',
-      '.proc-guia-copy-bar { display:flex; align-items:center; gap:6px; padding:8px 16px; background:#fafafa; border-bottom:1px solid #e0e0e0; flex-wrap:wrap; flex-shrink:0; }',
-      '.proc-guia-copy-label { font-size:.7rem; font-weight:700; color:#000!important; text-transform:uppercase; letter-spacing:.05em; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
-      '.proc-guia-copy-btn { padding:4px 11px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:7px; background:#fff; color:#000; transition:background .12s,color .12s; white-space:nowrap; }',
+      '.proc-guia-copy-bar { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 16px; background:#fff; border-bottom:1px solid #e0e0e0; flex-shrink:0; }',
+      '.proc-guia-copy-btn { padding:7px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#fff; color:#000; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; text-align:center; display:flex; align-items:center; justify-content:center; gap:5px; }',
       '.proc-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
       '.proc-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
-      '.proc-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; margin-left:4px; color:#000!important; }',
+      '.proc-guia-copy-msg { display:none; }',
       '#proc-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
       '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
       '.proc-guia-th { padding:9px 14px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border-bottom:2px solid #ddd; text-align:center; }',
-      '.proc-guia-th-f { background:transparent; color:#000; }',
-      '.proc-guia-th-p { background:transparent; color:#000; }',
-      '.proc-guia-th-sep { width:16px; background:transparent; border-bottom:2px solid #ddd; }',
-      '.proc-guia-th2 { padding:7px 14px; background:transparent; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; }',
+      '.proc-guia-th-f { background:#fff; color:#000; }',
+      '.proc-guia-th-p { background:#fff; color:#000; }',
+      '.proc-guia-th-sep { width:16px; background:#fff; border-bottom:2px solid #ddd; }',
+      '.proc-guia-th2 { padding:7px 14px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; }',
       '.proc-guia-td { padding:7px 14px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }',
       '.proc-guia-ref-f { font-weight:700; color:#000; min-width:120px; }',
       '.proc-guia-qty-f { text-align:center; font-weight:700; color:#000; font-variant-numeric:tabular-nums; }',
@@ -2283,11 +2282,9 @@
     }
 
     var copyBar = '<div class="proc-guia-copy-bar">'
-      + '<span class="proc-guia-copy-label">copiar coluna:</span>'
       + COL_G.map(function(lbl,ci){
           return '<button class="proc-guia-copy-btn" data-gcol="' + ci + '">\u29c9 ' + lbl + '</button>';
         }).join('')
-      + '<span class="proc-guia-copy-msg" id="proc-guia-copy-msg"></span>'
       + '</div>';
 
     var sentSection = sentRows.length

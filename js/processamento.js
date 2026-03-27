@@ -142,10 +142,11 @@
       '#proc-content .proc-table-footer { background:#fafafa; border:1px solid #e6e6e6; border-radius:14px; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }',
       '#proc-content .proc-summary-line { display:flex; gap:20px; font-size:.78rem; color:#000; font-weight:700; }',
       '#proc-content .proc-summary-line strong { color:#000; }',
-      '#proc-content .proc-diff-chip { font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:20px; border:1.5px solid; display:inline-block; }',
-      '#proc-content .proc-diff-chip.zero { border-color:#2a8a2a; color:#2a8a2a; background:#f0faf0; }',
+      '#proc-content .proc-diff-chip { font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:20px; border:1.5px solid; display:inline-block; transition:all 0.3s ease; }',
+      '#proc-content .proc-diff-chip.zero { border-color:#1a7a1a; color:#fff; background:linear-gradient(135deg,#2a8a2a,#3daf3d); font-size:.88rem; padding:5px 14px; border-radius:24px; box-shadow:0 2px 10px rgba(42,138,42,.35); letter-spacing:.02em; animation:proc-chip-pop 0.35s cubic-bezier(.36,.07,.19,.97); }',
       '#proc-content .proc-diff-chip.pos { border-color:#e67e00; color:#e67e00; background:#fff8f0; }',
       '#proc-content .proc-diff-chip.neg { border-color:#c00; color:#c00; background:#fff0f0; }',
+      '@keyframes proc-chip-pop { 0%{transform:scale(.85);opacity:.6} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }',
       '#proc-content .proc-footer-actions { display:flex; gap:8px; }',
 
       /* Buttons */
@@ -650,6 +651,42 @@
       });
   }
 
+  /* ── 4a-bis. FORCE REMOTE LOAD (ignores localStorage cache) ── */
+  function procForceLoadSession(key) {
+    procSetSyncStatus('syncing', 'a actualizar\u2026');
+    procCloseSessionMenu();
+    procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key) + '&select=dados', { method: 'GET' })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        var raw = (rows && rows.length && rows[0].dados) ? rows[0].dados : null;
+        if (!raw) {
+          raw = localStorage.getItem(key);
+          if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
+          procApplySessionData(key, raw, function() {
+            procMarkSynced();
+            procShowMainArea(key);
+            procSetSyncStatus('offline', 'sem dados remotos \u2014 carregado localmente');
+          });
+          return;
+        }
+        try { localStorage.setItem(key, raw); } catch(e) {}
+        procApplySessionData(key, raw, function() {
+          procMarkSynced();
+          procShowMainArea(key);
+          procSetSyncStatus('ok', '\u2713 actualizado e carregado');
+        });
+      })
+      .catch(function() {
+        var raw = localStorage.getItem(key);
+        if (!raw) { procFloatModal({ title: 'Sess\u00e3o n\u00e3o encontrada.', buttons: [{ label: 'OK', cb: null }] }); return; }
+        procApplySessionData(key, raw, function() {
+          procMarkSynced();
+          procShowMainArea(key);
+          procSetSyncStatus('offline', 'offline \u2014 carregado localmente');
+        });
+      });
+  }
+
   function procDeleteSession(key) {
     procFloatModal({
       label: 'Eliminar sess\u00e3o',
@@ -896,7 +933,7 @@
         + (savedAt ? '<span class="proc-session-menu-item-date">' + savedAt + nFat + '</span>' : '')
         + '</div>'
         + '<div class="proc-session-menu-item-actions">'
-        + '<button class="proc-session-load-btn" onclick="procLoadSession(\'' + key + '\')">carregar</button>'
+        + '<button class="proc-session-load-btn" onclick="procForceLoadSession(\'' + key + '\')">&#8635; carregar</button>'
         + '<button class="proc-session-delete-btn" onclick="procDeleteSession(\'' + key + '\')">\u2715</button>'
         + '</div></div>';
     }).join('');
@@ -2273,6 +2310,7 @@
   window.procShowStockModal      = procShowStockModal;
   window.procToggleSessionMenu   = procToggleSessionMenu;
   window.procLoadSession         = procLoadSession;
+  window.procForceLoadSession    = procForceLoadSession;
   window.procDeleteSession       = procDeleteSession;
   window.procSaveSession         = procSaveSession;
   window.procUpdateTableLock     = procUpdateTableLock;

@@ -87,7 +87,7 @@
       /* TD inputs — compact, centered numbers */
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:800; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }',
-      '#proc-content .proc-table-wrap td input.proc-ref-input { width:100%; min-width:100px; text-align:left; }',
+      '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; text-align:left; }',
       '#proc-content .proc-table-wrap td input.proc-desc-input { width:100%; min-width:140px; font-size:.73rem; text-align:left; }',
       '#proc-content .proc-table-wrap td input.proc-preco-input { width:46px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-desc-pct-input { width:38px; text-align:center; }',
@@ -159,12 +159,18 @@
       /* Flagged row highlight */
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged { background:linear-gradient(90deg,rgba(155,77,77,.10) 0%,rgba(255,235,238,.45) 100%) !important; outline:2px solid rgba(155,77,77,.35); outline-offset:-1px; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover { background:linear-gradient(90deg,rgba(155,77,77,.16) 0%,rgba(255,235,238,.6) 100%) !important; }',
+      /* Sticky cell in flagged row must have solid bg to avoid bleed-through */
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged td.td-ref { background:#fdf0f0 !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover td.td-ref { background:#f9e4e4 !important; }',
 
       /* Buttons */
       '#proc-content .proc-btn { padding:7px 16px; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; text-transform:lowercase; cursor:pointer; transition:all 0.15s; white-space:nowrap; }',
       '#proc-content .proc-btn:hover { background:#000; color:#fff; border-color:#000; }',
       '#proc-content .proc-btn.primary { border-color:#ccc; color:#000; background:transparent; }',
       '#proc-content .proc-btn.primary:hover { background:#000; color:#fff; border-color:#000; }',
+
+      /* Session bar base */
+      '#proc-session-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0 12px; }',
 
       /* Floating action buttons — visible only when top bar scrolls out */
       '#proc-float-actions { position:fixed; right:16px; bottom:24px; display:none; flex-direction:column; gap:10px; z-index:1200; transition:opacity 0.2s; }',
@@ -314,29 +320,33 @@
       '.proc-or-table .empty-row td { text-align:center; color:#000; padding:24px; font-style:italic; font-weight:400; }',
       '.proc-or-panel-footer { padding:10px 20px; border-top:1px solid #e0e0e0; background:#fafafa; font-size:.72rem; font-weight:700; color:#000; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
 
-      /* Ref column: width fits content, never clips */
-      '#proc-content .proc-table-wrap td.td-ref { min-width:0; width:1%; white-space:nowrap; }',
-      '#proc-content .proc-table-wrap td.td-ref .proc-ref-wrap { width:auto; }',
-      '#proc-content .proc-table-wrap td.td-ref input.proc-ref-input { min-width:80px; width:auto; }',
+      /* Ref column: auto-width driven by content, no fixed sizes */
+      '#proc-content .proc-table-wrap td.td-ref { width:1px; white-space:nowrap; padding:3px 4px; }',
+      '#proc-content .proc-table-wrap th.left:first-child { width:1px; white-space:nowrap; }',
+      '#proc-content .proc-table-wrap td.td-ref .proc-ref-wrap { display:inline-flex; align-items:center; gap:0; width:auto; }',
+      '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; max-width:none; text-align:left; padding-left:4px; }',
 
       /* ── RESPONSIVE ── */
       '@media (max-width:768px) {',
       '  #proc-content { padding:10px; }',
+      '  #proc-session-bar { padding:6px 0 10px; gap:6px; }',
       '  #proc-content .proc-fatura-banner { padding:14px 14px; flex-wrap:wrap; gap:8px; }',
       '  #proc-content .proc-fatura-banner-provider { font-size:1.15rem; }',
       '  #proc-content .proc-header-card { grid-template-columns:1fr; gap:12px; padding:14px; }',
       '  #proc-content .proc-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
       '  #proc-content .proc-table-wrap table { min-width:0; table-layout:auto; }',
-      /* Sticky ref column on mobile — always fully visible */
-      '  #proc-content .proc-table-wrap td.td-ref,',
-      '  #proc-content .proc-table-wrap th.left:first-child {',
+      /* Sticky ref column on mobile */
+      '  #proc-content .proc-table-wrap td.td-ref {',
       '    position:sticky; left:0; background:#fff; z-index:2;',
-      '    box-shadow:2px 0 6px rgba(0,0,0,.10);',
-      '    min-width:0; width:1%; white-space:nowrap;',
+      '    box-shadow:3px 0 6px rgba(0,0,0,.10);',
       '  }',
-      '  #proc-content .proc-table-wrap thead th.left:first-child { background:#fff; z-index:3; }',
+      '  #proc-content .proc-table-wrap th.left:first-child {',
+      '    position:sticky; left:0; background:#fff; z-index:3;',
+      '    box-shadow:3px 0 6px rgba(0,0,0,.10);',
+      '  }',
       '  #proc-content .proc-table-wrap tbody tr:hover td.td-ref { background:#f5f5f5 !important; }',
-      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged td.td-ref { background:rgba(255,235,238,.6) !important; }',
+      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged td.td-ref { background:#fdf0f0 !important; }',
+      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover td.td-ref { background:#f9e4e4 !important; }',
       '  #proc-content .proc-top-bar { flex-direction:column; align-items:flex-start; }',
       '  #proc-content .proc-footer-actions { flex-wrap:wrap; }',
       '  #proc-content .proc-table-footer { flex-direction:column; align-items:flex-start; gap:10px; }',
@@ -346,14 +356,17 @@
       '@media (min-width:769px) and (max-width:1024px) {',
       '  #proc-content .proc-header-card { grid-template-columns:1fr 1fr; }',
       '  #proc-content .proc-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
-      '  #proc-content .proc-table-wrap td.td-ref,',
-      '  #proc-content .proc-table-wrap th.left:first-child {',
+      '  #proc-content .proc-table-wrap td.td-ref {',
       '    position:sticky; left:0; background:#fff; z-index:2;',
       '    box-shadow:2px 0 5px rgba(0,0,0,.08);',
-      '    min-width:0; width:1%; white-space:nowrap;',
       '  }',
-      '  #proc-content .proc-table-wrap thead th.left:first-child { background:#fff; z-index:3; }',
+      '  #proc-content .proc-table-wrap th.left:first-child {',
+      '    position:sticky; left:0; background:#fff; z-index:3;',
+      '    box-shadow:2px 0 5px rgba(0,0,0,.08);',
+      '  }',
       '  #proc-content .proc-table-wrap tbody tr:hover td.td-ref { background:#f5f5f5 !important; }',
+      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged td.td-ref { background:#fdf0f0 !important; }',
+      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover td.td-ref { background:#f9e4e4 !important; }',
       '}',
     ].join('\n');
     document.head.appendChild(style);
@@ -1054,6 +1067,7 @@
         procRecalcRow(fid, rid);
       });
       procUpdateHeader(fid);
+      procSyncRefColWidth(fid);
     }
     if (activeFaturas.length > 1) {
       wrap.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1273,6 +1287,30 @@
 
   function procCheckAutoExpand(fid, id) {
     if (id === rowCounts[fid]) procAddRows(fid, 1);
+    procSyncRefColWidth(fid);
+  }
+
+  /* Measure the longest ref value in this fatura and set all ref inputs
+     to that same character-width so the column is always content-driven */
+  function procSyncRefColWidth(fid) {
+    var tbody = document.getElementById('proc-tableBody-' + fid);
+    if (!tbody) return;
+    var inputs = tbody.querySelectorAll('input.proc-ref-input');
+    var maxLen = 6; /* minimum fallback chars */
+    inputs.forEach(function(inp) {
+      var len = inp.value ? inp.value.length : 0;
+      if (len > maxLen) maxLen = len;
+    });
+    /* size attribute drives input width in ch units — add 1 for cursor */
+    inputs.forEach(function(inp) {
+      inp.setAttribute('size', maxLen + 1);
+    });
+    /* Also size the header th to match */
+    var table = document.getElementById('proc-mainTable-' + fid);
+    if (table) {
+      var th = table.querySelector('thead th.left:first-child');
+      if (th) th.style.minWidth = '';
+    }
   }
 
   /* ── 8. AUTO-SPLIT ── */

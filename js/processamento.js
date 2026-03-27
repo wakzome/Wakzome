@@ -44,11 +44,11 @@
 
       /* Fatura instance & banner */
       '#proc-content .proc-fatura-instance { margin-bottom:28px; }',
-      '#proc-content .proc-fatura-banner { background:#1a1a1a; border-radius:12px 12px 0 0; padding:18px 24px; display:flex; align-items:center; justify-content:space-between; }',
+      '#proc-content .proc-fatura-banner { background:transparent; border-radius:12px 12px 0 0; padding:18px 24px; display:flex; align-items:center; justify-content:space-between; border:1px solid #e0e0e0; border-bottom:none; }',
       '#proc-content .proc-fatura-banner-left { display:flex; align-items:center; gap:10px; }',
-      '#proc-content .proc-fatura-banner-num { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#ffffff !important; }',
-      '#proc-content .proc-fatura-banner-provider { font-size:1.2rem; font-weight:300; color:#ffffff !important; letter-spacing:.02em; }',
-      '#proc-content .proc-remove-fatura-btn { padding:3px 11px; border:1px solid rgba(255,255,255,.35); border-radius:6px; background:transparent; color:rgba(255,255,255,.7); font-size:.68rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
+      '#proc-content .proc-fatura-banner-num { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000 !important; }',
+      '#proc-content .proc-fatura-banner-provider { font-size:1.2rem; font-weight:300; color:#000 !important; letter-spacing:.02em; }',
+      '#proc-content .proc-remove-fatura-btn { padding:3px 11px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.68rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
       '#proc-content .proc-remove-fatura-btn:hover { border-color:#c47a7a; color:#c47a7a; background:rgba(155,77,77,.12); }',
 
       /* Connect banner to header-card */
@@ -74,17 +74,17 @@
       '#proc-content .proc-table-wrap { overflow-x:auto; width:100%; }',
       '#proc-content .proc-table-wrap table { border-collapse:collapse; white-space:nowrap; border-radius:0; border-spacing:0; width:100%; table-layout:auto; }',
       '#proc-content .proc-table-wrap thead tr { background:transparent; border-bottom:1px solid #e0e0e0; }',
-      '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.68rem; font-weight:400; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.6; white-space:nowrap; border:none; border-radius:0; }',
+      '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.68rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:1; white-space:nowrap; border:none; border-radius:0; background:transparent; }',
       '#proc-content .proc-table-wrap thead th.left { text-align:left; padding-left:10px; }',
       '#proc-content .proc-table-wrap thead th.th-a4 { color:#000; background:transparent; }',
       '#proc-content .proc-table-wrap thead th.th-a5 { color:#000; background:transparent; }',
       '#proc-content .proc-table-wrap tbody tr { border-bottom:1px solid #f0f0f0; transition:background 0.1s; }',
       '#proc-content .proc-table-wrap tbody tr:hover { background:#f5f5f5 !important; }',
       '#proc-content .proc-table-wrap tbody tr.has-data { background:#fff; }',
-      '#proc-content .proc-table-wrap td { padding:3px 4px; vertical-align:middle; white-space:nowrap; border:none; border-radius:0; font-size:.9rem; font-weight:600; color:#000; }',
+      '#proc-content .proc-table-wrap td { padding:3px 4px; vertical-align:middle; white-space:nowrap; border:none; border-radius:0; font-size:.9rem; font-weight:800; color:#000; }',
 
       /* TD inputs — compact, centered numbers */
-      '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:600; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
+      '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:800; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-ref-input { width:100%; min-width:100px; text-align:left; }',
       '#proc-content .proc-table-wrap td input.proc-desc-input { width:100%; min-width:140px; font-size:.73rem; text-align:left; }',
@@ -207,9 +207,9 @@
       '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:transparent; color:#000!important; transition:background .13s,color .13s; white-space:nowrap; }',
       '.proc-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
       '.proc-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
-      '.proc-guia-confirm { border-color:#000!important; color:#000!important; background:#f0f0f0!important; }',
+      '.proc-guia-confirm { border-color:#000!important; color:#000!important; background:transparent!important; }',
       '.proc-guia-confirm:hover:not(:disabled) { background:#000!important; color:#fff!important; border-color:#000!important; }',
-      '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#E8EFF4; color:#000; transition:background .12s; }',
+      '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:transparent; color:#000; transition:background .12s; }',
       '.proc-guia-close-btn:hover { background:#7a3535; color:#fff; border-color:#7a3535; }',
       '.proc-guia-copy-bar { display:flex; align-items:center; gap:6px; padding:8px 16px; background:#fafafa; border-bottom:1px solid #e0e0e0; flex-wrap:wrap; flex-shrink:0; }',
       '.proc-guia-copy-label { font-size:.7rem; font-weight:700; color:#000!important; text-transform:uppercase; letter-spacing:.05em; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
@@ -221,10 +221,10 @@
       '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
       '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
       '.proc-guia-th { padding:9px 14px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border-bottom:2px solid #ddd; text-align:center; }',
-      '.proc-guia-th-f { background:#f2f2f2; color:#000; }',
-      '.proc-guia-th-p { background:#f2f2f2; color:#000; }',
-      '.proc-guia-th-sep { width:16px; background:#f2f2f2; border-bottom:2px solid #ddd; }',
-      '.proc-guia-th2 { padding:7px 14px; background:#f2f2f2; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; }',
+      '.proc-guia-th-f { background:transparent; color:#000; }',
+      '.proc-guia-th-p { background:transparent; color:#000; }',
+      '.proc-guia-th-sep { width:16px; background:transparent; border-bottom:2px solid #ddd; }',
+      '.proc-guia-th2 { padding:7px 14px; background:transparent; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; }',
       '.proc-guia-td { padding:7px 14px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }',
       '.proc-guia-ref-f { font-weight:700; color:#000; min-width:120px; }',
       '.proc-guia-qty-f { text-align:center; font-weight:700; color:#000; font-variant-numeric:tabular-nums; }',
@@ -237,7 +237,7 @@
       '.proc-guia-row-sent .proc-guia-ref-f,.proc-guia-row-sent .proc-guia-ref-p { color:#000; }',
       '.proc-guia-row-sent .proc-guia-qty-f,.proc-guia-row-sent .proc-guia-qty-p { color:#000; }',
       '#proc-guia-table tbody tr:hover td { background:#f0f0f0!important; }',
-      '.proc-guia-sent-hdr td { padding:6px 14px; background:#f2f2f2; font-size:.72rem; font-weight:700; color:#000; text-transform:uppercase; letter-spacing:.04em; border-top:2px solid #e0e0e0; border-bottom:1px solid #e0e0e0; }',
+      '.proc-guia-sent-hdr td { padding:6px 14px; background:transparent; font-size:.72rem; font-weight:700; color:#000; text-transform:uppercase; letter-spacing:.04em; border-top:2px solid #e0e0e0; border-bottom:1px solid #e0e0e0; }',
       '.proc-guia-empty { padding:24px; color:#000; font-style:italic; text-align:center; }',
       '#proc-guia-footer { padding:8px 20px; font-size:.72rem; font-weight:700; color:#000!important; border-top:1px solid #e0e0e0; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; }',
       '#proc-guia-confirm-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.9); border-radius:16px; }',
@@ -837,7 +837,7 @@
         section1.innerHTML = '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.4;margin-bottom:8px;">\u00daltima sess\u00e3o</div>';
 
         var lastBtn = makeBtn(
-          'border-color:#5F7B94;background:#E8EFF4;color:#5F7B94;',
+          'border-color:#5F7B94;background:transparent;color:#5F7B94;',
           '\u21a9 Continuar \u2014 ' + lm.label + metaLine(lm)
         );
         lastBtn.addEventListener('click', function() {
@@ -1792,8 +1792,8 @@
       +     '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
       +     '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
       +     '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
-      +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#9B4D4D;color:#9B4D4D;background:#F5EAEA;">&#x23CF;&#xFE0F;</button>'
-      +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:#E8EFF4;">&#128203;</button>'
+      +     '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#9B4D4D;color:#9B4D4D;background:transparent;">&#x23CF;&#xFE0F;</button>'
+      +     '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:transparent;">&#128203;</button>'
       +   '</div>'
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'
@@ -1879,7 +1879,7 @@
         +   (meta ? '<div style="font-size:.68rem;font-weight:600;color:#888;margin-top:2px;">' + meta + '</div>' : '')
         + '</div>'
         + '<div style="display:flex;gap:5px;flex-shrink:0;">'
-        +   '<button class="proc-start-load-btn" data-key="' + key + '" style="padding:5px 13px;border:1px solid #5F7B94;border-radius:7px;background:#E8EFF4;color:#5F7B94;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;">\u21a9 carregar</button>'
+        +   '<button class="proc-start-load-btn" data-key="' + key + '" style="padding:5px 13px;border:1px solid #5F7B94;border-radius:7px;background:transparent;color:#5F7B94;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;">\u21a9 carregar</button>'
         +   '<button class="proc-start-del-btn" data-key="' + key + '" style="padding:5px 9px;border:1px solid #ddd;border-radius:7px;background:transparent;color:#888;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;">\u2715</button>'
         + '</div>'
         + '</div>';

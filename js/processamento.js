@@ -165,6 +165,17 @@
       '#proc-content .proc-btn.primary { border-color:#1565c0; color:#1565c0; background:#e3f2fd; }',
       '#proc-content .proc-btn.primary:hover { background:#1565c0; color:#fff; border-color:#1565c0; }',
 
+      /* Floating action buttons */
+      '#proc-float-actions { position:fixed; right:20px; top:50%; transform:translateY(-50%); display:none; flex-direction:column; gap:10px; z-index:1200; }',
+      '#proc-float-actions .proc-float-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:56px; height:56px; border-radius:14px; border:1.5px solid; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.58rem; font-weight:700; text-transform:lowercase; letter-spacing:.03em; line-height:1.2; transition:all 0.18s; box-shadow:0 4px 16px rgba(0,0,0,.14); }',
+      '#proc-float-actions .proc-float-btn:hover { transform:scale(1.08); box-shadow:0 6px 22px rgba(0,0,0,.22); }',
+      '#proc-float-actions .proc-float-btn:active { transform:scale(0.96); }',
+      '#proc-float-actions .proc-float-btn-icon { font-size:1.2rem; line-height:1; }',
+      '#proc-float-save { border-color:#1565c0; color:#1565c0; background:#e3f2fd; }',
+      '#proc-float-save:hover { background:#1565c0; color:#fff; border-color:#1565c0; }',
+      '#proc-float-close { border-color:#c00; color:#c00; background:#fff0f0; }',
+      '#proc-float-close:hover { background:#c00; color:#fff; border-color:#c00; }',
+
       /* OBS input */
       '#proc-content .proc-table-wrap td input.proc-obs-input { width:70px; }',
 
@@ -1734,6 +1745,41 @@
     procOpenModal(modal);
   }
 
+  /* ── 15b. FLOATING ACTION BUTTONS ── */
+  function procCreateFloatingButtons() {
+    if (document.getElementById('proc-float-actions')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'proc-float-actions';
+
+    var saveBtn = document.createElement('button');
+    saveBtn.id = 'proc-float-save';
+    saveBtn.className = 'proc-float-btn';
+    saveBtn.title = 'Guardar sessão';
+    saveBtn.innerHTML = '<span class="proc-float-btn-icon">&#128190;</span>guardar';
+    saveBtn.addEventListener('click', function() { procSaveSession(true); });
+
+    var closeBtn = document.createElement('button');
+    closeBtn.id = 'proc-float-close';
+    closeBtn.className = 'proc-float-btn';
+    closeBtn.title = 'Guardar e fechar a sessão activa';
+    closeBtn.innerHTML = '<span class="proc-float-btn-icon">&#x23CF;&#xFE0F;</span>fechar';
+    closeBtn.addEventListener('click', function() { procCloseActiveSession(); });
+
+    wrap.appendChild(saveBtn);
+    wrap.appendChild(closeBtn);
+    document.body.appendChild(wrap);
+  }
+
+  function procShowFloatingButtons() {
+    var wrap = document.getElementById('proc-float-actions');
+    if (wrap) wrap.style.display = 'flex';
+  }
+
+  function procHideFloatingButtons() {
+    var wrap = document.getElementById('proc-float-actions');
+    if (wrap) wrap.style.display = 'none';
+  }
+
   /* ── 16. BUILD OVERLAY HTML ── */
   function buildOverlayContent(container) {
     container.id = 'proc-content';
@@ -1925,6 +1971,9 @@
     /* Show close button */
     var closeBtn = document.getElementById('proc-closeSessionBtn');
     if (closeBtn) closeBtn.style.display = '';
+    /* Floating action buttons */
+    procCreateFloatingButtons();
+    procShowFloatingButtons();
   }
 
   function procShowStartArea() {
@@ -1945,6 +1994,8 @@
     if (saveStatus) saveStatus.style.display = 'none';
     var sb = document.getElementById('proc-session-bar');
     if (sb) sb.style.justifyContent = 'center';
+    /* Hide floating buttons */
+    procHideFloatingButtons();
     /* Reload remote keys then render */
     procLoadRemoteKeys(procRenderStartPanel);
   }

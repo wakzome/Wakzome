@@ -256,6 +256,8 @@
       '.proc-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
       '.proc-guia-other-text strong { color:#000!important; }',
       '.proc-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
+      '#proc-guia-other-add-btn:hover { background:#333!important; border-color:#333!important; }',
+      '#proc-guia-other-dismiss-btn:hover { background:#f5f5f5!important; }',
       '.proc-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
       '#proc-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; border-top:1px dashed #e0e0e0; opacity:.6; font-weight:700; }',
       '.proc-guia-legend-item { display:flex; align-items:center; gap:4px; }',
@@ -3164,7 +3166,50 @@
     requestAnimationFrame(function(){ modal.classList.add('proc-guia-visible'); });
 
     /* ── Fase 2: fetch remoto — proc + TAM ── */
-    var otherRows = [];
+    /* NÃO adiciona automaticamente — apenas avisa e espera confirmação do utilizador */
+    var _pendingOtherRows = [];   /* ficam guardadas até o user clicar em Adicionar */
+
+    function applyOtherRows() {
+      /* Incorpora os pendentes de outras sessões na tabela */
+      var newPendRows = pendRows.concat(_pendingOtherRows);
+      var newFPend = newPendRows.reduce(function(s,r){ return s+r.pendF; },0);
+      var newPPend = newPendRows.reduce(function(s,r){ return s+r.pendP; },0);
+
+      var tbody = modal.querySelector('#proc-guia-tbody');
+      if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + sentSection;
+
+      var fncCount = modal.querySelector('#proc-guia-fnc-count');
+      var pxoCount = modal.querySelector('#proc-guia-pxo-count');
+      if (fncCount) fncCount.textContent = newFPend + ' un. pendentes';
+      if (pxoCount) pxoCount.textContent = newPPend + ' un. pendentes';
+
+      var legendWrap = modal.querySelector('#proc-guia-legend-wrap');
+      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(_pendingOtherRows);
+
+      var footerText = modal.querySelector('#proc-guia-footer-text');
+      if (footerText) {
+        footerText.textContent = newPendRows.length + ' refs pendentes · ' + newFPend + ' un. FNC · ' + newPPend + ' un. PXO'
+          + (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '')
+          + ' · ' + _pendingOtherRows.length + ' de sessões anteriores adicionadas';
+      }
+
+      var confirmBtn = modal.querySelector('#proc-guia-confirm-btn');
+      if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
+
+      pendRows = newPendRows;
+      fPend = newFPend; pPend = newPPend;
+
+      /* Fechar banner após adicionar */
+      var banner = modal.querySelector('#proc-guia-other-banner');
+      if (banner) {
+        banner.classList.remove('proc-guia-other-found');
+        banner.classList.add('proc-guia-other-none');
+        banner.innerHTML = '<span>✓ ' + _pendingOtherRows.length + ' referência(s) adicionada(s) à guia</span>';
+        setTimeout(function(){ banner.style.display = 'none'; }, 2200);
+      }
+      _pendingOtherRows = [];
+    }
+
     Promise.all([
       procGetPendingFromProcSessions(),
       procGetPendingFromTamSessions()
@@ -3179,62 +3224,59 @@
         if (!colorMap[row.sessionKey]) colorMap[row.sessionKey] = procSessionColor(colorIdx++);
         row._dotColor = colorMap[row.sessionKey];
       });
-      otherRows = allOther;
 
-      /* Recalcular totais */
-      var newPendRows = pendRows.concat(allOther);
-      var newFPend = newPendRows.reduce(function(s,r){ return s+r.pendF; },0);
-      var newPPend = newPendRows.reduce(function(s,r){ return s+r.pendP; },0);
-
-      /* Actualizar tabela */
-      var tbody = modal.querySelector('#proc-guia-tbody');
-      if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + sentSection;
-
-      /* Actualizar contadores */
-      var fncCount = modal.querySelector('#proc-guia-fnc-count');
-      var pxoCount = modal.querySelector('#proc-guia-pxo-count');
-      if (fncCount) fncCount.textContent = newFPend + ' un. pendentes';
-      if (pxoCount) pxoCount.textContent = newPPend + ' un. pendentes';
-
-      /* Actualizar legenda */
-      var legendWrap = modal.querySelector('#proc-guia-legend-wrap');
-      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(allOther);
-
-      /* Actualizar footer */
-      var footerText = modal.querySelector('#proc-guia-footer-text');
-      if (footerText) {
-        footerText.textContent = newPendRows.length + ' refs pendentes \u00b7 ' + newFPend + ' un. FNC \u00b7 ' + newPPend + ' un. PXO'
-          + (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
-          + (allOther.length ? ' \u00b7 ' + allOther.length + ' de sessões anteriores' : '');
-      }
-
-      /* Actualizar botão confirmar */
-      var confirmBtn = modal.querySelector('#proc-guia-confirm-btn');
-      if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
-
-      /* Actualizar pendRows para o handler de confirmar */
-      pendRows = newPendRows;
-      fPend = newFPend; pPend = newPPend;
-
-      /* ── Actualizar banner ── */
       banner.classList.remove('proc-guia-other-loading');
+
       if (!allOther.length) {
+        /* Sem pendentes — ocultar banner silenciosamente */
         banner.classList.add('proc-guia-other-none');
-        banner.querySelector('#proc-guia-other-status').textContent = '\u2713 sem pendentes noutras sessões';
+        banner.querySelector('#proc-guia-other-status').textContent = '✓ sem pendentes noutras sessões';
         setTimeout(function(){ banner.style.display = 'none'; }, 2000);
-      } else {
-        var sessionNames = [];
-        var seenKeys = {};
-        allOther.forEach(function(r){
-          if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
-        });
-        banner.classList.add('proc-guia-other-found');
-        banner.innerHTML = '<div class="proc-guia-other-icon">\u23f3</div>'
-          + '<div class="proc-guia-other-text">'
-          +   '<strong>' + allOther.length + ' referência(s) pendente(s)</strong> de ' + sessionNames.length + ' sessão(ões) anterior(es)'
-          +   '<span class="proc-guia-other-sessions">(' + sessionNames.map(function(n){ return n; }).join(', ') + ')</span>'
-          + '</div>';
+        return;
       }
+
+      /* Há pendentes — guardar e mostrar aviso COM botão Adicionar */
+      _pendingOtherRows = allOther;
+
+      var sessionNames = [];
+      var seenKeys = {};
+      allOther.forEach(function(r){
+        if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
+      });
+
+      var totalF = allOther.reduce(function(s,r){ return s+r.pendF; },0);
+      var totalP = allOther.reduce(function(s,r){ return s+r.pendP; },0);
+
+      banner.classList.add('proc-guia-other-found');
+      banner.innerHTML =
+        '<div class="proc-guia-other-icon">⏳</div>'
+        + '<div class="proc-guia-other-text">'
+        +   '<strong>' + allOther.length + ' ref(s) pendente(s)</strong>'
+        +   ' · ' + totalF + ' FNC · ' + totalP + ' PXO'
+        +   '<span class="proc-guia-other-sessions">' + sessionNames.map(function(n){ return n; }).join(', ') + '</span>'
+        + '</div>'
+        + '<button id="proc-guia-other-add-btn" style="'
+        +   'margin-left:auto;padding:5px 14px;font-size:.72rem;font-weight:700;'
+        +   'font-family:sans-serif;cursor:pointer;border:1.5px solid #000;'
+        +   'border-radius:7px;background:#000;color:#fff;white-space:nowrap;transition:all .13s;flex-shrink:0;'
+        + '">\u002b Adicionar</button>'
+        + '<button id="proc-guia-other-dismiss-btn" style="'
+        +   'padding:5px 10px;font-size:.72rem;font-weight:700;'
+        +   'font-family:sans-serif;cursor:pointer;border:1.5px solid #ccc;'
+        +   'border-radius:7px;background:transparent;color:#000;white-space:nowrap;transition:all .13s;flex-shrink:0;'
+        + '">Ignorar</button>';
+
+      /* Botão Adicionar */
+      var addBtn = banner.querySelector('#proc-guia-other-add-btn');
+      if (addBtn) addBtn.addEventListener('click', function(){ applyOtherRows(); });
+
+      /* Botão Ignorar — fecha banner sem tocar na tabela */
+      var dismissBtn = banner.querySelector('#proc-guia-other-dismiss-btn');
+      if (dismissBtn) dismissBtn.addEventListener('click', function(){
+        banner.style.display = 'none';
+        _pendingOtherRows = [];
+      });
+
     }).catch(function() {
       var banner = modal.querySelector('#proc-guia-other-banner');
       if (banner) banner.style.display = 'none';

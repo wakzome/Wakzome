@@ -256,7 +256,7 @@
       '.proc-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
       '.proc-guia-other-text strong { color:#000!important; }',
       '.proc-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
-      '#proc-guia-other-add-btn:hover { background:#333!important; border-color:#333!important; }',
+      '#proc-guia-other-add-btn:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '#proc-guia-other-dismiss-btn:hover { background:#f5f5f5!important; }',
       '.proc-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
       '#proc-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; border-top:1px dashed #e0e0e0; opacity:.6; font-weight:700; }',
@@ -303,6 +303,8 @@
       '#proc-guia-table tbody tr:hover td { background:#f0f0f0!important; }',
       '.proc-guia-sent-hdr td { padding:6px 14px; background:transparent; font-size:.72rem; font-weight:700; color:#000; text-transform:uppercase; letter-spacing:.04em; border-top:2px solid #e0e0e0; border-bottom:1px solid #e0e0e0; }',
       '.proc-guia-empty { padding:24px; color:#000; font-style:italic; text-align:center; }',
+      '.proc-guia-dot-col { width:14px; min-width:14px; max-width:14px; padding:4px 2px 4px 8px!important; text-align:center; vertical-align:middle; }',
+      '.proc-guia-dot-th { width:14px; min-width:14px; border-bottom:2px solid #ddd; background:#fff; padding:0!important; }',
       '#proc-guia-footer { padding:8px 20px; font-size:.72rem; font-weight:700; color:#000!important; border-top:1px solid #e0e0e0; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; }',
       '#proc-guia-confirm-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.9); border-radius:16px; }',
       '#proc-guia-confirm-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.18); padding:24px 28px; width:min(380px,90%); font-family:\'MontserratLight\',sans-serif; }',
@@ -3056,7 +3058,7 @@
     var COL_G = ['Ref. FNC', 'Qtd. F', 'Ref. PXO', 'Qtd. PS'];
 
     function buildTableRows(rowList) {
-      if (!rowList.length) return '<tr><td colspan="5" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
+      if (!rowList.length) return '<tr><td colspan="7" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
       var fRows = rowList.filter(function(r){ return (r.done ? r.totalF : r.pendF) > 0; });
       var pRows = rowList.filter(function(r){ return (r.done ? r.totalP : r.pendP) > 0; });
       var maxLen = Math.max(fRows.length, pRows.length);
@@ -3066,17 +3068,24 @@
         var pRow = pRows[i] || null;
         var refRow = fRow || pRow;
         var cls = refRow.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
-        var fDot = (fRow && fRow._dotColor) ? '<span class="proc-guia-session-dot" style="color:' + fRow._dotColor + ';user-select:none;" aria-hidden="true">\u25cf</span>' : '';
-        var pDot = (pRow && pRow._dotColor) ? '<span class="proc-guia-session-dot" style="color:' + pRow._dotColor + ';user-select:none;" aria-hidden="true">\u25cf</span>' : '';
+        /* Indicator dots live in their own column — refs are untouched */
+        var fDot = (fRow && fRow._dotColor)
+          ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + fRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
+          : '';
+        var pDot = (pRow && pRow._dotColor)
+          ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + pRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
+          : '';
         var fRef = fRow ? fRow.ref : '';
         var fQty = fRow ? (fRow.done ? fRow.totalF : fRow.pendF) : '';
         var pRef = pRow ? pRow.ref : '';
         var pQty = pRow ? (pRow.done ? pRow.totalP : pRow.pendP) : '';
         html += '<tr class="proc-guia-tr' + cls + '">'
-          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + fDot + fRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-dot-col">' + fDot + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + fRef + '</td>'
           + '<td class="proc-guia-td proc-guia-qty-f" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
           + '<td class="proc-guia-td proc-guia-sep-td"></td>'
-          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + pDot + pRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-dot-col">' + pDot + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + pRef + '</td>'
           + '<td class="proc-guia-td proc-guia-qty-p" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
           + '</tr>';
       }
@@ -3105,7 +3114,7 @@
       + '</div>';
 
     var sentSection = sentRows.length
-      ? '<tr class="proc-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado ('
+      ? '<tr class="proc-guia-sent-hdr"><td colspan="7">\u2713 J\u00e1 enviado ('
         + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>'
         + buildTableRows(sentRows)
       : '';
@@ -3139,13 +3148,17 @@
       +   '<div id="proc-guia-scroll">'
       +     '<table id="proc-guia-table">'
       +       '<thead><tr>'
+      +         '<th class="proc-guia-th proc-guia-dot-th"></th>'
       +         '<th class="proc-guia-th proc-guia-th-f" colspan="2"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><span>\ud83d\udd35 FNC (A4)</span><span id="proc-guia-fnc-count" style="font-size:.6rem;font-weight:600;opacity:.7;">' + fPend + ' un. pendentes</span></div></th>'
       +         '<th class="proc-guia-th proc-guia-th-sep"></th>'
+      +         '<th class="proc-guia-th proc-guia-dot-th"></th>'
       +         '<th class="proc-guia-th proc-guia-th-p" colspan="2"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><span>\ud83d\udd34 PXO (A5)</span><span id="proc-guia-pxo-count" style="font-size:.6rem;font-weight:600;opacity:.7;">' + pPend + ' un. pendentes</span></div></th>'
       +       '</tr><tr>'
+      +         '<th class="proc-guia-dot-th"></th>'
       +         '<th class="proc-guia-th2"><div class="proc-guia-th2-inner">Refer\u00eancia <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="0">\u29c9</button></div></th>'
       +         '<th class="proc-guia-th2" style="text-align:center"><div class="proc-guia-th2-inner" style="justify-content:center">Qtd. <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="1">\u29c9</button></div></th>'
       +         '<th class="proc-guia-th-sep"></th>'
+      +         '<th class="proc-guia-dot-th"></th>'
       +         '<th class="proc-guia-th2"><div class="proc-guia-th2-inner">Refer\u00eancia <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="2">\u29c9</button></div></th>'
       +         '<th class="proc-guia-th2" style="text-align:center"><div class="proc-guia-th2-inner" style="justify-content:center">Qtd. <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="3">\u29c9</button></div></th>'
       +       '</tr></thead>'
@@ -3257,8 +3270,8 @@
         + '</div>'
         + '<button id="proc-guia-other-add-btn" style="'
         +   'margin-left:auto;padding:5px 14px;font-size:.72rem;font-weight:700;'
-        +   'font-family:sans-serif;cursor:pointer;border:1.5px solid #000;'
-        +   'border-radius:7px;background:#000;color:#fff;white-space:nowrap;transition:all .13s;flex-shrink:0;'
+        +   'cursor:pointer;border:1.5px solid #000;'
+        +   'border-radius:7px;background:#fff;color:#000;white-space:nowrap;transition:background .13s,color .13s;flex-shrink:0;'
         + '">\u002b Adicionar</button>'
         + '<button id="proc-guia-other-dismiss-btn" style="'
         +   'padding:5px 10px;font-size:.72rem;font-weight:700;'

@@ -302,12 +302,12 @@
       '.proc-or-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       '.proc-or-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
       '.proc-or-action-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.proc-or-copy-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 20px; border-bottom:1px solid #f0f0f0; background:#fafafa; flex-shrink:0; }',
-      '.proc-or-copy-label { font-size:.63rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; margin-right:4px; font-family:\'MontserratLight\',sans-serif; }',
-      '.proc-or-copy-btn { background:#fff; border:1px solid #ddd; border-radius:7px; color:#000; font-size:.72rem; font-weight:700; padding:3px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
-      '.proc-or-copy-btn:hover { background:#f0f0f0; border-color:#999; }',
-      '.proc-or-copy-btn.active { border-color:#000; color:#000; background:#f0f0f0; }',
-      '.proc-or-copy-msg { font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; }',
+      '.proc-or-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:1px solid #f0f0f0; background:#fff; flex-shrink:0; }',
+      '.proc-or-copy-label { display:none; }',
+      '.proc-or-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }',
+      '.proc-or-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.proc-or-copy-btn.active { border-color:#000; color:#fff; background:#000; }',
+      '.proc-or-copy-msg { display:none; }',
       '.proc-or-scroll { overflow:auto; flex:1; }',
       '.proc-or-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
       '.proc-or-table thead { position:sticky; top:0; z-index:2; }',
@@ -1735,10 +1735,10 @@
       });
     });
 
-    var COLS = ['Refer\u00eancia','Armaz\u00e9m','IVA','Pre\u00e7o','Qtd.'];
-    var copyBar = '<div class="proc-or-copy-bar"><span class="proc-or-copy-label">Copiar coluna:</span>'
+    var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
+    var copyBar = '<div class="proc-or-copy-bar">'
       + COLS.map(function(c,i) { return '<button class="proc-or-copy-btn" data-col="' + i + '">\u29c9 ' + c + '</button>'; }).join('')
-      + '<span class="proc-or-copy-msg"></span></div>';
+      + '</div>';
 
     var tableRows = lines.length
       ? lines.map(function(l) {
@@ -1775,9 +1775,9 @@
       +   '<div class="proc-or-scroll">'
       +     '<table class="proc-or-table"><thead><tr>'
       +       '<th>Refer\u00eancia</th>'
-      +       '<th class="center">Armaz\u00e9m</th>'
+      +       '<th class="center">ARM</th>'
       +       '<th class="center">IVA</th>'
-      +       '<th class="center">Pre\u00e7o</th>'
+      +       '<th class="center">\u20ac</th>'
       +       '<th class="center">Qtd.</th>'
       +     '</tr></thead>'
       +     '<tbody>' + tableRows + '</tbody>'

@@ -3134,8 +3134,8 @@
     var modal = document.createElement('div');
     modal.id = 'tam-guia-modal';
 
-    /* ── Column copy helpers ── */
-    var COL_G = ['Ref. Funchal','Qtd. F','Ref. Porto Santo','Qtd. PS'];
+    /* ── Column copy labels ── */
+    var COL_G = ['Ref. FNC', 'Qtd. F', 'Ref. PXO', 'Qtd. PS'];
 
     function buildTableRows(rowList) {
       if (!rowList.length) return '<tr><td colspan="5" class="tam-guia-empty">Sem referências pendentes</td></tr>';
@@ -3145,7 +3145,6 @@
         var pQty = row.done ? row.totalP : row.pendP;
         var fDisp = fQty > 0 ? fQty : '—';
         var pDisp = pQty > 0 ? pQty : '—';
-        /* Dot: only for rows from other sessions, not copyable */
         var dot = row._dotColor
           ? '<span class="tam-guia-session-dot" style="color:' + row._dotColor + ';user-select:none;-webkit-user-select:none;" aria-hidden="true">●</span>'
           : '';
@@ -3164,16 +3163,17 @@
     var fSent = sentRows.reduce(function(s,r){ return s+r.totalF; },0);
     var pSent = sentRows.reduce(function(s,r){ return s+r.totalP; },0);
 
-    var copyBar = '<div class="tam-guia-copy-bar">' +
-      '<span class="tam-guia-copy-label">copiar coluna:</span>' +
-      COL_G.map(function(lbl,ci){
-        return '<button class="tam-guia-copy-btn" data-gcol="' + ci + '">⧉ ' + lbl + '</button>';
-      }).join('') +
-      '<span class="tam-guia-copy-msg" id="tam-guia-copy-msg"></span>' +
-    '</div>';
+    /* ── 4 address buttons (identical to processamento.js) ── */
+    var addrBar =
+      '<div class="tam-guia-copy-bar tam-guia-addr-bar-4">' +
+        '<button class="tam-guia-addr-btn" data-addr="CALCADA DA QUINTINHA 17 B">\u29c9\u00a0Lisboa</button>' +
+        '<button class="tam-guia-addr-btn" data-addr="29-FV-30">\u29c9\u00a0Placa</button>' +
+        '<button class="tam-guia-addr-btn" data-addr="RUA DE SAO FRANCISCO N\u00ba 20">\u29c9\u00a0FNC</button>' +
+        '<button class="tam-guia-addr-btn" data-addr="EDIFICIO Ilha Dourada Loja-1">\u29c9\u00a0PXO</button>' +
+      '</div>';
 
     var sentSection = sentRows.length
-      ? '<tr class="tam-guia-sent-hdr"><td colspan="5">✓ Já enviado (' + sentRows.length + ' refs · ' + fSent + ' F · ' + pSent + ' PS)</td></tr>' +
+      ? '<tr class="tam-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado (' + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>' +
         buildTableRows(sentRows)
       : '';
 
@@ -3199,44 +3199,62 @@
         '<div id="tam-guia-header">' +
           '<div id="tam-guia-title">' +
             '<span id="tam-guia-title-main">' + title + '</span>' +
-            '<span id="tam-guia-title-sub">Guía de transporte · TAM Fashion</span>' +
+            '<span id="tam-guia-title-sub">Guia de transporte \u00b7 TAM Fashion</span>' +
           '</div>' +
           '<div id="tam-guia-header-btns">' +
-            '<button id="tam-guia-confirm-btn" class="tam-guia-action-btn tam-guia-confirm"' + (pendRows.length===0?' disabled':'') + '>✓ Confirmar envío</button>' +
-            '<button id="tam-guia-export-btn" class="tam-guia-action-btn">⬇ Exportar CSV</button>' +
-            '<button id="tam-guia-close-btn" class="tam-guia-close-btn">✕</button>' +
+            '<button id="tam-guia-confirm-btn" class="tam-guia-action-btn tam-guia-confirm"' + (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>' +
+            '<button id="tam-guia-export-btn" class="tam-guia-action-btn">\u2b07 Exportar CSV</button>' +
+            '<button id="tam-guia-close-btn" class="tam-guia-close-btn">\u00d7</button>' +
           '</div>' +
         '</div>' +
-        copyBar +
+        addrBar +
         '<div id="tam-guia-scroll">' +
           '<table id="tam-guia-table">' +
-            '<thead><tr>' +
-              '<th class="tam-guia-th tam-guia-th-f" colspan="2">🔵 FUNCHAL (A4) · ' + fPend + ' uds pendentes</th>' +
-              '<th class="tam-guia-th tam-guia-th-sep"></th>' +
-              '<th class="tam-guia-th tam-guia-th-p" colspan="2">🔴 PORTO SANTO (A5) · ' + pPend + ' uds pendentes</th>' +
-            '</tr>' +
-            '<tr>' +
-              '<th class="tam-guia-th2">Referência</th>' +
-              '<th class="tam-guia-th2 tam-guia-th2-qty">Qtd.</th>' +
-              '<th class="tam-guia-th-sep"></th>' +
-              '<th class="tam-guia-th2">Referência</th>' +
-              '<th class="tam-guia-th2 tam-guia-th2-qty">Qtd.</th>' +
-            '</tr></thead>' +
+            '<thead>' +
+              '<tr>' +
+                '<th class="tam-guia-th tam-guia-th-f" colspan="2">\ud83d\udd35 FNC (A4) \u00b7 ' + fPend + ' un. pendentes</th>' +
+                '<th class="tam-guia-th tam-guia-th-sep"></th>' +
+                '<th class="tam-guia-th tam-guia-th-p" colspan="2">\ud83d\udd34 PXO (A5) \u00b7 ' + pPend + ' un. pendentes</th>' +
+              '</tr>' +
+              '<tr>' +
+                '<th class="tam-guia-th2"><div class="tam-guia-th2-inner">Refer\u00eancia <button class="tam-guia-copy-btn tam-guia-hdr-copy" data-gcol="0">\u29c9</button></div></th>' +
+                '<th class="tam-guia-th2 tam-guia-th2-qty"><div class="tam-guia-th2-inner" style="justify-content:center">Qtd. <button class="tam-guia-copy-btn tam-guia-hdr-copy" data-gcol="1">\u29c9</button></div></th>' +
+                '<th class="tam-guia-th-sep"></th>' +
+                '<th class="tam-guia-th2"><div class="tam-guia-th2-inner">Refer\u00eancia <button class="tam-guia-copy-btn tam-guia-hdr-copy" data-gcol="2">\u29c9</button></div></th>' +
+                '<th class="tam-guia-th2 tam-guia-th2-qty"><div class="tam-guia-th2-inner" style="justify-content:center">Qtd. <button class="tam-guia-copy-btn tam-guia-hdr-copy" data-gcol="3">\u29c9</button></div></th>' +
+              '</tr>' +
+            '</thead>' +
             '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>' +
           '</table>' +
           legendHtml +
         '</div>' +
         '<div id="tam-guia-footer">' +
-          pendRows.length + ' refs pendentes · ' + fPend + ' uds Funchal · ' + pPend + ' uds Porto Santo' +
-          (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '') +
-          (otherRows.length ? ' · ' + otherRows.length + ' de sessões anteriores' : '') +
+          pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO' +
+          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '') +
+          (otherRows.length ? ' \u00b7 ' + otherRows.length + ' de sess\u00f5es anteriores' : '') +
+          '<span class="tam-guia-copy-msg" id="tam-guia-copy-msg" style="margin-left:10px;"></span>' +
         '</div>' +
       '</div>';
 
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-guia-visible'); });
 
-    /* ── Copy column — extrae solo textContent de celdas, el dot tiene user-select:none ── */
+    /* ── Address buttons (4 especiales — Lisboa, Placa, FNC, PXO) ── */
+    modal.querySelectorAll('.tam-guia-addr-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var text = btn.getAttribute('data-addr');
+        if (!text) return;
+        function flash(){ btn.classList.add('tam-guia-addr-copied'); setTimeout(function(){ btn.classList.remove('tam-guia-addr-copied'); }, 1400); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(flash).catch(flash);
+        } else {
+          try { var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;top:-9999px;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch(e){}
+          flash();
+        }
+      });
+    });
+
+    /* ── Copy column — inline hdr-copy + dot removal ── */
     var copyMsg   = modal.querySelector('#tam-guia-copy-msg');
     var copyTimer = null;
     modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(btn){
@@ -3244,25 +3262,24 @@
         var ci   = parseInt(btn.getAttribute('data-gcol'));
         var vals = Array.from(modal.querySelectorAll('td[data-gcol="'+ci+'"]'))
                        .map(function(td){
-                         /* Remove dot spans before reading text */
                          var clone = td.cloneNode(true);
                          clone.querySelectorAll('.tam-guia-session-dot').forEach(function(d){ d.parentNode.removeChild(d); });
                          return clone.textContent.trim();
                        })
-                       .filter(function(v){ return v && v !== '—'; });
+                       .filter(function(v){ return v && v !== '\u2014'; });
         if (!vals.length) return;
         modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
         btn.classList.add('tam-guia-copy-active');
         var text = vals.join('\n');
         function showMsg(ok){
           if (!copyMsg) return;
-          copyMsg.textContent = ok ? '✓ ' + COL_G[ci] + ' copiado!' : '⚠ copie manualmente';
-          copyMsg.style.color = ok ? '#2e7d32' : '#b05000';
+          copyMsg.textContent = ok ? '\u2713 ' + COL_G[ci] + ' copiado!' : '\u26a0 copie manualmente';
+          copyMsg.style.color = ok ? '#4A7C6F' : '#5F7B94';
           if (copyTimer) clearTimeout(copyTimer);
           copyTimer = setTimeout(function(){
             copyMsg.textContent = '';
             modal.querySelectorAll('.tam-guia-copy-btn').forEach(function(b){ b.classList.remove('tam-guia-copy-active'); });
-          }, 2000);
+          }, 2200);
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
@@ -3277,21 +3294,21 @@
       });
     });
 
-    /* ── Confirmar envío ── */
+    /* ── Confirmar envio ── */
     modal.querySelector('#tam-guia-confirm-btn').addEventListener('click', function(){
       if (!pendRows.length) return;
       var confirmDiv = document.createElement('div');
       confirmDiv.id = 'tam-guia-confirm-overlay';
       confirmDiv.innerHTML =
         '<div id="tam-guia-confirm-box">' +
-          '<div class="tam-gc-title">⚠ Confirmar envío</div>' +
+          '<div class="tam-gc-title">\u26a0 Confirmar envio</div>' +
           '<div class="tam-gc-body">' +
-            'Vas a marcar <strong>' + pendRows.length + ' referencias</strong> como enviadas hoy (' + new Date().toLocaleDateString('pt-PT') + ').<br>' +
-            '<strong>' + fPend + '</strong> uds Funchal · <strong>' + pPend + '</strong> uds Porto Santo<br><br>' +
-            'Esta acción no se puede deshacer.' +
+            'Vais marcar <strong>' + pendRows.length + ' refer\u00eancias</strong> como enviadas hoje (' + new Date().toLocaleDateString('pt-PT') + ').<br>' +
+            '<strong>' + fPend + '</strong> un. FNC \u00b7 <strong>' + pPend + '</strong> un. PXO<br><br>' +
+            'Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.' +
           '</div>' +
           '<div class="tam-gc-btns">' +
-            '<button class="tam-gc-btn tam-gc-ok">✓ Confirmar</button>' +
+            '<button class="tam-gc-btn tam-gc-ok">\u2713 Confirmar</button>' +
             '<button class="tam-gc-btn tam-gc-cancel">Cancelar</button>' +
           '</div>' +
         '</div>';
@@ -3300,9 +3317,7 @@
         confirmDiv.parentNode.removeChild(confirmDiv);
       });
       confirmDiv.querySelector('.tam-gc-ok').addEventListener('click', function(){
-        /* Confirmar en sesión activa las filas normales */
         tamConfirmGuiaEnvio(pendRows.filter(function(r){ return !r._fromOtherSession; }));
-        /* Confirmar en sus sesiones de origen las filas de otras sesiones */
         tamConfirmOtherSessionsEnvio(pendRows.filter(function(r){ return r._fromOtherSession; }));
         confirmDiv.parentNode.removeChild(confirmDiv);
         closeModal();
@@ -3390,7 +3405,7 @@
       ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem distribuição registada para esta fatura</td></tr>'
       : '';
 
-    var COL_S = ['Referencia', 'Armaz\u00e9m', 'IVA', 'Pre\u00e7o', 'Qtd.'];
+    var COL_S = ['Referencia', 'ARM', 'IVA', '\u20ac', 'Qtd.'];
     var stockCopyBar =
       '<div class="tam-stock-copy-bar">' +
         COL_S.map(function(lbl, ci){
@@ -3418,9 +3433,9 @@
             '<thead>' +
               '<tr>' +
                 '<th class="tam-stock-th tam-stock-ref">Referencia</th>' +
-                '<th class="tam-stock-th tam-stock-city">Armazém</th>' +
+                '<th class="tam-stock-th tam-stock-city">ARM</th>' +
                 '<th class="tam-stock-th tam-stock-iva">IVA</th>' +
-                '<th class="tam-stock-th tam-stock-price">Preço</th>' +
+                '<th class="tam-stock-th tam-stock-price">&euro;</th>' +
                 '<th class="tam-stock-th tam-stock-qty">Qtd.</th>' +
               '</tr>' +
             '</thead>' +
@@ -3493,7 +3508,7 @@
 
     // Export to CSV (Excel-compatible)
     modal.querySelector('#tam-stock-export-btn').addEventListener('click', function(){
-      var lines = ['\uFEFF' + ['Referencia','Armazem','IVA','Preco','Quantidade'].join(';')];
+      var lines = ['\uFEFF' + ['Referencia','ARM','IVA','Euro','Quantidade'].join(';')];
       rows.forEach(function(row){
         lines.push([row.ref, row.city, row.iva, String(row.price).replace('.',','), row.qty].join(';'));
       });
@@ -5280,6 +5295,8 @@
       '.tam-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; }',
       '.tam-th { background:#fafafa; padding:8px 12px; text-align:center; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.10em; border:none; border-bottom:1px solid #e0e0e0; white-space:nowrap; color:#000; }',
       /* FNC/PXO defined below with their specific background */
+      '.tam-th-funchal { background:#f0f0f0!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
+      '.tam-th-porto   { background:#e8e8e8!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
       '.tam-td { padding:5px 12px; border:none; border-bottom:1px solid #f0f0f0; font-size:.88rem; font-weight:800; vertical-align:middle; text-align:center; white-space:nowrap; color:#000; }',
       '.tam-td-num { font-variant-numeric:tabular-nums; }',
       '.tam-cell-funchal { color:#000; font-weight:800; }',
@@ -5396,9 +5413,7 @@
       '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; }',
       '.tam-rec-area-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; background:#fafafa; border-radius:14px 14px 0 0; }',
 
-      /* Funchal/Porto headers — visible black text, no color bg */
-      '.tam-th-funchal { background:#f5f5f5!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
-      '.tam-th-porto   { background:#eeeeee!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
+      /* Funchal/Porto reception th already defined above */
 
       /* ── Quick distribution buttons (proc style — white bg) ── */
       '.tam-rec-quick-btns { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid #e0e0e0; background:#fafafa!important; flex-wrap:wrap; border-radius:0; }',
@@ -5686,22 +5701,30 @@
       '.tam-guia-confirm:hover:not(:disabled) { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '.tam-guia-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-guia-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
-      /* Copy bar — 4 cols identical to proc */
-      '.tam-guia-copy-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:1px solid #f0f0f0; background:#fff; flex-shrink:0; }',
+      /* Address bar — 4 cols grid for Lisboa/Placa/FNC/PXO buttons */
+      '.tam-guia-addr-bar-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:1px solid #f0f0f0; background:#fff; flex-shrink:0; }',
+      '.tam-guia-addr-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; white-space:nowrap; }',
+      '.tam-guia-addr-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-guia-addr-copied { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      /* Inline header copy buttons (small, beside Referência label in th2) */
       '.tam-guia-copy-label { display:none; }',
-      '.tam-guia-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
+      '.tam-guia-copy-btn { background:transparent; border:1px solid #ccc; border-radius:5px; color:#888; font-size:.58rem; font-weight:700; padding:2px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all .12s; flex-shrink:0; display:inline-flex; align-items:center; }',
       '.tam-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.tam-guia-copy-active { border-color:#000!important; color:#fff!important; background:#000!important; }',
-      '.tam-guia-copy-msg { display:none; }',
+      '.tam-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; color:#4A7C6F; }',
+      '.tam-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
+      '.tam-guia-hdr-copy:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-guia-hdr-copy.tam-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
       '#tam-guia-table thead { position:sticky; top:0; z-index:2; }',
       /* Col headers F/P — now with subtle background */
       '.tam-guia-th { padding:9px 14px; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; border-bottom:2px solid #e0e0e0; text-align:center; white-space:nowrap; }',
       '.tam-guia-th-f { background:#f5f5f5; color:#000; }',
-      '.tam-guia-th-p { background:#f0f0f0; color:#000; }',
+      '.tam-guia-th-p { background:#eeeeee; color:#000; }',
       '.tam-guia-th-sep { width:16px; background:#fff; border-bottom:2px solid #e0e0e0; }',
-      '.tam-guia-th2 { padding:7px 14px; background:#fff; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; border-bottom:1px solid #e0e0e0; text-align:left; }',
+      '.tam-guia-th2 { padding:7px 10px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #e0e0e0; text-align:left; white-space:nowrap; }',
+      '.tam-guia-th2-inner { display:flex; align-items:center; gap:5px; }',
       '.tam-guia-th2-qty { text-align:center; }',
       '.tam-guia-td { padding:7px 12px; font-size:.84rem; font-weight:700; border-bottom:1px solid #f0f0f0; vertical-align:middle; color:#000; }',
       '.tam-guia-ref-f { font-weight:700; color:#000; min-width:120px; }',
@@ -5717,7 +5740,7 @@
       '#tam-guia-table tbody tr:hover td { background:#f0f0f0!important; }',
       '.tam-guia-sent-hdr td { padding:6px 14px; background:transparent; font-size:.65rem; font-weight:700; color:#000; text-transform:uppercase; letter-spacing:.08em; border-top:2px solid #e0e0e0; border-bottom:1px solid #e0e0e0; opacity:.5; }',
       '.tam-guia-empty { padding:24px; color:#000; font-style:italic; text-align:center; opacity:.4; }',
-      '#tam-guia-footer { padding:10px 20px; font-size:.72rem; font-weight:700; color:#000!important; border-top:1px solid #e0e0e0; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; }',
+      '#tam-guia-footer { padding:10px 20px; font-size:.72rem; font-weight:700; color:#000!important; border-top:1px solid #e0e0e0; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }',
       '.tam-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
       '#tam-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; border-top:1px dashed #e0e0e0; opacity:.6; font-weight:700; }',
       '.tam-guia-legend-item { display:flex; align-items:center; gap:4px; }',

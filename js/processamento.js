@@ -196,7 +196,14 @@
       '#proc-content .proc-obs-tip::after { content:""; position:absolute; top:100%; right:14px; border:6px solid transparent; border-top-color:#1a1a1a; }',
       '#proc-content .proc-obs-cell:hover .proc-obs-tip.has-text { visibility:visible; opacity:1; }',
 
-      /* Add fatura */
+      /* Incoherence soft warning — orange border on fields */
+      '#proc-content .proc-warn-field { border-color:#E8A44A !important; background:#FFFBF5 !important; }',
+      '#proc-content .proc-warn-field:focus { border-color:#D4922A !important; }',
+      /* Onboarding tooltip */
+      '#proc-onboarding-tip { position:absolute; z-index:2000; pointer-events:none; animation:proc-tip-in 0.3s ease both; }',
+      '@keyframes proc-tip-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }',
+      '#proc-onboarding-tip .proc-tip-bubble { background:#1a1a1a; color:#fff; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; padding:8px 14px; border-radius:10px; white-space:nowrap; box-shadow:0 4px 18px rgba(0,0,0,.28); display:flex; align-items:center; gap:8px; }',
+      '#proc-onboarding-tip .proc-tip-arrow { position:absolute; top:100%; left:18px; border:7px solid transparent; border-top-color:#1a1a1a; }',
       '#proc-content .proc-add-fatura-wrap { display:flex; justify-content:center; margin:8px 0 14px; }',
       '#proc-content .proc-add-fatura-btn { padding:9px 32px; font-size:.82rem; border-style:dashed; border-color:#ccc; color:#000; background:transparent; border-radius:10px; }',
       '#proc-content .proc-add-fatura-btn:hover { background:#000; color:#fff; border-style:solid; }',
@@ -388,6 +395,11 @@
   var _procInited   = false;
   var _isSynced     = false;   /* true only after remote fetch completes on init */
 
+  /* ── UNDO HISTORY (Ctrl+Z, ultimos 10 estados) ── */
+  var _undoStack   = [];
+  var _undoMaxSize = 10;
+  var _undoPaused  = false; /* evita gravacao durante restore */
+
   /* ── 2a. SUPABASE CONFIG ── */
   var PROC_SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
   var PROC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
@@ -415,6 +427,72 @@
 
   function procMarkSynced() {
     _isSynced = true;
+  }
+
+  /* ── UNDO HELPERS ── */
+
+  function procUndoSnapshot() {
+    if (_undoPaused) return;
+    var payload = procBuildSavePayload();
+    if (!payload) return;
+    var json = JSON.stringify(payload);
+    if (_undoStack.length && _undoStack[_undoStack.length - 1] === json) return;
+    _undoStack.push(json);
+    if (_undoStack.length > _undoMaxSize) _undoStack.shift();
+  }
+
+  function procUndoRestore() {
+    if (_undoStack.length < 2) {
+      procUndoFlash('nada para desfazer');
+      return;
+    }
+    _undoStack.pop();
+    var json = _undoStack[_undoStack.length - 1];
+    _undoPaused = true;
+    try {
+      var data;
+      try { data = JSON.parse(json); } catch(e) { _undoPaused = false; return; }
+      var cont = document.getElementById('proc-faturasContainer');
+      if (cont) cont.innerHTML = '';
+      faturaCount   = 0;
+      activeFaturas = [];
+      Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+      var faturas = data.faturas || [];
+      if (!faturas.length) { procAddFatura(null); }
+      else faturas.forEach(function(fd) { procAddFatura(fd); });
+    } finally {
+      _undoPaused = false;
+    }
+    procUndoFlash('desfeito');
+  }
+
+  function procUndoFlash(msg) {
+    var el = document.getElementById('proc-saveStatus');
+    if (!el) return;
+    var prev = el.textContent;
+    var prevOpacity = el.style.opacity;
+    el.textContent = String.fromCharCode(8617) + ' ' + msg;
+    el.style.opacity = '1';
+    el.style.color = '#5F7B94';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() {
+      el.textContent = prev;
+      el.style.opacity = prevOpacity;
+      el.style.color = '';
+    }, 1800);
+  }
+
+  function procInitUndoKeyboard() {
+    document.addEventListener('keydown', function(e) {
+      var inProc = document.getElementById('proc-content');
+      if (!inProc) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        var active = document.activeElement;
+        if (!inProc.contains(active) && active !== document.body) return;
+        e.preventDefault();
+        procUndoRestore();
+      }
+    });
   }
 
   /* ── 2b. PROVIDER LIST ── */
@@ -528,6 +606,46 @@
 
   function procNormalizeDesc(s) {
     return s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  /* Corrección silenciosa: normaliza el input y busca la mejor coincidencia
+     en DESC_TIPOS y DESC_MODS. Si la distancia de edición es <= 2 caracteres,
+     reemplaza sin avisar al usuario. */
+  function procSilentCorrectDesc(raw) {
+    var parts = raw.trim().toUpperCase().split(/\s+/);
+    var correctedParts = parts.map(function(part, idx) {
+      var partN = procNormalizeDesc(part);
+      /* Buscar en TIPOS (solo en primera palabra) o MODS */
+      var candidates = idx === 0 ? DESC_TIPOS.concat(DESC_MODS) : DESC_MODS;
+      var candidatesN = idx === 0 ? _DESC_TIPOS_N.concat(_DESC_MODS_N) : _DESC_MODS_N;
+      var bestDist = 3; /* umbral máximo */
+      var bestMatch = null;
+      for (var i = 0; i < candidatesN.length; i++) {
+        var cn = candidatesN[i];
+        if (Math.abs(cn.length - partN.length) > 2) continue;
+        var d = procLevenshtein(partN, cn);
+        if (d < bestDist) { bestDist = d; bestMatch = candidates[i]; }
+        if (d === 0) break; /* coincidencia exacta */
+      }
+      return (bestDist <= 2 && bestMatch) ? bestMatch : part;
+    });
+    var result = correctedParts.join(' ');
+    return result !== raw.toUpperCase() ? result : null;
+  }
+
+  function procLevenshtein(a, b) {
+    var m = a.length, n = b.length;
+    var dp = [];
+    for (var i = 0; i <= m; i++) { dp[i] = [i]; }
+    for (var j = 0; j <= n; j++) { dp[0][j] = j; }
+    for (var i2 = 1; i2 <= m; i2++) {
+      for (var j2 = 1; j2 <= n; j2++) {
+        dp[i2][j2] = a[i2-1] === b[j2-1]
+          ? dp[i2-1][j2-1]
+          : 1 + Math.min(dp[i2-1][j2], dp[i2][j2-1], dp[i2-1][j2-1]);
+      }
+    }
+    return dp[m][n];
   }
 
   function procFindDescMatches(raw) {
@@ -775,17 +893,9 @@
     return { close: close };
   }
 
-  /* ── 4. SAVE / LOAD ── */
-  var _procSaveDebounce = null;
-
-  function procSaveSession(manual) {
-    if (!_isSynced) {
-      if (manual) procSetSyncStatus('syncing', 'a sincronizar…');
-      return;
-    }
-    var key = _activeSessionKey || getSessionKey();
-    _activeSessionKey = key;
-    var payload = {
+  function procBuildSavePayload() {
+    if (!activeFaturas.length) return null;
+    return {
       savedAt: new Date().toISOString(),
       faturas: activeFaturas.map(function(fid) {
         var rows = procCollectRows(fid).map(function(r) {
@@ -799,6 +909,20 @@
         };
       })
     };
+  }
+
+    /* ── 4. SAVE / LOAD ── */
+  var _procSaveDebounce = null;
+
+  function procSaveSession(manual) {
+    if (!_isSynced) {
+      if (manual) procSetSyncStatus('syncing', 'a sincronizar…');
+      return;
+    }
+    var key = _activeSessionKey || getSessionKey();
+    _activeSessionKey = key;
+    var payload = procBuildSavePayload();
+    if (!payload) return;
 
     /* Always save to localStorage as offline fallback */
     try { localStorage.setItem(key, JSON.stringify(payload)); } catch(e) {}
@@ -835,6 +959,8 @@
     var faturas = data.faturas || [];
     if (!faturas.length) { procAddFatura(null); }
     else faturas.forEach(function(fd) { procAddFatura(fd); });
+    /* Snapshot inicial para que o primeiro Ctrl+Z restaure este estado */
+    setTimeout(procUndoSnapshot, 100);
     if (callback) callback();
   }
 
@@ -1172,6 +1298,11 @@
     procInitProviderInput(fid);
     procUpdateTableLock(fid);
 
+    /* ── Onboarding invisível (uma única vez) ── */
+    if (!data && fid === 1) {
+      setTimeout(function() { procShowOnboardingTooltip(fid); }, 600);
+    }
+
     var dataRows = (data && data.rows) ? data.rows : [];
     var nRows    = Math.max(dataRows.length + 1, 2);
     procAddRows(fid, nRows);
@@ -1284,6 +1415,7 @@
 
   function procRemoveFatura(fid) {
     if (activeFaturas.length <= 1) return;
+    procUndoSnapshot(); /* snapshot antes de remover */
     var el = document.getElementById('proc-fatura-' + fid);
     if (el) el.remove();
     activeFaturas = activeFaturas.filter(function(id) { return id !== fid; });
@@ -1357,6 +1489,12 @@
         setTimeout(function() {
           var sg = document.getElementById('proc-desc-global-sugg');
           if (sg) { sg.style.display = 'none'; sg._activeInput = null; }
+          /* ── Correção silenciosa da descrição ── */
+          var inp = e.target;
+          var raw = inp.value.trim();
+          if (!raw) return;
+          var corrected = procSilentCorrectDesc(raw);
+          if (corrected && corrected !== raw) inp.value = corrected;
         }, 180);
       });
     }
@@ -1689,7 +1827,73 @@
     if (preco || refVal) tr.classList.add('has-data');
     else                 tr.classList.remove('has-data');
 
+    procCheckRowCoherence(fid, id, tr, qtdFt, pecas, preco);
     procUpdateSummary(fid);
+    /* Snapshot para undo — debounced */
+    clearTimeout(procRecalcRow._undoTimer);
+    procRecalcRow._undoTimer = setTimeout(procUndoSnapshot, 600);
+  }
+
+  /* ── 9b. ROW COHERENCE CHECK ── */
+  /* Marca visualmente com borda laranja suave campos com incoerências:
+     - Qtd 0 mas preço preenchido
+     - preço 0 mas qtd preenchida
+     - Total de peças (FNC+PXO) muito diferente da qtd FT (sem flag D) */
+  function procCheckRowCoherence(fid, id, tr, qtdFt, pecas, preco) {
+    var inputs    = tr.querySelectorAll('input[type="number"]');
+    var qtdInput  = inputs[0];
+    var precoInput = inputs[3];
+
+    /* Reset warnings */
+    if (qtdInput)   qtdInput.classList.remove('proc-warn-field');
+    if (precoInput) precoInput.classList.remove('proc-warn-field');
+
+    /* Qtd 0 com preço preenchido */
+    if (!qtdFt && preco > 0) {
+      if (qtdInput) qtdInput.classList.add('proc-warn-field');
+    }
+    /* Preço 0 com qtd preenchida */
+    if (qtdFt > 0 && !preco) {
+      if (precoInput) precoInput.classList.add('proc-warn-field');
+    }
+  }
+
+  /* ── 9c. ONBOARDING TOOLTIP (once per device) ── */
+  function procShowOnboardingTooltip(fid) {
+    var SEEN_KEY = 'proc_onboarding_seen';
+    try { if (localStorage.getItem(SEEN_KEY)) return; } catch(e) { return; }
+
+    var input = document.getElementById('proc-proveedor-' + fid);
+    if (!input) return;
+
+    var tip = document.createElement('div');
+    tip.id = 'proc-onboarding-tip';
+    tip.innerHTML =
+      '<div class="proc-tip-bubble">'
+      + '<span>&#8594; começa aqui &mdash; escreve o fornecedor</span>'
+      + '</div>'
+      + '<div class="proc-tip-arrow"></div>';
+
+    document.body.appendChild(tip);
+
+    function reposition() {
+      var r = input.getBoundingClientRect();
+      tip.style.left = (r.left + window.scrollX) + 'px';
+      tip.style.top  = (r.top + window.scrollY - tip.offsetHeight - 10) + 'px';
+    }
+    reposition();
+
+    function dismiss() {
+      if (!tip.parentNode) return;
+      tip.style.transition = 'opacity 0.25s';
+      tip.style.opacity = '0';
+      setTimeout(function() { if (tip.parentNode) tip.parentNode.removeChild(tip); }, 260);
+      try { localStorage.setItem(SEEN_KEY, '1'); } catch(e) {}
+      input.removeEventListener('focus', dismiss);
+    }
+    input.addEventListener('focus', dismiss);
+    /* Auto-dismiss after 5s */
+    setTimeout(dismiss, 5000);
   }
 
   /* ── 10. SUMMARY ── */
@@ -1743,10 +1947,17 @@
     var diff = computedTotal - ftVal;
     if (Math.abs(diff) < 0.01) {
       diffChip.className = 'proc-diff-chip zero'; diffChip.textContent = '\u2713 fatura certa';
+      if (vEl) vEl.classList.remove('proc-warn-field');
     } else {
       var sign = diff > 0 ? '+' : '';
       diffChip.className = 'proc-diff-chip ' + (diff > 0 ? 'pos' : 'neg');
       diffChip.textContent = 'erro ' + sign + diff.toFixed(2) + ' \u20ac';
+      /* Borda laranja subtil se diferença for relevante e houver linhas */
+      if (computedTotal > 0 && Math.abs(diff) > 0.01) {
+        if (vEl) vEl.classList.add('proc-warn-field');
+      } else {
+        if (vEl) vEl.classList.remove('proc-warn-field');
+      }
     }
   }
 
@@ -2290,6 +2501,9 @@
 
     /* auto-save every 10 s */
     setInterval(function() { procSaveSession(false); }, 10000);
+
+    /* Undo keyboard shortcut (Ctrl+Z) */
+    procInitUndoKeyboard();
   }
 
   /* ── 18. OVERLAY OPEN / CLOSE ── */

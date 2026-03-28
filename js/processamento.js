@@ -184,8 +184,6 @@
       '#proc-float-actions .proc-float-btn-icon { font-size:1.2rem; line-height:1; }',
       '#proc-float-save { border-color:#ccc; color:#000; background:transparent; }',
       '#proc-float-save:hover { background:#f5f5f5; border-color:#555; }',
-      '#proc-float-close { border-color:#9B4D4D; color:#9B4D4D; background:transparent; }',
-      '#proc-float-close:hover { background:#9B4D4D; color:#fff; border-color:#9B4D4D; }',
 
       /* OBS input */
       '#proc-content .proc-table-wrap td input.proc-obs-input { width:70px; }',
@@ -2453,15 +2451,7 @@
     saveBtn.innerHTML = '<span class="proc-float-btn-icon">&#128190;</span>';
     saveBtn.addEventListener('click', function() { procSaveSession(true); });
 
-    var closeBtn = document.createElement('button');
-    closeBtn.id = 'proc-float-close';
-    closeBtn.className = 'proc-float-btn';
-    closeBtn.title = 'Guardar e fechar a sessão activa';
-    closeBtn.innerHTML = '<span class="proc-float-btn-icon">&#x23CF;&#xFE0F;</span>';
-    closeBtn.addEventListener('click', function() { procCloseActiveSession(); });
-
     wrap.appendChild(saveBtn);
-    wrap.appendChild(closeBtn);
     document.body.appendChild(wrap);
 
     /* Show float buttons only when the top session bar scrolls out of view */
@@ -2513,7 +2503,6 @@
       +       '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
       +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
       +       '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
-      +       '<button class="proc-btn" id="proc-closeSessionBtn" title="Guarda e fecha a sess\u00e3o activa" style="display:none;border-color:#9B4D4D;color:#9B4D4D;background:transparent;">&#x23CF;&#xFE0F;</button>'
       +       '<button class="proc-btn" id="proc-guiaBtn" style="display:none;border-color:#5F7B94;color:#5F7B94;background:transparent;">&#128203;</button>'
       +     '</div>'
       +   '</div>'
@@ -2566,7 +2555,6 @@
     document.getElementById('proc-saveBtn').addEventListener('click', function() { procSaveSession(true); });
     document.getElementById('proc-sessionMenuBtn').addEventListener('click', function(e) { procToggleSessionMenu(e); });
     document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
-    document.getElementById('proc-closeSessionBtn').addEventListener('click', function() { procCloseActiveSession(); });
     document.getElementById('proc-start-new-btn').addEventListener('click', function() { procStartNewSession(); });
 
     /* close session menu on outside click */
@@ -2688,9 +2676,6 @@
     /* Update label in session bar */
     var lbl = document.getElementById('proc-session-label');
     if (lbl && key) { lbl.textContent = labelFromKey(key); lbl.style.display = ''; }
-    /* Show close button */
-    var closeBtn = document.getElementById('proc-closeSessionBtn');
-    if (closeBtn) closeBtn.style.display = '';
     /* Floating action buttons */
     procCreateFloatingButtons();
     procShowFloatingButtons();
@@ -2703,8 +2688,6 @@
     if (main)  main.style.display  = 'none';
     var lbl = document.getElementById('proc-session-label');
     if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
-    var closeBtn = document.getElementById('proc-closeSessionBtn');
-    if (closeBtn) closeBtn.style.display = 'none';
     /* Hide save and guia, recenter bar */
     var saveBtn = document.getElementById('proc-saveBtn');
     var guiaBtn = document.getElementById('proc-guiaBtn');
@@ -2771,6 +2754,35 @@
 
     /* Undo keyboard shortcut (Ctrl+Z) */
     procInitUndoKeyboard();
+
+    /* ── adm-back-btn: guardar e fechar sessão antes de voltar ao dashboard ── */
+    (function() {
+      var backBtn = document.getElementById('adm-back-btn');
+      if (!backBtn || backBtn._procBound) return;
+      backBtn._procBound = true;
+      backBtn.addEventListener('click', function(e) {
+        if (!_isSynced || !_activeSessionKey) return; /* sem sessão activa — comportamento normal */
+        e.stopImmediatePropagation();
+        /* Guardar e fechar sessão silenciosamente */
+        if (_isSynced) procSaveSession(false);
+        _isSynced        = false;
+        _activeSessionKey = null;
+        _procInited       = false;
+        faturaCount   = 0;
+        activeFaturas = [];
+        Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+        _procSentRefs = {};
+        var cont = document.getElementById('proc-faturasContainer');
+        if (cont) cont.innerHTML = '';
+        procHideFloatingButtons();
+        /* Deixar o click propagar para o admin-init fazer goToDashboard */
+        setTimeout(function() {
+          backBtn._procBound = false;
+          backBtn.click();
+          backBtn._procBound = true;
+        }, 80);
+      }, true); /* capture = true */
+    })();
   }
 
   /* ── 18. OVERLAY OPEN / CLOSE ── */

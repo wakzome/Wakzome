@@ -244,7 +244,21 @@
       '#proc-guia-title { display:flex; flex-direction:column; gap:2px; }',
       '#proc-guia-title-main { font-size:.95rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
       '#proc-guia-title-sub { display:block; font-size:.68rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
-      '#proc-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
+      '#proc-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }',
+      /* Right side of header: banner stacked above buttons */
+      '#proc-guia-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }',
+      /* ── Banner sessões anteriores (proc + TAM) ── */
+      '.proc-guia-other-banner { display:flex; align-items:center; gap:7px; border-radius:8px; padding:5px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; transition:all .3s; }',
+      '.proc-guia-other-loading { background:#f5f5f5; color:#000; opacity:.55; }',
+      '.proc-guia-other-none    { background:transparent; color:#4A7C6F; }',
+      '.proc-guia-other-found   { background:#FFFBF5; border:1px solid #E8A44A; color:#000; flex-wrap:wrap; }',
+      '.proc-guia-other-icon    { font-size:1rem; flex-shrink:0; }',
+      '.proc-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
+      '.proc-guia-other-text strong { color:#000!important; }',
+      '.proc-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
+      '.proc-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
+      '#proc-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; border-top:1px dashed #e0e0e0; opacity:.6; font-weight:700; }',
+      '.proc-guia-legend-item { display:flex; align-items:center; gap:4px; }',
       '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:transparent; color:#000!important; transition:background .13s,color .13s; white-space:nowrap; }',
       '.proc-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
       '.proc-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
@@ -2834,6 +2848,185 @@
     procSaveSession(false);
   }
 
+  /* ══════════════════════════════════════════════════════════
+     PENDENTES DE OUTRAS SESSÕES — Processamento + TAM
+     Consulta Supabase para funcionar entre dispositivos.
+  ══════════════════════════════════════════════════════════ */
+
+  var PROC_SESSION_COLORS = ['#F59E0B','#8B5CF6','#3B82F6','#10B981','#6B7280'];
+  function procSessionColor(idx) {
+    return PROC_SESSION_COLORS[Math.min(idx, PROC_SESSION_COLORS.length - 1)];
+  }
+
+  /* ── Extrai pendentes das sessões de Processamento (proc_sessoes) ── */
+  async function procGetPendingFromProcSessions() {
+    var results = [];
+    try {
+      var res = await procSbFetch('proc_sessoes?select=session_key,dados&order=updated_at.desc', { method: 'GET' });
+      if (!res.ok) return results;
+      var rows = await res.json();
+      rows.forEach(function(row) {
+        /* Ignorar a sessão activa */
+        if (row.session_key === _activeSessionKey) return;
+        var data;
+        try { data = JSON.parse(row.dados); } catch(e) { return; }
+        if (!data.faturas || !data.faturas.length) return;
+        var sentRefs = data.sentRefs || {};
+        data.faturas.forEach(function(fat, fidIdx) {
+          var fid = fidIdx; /* index como fid — igual a como os rows são gravados */
+          var forn = fat.proveedor || ('Fatura ' + fidIdx);
+          (fat.rows || []).forEach(function(r) {
+            if (!r.ref) return;
+            var a4 = r.a4 || 0, a5 = r.a5 || 0;
+            if (a4 === 0 && a5 === 0) return;
+            var sentKey = r.ref + '___' + fid;
+            var lots = sentRefs[sentKey] || [];
+            var sF = 0, sP = 0;
+            lots.forEach(function(l){ sF += l.f||0; sP += l.p||0; });
+            var pendF = Math.max(0, a4 - sF);
+            var pendP = Math.max(0, a5 - sP);
+            if (pendF === 0 && pendP === 0) return;
+            results.push({
+              ref:               r.ref,
+              forn:              forn,
+              sourceModule:      'proc',
+              sessionKey:        row.session_key,
+              sessionName:       forn + ' (' + (data.savedAt ? new Date(data.savedAt).toLocaleDateString('pt-PT') : row.session_key) + ')',
+              pendF:             pendF,
+              pendP:             pendP,
+              totalF:            a4,
+              totalP:            a5,
+              done:              false,
+              _fromOtherSession: true,
+              _procKey:          row.session_key,
+              _procSentKey:      sentKey
+            });
+          });
+        });
+      });
+    } catch(e) { console.warn('procGetPendingFromProcSessions error', e); }
+    return results;
+  }
+
+  /* ── Extrai pendentes das sessões de TAM (tam_sessions) ── */
+  async function procGetPendingFromTamSessions() {
+    var results = [];
+    try {
+      var res = await procSbFetch('tam_sessions?select=session_name,data&order=saved_at.desc', { method: 'GET' });
+      if (!res.ok) return results;
+      var rows = await res.json();
+      rows.forEach(function(row) {
+        var data;
+        try { data = JSON.parse(row.data); } catch(e) { return; }
+        if (!data.invoices || !data.boxes) return;
+        var sentRefs = data.sentRefs || {};
+        data.invoices.forEach(function(inv, invIdx) {
+          (inv.grouped || []).forEach(function(g) {
+            if (!g.ref) return;
+            /* Calcular distribuído nas caixas desta sessão TAM */
+            var distF = 0, distP = 0;
+            data.boxes.forEach(function(box) {
+              if (box.refs && box.refs[g.ref]) {
+                distF += box.refs[g.ref].f || 0;
+                distP += box.refs[g.ref].p || 0;
+              }
+            });
+            if (distF === 0 && distP === 0) return;
+            /* Calcular já enviado */
+            var sentKey = g.ref + '___' + invIdx;
+            var lots = sentRefs[sentKey] || [];
+            var sF = 0, sP = 0;
+            lots.forEach(function(l){ sF += l.f||0; sP += l.p||0; });
+            var pendF = Math.max(0, distF - sF);
+            var pendP = Math.max(0, distP - sP);
+            if (pendF === 0 && pendP === 0) return;
+            results.push({
+              ref:               g.ref,
+              forn:              inv.invoiceNo || row.session_name,
+              sourceModule:      'tam',
+              sessionKey:        row.session_name,
+              sessionName:       'TAM · ' + row.session_name,
+              pendF:             pendF,
+              pendP:             pendP,
+              totalF:            distF,
+              totalP:            distP,
+              done:              false,
+              _fromOtherSession: true,
+              _tamSessionName:   row.session_name,
+              _tamSentKey:       sentKey,
+              _tamInvIdx:        invIdx
+            });
+          });
+        });
+      });
+    } catch(e) { console.warn('procGetPendingFromTamSessions error', e); }
+    return results;
+  }
+
+  /* ── Confirmar envio de pendentes de outras sessões ── */
+  async function procConfirmOtherSessionsEnvio(otherRows) {
+    if (!otherRows.length) return;
+    var today = new Date().toISOString().slice(0, 10);
+
+    /* Agrupar por sessão proc */
+    var byProcKey = {};
+    otherRows.filter(function(r){ return r.sourceModule === 'proc'; }).forEach(function(r) {
+      if (!byProcKey[r._procKey]) byProcKey[r._procKey] = [];
+      byProcKey[r._procKey].push(r);
+    });
+
+    /* Agrupar por sessão TAM */
+    var byTamKey = {};
+    otherRows.filter(function(r){ return r.sourceModule === 'tam'; }).forEach(function(r) {
+      if (!byTamKey[r._tamSessionName]) byTamKey[r._tamSessionName] = [];
+      byTamKey[r._tamSessionName].push(r);
+    });
+
+    /* Actualizar sessões proc */
+    for (var pKey in byProcKey) {
+      try {
+        var pRes = await procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(pKey) + '&select=dados', { method: 'GET' });
+        var pRows = await pRes.json();
+        var pRaw  = pRows && pRows.length ? pRows[0].dados : null;
+        if (!pRaw) continue;
+        var pData = JSON.parse(pRaw);
+        if (!pData.sentRefs) pData.sentRefs = {};
+        byProcKey[pKey].forEach(function(row) {
+          if (!pData.sentRefs[row._procSentKey]) pData.sentRefs[row._procSentKey] = [];
+          pData.sentRefs[row._procSentKey].push({ data: today, f: row.pendF, p: row.pendP });
+        });
+        pData.savedAt = new Date().toISOString();
+        await procSbFetch('proc_sessoes', {
+          method: 'POST',
+          headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+          body: JSON.stringify({ session_key: pKey, dados: JSON.stringify(pData), updated_at: pData.savedAt })
+        });
+      } catch(e) { console.warn('procConfirmOtherSessionsEnvio proc error', e); }
+    }
+
+    /* Actualizar sessões TAM */
+    for (var tKey in byTamKey) {
+      try {
+        var tRes = await procSbFetch('tam_sessions?session_name=eq.' + encodeURIComponent(tKey) + '&select=data', { method: 'GET' });
+        var tRows = await tRes.json();
+        var tRaw  = tRows && tRows.length ? tRows[0].data : null;
+        if (!tRaw) continue;
+        var tData = JSON.parse(tRaw);
+        if (!tData.sentRefs) tData.sentRefs = {};
+        byTamKey[tKey].forEach(function(row) {
+          if (!tData.sentRefs[row._tamSentKey]) tData.sentRefs[row._tamSentKey] = [];
+          tData.sentRefs[row._tamSentKey].push({ data: today, f: row.pendF, p: row.pendP });
+        });
+        tData.savedAt = Date.now();
+        await procSbFetch('tam_sessions', {
+          method: 'POST',
+          headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+          body: JSON.stringify({ session_name: tKey, saved_at: new Date().toISOString(), data: JSON.stringify(tData) })
+        });
+      } catch(e) { console.warn('procConfirmOtherSessionsEnvio tam error', e); }
+    }
+  }
+
   function procShowGuiaModal() {
     var allRows  = procBuildGuiaRows();
     var pendRows = allRows.filter(function(r){ return !r.done; });
@@ -2848,8 +3041,8 @@
       return;
     }
 
-    var old = document.getElementById('proc-guia-modal');
-    if (old) old.parentNode.removeChild(old);
+    var oldModal = document.getElementById('proc-guia-modal');
+    if (oldModal) oldModal.parentNode.removeChild(oldModal);
 
     var nFaturas = activeFaturas.length;
     var title    = 'Guia Consolidada \u00b7 ' + nFaturas + ' fatura' + (nFaturas !== 1 ? 's' : '');
@@ -2862,8 +3055,6 @@
 
     function buildTableRows(rowList) {
       if (!rowList.length) return '<tr><td colspan="5" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
-
-      /* Separate into FNC-only list and PXO-only list, then pair them row by row */
       var fRows = rowList.filter(function(r){ return (r.done ? r.totalF : r.pendF) > 0; });
       var pRows = rowList.filter(function(r){ return (r.done ? r.totalP : r.pendP) > 0; });
       var maxLen = Math.max(fRows.length, pRows.length);
@@ -2873,19 +3064,35 @@
         var pRow = pRows[i] || null;
         var refRow = fRow || pRow;
         var cls = refRow.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
+        var fDot = (fRow && fRow._dotColor) ? '<span class="proc-guia-session-dot" style="color:' + fRow._dotColor + ';user-select:none;" aria-hidden="true">\u25cf</span>' : '';
+        var pDot = (pRow && pRow._dotColor) ? '<span class="proc-guia-session-dot" style="color:' + pRow._dotColor + ';user-select:none;" aria-hidden="true">\u25cf</span>' : '';
         var fRef = fRow ? fRow.ref : '';
         var fQty = fRow ? (fRow.done ? fRow.totalF : fRow.pendF) : '';
         var pRef = pRow ? pRow.ref : '';
         var pQty = pRow ? (pRow.done ? pRow.totalP : pRow.pendP) : '';
         html += '<tr class="proc-guia-tr' + cls + '">'
-          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + fRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + fDot + fRef + '</td>'
           + '<td class="proc-guia-td proc-guia-qty-f" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
           + '<td class="proc-guia-td proc-guia-sep-td"></td>'
-          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + pRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + pDot + pRef + '</td>'
           + '<td class="proc-guia-td proc-guia-qty-p" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
           + '</tr>';
       }
       return html;
+    }
+
+    function buildLegendHtml(otherRows) {
+      var colorMap = {};
+      otherRows.forEach(function(r){ if (!colorMap[r.sessionKey]) colorMap[r.sessionKey] = r._dotColor; });
+      var keys = Object.keys(colorMap);
+      if (!keys.length) return '';
+      return '<div id="proc-guia-session-legend">'
+        + keys.map(function(k){
+            var row = otherRows.find(function(r){ return r.sessionKey === k; });
+            var name = row ? row.sessionName : k;
+            return '<span class="proc-guia-legend-item"><span style="color:' + colorMap[k] + ';user-select:none;">\u25cf</span> ' + name + '</span>';
+          }).join('')
+        + '</div>';
     }
 
     var copyBar = '<div class="proc-guia-copy-bar">'
@@ -2901,6 +3108,11 @@
         + buildTableRows(sentRows)
       : '';
 
+    /* Banner — fase 1: a verificar */
+    var bannerHtml = '<div id="proc-guia-other-banner" class="proc-guia-other-banner proc-guia-other-loading">'
+      + '<span id="proc-guia-other-status">\u21bb a verificar sessões anteriores\u2026</span>'
+      + '</div>';
+
     var modal = document.createElement('div');
     modal.id  = 'proc-guia-modal';
     modal.innerHTML =
@@ -2911,20 +3123,23 @@
       +       '<span id="proc-guia-title-main">' + title + '</span>'
       +       '<span id="proc-guia-title-sub">Guia de transporte \u00b7 Processamento de Faturas</span>'
       +     '</div>'
-      +     '<div id="proc-guia-header-btns">'
-      +       '<button id="proc-guia-confirm-btn" class="proc-guia-action-btn proc-guia-confirm"'
-      +         (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>'
-      +       '<button id="proc-guia-export-btn" class="proc-guia-action-btn">\u2b07 Exportar CSV</button>'
-      +       '<button id="proc-guia-close-btn" class="proc-guia-close-btn">\u00d7</button>'
+      +     '<div id="proc-guia-header-right">'
+      +       bannerHtml
+      +       '<div id="proc-guia-header-btns">'
+      +         '<button id="proc-guia-confirm-btn" class="proc-guia-action-btn proc-guia-confirm"'
+      +           (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>'
+      +         '<button id="proc-guia-export-btn" class="proc-guia-action-btn">\u2b07 Exportar CSV</button>'
+      +         '<button id="proc-guia-close-btn" class="proc-guia-close-btn">\u00d7</button>'
+      +       '</div>'
       +     '</div>'
       +   '</div>'
       +   copyBar
       +   '<div id="proc-guia-scroll">'
       +     '<table id="proc-guia-table">'
       +       '<thead><tr>'
-      +         '<th class="proc-guia-th proc-guia-th-f" colspan="2">\ud83d\udd35 FNC (A4) \u00b7 ' + fPend + ' un. pendentes</th>'
+      +         '<th class="proc-guia-th proc-guia-th-f" colspan="2"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><span>\ud83d\udd35 FNC (A4)</span><span id="proc-guia-fnc-count" style="font-size:.6rem;font-weight:600;opacity:.7;">' + fPend + ' un. pendentes</span></div></th>'
       +         '<th class="proc-guia-th proc-guia-th-sep"></th>'
-      +         '<th class="proc-guia-th proc-guia-th-p" colspan="2">\ud83d\udd34 PXO (A5) \u00b7 ' + pPend + ' un. pendentes</th>'
+      +         '<th class="proc-guia-th proc-guia-th-p" colspan="2"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><span>\ud83d\udd34 PXO (A5)</span><span id="proc-guia-pxo-count" style="font-size:.6rem;font-weight:600;opacity:.7;">' + pPend + ' un. pendentes</span></div></th>'
       +       '</tr><tr>'
       +         '<th class="proc-guia-th2"><div class="proc-guia-th2-inner">Refer\u00eancia <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="0">\u29c9</button></div></th>'
       +         '<th class="proc-guia-th2" style="text-align:center"><div class="proc-guia-th2-inner" style="justify-content:center">Qtd. <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="1">\u29c9</button></div></th>'
@@ -2932,17 +3147,98 @@
       +         '<th class="proc-guia-th2"><div class="proc-guia-th2-inner">Refer\u00eancia <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="2">\u29c9</button></div></th>'
       +         '<th class="proc-guia-th2" style="text-align:center"><div class="proc-guia-th2-inner" style="justify-content:center">Qtd. <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="3">\u29c9</button></div></th>'
       +       '</tr></thead>'
-      +       '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>'
+      +       '<tbody id="proc-guia-tbody">' + buildTableRows(pendRows) + sentSection + '</tbody>'
       +     '</table>'
+      +     '<div id="proc-guia-legend-wrap"></div>'
       +   '</div>'
       +   '<div id="proc-guia-footer">'
-      +     pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO'
-      +     (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
+      +     '<span id="proc-guia-footer-text">'
+      +       pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO'
+      +       (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
+      +     '</span>'
+      +     '<span class="proc-guia-copy-msg" id="proc-guia-copy-msg" style="margin-left:8px;"></span>'
       +   '</div>'
       + '</div>';
 
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('proc-guia-visible'); });
+
+    /* ── Fase 2: fetch remoto — proc + TAM ── */
+    var otherRows = [];
+    Promise.all([
+      procGetPendingFromProcSessions(),
+      procGetPendingFromTamSessions()
+    ]).then(function(results) {
+      var allOther = results[0].concat(results[1]);
+      var banner   = modal.querySelector('#proc-guia-other-banner');
+      if (!banner || !modal.parentNode) return;
+
+      /* Atribuir cores por sessão */
+      var colorMap = {}, colorIdx = 0;
+      allOther.forEach(function(row) {
+        if (!colorMap[row.sessionKey]) colorMap[row.sessionKey] = procSessionColor(colorIdx++);
+        row._dotColor = colorMap[row.sessionKey];
+      });
+      otherRows = allOther;
+
+      /* Recalcular totais */
+      var newPendRows = pendRows.concat(allOther);
+      var newFPend = newPendRows.reduce(function(s,r){ return s+r.pendF; },0);
+      var newPPend = newPendRows.reduce(function(s,r){ return s+r.pendP; },0);
+
+      /* Actualizar tabela */
+      var tbody = modal.querySelector('#proc-guia-tbody');
+      if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + sentSection;
+
+      /* Actualizar contadores */
+      var fncCount = modal.querySelector('#proc-guia-fnc-count');
+      var pxoCount = modal.querySelector('#proc-guia-pxo-count');
+      if (fncCount) fncCount.textContent = newFPend + ' un. pendentes';
+      if (pxoCount) pxoCount.textContent = newPPend + ' un. pendentes';
+
+      /* Actualizar legenda */
+      var legendWrap = modal.querySelector('#proc-guia-legend-wrap');
+      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(allOther);
+
+      /* Actualizar footer */
+      var footerText = modal.querySelector('#proc-guia-footer-text');
+      if (footerText) {
+        footerText.textContent = newPendRows.length + ' refs pendentes \u00b7 ' + newFPend + ' un. FNC \u00b7 ' + newPPend + ' un. PXO'
+          + (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
+          + (allOther.length ? ' \u00b7 ' + allOther.length + ' de sessões anteriores' : '');
+      }
+
+      /* Actualizar botão confirmar */
+      var confirmBtn = modal.querySelector('#proc-guia-confirm-btn');
+      if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
+
+      /* Actualizar pendRows para o handler de confirmar */
+      pendRows = newPendRows;
+      fPend = newFPend; pPend = newPPend;
+
+      /* ── Actualizar banner ── */
+      banner.classList.remove('proc-guia-other-loading');
+      if (!allOther.length) {
+        banner.classList.add('proc-guia-other-none');
+        banner.querySelector('#proc-guia-other-status').textContent = '\u2713 sem pendentes noutras sessões';
+        setTimeout(function(){ banner.style.display = 'none'; }, 2000);
+      } else {
+        var sessionNames = [];
+        var seenKeys = {};
+        allOther.forEach(function(r){
+          if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
+        });
+        banner.classList.add('proc-guia-other-found');
+        banner.innerHTML = '<div class="proc-guia-other-icon">\u23f3</div>'
+          + '<div class="proc-guia-other-text">'
+          +   '<strong>' + allOther.length + ' referência(s) pendente(s)</strong> de ' + sessionNames.length + ' sessão(ões) anterior(es)'
+          +   '<span class="proc-guia-other-sessions">(' + sessionNames.map(function(n){ return n; }).join(', ') + ')</span>'
+          + '</div>';
+      }
+    }).catch(function() {
+      var banner = modal.querySelector('#proc-guia-other-banner');
+      if (banner) banner.style.display = 'none';
+    });
 
     function closeModal() {
       modal.classList.remove('proc-guia-visible');
@@ -3024,7 +3320,10 @@
         confirmDiv.parentNode.removeChild(confirmDiv);
       });
       confirmDiv.querySelector('.proc-gc-ok').addEventListener('click', function(){
-        procConfirmGuiaEnvio(pendRows);
+        var ownRows   = pendRows.filter(function(r){ return !r._fromOtherSession; });
+        var otherRows = pendRows.filter(function(r){ return  r._fromOtherSession; });
+        procConfirmGuiaEnvio(ownRows);
+        procConfirmOtherSessionsEnvio(otherRows);
         confirmDiv.parentNode.removeChild(confirmDiv);
         closeModal();
         setTimeout(function(){ procShowGuiaModal(); }, 280);

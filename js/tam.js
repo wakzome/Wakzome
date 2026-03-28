@@ -3031,20 +3031,18 @@
   }
 
   /* ── Recopilar pendientes de sesiones anteriores ── */
-  function tamGetPendingFromOtherSessions() {
-    var allSessions = tamLoadAllSessionsLocal();
-    var results = []; // [{ ref, invIdx, sessionKey, sessionName, pendF, pendP }]
-    // Sort sessions by savedAt descending (most recent first), skip active
+
+  /* Extrae pendientes de un mapa de sesiones ya cargado (local o remoto) */
+  function tamExtractPendingFromSessionsMap(allSessions) {
+    var results = [];
     var keys = Object.keys(allSessions)
       .filter(function(k){ return !tamSession || allSessions[k].name !== tamSession.name; })
       .sort(function(a,b){ return (allSessions[b].savedAt||0) - (allSessions[a].savedAt||0); });
-
     keys.forEach(function(key){
       var s = allSessions[key];
       if (!s.invoices || !s.boxes) return;
       s.invoices.forEach(function(inv, invIdx){
         (inv.grouped || []).forEach(function(g){
-          // Calcular distribuido en cajas de esa sesión
           var distF = 0, distP = 0;
           s.boxes.forEach(function(box){
             if (box.refs && box.refs[g.ref]) {
@@ -3052,8 +3050,7 @@
               distP += box.refs[g.ref].p || 0;
             }
           });
-          if (distF === 0 && distP === 0) return; // nunca distribuido
-          // Calcular ya enviado en esa sesión
+          if (distF === 0 && distP === 0) return;
           var sentKey = g.ref + '___' + invIdx;
           var lotes = (s.sentRefs || {})[sentKey] || [];
           var sentF = 0, sentP = 0;
@@ -3062,17 +3059,17 @@
           var pendP = Math.max(0, distP - sentP);
           if (pendF > 0 || pendP > 0) {
             results.push({
-              ref:         g.ref,
-              invIdx:      invIdx,
-              sessionKey:  key,
-              sessionName: s.name,
-              pendF:       pendF,
-              pendP:       pendP,
-              sentF:       sentF,
-              sentP:       sentP,
-              totalF:      distF,
-              totalP:      distP,
-              done:        false,
+              ref:               g.ref,
+              invIdx:            invIdx,
+              sessionKey:        key,
+              sessionName:       s.name,
+              pendF:             pendF,
+              pendP:             pendP,
+              sentF:             sentF,
+              sentP:             sentP,
+              totalF:            distF,
+              totalP:            distP,
+              done:              false,
               _fromOtherSession: true
             });
           }
@@ -3080,6 +3077,17 @@
       });
     });
     return results;
+  }
+
+  /* Versão síncrona (só localStorage) — resultado imediato */
+  function tamGetPendingFromOtherSessions() {
+    return tamExtractPendingFromSessionsMap(tamLoadAllSessionsLocal());
+  }
+
+  /* Versão async — consulta Supabase para funcionar entre dispositivos */
+  async function tamGetPendingFromOtherSessionsRemote() {
+    var allSessions = await tamLoadAllSessionsMerged();
+    return tamExtractPendingFromSessionsMap(allSessions);
   }
 
   /* ── Confirmar envío de pendientes de sesiones anteriores ── */
@@ -3204,26 +3212,27 @@
       ? 'Guía Consolidada · ' + tamInvoices.length + ' fatura(s)'
       : 'Guía · ' + tamEsc(tamInvoices[invIdx].invoiceNo);
 
-    /* ── Pendientes de sesiones anteriores ── */
+    /* ── Pendientes de sesiones anteriores — fase 1: localStorage inmediato ── */
     var otherRows = tamGetPendingFromOtherSessions();
 
-    /* Asignar color por sesión (orden: más reciente = color[0]) */
-    var sessionColorMap = {};
-    var sessionColorIdx = 0;
-    otherRows.forEach(function(row){
-      if (!sessionColorMap[row.sessionKey]) {
-        sessionColorMap[row.sessionKey] = tamSessionColor(sessionColorIdx++);
-      }
-      row._dotColor = sessionColorMap[row.sessionKey];
-    });
+    /* Asignar color por sesión */
+    function tamAssignSessionColors(rows) {
+      var colorMap = {};
+      var idx = 0;
+      rows.forEach(function(row){
+        if (!colorMap[row.sessionKey]) colorMap[row.sessionKey] = tamSessionColor(idx++);
+        row._dotColor = colorMap[row.sessionKey];
+      });
+      return colorMap;
+    }
+    var sessionColorMap = tamAssignSessionColors(otherRows);
 
     /* Combinar: filas activas primero, luego otras sesiones */
-    var allPendRows = rows.filter(function(r){ return !r.done; }).concat(otherRows);
-    var pendRows = allPendRows;
+    var pendRows = rows.filter(function(r){ return !r.done; }).concat(otherRows);
     var sentRows = rows.filter(function(r){ return  r.done; });
 
-    var old = document.getElementById('tam-guia-modal');
-    if (old) old.parentNode.removeChild(old);
+    var oldModal = document.getElementById('tam-guia-modal');
+    if (oldModal) oldModal.parentNode.removeChild(oldModal);
 
     var modal = document.createElement('div');
     modal.id = 'tam-guia-modal';
@@ -3252,12 +3261,35 @@
       }).join('');
     }
 
-    var fPend = pendRows.reduce(function(s,r){ return s+r.pendF; },0);
-    var pPend = pendRows.reduce(function(s,r){ return s+r.pendP; },0);
-    var fSent = sentRows.reduce(function(s,r){ return s+r.totalF; },0);
-    var pSent = sentRows.reduce(function(s,r){ return s+r.totalP; },0);
+    function buildLegendHtml(colorMap) {
+      var keys = Object.keys(colorMap);
+      if (!keys.length) return '';
+      return '<div id="tam-guia-session-legend">' +
+        keys.map(function(k){
+          var color = colorMap[k];
+          var name  = (tamLoadAllSessionsLocal()[k] || {}).name || k;
+          return '<span class="tam-guia-legend-item">' +
+            '<span style="color:' + color + ';user-select:none;-webkit-user-select:none;">●</span> ' +
+            tamEsc(name) +
+          '</span>';
+        }).join('') +
+      '</div>';
+    }
 
-    /* ── 4 address buttons (identical to processamento.js) ── */
+    function recalcTotals(pr, sr) {
+      return {
+        fPend: pr.reduce(function(s,r){ return s+r.pendF; },0),
+        pPend: pr.reduce(function(s,r){ return s+r.pendP; },0),
+        fSent: sr.reduce(function(s,r){ return s+r.totalF; },0),
+        pSent: sr.reduce(function(s,r){ return s+r.totalP; },0)
+      };
+    }
+
+    var totals = recalcTotals(pendRows, sentRows);
+    var fPend = totals.fPend, pPend = totals.pPend;
+    var fSent = totals.fSent, pSent = totals.pSent;
+
+    /* ── 4 address buttons ── */
     var addrBar =
       '<div class="tam-guia-copy-bar tam-guia-addr-bar-4">' +
         '<button class="tam-guia-addr-btn" data-addr="CALCADA DA QUINTINHA 17 B">\u29c9\u00a0Lisboa</button>' +
@@ -3271,21 +3303,12 @@
         buildTableRows(sentRows)
       : '';
 
-    /* ── Leyenda de sesiones anteriores ── */
-    var legendHtml = '';
-    var legendKeys = Object.keys(sessionColorMap);
-    if (legendKeys.length) {
-      legendHtml = '<div id="tam-guia-session-legend">' +
-        legendKeys.map(function(k){
-          var color = sessionColorMap[k];
-          var name  = (tamLoadAllSessionsLocal()[k] || {}).name || k;
-          return '<span class="tam-guia-legend-item">' +
-            '<span style="color:' + color + ';user-select:none;-webkit-user-select:none;">●</span> ' +
-            tamEsc(name) +
-          '</span>';
-        }).join('') +
+    /* ── Banner de sessões anteriores (zona superior direita do header) ── */
+    /* Aparece imediatamente a indicar que está a verificar; atualiza depois do fetch remoto */
+    var bannerHtml =
+      '<div id="tam-guia-other-banner" class="tam-guia-other-banner tam-guia-other-loading">' +
+        '<span id="tam-guia-other-status">\u21bb a verificar sessões anteriores…</span>' +
       '</div>';
-    }
 
     modal.innerHTML =
       '<div id="tam-guia-backdrop"></div>' +
@@ -3295,10 +3318,13 @@
             '<span id="tam-guia-title-main">' + title + '</span>' +
             '<span id="tam-guia-title-sub">Guia de transporte \u00b7 TAM Fashion</span>' +
           '</div>' +
-          '<div id="tam-guia-header-btns">' +
-            '<button id="tam-guia-confirm-btn" class="tam-guia-action-btn tam-guia-confirm"' + (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>' +
-            '<button id="tam-guia-export-btn" class="tam-guia-action-btn">\u2b07 Exportar CSV</button>' +
-            '<button id="tam-guia-close-btn" class="tam-guia-close-btn">\u00d7</button>' +
+          '<div id="tam-guia-header-right">' +
+            bannerHtml +
+            '<div id="tam-guia-header-btns">' +
+              '<button id="tam-guia-confirm-btn" class="tam-guia-action-btn tam-guia-confirm"' + (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>' +
+              '<button id="tam-guia-export-btn" class="tam-guia-action-btn">\u2b07 Exportar CSV</button>' +
+              '<button id="tam-guia-close-btn" class="tam-guia-close-btn">\u00d7</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         addrBar +
@@ -3309,14 +3335,14 @@
                 '<th class="tam-guia-th tam-guia-th-f" colspan="2">' +
                   '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
                     '<span>\ud83d\udd35 FNC (A4)</span>' +
-                    '<span style="font-size:.6rem;font-weight:600;opacity:.7;">' + fPend + ' un. pendentes</span>' +
+                    '<span id="tam-guia-fnc-count" style="font-size:.6rem;font-weight:600;opacity:.7;">' + fPend + ' un. pendentes</span>' +
                   '</div>' +
                 '</th>' +
                 '<th class="tam-guia-th tam-guia-th-sep"></th>' +
                 '<th class="tam-guia-th tam-guia-th-p" colspan="2">' +
                   '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
                     '<span>\ud83d\udd34 PXO (A5)</span>' +
-                    '<span style="font-size:.6rem;font-weight:600;opacity:.7;">' + pPend + ' un. pendentes</span>' +
+                    '<span id="tam-guia-pxo-count" style="font-size:.6rem;font-weight:600;opacity:.7;">' + pPend + ' un. pendentes</span>' +
                   '</div>' +
                 '</th>' +
               '</tr>' +
@@ -3328,20 +3354,98 @@
                 '<th class="tam-guia-th2 tam-guia-th2-qty"><div class="tam-guia-th2-inner" style="justify-content:center">Qtd. <button class="tam-guia-copy-btn tam-guia-hdr-copy" data-gcol="3">\u29c9</button></div></th>' +
               '</tr>' +
             '</thead>' +
-            '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>' +
+            '<tbody id="tam-guia-tbody">' + buildTableRows(pendRows) + sentSection + '</tbody>' +
           '</table>' +
-          legendHtml +
+          '<div id="tam-guia-legend-wrap">' + buildLegendHtml(sessionColorMap) + '</div>' +
         '</div>' +
         '<div id="tam-guia-footer">' +
-          pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO' +
-          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '') +
-          (otherRows.length ? ' \u00b7 ' + otherRows.length + ' de sess\u00f5es anteriores' : '') +
+          '<span id="tam-guia-footer-text">' +
+            pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO' +
+            (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '') +
+            (otherRows.length ? ' \u00b7 ' + otherRows.length + ' de sess\u00f5es anteriores' : '') +
+          '</span>' +
           '<span class="tam-guia-copy-msg" id="tam-guia-copy-msg" style="margin-left:10px;"></span>' +
         '</div>' +
       '</div>';
 
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-guia-visible'); });
+
+    /* ── Fase 2: fetch remoto de Supabase — actualiza banner y tabla ── */
+    tamGetPendingFromOtherSessionsRemote().then(function(remoteOtherRows) {
+      var banner   = modal.querySelector('#tam-guia-other-banner');
+      var statusEl = modal.querySelector('#tam-guia-other-status');
+      if (!banner || !modal.parentNode) return; // modal ya cerrado
+
+      /* Recalcular filas completas con datos remotos */
+      var remoteColorMap = tamAssignSessionColors(remoteOtherRows);
+      var newPendRows = rows.filter(function(r){ return !r.done; }).concat(remoteOtherRows);
+      var newTotals   = recalcTotals(newPendRows, sentRows);
+
+      /* Actualizar tabla */
+      var tbody = modal.querySelector('#tam-guia-tbody');
+      var newSentSection = sentRows.length
+        ? '<tr class="tam-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado (' + sentRows.length + ' refs \u00b7 ' + newTotals.fSent + ' F \u00b7 ' + newTotals.pSent + ' PS)</td></tr>' +
+          buildTableRows(sentRows)
+        : '';
+      if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + newSentSection;
+
+      /* Actualizar contadores de cabecera */
+      var fncCount = modal.querySelector('#tam-guia-fnc-count');
+      var pxoCount = modal.querySelector('#tam-guia-pxo-count');
+      if (fncCount) fncCount.textContent = newTotals.fPend + ' un. pendentes';
+      if (pxoCount) pxoCount.textContent = newTotals.pPend + ' un. pendentes';
+
+      /* Actualizar leyenda */
+      var legendWrap = modal.querySelector('#tam-guia-legend-wrap');
+      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(remoteColorMap);
+
+      /* Actualizar footer */
+      var footerText = modal.querySelector('#tam-guia-footer-text');
+      if (footerText) {
+        footerText.textContent =
+          newPendRows.length + ' refs pendentes \u00b7 ' + newTotals.fPend + ' un. FNC \u00b7 ' + newTotals.pPend + ' un. PXO' +
+          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '') +
+          (remoteOtherRows.length ? ' \u00b7 ' + remoteOtherRows.length + ' de sessões anteriores' : '');
+      }
+
+      /* Actualizar botón confirmar */
+      var confirmBtn = modal.querySelector('#tam-guia-confirm-btn');
+      if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
+
+      /* Reasignar pendRows para el handler de confirmar */
+      pendRows = newPendRows;
+      otherRows = remoteOtherRows;
+      fPend = newTotals.fPend;
+      pPend = newTotals.pPend;
+
+      /* ── Actualizar banner ── */
+      banner.classList.remove('tam-guia-other-loading');
+      if (remoteOtherRows.length === 0) {
+        /* Sin pendientes en otras sesiones — ocultar banner */
+        banner.classList.add('tam-guia-other-none');
+        statusEl.textContent = '\u2713 sem pendentes noutras sessões';
+        setTimeout(function(){ banner.style.display = 'none'; }, 2000);
+      } else {
+        /* Hay pendientes — mostrar aviso con botón para añadir */
+        var sessionNames = [];
+        var seenKeys = {};
+        remoteOtherRows.forEach(function(r){
+          if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
+        });
+        banner.classList.add('tam-guia-other-found');
+        banner.innerHTML =
+          '<div class="tam-guia-other-icon">\u23f3</div>' +
+          '<div class="tam-guia-other-text">' +
+            '<strong>' + remoteOtherRows.length + ' referência(s) pendente(s)</strong> de ' + sessionNames.length + ' sessão(ões) anterior(es)' +
+            '<span class="tam-guia-other-sessions">(' + sessionNames.map(tamEsc).join(', ') + ')</span>' +
+          '</div>';
+      }
+    }).catch(function(){
+      /* Falló el fetch remoto — ocultar spinner silenciosamente */
+      var banner = modal.querySelector('#tam-guia-other-banner');
+      if (banner) banner.style.display = 'none';
+    });
 
     /* ── Address buttons (4 especiales — Lisboa, Placa, FNC, PXO) ── */
     modal.querySelectorAll('.tam-guia-addr-btn').forEach(function(btn){
@@ -5807,7 +5911,18 @@
       '#tam-guia-title { display:flex; flex-direction:column; gap:2px; }',
       '#tam-guia-title-main { font-size:1rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-guia-title-sub { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:\'MontserratLight\',sans-serif; opacity:.55; }',
-      '#tam-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
+      /* Right side of header: banner + buttons stacked */
+      '#tam-guia-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }',
+      '#tam-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }',
+      /* ── Banner sessões anteriores ── */
+      '.tam-guia-other-banner { display:flex; align-items:center; gap:7px; border-radius:8px; padding:5px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; max-width:340px; transition:all .3s; }',
+      '.tam-guia-other-loading { background:#f5f5f5; color:#000; opacity:.55; }',
+      '.tam-guia-other-none    { background:transparent; color:#4A7C6F; border:1px solid #c8e6c9; }',
+      '.tam-guia-other-found   { background:#FFFBF5; border:1px solid #E8A44A; color:#000; flex-wrap:wrap; max-width:none; }',
+      '.tam-guia-other-icon    { font-size:1rem; flex-shrink:0; }',
+      '.tam-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
+      '.tam-guia-other-text strong { color:#000!important; }',
+      '.tam-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
       '.tam-guia-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000!important; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
       '.tam-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff!important; border-color:#000; }',
       '.tam-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',

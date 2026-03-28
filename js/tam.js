@@ -751,14 +751,14 @@
       if (qd0) {
         singleQuick.innerHTML =
           '<span class="tam-inv-quick-active">' +
-            (qd0 === 'funchal' ? '100% Funchal' : qd0 === 'porto' ? '100% Porto Santo' : '50/50') + ' ativo' +
+            (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
           '</span>' +
           '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>';
       } else {
         singleQuick.innerHTML =
           '<span class="tam-quick-label">distribuição rápida:</span>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100% Funchal</button>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100% Porto Santo</button>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%FNC</button>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%PXO</button>' +
           '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50 / 50</button>';
       }
       singleQuick.querySelectorAll('[data-mode]').forEach(function(btn){
@@ -797,17 +797,17 @@
       singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
       meta.appendChild(singleStock);
 
-      var singleExport = document.createElement('button');
-      singleExport.className = 'tam-inv-export-btn';
-      singleExport.textContent = '⬇ exportar';
-      singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
-      meta.appendChild(singleExport);
-
       var singleGuia = document.createElement('button');
       singleGuia.className = 'tam-inv-guia-btn';
       singleGuia.textContent = '📋 guía';
       singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
       meta.appendChild(singleGuia);
+
+      var singleExport = document.createElement('button');
+      singleExport.className = 'tam-inv-export-btn';
+      singleExport.textContent = '⬇ exportar';
+      singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
+      meta.appendChild(singleExport);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
       } else {
@@ -830,13 +830,13 @@
         var quickBtnsHtml = qd
           ? '<div class="tam-inv-quick-wrap">' +
               '<span class="tam-inv-quick-active">' +
-                (qd === 'funchal' ? '100%F' : qd === 'porto' ? '100%PS' : '50/50') + ' ativo' +
+                (qd === 'funchal' ? '100%FNC' : qd === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
               '</span>' +
               '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + idx + '" data-mode="undo">↩ desfazer</button>' +
             '</div>'
           : '<div class="tam-inv-quick-wrap">' +
-              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">100%F</button>' +
-              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">100%PS</button>' +
+              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">100%FNC</button>' +
+              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">100%PXO</button>' +
               '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + idx + '" data-mode="split">50/50</button>' +
             '</div>';
 
@@ -1607,8 +1607,8 @@
     var globalBar =
       '<div class="tam-rec-quick-btns">' +
         '<span class="tam-quick-label">tudo:</span>' +
-        '<button class="tam-quick-btn" id="tam-quick-funchal">100% Funchal</button>' +
-        '<button class="tam-quick-btn" id="tam-quick-porto">100% Porto Santo</button>' +
+        '<button class="tam-quick-btn" id="tam-quick-funchal">100%FNC</button>' +
+        '<button class="tam-quick-btn" id="tam-quick-porto">100%PXO</button>' +
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
         '<button class="tam-quick-btn tam-guia-all-btn" id="tam-guia-all-btn">📋 Guía consolidada</button>' +
       '</div>';
@@ -2860,6 +2860,18 @@
       document.getElementById('tam-file-name').textContent = s.invoices.length + ' fatura(s) — sessão carregada';
       document.getElementById('tam-status-msg').textContent = 'sessão: ' + s.name;
       tamRebuildDNMap();
+      /* Pre-mark all already-completed refs as Done so no staggered re-renders fire */
+      tamRefCompleting.clear();
+      tamRefDone.clear();
+      if (tamSession) {
+        var _consolidated = tamConsolidatedRefs ? tamConsolidatedRefs() : [];
+        _consolidated.forEach(function(c){
+          var totals = tamGetRefTotals(c.ref);
+          if ((totals.f + totals.p) >= c.totalPieces && c.totalPieces > 0) {
+            tamRefDone.add(c.ref);
+          }
+        });
+      }
       tamRenderAll();
       tamStartAutoSave();
       tamShowDNBarButtons();

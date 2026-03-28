@@ -792,14 +792,20 @@
       meta.appendChild(singleRemove);
 
       var singleStock = document.createElement('button');
-      singleStock.className = 'tam-inv-stock-btn proc-btn';
-      singleStock.style.cssText = 'padding:3px 11px;border:1px solid #ccc;border-radius:6px;background:transparent;color:#000;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;transition:all 0.14s;text-transform:lowercase;';
+      singleStock.className = 'tam-inv-stock-btn';
+      singleStock.textContent = '📦 ingreso de stock';
       singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
       meta.appendChild(singleStock);
+
+      var singleExport = document.createElement('button');
+      singleExport.className = 'tam-inv-export-btn';
+      singleExport.textContent = '⬇ exportar';
+      singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
+      meta.appendChild(singleExport);
+
       var singleGuia = document.createElement('button');
-      singleGuia.className = 'tam-inv-guia-btn proc-btn';
-      singleGuia.style.cssText = 'padding:3px 11px;border:1px solid #ccc;border-radius:6px;background:transparent;color:#000;font-size:.72rem;font-weight:700;cursor:pointer;font-family:\'MontserratLight\',sans-serif;transition:all 0.14s;text-transform:lowercase;';
-      singleGuia.textContent = 'guía';
+      singleGuia.className = 'tam-inv-guia-btn';
+      singleGuia.textContent = '📋 guía';
       singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
       meta.appendChild(singleGuia);
       if (tamEditMode[0]) {
@@ -5471,7 +5477,7 @@
       '.tam-inv-banner .tam-engine-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }',
 
       /* ── Meta banner (proc style) ── */
-      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:none; padding:10px 0; margin-bottom:12px; font-size:.85rem; font-weight:700; color:#000; flex-wrap:wrap; gap:6px 28px; align-items:center; }',
+      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:none; padding:10px 0; margin-bottom:12px; font-size:.85rem; font-weight:700; color:#000; flex-wrap:wrap; gap:10px 20px; align-items:center; }',
       '#tam-invoice-meta.show { display:flex; }',
       '#tam-invoice-meta .tam-mi { display:flex; flex-direction:column; gap:1px; align-items:center; text-align:center; }',
       '#tam-invoice-meta .tam-mi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
@@ -5707,6 +5713,10 @@
       '.tam-inv-quick-active { font-size:.7rem; font-weight:700; color:#4A7C6F; border:1px solid #4A7C6F; border-radius:6px; padding:3px 8px; white-space:nowrap; letter-spacing:.02em; background:transparent; }',
       '.tam-inv-quick-undo { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
+
+      /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { padding:5px 13px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#000; color:#fff; border-color:#000; }',
 
       /* ── Edit mode button (proc style) ── */
       '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',

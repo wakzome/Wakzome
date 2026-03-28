@@ -38,7 +38,7 @@
       '#proc-content .proc-session-menu-item-date { font-size:.67rem; color:#000; font-weight:600; }',
       '#proc-content .proc-session-menu-item-actions { display:flex; gap:5px; align-items:center; flex-shrink:0; }',
       '#proc-content .proc-session-load-btn { padding:3px 10px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
-      '#proc-content .proc-session-load-btn:hover { background:#000; color:#fff; }',
+      '#proc-content .proc-session-load-btn:hover { background:#f0f0f0; border-color:#555; }',
       '#proc-content .proc-session-delete-btn { padding:3px 8px; border:1px solid #ddd; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
       '#proc-content .proc-session-delete-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
 
@@ -165,9 +165,9 @@
 
       /* Buttons */
       '#proc-content .proc-btn { padding:7px 16px; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; text-transform:lowercase; cursor:pointer; transition:all 0.15s; white-space:nowrap; }',
-      '#proc-content .proc-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '#proc-content .proc-btn:hover { background:#f0f0f0; border-color:#555; }',
       '#proc-content .proc-btn.primary { border-color:#ccc; color:#000; background:transparent; }',
-      '#proc-content .proc-btn.primary:hover { background:#000; color:#fff; border-color:#000; }',
+      '#proc-content .proc-btn.primary:hover { background:#f0f0f0; border-color:#555; }',
 
       /* Session bar — always one row, label left, buttons right */
       '#proc-session-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0 12px; flex-wrap:nowrap; }',
@@ -183,7 +183,7 @@
       '#proc-float-actions .proc-float-btn:active { transform:scale(0.96); }',
       '#proc-float-actions .proc-float-btn-icon { font-size:1.2rem; line-height:1; }',
       '#proc-float-save { border-color:#ccc; color:#000; background:transparent; }',
-      '#proc-float-save:hover { background:#000; color:#fff; border-color:#000; }',
+      '#proc-float-save:hover { background:#f5f5f5; border-color:#555; }',
       '#proc-float-close { border-color:#9B4D4D; color:#9B4D4D; background:transparent; }',
       '#proc-float-close:hover { background:#9B4D4D; color:#fff; border-color:#9B4D4D; }',
 
@@ -229,7 +229,7 @@
       '#proc-onboarding-tip .proc-tip-arrow { position:absolute; top:100%; left:18px; border:7px solid transparent; border-top-color:#1a1a1a; }',
       '#proc-content .proc-add-fatura-wrap { display:flex; justify-content:center; margin:8px 0 14px; }',
       '#proc-content .proc-add-fatura-btn { padding:9px 32px; font-size:.82rem; border-style:dashed; border-color:#ccc; color:#000; background:transparent; border-radius:10px; }',
-      '#proc-content .proc-add-fatura-btn:hover { background:#000; color:#fff; border-style:solid; }',
+      '#proc-content .proc-add-fatura-btn:hover { background:#f0f0f0; border-color:#555; border-style:solid; }',
 
       /* Disclaimer */
       '#proc-content .proc-disclaimer-msg { margin:4px 0 6px; padding:10px 16px; background:transparent; border:none; border-radius:0; font-size:.75rem; font-weight:800; color:#000; letter-spacing:.03em; text-align:center; opacity:1; }',
@@ -256,31 +256,31 @@
       '.proc-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
       '.proc-guia-other-text strong { color:#000!important; }',
       '.proc-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
-      '#proc-guia-other-add-btn:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '#proc-guia-other-add-btn:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '#proc-guia-other-dismiss-btn:hover { background:#f5f5f5!important; }',
       '.proc-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
       '#proc-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; border-top:1px dashed #e0e0e0; opacity:.6; font-weight:700; }',
       '.proc-guia-legend-item { display:flex; align-items:center; gap:4px; }',
       '.proc-guia-action-btn { padding:6px 16px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ccc; border-radius:8px; background:transparent; color:#000!important; transition:background .13s,color .13s; white-space:nowrap; }',
-      '.proc-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
+      '.proc-guia-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
       '.proc-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
       '.proc-guia-confirm { border-color:#000!important; color:#000!important; background:transparent!important; }',
-      '.proc-guia-confirm:hover:not(:disabled) { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.proc-guia-confirm:hover:not(:disabled) { background:#f0f0f0!important; border-color:#555!important; }',
       '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:transparent; color:#000; transition:background .12s; }',
       '.proc-guia-close-btn:hover { background:#7a3535; color:#fff; border-color:#7a3535; }',
       '.proc-guia-copy-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; background:#fafafa; border-bottom:1px solid #e0e0e0; flex-shrink:0; }',
       '.proc-guia-copy-btn { padding:7px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#fff; color:#000; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; text-align:center; display:flex; align-items:center; justify-content:center; gap:5px; }',
-      '.proc-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.proc-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.proc-guia-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.proc-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
       '.proc-guia-copy-msg { display:none; }',
       '.proc-guia-addr-btn { padding:7px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#fff; color:#000; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; text-align:center; display:flex; align-items:center; justify-content:center; gap:5px; width:100%; }',
-      '.proc-guia-addr-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.proc-guia-addr-btn.proc-guia-addr-copied { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.proc-guia-addr-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.proc-guia-addr-btn.proc-guia-addr-copied { background:#e8e8e8!important; border-color:#555!important; }',
       '.proc-guia-th2 { padding:7px 10px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; white-space:nowrap; }',
       '.proc-guia-th2-inner { display:flex; align-items:center; gap:5px; }',
       '.proc-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
-      '.proc-guia-hdr-copy:hover { background:#000; color:#fff; border-color:#000; }',
-      '.proc-guia-hdr-copy.proc-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.proc-guia-hdr-copy:hover { background:#f0f0f0; border-color:#555; }',
+      '.proc-guia-hdr-copy.proc-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
       '#proc-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
       '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
@@ -313,7 +313,7 @@
       '.proc-gc-btns { display:flex; gap:8px; }',
       '.proc-gc-btn { padding:8px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border-radius:8px; cursor:pointer; border:1.5px solid #ccc; background:#fff; color:#000; transition:background .12s; }',
       '.proc-gc-ok { border-color:#000!important; color:#000!important; background:#f0f0f0!important; }',
-      '.proc-gc-ok:hover { background:#000!important; color:#fff!important; }',
+      '.proc-gc-ok:hover { background:#e8e8e8!important; border-color:#555!important; }',
       '.proc-gc-cancel:hover { background:#f0f0f0; }',
 
       /* Address chips in guia header */
@@ -357,12 +357,12 @@
       '.proc-or-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.proc-or-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       '.proc-or-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; }',
-      '.proc-or-action-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.proc-or-action-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.proc-or-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:1px solid #f0f0f0; background:#fff; flex-shrink:0; }',
       '.proc-or-copy-label { display:none; }',
       '.proc-or-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }',
-      '.proc-or-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.proc-or-copy-btn.active { border-color:#000; color:#fff; background:#000; }',
+      '.proc-or-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.proc-or-copy-btn.active { border-color:#555; color:#000; background:#f0f0f0; }',
       '.proc-or-copy-msg { display:none; }',
       '.proc-or-scroll { overflow:auto; flex:1; }',
       '.proc-or-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
@@ -3182,9 +3182,19 @@
     /* NÃO adiciona automaticamente — apenas avisa e espera confirmação do utilizador */
     var _pendingOtherRows = [];   /* ficam guardadas até o user clicar em Adicionar */
 
+    /* _addedOtherRows acumula todas as rows de sessões que o user escolheu adicionar */
+    var _addedOtherRows = [];
+
     function applyOtherRows() {
-      /* Incorpora os pendentes de outras sessões na tabela */
-      var newPendRows = pendRows.concat(_pendingOtherRows);
+      /* _pendingOtherRows contém as rows da sessão que acabou de ser clicada */
+      var sessionRows = _pendingOtherRows.slice();
+      _pendingOtherRows = [];
+      if (!sessionRows.length) return;
+
+      /* Acumular para legenda */
+      _addedOtherRows = _addedOtherRows.concat(sessionRows);
+
+      var newPendRows = pendRows.concat(sessionRows);
       var newFPend = newPendRows.reduce(function(s,r){ return s+r.pendF; },0);
       var newPPend = newPendRows.reduce(function(s,r){ return s+r.pendP; },0);
 
@@ -3197,13 +3207,12 @@
       if (pxoCount) pxoCount.textContent = newPPend + ' un. pendentes';
 
       var legendWrap = modal.querySelector('#proc-guia-legend-wrap');
-      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(_pendingOtherRows);
+      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(_addedOtherRows);
 
       var footerText = modal.querySelector('#proc-guia-footer-text');
       if (footerText) {
         footerText.textContent = newPendRows.length + ' refs pendentes · ' + newFPend + ' un. FNC · ' + newPPend + ' un. PXO'
-          + (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '')
-          + ' · ' + _pendingOtherRows.length + ' de sessões anteriores adicionadas';
+          + (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '');
       }
 
       var confirmBtn = modal.querySelector('#proc-guia-confirm-btn');
@@ -3211,16 +3220,6 @@
 
       pendRows = newPendRows;
       fPend = newFPend; pPend = newPPend;
-
-      /* Fechar banner após adicionar */
-      var banner = modal.querySelector('#proc-guia-other-banner');
-      if (banner) {
-        banner.classList.remove('proc-guia-other-found');
-        banner.classList.add('proc-guia-other-none');
-        banner.innerHTML = '<span>✓ ' + _pendingOtherRows.length + ' referência(s) adicionada(s) à guia</span>';
-        setTimeout(function(){ banner.style.display = 'none'; }, 2200);
-      }
-      _pendingOtherRows = [];
     }
 
     Promise.all([
@@ -3231,63 +3230,89 @@
       var banner   = modal.querySelector('#proc-guia-other-banner');
       if (!banner || !modal.parentNode) return;
 
-      /* Atribuir cores por sessão */
+      banner.classList.remove('proc-guia-other-loading');
+
+      if (!allOther.length) {
+        banner.classList.add('proc-guia-other-none');
+        banner.querySelector('#proc-guia-other-status').textContent = '\u2713 sem pendentes noutras sess\u00f5es';
+        setTimeout(function(){ banner.style.display = 'none'; }, 2000);
+        return;
+      }
+
+      /* Atribuir cores por sess\u00e3o */
       var colorMap = {}, colorIdx = 0;
       allOther.forEach(function(row) {
         if (!colorMap[row.sessionKey]) colorMap[row.sessionKey] = procSessionColor(colorIdx++);
         row._dotColor = colorMap[row.sessionKey];
       });
 
-      banner.classList.remove('proc-guia-other-loading');
-
-      if (!allOther.length) {
-        /* Sem pendentes — ocultar banner silenciosamente */
-        banner.classList.add('proc-guia-other-none');
-        banner.querySelector('#proc-guia-other-status').textContent = '✓ sem pendentes noutras sessões';
-        setTimeout(function(){ banner.style.display = 'none'; }, 2000);
-        return;
-      }
-
-      /* Há pendentes — guardar e mostrar aviso COM botão Adicionar */
-      _pendingOtherRows = allOther;
-
-      var sessionNames = [];
-      var seenKeys = {};
-      allOther.forEach(function(r){
-        if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
+      /* Agrupar por sess\u00e3o — uma linha de banner por cada sess\u00e3o */
+      var sessionGroups = {};
+      var sessionOrder  = [];
+      allOther.forEach(function(row) {
+        if (!sessionGroups[row.sessionKey]) {
+          sessionGroups[row.sessionKey] = { rows: [], name: row.sessionName, color: row._dotColor, key: row.sessionKey };
+          sessionOrder.push(row.sessionKey);
+        }
+        sessionGroups[row.sessionKey].rows.push(row);
       });
 
-      var totalF = allOther.reduce(function(s,r){ return s+r.pendF; },0);
-      var totalP = allOther.reduce(function(s,r){ return s+r.pendP; },0);
-
       banner.classList.add('proc-guia-other-found');
-      banner.innerHTML =
-        '<div class="proc-guia-other-icon">⏳</div>'
-        + '<div class="proc-guia-other-text">'
-        +   '<strong>' + allOther.length + ' ref(s) pendente(s)</strong>'
-        +   ' · ' + totalF + ' FNC · ' + totalP + ' PXO'
-        +   '<span class="proc-guia-other-sessions">' + sessionNames.map(function(n){ return n; }).join(', ') + '</span>'
-        + '</div>'
-        + '<button id="proc-guia-other-add-btn" style="'
-        +   'margin-left:auto;padding:5px 14px;font-size:.72rem;font-weight:700;'
-        +   'cursor:pointer;border:1.5px solid #000;'
-        +   'border-radius:7px;background:#fff;color:#000;white-space:nowrap;transition:background .13s,color .13s;flex-shrink:0;'
-        + '">\u002b Adicionar</button>'
-        + '<button id="proc-guia-other-dismiss-btn" style="'
-        +   'padding:5px 10px;font-size:.72rem;font-weight:700;'
-        +   'font-family:sans-serif;cursor:pointer;border:1.5px solid #ccc;'
-        +   'border-radius:7px;background:transparent;color:#000;white-space:nowrap;transition:all .13s;flex-shrink:0;'
-        + '">Ignorar</button>';
+      banner.style.flexDirection = 'column';
+      banner.style.alignItems    = 'stretch';
+      banner.style.gap           = '6px';
 
-      /* Botão Adicionar */
-      var addBtn = banner.querySelector('#proc-guia-other-add-btn');
-      if (addBtn) addBtn.addEventListener('click', function(){ applyOtherRows(); });
+      /* Renderizar uma linha por sess\u00e3o */
+      banner.innerHTML = '<div style="font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.5;margin-bottom:2px;">Sessões anteriores com pendentes</div>'
+        + sessionOrder.map(function(sKey) {
+            var grp  = sessionGroups[sKey];
+            var totF = grp.rows.reduce(function(s,r){ return s+r.pendF; },0);
+            var totP = grp.rows.reduce(function(s,r){ return s+r.pendP; },0);
+            return '<div class="proc-guia-sess-row" data-skey="' + sKey + '" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">'
+              + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + grp.color + ';flex-shrink:0;"></span>'
+              + '<span style="font-size:.72rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + grp.name + '">' + grp.name + '</span>'
+              + '<span style="font-size:.68rem;font-weight:600;color:#000;opacity:.6;white-space:nowrap;flex-shrink:0;">' + grp.rows.length + ' ref' + (grp.rows.length!==1?'s':'') + ' \u00b7 ' + totF + ' FNC \u00b7 ' + totP + ' PXO</span>'
+              + '<button class="proc-guia-sess-add-btn" data-skey="' + sKey + '" style="padding:3px 12px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid #555;border-radius:6px;background:#fff;color:#000;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s;">+ Adicionar</button>'
+              + '<button class="proc-guia-sess-ign-btn" data-skey="' + sKey + '" style="padding:3px 8px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ddd;border-radius:6px;background:transparent;color:#000;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s;">\u00d7</button>'
+              + '</div>';
+          }).join('');
 
-      /* Botão Ignorar — fecha banner sem tocar na tabela */
-      var dismissBtn = banner.querySelector('#proc-guia-other-dismiss-btn');
-      if (dismissBtn) dismissBtn.addEventListener('click', function(){
-        banner.style.display = 'none';
-        _pendingOtherRows = [];
+      /* Bind por linha */
+      banner.querySelectorAll('.proc-guia-sess-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var sKey = btn.getAttribute('data-skey');
+          var grp  = sessionGroups[sKey];
+          if (!grp) return;
+
+          /* Flash sutil no bot\u00e3o — escurece borda brevemente, volta ao normal */
+          btn.style.borderColor = '#555';
+          btn.style.background  = '#f0f0f0';
+          setTimeout(function(){ btn.style.borderColor = ''; btn.style.background = ''; }, 300);
+
+          /* Aplicar apenas as rows desta sess\u00e3o */
+          _pendingOtherRows = grp.rows;
+          applyOtherRows();
+
+          /* Remover a linha desta sess\u00e3o do banner */
+          delete sessionGroups[sKey];
+          var rowEl = banner.querySelector('.proc-guia-sess-row[data-skey="' + sKey + '"]');
+          if (rowEl) rowEl.remove();
+
+          /* Se n\u00e3o restam sess\u00f5es, fechar banner */
+          if (!Object.keys(sessionGroups).length) {
+            banner.style.display = 'none';
+          }
+        });
+      });
+
+      banner.querySelectorAll('.proc-guia-sess-ign-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var sKey = btn.getAttribute('data-skey');
+          delete sessionGroups[sKey];
+          var rowEl = banner.querySelector('.proc-guia-sess-row[data-skey="' + sKey + '"]');
+          if (rowEl) rowEl.remove();
+          if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+        });
       });
 
     }).catch(function() {

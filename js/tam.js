@@ -1610,7 +1610,6 @@
         '<button class="tam-quick-btn" id="tam-quick-funchal">100%FNC</button>' +
         '<button class="tam-quick-btn" id="tam-quick-porto">100%PXO</button>' +
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
-        '<button class="tam-quick-btn tam-guia-all-btn" id="tam-guia-all-btn">📋 Guía consolidada</button>' +
       '</div>';
 
     var distribCollapsed = !!tamCollapseState['distrib'];
@@ -1639,12 +1638,6 @@
         if (recArea2) recArea2.classList.toggle('tam-rec-collapsed', !!tamCollapseState['distrib']);
         recToggleBtn.innerHTML = tamCollapseState['distrib'] ? '&#9654;' : '&#9660;';
       });
-    })();
-
-    // ── BIND GUIA CONSOLIDADA ────────────────────────────────
-    (function(){
-      var guiaAllBtn = area.querySelector('#tam-guia-all-btn');
-      if (guiaAllBtn) guiaAllBtn.addEventListener('click', function(){ tamShowGuiaModal(null); });
     })();
 
     // ── BIND UNDO / REDO / CLEAR BUTTONS ─────────────────────
@@ -2466,17 +2459,20 @@
     if (!bar) return;
     bar.style.display = 'flex';
     var nameEl = document.getElementById('tam-session-name');
-    var saveBtn = document.getElementById('tam-save-btn');
+    var saveBtn  = document.getElementById('tam-save-btn');
     var closeBtn = document.getElementById('tam-close-session-btn');
-    var stEl   = document.getElementById('tam-session-status');
+    var guiaBarBtn = document.getElementById('tam-guia-bar-btn');
+    var stEl    = document.getElementById('tam-session-status');
     if (tamSession) {
       if (nameEl) nameEl.value = tamSession.name;
       if (saveBtn) saveBtn.classList.add('visible');
       if (closeBtn) closeBtn.style.display = 'inline-block';
+      if (guiaBarBtn) guiaBarBtn.style.display = 'inline-block';
     } else {
       if (nameEl) nameEl.value = '';
       if (saveBtn) saveBtn.classList.remove('visible');
       if (closeBtn) closeBtn.style.display = 'none';
+      if (guiaBarBtn) guiaBarBtn.style.display = 'none';
     }
     if (stEl) stEl.textContent = '';
   }
@@ -2540,8 +2536,10 @@
       var stEl = document.getElementById('tam-session-status');
       var saveBtn = document.getElementById('tam-save-btn');
       var closeBtnVis = document.getElementById('tam-close-session-btn');
+      var guiaBtnVis  = document.getElementById('tam-guia-bar-btn');
       if (saveBtn) saveBtn.classList.add('visible');
       if (closeBtnVis) closeBtnVis.style.display = 'inline-block';
+      if (guiaBtnVis)  guiaBtnVis.style.display  = 'inline-block';
       if (stEl) {
         stEl.textContent = '✓ guardado';
         stEl.classList.add('saved');
@@ -5372,9 +5370,17 @@
       '#tam-dn-count { color:#000!important; font-weight:700!important; font-size:.75rem; }',
       '#tam-session-status.saved { color:#4A7C6F!important; }',
       /* Save button */
-      '#tam-save-btn { display:none; padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; }',
+      '#tam-save-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
       '#tam-save-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '#tam-save-btn.visible { display:inline-block!important; }',
+      '#tam-save-btn.visible { display:inline-flex!important; align-items:center; justify-content:center; }',
+      /* Guia bar button (icon-only, same as save/fechar) */
+      '#tam-guia-bar-btn { display:none; padding:7px 12px; font-size:.92rem; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-guia-bar-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      /* Fechar button icon-only sizing */
+      '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
+      '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
+      /* DN buttons icon-only sizing */
+      '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { padding:7px 12px!important; font-size:.92rem!important; line-height:1!important; }',
 
       /* ── Sessions dropdown (proc style) ── */
       '.tam-sessions-dropdown-wrap { position:relative; }',
@@ -5471,9 +5477,6 @@
       /* Quick undo: red tint like proc */
       '.tam-invoice-block-header .tam-inv-quick-undo { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
       '.tam-invoice-block-header .tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.12)!important; }',
-      /* ── Close session button (proc style) ── */
-      '#tam-close-session-btn { display:none; padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; }',
-      '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
       '.tam-inv-num { font-size:1.5rem; font-weight:800; color:#000!important; letter-spacing:.02em; }',
       '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; flex:1; }',
       '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; margin-left:auto; }',
@@ -6114,19 +6117,20 @@
       bar.innerHTML =
         '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
         '<span id="tam-session-status"></span>' +
-        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾 guardar</button>' +
-        '<button class="tam-session-btn tam-close-session-btn" id="tam-close-session-btn" title="guardar e fechar sessão" style="display:none">🔒 fechar</button>' +
         '<div class="tam-sessions-dropdown-wrap">' +
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" style="display:none">' +
-          '\ud83d\udce6 delivery notes' +
+        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾</button>' +
+        '<button class="tam-session-btn tam-close-session-btn" id="tam-close-session-btn" title="guardar e fechar sessão" style="display:none">🔒</button>' +
+        '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">📋</button>' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes" style="display:none">' +
+          '\ud83d\udce6' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
         '</label>' +
         '<span id="tam-dn-count" style="display:none;color:#fff;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
-        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" style="display:none">' +
-          '\ud83d\udcf7 fotografar caixa' +
+        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
+          '\ud83d\udcf7' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
         '</label>';
 
@@ -6185,6 +6189,8 @@
         if (dnLoadBtn) dnLoadBtn.style.display = 'none';
         var dnCamBtn = document.getElementById('tam-dn-cam-bar-btn');
         if (dnCamBtn) dnCamBtn.style.display = 'none';
+        var guiaBarBtnClose = document.getElementById('tam-guia-bar-btn');
+        if (guiaBarBtnClose) guiaBarBtnClose.style.display = 'none';
         var dnCount = document.getElementById('tam-dn-count');
         if (dnCount) dnCount.style.display = 'none';
         // Reset upload zone
@@ -6295,6 +6301,10 @@
         e.stopPropagation();
         tamOpenSessionsModal();
       });
+
+      // Guia bar button → open consolidated guia
+      var guiaBarBtn = bar.querySelector('#tam-guia-bar-btn');
+      if (guiaBarBtn) guiaBarBtn.addEventListener('click', function(){ tamShowGuiaModal(null); });
 
       // DN buttons listeners
       var dnBarI = bar.querySelector('#tam-dn-file-input');

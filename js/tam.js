@@ -3371,18 +3371,16 @@
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-guia-visible'); });
 
-    /* ── Fase 2: fetch remoto de Supabase — actualiza banner y tabla ── */
-    tamGetPendingFromOtherSessionsRemote().then(function(remoteOtherRows) {
-      var banner   = modal.querySelector('#tam-guia-other-banner');
-      var statusEl = modal.querySelector('#tam-guia-other-status');
-      if (!banner || !modal.parentNode) return; // modal ya cerrado
+    /* ── Fase 2: fetch remoto — opt-in por sessão, nunca adiciona automaticamente ── */
+    var _tamAddedOtherRows = [];  /* acumula as rows que o user escolheu adicionar */
 
-      /* Recalcular filas completas con datos remotos */
-      var remoteColorMap = tamAssignSessionColors(remoteOtherRows);
-      var newPendRows = rows.filter(function(r){ return !r.done; }).concat(remoteOtherRows);
+    function tamApplySessionRows(sessionRows) {
+      if (!sessionRows.length) return;
+      _tamAddedOtherRows = _tamAddedOtherRows.concat(sessionRows);
+
+      var newPendRows = pendRows.concat(sessionRows);
       var newTotals   = recalcTotals(newPendRows, sentRows);
 
-      /* Actualizar tabla */
       var tbody = modal.querySelector('#tam-guia-tbody');
       var newSentSection = sentRows.length
         ? '<tr class="tam-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado (' + sentRows.length + ' refs \u00b7 ' + newTotals.fSent + ' F \u00b7 ' + newTotals.pSent + ' PS)</td></tr>' +
@@ -3390,59 +3388,105 @@
         : '';
       if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + newSentSection;
 
-      /* Actualizar contadores de cabecera */
       var fncCount = modal.querySelector('#tam-guia-fnc-count');
       var pxoCount = modal.querySelector('#tam-guia-pxo-count');
       if (fncCount) fncCount.textContent = newTotals.fPend + ' un. pendentes';
       if (pxoCount) pxoCount.textContent = newTotals.pPend + ' un. pendentes';
 
-      /* Actualizar leyenda */
       var legendWrap = modal.querySelector('#tam-guia-legend-wrap');
-      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(remoteColorMap);
+      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(tamAssignSessionColors(_tamAddedOtherRows));
 
-      /* Actualizar footer */
       var footerText = modal.querySelector('#tam-guia-footer-text');
       if (footerText) {
         footerText.textContent =
           newPendRows.length + ' refs pendentes \u00b7 ' + newTotals.fPend + ' un. FNC \u00b7 ' + newTotals.pPend + ' un. PXO' +
-          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '') +
-          (remoteOtherRows.length ? ' \u00b7 ' + remoteOtherRows.length + ' de sessões anteriores' : '');
+          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '');
       }
 
-      /* Actualizar botón confirmar */
       var confirmBtn = modal.querySelector('#tam-guia-confirm-btn');
       if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
 
-      /* Reasignar pendRows para el handler de confirmar */
       pendRows = newPendRows;
-      otherRows = remoteOtherRows;
+      otherRows = _tamAddedOtherRows;
       fPend = newTotals.fPend;
       pPend = newTotals.pPend;
+    }
 
-      /* ── Actualizar banner ── */
+    tamGetPendingFromOtherSessionsRemote().then(function(remoteOtherRows) {
+      var banner = modal.querySelector('#tam-guia-other-banner');
+      if (!banner || !modal.parentNode) return;
+
       banner.classList.remove('tam-guia-other-loading');
-      if (remoteOtherRows.length === 0) {
-        /* Sin pendientes en otras sesiones — ocultar banner */
+
+      if (!remoteOtherRows.length) {
         banner.classList.add('tam-guia-other-none');
-        statusEl.textContent = '\u2713 sem pendentes noutras sessões';
+        var statusEl = banner.querySelector('#tam-guia-other-status');
+        if (statusEl) statusEl.textContent = '\u2713 sem pendentes noutras sess\u00f5es';
         setTimeout(function(){ banner.style.display = 'none'; }, 2000);
-      } else {
-        /* Hay pendientes — mostrar aviso con botón para añadir */
-        var sessionNames = [];
-        var seenKeys = {};
-        remoteOtherRows.forEach(function(r){
-          if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
-        });
-        banner.classList.add('tam-guia-other-found');
-        banner.innerHTML =
-          '<div class="tam-guia-other-icon">\u23f3</div>' +
-          '<div class="tam-guia-other-text">' +
-            '<strong>' + remoteOtherRows.length + ' referência(s) pendente(s)</strong> de ' + sessionNames.length + ' sessão(ões) anterior(es)' +
-            '<span class="tam-guia-other-sessions">(' + sessionNames.map(tamEsc).join(', ') + ')</span>' +
-          '</div>';
+        return;
       }
+
+      /* Atribuir cores e agrupar por sessão */
+      tamAssignSessionColors(remoteOtherRows);
+      var sessionGroups = {}, sessionOrder = [];
+      remoteOtherRows.forEach(function(row) {
+        if (!sessionGroups[row.sessionKey]) {
+          sessionGroups[row.sessionKey] = { rows: [], name: row.sessionName, color: row._dotColor, key: row.sessionKey };
+          sessionOrder.push(row.sessionKey);
+        }
+        sessionGroups[row.sessionKey].rows.push(row);
+      });
+
+      banner.classList.add('tam-guia-other-found');
+      banner.style.flexDirection = 'column';
+      banner.style.alignItems    = 'stretch';
+      banner.style.gap           = '6px';
+
+      banner.innerHTML =
+        '<div style="font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.5;margin-bottom:2px;">Sess\u00f5es anteriores com pendentes</div>' +
+        sessionOrder.map(function(sKey) {
+          var grp  = sessionGroups[sKey];
+          var totF = grp.rows.reduce(function(s,r){ return s+r.pendF; },0);
+          var totP = grp.rows.reduce(function(s,r){ return s+r.pendP; },0);
+          return '<div class="tam-guia-sess-row" data-skey="' + tamEsc(sKey) + '" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">' +
+            '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + grp.color + ';flex-shrink:0;"></span>' +
+            '<span style="font-size:.72rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + tamEsc(grp.name) + '">' + tamEsc(grp.name) + '</span>' +
+            '<span style="font-size:.68rem;font-weight:600;color:#000;opacity:.6;white-space:nowrap;flex-shrink:0;">' + grp.rows.length + ' ref' + (grp.rows.length!==1?'s':'') + ' \u00b7 ' + totF + ' FNC \u00b7 ' + totP + ' PXO</span>' +
+            '<button class="tam-guia-sess-add-btn" data-skey="' + tamEsc(sKey) + '" style="padding:3px 12px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid #555;border-radius:6px;background:#fff;color:#000;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s;">+ Adicionar</button>' +
+            '<button class="tam-guia-sess-ign-btn" data-skey="' + tamEsc(sKey) + '" style="padding:3px 8px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ddd;border-radius:6px;background:transparent;color:#000;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s;">\u00d7</button>' +
+            '</div>';
+        }).join('');
+
+      banner.querySelectorAll('.tam-guia-sess-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var sKey = btn.getAttribute('data-skey');
+          var grp  = sessionGroups[sKey];
+          if (!grp) return;
+
+          btn.style.background  = '#f0f0f0';
+          btn.style.borderColor = '#555';
+          setTimeout(function(){ btn.style.background = ''; btn.style.borderColor = ''; }, 300);
+
+          tamApplySessionRows(grp.rows);
+          delete sessionGroups[sKey];
+
+          var rowEl = banner.querySelector('.tam-guia-sess-row[data-skey="' + tamEsc(sKey) + '"]');
+          if (rowEl) rowEl.remove();
+          if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+        });
+      });
+
+      banner.querySelectorAll('.tam-guia-sess-ign-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var sKey = btn.getAttribute('data-skey');
+          delete sessionGroups[sKey];
+          var rowEl = banner.querySelector('.tam-guia-sess-row[data-skey="' + tamEsc(sKey) + '"]');
+          if (rowEl) rowEl.remove();
+          if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+        });
+      });
+
     }).catch(function(){
-      /* Falló el fetch remoto — ocultar spinner silenciosamente */
       var banner = modal.querySelector('#tam-guia-other-banner');
       if (banner) banner.style.display = 'none';
     });
@@ -5463,8 +5507,8 @@
       '.tam-dialog-btns { display:flex; flex-direction:column; gap:8px; }',
       '.tam-dialog-btn { padding:12px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:10px; border:1px solid #e0e0e0; background:transparent; text-align:left; transition:all 0.14s; color:#000; text-transform:lowercase; }',
       '.tam-dialog-btn:hover { background:#f5f5f5; border-color:#ccc; }',
-      '.tam-dialog-btn-new { border-color:#000; background:#000; color:#fff; }',
-      '.tam-dialog-btn-new:hover { background:#333; border-color:#333; }',
+      '.tam-dialog-btn-new { border-color:#555; background:#fff; color:#000; }',
+      '.tam-dialog-btn-new:hover { background:#f0f0f0; border-color:#555; }',
       /* ── Session bar ── */
       '#tam-session-name { font-size:.82rem; font-weight:700; flex:1; min-width:120px; max-width:240px; border:1px solid #e0e0e0; background:#fafafa!important; outline:none; color:#000!important; font-family:\'MontserratLight\',sans-serif; padding:6px 10px; border-radius:8px; transition:border-color 0.15s; }',
       '#tam-session-name:focus { border-color:#000; background:#fff!important; color:#000!important; }',
@@ -5475,11 +5519,11 @@
       '#tam-session-status.saved { color:#4A7C6F!important; }',
       /* Save button */
       '#tam-save-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
-      '#tam-save-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '#tam-save-btn:hover { background:#f0f0f0; border-color:#555; }',
       '#tam-save-btn.visible { display:inline-flex!important; align-items:center; justify-content:center; }',
       /* Guia bar button (icon-only, same as save/fechar) */
       '#tam-guia-bar-btn { display:none; padding:7px 12px; font-size:.92rem; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
-      '#tam-guia-bar-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '#tam-guia-bar-btn:hover { background:#f0f0f0; border-color:#555; }',
       /* Fechar button icon-only sizing */
       '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
       '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
@@ -5502,7 +5546,7 @@
       '.tam-dd-item-name { font-size:.82rem; font-weight:700; color:#000; white-space:normal; word-break:break-word; }',
       '.tam-dd-item-meta { font-size:.67rem; color:#000; font-weight:600; margin-top:1px; opacity:.5; }',
       '.tam-dd-load-btn { padding:3px 10px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
-      '.tam-dd-load-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-dd-load-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-dd-del-btn { background:none; border:1px solid #ddd; cursor:pointer; font-size:.7rem; font-weight:700; color:#000; padding:3px 8px; border-radius:6px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; transition:all .14s; }',
       '.tam-dd-del-btn:hover { color:#9B4D4D; border-color:#9B4D4D; background:#F5EAEA; }',
       '.tam-sessions-empty { color:#000; opacity:.4; text-align:center; padding:28px 0; font-size:.82rem; font-weight:700; }',
@@ -5540,7 +5584,7 @@
 
       /* Session buttons — defined here so mobile override below works */
       '.tam-session-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; }',
-      '.tam-session-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-session-btn:hover { background:#f0f0f0; border-color:#555; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -5575,7 +5619,7 @@
       '.tam-inv-color-0 .tam-inv-toggle-btn,.tam-inv-color-1 .tam-inv-toggle-btn,.tam-inv-color-2 .tam-inv-toggle-btn,.tam-inv-color-3 .tam-inv-toggle-btn,.tam-inv-color-4 .tam-inv-toggle-btn,.tam-inv-color-5 .tam-inv-toggle-btn { color:#bbb!important; }',
       /* Buttons inside header: proc style */
       '.tam-invoice-block-header button:not(.tam-inv-toggle-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
-      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):hover { background:#f0f0f0!important; border-color:#555!important; }',
       /* Quick active badge */
       '.tam-inv-color-0 .tam-inv-quick-active,.tam-inv-color-1 .tam-inv-quick-active,.tam-inv-color-2 .tam-inv-quick-active,.tam-inv-color-3 .tam-inv-quick-active,.tam-inv-color-4 .tam-inv-quick-active,.tam-inv-color-5 .tam-inv-quick-active { color:#000!important; font-weight:700!important; text-shadow:none!important; border:1px solid #e0e0e0!important; background:#f5f5f5!important; border-radius:6px; padding:3px 8px; }',
       /* Quick undo: red tint like proc */
@@ -5611,8 +5655,8 @@
       '.tam-engine-sel-wrap { grid-column:1/-1; width:100%; margin-top:4px; }',
       '.tam-engine-btns { display:flex; gap:8px; margin-top:6px; justify-content:flex-start; flex-wrap:wrap; }',
       '.tam-ebtn { border:1px solid #ccc; background:transparent; padding:7px 16px; border-radius:8px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; line-height:1.45; text-align:center; transition:all 0.15s; min-width:110px; color:#000; font-weight:700; text-transform:lowercase; }',
-      '.tam-ebtn:hover { background:#000; border-color:#000; color:#fff; }',
-      '.tam-ebtn-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-ebtn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-ebtn-active { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-ebtn-label { display:block; font-weight:700; font-size:.82rem; }',
       '.tam-ebtn-detail { display:block; font-size:.68rem; color:#000; opacity:.45; margin-top:2px; }',
       '.tam-ebtn-active .tam-ebtn-detail { color:#fff; opacity:.6; }',
@@ -5633,7 +5677,7 @@
       '.tam-rec-quick-btns { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid #e0e0e0; background:#fafafa!important; flex-wrap:wrap; border-radius:0; }',
       '.tam-quick-label { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000!important; white-space:nowrap; opacity:.5; }',
       '.tam-quick-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc!important; border-radius:8px; background:transparent!important; color:#000!important; transition:all 0.15s; white-space:nowrap; }',
-      '.tam-quick-btn:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-quick-btn:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-quick-btn-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
       '.tam-quick-btn-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
 
@@ -5652,7 +5696,7 @@
       '.tam-boxes-hdr-row .tam-rec-quick-col { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; background:#fafafa!important; }',
       '.tam-row-quick { display:flex; gap:3px; justify-content:center; }',
       '.tam-row-quick-btn { padding:3px 8px; font-size:.68rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ddd; border-radius:6px; background:transparent; color:#000; transition:all 0.12s; white-space:nowrap; line-height:1.4; }',
-      '.tam-row-quick-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-row-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-row-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; }',
       '.tam-row-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
 
@@ -5706,7 +5750,7 @@
       /* ── Quick column (rápido) — light grey ── */
       '.tam-rec-cell-quick.tam-col-odd, .tam-rec-cell-quick.tam-col-even { background:#f5f5f5!important; border-left:1px solid #e0e0e0!important; }',
       '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn { background:transparent!important; border-color:#ccc!important; color:#000!important; }',
-      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; }',
       '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
       '.tam-sub-q { font-size:.6rem; font-weight:700; color:#000; opacity:.4; letter-spacing:.03em; }',
@@ -5769,10 +5813,10 @@
       '#tam-modify-tip { position:absolute; z-index:9999; display:flex; align-items:center; gap:8px; padding:8px 14px; background:#fff; border:1px solid #000; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.18); font-family:\'MontserratLight\',sans-serif; font-size:.78rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translateX(-4px); transition:opacity .15s ease, transform .15s ease; }',
       '#tam-modify-tip.tam-tip-visible { opacity:1; pointer-events:auto; transform:translateX(0); }',
       '.tam-tip-msg { color:#000; font-weight:700; }',
-      '.tam-tip-btn { padding:3px 14px; font-size:.74rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #000; border-radius:7px; background:#000; color:#fff; transition:background .12s; text-transform:lowercase; }',
-      '.tam-tip-btn:hover { background:#333; border-color:#333; }',
+      '.tam-tip-btn { padding:3px 14px; font-size:.74rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #555; border-radius:7px; background:#fff; color:#000; transition:background .12s; text-transform:lowercase; }',
+      '.tam-tip-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-tip-cancel { padding:3px 10px; font-size:.74rem; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:all .12s; text-transform:lowercase; }',
-      '.tam-tip-cancel:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-tip-cancel:hover { background:#f0f0f0; border-color:#555; }',
       /* pointer on clickable ref cells */
       '.tam-ref-complete .tam-rec-ref-col, .tam-ref-over .tam-rec-ref-col { cursor:pointer; }',
       '.tam-ref-complete .tam-rec-ref-col:hover, .tam-ref-over .tam-rec-ref-col:hover { background:#f5f5f5!important; }',
@@ -5789,7 +5833,7 @@
       /* ── Undo / Redo / Clear action buttons (proc style) ── */
       '.tam-hdr-action-col { padding:2px 4px!important; text-align:center!important; vertical-align:middle!important; }',
       '.tam-action-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:26px; font-size:.9rem; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:all .12s; line-height:1; padding:0; }',
-      '.tam-action-btn:hover:not(:disabled) { background:#000; color:#fff; border-color:#000; }',
+      '.tam-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
       '.tam-action-btn:disabled { opacity:.25; cursor:not-allowed; }',
       '.tam-undo-btn:hover:not(:disabled) { background:#5F7B94!important; border-color:#5F7B94!important; color:#fff!important; }',
       '.tam-redo-btn:hover:not(:disabled) { background:#5F7B94!important; border-color:#5F7B94!important; color:#fff!important; }',
@@ -5826,7 +5870,7 @@
       /* ── Per-invoice quick distribution buttons (proc style) ── */
       '.tam-inv-quick-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }',
       '.tam-inv-quick-btn { padding:3px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.14s; white-space:nowrap; text-transform:lowercase; }',
-      '.tam-inv-quick-btn:hover { background:#000; border-color:#000; color:#fff; }',
+      '.tam-inv-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-inv-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
       '.tam-inv-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
       '.tam-inv-quick-active { font-size:.7rem; font-weight:700; color:#4A7C6F; border:1px solid #4A7C6F; border-radius:6px; padding:3px 8px; white-space:nowrap; letter-spacing:.02em; background:transparent; }',
@@ -5835,11 +5879,11 @@
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
       '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { padding:5px 13px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
-      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#f0f0f0; border-color:#555; }',
 
       /* ── Edit mode button (proc style) ── */
       '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
-      '.tam-inv-edit-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-inv-edit-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-inv-edit-btn.active { background:#4A7C6F; color:#fff; border-color:#4A7C6F; }',
       '.tam-inv-edit-btn.active:hover { background:#3a6b60; border-color:#3a6b60; }',
 
@@ -5854,9 +5898,9 @@
       '.tam-edit-del-row:hover { color:#9B4D4D; border-color:#9B4D4D; background:rgba(155,77,77,.08); }',
       '.tam-edit-actions { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px solid #e0e0e0; flex-wrap:wrap; }',
       '.tam-edit-add-row { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .15s; }',
-      '.tam-edit-add-row:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-edit-add-row:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-edit-save { padding:6px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .15s; }',
-      '.tam-edit-save:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-edit-save:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-edit-cancel { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:all .15s; }',
       '.tam-edit-cancel:hover { background:#f5f5f5; opacity:1; }',
 
@@ -5876,14 +5920,14 @@
       '#tam-stock-sub-label { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:\'MontserratLight\',sans-serif; opacity:.55; }',
       '#tam-stock-actions { display:flex; gap:8px; align-items:center; }',
       '.tam-stock-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
-      '.tam-stock-action-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-stock-action-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-stock-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-stock-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       /* Copy bar — 5 cols, identical to proc-or-copy-bar */
       '.tam-stock-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
       '.tam-stock-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
-      '.tam-stock-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.tam-stock-copy-btn.tam-stock-copy-active { border-color:#000!important; color:#fff!important; background:#000!important; }',
+      '.tam-stock-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-stock-copy-btn.tam-stock-copy-active { border-color:#555!important; color:#000!important; background:#f0f0f0!important; }',
       '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       /* Table — proc-or-table style */
       '#tam-stock-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
@@ -5924,26 +5968,26 @@
       '.tam-guia-other-text strong { color:#000!important; }',
       '.tam-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
       '.tam-guia-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000!important; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
-      '.tam-guia-action-btn:hover:not(:disabled) { background:#000; color:#fff!important; border-color:#000; }',
+      '.tam-guia-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
       '.tam-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
       '.tam-guia-confirm { border-color:#000!important; color:#000!important; background:transparent!important; }',
-      '.tam-guia-confirm:hover:not(:disabled) { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-guia-confirm:hover:not(:disabled) { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-guia-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-guia-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       /* Address bar — 4 cols grid for Lisboa/Placa/FNC/PXO buttons */
       '.tam-guia-addr-bar-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
       '.tam-guia-addr-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; white-space:nowrap; }',
-      '.tam-guia-addr-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.tam-guia-addr-copied { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-guia-addr-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-addr-copied { background:#e8e8e8!important; border-color:#555!important; }',
       /* Inline header copy buttons (small, beside Referência label in th2) */
       '.tam-guia-copy-label { display:none; }',
       '.tam-guia-copy-btn { background:transparent; border:1px solid #ccc; border-radius:5px; color:#888; font-size:.58rem; font-weight:700; padding:2px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all .12s; flex-shrink:0; display:inline-flex; align-items:center; }',
-      '.tam-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
-      '.tam-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-guia-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; color:#4A7C6F; }',
       '.tam-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
-      '.tam-guia-hdr-copy:hover { background:#000; color:#fff; border-color:#000; }',
-      '.tam-guia-hdr-copy.tam-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-guia-hdr-copy:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-hdr-copy.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
       '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
       '#tam-guia-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
@@ -5981,7 +6025,7 @@
       '.tam-gc-btns { display:flex; gap:8px; }',
       '.tam-gc-btn { padding:8px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; color:#000; transition:all .12s; text-transform:lowercase; }',
       '.tam-gc-ok { border-color:#000!important; color:#000!important; background:#f0f0f0!important; }',
-      '.tam-gc-ok:hover { background:#000!important; color:#fff!important; }',
+      '.tam-gc-ok:hover { background:#e8e8e8!important; border-color:#555!important; }',
       '.tam-gc-cancel:hover { background:#f0f0f0; border-color:#000; }',
 
       /* ── Anomaly column header and cells (proc style) ── */
@@ -6043,9 +6087,9 @@
       '.tam-dn-btns-cell { width:1%; white-space:nowrap; }',
       '.tam-dn-qbtn { padding:5px 11px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-dn-f100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
-      '.tam-dn-f100:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-dn-f100:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-p100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
-      '.tam-dn-p100:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-dn-p100:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
       '.tam-dn-row-filled { background:#f5f5f5!important; transition:background .4s; }',
       /* Odd-piece inline dialog */
@@ -6055,13 +6099,13 @@
       '.tam-dn-odd-btns { display:flex; gap:6px; flex-wrap:wrap; }',
       '.tam-dn-odd-btn { padding:5px 12px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-dn-odd-f { border-color:#ccc!important; color:#000!important; }',
-      '.tam-dn-odd-f:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-dn-odd-f:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-odd-p { border-color:#ccc!important; color:#000!important; }',
-      '.tam-dn-odd-p:hover { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.tam-dn-odd-p:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-odd-skip:hover { background:#f5f5f5!important; }',
       '#tam-dn-footer { display:flex; align-items:center; gap:10px; padding:12px 20px; border-top:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
       '.tam-dn-action-btn { padding:7px 22px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .13s; text-transform:lowercase; }',
-      '.tam-dn-action-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-dn-action-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-dn-cancel-btn { padding:7px 16px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:all .13s; text-transform:lowercase; }',
       '.tam-dn-cancel-btn:hover { background:#f5f5f5; opacity:1; }',
       '#tam-dn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:#000; color:#fff; padding:10px 20px; border-radius:10px; font-size:.84rem; font-family:\'MontserratLight\',sans-serif; opacity:0; transition:opacity .3s,transform .3s; z-index:20000; pointer-events:none; font-weight:700; }',
@@ -6102,7 +6146,7 @@
       '.tam-dn-md-low  { font-size:.7rem; font-weight:700; color:#9B4D4D; }',
       /* Motor D button in DN verification */
       '.tam-dnv-btn-motord { border-color:#000!important; color:#000!important; }',
-      '.tam-dnv-btn-motord:hover { background:#000!important; color:#fff!important; }',
+      '.tam-dnv-btn-motord:hover { background:#f0f0f0!important; border-color:#555!important; }',
 
       /* ── DN Verification area (proc style) ── */
       '#tam-dn-verify-area { width:100%; max-width:960px; margin-top:16px; }',
@@ -6136,7 +6180,7 @@
       /* Action buttons inside table (proc style) */
       '.tam-dnv-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }',
       '.tam-dnv-btn { padding:3px 10px; font-size:.73rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:6px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
-      '.tam-dnv-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.tam-dnv-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-dnv-btn-edit { border-color:#5F7B94!important; color:#5F7B94!important; }',
       '.tam-dnv-btn-edit:hover { background:#5F7B94!important; color:#fff!important; }',
       '.tam-dnv-btn-confirm-dn { border-color:#4A7C6F!important; color:#4A7C6F!important; }',

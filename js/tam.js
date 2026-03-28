@@ -2622,6 +2622,28 @@
     var isOpen = dd.classList.contains('open');
     dd.classList.toggle('open', !isOpen);
     if (!isOpen) {
+      /* Smart positioning: ensure dropdown doesn't go off-screen left */
+      dd.style.right = '0';
+      dd.style.left  = 'auto';
+      requestAnimationFrame(function(){
+        var rect = dd.getBoundingClientRect();
+        if (rect.left < 8) {
+          /* Would overflow left — anchor to left edge of wrap instead */
+          dd.style.right = 'auto';
+          dd.style.left  = '0';
+        }
+        /* On narrow screens use fixed positioning spanning full width */
+        if (window.innerWidth <= 768) {
+          dd.style.position = 'fixed';
+          dd.style.left     = '12px';
+          dd.style.right    = '12px';
+          dd.style.top      = '';
+          dd.style.width    = 'auto';
+        } else {
+          dd.style.position = '';
+          dd.style.width    = '';
+        }
+      });
       dd.innerHTML = '<div class="tam-dd-header">a carregar sessões…</div>';
       tamLoadAllSessionsMerged().then(function(sessions){
         tamRenderSessionsList(sessions);
@@ -5337,7 +5359,7 @@
 
       /* ── Sessions dropdown (proc style) ── */
       '.tam-sessions-dropdown-wrap { position:relative; }',
-      '#tam-sessions-dropdown { display:none; position:absolute; top:calc(100% + 6px); right:0; width:340px; max-width:96vw; max-height:380px; overflow-y:auto; background:#fff; border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.14); z-index:9999; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-sessions-dropdown { display:none; position:absolute; top:calc(100% + 6px); right:0; width:360px; max-width:calc(100vw - 24px); max-height:380px; overflow-y:auto; background:#fff; border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.14); z-index:9999; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-sessions-dropdown.open { display:block; }',
       '.tam-dd-header { padding:10px 14px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #f0f0f0; background:#fafafa; border-radius:12px 12px 0 0; }',
       '.tam-dd-item { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f0f0f0; transition:background .12s; }',
@@ -5348,7 +5370,7 @@
       '.tam-dd-item:last-child { border-bottom:none; }',
       '.tam-dd-item:hover { background:#f5f5f5; }',
       '.tam-dd-item-info { flex:1; min-width:0; }',
-      '.tam-dd-item-name { font-size:.82rem; font-weight:700; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
+      '.tam-dd-item-name { font-size:.82rem; font-weight:700; color:#000; white-space:normal; word-break:break-word; }',
       '.tam-dd-item-meta { font-size:.67rem; color:#000; font-weight:600; margin-top:1px; opacity:.5; }',
       '.tam-dd-load-btn { padding:3px 10px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
       '.tam-dd-load-btn:hover { background:#000; color:#fff; border-color:#000; }',
@@ -5728,16 +5750,16 @@
       '.tam-stock-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-stock-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       /* Copy bar — 5 cols, identical to proc-or-copy-bar */
-      '.tam-stock-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:1px solid #f0f0f0; background:#fff; flex-shrink:0; }',
+      '.tam-stock-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
       '.tam-stock-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
       '.tam-stock-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
       '.tam-stock-copy-btn.tam-stock-copy-active { border-color:#000!important; color:#fff!important; background:#000!important; }',
       '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       /* Table — proc-or-table style */
       '#tam-stock-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
-      '#tam-stock-table thead { position:sticky; top:0; z-index:2; }',
-      '#tam-stock-table thead tr { background:transparent; border-bottom:1px solid #e0e0e0; }',
-      '.tam-stock-th { padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; background:transparent; }',
+      '#tam-stock-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
+      '#tam-stock-table thead tr { background:#fff; border-bottom:1px solid #e0e0e0; }',
+      '.tam-stock-th { padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; background:#fff; border-bottom:2px solid #e0e0e0; }',
       '.tam-stock-th.tam-stock-city,.tam-stock-th.tam-stock-iva,.tam-stock-th.tam-stock-price,.tam-stock-th.tam-stock-qty { text-align:center; }',
       '.tam-stock-td { padding:7px 12px; font-size:.84rem; font-weight:700; border:none; border-bottom:1px solid #f0f0f0; color:#000; vertical-align:middle; }',
       '.tam-stock-td.tam-stock-city,.tam-stock-td.tam-stock-iva,.tam-stock-td.tam-stock-qty { text-align:center; }',
@@ -5768,7 +5790,7 @@
       '.tam-guia-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-guia-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       /* Address bar — 4 cols grid for Lisboa/Placa/FNC/PXO buttons */
-      '.tam-guia-addr-bar-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:1px solid #f0f0f0; background:#fff; flex-shrink:0; }',
+      '.tam-guia-addr-bar-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
       '.tam-guia-addr-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; white-space:nowrap; }',
       '.tam-guia-addr-btn:hover { background:#000; color:#fff; border-color:#000; }',
       '.tam-guia-addr-copied { background:#000!important; color:#fff!important; border-color:#000!important; }',
@@ -5783,7 +5805,7 @@
       '.tam-guia-hdr-copy.tam-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
-      '#tam-guia-table thead { position:sticky; top:0; z-index:2; }',
+      '#tam-guia-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
       /* Col headers F/P — now with subtle background */
       '.tam-guia-th { padding:8px 14px; font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#000; border-bottom:2px solid #e0e0e0; text-align:center; white-space:normal; line-height:1.3; }',
       '.tam-guia-th-f { background:#f5f5f5; color:#000; }',
@@ -6017,6 +6039,8 @@
          RESPONSIVE MOBILE — all tam module elements
       ══════════════════════════════════════════════ */
       '@media (max-width:768px) {',
+      /* Sessions dropdown — prevent off-screen right */
+      '  #tam-sessions-dropdown { position:fixed!important; top:auto!important; right:12px!important; left:12px!important; width:auto!important; max-width:none!important; border-radius:12px; }',
       /* Invoice block header — stack and shrink buttons */
       '  .tam-invoice-block-header { gap:6px; padding:14px 14px; flex-wrap:wrap; }',
       '  .tam-inv-num { font-size:1.1rem!important; }',

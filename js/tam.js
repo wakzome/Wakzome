@@ -1258,8 +1258,8 @@
         '<th class="tam-th">UND</th>' +
         '<th class="tam-th">P.Unit/T</th>' +
         '<th class="tam-th">Total</th>' +
-        '<th class="tam-th tam-th-funchal" style="color:#ffffff!important">FNC</th>' +
-        '<th class="tam-th tam-th-porto" style="color:#ffffff!important">PXO</th>' +
+        '<th class="tam-th tam-th-funchal">FNC</th>' +
+        '<th class="tam-th tam-th-porto">PXO</th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
@@ -2705,8 +2705,11 @@
       btn.addEventListener('click', function(e){
         e.stopPropagation();
         var key = btn.getAttribute('data-key');
-        tamLoadSession(key, sessions[key]);
+        /* Show loading feedback on button */
+        btn.textContent = '…';
+        btn.disabled = true;
         tamCloseSessionsModal();
+        tamLoadSessionFresh(key);
       });
     });
 
@@ -2721,6 +2724,59 @@
         });
       });
     });
+  }
+
+  /* ── Cargar sessão forçando fetch de Supabase primeiro ── */
+  async function tamLoadSessionFresh(key) {
+    /* Show loading state in status */
+    var statusEl = document.getElementById('tam-session-status');
+    if (statusEl) { statusEl.textContent = '↻ a sincronizar…'; statusEl.style.opacity = '1'; }
+
+    var sb = tamSB();
+    var sessionData = null;
+
+    /* 1. Try to fetch fresh data from Supabase */
+    if (sb) {
+      try {
+        var res = await sb.from(TAM_SESSIONS_TABLE)
+          .select('data, saved_at')
+          .eq('session_name', key)
+          .limit(1);
+        if (!res.error && res.data && res.data.length) {
+          var remote = JSON.parse(res.data[0].data);
+          /* Update localStorage with fresh remote data */
+          try {
+            var all = tamLoadAllSessionsLocal();
+            all[remote.name] = remote;
+            localStorage.setItem('tam_sessions', JSON.stringify(all));
+          } catch(e) {}
+          sessionData = remote;
+          if (statusEl) {
+            statusEl.textContent = '✓ sincronizado';
+            setTimeout(function(){ if (statusEl) statusEl.style.opacity = '0'; }, 2000);
+          }
+        }
+      } catch(e) {
+        console.warn('TAM: Supabase fetch failed, falling back to localStorage', e);
+      }
+    }
+
+    /* 2. Fallback to localStorage if Supabase unavailable or no remote data */
+    if (!sessionData) {
+      sessionData = tamLoadAllSessionsLocal()[key];
+      if (statusEl) {
+        statusEl.textContent = '⊘ offline — carregado localmente';
+        statusEl.style.color = '#5F7B94';
+        setTimeout(function(){ if (statusEl) { statusEl.style.opacity = '0'; statusEl.style.color = ''; } }, 2500);
+      }
+    }
+
+    if (!sessionData) {
+      if (statusEl) { statusEl.textContent = '⚠ sessão não encontrada'; statusEl.style.color = '#9B4D4D'; }
+      return;
+    }
+
+    tamLoadSession(key, sessionData);
   }
 
   function tamLoadSession(key, sessionData) {
@@ -3212,9 +3268,19 @@
           '<table id="tam-guia-table">' +
             '<thead>' +
               '<tr>' +
-                '<th class="tam-guia-th tam-guia-th-f" colspan="2">\ud83d\udd35 FNC (A4) \u00b7 ' + fPend + ' un. pendentes</th>' +
+                '<th class="tam-guia-th tam-guia-th-f" colspan="2">' +
+                  '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
+                    '<span>\ud83d\udd35 FNC (A4)</span>' +
+                    '<span style="font-size:.6rem;font-weight:600;opacity:.7;">' + fPend + ' un. pendentes</span>' +
+                  '</div>' +
+                '</th>' +
                 '<th class="tam-guia-th tam-guia-th-sep"></th>' +
-                '<th class="tam-guia-th tam-guia-th-p" colspan="2">\ud83d\udd34 PXO (A5) \u00b7 ' + pPend + ' un. pendentes</th>' +
+                '<th class="tam-guia-th tam-guia-th-p" colspan="2">' +
+                  '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
+                    '<span>\ud83d\udd34 PXO (A5)</span>' +
+                    '<span style="font-size:.6rem;font-weight:600;opacity:.7;">' + pPend + ' un. pendentes</span>' +
+                  '</div>' +
+                '</th>' +
               '</tr>' +
               '<tr>' +
                 '<th class="tam-guia-th2"><div class="tam-guia-th2-inner">Refer\u00eancia <button class="tam-guia-copy-btn tam-guia-hdr-copy" data-gcol="0">\u29c9</button></div></th>' +
@@ -5719,7 +5785,7 @@
       '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
       '#tam-guia-table thead { position:sticky; top:0; z-index:2; }',
       /* Col headers F/P — now with subtle background */
-      '.tam-guia-th { padding:9px 14px; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; border-bottom:2px solid #e0e0e0; text-align:center; white-space:nowrap; }',
+      '.tam-guia-th { padding:8px 14px; font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#000; border-bottom:2px solid #e0e0e0; text-align:center; white-space:normal; line-height:1.3; }',
       '.tam-guia-th-f { background:#f5f5f5; color:#000; }',
       '.tam-guia-th-p { background:#eeeeee; color:#000; }',
       '.tam-guia-th-sep { width:16px; background:#fff; border-bottom:2px solid #e0e0e0; }',

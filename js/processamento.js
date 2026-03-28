@@ -222,11 +222,19 @@
       '.proc-guia-confirm:hover:not(:disabled) { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '.proc-guia-close-btn { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:transparent; color:#000; transition:background .12s; }',
       '.proc-guia-close-btn:hover { background:#7a3535; color:#fff; border-color:#7a3535; }',
-      '.proc-guia-copy-bar { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 16px; background:#fff; border-bottom:1px solid #e0e0e0; flex-shrink:0; }',
+      '.proc-guia-copy-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; background:#fafafa; border-bottom:1px solid #e0e0e0; flex-shrink:0; }',
       '.proc-guia-copy-btn { padding:7px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#fff; color:#000; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; text-align:center; display:flex; align-items:center; justify-content:center; gap:5px; }',
       '.proc-guia-copy-btn:hover { background:#000; color:#fff; border-color:#000; }',
       '.proc-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '.proc-guia-copy-msg { display:none; }',
+      '.proc-guia-addr-btn { padding:7px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#fff; color:#000; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; text-align:center; display:flex; align-items:center; justify-content:center; gap:5px; width:100%; }',
+      '.proc-guia-addr-btn:hover { background:#000; color:#fff; border-color:#000; }',
+      '.proc-guia-addr-btn.proc-guia-addr-copied { background:#000!important; color:#fff!important; border-color:#000!important; }',
+      '.proc-guia-th2 { padding:7px 10px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; white-space:nowrap; }',
+      '.proc-guia-th2-inner { display:flex; align-items:center; gap:5px; }',
+      '.proc-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
+      '.proc-guia-hdr-copy:hover { background:#000; color:#fff; border-color:#000; }',
+      '.proc-guia-hdr-copy.proc-guia-copy-active { background:#000!important; color:#fff!important; border-color:#000!important; }',
       '#proc-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
       '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
@@ -234,7 +242,7 @@
       '.proc-guia-th-f { background:#fff; color:#000; }',
       '.proc-guia-th-p { background:#fff; color:#000; }',
       '.proc-guia-th-sep { width:16px; background:#fff; border-bottom:2px solid #ddd; }',
-      '.proc-guia-th2 { padding:7px 14px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; }',
+      
       '.proc-guia-td { padding:7px 14px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }',
       '.proc-guia-ref-f { font-weight:700; color:#000; min-width:120px; }',
       '.proc-guia-qty-f { text-align:center; font-weight:700; color:#000; font-variant-numeric:tabular-nums; }',
@@ -2235,7 +2243,7 @@
     if (!allRows.length) {
       procFloatModal({
         title: 'Sem distribuição',
-        body:  'Nenhuma fatura tem pe\u00e7as distribu\u00eddas por armazém. Preenche as colunas Funchal e Porto Santo primeiro.',
+        body:  'Nenhuma fatura tem pe\u00e7as distribu\u00eddas por armazém. Preenche as colunas FNC e PXO primeiro.',
         buttons: [{ label: 'OK', cb: null }]
       });
       return;
@@ -2251,7 +2259,7 @@
     var fSent    = sentRows.reduce(function(s,r){ return s+r.totalF; }, 0);
     var pSent    = sentRows.reduce(function(s,r){ return s+r.totalP; }, 0);
 
-    var COL_G = ['Ref. Funchal', 'Qtd. F', 'Ref. Porto Santo', 'Qtd. PS'];
+    var COL_G = ['Ref. FNC', 'Qtd. F', 'Ref. PXO', 'Qtd. PS'];
 
     function buildTableRows(rowList) {
       if (!rowList.length) return '<tr><td colspan="5" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
@@ -2282,9 +2290,10 @@
     }
 
     var copyBar = '<div class="proc-guia-copy-bar">'
-      + COL_G.map(function(lbl,ci){
-          return '<button class="proc-guia-copy-btn" data-gcol="' + ci + '">\u29c9 ' + lbl + '</button>';
-        }).join('')
+      + '<button class="proc-guia-addr-btn" data-addr="CAL\u00c7ADA DA QUINTINHA 17 B">\u29c9\u00a0Lisboa</button>'
+      + '<button class="proc-guia-addr-btn" data-addr="29-FV-30">\u29c9\u00a0Placa</button>'
+      + '<button class="proc-guia-addr-btn" data-addr="RUA DE S\u00c3O FRANCISCO N\u00ba 20">\u29c9\u00a0FNC</button>'
+      + '<button class="proc-guia-addr-btn" data-addr="EDIFICIO Ilha Dourada Loja-1">\u29c9\u00a0PXO</button>'
       + '</div>';
 
     var sentSection = sentRows.length
@@ -2314,21 +2323,21 @@
       +   '<div id="proc-guia-scroll">'
       +     '<table id="proc-guia-table">'
       +       '<thead><tr>'
-      +         '<th class="proc-guia-th proc-guia-th-f" colspan="2">\ud83d\udd35 FUNCHAL (A4) \u00b7 ' + fPend + ' un. pendentes</th>'
+      +         '<th class="proc-guia-th proc-guia-th-f" colspan="2">\ud83d\udd35 FNC (A4) \u00b7 ' + fPend + ' un. pendentes</th>'
       +         '<th class="proc-guia-th proc-guia-th-sep"></th>'
-      +         '<th class="proc-guia-th proc-guia-th-p" colspan="2">\ud83d\udd34 PORTO SANTO (A5) \u00b7 ' + pPend + ' un. pendentes</th>'
+      +         '<th class="proc-guia-th proc-guia-th-p" colspan="2">\ud83d\udd34 PXO (A5) \u00b7 ' + pPend + ' un. pendentes</th>'
       +       '</tr><tr>'
-      +         '<th class="proc-guia-th2">Refer\u00eancia</th>'
-      +         '<th class="proc-guia-th2" style="text-align:center">Qtd.</th>'
+      +         '<th class="proc-guia-th2"><div class="proc-guia-th2-inner">Refer\u00eancia <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="0">\u29c9</button></div></th>'
+      +         '<th class="proc-guia-th2" style="text-align:center"><div class="proc-guia-th2-inner" style="justify-content:center">Qtd. <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="1">\u29c9</button></div></th>'
       +         '<th class="proc-guia-th-sep"></th>'
-      +         '<th class="proc-guia-th2">Refer\u00eancia</th>'
-      +         '<th class="proc-guia-th2" style="text-align:center">Qtd.</th>'
+      +         '<th class="proc-guia-th2"><div class="proc-guia-th2-inner">Refer\u00eancia <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="2">\u29c9</button></div></th>'
+      +         '<th class="proc-guia-th2" style="text-align:center"><div class="proc-guia-th2-inner" style="justify-content:center">Qtd. <button class="proc-guia-copy-btn proc-guia-hdr-copy" data-gcol="3">\u29c9</button></div></th>'
       +       '</tr></thead>'
       +       '<tbody>' + buildTableRows(pendRows) + sentSection + '</tbody>'
       +     '</table>'
       +   '</div>'
       +   '<div id="proc-guia-footer">'
-      +     pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. Funchal \u00b7 ' + pPend + ' un. Porto Santo'
+      +     pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO'
       +     (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
       +   '</div>'
       + '</div>';
@@ -2341,11 +2350,12 @@
       setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
     }
 
-    /* Address chip copy */
-    modal.querySelectorAll('.proc-guia-addr-chip').forEach(function(chip){
-      chip.addEventListener('click', function(){
-        var text = chip.getAttribute('data-addr');
-        function flash(){ chip.classList.add('proc-addr-copied'); setTimeout(function(){ chip.classList.remove('proc-addr-copied'); }, 1600); }
+    /* Address button copy */
+    modal.querySelectorAll('.proc-guia-addr-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var text = btn.getAttribute('data-addr');
+        if (!text) return;
+        function flash(){ btn.classList.add('proc-guia-addr-copied'); setTimeout(function(){ btn.classList.remove('proc-guia-addr-copied'); }, 1400); }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(flash).catch(flash);
         } else {
@@ -2402,7 +2412,7 @@
         + '<div class="proc-gc-body">'
         + 'Vais marcar <strong>' + pendRows.length + ' refer\u00eancias</strong> como enviadas hoje ('
         + new Date().toLocaleDateString('pt-PT') + ').<br>'
-        + '<strong>' + fPend + '</strong> un. Funchal \u00b7 <strong>' + pPend + '</strong> un. Porto Santo<br><br>'
+        + '<strong>' + fPend + '</strong> un. FNC \u00b7 <strong>' + pPend + '</strong> un. PXO<br><br>'
         + 'Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.'
         + '</div>'
         + '<div class="proc-gc-btns">'
@@ -2426,7 +2436,7 @@
     modal.querySelector('#proc-guia-export-btn').addEventListener('click', function(){
       var fRows = pendRows.filter(function(r){ return r.pendF>0; });
       var pRows = pendRows.filter(function(r){ return r.pendP>0; });
-      var lines = ['\uFEFF' + 'Referencia;Qtd Funchal;Referencia;Qtd Porto Santo'];
+      var lines = ['\uFEFF' + 'Referencia;Qtd FNC;Referencia;Qtd PXO'];
       for (var li = 0; li < Math.max(fRows.length, pRows.length); li++) {
         var fc = fRows[li] ? fRows[li].ref + ';' + fRows[li].pendF : ';';
         var pc = pRows[li] ? pRows[li].ref + ';' + pRows[li].pendP : ';';

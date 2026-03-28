@@ -442,6 +442,74 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* ─── FATURAS SUB-OVERLAY ─── */
+#faturas-overlay {
+  display: none; position: fixed; inset: 0;
+  background: #fff; z-index: 210;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
+}
+#faturas-overlay.open { display: flex; }
+#faturas-overlay.visible { opacity: 1; }
+#faturas-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#faturas-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+#faturas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
+#faturas-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#faturas-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center;
+  padding: 40px 16px 60px;
+  font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+#faturas-sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 500px;
+}
+#faturas-sub-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+#faturas-sub-header .fsub-brand {
+  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
+  font-weight: 100;
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  color: #000;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+#faturas-sub-header .fsub-tagline {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #000;
+  opacity: .45;
+}
+@media (max-width: 600px) {
+  #faturas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+
 /* ─── INDEX: tablas de horarios ─── */
 /* summary-wrap: kept in DOM for JS but NEVER shown */
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
@@ -667,6 +735,10 @@ td, th { border-radius:10px; margin:2px; }
 .adm-mod-card[data-module="editor"]::before    { background: linear-gradient(145deg, #1a1010 0%, #2e1414 60%, #3d1515 100%); }
 .adm-mod-card[data-module="tam"]::before       { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
 .adm-mod-card[data-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
+.adm-mod-card[data-module="faturas"]::before   { background: linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 60%, #383838 100%); }
+/* Sub-cards dentro del overlay de faturas */
+#faturas-sub-grid .adm-mod-card[data-faturas-module="tam"]::before          { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
+#faturas-sub-grid .adm-mod-card[data-faturas-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
 
 .adm-mod-card:hover {
   transform: translateY(-5px);
@@ -2952,31 +3024,17 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-mod-card" data-module="tam" style="animation-delay:0.40s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">TAM</div>
-          <div class="adm-mod-desc">faturas TAM Fashion</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      <div class="adm-mod-card" data-module="processamento" style="animation-delay:0.45s">
+      <div class="adm-mod-card" data-module="faturas" style="animation-delay:0.40s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-            <path d="M15 17l1.5 1.5L19 16" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 7h8M8 10h8M8 13h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M14 17l1.5 1.5L18 15" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
         <div>
           <div class="adm-mod-name">FATURAS</div>
-          <div class="adm-mod-desc">processamento de faturas</div>
+          <div class="adm-mod-desc">tam · faturas lisboa</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
@@ -3294,6 +3352,57 @@ td                   { font-size: .96rem !important; }
       </div>
     </div>
     <div id="recibos-overlay-error" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- FATURAS SUB-OVERLAY -->
+<div id="faturas-overlay">
+  <div id="faturas-overlay-bar">
+    <button id="faturas-overlay-back">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="faturas-overlay-title">faturas</span>
+  </div>
+  <div id="faturas-overlay-content">
+    <div id="faturas-sub-header">
+      <div class="fsub-brand">FATURAS</div>
+      <div class="fsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="faturas-sub-grid">
+      <!-- TAM -->
+      <div class="adm-mod-card" data-faturas-module="tam" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">TAM</div>
+          <div class="adm-mod-desc">faturas TAM Fashion</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <!-- FATURAS LISBOA -->
+      <div class="adm-mod-card" data-faturas-module="processamento" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M15 17l1.5 1.5L19 16" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">FATURAS LISBOA</div>
+          <div class="adm-mod-desc">processamento de faturas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3632,10 +3741,14 @@ td                   { font-size: .96rem !important; }
     ferias:        'férias',
     editor:        'editor pdf',
     tam:           'tam',
-    processamento: 'faturas'
+    processamento: 'faturas lisboa',
+    faturas:       'faturas'
   };
 
   function openModule(tab) {
+    // Intercept faturas → open sub-overlay instead
+    if (tab === 'faturas') { openFaturasOverlay(); return; }
+
     var adminApp = document.getElementById('admin-app');
     var barTitle = document.getElementById('adm-module-bar-title');
 
@@ -3697,14 +3810,55 @@ td                   { font-size: .96rem !important; }
     });
   }
 
+  /* ── FATURAS OVERLAY ── */
+  function openFaturasOverlay() {
+    var ov = document.getElementById('faturas-overlay');
+    if (!ov) return;
+    ov.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        ov.classList.add('visible');
+        // Re-trigger sub-card animations
+        ov.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+          c.style.animation = 'none';
+          c.offsetWidth;
+          c.style.animation = '';
+          c.style.animationDelay = (0.05 + i * 0.07) + 's';
+        });
+      });
+    });
+  }
+
+  function closeFaturasOverlay() {
+    var ov = document.getElementById('faturas-overlay');
+    if (!ov) return;
+    ov.classList.remove('visible');
+    setTimeout(function () { ov.classList.remove('open'); }, 460);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    // Card clicks
+    // Main dashboard card clicks
     document.querySelectorAll('.adm-mod-card').forEach(function (card) {
       card.addEventListener('click', function () {
         var mod = card.dataset.module;
         if (mod) openModule(mod);
       });
     });
+
+    // Sub-cards inside faturas overlay
+    document.querySelectorAll('[data-faturas-module]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.faturasModule;
+        if (!mod) return;
+        closeFaturasOverlay();
+        // Wait for overlay fade-out then open the real module
+        setTimeout(function () { openModule(mod); }, 200);
+      });
+    });
+
+    // Back button in faturas overlay → close overlay (back to dashboard)
+    var fatBack = document.getElementById('faturas-overlay-back');
+    if (fatBack) fatBack.addEventListener('click', closeFaturasOverlay);
 
     // Back button
     var backBtn = document.getElementById('adm-back-btn');

@@ -199,6 +199,29 @@
       /* Incoherence soft warning — orange border on fields */
       '#proc-content .proc-warn-field { border-color:#E8A44A !important; background:#FFFBF5 !important; }',
       '#proc-content .proc-warn-field:focus { border-color:#D4922A !important; }',
+      /* Audit button */
+      '#proc-content .proc-audit-btn { margin-left:6px; padding:1px 7px; border:1px solid #E8A44A; border-radius:5px; background:transparent; color:#C47A1E; font-family:\'MontserratLight\',sans-serif; font-size:.6rem; font-weight:700; cursor:pointer; vertical-align:middle; transition:all .15s; }',
+      '#proc-content .proc-audit-btn:hover { background:#E8A44A; color:#fff; }',
+      /* Audit panel table */
+      '#proc-content .proc-audit-explain { font-size:.75rem; font-weight:600; color:#000; opacity:.6; margin-bottom:14px; line-height:1.6; }',
+      '#proc-content .proc-audit-table { width:100%; border-collapse:collapse; margin-bottom:14px; }',
+      '#proc-content .proc-audit-table thead th { font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; opacity:.45; padding:4px 8px; text-align:left; border-bottom:1px solid #e0e0e0; }',
+      '#proc-content .proc-audit-row { border-bottom:1px solid #f5f5f5; transition:background .1s; }',
+      '#proc-content .proc-audit-row:hover { background:#f9f5ee; }',
+      '#proc-content .proc-audit-row-top { background:#FFFBF5; }',
+      '#proc-content .proc-audit-row-top:hover { background:#FFF5E6; }',
+      '#proc-content .proc-audit-row td { padding:7px 8px; font-size:.82rem; font-weight:700; color:#000; }',
+      '#proc-content .proc-audit-ref { font-weight:800; }',
+      '#proc-content .proc-audit-desc { font-weight:600; opacity:.55; font-size:.72rem; }',
+      '#proc-content .proc-audit-val { font-variant-numeric:tabular-nums; }',
+      '#proc-content .proc-audit-corr { color:#4A7C6F; }',
+      '#proc-content .proc-audit-arrow { color:#000; opacity:.3; text-align:center; }',
+      '#proc-content .proc-audit-pcs { opacity:.5; font-size:.75rem; }',
+      '#proc-content .proc-audit-err { color:#E8A44A; font-size:.75rem; }',
+      '#proc-content .proc-audit-pairs-title { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#000; opacity:.4; margin-bottom:6px; }',
+      '#proc-content .proc-audit-pair { font-size:.8rem; font-weight:700; color:#000; padding:4px 0; }',
+      '#proc-content .proc-audit-pair-err { color:#E8A44A; font-weight:600; font-size:.75rem; }',
+      '#proc-content .proc-audit-note { font-size:.68rem; font-weight:600; color:#000; opacity:.35; margin-top:10px; }',
       /* Onboarding tooltip */
       '#proc-onboarding-tip { position:absolute; z-index:2000; pointer-events:none; animation:proc-tip-in 0.3s ease both; }',
       '@keyframes proc-tip-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }',
@@ -1371,7 +1394,7 @@
       +   '<div class="proc-field-group"><div class="proc-field-label">Valor Fatura s/IVA (\u20ac)</div>'
       +     '<input type="number" id="proc-valorFactura-' + fid + '" placeholder="0.00" step="0.01" oninput="procUpdateHeader(' + fid + ');procUpdateTableLock(' + fid + ')"></div>'
       +   '<div class="proc-field-group"><div class="proc-field-label">Total Calculado (\u20ac)</div>'
-      +     '<div class="proc-total-box"><div class="proc-field-label" style="font-size:.6rem">soma das linhas</div>'
+      +     '<div class="proc-total-box"><div class="proc-field-label" style="font-size:.6rem">soma das linhas <button class="proc-audit-btn" id="proc-audit-btn-' + fid + '" style="display:none" onclick="procShowAuditPanel(' + fid + ')">&#128269; rever</button></div>'
       +     '<div class="proc-amount" id="proc-totalCalc-' + fid + '">0.00</div></div></div>'
       + '</div>'
       /* Lock message */
@@ -1948,6 +1971,7 @@
     if (Math.abs(diff) < 0.01) {
       diffChip.className = 'proc-diff-chip zero'; diffChip.textContent = '\u2713 fatura certa';
       if (vEl) vEl.classList.remove('proc-warn-field');
+      procUpdateAuditButton(fid, 0);
     } else {
       var sign = diff > 0 ? '+' : '';
       diffChip.className = 'proc-diff-chip ' + (diff > 0 ? 'pos' : 'neg');
@@ -1958,10 +1982,225 @@
       } else {
         if (vEl) vEl.classList.remove('proc-warn-field');
       }
+      procUpdateAuditButton(fid, diff);
     }
   }
 
-  /* ── 11. CALC HELPERS ── */
+  /* ── 10b. AUDIT ENGINE ── */
+
+  /* Decide si el boton de auditoria debe mostrarse:
+     - Hay diferencia real (diff != 0)
+     - Todas las lineas con datos tienen distribucion completa (FNC+PXO == QTD o flag D)
+     - No hay ninguna linea con status "err" (error de cantidades sin resolver) */
+  function procUpdateAuditButton(fid, diff) {
+    var btn = document.getElementById('proc-audit-btn-' + fid);
+    if (!btn) return;
+    if (Math.abs(diff) < 0.01) { btn.style.display = 'none'; return; }
+
+    /* Verificar que no hay errores de cantidades pendientes */
+    var rc = rowCounts[fid] || 0;
+    for (var i = 1; i <= rc; i++) {
+      var statusEl = document.getElementById('proc-status-' + fid + '-' + i);
+      if (statusEl && statusEl.classList.contains('err')) {
+        btn.style.display = 'none';
+        return;
+      }
+    }
+
+    /* Verificar que todas las lineas con datos tienen distribucion completa */
+    var allDistributed = true;
+    for (var j = 1; j <= rc; j++) {
+      var tr = document.getElementById('proc-row-' + fid + '-' + j);
+      if (!tr) continue;
+      var nums = tr.querySelectorAll('input[type="number"]');
+      var qtdFt = parseFloat(nums[0] ? nums[0].value : 0) || 0;
+      var a4    = parseFloat(nums[1] ? nums[1].value : 0) || 0;
+      var a5    = parseFloat(nums[2] ? nums[2].value : 0) || 0;
+      var preco = parseFloat(nums[3] ? nums[3].value : 0) || 0;
+      if (!preco && !qtdFt) continue; /* linea vacia, ignorar */
+      var dCb = document.getElementById('proc-d-' + fid + '-' + j);
+      var hasD = dCb ? dCb.checked : false;
+      if (!hasD && qtdFt > 0 && (a4 + a5) !== qtdFt) {
+        allDistributed = false;
+        break;
+      }
+    }
+
+    btn.style.display = allDistributed ? 'inline-block' : 'none';
+  }
+
+  /* Calcula candidatas para el panel de auditoria */
+  function procComputeAuditCandidates(fid, diff) {
+    var rc = rowCounts[fid] || 0;
+    var lines = [];
+
+    for (var i = 1; i <= rc; i++) {
+      var tr = document.getElementById('proc-row-' + fid + '-' + i);
+      if (!tr) continue;
+      var rIn  = tr.querySelector('.proc-ref-input');
+      var dIn  = tr.querySelector('.proc-desc-input');
+      var nums = tr.querySelectorAll('input[type="number"]');
+      var dCb  = document.getElementById('proc-d-' + fid + '-' + i);
+      var pCb  = document.getElementById('proc-plus-' + fid + '-' + i);
+      var qtdFt = parseFloat(nums[0] ? nums[0].value : 0) || 0;
+      var a4    = parseFloat(nums[1] ? nums[1].value : 0) || 0;
+      var a5    = parseFloat(nums[2] ? nums[2].value : 0) || 0;
+      var preco = parseFloat(nums[3] ? nums[3].value : 0) || 0;
+      var descPct = parseFloat(nums[4] ? nums[4].value : 0) || 0;
+      var hasD  = dCb ? dCb.checked : false;
+      var plus1 = pCb ? pCb.checked : false;
+      var pcs   = a4 + a5;
+      if (!preco || !pcs) continue;
+
+      var pc = procCalcPrecoCusto(preco, plus1, hasD, qtdFt, a4, a5);
+      var contribution = pcs * pc * (1 - descPct / 100);
+
+      /* Precio que necesitaria esta linea para cerrar la diferencia sola */
+      /* contribution_corregida = contribution - diff  =>  pc_new = (contribution - diff) / (pcs * (1 - descPct/100)) */
+      var factor = pcs * (1 - descPct / 100);
+      var pc_new = (contribution - diff) / factor;
+      /* Convertir pc_new de vuelta a preco original (invirtiendo procCalcPrecoCusto) */
+      /* pc = preco + (plus1 ? 1 : 0) si no hay D, o ajuste D */
+      /* Aproximacion: error_unitario = diff / factor */
+      var errorUnitario = diff / factor;
+      var precoCorregido = preco - errorUnitario;
+
+      lines.push({
+        idx: i,
+        ref: rIn  ? (rIn.value  || '—') : '—',
+        desc: dIn ? (dIn.value || '') : '',
+        preco: preco,
+        precoCorregido: precoCorregido,
+        errorUnitario: Math.abs(errorUnitario),
+        pcs: pcs
+      });
+    }
+
+    /* Ordenar por menor error unitario necesario (mas probable que sea error de tecleo) */
+    lines.sort(function(a, b) { return a.errorUnitario - b.errorUnitario; });
+
+    /* Candidatas simples: todas, ordenadas */
+    var singles = lines.slice(0, 5);
+
+    /* Candidatas dobles: pares donde ambos errores unitarios son menores que el error mayor de las simples */
+    var doubles = [];
+    var threshold = singles.length ? singles[singles.length - 1].errorUnitario : Infinity;
+    for (var p = 0; p < lines.length && doubles.length < 3; p++) {
+      for (var q2 = p + 1; q2 < lines.length && doubles.length < 3; q2++) {
+        /* Si entre los dos explican la diferencia con errores unitarios razonables */
+        /* No hay una solucion unica para dos incognitas, pero podemos mostrar
+           el par con menor suma de errores si la diferencia se puede repartir */
+        /* Heuristica: si ambos tienen pcs similares, cada uno absorbe ~diff/2 */
+        var eA = Math.abs(diff / 2 / (lines[p].pcs  * (1 - 0)));
+        var eB = Math.abs(diff / 2 / (lines[q2].pcs * (1 - 0)));
+        if (eA < threshold && eB < threshold) {
+          doubles.push({ a: lines[p], b: lines[q2], eA: eA, eB: eB });
+        }
+      }
+    }
+
+    return { singles: singles, doubles: doubles, diff: diff };
+  }
+
+  function procShowAuditPanel(fid) {
+    var vEl  = document.getElementById('proc-valorFactura-' + fid);
+    var tEl  = document.getElementById('proc-totalCalc-'   + fid);
+    var ftVal = parseFloat(vEl ? vEl.value : 0) || 0;
+    var calc  = parseFloat(tEl ? tEl.textContent : 0) || 0;
+    var diff  = calc - ftVal;
+
+    var result = procComputeAuditCandidates(fid, diff);
+    var sign   = diff > 0 ? '+' : '';
+
+    /* ── Build panel HTML ── */
+    var rowsHTML = '';
+    result.singles.forEach(function(c, idx) {
+      var arrow = diff > 0 ? '\u2193' : '\u2191'; /* seta direcao correcao */
+      var precoStr    = c.preco.toFixed(2).replace('.', ',') + ' \u20ac';
+      var corrigStr   = c.precoCorregido.toFixed(2).replace('.', ',') + ' \u20ac';
+      var errStr      = (diff > 0 ? '-' : '+') + c.errorUnitario.toFixed(2).replace('.', ',') + ' \u20ac/un';
+      var highlight   = idx === 0 ? 'proc-audit-row-top' : '';
+      rowsHTML +=
+        '<tr class="proc-audit-row ' + highlight + '">'
+        + '<td class="proc-audit-ref">' + c.ref + (c.desc ? '<span class="proc-audit-desc"> ' + c.desc.slice(0, 22) + '</span>' : '') + '</td>'
+        + '<td class="proc-audit-val">' + precoStr + '</td>'
+        + '<td class="proc-audit-arrow">' + arrow + '</td>'
+        + '<td class="proc-audit-val proc-audit-corr">' + corrigStr + '</td>'
+        + '<td class="proc-audit-pcs">' + c.pcs + ' pcs</td>'
+        + '<td class="proc-audit-err">' + errStr + '</td>'
+        + '</tr>';
+    });
+
+    var doublesHTML = '';
+    if (result.singles.length === 0 || result.singles[0].errorUnitario > 1) {
+      /* Solo mostrar pares si las simples no son convincentes */
+      result.doubles.forEach(function(d) {
+        doublesHTML +=
+          '<div class="proc-audit-pair">'
+          + '\u2197 ' + d.a.ref + ' + ' + d.b.ref
+          + ' <span class="proc-audit-pair-err">(&plusmn;' + d.eA.toFixed(2) + ' + &plusmn;' + d.eB.toFixed(2) + ' \u20ac/un)</span>'
+          + '</div>';
+      });
+    }
+
+    var modal = document.createElement('div');
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:560px">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Auditoria de pre\u00e7os</span>'
+      +       '<span class="proc-or-panel-title-sub">Diferen\u00e7a: ' + sign + diff.toFixed(2) + ' \u20ac \u00b7 linhas mais prov\u00e1veis</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">\u2715</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll" style="padding:16px 20px">'
+      +     '<div class="proc-audit-explain">O sistema calculou, para cada linha, qual seria o pre\u00e7o unit\u00e1rio necess\u00e1rio para fechar a diferen\u00e7a. As linhas com menor ajuste necess\u00e1rio s\u00e3o as mais prov\u00e1veis.</div>'
+      +     '<table class="proc-audit-table">'
+      +       '<thead><tr>'
+      +         '<th>Refer\u00eancia</th>'
+      +         '<th>Pre\u00e7o atual</th>'
+      +         '<th></th>'
+      +         '<th>Pre\u00e7o correto</th>'
+      +         '<th>Pcs</th>'
+      +         '<th>Erro/un</th>'
+      +       '</tr></thead>'
+      +       '<tbody>' + rowsHTML + '</tbody>'
+      +     '</table>'
+      +     (doublesHTML ? '<div class="proc-audit-pairs-title">Poss\u00edveis combina\u00e7\u00f5es de duas linhas:</div>' + doublesHTML : '')
+      +     '<div class="proc-audit-note">Clica numa linha da tabela para ir diretamente a esse campo de pre\u00e7o.</div>'
+      +   '</div>'
+      + '</div>';
+
+    /* Click on row navigates to that price input */
+    procOpenModal(modal);
+    modal.querySelector('.proc-or-backdrop').addEventListener('click', function() { procCloseModal(modal); });
+    modal.querySelector('.proc-or-close-btn').addEventListener('click',  function() { procCloseModal(modal); });
+    var esc = function(e) { if (e.key === 'Escape') { procCloseModal(modal); document.removeEventListener('keydown', esc); } };
+    document.addEventListener('keydown', esc);
+
+    /* Row click — focus price input */
+    modal.querySelectorAll('.proc-audit-row').forEach(function(tr2, idx2) {
+      tr2.style.cursor = 'pointer';
+      tr2.addEventListener('click', function() {
+        procCloseModal(modal);
+        var candidate = result.singles[idx2];
+        if (!candidate) return;
+        var rowEl = document.getElementById('proc-row-' + fid + '-' + candidate.idx);
+        if (!rowEl) return;
+        var priceInput = rowEl.querySelectorAll('input[type="number"]')[3];
+        if (priceInput) {
+          priceInput.focus();
+          priceInput.select();
+          priceInput.classList.add('proc-warn-field');
+          setTimeout(function() { priceInput.classList.remove('proc-warn-field'); }, 3000);
+        }
+      });
+    });
+  }
+
+    /* ── 11. CALC HELPERS ── */
   function procCalcPVP(preco) {
     if (!preco || preco <= 0) return null;
     var raw  = preco * 2 + (preco * 2) * 0.23;
@@ -2855,6 +3094,7 @@
   window.procUpdateTableLock     = procUpdateTableLock;
   window.procObsSync             = procObsSync;
   window.procShowGuiaModal       = procShowGuiaModal;
+  window.procShowAuditPanel      = procShowAuditPanel;
   window.procCopyBtn             = procCopyBtn;
   window.procLimitDigits         = procLimitDigits;
   window.procToggleFlag          = procToggleFlag;

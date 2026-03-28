@@ -2055,15 +2055,24 @@
       var pc = procCalcPrecoCusto(preco, plus1, hasD, qtdFt, a4, a5);
       var contribution = pcs * pc * (1 - descPct / 100);
 
-      /* Precio que necesitaria esta linea para cerrar la diferencia sola */
-      /* contribution_corregida = contribution - diff  =>  pc_new = (contribution - diff) / (pcs * (1 - descPct/100)) */
+      /* pc_new: precio de coste que cerraría la diferencia si solo esta línea fuera culpable */
       var factor = pcs * (1 - descPct / 100);
       var pc_new = (contribution - diff) / factor;
-      /* Convertir pc_new de vuelta a preco original (invirtiendo procCalcPrecoCusto) */
-      /* pc = preco + (plus1 ? 1 : 0) si no hay D, o ajuste D */
-      /* Aproximacion: error_unitario = diff / factor */
-      var errorUnitario = diff / factor;
-      var precoCorregido = preco - errorUnitario;
+
+      /* errorUnitario: diferencia entre pc_new y pc (ambos en precio de coste) */
+      var errorUnitario = pc_new - pc;  /* negativo si hay que bajar, positivo si hay que subir */
+
+      /* precoCorregido: precio que el usuario debería haber escrito
+         Invertimos procCalcPrecoCusto: preco_correcto = preco + (pc_new - pc)
+         Esto funciona porque el ajuste D y +1 son lineales sobre preco */
+      var precoCorregido = preco + (pc_new - pc);
+
+      /* distClean: distancia del precoCorregido al multiplo de 0.05 mas cercano.
+         Un precio real de coste siempre es un numero limpio (x.00, x.25, x.50, x.75, x.99...).
+         Si precoCorregido es limpio, esta linea es la culpable probable.
+         Si no, es una linea inocente que produciria un precio absurdo al corregir. */
+      var nearest = Math.round(precoCorregido / 0.05) * 0.05;
+      var distClean = Math.abs(precoCorregido - nearest);
 
       lines.push({
         idx: i,
@@ -2072,20 +2081,20 @@
         preco: preco,
         precoCorregido: precoCorregido,
         errorUnitario: Math.abs(errorUnitario),
-        residuo: Math.abs(Math.abs(diff) - Math.abs(errorUnitario * pcs)),
+        distClean: distClean,
         pcs: pcs
       });
     }
 
-    /* Ordenar por residuo: la linea cuyo error_unitario x piezas se acerca mas a diff va primera */
-    lines.sort(function(a, b) { return a.residuo - b.residuo; });
+    /* Ordenar por distClean: el precoCorregido mas limpio (cercano a multiplo de 0.05) va primero */
+    lines.sort(function(a, b) { return a.distClean - b.distClean; });
 
     /* Candidatas simples: todas, ordenadas */
     var singles = lines.slice(0, 5);
 
     /* Candidatas dobles: pares donde ambos errores unitarios son menores que el error mayor de las simples */
     var doubles = [];
-    var threshold = singles.length ? singles[singles.length - 1].errorUnitario : Infinity;
+    var threshold = singles.length ? singles[singles.length - 1].distClean : Infinity;
     for (var p = 0; p < lines.length && doubles.length < 3; p++) {
       for (var q2 = p + 1; q2 < lines.length && doubles.length < 3; q2++) {
         /* Si entre los dos explican la diferencia con errores unitarios razonables */
@@ -2094,7 +2103,7 @@
         /* Heuristica: si ambos tienen pcs similares, cada uno absorbe ~diff/2 */
         var eA = Math.abs(diff / 2 / (lines[p].pcs  * (1 - 0)));
         var eB = Math.abs(diff / 2 / (lines[q2].pcs * (1 - 0)));
-        if (eA < threshold && eB < threshold) {
+        if (eA < 0.05 && eB < 0.05) {
           doubles.push({ a: lines[p], b: lines[q2], eA: eA, eB: eB });
         }
       }

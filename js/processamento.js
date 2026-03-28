@@ -2072,12 +2072,13 @@
         preco: preco,
         precoCorregido: precoCorregido,
         errorUnitario: Math.abs(errorUnitario),
+        residuo: Math.abs(Math.abs(diff) - Math.abs(errorUnitario * pcs)),
         pcs: pcs
       });
     }
 
-    /* Ordenar por menor error unitario necesario (mas probable que sea error de tecleo) */
-    lines.sort(function(a, b) { return a.errorUnitario - b.errorUnitario; });
+    /* Ordenar por residuo: la linea cuyo error_unitario x piezas se acerca mas a diff va primera */
+    lines.sort(function(a, b) { return a.residuo - b.residuo; });
 
     /* Candidatas simples: todas, ordenadas */
     var singles = lines.slice(0, 5);

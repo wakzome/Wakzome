@@ -344,7 +344,7 @@
         pieces:            pieces,
         totalCost:         tamRound2(totalCost),
         unitPriceWithShip: tamRound2(base + shipPerPiece),
-        grandTotal:        tamRound2((base + shipPerPiece) * pieces),
+        grandTotal:        tamRound2(totalCost + shipPerPiece * pieces),
         confidence:        'MOTOR_D'
       });
     });
@@ -2821,7 +2821,7 @@
           if (!g.unitPriceWithShip && g.totalCost && g.pieces) {
             var base = g.pieces > 0 ? g.totalCost / g.pieces : 0;
             g.unitPriceWithShip = tamRound2(base + shipPerPiece);
-            g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+            g.grandTotal        = tamRound2(g.totalCost + shipPerPiece * g.pieces);
           }
           return g;
         });
@@ -4945,7 +4945,8 @@
     grouped.forEach(function(g){
       var base = g.pieces>0 ? g.totalCost/g.pieces : 0;
       g.unitPriceWithShip = tamRound2(base + shipPerPiece);
-      g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+      /* grandTotal: use exact shipping fraction to avoid cumulative rounding error */
+      g.grandTotal        = tamRound2(g.totalCost + shipPerPiece * g.pieces);
     });
     var subtotalRows    = tagged.filter(function(r){return r.type==='SUBTOTAL';});
     var invoiceSubtotal = subtotalRows.length ? subtotalRows[0].value : null;
@@ -5019,7 +5020,7 @@
     r.grouped.forEach(function(g) {
       var base            = g.pieces > 0 ? g.totalCost / g.pieces : 0;
       g.unitPriceWithShip = tamRound2(base + shipPerPiece);
-      g.grandTotal        = tamRound2(g.unitPriceWithShip * g.pieces);
+      g.grandTotal        = tamRound2(g.totalCost + shipPerPiece * g.pieces);
     });
 
     r.shipping         = shippingCost;
@@ -5131,7 +5132,7 @@
     r.grouped.forEach(function(g) {
       var base            = g.pieces > 0 ? g.totalCost / g.pieces : 0;
       g.unitPriceWithShip = tamRound2(base);
-      g.grandTotal        = tamRound2(base * g.pieces);
+      g.grandTotal        = tamRound2(g.totalCost);  /* no shipping: exact totalCost */
     });
     // Restore engine cache
     var cache = tamEngineCache[r._fileKey];
@@ -5292,7 +5293,7 @@
     activeGrouped.forEach(function(g){
       var base=g.pieces>0?g.totalCost/g.pieces:0;
       g.unitPriceWithShip=tamRound2(base+shipPerPiece);
-      g.grandTotal=tamRound2(g.unitPriceWithShip*g.pieces);
+      g.grandTotal=tamRound2(g.totalCost + shipPerPiece*g.pieces);
     });
     var meta = resA.invoiceNo!=='—' ? resA : resB;
     var fullyAgree = conflicts.length===0 && activeGrouped.every(function(g){return g.confidence==='CONFIRMED';});

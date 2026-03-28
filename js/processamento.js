@@ -2755,17 +2755,17 @@
     /* Undo keyboard shortcut (Ctrl+Z) */
     procInitUndoKeyboard();
 
-    /* ── adm-back-btn: guardar e fechar sessão antes de voltar ao dashboard ── */
+    /* ── adm-back-btn: guardar, fechar sessão e ocultar botões flutuantes ── */
     (function() {
       var backBtn = document.getElementById('adm-back-btn');
       if (!backBtn || backBtn._procBound) return;
       backBtn._procBound = true;
       backBtn.addEventListener('click', function(e) {
-        if (!_isSynced || !_activeSessionKey) return; /* sem sessão activa — comportamento normal */
+        if (!_isSynced || !_activeSessionKey) return;
         e.stopImmediatePropagation();
-        /* Guardar e fechar sessão silenciosamente */
         if (_isSynced) procSaveSession(false);
-        _isSynced        = false;
+        procHideFloatingButtons();
+        _isSynced         = false;
         _activeSessionKey = null;
         _procInited       = false;
         faturaCount   = 0;
@@ -2774,14 +2774,12 @@
         _procSentRefs = {};
         var cont = document.getElementById('proc-faturasContainer');
         if (cont) cont.innerHTML = '';
-        procHideFloatingButtons();
-        /* Deixar o click propagar para o admin-init fazer goToDashboard */
         setTimeout(function() {
           backBtn._procBound = false;
           backBtn.click();
           backBtn._procBound = true;
         }, 80);
-      }, true); /* capture = true */
+      }, true);
     })();
   }
 
@@ -2806,6 +2804,7 @@
     var overlay = document.getElementById('processamento-overlay');
     if (!overlay) return;
     overlay.classList.remove('visible');
+    procHideFloatingButtons();
     setTimeout(function() { overlay.classList.remove('open'); }, 600);
   }
 

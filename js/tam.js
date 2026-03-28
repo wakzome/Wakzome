@@ -3366,78 +3366,102 @@
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-guia-visible'); });
 
-    /* ── Fase 2: fetch remoto de Supabase — actualiza banner y tabla ── */
-    tamGetPendingFromOtherSessionsRemote().then(function(remoteOtherRows) {
-      var banner   = modal.querySelector('#tam-guia-other-banner');
-      var statusEl = modal.querySelector('#tam-guia-other-status');
-      if (!banner || !modal.parentNode) return; // modal ya cerrado
+    /* ── Fase 2: fetch remoto — opt-in por sessão, nunca adiciona automaticamente ── */
+    var _tamAddedOtherRows = [];
 
-      /* Recalcular filas completas con datos remotos */
-      var remoteColorMap = tamAssignSessionColors(remoteOtherRows);
-      var newPendRows = rows.filter(function(r){ return !r.done; }).concat(remoteOtherRows);
+    function tamApplySessionRows(sessionRows) {
+      if (!sessionRows.length) return;
+      _tamAddedOtherRows = _tamAddedOtherRows.concat(sessionRows);
+      var newPendRows = pendRows.concat(sessionRows);
       var newTotals   = recalcTotals(newPendRows, sentRows);
-
-      /* Actualizar tabla */
       var tbody = modal.querySelector('#tam-guia-tbody');
       var newSentSection = sentRows.length
         ? '<tr class="tam-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado (' + sentRows.length + ' refs \u00b7 ' + newTotals.fSent + ' F \u00b7 ' + newTotals.pSent + ' PS)</td></tr>' +
           buildTableRows(sentRows)
         : '';
       if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + newSentSection;
-
-      /* Actualizar contadores de cabecera */
       var fncCount = modal.querySelector('#tam-guia-fnc-count');
       var pxoCount = modal.querySelector('#tam-guia-pxo-count');
       if (fncCount) fncCount.textContent = newTotals.fPend + ' un. pendentes';
       if (pxoCount) pxoCount.textContent = newTotals.pPend + ' un. pendentes';
-
-      /* Actualizar leyenda */
       var legendWrap = modal.querySelector('#tam-guia-legend-wrap');
-      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(remoteColorMap);
-
-      /* Actualizar footer */
+      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(tamAssignSessionColors(_tamAddedOtherRows));
       var footerText = modal.querySelector('#tam-guia-footer-text');
       if (footerText) {
         footerText.textContent =
           newPendRows.length + ' refs pendentes \u00b7 ' + newTotals.fPend + ' un. FNC \u00b7 ' + newTotals.pPend + ' un. PXO' +
-          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '') +
-          (remoteOtherRows.length ? ' \u00b7 ' + remoteOtherRows.length + ' de sessões anteriores' : '');
+          (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '');
       }
-
-      /* Actualizar botón confirmar */
       var confirmBtn = modal.querySelector('#tam-guia-confirm-btn');
       if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
-
-      /* Reasignar pendRows para el handler de confirmar */
       pendRows = newPendRows;
-      otherRows = remoteOtherRows;
+      otherRows = _tamAddedOtherRows;
       fPend = newTotals.fPend;
       pPend = newTotals.pPend;
+    }
 
-      /* ── Actualizar banner ── */
+    tamGetPendingFromOtherSessionsRemote().then(function(remoteOtherRows) {
+      var banner = modal.querySelector('#tam-guia-other-banner');
+      if (!banner || !modal.parentNode) return;
       banner.classList.remove('tam-guia-other-loading');
-      if (remoteOtherRows.length === 0) {
-        /* Sin pendientes en otras sesiones — ocultar banner */
+      if (!remoteOtherRows.length) {
         banner.classList.add('tam-guia-other-none');
-        statusEl.textContent = '\u2713 sem pendentes noutras sessões';
+        var statusEl = banner.querySelector('#tam-guia-other-status');
+        if (statusEl) statusEl.textContent = '\u2713 sem pendentes noutras sess\u00f5es';
         setTimeout(function(){ banner.style.display = 'none'; }, 2000);
-      } else {
-        /* Hay pendientes — mostrar aviso con botón para añadir */
-        var sessionNames = [];
-        var seenKeys = {};
-        remoteOtherRows.forEach(function(r){
-          if (!seenKeys[r.sessionKey]) { seenKeys[r.sessionKey] = true; sessionNames.push(r.sessionName); }
-        });
-        banner.classList.add('tam-guia-other-found');
-        banner.innerHTML =
-          '<div class="tam-guia-other-icon">\u23f3</div>' +
-          '<div class="tam-guia-other-text">' +
-            '<strong>' + remoteOtherRows.length + ' referência(s) pendente(s)</strong> de ' + sessionNames.length + ' sessão(ões) anterior(es)' +
-            '<span class="tam-guia-other-sessions">(' + sessionNames.map(tamEsc).join(', ') + ')</span>' +
-          '</div>';
+        return;
       }
+      tamAssignSessionColors(remoteOtherRows);
+      var sessionGroups = {}, sessionOrder = [];
+      remoteOtherRows.forEach(function(row) {
+        if (!sessionGroups[row.sessionKey]) {
+          sessionGroups[row.sessionKey] = { rows: [], name: row.sessionName, color: row._dotColor };
+          sessionOrder.push(row.sessionKey);
+        }
+        sessionGroups[row.sessionKey].rows.push(row);
+      });
+      banner.classList.add('tam-guia-other-found');
+      banner.style.flexDirection = 'column';
+      banner.style.alignItems    = 'stretch';
+      banner.style.gap           = '6px';
+      banner.innerHTML =
+        '<div style="font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#000;opacity:.5;margin-bottom:2px;">Sess\u00f5es anteriores com pendentes</div>' +
+        sessionOrder.map(function(sKey) {
+          var grp  = sessionGroups[sKey];
+          var totF = grp.rows.reduce(function(s,r){ return s+r.pendF; },0);
+          var totP = grp.rows.reduce(function(s,r){ return s+r.pendP; },0);
+          return '<div class="tam-guia-sess-row" data-skey="' + tamEsc(sKey) + '" style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + grp.color + ';flex-shrink:0;"></span>' +
+            '<span style="font-size:.72rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + tamEsc(grp.name) + '">' + tamEsc(grp.name) + '</span>' +
+            '<span style="font-size:.68rem;font-weight:600;color:#000;opacity:.6;white-space:nowrap;flex-shrink:0;">' + grp.rows.length + ' ref' + (grp.rows.length!==1?'s':'') + ' \u00b7 ' + totF + ' FNC \u00b7 ' + totP + ' PXO</span>' +
+            '<button class="tam-guia-sess-add-btn" data-skey="' + tamEsc(sKey) + '" style="padding:3px 12px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid #555;border-radius:6px;background:#fff;color:#000;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s;">+ Adicionar</button>' +
+            '<button class="tam-guia-sess-ign-btn" data-skey="' + tamEsc(sKey) + '" style="padding:3px 8px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ddd;border-radius:6px;background:transparent;color:#000;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s;">\u00d7</button>' +
+            '</div>';
+        }).join('');
+      banner.querySelectorAll('.tam-guia-sess-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var sKey = btn.getAttribute('data-skey');
+          var grp  = sessionGroups[sKey];
+          if (!grp) return;
+          btn.style.background = '#f0f0f0'; btn.style.borderColor = '#555';
+          setTimeout(function(){ btn.style.background = ''; btn.style.borderColor = ''; }, 300);
+          tamApplySessionRows(grp.rows);
+          delete sessionGroups[sKey];
+          var rowEl = banner.querySelector('.tam-guia-sess-row[data-skey="' + tamEsc(sKey) + '"]');
+          if (rowEl) rowEl.remove();
+          if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+        });
+      });
+      banner.querySelectorAll('.tam-guia-sess-ign-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var sKey = btn.getAttribute('data-skey');
+          delete sessionGroups[sKey];
+          var rowEl = banner.querySelector('.tam-guia-sess-row[data-skey="' + tamEsc(sKey) + '"]');
+          if (rowEl) rowEl.remove();
+          if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+        });
+      });
     }).catch(function(){
-      /* Falló el fetch remoto — ocultar spinner silenciosamente */
       var banner = modal.querySelector('#tam-guia-other-banner');
       if (banner) banner.style.display = 'none';
     });
@@ -5863,7 +5887,7 @@
       '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-stock-modal.tam-stock-visible { opacity:1; pointer-events:auto; }',
       '#tam-stock-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
-      '#tam-stock-panel { position:relative; z-index:1; width:auto; max-width:min(820px,96vw); min-width:min(460px,96vw); max-height:72vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-stock-panel { position:relative; z-index:1; width:min(680px,92vw); max-height:68vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-stock-modal.tam-stock-visible #tam-stock-panel { transform:translateY(0); }',
       '#tam-stock-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
       '#tam-stock-title { display:flex; flex-direction:column; gap:2px; }',
@@ -5879,9 +5903,9 @@
       '.tam-stock-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
       '.tam-stock-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-stock-copy-btn.tam-stock-copy-active { border-color:#555!important; color:#000!important; background:#f0f0f0!important; }',
-      '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#tam-stock-scroll { overflow-x:auto; overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       /* Table — proc-or-table style */
-      '#tam-stock-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
+      '#tam-stock-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:auto; min-width:100%; }',
       '#tam-stock-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
       '#tam-stock-table thead tr { background:#fff; border-bottom:1px solid #e0e0e0; }',
       '.tam-stock-th { padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; background:#fff; border-bottom:2px solid #e0e0e0; }',
@@ -5900,7 +5924,7 @@
       '#tam-guia-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-guia-modal.tam-guia-visible { opacity:1; pointer-events:auto; }',
       '#tam-guia-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
-      '#tam-guia-panel { position:relative; z-index:1; width:auto; max-width:min(760px,96vw); min-width:min(460px,96vw); max-height:72vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-guia-panel { position:relative; z-index:1; width:min(660px,92vw); max-height:68vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-guia-modal.tam-guia-visible #tam-guia-panel { transform:translateY(0); }',
       '#tam-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
       '#tam-guia-title { display:flex; flex-direction:column; gap:2px; }',
@@ -5939,8 +5963,8 @@
       '.tam-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
       '.tam-guia-hdr-copy:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-guia-hdr-copy.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
-      '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
-      '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
+      '#tam-guia-scroll { overflow-x:auto; overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:auto; min-width:100%; }',
       '#tam-guia-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
       /* Col headers F/P — now with subtle background */
       '.tam-guia-th { padding:8px 14px; font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#000; border-bottom:2px solid #e0e0e0; text-align:center; white-space:normal; line-height:1.3; }',
@@ -6196,7 +6220,7 @@
       '  .tam-quick-btn { font-size:.72rem!important; padding:5px 10px!important; }',
       '  #tam-reception-area { margin-top:12px; }',
       /* Modals full width */
-      '  #tam-stock-panel, #tam-guia-panel { border-radius:12px 12px 0 0; max-height:75vh; position:fixed; bottom:0; left:0; right:0; width:100%!important; transform:translateY(100%)!important; }',
+      '  #tam-stock-panel, #tam-guia-panel { border-radius:12px 12px 0 0; max-height:72vh; position:fixed; bottom:0; left:0; right:0; width:100%!important; transform:translateY(100%)!important; }',
       '  #tam-stock-modal.tam-stock-visible #tam-stock-panel, #tam-guia-modal.tam-guia-visible #tam-guia-panel { transform:translateY(0)!important; }',
       '  .tam-stock-copy-bar { grid-template-columns:repeat(3,1fr)!important; }',
       '  .tam-guia-copy-bar { grid-template-columns:repeat(2,1fr)!important; }',
@@ -6465,25 +6489,22 @@
     // Inject styles immediately — always fresh
     tamEnsureStyles();
 
-    // ── Intercept adm-back-btn: save+close session before returning to dashboard ──
+    // ── adm-back-btn: guardar e fechar sessão antes de voltar ao dashboard ──
     (function() {
       var backBtn = document.getElementById('adm-back-btn');
       if (!backBtn || backBtn._tamBound) return;
       backBtn._tamBound = true;
       backBtn.addEventListener('click', function(e) {
-        if (!tamSession) return; // no active session — let default behaviour run
+        if (!tamSession) return;
         e.stopImmediatePropagation();
-        // Save silently then reset state
         tamSaveSession(false);
         tamDoCloseSession();
-        // Trigger the original goToDashboard via the existing admin-init logic
-        // by dispatching a fresh click after a short delay so save can flush
         setTimeout(function() {
-          backBtn._tamBound = false; // allow next click to pass through
+          backBtn._tamBound = false;
           backBtn.click();
           backBtn._tamBound = true;
         }, 80);
-      }, true); // capture = true so we run before admin-init's listener
+      }, true);
     })();
   })();
 

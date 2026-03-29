@@ -2711,7 +2711,24 @@
         {
           label: '\ud83d\udcbe Guardar e fechar',
           style: 'background:#F5EAEA;border:1px solid #e8c5c5;color:#9B4D4D;font-weight:700;',
-          cb: function() { procDoCloseSession(); }
+          cb: function() {
+            if (_isSynced) procSaveSession(true);
+            setTimeout(function() {
+              _isSynced = false;
+              _activeSessionKey = null;
+              _procInited = false;
+              faturaCount   = 0;
+              activeFaturas = [];
+              Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+              _procSentRefs = {};
+              var cont = document.getElementById('proc-faturasContainer');
+              if (cont) cont.innerHTML = '';
+              var saveBtn = document.getElementById('proc-saveBtn');
+              if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
+              procSetSyncStatus('ok', 'sess\u00e3o fechada');
+              procShowStartArea();
+            }, 400);
+          }
         },
         { label: 'Cancelar', style: 'background:#fff;border:1px solid #9DB6C9;color:#000;', cb: null }
       ]
@@ -2738,15 +2755,25 @@
     /* Undo keyboard shortcut (Ctrl+Z) */
     procInitUndoKeyboard();
 
-    /* ── adm-back-btn: guardar e fechar sessão antes de voltar ── */
+    /* ── adm-back-btn: guardar, fechar sessão e ocultar botões flutuantes ── */
     (function() {
       var backBtn = document.getElementById('adm-back-btn');
       if (!backBtn || backBtn._procBound) return;
       backBtn._procBound = true;
       backBtn.addEventListener('click', function(e) {
-        if (!_activeSessionKey) return;
+        if (!_isSynced || !_activeSessionKey) return;
         e.stopImmediatePropagation();
-        procDoCloseSession();
+        if (_isSynced) procSaveSession(false);
+        procHideFloatingButtons();
+        _isSynced         = false;
+        _activeSessionKey = null;
+        _procInited       = false;
+        faturaCount   = 0;
+        activeFaturas = [];
+        Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+        _procSentRefs = {};
+        var cont = document.getElementById('proc-faturasContainer');
+        if (cont) cont.innerHTML = '';
         setTimeout(function() {
           backBtn._procBound = false;
           backBtn.click();
@@ -2756,11 +2783,31 @@
     })();
   }
 
-  /* ── procDoCloseSession: igual ao tamDoCloseSession ── */
+  /* ── 18. OVERLAY OPEN / CLOSE ── */
+  function openProcessamentoOverlay() {
+    var overlay = document.getElementById('processamento-overlay');
+    if (!overlay) return;
+    overlay.classList.add('open');
+    requestAnimationFrame(function() { overlay.classList.add('visible'); });
+
+    var root = document.getElementById('proc-root');
+    if (!root) return;
+
+    var content = document.getElementById('proc-content');
+    if (!content) {
+      /* Primeira vez — inicializar */
+      initProcessamento(root);
+    } else if (!_activeSessionKey) {
+      /* Voltou sem sessão activa — mostrar ecrã de início */
+      _procInited = false;
+      initProcessamento(root);
+    }
+    /* Se há sessão activa, a UI já está correcta */
+  }
+
+  /* ── procDoCloseSession: guarda e reseta o estado da sessão ── */
   function procDoCloseSession() {
-    /* 1. Guardar */
     if (_isSynced && _activeSessionKey) procSaveSession(false);
-    /* 2. Resetar estado — igual ao TAM */
     _isSynced         = false;
     _activeSessionKey = null;
     _procInited       = false;
@@ -2768,12 +2815,8 @@
     activeFaturas     = [];
     Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
     _procSentRefs     = {};
-    /* 3. Limpar DOM — áreas de conteúdo */
     var cont = document.getElementById('proc-faturasContainer');
     if (cont) cont.innerHTML = '';
-    var main = document.getElementById('proc-main-area');
-    if (main) main.style.display = 'none';
-    /* 4. Esconder botões */
     var saveBtn = document.getElementById('proc-saveBtn');
     if (saveBtn) { saveBtn.style.display = 'none'; saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
     var guiaBtn = document.getElementById('proc-guiaBtn');
@@ -2782,35 +2825,22 @@
     if (saveStatus) saveStatus.style.display = 'none';
     var lbl = document.getElementById('proc-session-label');
     if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
+    var main = document.getElementById('proc-main-area');
+    if (main) main.style.display = 'none';
+    var start = document.getElementById('proc-session-start');
+    if (start) start.style.display = 'flex';
     procHideFloatingButtons();
-    /* 5. Libertar listener do botão voltar */
     var backBtn = document.getElementById('adm-back-btn');
     if (backBtn) backBtn._procBound = false;
-    /* 6. Mostrar ecrã de início */
-    procShowStartArea();
-  }
-
-  /* ── 18. OVERLAY OPEN / CLOSE ── */
-  function openProcessamentoOverlay() {
-    var overlay = document.getElementById('processamento-overlay');
-    if (!overlay) return;
-    overlay.classList.add('open');
-    requestAnimationFrame(function() { overlay.classList.add('visible'); });
-
-    /* Se não há sessão activa, inicializar (ou reinicializar) */
-    if (!_activeSessionKey) {
-      _procInited = false;
-      var root = document.getElementById('proc-root');
-      if (root) initProcessamento(root);
-    }
-    /* Se há sessão activa, a UI está correcta — não faz nada */
+    procLoadRemoteKeys(procRenderStartPanel);
   }
 
   function closeProcessamentoOverlay() {
     var overlay = document.getElementById('processamento-overlay');
     if (!overlay) return;
+    /* Se há sessão activa, guardar e fechar antes de esconder a overlay */
+    if (_activeSessionKey) procDoCloseSession();
     overlay.classList.remove('visible');
-    procHideFloatingButtons();
     setTimeout(function() { overlay.classList.remove('open'); }, 600);
   }
 

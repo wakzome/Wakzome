@@ -2702,30 +2702,6 @@
   }
 
   /* ── 16b. CLOSE / RESET SESSION ── */
-
-  /* Resets all state and DOM — no flags needed, mirrors tamDoCloseSession */
-  function procDoCloseSession() {
-    procSaveSession(false);
-    /* Reset state */
-    _isSynced         = false;
-    _activeSessionKey = null;
-    _procInited       = false;
-    faturaCount       = 0;
-    activeFaturas     = [];
-    Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-    _procSentRefs     = {};
-    /* Clear undo stack */
-    if (typeof _undoStack !== 'undefined') { _undoStack.length = 0; }
-    /* Clear rendered faturas */
-    var cont = document.getElementById('proc-faturasContainer');
-    if (cont) cont.innerHTML = '';
-    /* Reset save button */
-    var saveBtn = document.getElementById('proc-saveBtn');
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
-    /* Show start panel */
-    procShowStartArea();
-  }
-
   function procCloseActiveSession() {
     procFloatModal({
       label: 'Fechar sess\u00e3o',
@@ -2762,15 +2738,15 @@
     /* Undo keyboard shortcut (Ctrl+Z) */
     procInitUndoKeyboard();
 
-    /* ── adm-back-btn: guardar, fechar sessão e ocultar botões flutuantes ── */
+    /* ── adm-back-btn: guardar e fechar sessão antes de voltar ── */
     (function() {
       var backBtn = document.getElementById('adm-back-btn');
       if (!backBtn || backBtn._procBound) return;
       backBtn._procBound = true;
       backBtn.addEventListener('click', function(e) {
-        if (!_activeSessionKey) return;
+        if (!_activeSessionKey) return;   /* sem sessão activa — navega normalmente */
         e.stopImmediatePropagation();
-        procDoCloseSession();
+        procDoCloseSession();             /* guarda + reseta estado + limpa DOM */
         setTimeout(function() {
           backBtn._procBound = false;
           backBtn.click();
@@ -2780,6 +2756,28 @@
     })();
   }
 
+  /* ── procDoCloseSession: guarda, reseta todo o estado e destrói o DOM ── */
+  function procDoCloseSession() {
+    /* 1. Guardar se há sessão activa */
+    if (_isSynced && _activeSessionKey) procSaveSession(false);
+    /* 2. Resetar estado em memória */
+    _isSynced         = false;
+    _activeSessionKey = null;
+    _procInited       = false;
+    faturaCount       = 0;
+    activeFaturas     = [];
+    Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+    _procSentRefs     = {};
+    /* 3. Esconder botões flutuantes */
+    procHideFloatingButtons();
+    /* 4. Destruir DOM — na próxima abertura reconstrói tudo do zero */
+    var root = document.getElementById('proc-root');
+    if (root) root.innerHTML = '';
+    /* 5. Libertar o listener do botão voltar para re-registo */
+    var backBtn = document.getElementById('adm-back-btn');
+    if (backBtn) backBtn._procBound = false;
+  }
+
   /* ── 18. OVERLAY OPEN / CLOSE ── */
   function openProcessamentoOverlay() {
     var overlay = document.getElementById('processamento-overlay');
@@ -2787,20 +2785,13 @@
     overlay.classList.add('open');
     requestAnimationFrame(function() { overlay.classList.add('visible'); });
 
-    var content = document.getElementById('proc-content');
-    if (!content) {
-      /* First time opening — build the full UI */
+    /* Se não há sessão activa, inicializar sempre do zero */
+    if (!_activeSessionKey) {
+      _procInited = false;
       var root = document.getElementById('proc-root');
       if (root) initProcessamento(root);
-    } else if (!_activeSessionKey) {
-      /* Returned after closing session — show start panel and re-bind back button */
-      var backBtn = document.getElementById('adm-back-btn');
-      if (backBtn) backBtn._procBound = false;
-      _procInited = false;
-      var root = content.parentElement || document.getElementById('proc-root');
-      if (root) initProcessamento(root);
     }
-    /* If _activeSessionKey exists, session is still active — do nothing, stay in main area */
+    /* Se há sessão activa, a UI já está correcta — não faz nada */
   }
 
   function closeProcessamentoOverlay() {

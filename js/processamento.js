@@ -2702,6 +2702,30 @@
   }
 
   /* ── 16b. CLOSE / RESET SESSION ── */
+
+  /* Resets all state and DOM — no flags needed, mirrors tamDoCloseSession */
+  function procDoCloseSession() {
+    procSaveSession(false);
+    /* Reset state */
+    _isSynced         = false;
+    _activeSessionKey = null;
+    _procInited       = false;
+    faturaCount       = 0;
+    activeFaturas     = [];
+    Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+    _procSentRefs     = {};
+    /* Clear undo stack */
+    if (typeof _undoStack !== 'undefined') { _undoStack.length = 0; }
+    /* Clear rendered faturas */
+    var cont = document.getElementById('proc-faturasContainer');
+    if (cont) cont.innerHTML = '';
+    /* Reset save button */
+    var saveBtn = document.getElementById('proc-saveBtn');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
+    /* Show start panel */
+    procShowStartArea();
+  }
+
   function procCloseActiveSession() {
     procFloatModal({
       label: 'Fechar sess\u00e3o',
@@ -2711,24 +2735,7 @@
         {
           label: '\ud83d\udcbe Guardar e fechar',
           style: 'background:#F5EAEA;border:1px solid #e8c5c5;color:#9B4D4D;font-weight:700;',
-          cb: function() {
-            if (_isSynced) procSaveSession(true);
-            setTimeout(function() {
-              _isSynced = false;
-              _activeSessionKey = null;
-              _procInited = false;
-              faturaCount   = 0;
-              activeFaturas = [];
-              Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-              _procSentRefs = {};
-              var cont = document.getElementById('proc-faturasContainer');
-              if (cont) cont.innerHTML = '';
-              var saveBtn = document.getElementById('proc-saveBtn');
-              if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
-              procSetSyncStatus('ok', 'sess\u00e3o fechada');
-              procShowStartArea();
-            }, 400);
-          }
+          cb: function() { procDoCloseSession(); }
         },
         { label: 'Cancelar', style: 'background:#fff;border:1px solid #9DB6C9;color:#000;', cb: null }
       ]
@@ -2761,24 +2768,9 @@
       if (!backBtn || backBtn._procBound) return;
       backBtn._procBound = true;
       backBtn.addEventListener('click', function(e) {
-        if (!_isSynced || !_activeSessionKey) return;
+        if (!_activeSessionKey) return;
         e.stopImmediatePropagation();
-        /* 1. Guardar sessão antes de sair */
-        procSaveSession(false);
-        /* 2. Resetar todo o estado em memória */
-        _isSynced         = false;
-        _activeSessionKey = null;
-        _procInited       = false;
-        faturaCount   = 0;
-        activeFaturas = [];
-        Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-        _procSentRefs = {};
-        /* 3. Limpar container de faturas */
-        var cont = document.getElementById('proc-faturasContainer');
-        if (cont) cont.innerHTML = '';
-        /* 4. Voltar ao ecrã de início (para quando o utilizador reentrar no módulo) */
-        procShowStartArea();
-        /* 5. Navegar — após a UI estar no estado correcto */
+        procDoCloseSession();
         setTimeout(function() {
           backBtn._procBound = false;
           backBtn.click();
@@ -2797,17 +2789,18 @@
 
     var content = document.getElementById('proc-content');
     if (!content) {
+      /* First time opening — build the full UI */
       var root = document.getElementById('proc-root');
       if (root) initProcessamento(root);
-    } else if (!_isSynced) {
-      /* Returned after closing session — re-bind back button and refresh start panel */
+    } else if (!_activeSessionKey) {
+      /* Returned after closing session — show start panel and re-bind back button */
       var backBtn = document.getElementById('adm-back-btn');
       if (backBtn) backBtn._procBound = false;
       _procInited = false;
       var root = content.parentElement || document.getElementById('proc-root');
       if (root) initProcessamento(root);
-      procShowStartArea();
     }
+    /* If _activeSessionKey exists, session is still active — do nothing, stay in main area */
   }
 
   function closeProcessamentoOverlay() {

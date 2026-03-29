@@ -2763,8 +2763,9 @@
       backBtn.addEventListener('click', function(e) {
         if (!_isSynced || !_activeSessionKey) return;
         e.stopImmediatePropagation();
-        if (_isSynced) procSaveSession(false);
-        procHideFloatingButtons();
+        /* 1. Guardar sessão antes de sair */
+        procSaveSession(false);
+        /* 2. Resetar todo o estado em memória */
         _isSynced         = false;
         _activeSessionKey = null;
         _procInited       = false;
@@ -2772,8 +2773,12 @@
         activeFaturas = [];
         Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
         _procSentRefs = {};
+        /* 3. Limpar container de faturas */
         var cont = document.getElementById('proc-faturasContainer');
         if (cont) cont.innerHTML = '';
+        /* 4. Voltar ao ecrã de início (para quando o utilizador reentrar no módulo) */
+        procShowStartArea();
+        /* 5. Navegar — após a UI estar no estado correcto */
         setTimeout(function() {
           backBtn._procBound = false;
           backBtn.click();
@@ -2795,7 +2800,12 @@
       var root = document.getElementById('proc-root');
       if (root) initProcessamento(root);
     } else if (!_isSynced) {
-      /* Returned after closing session — refresh start panel */
+      /* Returned after closing session — re-bind back button and refresh start panel */
+      var backBtn = document.getElementById('adm-back-btn');
+      if (backBtn) backBtn._procBound = false;
+      _procInited = false;
+      var root = content.parentElement || document.getElementById('proc-root');
+      if (root) initProcessamento(root);
       procShowStartArea();
     }
   }

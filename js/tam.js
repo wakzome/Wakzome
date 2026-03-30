@@ -3840,7 +3840,7 @@
     var n = Object.keys(tamDeliveryNotes).length;
     el.textContent = n > 0 ? n + ' DN' : '';
     el.style.display = n > 0 ? 'inline-block' : 'none';
-    el.style.color = '#ffffff';
+    el.style.color = '#000';
     el.style.fontWeight = '700';
   }
 
@@ -4185,12 +4185,19 @@
       });
 
       /* ── Call Motor D photo mode ── */
+      /* Collect known refs from loaded DNs so Motor D can read the manuscript columns */
+      var knownRefs = [];
+      Object.values(tamDeliveryNotes).forEach(function(dnn) {
+        if (dnn && dnn.refs) dnn.refs.forEach(function(r) {
+          if (knownRefs.indexOf(r.ref) < 0) knownRefs.push(r.ref);
+        });
+      });
       tamMotorDSpinner('a ler foto...');
       var mdResult = await tamMotorDCall({
         mode:        'photo',
         imageBase64: base64,
         mediaType:   imageFile.type || 'image/jpeg',
-        refs:        []
+        refs:        knownRefs
       });
       tamMotorDSpinner(null);
 
@@ -4242,10 +4249,54 @@
 
       /* ── RULE 2/3: Distribution present → pre-fill. Absent → empty modal ── */
       var distribution = mdResult && mdResult.distribution && mdResult.distribution.length
-        ? mdResult.distribution : null;
+        ? mdResult.distribution.slice() : null;
       var confidence   = mdResult && mdResult.confidence ? mdResult.confidence : null;
 
-      tamShowDNDistribModal(dn, distribution, confidence);
+      /* ── POST-PROCESS: right-column overflow = continuation of last row ──
+         When there is no space on the paper, the user writes values for the
+         last ref on the right side. Motor D may return these as a separate
+         rightColumn array [{f,p}] or as entries with no ref.
+         Rule: merge right-column data into the corresponding ref by position. */
+      if (distribution && distribution.length) {
+        /* Case A: Motor D returns a separate rightColumn array */
+        if (mdResult.rightColumn && mdResult.rightColumn.length) {
+          mdResult.rightColumn.forEach(function(rc, i) {
+            var dnRef = dn.refs[i];
+            if (!dnRef) return;
+            var existing = null;
+            for (var di=0; di<distribution.length; di++) {
+              if (distribution[di].ref === dnRef.ref) { existing = distribution[di]; break; }
+            }
+            if (existing) {
+              if (rc.f != null && (existing.f == null || existing.f === 0)) existing.f = rc.f;
+              if (rc.p != null && (existing.p == null || existing.p === 0)) existing.p = rc.p;
+            } else {
+              distribution.push({ ref: dnRef.ref, f: rc.f != null ? rc.f : null, p: rc.p != null ? rc.p : null });
+            }
+          });
+        }
+        /* Case B: entries with no/empty ref = continuation of last valid ref */
+        var lastValidRef = null;
+        for (var di=0; di<distribution.length; di++) {
+          var d = distribution[di];
+          if (d.ref && d.ref.trim()) {
+            lastValidRef = d.ref;
+          } else if (lastValidRef) {
+            for (var dj=0; dj<distribution.length; dj++) {
+              if (distribution[dj].ref === lastValidRef) {
+                if (d.f != null && (distribution[dj].f == null || distribution[dj].f === 0)) distribution[dj].f = d.f;
+                if (d.p != null && (distribution[dj].p == null || distribution[dj].p === 0)) distribution[dj].p = d.p;
+                break;
+              }
+            }
+          }
+        }
+        /* Remove ref-less orphan entries after merging */
+        distribution = distribution.filter(function(d){ return d.ref && d.ref.trim(); });
+      }
+
+      /* fromPhoto=true: boxes must NOT auto-lock if distribution is incomplete */
+      tamShowDNDistribModal(dn, distribution, confidence, true);
 
     } catch(e) {
       console.error('DN camera error', e);
@@ -4273,7 +4324,7 @@
     setTimeout(function(){ t.classList.remove('tam-dn-toast-show'); setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 400); }, 3500);
   }
 
-  function tamShowDNDistribModal(dn, motorDDistrib, motorDConf) {
+  function tamShowDNDistribModal(dn, motorDDistrib, motorDConf, fromPhoto) {
     var old = document.getElementById('tam-dn-modal');
     if (old) old.parentNode.removeChild(old);
     var modal = document.createElement('div');
@@ -4483,14 +4534,30 @@
       var targetBox=null, targetBi=-1;
       var knownInvIdx = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
       if (knownInvIdx >= 0) {
+        // First try: find an unlocked box for this invoice
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
           var b=tamSession.boxes[bi];
           if (b.invIdx===knownInvIdx && !b.locked) { targetBox=b; targetBi=bi; break; }
         }
+        // Fallback: all boxes are locked — reopen the last box of this invoice
         if (!targetBox) {
-          var invNo=(tamInvoices[knownInvIdx]&&tamInvoices[knownInvIdx].invoiceNo)||'';
-          tamShowDNError('Todas as caixas da fatura ' + invNo + ' j\u00e1 est\u00e3o fechadas.');
-          return;
+          var lastBi = -1;
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            if (tamSession.boxes[bi].invIdx===knownInvIdx) lastBi=bi;
+          }
+          if (lastBi >= 0) {
+            // Cancel any pending lock timer for this box
+            if (tamBoxLockTimers[lastBi]) { clearTimeout(tamBoxLockTimers[lastBi]); delete tamBoxLockTimers[lastBi]; }
+            delete tamBoxLockPending[lastBi];
+            tamSession.boxes[lastBi].locked = false;
+            // Clear tamRefDone so refs can be re-animated
+            Object.keys(tamSession.boxes[lastBi].refs).forEach(function(ref){ tamRefDone.delete(ref); });
+            targetBox=tamSession.boxes[lastBi]; targetBi=lastBi;
+          } else {
+            var invNo=(tamInvoices[knownInvIdx]&&tamInvoices[knownInvIdx].invoiceNo)||'';
+            tamShowDNError('N\u00e3o foi poss\u00edvel encontrar caixas para a fatura ' + invNo + '.');
+            return;
+          }
         }
       } else {
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
@@ -4515,7 +4582,20 @@
       if (tamDeliveryNotes[dn.zyCode]) tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
       tamRenderAll();
       tamSaveSession(true);  // immediate silent save
-      tamCheckBoxLock(targetBi);
+      /* When coming from a photo, only lock the box if distribution is truly complete.
+         The user may be distributing across multiple DNs — never force-lock mid-process. */
+      if (!fromPhoto) {
+        tamCheckBoxLock(targetBi);
+      } else {
+        /* Check completion voluntarily — only lock if F+P >= box total */
+        var box2 = tamSession.boxes[targetBi];
+        if (box2 && box2.total) {
+          var recv2 = 0;
+          Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
+          if (recv2 >= box2.total) tamCheckBoxLock(targetBi);
+          /* else: leave box open — more DNs may still come */
+        }
+      }
       closeModal();
     });
   }
@@ -6260,7 +6340,7 @@
           '\ud83d\udce6' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
         '</label>' +
-        '<span id="tam-dn-count" style="display:none;color:#fff;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
+        '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
           '\ud83d\udcf7' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +

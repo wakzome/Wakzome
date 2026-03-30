@@ -222,7 +222,7 @@
       /* Success — clear any deprecation warning */
       tamMotorDSetDeprecated(false);
       /* Track cost */
-      var cost = payload.mode === 'photo' ? 0.004 : payload.mode === 'invoice' ? 0.014 : 0.006;
+      var cost = payload.mode === 'photo' ? 0.010 : payload.mode === 'invoice' ? 0.014 : 0.006;
       tamMotorDCost = Math.round((tamMotorDCost + cost) * 1000) / 1000;
       console.log('TAM Motor D coste acumulado: $' + tamMotorDCost.toFixed(3));
       var sb = tamSB();
@@ -1467,7 +1467,10 @@
     sortedBoxes.forEach(function(bObj, boxPos){
       var bi  = bObj.bi;
       var info = boxStyleInfo[boxPos];
-      var boxLabel = 'Caixa ' + (bi+1) + (bObj.box.locked ? ' \uD83D\uDD12' : '');
+      var dnCode = bObj.box.dnZyCode || null;
+      var boxLabel = dnCode
+        ? (dnCode + (bObj.box.locked ? ' \uD83D\uDD12' : ''))
+        : ('Caixa ' + (bi+1) + (bObj.box.locked ? ' \uD83D\uDD12' : ''));
       var colSpan = info.isActiveBox ? 3 : 2;
       hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + boxLabel + '</th>';
     });
@@ -1508,6 +1511,7 @@
             (isLocked ? 'disabled ' : '') + 'min="1" data-box="' + bi + '">' +
           (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
           (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '">\u270F\uFE0F</button>' : '') +
+          '<button class="tam-box-filter-btn" data-box="' + bi + '" title="Mostrar s\u00f3 refs distribu\u00eddas nesta caixa">\uD83D\uDD0D</button>' +
         '</div>' +
         '<div class="tam-box-sub-labels">' +
           '<span class="tam-sub-f">F</span>' +
@@ -1719,11 +1723,68 @@
         var bi = parseInt(btn.getAttribute('data-box'));
         var box = tamSession.boxes[bi];
         if (box) {
-          // Clear tamRefDone for all refs in this box so they can flash again after re-work
           Object.keys(box.refs).forEach(function(ref){ tamRefDone.delete(ref); });
           box.locked = false;
         }
         tamRenderAll(); tamScheduleSave();
+        /* FIX 4: Scroll the boxes table so the edited box is the first visible column */
+        requestAnimationFrame(function(){
+          var scroll = area.querySelector('.tam-rec-boxes-scroll');
+          if (!scroll) return;
+          var boxTh = area.querySelector('.tam-box-sub-th [data-box="' + bi + '"]');
+          if (!boxTh) boxTh = area.querySelector('#tam-box-total-' + bi);
+          if (boxTh) {
+            var th = boxTh.closest('th');
+            if (th) scroll.scrollLeft = th.offsetLeft - 8;
+          }
+        });
+      });
+    });
+
+    /* FIX 5: Per-box filter — show only refs with values in that box */
+    var tamBoxFilterActive = {};
+    area.querySelectorAll('.tam-box-filter-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var bi  = parseInt(btn.getAttribute('data-box'));
+        var box = tamSession && tamSession.boxes[bi];
+        if (!box) return;
+        /* Toggle filter for this box */
+        if (tamBoxFilterActive[bi]) {
+          delete tamBoxFilterActive[bi];
+          btn.style.background = 'transparent';
+          btn.style.borderColor = '#e0e0e0';
+          /* Show all rows */
+          area.querySelectorAll('tr[data-ref]').forEach(function(row){
+            row.style.display = '';
+          });
+        } else {
+          /* Deactivate any other box filter */
+          area.querySelectorAll('.tam-box-filter-btn').forEach(function(ob){
+            ob.style.background = 'transparent'; ob.style.borderColor = '#e0e0e0';
+          });
+          tamBoxFilterActive = {};
+          tamBoxFilterActive[bi] = true;
+          btn.style.background = '#f0f0f0';
+          btn.style.borderColor = '#000';
+          /* Hide rows that have no values in this box */
+          var refsWithData = Object.keys(box.refs).filter(function(ref){
+            return (box.refs[ref].f || 0) + (box.refs[ref].p || 0) > 0;
+          });
+          area.querySelectorAll('tr[data-ref]').forEach(function(row){
+            var ref = row.getAttribute('data-ref');
+            row.style.display = (refsWithData.indexOf(ref) >= 0) ? '' : 'none';
+          });
+          /* Scroll this box into view */
+          requestAnimationFrame(function(){
+            var scroll = area.querySelector('.tam-rec-boxes-scroll');
+            var boxTh = area.querySelector('#tam-box-total-' + bi);
+            if (scroll && boxTh) {
+              var th = boxTh.closest('th');
+              if (th) scroll.scrollLeft = th.offsetLeft - 8;
+            }
+          });
+        }
       });
     });
 
@@ -1741,8 +1802,48 @@
         var val  = parseInt(inp.value) || 0;
         if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f:0, p:0 };
         tamSession.boxes[bi].refs[ref][city] = val;
+
+        /* Cap check: F+P must not exceed the DN qty for this ref.
+           Find what the DN says for this ref. */
+        var box = tamSession.boxes[bi];
+        if (box.dnZyCode) {
+          var capDn = tamDeliveryNotes[box.dnZyCode];
+          if (capDn) {
+            var dnRef = capDn.refs.find ? capDn.refs.find(function(r){ return r.ref === ref; })
+              : (function(){ for(var i=0;i<capDn.refs.length;i++){ if(capDn.refs[i].ref===ref) return capDn.refs[i]; } return null; })();
+            if (dnRef) {
+              var curF = box.refs[ref].f || 0;
+              var curP = box.refs[ref].p || 0;
+              if (curF + curP > dnRef.qty) {
+                /* Flash the input red — do NOT revert automatically, just warn */
+                inp.style.borderColor = '#9B4D4D';
+                inp.style.background  = '#FFF0F0';
+                inp.title = '\u26a0 ' + (curF+curP) + ' > ' + dnRef.qty + ' (total DN)';
+                if (!inp._capWarned) {
+                  inp._capWarned = true;
+                  if (!confirm('\u26a0 ATENÇÃO\n\nEstás a distribuir ' + (curF+curP) +
+                    ' pcs para "' + ref + '"\nmas a DN só tem ' + dnRef.qty + ' pcs.\n\n' +
+                    'Confirmas que há efectivamente mais peças?')) {
+                    /* Revert to DN max */
+                    if (city === 'f') box.refs[ref].f = Math.max(0, dnRef.qty - (box.refs[ref].p||0));
+                    else              box.refs[ref].p = Math.max(0, dnRef.qty - (box.refs[ref].f||0));
+                    inp.value = box.refs[ref][city];
+                    inp.style.borderColor = '';
+                    inp.style.background  = '';
+                    inp.title = '';
+                  }
+                  inp._capWarned = false;
+                }
+              } else {
+                inp.style.borderColor = '';
+                inp.style.background  = '';
+                inp.title = '';
+              }
+            }
+          }
+        }
+
         tamUpdateSummaryRow(ref);
-        // Detect completions on every keystroke (3s timers handle the deferred sort/lock)
         tamDetectRefCompletions();
         tamCheckBoxLock(bi);
         tamScheduleSave();
@@ -3842,97 +3943,6 @@
     el.style.display = n > 0 ? 'inline-block' : 'none';
     el.style.color = '#000';
     el.style.fontWeight = '700';
-    el.style.cursor = 'pointer';
-    el.style.textDecoration = 'underline dotted';
-    el.title = 'Ver delivery notes carregadas';
-    if (!el._tamDNBound) {
-      el._tamDNBound = true;
-      el.addEventListener('click', function(e){ e.stopPropagation(); tamShowDNListPanel(); });
-    }
-  }
-
-  function tamShowDNListPanel() {
-    var existing = document.getElementById('tam-dn-list-panel');
-    if (existing) { existing.remove(); return; }
-    var el = document.getElementById('tam-dn-count');
-    var rect = el ? el.getBoundingClientRect() : { left: 100, bottom: 60 };
-    var panel = document.createElement('div');
-    panel.id = 'tam-dn-list-panel';
-    panel.style.cssText = [
-      'position:fixed',
-      'top:' + (rect.bottom + 6) + 'px',
-      'left:' + Math.min(rect.left, window.innerWidth - 390) + 'px',
-      'z-index:99998',
-      'background:#fff',
-      'border:1px solid #e0e0e0',
-      'border-radius:12px',
-      'box-shadow:0 8px 30px rgba(0,0,0,.14)',
-      "font-family:'MontserratLight',sans-serif",
-      'min-width:280px',
-      'max-width:380px',
-      'max-height:420px',
-      'overflow-y:auto'
-    ].join(';');
-
-    var dns = Object.values(tamDeliveryNotes);
-    if (!dns.length) {
-      panel.innerHTML = '<div style="padding:18px 16px;font-size:.82rem;color:#000;opacity:.5;font-weight:700;">Nenhuma DN carregada.</div>';
-    } else {
-      var hdr = '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
-        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;">' +
-        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>';
-
-      var rows = dns.map(function(dn) {
-        var hasPhoto  = !!(dn.lastPhotoDistrib && dn.lastPhotoDistrib.length);
-        var confirmed = dn.distribConfirmed ? ' ✓' : '';
-        var clr       = dn.distribConfirmed ? '#4A7C6F' : '#000';
-        var isUserConf = dn.lastPhotoConf === 'user_confirmed';
-        var btnLabel  = hasPhoto ? (isUserConf ? '✓ ver confirmado' : '?? ver resultado') : '';
-        var photoBtn  = hasPhoto
-          ? '<button class="tam-dn-replay-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
-              'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
-              'border:1px solid ' + (isUserConf ? '#4A7C6F' : '#ccc') + ';border-radius:6px;background:transparent;' +
-              'color:' + (isUserConf ? '#4A7C6F' : '#000') + ";font-family:'MontserratLight',sans-serif;" +
-              'transition:all .12s;white-space:nowrap;flex-shrink:0;">' +
-              btnLabel + '</button>'
-          : '<span style="font-size:.65rem;color:#000;opacity:.3;font-weight:600;white-space:nowrap;">sem foto</span>';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
-          '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-              tamEsc(dn.zyCode) + confirmed +
-            '</div>' +
-            '<div style="font-size:.65rem;color:#000;opacity:.45;margin-top:1px;">' +
-              (dn.refs ? dn.refs.length + ' refs' : '') +
-              (dn.gesamtPcs ? ' · ' + dn.gesamtPcs + ' pcs' : '') +
-            '</div>' +
-          '</div>' +
-          photoBtn +
-        '</div>';
-      }).join('');
-      panel.innerHTML = hdr + rows;
-    }
-
-    document.body.appendChild(panel);
-
-    panel.querySelectorAll('.tam-dn-replay-btn').forEach(function(btn) {
-      btn.addEventListener('mouseenter', function(){ btn.style.background='#f5f5f5'; });
-      btn.addEventListener('mouseleave', function(){ btn.style.background='transparent'; });
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var zy = btn.getAttribute('data-zy');
-        var dn = tamDeliveryNotes[zy];
-        if (!dn) return;
-        panel.remove();
-        tamShowDNDistribModal(dn, dn.lastPhotoDistrib || null, dn.lastPhotoConf || null, false);
-      });
-    });
-
-    function onOutside(e) {
-      if (!panel.contains(e.target) && e.target !== el) {
-        panel.remove(); document.removeEventListener('click', onOutside);
-      }
-    }
-    setTimeout(function(){ document.addEventListener('click', onOutside); }, 50);
   }
 
   async function tamHandleDeliveryNoteFiles(files) {
@@ -4489,25 +4499,48 @@
             '<thead><tr>' +
               '<th class="tam-dn-th">Refer\u00eancia</th>' +
               '<th class="tam-dn-th">Total</th>' +
-              '<th class="tam-dn-th tam-dn-th-f">FNC</th>' +
-              '<th class="tam-dn-th tam-dn-th-p">PXO</th>' +
+              '<th class="tam-dn-th tam-dn-th-f">Funchal</th>' +
+              '<th class="tam-dn-th tam-dn-th-p">Porto Santo</th>' +
               '<th class="tam-dn-th"></th>' +
             '</tr></thead>' +
             '<tbody>' + rowsHtml + '</tbody>' +
           '</table>' +
         '</div>' +
         '<div id="tam-dn-footer">' +
-          '<button id="tam-dn-confirm-btn" class="tam-dn-action-btn">\u2713 Confirmar distribui\u00e7\u00e3o</button>' +
+          (dn.distribConfirmed
+            ? '<button id="tam-dn-confirm-btn" class="tam-dn-action-btn" style="border-color:#E8A44A;color:#C47A1E;">\u270F editar distribui\u00e7\u00e3o</button>'
+            : '<button id="tam-dn-confirm-btn" class="tam-dn-action-btn">\u2713 Confirmar distribui\u00e7\u00e3o</button>') +
           '<button id="tam-dn-cancel-btn" class="tam-dn-cancel-btn">Cancelar</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-dn-visible'); });
 
-    /* ── Motor D pre-fill + arithmetic confidence check ── */
-    if (motorDDistrib && motorDDistrib.length) {
+    /* ── Pre-fill from previously confirmed distribution ── */
+    if (dn.distribConfirmed && dn.lastPhotoDistrib && dn.lastPhotoDistrib.length && !motorDDistrib) {
+      dn.lastPhotoDistrib.forEach(function(d) {
+        if (!d || !d.ref) return;
+        var safe = d.ref.replace(/[^a-z0-9]/gi, '_');
+        var fi = modal.querySelector('#tam-dn-f-' + safe);
+        var pi = modal.querySelector('#tam-dn-p-' + safe);
+        if (fi && d.f != null) { fi.value = d.f; fi.classList.add('tam-dn-inp-prefilled'); }
+        if (pi && d.p != null) { pi.value = d.p; pi.classList.add('tam-dn-inp-prefilled'); }
+      });
+      var subEl2 = modal.querySelector('#tam-dn-sub');
+      if (subEl2) subEl2.innerHTML = 'Delivery Note &middot; distribui\u00e7\u00e3o j\u00e1 confirmada &middot; <span class="tam-dn-md-high">\u2713 a editar</span>';
+    }
 
-      /* Step 1: fill inputs */
+    /* ── Motor D pre-fill ── */
+    if (motorDDistrib && motorDDistrib.length) {
+      /* Confidence banner */
+      var subEl = modal.querySelector('#tam-dn-sub');
+      if (subEl && motorDConf) {
+        var confLabel = motorDConf === 'high'   ? '<span class="tam-dn-md-high">🤖 Motor D · alta confiança</span>'
+                      : motorDConf === 'medium' ? '<span class="tam-dn-md-med">🤖 Motor D · verifica os valores</span>'
+                      :                           '<span class="tam-dn-md-low">🤖 Motor D · verifica com atenção</span>';
+        subEl.innerHTML = 'Delivery Note &middot; distribuir por loja &middot; ' + confLabel;
+      }
+      /* Fill inputs — null/undefined → empty + red border */
       motorDDistrib.forEach(function(d) {
         if (!d || !d.ref) return;
         var safe = d.ref.replace(/[^a-z0-9]/gi, '_');
@@ -4515,64 +4548,25 @@
         var pi = modal.querySelector('#tam-dn-p-' + safe);
         var row = fi ? fi.closest('tr') : null;
         if (fi) {
-          if (d.f != null) { fi.value = d.f; fi.classList.add('tam-dn-inp-prefilled'); }
-          else             { fi.value = '';  fi.classList.add('tam-dn-inp-unclear'); }
+          if (d.f != null) {
+            fi.value = d.f;
+            fi.classList.add('tam-dn-inp-prefilled');
+          } else {
+            fi.value = '';
+            fi.classList.add('tam-dn-inp-unclear');
+          }
         }
         if (pi) {
-          if (d.p != null) { pi.value = d.p; pi.classList.add('tam-dn-inp-prefilled'); }
-          else             { pi.value = '';  pi.classList.add('tam-dn-inp-unclear'); }
+          if (d.p != null) {
+            pi.value = d.p;
+            pi.classList.add('tam-dn-inp-prefilled');
+          } else {
+            pi.value = '';
+            pi.classList.add('tam-dn-inp-unclear');
+          }
         }
         if (row) row.classList.add('tam-dn-row-prefilled');
       });
-
-      /* Step 2: validate each row — F+P must equal Total.
-         Motor D's self-reported confidence is overridden by arithmetic. */
-      var mismatchCount = 0, nullCount = 0;
-      dn.refs.forEach(function(r) {
-        var safe2 = r.ref.replace(/[^a-z0-9]/gi, '_');
-        var fi2  = modal.querySelector('#tam-dn-f-' + safe2);
-        var pi2  = modal.querySelector('#tam-dn-p-' + safe2);
-        var row2 = fi2 ? fi2.closest('tr') : null;
-        if (!fi2 || !pi2 || !row2) return;
-        var fVal = fi2.value === '' ? null : (parseInt(fi2.value) || 0);
-        var pVal = pi2.value === '' ? null : (parseInt(pi2.value) || 0);
-        if (fVal === null || pVal === null) { nullCount++; return; }
-        var sum = fVal + pVal;
-        var wc = row2.querySelector('.tam-dn-warn-cell');
-        if (!wc) {
-          wc = document.createElement('td');
-          wc.className = 'tam-dn-warn-cell';
-          wc.style.cssText = 'font-size:.68rem;font-weight:700;white-space:nowrap;padding:0 6px;vertical-align:middle;';
-          row2.appendChild(wc);
-        }
-        if (sum !== r.qty) {
-          mismatchCount++;
-          fi2.classList.remove('tam-dn-inp-prefilled'); fi2.classList.add('tam-dn-inp-unclear');
-          pi2.classList.remove('tam-dn-inp-prefilled'); pi2.classList.add('tam-dn-inp-unclear');
-          fi2.style.borderColor = '#9B4D4D'; pi2.style.borderColor = '#9B4D4D';
-          wc.style.color = '#9B4D4D';
-          wc.textContent = '⚠ ' + sum + '≠' + r.qty;
-        } else {
-          fi2.style.borderColor = ''; pi2.style.borderColor = '';
-          wc.style.color = '#4A7C6F'; wc.textContent = '✓';
-        }
-      });
-
-      /* Step 3: effective confidence */
-      var effectiveConf = mismatchCount > 0 ? 'low' : nullCount > 0 ? 'medium' : motorDConf;
-
-      /* Step 4: confidence banner */
-      var subEl = modal.querySelector('#tam-dn-sub');
-      if (subEl) {
-        var confLabel = effectiveConf === 'high'
-          ? '<span class="tam-dn-md-high">🤖 Motor D · alta confiança</span>'
-          : effectiveConf === 'medium'
-            ? '<span class="tam-dn-md-med">🤖 Motor D · verifica os valores</span>'
-            : mismatchCount > 0
-              ? '<span class="tam-dn-md-low">🤖 Motor D · ' + mismatchCount + ' erro' + (mismatchCount>1?'s':'') + ' — corrige antes de confirmar</span>'
-              : '<span class="tam-dn-md-low">🤖 Motor D · verifica com atenção</span>';
-        subEl.innerHTML = 'Delivery Note &middot; distribuir por loja &middot; ' + confLabel;
-      }
     }
 
     function closeModal() {
@@ -4582,41 +4576,6 @@
     modal.querySelector('#tam-dn-backdrop').addEventListener('click', closeModal);
     modal.querySelector('#tam-dn-close-btn').addEventListener('click', closeModal);
     modal.querySelector('#tam-dn-cancel-btn').addEventListener('click', closeModal);
-
-    /* Live per-row mismatch validation */
-    modal.querySelectorAll('.tam-dn-inp').forEach(function(inp) {
-      inp.addEventListener('input', function() {
-        var row  = inp.closest('tr');
-        if (!row) return;
-        var qty  = parseInt(inp.getAttribute('data-qty')) || 0;
-        var safe = inp.getAttribute('data-ref').replace(/[^a-z0-9]/gi,'_');
-        var fi   = modal.querySelector('#tam-dn-f-' + safe);
-        var pi   = modal.querySelector('#tam-dn-p-' + safe);
-        var fVal = fi ? (parseInt(fi.value)||0) : 0;
-        var pVal = pi ? (parseInt(pi.value)||0) : 0;
-        var sum  = fVal + pVal;
-        var wc   = row.querySelector('.tam-dn-warn-cell');
-        if (!wc) {
-          wc = document.createElement('td');
-          wc.className = 'tam-dn-warn-cell';
-          wc.style.cssText = 'font-size:.68rem;font-weight:700;white-space:nowrap;padding:0 6px;vertical-align:middle;';
-          row.appendChild(wc);
-        }
-        if (qty > 0 && sum !== qty) {
-          wc.style.color = '#9B4D4D'; wc.textContent = '⚠ ' + sum + '≠' + qty;
-          if (fi) fi.style.borderColor = '#9B4D4D';
-          if (pi) pi.style.borderColor = '#9B4D4D';
-        } else if (qty > 0 && sum === qty) {
-          wc.style.color = '#4A7C6F'; wc.textContent = '✓';
-          if (fi) fi.style.borderColor = '';
-          if (pi) pi.style.borderColor = '';
-        } else {
-          wc.textContent = '';
-          if (fi) fi.style.borderColor = '';
-          if (pi) pi.style.borderColor = '';
-        }
-      });
-    });
 
     modal.querySelectorAll('.tam-dn-f100').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -4725,18 +4684,10 @@
       }
 
       if (knownInvIdx >= 0) {
-        // Pass 1a: prefer an EMPTY unlocked box for this invoice (no refs yet = fresh box)
+        // Pass 1: unlocked box for this invoice
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var bx = tamSession.boxes[bi];
-          if (bx.invIdx===knownInvIdx && !bx.locked && Object.keys(bx.refs).length === 0) {
-            targetBox=bx; targetBi=bi; break;
-          }
-        }
-        // Pass 1b: no empty box — use an unlocked box that already has refs (partial fill)
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            var bx = tamSession.boxes[bi];
-            if (bx.invIdx===knownInvIdx && !bx.locked) { targetBox=bx; targetBi=bi; break; }
+          if (tamSession.boxes[bi].invIdx===knownInvIdx && !tamSession.boxes[bi].locked) {
+            targetBox=tamSession.boxes[bi]; targetBi=bi; break;
           }
         }
         // Pass 2: all boxes locked — reopen last box of this invoice
@@ -4747,38 +4698,21 @@
           }
           if (lastBi >= 0) { unlockBox(lastBi); targetBox=tamSession.boxes[lastBi]; targetBi=lastBi; }
         }
-        // Pass 3: invIdx mismatch (legacy) — first empty unlocked box anywhere
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            var bx = tamSession.boxes[bi];
-            if (!bx.locked && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
-          }
-        }
-        // Pass 4: any unlocked box
+        // Pass 3: invIdx mismatch (legacy session) — any unlocked box
         if (!targetBox) {
           for (var bi=0; bi<tamSession.boxes.length; bi++) {
             if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
           }
         }
-        // Pass 5: everything locked — reopen the last box of this invoice
+        // Pass 4: everything locked — reopen the last box in the session
         if (!targetBox && tamSession.boxes.length) {
           var lastAny=tamSession.boxes.length-1;
-          for (var bi=tamSession.boxes.length-1; bi>=0; bi--) {
-            if (tamSession.boxes[bi].invIdx===knownInvIdx) { lastAny=bi; break; }
-          }
           unlockBox(lastAny); targetBox=tamSession.boxes[lastAny]; targetBi=lastAny;
         }
       } else {
-        // ZY not mapped — first empty unlocked box
+        // ZY not mapped to any invoice — first unlocked box
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var bx = tamSession.boxes[bi];
-          if (!bx.locked && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
-        }
-        // Any unlocked box
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
-          }
+          if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
         }
         // All locked — reopen last box
         if (!targetBox && tamSession.boxes.length) {
@@ -4790,52 +4724,34 @@
       if (!targetBox) { tamShowDNError('Sem caixas na sess\u00e3o.'); return; }
 
       var totalQty = dn.refs.reduce(function(s,r){ return s+r.qty; }, 0);
+      if (!targetBox.total) targetBox.total = totalQty;
       tamPushUndo();
+      /* REPLACE (not add) — prevents double-counting when re-confirming */
       dn.refs.forEach(function(r){
         var safe=r.ref.replace(/[^a-z0-9]/gi,'_');
         var fi=modal.querySelector('#tam-dn-f-'+safe), pi=modal.querySelector('#tam-dn-p-'+safe);
         var fVal=fi?(parseInt(fi.value)||0):0, pVal=pi?(parseInt(pi.value)||0):0;
-        if (fVal>0||pVal>0) {
-          if (!targetBox.refs[r.ref]) targetBox.refs[r.ref]={f:0,p:0};
-          targetBox.refs[r.ref].f=fVal; targetBox.refs[r.ref].p=pVal;
-        }
+        /* Always set — never accumulate. Idempotent: confirming twice = same result */
+        targetBox.refs[r.ref] = {f: fVal, p: pVal};
       });
+      /* Store which DN this box belongs to — used for header label and cap check */
+      targetBox.dnZyCode = dn.zyCode;
+
       /* Mark DN as user-confirmed (distribution is final) */
-      if (tamDeliveryNotes[dn.zyCode]) {
-        tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
-        if (fromPhoto) {
-          /* Save values the user confirmed (after any corrections), not raw Motor D */
-          var savedDistrib = dn.refs.map(function(r) {
-            var safe2 = r.ref.replace(/[^a-z0-9]/gi,'_');
-            var fi2 = modal.querySelector('#tam-dn-f-' + safe2);
-            var pi2 = modal.querySelector('#tam-dn-p-' + safe2);
-            return { ref: r.ref, f: fi2 ? (parseInt(fi2.value)||0) : 0, p: pi2 ? (parseInt(pi2.value)||0) : 0 };
-          });
-          tamDeliveryNotes[dn.zyCode].lastPhotoDistrib = savedDistrib;
-          tamDeliveryNotes[dn.zyCode].lastPhotoConf    = 'user_confirmed';
-        }
-      }
-      /* box.total = total pieces in this DN — always set from DN, never from an average.
-         If the box already had a total from a previous DN, keep the larger value. */
-      targetBox.total = Math.max(targetBox.total || 0, totalQty);
-
-      /* Synchronous lock check — forces the box to close immediately so the next
-         DN photo lands in a fresh box, without waiting for the 3s animation timer. */
-      var recvNow = 0;
-      Object.values(targetBox.refs).forEach(function(v){ recvNow += (v.f||0) + (v.p||0); });
-      if (recvNow >= targetBox.total) {
-        if (tamBoxLockTimers[targetBi]) { clearTimeout(tamBoxLockTimers[targetBi]); delete tamBoxLockTimers[targetBi]; }
-        delete tamBoxLockPending[targetBi];
-        targetBox.locked = true;
-        /* Clear any completing-ref animations for refs in this box */
-        Object.keys(targetBox.refs).forEach(function(ref){
-          tamRefCompleting.delete(ref);
-          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
-        });
-      }
-
+      if (tamDeliveryNotes[dn.zyCode]) tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
       tamRenderAll();
       tamSaveSession(true);
+      /* fromPhoto: only lock if distribution is genuinely complete */
+      if (!fromPhoto) {
+        tamCheckBoxLock(targetBi);
+      } else {
+        var chkBox = tamSession.boxes[targetBi];
+        if (chkBox && chkBox.total) {
+          var recv2=0;
+          Object.values(chkBox.refs).forEach(function(v){ recv2+=(v.f||0)+(v.p||0); });
+          if (recv2 >= chkBox.total) tamCheckBoxLock(targetBi);
+        }
+      }
       closeModal();
     });
   }
@@ -6082,6 +5998,8 @@
       '.tam-box-total-input:disabled { background:#fafafa; color:#bbb; border-color:#e0e0e0; }',
       '.tam-box-pct { font-size:.68rem; font-weight:700; color:#000; opacity:.4; white-space:nowrap; }',
       '.tam-box-edit-btn { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.75rem; padding:1px 5px; transition:background .15s; }',
+      '.tam-box-filter-btn { background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:1px 5px; transition:all .15s; margin-left:2px; }',
+      '.tam-box-filter-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-box-edit-btn:hover { background:#f0f0f0; border-color:#000; }',
       '.tam-box-sub-labels { display:flex; justify-content:space-around; }',
       '.tam-sub-f { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',

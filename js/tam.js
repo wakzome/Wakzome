@@ -1307,8 +1307,8 @@
         '<td class="tam-td tam-td-num">' + g.pieces + '</td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(g.unitPriceWithShip) + '</td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
-        '<td class="tam-td tam-td-num tam-cell-funchal">' + (fVal > 0 ? fVal : '—') + '</td>' +
-        '<td class="tam-td tam-td-num tam-cell-porto">'   + (pVal > 0 ? pVal : '—') + '</td>' +
+        '<td class="tam-td tam-td-num tam-cell-funchal" id="tam-inv-f-' + invIdx + '-' + g.ref.replace(/[^a-z0-9]/gi,'_') + '">' + (fVal > 0 ? fVal : '—') + '</td>' +
+        '<td class="tam-td tam-td-num tam-cell-porto" id="tam-inv-p-' + invIdx + '-' + g.ref.replace(/[^a-z0-9]/gi,'_') + '">'   + (pVal > 0 ? pVal : '—') + '</td>' +
         anomalyCell +
         '</tr>';
     });
@@ -1621,6 +1621,7 @@
       '</div>';
 
     var distribCollapsed = !!tamCollapseState['distrib'];
+    area.style.visibility = 'hidden';
     area.innerHTML =
       '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
       '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
@@ -1637,6 +1638,7 @@
         '</div>' +
       '</div>';
 
+    area.style.visibility = '';  // show instantly — all rows appear at once
     // ── BIND DISTRIBUTION TOGGLE ─────────────────────────────────
     (function(){
       var recToggleBtn = area.querySelector('#tam-rec-toggle-btn');
@@ -2096,9 +2098,21 @@
     if (pEl) pEl.textContent = totals.p > 0 ? totals.p : '—';
   }
 
-  /* Actualizar filas de facturas superiores para un ref */
+  /* Actualizar filas de facturas superiores para un ref — in-place, no rebuild */
   function tamUpdateInvoicesRows(ref) {
-    tamRenderInvoices();
+    if (!tamSession) return;
+    var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
+    tamInvoices.forEach(function(r, invIdx) {
+      var distrib = tamGetRefDistribForInvoice(ref, invIdx);
+      var fVal = distrib.f || 0;
+      var pVal = distrib.p || 0;
+      /* Update FNC and PXO cells */
+      var fCell = document.getElementById('tam-inv-f-' + invIdx + '-' + safeRef);
+      var pCell = document.getElementById('tam-inv-p-' + invIdx + '-' + safeRef);
+      if (fCell) fCell.textContent = fVal > 0 ? fVal : '—';
+      if (pCell) pCell.textContent = pVal > 0 ? pVal : '—';
+      /* If cells don't exist yet (invoice not rendered), skip silently */
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════

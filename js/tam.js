@@ -33,6 +33,7 @@
   var tamMotorDCost   = 0;
 
   var tamRedoStack          = [];         // redo stack (cleared on new action)
+  var tamEditingBoxBi       = -1;         // bi of box currently being edited (moves to front)
   var TAM_UNDO_MAX          = 50;         // max undo steps
   var tamCollapseState      = {};         // { inv_N: true (collapsed), distrib: true }
 
@@ -1433,6 +1434,15 @@
 
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
+    /* If a box is being edited, it goes FIRST — move it to front of pending */
+    if (tamEditingBoxBi >= 0) {
+      var editIdx = pendingBoxes.findIndex ? pendingBoxes.findIndex(function(b){ return b.bi === tamEditingBoxBi; })
+        : (function(){ for(var i=0;i<pendingBoxes.length;i++){ if(pendingBoxes[i].bi===tamEditingBoxBi) return i; } return -1; })();
+      if (editIdx > 0) {
+        var editBox = pendingBoxes.splice(editIdx, 1);
+        pendingBoxes.unshift(editBox[0]);
+      }
+    }
     var visiblePending = pendingBoxes.length > 0 ? [pendingBoxes[0]] : [];
     var sortedBoxes    = visiblePending.concat(completedBoxes);
 
@@ -1726,18 +1736,9 @@
           Object.keys(box.refs).forEach(function(ref){ tamRefDone.delete(ref); });
           box.locked = false;
         }
+        /* Mark this box as the one being edited — it will render FIRST (leftmost) */
+        tamEditingBoxBi = bi;
         tamRenderAll(); tamScheduleSave();
-        /* FIX 4: Scroll the boxes table so the edited box is the first visible column */
-        requestAnimationFrame(function(){
-          var scroll = area.querySelector('.tam-rec-boxes-scroll');
-          if (!scroll) return;
-          var boxTh = area.querySelector('.tam-box-sub-th [data-box="' + bi + '"]');
-          if (!boxTh) boxTh = area.querySelector('#tam-box-total-' + bi);
-          if (boxTh) {
-            var th = boxTh.closest('th');
-            if (th) scroll.scrollLeft = th.offsetLeft - 8;
-          }
-        });
       });
     });
 
@@ -2090,6 +2091,7 @@
         Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
         if (recv2 >= box2.total) {
           box2.locked = true;
+          if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;  // no longer editing
           // Clear any completing-ref animations for refs in this box
           Object.keys(box2.refs).forEach(function(ref){
             if (tamRefCompleting.has(ref)) {
@@ -2119,56 +2121,25 @@
   ──────────────────────────────────────────────────────────────── */
   /* Detect which refs just completed / uncompleted and update tamRefCompleting + DOM classes */
   function tamDetectRefCompletions() {
+    /* Animation removed — just update row classes immediately, no timers */
     if (!tamSession) return;
     var consolidated = tamConsolidatedRefs();
     var area = document.getElementById('tam-reception-area');
-
+    if (!area) return;
     consolidated.forEach(function(c){
       var totals = tamGetRefTotals(c.ref);
       var recv   = totals.f + totals.p;
       var isDone = recv >= c.totalPieces && c.totalPieces > 0;
       var isOver = recv >  c.totalPieces && c.totalPieces > 0;
-      var alreadyCompleting = tamRefCompleting.has(c.ref);
-      var alreadyDone       = tamRefDone.has(c.ref);
-
-      if (isDone && !alreadyCompleting && !alreadyDone) {
-        // Newly complete for the first time — start 3s green flash
-        tamRefCompleting.add(c.ref);
-        if (tamRefCompletingTimers[c.ref]) clearTimeout(tamRefCompletingTimers[c.ref]);
-        (function(ref){
-          tamRefCompletingTimers[ref] = setTimeout(function(){
-            delete tamRefCompletingTimers[ref];
-            tamRefCompleting.delete(ref);
-            tamRefDone.add(ref);        // mark permanently done — no re-flash
-            // Re-render reception so the ref sorts to the bottom
-            tamRenderReception();
-          }, 3000);
-        })(c.ref);
-      } else if (!isDone && (alreadyCompleting || alreadyDone)) {
-        // Ref became incomplete again (user edited a value) — reset everything
-        if (tamRefCompletingTimers[c.ref]) {
-          clearTimeout(tamRefCompletingTimers[c.ref]);
-          delete tamRefCompletingTimers[c.ref];
-        }
-        tamRefCompleting.delete(c.ref);
-        tamRefDone.delete(c.ref);       // allow re-flash next time it completes
-      }
-
-      // Update DOM row classes in-place (no full rebuild needed)
-      if (!area) return;
+      /* Mark in tamRefDone so sorting works correctly */
+      if (isDone) tamRefDone.add(c.ref);
+      else        tamRefDone.delete(c.ref);
       var safeSelector = c.ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
       var row = area.querySelector('tr[data-ref="' + safeSelector + '"]');
       if (!row) return;
       row.classList.remove('tam-ref-over', 'tam-ref-complete', 'tam-ref-completing');
-      if (isOver) {
-        row.classList.add('tam-ref-over');
-      } else if (isDone) {
-        if (tamRefCompleting.has(c.ref)) {
-          row.classList.add('tam-ref-completing');
-        } else {
-          row.classList.add('tam-ref-complete');
-        }
-      }
+      if (isOver)       row.classList.add('tam-ref-over');
+      else if (isDone)  row.classList.add('tam-ref-complete');
     });
   }
 

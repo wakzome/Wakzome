@@ -222,7 +222,7 @@
       /* Success — clear any deprecation warning */
       tamMotorDSetDeprecated(false);
       /* Track cost */
-      var cost = payload.mode === 'photo' ? 0.010 : payload.mode === 'invoice' ? 0.014 : 0.006;
+      var cost = payload.mode === 'photo' ? 0.004 : payload.mode === 'invoice' ? 0.014 : 0.006;
       tamMotorDCost = Math.round((tamMotorDCost + cost) * 1000) / 1000;
       console.log('TAM Motor D coste acumulado: $' + tamMotorDCost.toFixed(3));
       var sb = tamSB();

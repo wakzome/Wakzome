@@ -2034,42 +2034,20 @@
     Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
 
     if (received >= box.total) {
-      // Mark as pending (keeps it shown as active during the 3s window)
-      tamBoxLockPending[bi] = true;
-      // Don't stack timers
-      if (tamBoxLockTimers[bi]) return;
-      tamBoxLockTimers[bi] = setTimeout(function(){
-        delete tamBoxLockTimers[bi];
-        delete tamBoxLockPending[bi];
-        if (!tamSession) return;
-        var box2 = tamSession.boxes[bi];
-        if (!box2 || box2.locked) return;
-        // Re-verify (user may have corrected a value during the 3s)
-        var recv2 = 0;
-        Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
-        if (recv2 >= box2.total) {
-          box2.locked = true;
-          if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
-          // Clear any completing-ref animations for refs in this box
-          Object.keys(box2.refs).forEach(function(ref){
-            if (tamRefCompleting.has(ref)) {
-              tamRefCompleting.delete(ref);
-              if (tamRefCompletingTimers[ref]) {
-                clearTimeout(tamRefCompletingTimers[ref]);
-                delete tamRefCompletingTimers[ref];
-              }
-            }
-          });
-          tamRenderAll();
-          tamScheduleSave();
-        }
-      }, 3000);
+      // Lock immediately — no 3-second delay, no row-by-row rebuild
+      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+      delete tamBoxLockPending[bi];
+      box.locked = true;
+      if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
+      Object.keys(box.refs).forEach(function(ref){
+        tamRefCompleting.delete(ref);
+        if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
+      });
+      tamRenderReception();
+      tamScheduleSave();
     } else {
-      // No longer complete — cancel pending lock for this box
-      if (tamBoxLockTimers[bi]) {
-        clearTimeout(tamBoxLockTimers[bi]);
-        delete tamBoxLockTimers[bi];
-      }
+      // No longer complete — cancel pending lock
+      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
       delete tamBoxLockPending[bi];
     }
   }

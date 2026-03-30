@@ -4184,25 +4184,46 @@
         reader.readAsDataURL(imageFile);
       });
 
-      /* ── Call Motor D photo mode ── */
-      /* Collect known refs from loaded DNs so Motor D can read the manuscript columns */
-      var knownRefs = [];
-      Object.values(tamDeliveryNotes).forEach(function(dnn) {
-        if (dnn && dnn.refs) dnn.refs.forEach(function(r) {
-          if (knownRefs.indexOf(r.ref) < 0) knownRefs.push(r.ref);
-        });
-      });
+      /* ── Call Motor D photo mode ──
+         Strategy: send the refs of the specific DN being photographed.
+         Since we don’t know the ZY until Motor D replies, we do a first
+         pass with no refs (just ZY detection), then a second pass with the
+         exact refs of that DN in order so Motor D can read the manuscript
+         column-by-column with full context.
+      ── */
+
+      /* Pass 1 — ZY detection only (no refs) */
       tamMotorDSpinner('a ler foto...');
       var mdResult = await tamMotorDCall({
         mode:        'photo',
         imageBase64: base64,
         mediaType:   imageFile.type || 'image/jpeg',
-        refs:        knownRefs
+        refs:        []   /* no refs yet — just find the ZY code */
       });
       tamMotorDSpinner(null);
 
       /* Extract ZY code */
       var zyCode = mdResult && mdResult.zyCode ? mdResult.zyCode : null;
+
+      /* Pass 2 — if ZY found and DN is loaded, re-call with exact refs in order */
+      if (zyCode && tamDeliveryNotes[zyCode]) {
+        var dnRefs = tamDeliveryNotes[zyCode].refs || [];
+        if (dnRefs.length > 0) {
+          tamMotorDSpinner('a ler distribuição...');
+          var mdResult2 = await tamMotorDCall({
+            mode:        'photo',
+            imageBase64: base64,
+            mediaType:   imageFile.type || 'image/jpeg',
+            refs:        dnRefs.map(function(r){ return r.ref; })
+          });
+          tamMotorDSpinner(null);
+          /* Use the second result if it returned a distribution */
+          if (mdResult2 && mdResult2.distribution && mdResult2.distribution.length) {
+            mdResult = mdResult2;
+            if (!mdResult.zyCode) mdResult.zyCode = zyCode; /* preserve ZY from pass 1 */
+          }
+        }
+      }
 
       /* ── Fallback to Tesseract if Motor D didn't find ZY ── */
       if (!zyCode) {
@@ -4531,41 +4552,60 @@
 
     modal.querySelector('#tam-dn-confirm-btn').addEventListener('click', function(){
       if (!tamSession) { tamShowDNError('Sem sess\u00e3o activa.'); return; }
+
+      // Always repair invIdx first — fixes legacy sessions where boxes lack invIdx
+      tamRepairBoxInvIdx();
+
       var targetBox=null, targetBi=-1;
       var knownInvIdx = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
+
+      function unlockBox(bi) {
+        if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+        delete tamBoxLockPending[bi];
+        tamSession.boxes[bi].locked = false;
+        Object.keys(tamSession.boxes[bi].refs).forEach(function(ref){ tamRefDone.delete(ref); });
+      }
+
       if (knownInvIdx >= 0) {
-        // First try: find an unlocked box for this invoice
+        // Pass 1: unlocked box for this invoice
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var b=tamSession.boxes[bi];
-          if (b.invIdx===knownInvIdx && !b.locked) { targetBox=b; targetBi=bi; break; }
+          if (tamSession.boxes[bi].invIdx===knownInvIdx && !tamSession.boxes[bi].locked) {
+            targetBox=tamSession.boxes[bi]; targetBi=bi; break;
+          }
         }
-        // Fallback: all boxes are locked — reopen the last box of this invoice
+        // Pass 2: all boxes locked — reopen last box of this invoice
         if (!targetBox) {
-          var lastBi = -1;
+          var lastBi=-1;
           for (var bi=0; bi<tamSession.boxes.length; bi++) {
             if (tamSession.boxes[bi].invIdx===knownInvIdx) lastBi=bi;
           }
-          if (lastBi >= 0) {
-            // Cancel any pending lock timer for this box
-            if (tamBoxLockTimers[lastBi]) { clearTimeout(tamBoxLockTimers[lastBi]); delete tamBoxLockTimers[lastBi]; }
-            delete tamBoxLockPending[lastBi];
-            tamSession.boxes[lastBi].locked = false;
-            // Clear tamRefDone so refs can be re-animated
-            Object.keys(tamSession.boxes[lastBi].refs).forEach(function(ref){ tamRefDone.delete(ref); });
-            targetBox=tamSession.boxes[lastBi]; targetBi=lastBi;
-          } else {
-            var invNo=(tamInvoices[knownInvIdx]&&tamInvoices[knownInvIdx].invoiceNo)||'';
-            tamShowDNError('N\u00e3o foi poss\u00edvel encontrar caixas para a fatura ' + invNo + '.');
-            return;
+          if (lastBi >= 0) { unlockBox(lastBi); targetBox=tamSession.boxes[lastBi]; targetBi=lastBi; }
+        }
+        // Pass 3: invIdx mismatch (legacy session) — any unlocked box
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
           }
         }
-      } else {
-        for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var b=tamSession.boxes[bi];
-          if (!b.locked) { targetBox=b; targetBi=bi; break; }
+        // Pass 4: everything locked — reopen the last box in the session
+        if (!targetBox && tamSession.boxes.length) {
+          var lastAny=tamSession.boxes.length-1;
+          unlockBox(lastAny); targetBox=tamSession.boxes[lastAny]; targetBi=lastAny;
         }
-        if (!targetBox) { tamShowDNError('N\u00e3o h\u00e1 caixas dispon\u00edveis.'); return; }
+      } else {
+        // ZY not mapped to any invoice — first unlocked box
+        for (var bi=0; bi<tamSession.boxes.length; bi++) {
+          if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+        }
+        // All locked — reopen last box
+        if (!targetBox && tamSession.boxes.length) {
+          var lastAny2=tamSession.boxes.length-1;
+          unlockBox(lastAny2); targetBox=tamSession.boxes[lastAny2]; targetBi=lastAny2;
+        }
       }
+
+      if (!targetBox) { tamShowDNError('Sem caixas na sess\u00e3o.'); return; }
+
       var totalQty = dn.refs.reduce(function(s,r){ return s+r.qty; }, 0);
       if (!targetBox.total) targetBox.total = totalQty;
       tamPushUndo();
@@ -4581,19 +4621,16 @@
       /* Mark DN as user-confirmed (distribution is final) */
       if (tamDeliveryNotes[dn.zyCode]) tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
       tamRenderAll();
-      tamSaveSession(true);  // immediate silent save
-      /* When coming from a photo, only lock the box if distribution is truly complete.
-         The user may be distributing across multiple DNs — never force-lock mid-process. */
+      tamSaveSession(true);
+      /* fromPhoto: only lock if distribution is genuinely complete */
       if (!fromPhoto) {
         tamCheckBoxLock(targetBi);
       } else {
-        /* Check completion voluntarily — only lock if F+P >= box total */
-        var box2 = tamSession.boxes[targetBi];
-        if (box2 && box2.total) {
-          var recv2 = 0;
-          Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
-          if (recv2 >= box2.total) tamCheckBoxLock(targetBi);
-          /* else: leave box open — more DNs may still come */
+        var chkBox = tamSession.boxes[targetBi];
+        if (chkBox && chkBox.total) {
+          var recv2=0;
+          Object.values(chkBox.refs).forEach(function(v){ recv2+=(v.f||0)+(v.p||0); });
+          if (recv2 >= chkBox.total) tamCheckBoxLock(targetBi);
         }
       }
       closeModal();

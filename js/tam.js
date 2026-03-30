@@ -1427,7 +1427,7 @@
       var received = 0;
       if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
       // A box in tamBoxLockPending is in the 3s transition window: treat as NOT yet complete
-      var isComplete = box.total && received >= box.total && !tamBoxLockPending[bi];
+      var isComplete = box.total && received >= box.total;
       var isHidden   = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
       return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
     }).filter(function(b){ return !b.isHidden; });
@@ -1558,10 +1558,6 @@
         var colParity = ' ' + info.colParity;
         var greyCls   = info.greyShade ? (' ' + info.greyShade) : '';
         var compactCls = (!info.isActiveBox) ? ' tam-box-compact' : '';
-        var isPending  = info.isActiveBox;
-
-        // Quick buttons only in the active (first pending) box, only for pending/completing refs
-        var quickCell = '';
         var boxHasTotal = !!(box.total);
         if (isPending && !isDone && !isOver) {
           var btnDisabled = boxHasTotal ? '' : ' disabled';
@@ -1881,10 +1877,7 @@
             }
           });
 
-          // Reset animation state so it can flash again when re-completed
           tamRefDone.delete(ref);
-          tamRefCompleting.delete(ref);
-          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
 
           if (!unlockedBis.length) return;
           tamScheduleSave();
@@ -2034,42 +2027,15 @@
     Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
 
     if (received >= box.total) {
-      // Mark as pending (keeps it shown as active during the 3s window)
-      tamBoxLockPending[bi] = true;
-      // Don't stack timers
-      if (tamBoxLockTimers[bi]) return;
-      tamBoxLockTimers[bi] = setTimeout(function(){
-        delete tamBoxLockTimers[bi];
-        delete tamBoxLockPending[bi];
-        if (!tamSession) return;
-        var box2 = tamSession.boxes[bi];
-        if (!box2 || box2.locked) return;
-        // Re-verify (user may have corrected a value during the 3s)
-        var recv2 = 0;
-        Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
-        if (recv2 >= box2.total) {
-          box2.locked = true;
-          if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
-          // Clear any completing-ref animations for refs in this box
-          Object.keys(box2.refs).forEach(function(ref){
-            if (tamRefCompleting.has(ref)) {
-              tamRefCompleting.delete(ref);
-              if (tamRefCompletingTimers[ref]) {
-                clearTimeout(tamRefCompletingTimers[ref]);
-                delete tamRefCompletingTimers[ref];
-              }
-            }
-          });
-          tamRenderAll();
-          tamScheduleSave();
-        }
-      }, 3000);
+      /* Lock immediately — no timer, no delay, no row-by-row effect */
+      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+      delete tamBoxLockPending[bi];
+      box.locked = true;
+      if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
+      tamRenderAll();
+      tamScheduleSave();
     } else {
-      // No longer complete — cancel pending lock for this box
-      if (tamBoxLockTimers[bi]) {
-        clearTimeout(tamBoxLockTimers[bi]);
-        delete tamBoxLockTimers[bi];
-      }
+      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
       delete tamBoxLockPending[bi];
     }
   }
@@ -2081,23 +2047,10 @@
   function tamDetectRefCompletions() {
     if (!tamSession) return;
     var consolidated = tamConsolidatedRefs();
-    var area = document.getElementById('tam-reception-area');
-    /* Cancel all pending completing timers */
-    Object.keys(tamRefCompletingTimers).forEach(function(k){
-      clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k];
-    });
-    tamRefCompleting.clear();
-    consolidated.forEach(function(c){
-      var totals = tamGetRefTotals(c.ref);
-      var recv   = totals.f + totals.p;
-      var isDone = recv >= c.totalPieces && c.totalPieces > 0;
-      var isOver = recv >  c.totalPieces && c.totalPieces > 0;
-      if (isDone) tamRefDone.add(c.ref); else tamRefDone.delete(c.ref);
-      if (!area) return;
-      var safeSelector = c.ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+    var area = document.getElementById('tam-reception-area\\\\').replace(/"/g,'\\"');
       var row = area.querySelector('tr[data-ref="' + safeSelector + '"]');
       if (!row) return;
-      row.classList.remove('tam-ref-over', 'tam-ref-complete', 'tam-ref-completing');
+      row.classList.remove('tam-ref-over', 'tam-ref-complete',);
       if (isOver)      row.classList.add('tam-ref-over');
       else if (isDone) row.classList.add('tam-ref-complete');
     });
@@ -4880,35 +4833,7 @@
           return { ref: r.ref, f: fi2 ? (parseInt(fi2.value)||0) : 0, p: pi2 ? (parseInt(pi2.value)||0) : 0 };
         });
         tamDeliveryNotes[dn.zyCode].lastPhotoDistrib = savedDistrib;
-        tamDeliveryNotes[dn.zyCode].lastPhotoConf    = 'user_confirmed';
-      }
-      /* box.total = total pieces in this DN — always set from DN, never from an average.
-         If the box already had a total from a previous DN, keep the larger value. */
-      targetBox.total = Math.max(targetBox.total || 0, totalQty);
-
-      /* Synchronous lock check — forces the box to close immediately so the next
-         DN photo lands in a fresh box, without waiting for the 3s animation timer. */
-      var recvNow = 0;
-      Object.values(targetBox.refs).forEach(function(v){ recvNow += (v.f||0) + (v.p||0); });
-      if (recvNow >= targetBox.total) {
-        if (tamBoxLockTimers[targetBi]) { clearTimeout(tamBoxLockTimers[targetBi]); delete tamBoxLockTimers[targetBi]; }
-        delete tamBoxLockPending[targetBi];
-        targetBox.locked = true;
-        /* Clear any completing-ref animations for refs in this box */
-        Object.keys(targetBox.refs).forEach(function(ref){
-          tamRefCompleting.delete(ref);
-          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
-        });
-      }
-
-      tamRenderAll();
-      tamSaveSession(true);
-      closeModal();
-    });
-  }
-
-  function tamDNHighlightRow(btn) {
-    var row = btn.closest('tr');
+        tamDeliveryNotes[dn.zyCode].lastPhotoConf    = 'user_confirmedtr');
     if (!row) return;
     row.classList.add('tam-dn-row-filled');
     setTimeout(function(){ row.classList.remove('tam-dn-row-filled'); }, 600);
@@ -6117,13 +6042,7 @@
       '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
       '.tam-sub-q { font-size:.6rem; font-weight:700; color:#000; opacity:.4; letter-spacing:.03em; }',
       '.tam-row-quick-btn:disabled { opacity:0.3; cursor:not-allowed; }',
-      '.tam-quick-nototals { opacity:0.5; }',
-
-      /* tam-ref-completing animation removed */
-
-
-      /* ── Top scrollbar sync bar ── */
-      '.tam-rec-scroll-sync-wrap { display:flex; flex-direction:column; width:100%; }',
+      '.tam-quick-nototals { opacity:0.5; }.tam-rec-scroll-sync-wrap { display:flex; flex-direction:column; width:100%; }',
       '.tam-rec-scroll-top-bar { overflow-x:auto; overflow-y:hidden; height:12px; background:#e8e8e8; border-radius:6px 6px 0 0; border-bottom:1px solid #ccc; scrollbar-width:thin; }',
       '.tam-rec-scroll-top-bar::-webkit-scrollbar { height:8px; }',
       '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb { background:#aaa; border-radius:4px; }',

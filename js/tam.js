@@ -4725,10 +4725,18 @@
       }
 
       if (knownInvIdx >= 0) {
-        // Pass 1: unlocked box for this invoice
+        // Pass 1a: prefer an EMPTY unlocked box for this invoice (no refs yet = fresh box)
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          if (tamSession.boxes[bi].invIdx===knownInvIdx && !tamSession.boxes[bi].locked) {
-            targetBox=tamSession.boxes[bi]; targetBi=bi; break;
+          var bx = tamSession.boxes[bi];
+          if (bx.invIdx===knownInvIdx && !bx.locked && Object.keys(bx.refs).length === 0) {
+            targetBox=bx; targetBi=bi; break;
+          }
+        }
+        // Pass 1b: no empty box — use an unlocked box that already has refs (partial fill)
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            var bx = tamSession.boxes[bi];
+            if (bx.invIdx===knownInvIdx && !bx.locked) { targetBox=bx; targetBi=bi; break; }
           }
         }
         // Pass 2: all boxes locked — reopen last box of this invoice
@@ -4739,21 +4747,38 @@
           }
           if (lastBi >= 0) { unlockBox(lastBi); targetBox=tamSession.boxes[lastBi]; targetBi=lastBi; }
         }
-        // Pass 3: invIdx mismatch (legacy session) — any unlocked box
+        // Pass 3: invIdx mismatch (legacy) — first empty unlocked box anywhere
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            var bx = tamSession.boxes[bi];
+            if (!bx.locked && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
+          }
+        }
+        // Pass 4: any unlocked box
         if (!targetBox) {
           for (var bi=0; bi<tamSession.boxes.length; bi++) {
             if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
           }
         }
-        // Pass 4: everything locked — reopen the last box in the session
+        // Pass 5: everything locked — reopen the last box of this invoice
         if (!targetBox && tamSession.boxes.length) {
           var lastAny=tamSession.boxes.length-1;
+          for (var bi=tamSession.boxes.length-1; bi>=0; bi--) {
+            if (tamSession.boxes[bi].invIdx===knownInvIdx) { lastAny=bi; break; }
+          }
           unlockBox(lastAny); targetBox=tamSession.boxes[lastAny]; targetBi=lastAny;
         }
       } else {
-        // ZY not mapped to any invoice — first unlocked box
+        // ZY not mapped — first empty unlocked box
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+          var bx = tamSession.boxes[bi];
+          if (!bx.locked && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
+        }
+        // Any unlocked box
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+          }
         }
         // All locked — reopen last box
         if (!targetBox && tamSession.boxes.length) {
@@ -4765,7 +4790,6 @@
       if (!targetBox) { tamShowDNError('Sem caixas na sess\u00e3o.'); return; }
 
       var totalQty = dn.refs.reduce(function(s,r){ return s+r.qty; }, 0);
-      if (!targetBox.total) targetBox.total = totalQty;
       tamPushUndo();
       dn.refs.forEach(function(r){
         var safe=r.ref.replace(/[^a-z0-9]/gi,'_');
@@ -4791,19 +4815,27 @@
           tamDeliveryNotes[dn.zyCode].lastPhotoConf    = 'user_confirmed';
         }
       }
+      /* box.total = total pieces in this DN — always set from DN, never from an average.
+         If the box already had a total from a previous DN, keep the larger value. */
+      targetBox.total = Math.max(targetBox.total || 0, totalQty);
+
+      /* Synchronous lock check — forces the box to close immediately so the next
+         DN photo lands in a fresh box, without waiting for the 3s animation timer. */
+      var recvNow = 0;
+      Object.values(targetBox.refs).forEach(function(v){ recvNow += (v.f||0) + (v.p||0); });
+      if (recvNow >= targetBox.total) {
+        if (tamBoxLockTimers[targetBi]) { clearTimeout(tamBoxLockTimers[targetBi]); delete tamBoxLockTimers[targetBi]; }
+        delete tamBoxLockPending[targetBi];
+        targetBox.locked = true;
+        /* Clear any completing-ref animations for refs in this box */
+        Object.keys(targetBox.refs).forEach(function(ref){
+          tamRefCompleting.delete(ref);
+          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
+        });
+      }
+
       tamRenderAll();
       tamSaveSession(true);
-      /* Lock check: correct box.total from invoice if it was set from DN qty (wrong source) */
-      if (fromPhoto && knownInvIdx >= 0) {
-        var invForBox = tamInvoices[knownInvIdx];
-        var boxesForInv = tamSession.boxes.filter(function(bx){ return bx.invIdx === knownInvIdx; });
-        if (invForBox && boxesForInv.length > 0) {
-          var pcsPerBox = Math.ceil(invForBox.totalPieces / boxesForInv.length);
-          var dnQtyCheck = dn.refs.reduce(function(s,r){ return s+r.qty; },0);
-          if (targetBox.total === dnQtyCheck && pcsPerBox > 0) targetBox.total = pcsPerBox;
-        }
-      }
-      tamCheckBoxLock(targetBi);
       closeModal();
     });
   }

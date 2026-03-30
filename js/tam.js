@@ -3842,6 +3842,89 @@
     el.style.display = n > 0 ? 'inline-block' : 'none';
     el.style.color = '#000';
     el.style.fontWeight = '700';
+    el.style.cursor = 'pointer';
+    el.style.textDecoration = 'underline dotted';
+    el.title = 'Ver delivery notes carregadas';
+    if (!el._tamDNBound) {
+      el._tamDNBound = true;
+      el.addEventListener('click', function(e){ e.stopPropagation(); tamShowDNListPanel(); });
+    }
+  }
+
+  function tamShowDNListPanel() {
+    var existing = document.getElementById('tam-dn-list-panel');
+    if (existing) { existing.remove(); return; }
+    var el = document.getElementById('tam-dn-count');
+    var rect = el ? el.getBoundingClientRect() : { left: 100, bottom: 60 };
+    var panel = document.createElement('div');
+    panel.id = 'tam-dn-list-panel';
+    panel.style.cssText = [
+      'position:fixed',
+      'top:' + (rect.bottom + 6) + 'px',
+      'left:' + Math.min(rect.left, window.innerWidth - 390) + 'px',
+      'z-index:99998',
+      'background:#fff',
+      'border:1px solid #e0e0e0',
+      'border-radius:12px',
+      'box-shadow:0 8px 30px rgba(0,0,0,.14)',
+      "font-family:'MontserratLight',sans-serif",
+      'min-width:280px',
+      'max-width:380px',
+      'max-height:420px',
+      'overflow-y:auto'
+    ].join(';');
+    var dns = Object.values(tamDeliveryNotes);
+    if (!dns.length) {
+      panel.innerHTML = '<div style="padding:18px 16px;font-size:.82rem;color:#000;opacity:.5;font-weight:700;">Nenhuma DN carregada.</div>';
+    } else {
+      var hdr = '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;">' +
+        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>';
+      var rows = dns.map(function(dn) {
+        var hasPhoto  = !!(dn.lastPhotoDistrib && dn.lastPhotoDistrib.length);
+        var confirmed = dn.distribConfirmed ? ' \u2713' : '';
+        var clr       = dn.distribConfirmed ? '#4A7C6F' : '#000';
+        var photoBtn  = hasPhoto
+          ? '<button class="tam-dn-replay-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
+              'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
+              'border:1px solid #ccc;border-radius:6px;background:transparent;' +
+              "color:#000;font-family:'MontserratLight',sans-serif;" +
+              'transition:all .12s;white-space:nowrap;flex-shrink:0;">' +
+              '\ud83d\udcf7 ver resultado</button>'
+          : '<span style="font-size:.65rem;color:#000;opacity:.3;font-weight:600;white-space:nowrap;">sem foto</span>';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+              tamEsc(dn.zyCode) + confirmed +
+            '</div>' +
+            '<div style="font-size:.65rem;color:#000;opacity:.45;margin-top:1px;">' +
+              (dn.refs ? dn.refs.length + ' refs' : '') +
+              (dn.gesamtPcs ? ' \u00b7 ' + dn.gesamtPcs + ' pcs' : '') +
+            '</div>' +
+          '</div>' +
+          photoBtn +
+        '</div>';
+      }).join('');
+      panel.innerHTML = hdr + rows;
+    }
+    document.body.appendChild(panel);
+    panel.querySelectorAll('.tam-dn-replay-btn').forEach(function(btn) {
+      btn.addEventListener('mouseenter', function(){ btn.style.background='#f0f0f0'; btn.style.borderColor='#555'; });
+      btn.addEventListener('mouseleave', function(){ btn.style.background='transparent'; btn.style.borderColor='#ccc'; });
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var zy = btn.getAttribute('data-zy');
+        var dn = tamDeliveryNotes[zy];
+        if (!dn) return;
+        panel.remove();
+        tamShowDNDistribModal(dn, dn.lastPhotoDistrib || null, dn.lastPhotoConf || null, true);
+      });
+    });
+    function onOutside(e) {
+      if (!panel.contains(e.target) && e.target !== el) {
+        panel.remove(); document.removeEventListener('click', onOutside);
+      }
+    }
+    setTimeout(function(){ document.addEventListener('click', onOutside); }, 50);
   }
 
   async function tamHandleDeliveryNoteFiles(files) {
@@ -4606,6 +4689,12 @@
 
       if (!targetBox) { tamShowDNError('Sem caixas na sess\u00e3o.'); return; }
 
+      /* Fix: stamp the correct invIdx on the box so tamGetRefDistribForInvoice
+         can find this distribution when rendering the invoice table. */
+      if (knownInvIdx >= 0 && targetBox.invIdx !== knownInvIdx) {
+        targetBox.invIdx = knownInvIdx;
+      }
+
       var totalQty = dn.refs.reduce(function(s,r){ return s+r.qty; }, 0);
       if (!targetBox.total) targetBox.total = totalQty;
       tamPushUndo();
@@ -4618,8 +4707,14 @@
           targetBox.refs[r.ref].f=fVal; targetBox.refs[r.ref].p=pVal;
         }
       });
-      /* Mark DN as user-confirmed (distribution is final) */
-      if (tamDeliveryNotes[dn.zyCode]) tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
+      /* Mark DN as user-confirmed and save photo result for replay */
+      if (tamDeliveryNotes[dn.zyCode]) {
+        tamDeliveryNotes[dn.zyCode].distribConfirmed = true;
+        if (fromPhoto && motorDDistrib) {
+          tamDeliveryNotes[dn.zyCode].lastPhotoDistrib = motorDDistrib;
+          tamDeliveryNotes[dn.zyCode].lastPhotoConf    = motorDConf;
+        }
+      }
       tamRenderAll();
       tamSaveSession(true);
       /* fromPhoto: only lock if distribution is genuinely complete */

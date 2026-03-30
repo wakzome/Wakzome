@@ -1537,8 +1537,7 @@
       var recv    = totals.f + totals.p;
       var isDone  = recv >= c.totalPieces && c.totalPieces > 0;
       var isOver  = recv > c.totalPieces  && c.totalPieces > 0;
-      var isCompleting = isDone && tamRefCompleting.has(c.ref);
-      var rowCls  = isOver ? 'tam-ref-over' : (isCompleting ? 'tam-ref-completing' : (isDone ? 'tam-ref-complete' : ''));
+      var rowCls  = isOver ? 'tam-ref-over' : (isDone ? 'tam-ref-complete' : '');
       var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
 
       rowsHtml +=
@@ -1575,8 +1574,6 @@
                 '<button class="tam-row-quick-btn tam-row-quick-split"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="split">\xbd</button>' +
               '</div>' +
             '</td>';
-        } else if (isPending && isCompleting) {
-          quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
         } else if (isPending) {
           quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
         }
@@ -1805,6 +1802,7 @@
           }
         }
         tamUpdateSummaryRow(ref);
+        tamUpdateInvoicesRows(ref);  /* also refresh invoice table columns */
         tamDetectRefCompletions();
         tamCheckBoxLock(bi);
         tamScheduleSave();
@@ -4502,8 +4500,8 @@
         '<td class="tam-dn-cell"><input type="text" inputmode="numeric" class="tam-dn-inp tam-dn-inp-f" id="tam-dn-f-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" placeholder="0" autocomplete="off"></td>' +
         '<td class="tam-dn-cell"><input type="text" inputmode="numeric" class="tam-dn-inp tam-dn-inp-p" id="tam-dn-p-'+safeRef+'" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'" placeholder="0" autocomplete="off"></td>' +
         '<td class="tam-dn-btns">' +
-          '<button class="tam-dn-qbtn tam-dn-f100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">F 100%</button>' +
-          '<button class="tam-dn-qbtn tam-dn-p100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">PS 100%</button>' +
+          '<button class="tam-dn-qbtn tam-dn-f100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">F</button>' +
+          '<button class="tam-dn-qbtn tam-dn-p100" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">PS</button>' +
           '<button class="tam-dn-qbtn tam-dn-split" data-ref="'+tamEsc(r.ref)+'" data-qty="'+r.qty+'">&frac12;</button>' +
         '</td>' +
       '</tr>';
@@ -4522,7 +4520,7 @@
           '<table id="tam-dn-table">' +
             '<thead><tr>' +
               '<th class="tam-dn-th">Refer\u00eancia</th>' +
-              '<th class="tam-dn-th">Total</th>' +
+              '<th class="tam-dn-th tam-dn-th-t">T</th>' +
               '<th class="tam-dn-th tam-dn-th-f">FNC</th>' +
               '<th class="tam-dn-th tam-dn-th-p">PXO</th>' +
               '<th class="tam-dn-th"></th>' +
@@ -4614,13 +4612,24 @@
       /* Step 4: confidence banner */
       var subEl = modal.querySelector('#tam-dn-sub');
       if (subEl) {
-        var confLabel = effectiveConf === 'high'
-          ? '<span class="tam-dn-md-high">🤖 Motor D · alta confiança</span>'
-          : effectiveConf === 'medium'
-            ? '<span class="tam-dn-md-med">🤖 Motor D · verifica os valores</span>'
+        /* Check if distributed total matches DN total */
+        var dnExpected = dn.refs.reduce(function(s,r){ return s+r.qty; },0);
+        var dnDistrib  = 0;
+        dn.refs.forEach(function(r){
+          var s2 = r.ref.replace(/[^a-z0-9]/gi,'_');
+          var fi2 = modal.querySelector('#tam-dn-f-'+s2), pi2 = modal.querySelector('#tam-dn-p-'+s2);
+          dnDistrib += (fi2?(parseInt(fi2.value)||0):0) + (pi2?(parseInt(pi2.value)||0):0);
+        });
+        var totalWrong = dnExpected > 0 && dnDistrib > 0 && dnDistrib !== dnExpected;
+        if (totalWrong) mismatchCount = Math.max(mismatchCount, 1);
+
+        var confLabel = effectiveConf === 'high' && !totalWrong
+          ? '<span class="tam-dn-md-high tam-conf-badge tam-conf-ok">✓ Motor D · alta confiança</span>'
+          : effectiveConf === 'medium' || (effectiveConf === 'high' && totalWrong)
+            ? '<span class="tam-dn-md-med tam-conf-badge tam-conf-warn">⚠ Motor D · verifica os valores</span>'
             : mismatchCount > 0
-              ? '<span class="tam-dn-md-low">🤖 Motor D · ' + mismatchCount + ' erro' + (mismatchCount>1?'s':'') + ' — corrige antes de confirmar</span>'
-              : '<span class="tam-dn-md-low">🤖 Motor D · verifica com atenção</span>';
+              ? '<span class="tam-dn-md-low tam-conf-badge tam-conf-err">✗ Motor D · ' + mismatchCount + ' erro' + (mismatchCount>1?'s':'') + ' — corrige antes de confirmar</span>'
+              : '<span class="tam-dn-md-low tam-conf-badge tam-conf-err">⚠ Motor D · verifica com atenção</span>';
         subEl.innerHTML = 'Delivery Note &middot; distribuir por loja &middot; ' + confLabel;
       }
     }
@@ -4760,6 +4769,18 @@
 
     modal.querySelector('#tam-dn-confirm-btn').addEventListener('click', function(){
       if (!tamSession) { tamShowDNError('Sem sess\u00e3o activa.'); return; }
+      /* Warn if distributed total ≠ DN total */
+      var _dnExp = dn.refs.reduce(function(s,r){ return s+r.qty; },0);
+      var _dnDist = 0;
+      dn.refs.forEach(function(r){
+        var _s = r.ref.replace(/[^a-z0-9]/gi,'_');
+        var _f = modal.querySelector('#tam-dn-f-'+_s), _p = modal.querySelector('#tam-dn-p-'+_s);
+        _dnDist += (_f?(parseInt(_f.value)||0):0)+(_p?(parseInt(_p.value)||0):0);
+      });
+      if (_dnExp > 0 && _dnDist !== _dnExp) {
+        if (!confirm('\u26a0 ATEN\u00c7\u00c3O\n\nO total distribuído é ' + _dnDist +
+          ' pcs mas esta DN tem ' + _dnExp + ' pcs.\n\nConfirmas mesmo assim?')) return;
+      }
 
       // Always repair invIdx first — fixes legacy sessions where boxes lack invIdx
       tamRepairBoxInvIdx();
@@ -6098,10 +6119,8 @@
       '.tam-row-quick-btn:disabled { opacity:0.3; cursor:not-allowed; }',
       '.tam-quick-nototals { opacity:0.5; }',
 
-      /* ── ref-completing: green flash for 3s ── */
-      '.tam-ref-completing td { background:#f0fdf0!important; transition:background 0.4s; }',
-      '.tam-ref-completing .tam-rec-ref-col { background:#e8f8e8!important; }',
-      '.tam-ref-completing .tam-rec-total-col { background:#ecfaec!important; }',
+      /* tam-ref-completing animation removed */
+
 
       /* ── Top scrollbar sync bar ── */
       '.tam-rec-scroll-sync-wrap { display:flex; flex-direction:column; width:100%; }',
@@ -6149,7 +6168,6 @@
       '  .tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:12!important; background-color:#fafafa!important; background:#fafafa!important; }',
       '  .tam-ref-over .tam-rec-ref-col { background-color:#fdf0f0!important; background:#fdf0f0!important; }',
       '  .tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; }',
-      '  .tam-ref-completing .tam-rec-ref-col { background:#e8f8e8!important; }',
       '}',
 
       /* ── Click-to-modify tooltip (proc style) ── */
@@ -6412,7 +6430,14 @@
       '.tam-dn-close { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
       '.tam-dn-close:hover { background:#c62828; color:#fff; border-color:#c62828; }',
       '#tam-dn-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
-      '#tam-dn-table { width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; table-layout:auto; }',
+      '#tam-dn-table { width:auto; min-width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; table-layout:auto; }',
+      '.tam-dn-th-t { width:1px; white-space:nowrap; text-align:center; }',
+      '.tam-dn-th-f { width:1px; white-space:nowrap; text-align:center; color:#1565c0; background:#e8f0fe; }',
+      '.tam-dn-th-p { width:1px; white-space:nowrap; text-align:center; color:#c62828; background:#fce4ec; }',
+      '.tam-conf-badge { display:inline-block; padding:2px 8px; border-radius:5px; font-weight:700; }',
+      '.tam-conf-ok   { background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; }',
+      '.tam-conf-warn { background:#fff8e1; color:#e65100; border:1px solid #ffcc80; }',
+      '.tam-conf-err  { background:#ffebee; color:#c62828; border:1px solid #ef9a9a; }',
       '#tam-dn-table thead { position:sticky; top:0; z-index:2; }',
       '.tam-dn-th { padding:8px 12px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666; border-bottom:2px solid #ddd; text-align:left; }',
       '.tam-dn-th-f { color:#1565c0; background:#e8f0fe; }',
@@ -6428,7 +6453,7 @@
       '.tam-dn-inp-p:focus { border-color:#000; }',
       '.tam-dn-btns { display:flex; gap:4px; align-items:center; white-space:nowrap; }',
       '.tam-dn-btns-cell { width:1%; white-space:nowrap; }',
-      '.tam-dn-qbtn { padding:5px 11px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-dn-qbtn { padding:4px 8px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; }',  /* compact buttons */
       '.tam-dn-f100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
       '.tam-dn-f100:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-p100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',

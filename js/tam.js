@@ -1307,8 +1307,8 @@
         '<td class="tam-td tam-td-num">' + g.pieces + '</td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(g.unitPriceWithShip) + '</td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
-        '<td class="tam-td tam-td-num tam-cell-funchal" id="tam-inv-f-' + invIdx + '-' + g.ref.replace(/[^a-z0-9]/gi,'_') + '">' + (fVal > 0 ? fVal : '—') + '</td>' +
-        '<td class="tam-td tam-td-num tam-cell-porto" id="tam-inv-p-' + invIdx + '-' + g.ref.replace(/[^a-z0-9]/gi,'_') + '">'   + (pVal > 0 ? pVal : '—') + '</td>' +
+        '<td class="tam-td tam-td-num tam-cell-funchal">' + (fVal > 0 ? fVal : '—') + '</td>' +
+        '<td class="tam-td tam-td-num tam-cell-porto">'   + (pVal > 0 ? pVal : '—') + '</td>' +
         anomalyCell +
         '</tr>';
     });
@@ -1440,8 +1440,8 @@
       for (var _i=0; _i<pendingBoxes.length; _i++) { if (pendingBoxes[_i].bi===tamEditingBoxBi){ eIdx=_i; break; } }
       if (eIdx > 0) { var _eb = pendingBoxes.splice(eIdx,1); pendingBoxes.unshift(_eb[0]); }
     }
-    var visiblePending = pendingBoxes.length > 0 ? [pendingBoxes[0]] : [];
-    var sortedBoxes    = visiblePending.concat(completedBoxes);
+    // Show ALL pending boxes — user can fill any box freely, not forced to go in order
+    var sortedBoxes = pendingBoxes.concat(completedBoxes);
 
     // Only refs needing manual work
     var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
@@ -1460,7 +1460,7 @@
 
     // Pre-compute per-box style info used in both hdr1 and hdr2
     var boxStyleInfo = sortedBoxes.map(function(bObj, boxPos){
-      var isActiveBox    = (pendingBoxes[0] && bObj.bi === pendingBoxes[0].bi);
+      var isActiveBox    = !bObj.isComplete;   // every pending box is "active" — user chooses which to fill
       var isCompletedBox = bObj.isComplete;
       var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
       var greyShade = isCompletedBox ? ((completedCount % 2 === 0) ? 'tam-box-col-grey-odd' : 'tam-box-col-grey-even') : '';
@@ -1560,7 +1560,7 @@
         var compactCls = (!info.isActiveBox) ? ' tam-box-compact' : '';
         var isPending  = info.isActiveBox;
 
-        // Quick buttons only in the active (first pending) box, only for pending/completing refs
+        // Quick buttons in every active pending box, only for pending/completing refs
         var quickCell = '';
         var boxHasTotal = !!(box.total);
         if (isPending && !isDone && !isOver) {
@@ -1569,9 +1569,9 @@
           quickCell =
             '<td class="tam-rec-cell-quick' + colParity + (boxHasTotal ? '' : ' tam-quick-nototals') + '">' +
               '<div class="tam-row-quick">' +
-                '<button class="tam-row-quick-btn"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
-                '<button class="tam-row-quick-btn"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
-                '<button class="tam-row-quick-btn tam-row-quick-split"' + btnDisabled + btnTitle + ' data-ref="' + tamEsc(c.ref) + '" data-mode="split">\xbd</button>' +
+                '<button class="tam-row-quick-btn"' + btnDisabled + btnTitle + ' data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-mode="funchal">F</button>' +
+                '<button class="tam-row-quick-btn"' + btnDisabled + btnTitle + ' data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-mode="porto">PS</button>' +
+                '<button class="tam-row-quick-btn tam-row-quick-split"' + btnDisabled + btnTitle + ' data-box="' + bi + '" data-ref="' + tamEsc(c.ref) + '" data-mode="split">\xbd</button>' +
               '</div>' +
             '</td>';
         } else if (isPending) {
@@ -1621,7 +1621,6 @@
       '</div>';
 
     var distribCollapsed = !!tamCollapseState['distrib'];
-    area.style.visibility = 'hidden';
     area.innerHTML =
       '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
       '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
@@ -1638,7 +1637,6 @@
         '</div>' +
       '</div>';
 
-    area.style.visibility = '';  // show instantly — all rows appear at once
     // ── BIND DISTRIBUTION TOGGLE ─────────────────────────────────
     (function(){
       var recToggleBtn = area.querySelector('#tam-rec-toggle-btn');
@@ -1673,12 +1671,14 @@
       btn.addEventListener('click', function(){
         var ref  = btn.getAttribute('data-ref');
         var mode = btn.getAttribute('data-mode');
+        var bi   = parseInt(btn.getAttribute('data-box'));
         var c    = consolidatedForSummary.find(function(x){ return x.ref === ref; });
         if (!c) return;
         tamPushUndo();
-        // Use only the first pending box
-        var firstPending = pendingBoxes[0];
-        var boxList = firstPending ? [firstPending.box] : sortedBoxes.map(function(b){ return b.box; });
+        // Apply to the specific box this button belongs to
+        var targetBox = tamSession.boxes[bi];
+        var boxList = targetBox ? [targetBox] : [];
+        if (!boxList.length) return;
         if (mode === 'funchal') {
           tamDistribToBoxesFiltered(ref, c.totalPieces, c.totalPieces, 0, boxList);
         } else if (mode === 'porto') {
@@ -1690,7 +1690,7 @@
           if (isOdd) {
             tamOddPieceDialogFiltered([{ ref:ref, totalPieces:c.totalPieces }], 0, boxList, function(){
               tamDetectRefCompletions();
-              if (firstPending) tamCheckBoxLock(firstPending.bi);
+              tamCheckBoxLock(bi);
               tamRenderAll(); tamSaveSession(false);
             });
             return;
@@ -1698,7 +1698,7 @@
         }
         // Detect completions BEFORE re-render so 3s state is set
         tamDetectRefCompletions();
-        if (firstPending) tamCheckBoxLock(firstPending.bi);
+        tamCheckBoxLock(bi);
         tamRenderAll();
         tamSaveSession(false);
       });
@@ -2036,20 +2036,42 @@
     Object.values(box.refs).forEach(function(v){ received += (v.f||0) + (v.p||0); });
 
     if (received >= box.total) {
-      // Lock immediately — no 3-second delay, no row-by-row rebuild
-      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
-      delete tamBoxLockPending[bi];
-      box.locked = true;
-      if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
-      Object.keys(box.refs).forEach(function(ref){
-        tamRefCompleting.delete(ref);
-        if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
-      });
-      tamRenderReception();
-      tamScheduleSave();
+      // Mark as pending (keeps it shown as active during the 3s window)
+      tamBoxLockPending[bi] = true;
+      // Don't stack timers
+      if (tamBoxLockTimers[bi]) return;
+      tamBoxLockTimers[bi] = setTimeout(function(){
+        delete tamBoxLockTimers[bi];
+        delete tamBoxLockPending[bi];
+        if (!tamSession) return;
+        var box2 = tamSession.boxes[bi];
+        if (!box2 || box2.locked) return;
+        // Re-verify (user may have corrected a value during the 3s)
+        var recv2 = 0;
+        Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
+        if (recv2 >= box2.total) {
+          box2.locked = true;
+          if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
+          // Clear any completing-ref animations for refs in this box
+          Object.keys(box2.refs).forEach(function(ref){
+            if (tamRefCompleting.has(ref)) {
+              tamRefCompleting.delete(ref);
+              if (tamRefCompletingTimers[ref]) {
+                clearTimeout(tamRefCompletingTimers[ref]);
+                delete tamRefCompletingTimers[ref];
+              }
+            }
+          });
+          tamRenderAll();
+          tamScheduleSave();
+        }
+      }, 3000);
     } else {
-      // No longer complete — cancel pending lock
-      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+      // No longer complete — cancel pending lock for this box
+      if (tamBoxLockTimers[bi]) {
+        clearTimeout(tamBoxLockTimers[bi]);
+        delete tamBoxLockTimers[bi];
+      }
       delete tamBoxLockPending[bi];
     }
   }
@@ -2098,21 +2120,9 @@
     if (pEl) pEl.textContent = totals.p > 0 ? totals.p : '—';
   }
 
-  /* Actualizar filas de facturas superiores para un ref — in-place, no rebuild */
+  /* Actualizar filas de facturas superiores para un ref */
   function tamUpdateInvoicesRows(ref) {
-    if (!tamSession) return;
-    var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-    tamInvoices.forEach(function(r, invIdx) {
-      var distrib = tamGetRefDistribForInvoice(ref, invIdx);
-      var fVal = distrib.f || 0;
-      var pVal = distrib.p || 0;
-      /* Update FNC and PXO cells */
-      var fCell = document.getElementById('tam-inv-f-' + invIdx + '-' + safeRef);
-      var pCell = document.getElementById('tam-inv-p-' + invIdx + '-' + safeRef);
-      if (fCell) fCell.textContent = fVal > 0 ? fVal : '—';
-      if (pCell) pCell.textContent = pVal > 0 ? pVal : '—';
-      /* If cells don't exist yet (invoice not rendered), skip silently */
-    });
+    tamRenderInvoices();
   }
 
   /* ══════════════════════════════════════════════════════════════

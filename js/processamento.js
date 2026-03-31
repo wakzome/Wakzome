@@ -2390,11 +2390,6 @@
       });
     });
 
-    var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
-    var copyBar = '<div class="proc-or-copy-bar">'
-      + COLS.map(function(c,i) { return '<button class="proc-or-copy-btn" data-col="' + i + '">\u29c9 ' + c + '</button>'; }).join('')
-      + '</div>';
-
     var tableRows = lines.length
       ? lines.map(function(l) {
           return '<tr>'
@@ -2411,6 +2406,8 @@
     var totalPortoSanto = lines.filter(function(l) { return l.cod==='A5'; }).reduce(function(s,l) { return s+l.qty; }, 0);
     var totalStock      = lines.reduce(function(s,l) { return s + l.qty * l.precio; }, 0);
 
+    var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
+
     var modal = document.createElement('div');
     modal.className = 'proc-or-modal';
     modal.innerHTML =
@@ -2426,14 +2423,13 @@
       +       '<button class="proc-or-close-btn">\u2715</button>'
       +     '</div>'
       +   '</div>'
-      +   copyBar
       +   '<div class="proc-or-scroll">'
       +     '<table class="proc-or-table"><thead><tr>'
-      +       '<th>Refer\u00eancia</th>'
-      +       '<th class="center">ARM</th>'
-      +       '<th class="center">IVA</th>'
-      +       '<th class="center">\u20ac</th>'
-      +       '<th class="center">Qtd.</th>'
+      +       '<th><div class="proc-guia-th2-inner"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="0">\u29c9</button>Refer\u00eancia</div></th>'
+      +       '<th class="center"><div class="proc-guia-th2-inner" style="justify-content:center"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="1">\u29c9</button>ARM</div></th>'
+      +       '<th class="center"><div class="proc-guia-th2-inner" style="justify-content:center"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="2">\u29c9</button>IVA</div></th>'
+      +       '<th class="center"><div class="proc-guia-th2-inner" style="justify-content:center"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="3">\u29c9</button>\u20ac</div></th>'
+      +       '<th class="center"><div class="proc-guia-th2-inner" style="justify-content:center"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="4">\u29c9</button>Qtd.</div></th>'
       +     '</tr></thead>'
       +     '<tbody>' + tableRows + '</tbody>'
       +     '</table>'
@@ -2441,6 +2437,7 @@
       +   '<div class="proc-or-panel-footer">'
       +     lines.length + ' linhas \u00b7 ' + totalFunchal + ' un. Funchal \u00b7 ' + totalPortoSanto + ' un. Porto Santo'
       +     ' \u00b7 <strong style="color:#000;font-size:1rem;letter-spacing:-.01em">Total: ' + totalStock.toFixed(2) + '</strong>'
+      +     '<span class="proc-or-copy-msg" id="proc-stock-copy-msg" style="margin-left:10px;font-size:.72rem;font-weight:700;"></span>'
       +   '</div>'
       + '</div>';
 

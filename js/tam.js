@@ -3667,13 +3667,6 @@
       : '';
 
     var COL_S = ['Referencia', 'ARM', 'IVA', '\u20ac', 'Qtd.'];
-    var stockCopyBar =
-      '<div class="tam-stock-copy-bar">' +
-        COL_S.map(function(lbl, ci){
-          return '<button class="tam-stock-copy-btn" data-scol="' + ci + '">&#x29c9; ' + lbl + '</button>';
-        }).join('') +
-        '<span class="tam-guia-copy-msg" id="tam-stock-copy-msg"></span>' +
-      '</div>';
 
     modal.innerHTML =
       '<div id="tam-stock-backdrop"></div>' +
@@ -3688,16 +3681,15 @@
             '<button id="tam-stock-close-btn" class="tam-stock-close-btn" title="fechar">✕</button>' +
           '</div>' +
         '</div>' +
-        stockCopyBar +
         '<div id="tam-stock-scroll">' +
           '<table id="tam-stock-table">' +
             '<thead>' +
               '<tr>' +
-                '<th class="tam-stock-th tam-stock-ref">Referencia</th>' +
-                '<th class="tam-stock-th tam-stock-city">ARM</th>' +
-                '<th class="tam-stock-th tam-stock-iva">IVA</th>' +
-                '<th class="tam-stock-th tam-stock-price">&euro;</th>' +
-                '<th class="tam-stock-th tam-stock-qty">Qtd.</th>' +
+                '<th class="tam-stock-th tam-stock-ref"><div class="tam-guia-th2-inner"><button class="tam-stock-copy-btn" data-scol="0">&#x29c9;</button>Referencia</div></th>' +
+                '<th class="tam-stock-th tam-stock-city"><div class="tam-guia-th2-inner" style="justify-content:center"><button class="tam-stock-copy-btn" data-scol="1">&#x29c9;</button>ARM</div></th>' +
+                '<th class="tam-stock-th tam-stock-iva"><div class="tam-guia-th2-inner" style="justify-content:center"><button class="tam-stock-copy-btn" data-scol="2">&#x29c9;</button>IVA</div></th>' +
+                '<th class="tam-stock-th tam-stock-price"><div class="tam-guia-th2-inner" style="justify-content:center"><button class="tam-stock-copy-btn" data-scol="3">&#x29c9;</button>&euro;</div></th>' +
+                '<th class="tam-stock-th tam-stock-qty"><div class="tam-guia-th2-inner" style="justify-content:center"><button class="tam-stock-copy-btn" data-scol="4">&#x29c9;</button>Qtd.</div></th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + (noData || tableRows) + '</tbody>' +
@@ -3707,6 +3699,7 @@
           rows.length + ' linhas · ' +
           rows.filter(function(rw){ return rw.city==='A4'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Funchal · ' +
           rows.filter(function(rw){ return rw.city==='A5'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Porto Santo' +
+          '<span class="tam-guia-copy-msg" id="tam-stock-copy-msg" style="margin-left:10px;"></span>' +
         '</div>' +
       '</div>';
 

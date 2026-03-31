@@ -445,10 +445,10 @@
       ? overlaps.filter(function(o){ return o.a.loja === filterLoja; })
       : overlaps;
     if (filteredOverlaps.length) {
-      let ohtml = '<div style="background:#3a1a00;border:1px solid #8a4000;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.78rem;color:#ffaa55;font-weight:600">'
+      let ohtml = '<div style="background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.78rem;color:#111;font-weight:600">'
         +'⚠️ Solapamentos detetados:<br>';
       filteredOverlaps.forEach(function(o){
-        ohtml += '<span style="font-weight:400;color:#ffcc88">'+o.a.nome+' &amp; '+o.b.nome+' ('+o.a.loja+') — '
+        ohtml += '<span style="font-weight:400;color:#444">'+o.a.nome+' &amp; '+o.b.nome+' ('+o.a.loja+') — '
           +o.a.de.substring(0,5)+' a '+o.a.ate.substring(0,5)+' / '+o.b.de.substring(0,5)+' a '+o.b.ate.substring(0,5)+'</span><br>';
       });
       ohtml += '</div>';
@@ -531,7 +531,7 @@
 
     // Bloco "próximo a ir" só no ano atual
     if (isCurrentYear && nextUp && nextUp.days > 7) {
-      html += '<div style="background:#1a2a1a;border:1px solid #2a5a2a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem;color:#88cc88;font-weight:600">'
+      html += '<div style="background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem;color:#111;font-weight:600">'
         +'🏖 Próximo: <strong>'+nextUp.nome+'</strong> ('+nextUp.loja+') — em '+nextUp.days+' dias'
         +'</div>';
     }
@@ -591,9 +591,9 @@
       html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
       pessoasNoAno.forEach(function(p){
         const total = diasFerias(p, currentYear);
-        html += '<button class="f-view-pessoa-btn" data-nome="'+p+'" style="background:#222;border:1px solid #333;border-radius:8px;padding:6px 12px;cursor:pointer;text-align:left">'
-          +'<span style="display:block;font-size:.75rem;font-weight:700;color:#ddd">'+p+'</span>'
-          +'<span style="font-size:.68rem;color:#888">'+total+' dias</span>'
+        html += '<button class="f-view-pessoa-btn" data-nome="'+p+'" style="background:#fff;border:1px solid #ccc;border-radius:8px;padding:6px 12px;cursor:pointer;text-align:left">'
+          +'<span style="display:block;font-size:.75rem;font-weight:700;color:#111">'+p+'</span>'
+          +'<span style="font-size:.68rem;color:#555">'+total+' dias</span>'
           +'</button>';
       });
       html += '</div></div>';

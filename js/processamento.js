@@ -87,8 +87,8 @@
       /* TD inputs — compact, centered numbers */
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:800; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }',
-      '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; text-align:left; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { width:auto; min-width:0; font-size:.73rem; text-align:left; }',
+      '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; text-align:left; text-transform:uppercase; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { width:auto; min-width:0; font-size:.73rem; text-align:left; text-transform:uppercase; }',
       '#proc-content .proc-table-wrap td input.proc-preco-input { width:46px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-desc-pct-input { width:38px; text-align:center; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
@@ -380,7 +380,7 @@
       '#proc-content .proc-table-wrap td.td-ref { width:1px; white-space:nowrap; padding:3px 4px; }',
       '#proc-content .proc-table-wrap th.left:first-child { width:1px; white-space:nowrap; }',
       '#proc-content .proc-table-wrap td.td-ref .proc-ref-wrap { display:inline-flex; align-items:center; gap:0; width:auto; }',
-      '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; max-width:none; text-align:left; padding-left:4px; }',
+      '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; max-width:none; text-align:left; padding-left:4px; text-transform:uppercase; }',
 
       /* ── RESPONSIVE ── */
       '@media (max-width:768px) {',
@@ -1564,7 +1564,7 @@
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '</button>'
         + '<input type="text" class="proc-ref-input"'
-        + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
+        + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td class="td-desc">'
         + '<div class="proc-desc-wrap">'
@@ -1572,7 +1572,7 @@
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '</button>'
         + '<input type="text" class="proc-desc-input" size="15"'
-        + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')">'
+        + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procCheckAutoExpand(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td><input type="number" min="0" step="1" maxlength="5"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'

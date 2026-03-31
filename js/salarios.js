@@ -1,3 +1,18 @@
+// ── Salários: estilos do botão de cópia por célula ──
+(function(){
+  const sid = 's-liq-copy-styles';
+  if (document.getElementById(sid)) return;
+  const st = document.createElement('style');
+  st.id = sid;
+  st.textContent = [
+    '.s-liq-cell { display:inline-flex; align-items:center; gap:6px; }',
+    '.s-liq-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:1px solid #d0d0d0; background:transparent; cursor:pointer; color:#aaa; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; }',
+    '.s-liq-copy-btn:hover { color:#000; background:#f0f0f0; border-color:#bbb; }',
+    '.s-liq-copy-btn.s-liq-copy-ok { color:#4A7C6F; border-color:#4A7C6F; background:#f0faf8; }',
+  ].join('\n');
+  document.head.appendChild(st);
+})();
+
 // ══════════════════════════════════════════════════════════════
 //  ADMIN: SALÁRIOS
 // ══════════════════════════════════════════════════════════════
@@ -106,11 +121,27 @@ function sRenderTable(rows) {
   </tr></thead><tbody>`;
   filtered.forEach((r, i) => {
     const cleanVal = r.liquido.replace(/\.(?=\d{3},)/, '');
-    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td>${escHtml(cleanVal)}</td></tr>`;
+    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td><span class="s-liq-cell"><button class="s-liq-copy-btn" onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Copiar valor"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>${escHtml(cleanVal)}</span></td></tr>`;
   });
   html += `</tbody><tfoot><tr>
     <td class="row-num"></td><td>total</td>
     <td>${total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
   </tr></tfoot></table>`;
   document.getElementById('s-results-wrap').innerHTML = html;
+}
+
+function sCopyLiquido(btn) {
+  const val = btn.getAttribute('data-val');
+  const copy = (navigator.clipboard && navigator.clipboard.writeText)
+    ? navigator.clipboard.writeText(val)
+    : Promise.reject();
+  copy.catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = val; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  });
+  const orig = btn.innerHTML;
+  btn.classList.add('s-liq-copy-ok');
+  btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  setTimeout(() => { btn.classList.remove('s-liq-copy-ok'); btn.innerHTML = orig; }, 1000);
 }

@@ -88,13 +88,13 @@
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:800; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; text-align:left; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { width:100%; min-width:140px; font-size:.73rem; text-align:left; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { min-width:0; font-size:.73rem; text-align:left; }',
       '#proc-content .proc-table-wrap td input.proc-preco-input { width:46px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-desc-pct-input { width:38px; text-align:center; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
       '#proc-content .proc-table-wrap td.center-col { text-align:center; }',
       '#proc-content .proc-table-wrap td.td-ref { }',
-      '#proc-content .proc-table-wrap td.td-desc { min-width:140px; }',
+      '#proc-content .proc-table-wrap td.td-desc { }',
 
       /* Row misc */
       '#proc-content .proc-cell-computed { padding:3px 6px; font-size:.85rem; font-weight:800; text-align:center; color:#000; white-space:nowrap; }',
@@ -186,11 +186,11 @@
       '#proc-float-save:hover { background:#f5f5f5; border-color:#555; }',
 
       /* OBS input */
-      '#proc-content .proc-table-wrap td input.proc-obs-input { width:70px; }',
+      '#proc-content .proc-table-wrap td input.proc-obs-input { min-width:0; }',
 
       /* OBS tooltip cell */
       '#proc-content .proc-obs-cell { position:relative; }',
-      '#proc-content .proc-obs-tip { visibility:hidden; opacity:0; position:absolute; bottom:calc(100% + 8px); right:0; min-width:180px; max-width:300px; background:#1a1a1a; color:#fff; font-size:.78rem; font-weight:600; padding:8px 12px; border-radius:8px; white-space:pre-wrap; word-break:break-word; z-index:9999; pointer-events:none; line-height:1.6; transition:opacity .15s, visibility .15s; box-shadow:0 4px 14px rgba(0,0,0,.25); }',
+      '#proc-content .proc-obs-tip { visibility:hidden; opacity:0; position:absolute; bottom:calc(100% + 8px); right:0; min-width:180px; max-width:300px; background:#1a1a1a; color:#fff !important; font-size:.78rem; font-weight:600; padding:8px 12px; border-radius:8px; white-space:pre-wrap; word-break:break-word; z-index:9999; pointer-events:none; line-height:1.6; transition:opacity .15s, visibility .15s; box-shadow:0 4px 14px rgba(0,0,0,.25); }',
       '#proc-content .proc-obs-tip::after { content:""; position:absolute; top:100%; right:14px; border:6px solid transparent; border-top-color:#1a1a1a; }',
       '#proc-content .proc-obs-cell:hover .proc-obs-tip.has-text { visibility:visible; opacity:1; }',
 
@@ -223,7 +223,7 @@
       /* Onboarding tooltip */
       '#proc-onboarding-tip { position:absolute; z-index:2000; pointer-events:none; animation:proc-tip-in 0.3s ease both; }',
       '@keyframes proc-tip-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }',
-      '#proc-onboarding-tip .proc-tip-bubble { background:#1a1a1a; color:#fff; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; padding:8px 14px; border-radius:10px; white-space:nowrap; box-shadow:0 4px 18px rgba(0,0,0,.28); display:flex; align-items:center; gap:8px; }',
+      '#proc-onboarding-tip .proc-tip-bubble { background:#1a1a1a; color:#fff !important; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; padding:8px 14px; border-radius:10px; white-space:nowrap; box-shadow:0 4px 18px rgba(0,0,0,.28); display:flex; align-items:center; gap:8px; }',
       '#proc-onboarding-tip .proc-tip-arrow { position:absolute; top:100%; left:18px; border:7px solid transparent; border-top-color:#1a1a1a; }',
       '#proc-content .proc-add-fatura-wrap { display:flex; justify-content:center; margin:8px 0 14px; }',
       '#proc-content .proc-add-fatura-btn { padding:9px 32px; font-size:.82rem; border-style:dashed; border-color:#ccc; color:#000; background:transparent; border-radius:10px; }',
@@ -1372,7 +1372,10 @@
         if (nums[4]) nums[4].value   = (row.descPct != null && row.descPct !== 0) ? row.descPct : '';
         if (dCb)     dCb.checked     = !!row.hasD;
         if (pCb)     pCb.checked     = !!row.plus1;
-        if (oIn)     oIn.value       = row.obs || '';
+        if (oIn) {
+          oIn.value = row.obs || '';
+          procObsSync(oIn);
+        }
         if (row.flagged) {
           var flagBtn = document.getElementById('proc-flag-' + fid + '-' + rid);
           var flagTr  = document.getElementById('proc-row-'  + fid + '-' + rid);
@@ -1383,6 +1386,8 @@
       });
       procUpdateHeader(fid);
       procSyncRefColWidth(fid);
+      procSyncDescColWidth(fid);
+      procSyncObsColWidth(fid);
     }
     if (activeFaturas.length > 1) {
       wrap.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1610,6 +1615,8 @@
   function procCheckAutoExpand(fid, id) {
     if (id === rowCounts[fid]) procAddRows(fid, 1);
     procSyncRefColWidth(fid);
+    procSyncDescColWidth(fid);
+    procSyncObsColWidth(fid);
   }
 
   /* Measure the longest ref value in this fatura and set all ref inputs
@@ -1635,7 +1642,35 @@
     }
   }
 
-  /* ── 8. AUTO-SPLIT ── */
+  function procSyncDescColWidth(fid) {
+    var tbody = document.getElementById('proc-tableBody-' + fid);
+    if (!tbody) return;
+    var inputs = tbody.querySelectorAll('input.proc-desc-input');
+    var maxLen = 14; /* minimum fallback chars */
+    inputs.forEach(function(inp) {
+      var len = inp.value ? inp.value.length : 0;
+      if (len > maxLen) maxLen = len;
+    });
+    inputs.forEach(function(inp) {
+      inp.setAttribute('size', maxLen + 1);
+    });
+  }
+
+  function procSyncObsColWidth(fid) {
+    var tbody = document.getElementById('proc-tableBody-' + fid);
+    if (!tbody) return;
+    var inputs = tbody.querySelectorAll('input.proc-obs-input');
+    var maxLen = 6; /* minimum fallback chars */
+    inputs.forEach(function(inp) {
+      var len = inp.value ? inp.value.length : 0;
+      if (len > maxLen) maxLen = len;
+    });
+    inputs.forEach(function(inp) {
+      inp.setAttribute('size', maxLen + 1);
+    });
+  }
+
+
   function procAutoSplit(fid, id) {
     var tr = document.getElementById('proc-row-' + fid + '-' + id);
     if (!tr) return;
@@ -2924,8 +2959,9 @@
         if (!data.faturas || !data.faturas.length) return;
         var sentRefs = data.sentRefs || {};
         data.faturas.forEach(function(fat, fidIdx) {
-          var fid = fidIdx; /* index como fid — igual a como os rows são gravados */
-          var forn = fat.proveedor || ('Fatura ' + fidIdx);
+          /* procSentKey usa fid 1-based (faturaCount começa em 1) */
+          var fid  = fidIdx + 1;
+          var forn = fat.proveedor || ('Fatura ' + fid);
           (fat.rows || []).forEach(function(r) {
             if (!r.ref) return;
             var a4 = r.a4 || 0, a5 = r.a5 || 0;
@@ -2983,9 +3019,12 @@
               }
             });
             if (distF === 0 && distP === 0) return;
-            /* Calcular já enviado */
-            var sentKey = g.ref + '___' + invIdx;
-            var lots = sentRefs[sentKey] || [];
+            /* Calcular já enviado — usar invoiceNo como chave estável;
+               fallback para invIdx para compatibilidade com sessões antigas */
+            var stableId = inv.invoiceNo || String(invIdx);
+            var sentKey  = g.ref + '___' + stableId;
+            var sentKeyLegacy = g.ref + '___' + invIdx;
+            var lots = sentRefs[sentKey] || sentRefs[sentKeyLegacy] || [];
             var sF = 0, sP = 0;
             lots.forEach(function(l){ sF += l.f||0; sP += l.p||0; });
             var pendF = Math.max(0, distF - sF);
@@ -3005,7 +3044,8 @@
               _fromOtherSession: true,
               _tamSessionName:   row.session_name,
               _tamSentKey:       sentKey,
-              _tamInvIdx:        invIdx
+              _tamInvIdx:        invIdx,
+              _tamStableId:      stableId
             });
           });
         });

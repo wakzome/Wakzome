@@ -88,7 +88,7 @@
       '#proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:800; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }',
       '#proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; text-align:left; }',
-      '#proc-content .proc-table-wrap td input.proc-desc-input { min-width:0; font-size:.73rem; text-align:left; }',
+      '#proc-content .proc-table-wrap td input.proc-desc-input { width:auto; min-width:0; font-size:.73rem; text-align:left; }',
       '#proc-content .proc-table-wrap td input.proc-preco-input { width:46px; text-align:center; }',
       '#proc-content .proc-table-wrap td input.proc-desc-pct-input { width:38px; text-align:center; }',
       '#proc-content .proc-table-wrap td input:focus { background:#fff; border-color:#ccc; }',
@@ -186,7 +186,7 @@
       '#proc-float-save:hover { background:#f5f5f5; border-color:#555; }',
 
       /* OBS input */
-      '#proc-content .proc-table-wrap td input.proc-obs-input { min-width:0; }',
+      '#proc-content .proc-table-wrap td input.proc-obs-input { width:auto; min-width:0; }',
 
       /* OBS tooltip cell */
       '#proc-content .proc-obs-cell { position:relative; }',
@@ -1571,7 +1571,7 @@
         + '<button class="proc-copy-btn" title="Copiar descri\u00e7\u00e3o" onclick="procCopyBtn(this)">'
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '</button>'
-        + '<input type="text" class="proc-desc-input"'
+        + '<input type="text" class="proc-desc-input" size="15"'
         + ' oninput="procCheckAutoExpand(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td><input type="number" min="0" step="1" maxlength="5"'
@@ -1599,7 +1599,7 @@
         + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-obs-cell">'
-        +   '<input type="text" class="proc-obs-input" id="proc-obs-' + f + '-' + r + '">'
+        +   '<input type="text" class="proc-obs-input" size="7" id="proc-obs-' + f + '-' + r + '">'
         +   '<div class="proc-obs-tip" id="proc-obs-tip-' + f + '-' + r + '"></div>'
         + '</td>'
         + '<td style="text-align:center;padding:2px 4px;">'
@@ -2958,36 +2958,52 @@
         try { data = JSON.parse(row.dados); } catch(e) { return; }
         if (!data.faturas || !data.faturas.length) return;
         var sentRefs = data.sentRefs || {};
+
+        /* Agrupar por ref para evitar entradas duplicadas (mesma ref em
+           várias faturas ou várias linhas da mesma sessão) */
+        var refMap = {}; /* ref → { a4, a5, sentKey } */
         data.faturas.forEach(function(fat, fidIdx) {
-          /* procSentKey usa fid 1-based (faturaCount começa em 1) */
-          var fid  = fidIdx + 1;
-          var forn = fat.proveedor || ('Fatura ' + fid);
+          var fid  = fidIdx + 1; /* 1-based, igual a faturaCount */
           (fat.rows || []).forEach(function(r) {
             if (!r.ref) return;
             var a4 = r.a4 || 0, a5 = r.a5 || 0;
             if (a4 === 0 && a5 === 0) return;
-            var sentKey = r.ref + '___' + fid;
-            var lots = sentRefs[sentKey] || [];
-            var sF = 0, sP = 0;
-            lots.forEach(function(l){ sF += l.f||0; sP += l.p||0; });
-            var pendF = Math.max(0, a4 - sF);
-            var pendP = Math.max(0, a5 - sP);
-            if (pendF === 0 && pendP === 0) return;
-            results.push({
-              ref:               r.ref,
-              forn:              forn,
-              sourceModule:      'proc',
-              sessionKey:        row.session_key,
-              sessionName:       forn + ' (' + (data.savedAt ? new Date(data.savedAt).toLocaleDateString('pt-PT') : row.session_key) + ')',
-              pendF:             pendF,
-              pendP:             pendP,
-              totalF:            a4,
-              totalP:            a5,
-              done:              false,
-              _fromOtherSession: true,
-              _procKey:          row.session_key,
-              _procSentKey:      sentKey
-            });
+            if (!refMap[r.ref]) refMap[r.ref] = { a4: 0, a5: 0, sentKeys: [] };
+            refMap[r.ref].a4 += a4;
+            refMap[r.ref].a5 += a5;
+            refMap[r.ref].sentKeys.push(r.ref + '___' + fid);
+          });
+        });
+
+        var sessionLabel = (data.faturas[0] && data.faturas[0].proveedor) || row.session_key;
+        var sessionName  = sessionLabel + ' (' + (data.savedAt ? new Date(data.savedAt).toLocaleDateString('pt-PT') : row.session_key) + ')';
+
+        Object.keys(refMap).forEach(function(ref) {
+          var entry = refMap[ref];
+          /* Somar já enviado de todas as chaves associadas a esta ref */
+          var sF = 0, sP = 0;
+          entry.sentKeys.forEach(function(sk) {
+            (sentRefs[sk] || []).forEach(function(l){ sF += l.f||0; sP += l.p||0; });
+          });
+          var pendF = Math.max(0, entry.a4 - sF);
+          var pendP = Math.max(0, entry.a5 - sP);
+          if (pendF === 0 && pendP === 0) return;
+          /* Usar a primeira chave como referência para gravação */
+          var primaryKey = entry.sentKeys[0];
+          results.push({
+            ref:               ref,
+            forn:              sessionLabel,
+            sourceModule:      'proc',
+            sessionKey:        row.session_key,
+            sessionName:       sessionName,
+            pendF:             pendF,
+            pendP:             pendP,
+            totalF:            entry.a4,
+            totalP:            entry.a5,
+            done:              false,
+            _fromOtherSession: true,
+            _procKey:          row.session_key,
+            _procSentKey:      primaryKey
           });
         });
       });
@@ -3005,48 +3021,56 @@
       rows.forEach(function(row) {
         var data;
         try { data = JSON.parse(row.data); } catch(e) { return; }
-        if (!data.invoices || !data.boxes) return;
+        if (!data.boxes) return;
         var sentRefs = data.sentRefs || {};
-        data.invoices.forEach(function(inv, invIdx) {
-          (inv.grouped || []).forEach(function(g) {
-            if (!g.ref) return;
-            /* Calcular distribuído nas caixas desta sessão TAM */
-            var distF = 0, distP = 0;
-            data.boxes.forEach(function(box) {
-              if (box.refs && box.refs[g.ref]) {
-                distF += box.refs[g.ref].f || 0;
-                distP += box.refs[g.ref].p || 0;
-              }
-            });
-            if (distF === 0 && distP === 0) return;
-            /* Calcular já enviado — usar invoiceNo como chave estável;
-               fallback para invIdx para compatibilidade com sessões antigas */
-            var stableId = inv.invoiceNo || String(invIdx);
-            var sentKey  = g.ref + '___' + stableId;
-            var sentKeyLegacy = g.ref + '___' + invIdx;
-            var lots = sentRefs[sentKey] || sentRefs[sentKeyLegacy] || [];
-            var sF = 0, sP = 0;
-            lots.forEach(function(l){ sF += l.f||0; sP += l.p||0; });
-            var pendF = Math.max(0, distF - sF);
-            var pendP = Math.max(0, distP - sP);
-            if (pendF === 0 && pendP === 0) return;
-            results.push({
-              ref:               g.ref,
-              forn:              inv.invoiceNo || row.session_name,
-              sourceModule:      'tam',
-              sessionKey:        row.session_name,
-              sessionName:       'TAM · ' + row.session_name,
-              pendF:             pendF,
-              pendP:             pendP,
-              totalF:            distF,
-              totalP:            distP,
-              done:              false,
-              _fromOtherSession: true,
-              _tamSessionName:   row.session_name,
-              _tamSentKey:       sentKey,
-              _tamInvIdx:        invIdx,
-              _tamStableId:      stableId
-            });
+
+        /* Recolher todas as refs únicas das caixas — fonte única de verdade.
+           A distribuição está nas caixas, não nos invoices; iterar invoices
+           causava entradas duplicadas (uma por invoice × ref). */
+        var refMap = {}; /* ref → { distF, distP } */
+        data.boxes.forEach(function(box) {
+          if (!box.refs) return;
+          Object.keys(box.refs).forEach(function(ref) {
+            if (!refMap[ref]) refMap[ref] = { distF: 0, distP: 0 };
+            refMap[ref].distF += box.refs[ref].f || 0;
+            refMap[ref].distP += box.refs[ref].p || 0;
+          });
+        });
+
+        Object.keys(refMap).forEach(function(ref) {
+          var distF = refMap[ref].distF;
+          var distP = refMap[ref].distP;
+          if (distF === 0 && distP === 0) return;
+
+          /* sentRefs em TAM: a chave histórica era ref___invIdx (por invoice).
+             Para compatibilidade, somar todos os lots cujo key começa com ref___  */
+          var sF = 0, sP = 0;
+          Object.keys(sentRefs).forEach(function(k) {
+            if (k === ref || k.indexOf(ref + '___') === 0) {
+              (sentRefs[k] || []).forEach(function(l){ sF += l.f||0; sP += l.p||0; });
+            }
+          });
+
+          var pendF = Math.max(0, distF - sF);
+          var pendP = Math.max(0, distP - sP);
+          if (pendF === 0 && pendP === 0) return;
+
+          /* sentKey estável para futuras gravações: ref___TAMsessionName */
+          var sentKey = ref + '___' + row.session_name;
+          results.push({
+            ref:               ref,
+            forn:              row.session_name,
+            sourceModule:      'tam',
+            sessionKey:        row.session_name,
+            sessionName:       'TAM · ' + row.session_name,
+            pendF:             pendF,
+            pendP:             pendP,
+            totalF:            distF,
+            totalP:            distP,
+            done:              false,
+            _fromOtherSession: true,
+            _tamSessionName:   row.session_name,
+            _tamSentKey:       sentKey
           });
         });
       });

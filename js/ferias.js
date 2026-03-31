@@ -142,14 +142,14 @@
     modal.id = 'f-modal-overlay';
     modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
 
-    const LS = 'display:block;font-size:.72rem;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px';
-    const IS = 'width:100%;background:#111;color:#fff;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:.88rem;box-sizing:border-box;outline:none';
+    const LS = 'display:block;font-size:.72rem;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px';
+    const IS = 'width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:8px;padding:9px 12px;font-size:.88rem;box-sizing:border-box;outline:none';
 
     modal.innerHTML =
-      '<div style="background:#1e1e1e;border-radius:14px;padding:28px 24px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:inherit">'
+      '<div style="background:#fff;border-radius:14px;padding:28px 24px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.15);font-family:inherit">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">'
-      +'<span style="font-size:1rem;font-weight:700;color:#fff">'+(isEdit?'✏️ Editar':'➕ Adicionar')+' Férias '+year+'</span>'
-      +'<button id="f-modal-close" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer">✕</button>'
+      +'<span style="font-size:1rem;font-weight:700;color:#111">'+(isEdit?'✏️ Editar':'➕ Adicionar')+' Férias '+year+'</span>'
+      +'<button id="f-modal-close" style="background:none;border:none;color:#888;font-size:1.3rem;cursor:pointer">✕</button>'
       +'</div>'
 
       +'<label style="'+LS+'">Pessoa</label>'
@@ -181,9 +181,9 @@
       +'<input id="f-inp-ate" type="date" value="'+defAte+'" style="'+IS+'"></div>'
       +'</div>'
 
-      +'<div id="f-modal-error" style="display:none;color:#f55;font-size:.78rem;margin-bottom:10px;font-weight:600"></div>'
+      +'<div id="f-modal-error" style="display:none;color:#c00;font-size:.78rem;margin-bottom:10px;font-weight:600"></div>'
       +'<div style="display:flex;gap:10px">'
-      +(isEdit ? '<button id="f-modal-delete" style="flex:0 0 auto;background:#3a1a1a;color:#f55;border:1px solid #5a2a2a;border-radius:9px;padding:11px 16px;font-size:.85rem;font-weight:700;cursor:pointer">🗑</button>' : '')
+      +(isEdit ? '<button id="f-modal-delete" style="flex:0 0 auto;background:#fff;color:#c00;border:1px solid #ccc;border-radius:9px;padding:11px 16px;font-size:.85rem;font-weight:700;cursor:pointer">🗑</button>' : '')
       +'<button id="f-modal-save" style="flex:1;background:#fff;color:#111;border:1px solid #ccc;border-radius:9px;padding:11px;font-size:.9rem;font-weight:700;cursor:pointer">'+(isEdit?'Guardar alterações':'Guardar')+'</button>'
       +'</div>'
       +'</div>';
@@ -255,24 +255,24 @@
   // ── MODAL: ADICIONAR PESSOA ──
   function openModalPessoa() {
     closeModal();
-    const LS = 'display:block;font-size:.72rem;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px';
-    const IS = 'width:100%;background:#111;color:#fff;border:1px solid #333;border-radius:8px;padding:10px 12px;font-size:.9rem;box-sizing:border-box;outline:none;text-transform:uppercase;margin-bottom:20px';
+    const LS = 'display:block;font-size:.72rem;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px';
+    const IS = 'width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:8px;padding:10px 12px;font-size:.9rem;box-sizing:border-box;outline:none;text-transform:uppercase;margin-bottom:20px';
 
     const modal = document.createElement('div');
     modal.id = 'f-modal-overlay';
     modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
     modal.innerHTML =
-      '<div style="background:#1e1e1e;border-radius:14px;padding:28px 24px;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:inherit">'
+      '<div style="background:#fff;border-radius:14px;padding:28px 24px;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.15);font-family:inherit">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">'
-      +'<span style="font-size:1rem;font-weight:700;color:#fff">👤 Nova Pessoa</span>'
-      +'<button id="f-modal-close" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer">✕</button>'
+      +'<span style="font-size:1rem;font-weight:700;color:#111">👤 Nova Pessoa</span>'
+      +'<button id="f-modal-close" style="background:none;border:none;color:#888;font-size:1.3rem;cursor:pointer">✕</button>'
       +'</div>'
       +'<label style="'+LS+'">Nome completo</label>'
       +'<input id="f-inp-pessoa-nome" type="text" placeholder="NOME APELIDO" style="'+IS+'">'
-      +'<div id="f-modal-error" style="display:none;color:#f55;font-size:.78rem;margin-bottom:10px;font-weight:600"></div>'
+      +'<div id="f-modal-error" style="display:none;color:#c00;font-size:.78rem;margin-bottom:10px;font-weight:600"></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
       +'<button id="f-pessoa-save-only" style="'+BTN+'">Guardar</button>'
-      +'<button id="f-pessoa-save-ferias" style="background:#fff;color:#111;border:2px solid #111;border-radius:8px;padding:7px 18px;font-size:.82rem;font-weight:700;cursor:pointer">Guardar + Férias</button>'
+      +'<button id="f-pessoa-save-ferias" style="'+BTN+'">Guardar + Férias</button>'
       +'</div>'
       +'</div>';
 
@@ -313,15 +313,15 @@
         return acc + daysBetween(parseDate(f.de), parseDate(f.ate)) + 1;
       }, 0);
       html += '<div style="margin-bottom:16px">'
-        +'<div style="font-size:.75rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+yr+' · '+total+' dias</div>';
+        +'<div style="font-size:.75rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+yr+' · '+total+' dias</div>';
       entries.sort(function(a,b){ return parseDate(a.de)-parseDate(b.de); }).forEach(function(f,i){
         const deD = parseDate(f.de), ateD = parseDate(f.ate);
         const dias = daysBetween(deD, ateD) + 1;
         const deStr = f.de.substring(0,5), ateStr = f.ate.substring(0,5);
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #2a2a2a">'
-          +'<span style="font-size:.82rem;color:#ddd">'+deStr+' → '+ateStr+'</span>'
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #eee">'
+          +'<span style="font-size:.82rem;color:#111">'+deStr+' → '+ateStr+'</span>'
           +'<span style="display:flex;align-items:center;gap:10px">'
-          +'<span style="font-size:.75rem;color:#888">'+dias+'d · '+f.loja+'</span>'
+          +'<span style="font-size:.75rem;color:#666">'+dias+'d · '+f.loja+'</span>'
           +'<button data-yr="'+yr+'" data-idx="'+i+'" class="fv-edit-btn" style="background:none;border:none;color:#888;cursor:pointer;font-size:.8rem;padding:2px 6px">✏️</button>'
           +'</span>'
           +'</div>';
@@ -334,10 +334,10 @@
     modal.id = 'f-modal-overlay';
     modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
     modal.innerHTML =
-      '<div style="background:#1e1e1e;border-radius:14px;padding:28px 24px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:inherit">'
+      '<div style="background:#fff;border-radius:14px;padding:28px 24px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15);font-family:inherit">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'
-      +'<span style="font-size:.95rem;font-weight:700;color:#fff">📋 '+nome+'</span>'
-      +'<button id="f-modal-close" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer">✕</button>'
+      +'<span style="font-size:.95rem;font-weight:700;color:#111">📋 '+nome+'</span>'
+      +'<button id="f-modal-close" style="background:none;border:none;color:#888;font-size:1.3rem;cursor:pointer">✕</button>'
       +'</div>'
       +html
       +'<button id="fv-add-btn" style="margin-top:16px;width:100%;'+BTN+'">＋ Adicionar Férias</button>'

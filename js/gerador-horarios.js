@@ -1008,11 +1008,10 @@
     const panel = document.getElementById('tab-gerador');
     if (!panel) return;
 
-    // Inject CSS only once
-    if (!document.getElementById('gh-styles')) {
-      const style = document.createElement('style');
-      style.id = 'gh-styles';
-      style.textContent = `
+    // Inject CSS — always replace so updates take effect on reload
+    let style = document.getElementById('gh-styles');
+    if (!style) { style = document.createElement('style'); style.id = 'gh-styles'; document.head.appendChild(style); }
+    style.textContent = `
         /* ── LAYOUT — isolation from admin dark theme ── */
         #tab-gerador { background:#fff !important; color:#111 !important; }
         #tab-gerador.active {
@@ -1189,8 +1188,6 @@
         #tab-gerador .gh-ab-row-ferias .gh-ferias-tag { background:#e0f5e0; color:#1a5c1a; border-radius:4px; font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em; flex-shrink:0; }
         #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
       `;
-      document.head.appendChild(style);
-    }
 
     // Inject HTML into panel (only once) — only gh-container goes inside the panel
     if (!document.getElementById('gh-container')) {

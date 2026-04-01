@@ -3769,6 +3769,11 @@ td                   { font-size: .96rem !important; }
     // Intercept faturas → open sub-overlay instead
     if (tab === 'faturas') { openFaturasOverlay(); return; }
 
+    // If navigating away from gerador, clean up its layout first
+    if (tab !== 'gerador' && typeof cleanupGeradorLayout === 'function') {
+      cleanupGeradorLayout();
+    }
+
     var adminApp = document.getElementById('admin-app');
     var barTitle = document.getElementById('adm-module-bar-title');
 

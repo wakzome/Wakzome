@@ -80,7 +80,7 @@
       container.style.flex = '1';
       container.style.minHeight = '0';
       container.style.overflowY = 'auto';
-      container.style.overflowX = 'auto';
+      container.style.overflowX = 'hidden';
       container.style.background = '#fff';
       container.style.color = '#111';
     }
@@ -503,7 +503,7 @@
               content = c2.shift ? c2.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('') : `<span class="gh-sh-line">—</span>`;
             } else {
               cls = 'c-elsewhere';
-              content = `<span class="gh-sh-loc">${sshort(c2.store)}</span>`;
+              content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
             }
           }
           return `<td class="gh-sh-td" data-pid="${p.id}" data-day="${day}" data-store="${st.id}"><div class="gh-sh-inner ${cls}">${content}</div></td>`;
@@ -529,10 +529,9 @@
       bodyHTML += `<div class="gh-store-block"><table class="gh-sched-tbl">
         <thead>
           <tr class="gh-tbl-store-hdr">
-            <td>PORTO SANTO<br>${st.short}</td>
+            <td>PORTO SANTO<br>${st.short.split(' ').join('<br>')}</td>
             ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
           </tr>
-          <tr class="gh-tbl-day-hdr"><th>Pessoa</th>${hdrs}</tr>
         </thead>
         <tbody>${rows}</tbody>
       </table></div>`;
@@ -701,14 +700,9 @@
         /* Table: auto layout, width determined by content only — never stretches to fill container */
         .gh-sched-tbl { border-collapse:collapse; table-layout:auto; }
         .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:7px 8px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; }
-        .gh-tbl-store-hdr td:first-child { text-align:left; white-space:nowrap; }
+        .gh-tbl-store-hdr td { padding:7px 8px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; min-width:80px; }
+        .gh-tbl-store-hdr td:first-child { text-align:left; min-width:0; width:130px; }
         .gh-tbl-date { font-weight:300; font-size:.72rem; color:#555; }
-        .gh-tbl-day-hdr th { padding:7px 4px; font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; border:1px solid #e8e8e8; text-align:center; background:#f8f8f8; white-space:nowrap; }
-        .gh-tbl-day-hdr th:first-child { text-align:left; padding-left:10px; white-space:nowrap; }
-        .gh-th-date { display:block; font-size:.72rem; font-weight:300; color:#111; letter-spacing:0; margin-top:2px; }
-        .gh-th-closed .gh-th-date { color:#ccc; }
-        .gh-th-today .gh-th-date  { font-weight:700; }
         .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
         .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
 
@@ -728,7 +722,7 @@
         .gh-no-click:hover { background:transparent; }
         .gh-sh-inner { padding:7px 4px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
         .gh-sh-line { display:block; font-size:.73rem; font-weight:400; line-height:1.6; color:#111; white-space:nowrap; }
-        .gh-sh-loc  { display:block; font-size:.68rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:#111; white-space:nowrap; }
+        .gh-sh-loc  { display:block; font-size:.68rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
         .c-folga  { background:#f9f9f9; }
         .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         .c-ferias { background:#f9f9f9; }

@@ -70,7 +70,9 @@
   function fixPanelLayout() {
     const panel = document.getElementById('tab-gerador');
     if (panel) {
-      panel.style.display = 'flex'; // restore after cleanupGeradorLayout may have set none
+      // NEVER set display here — the tab system's CSS (.tab-panel.active { display:flex })
+      // is the single source of truth for visibility. Forcing display:flex here causes the
+      // gerador panel to bleed into other modules when tabs switch.
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
@@ -80,17 +82,17 @@
   }
 
   function cleanupGeradorLayout() {
-    // Called when leaving the gerador tab — only hide the modal and reset inline styles
-    // we added. Do NOT set display:none on the panel itself — the tab system manages
-    // panel visibility via classes. Forcing display:none here bleeds into other modules.
+    // Called when leaving the gerador tab — reset only the inline styles we added.
+    // NEVER touch display — the tab system's CSS controls visibility exclusively.
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '';
       panel.style.background = '';
       panel.style.color = '';
       panel.style.overflow = '';
-      // Do NOT set panel.style.display here — let the tab system control visibility.
       panel.style.flexDirection = '';
+      // display must never be set inline — clear any leftover value just in case
+      panel.style.display = '';
     }
     const modal = document.getElementById('gh-modal');
     if (modal) {
@@ -1193,12 +1195,15 @@
   };
 
   // ── TAB LISTENER ──
-  // Use event delegation on document so dynamically-added tab buttons are also caught.
-  // This prevents the modal/layout from bleeding into other modules when tabs are
-  // added after the IIFE runs.
+  // Listen for tab changes using the custom openModule flow AND direct tab-btn clicks.
+  // IMPORTANT: only match clicks whose target is actually a tab button — NOT clicks on
+  // dashboard cards (.adm-mod-card) which also reach the document in capture phase.
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.tab-btn, .drawer-tab-btn');
     if (!btn) return;
+    // Extra guard: ignore if the button is inside the dashboard card grid
+    // (shouldn't happen normally, but prevents false positives)
+    if (e.target.closest('.adm-mod-card')) return;
     if (btn.dataset.tab === 'gerador') {
       window.initGeradorHorarios?.();
     } else {

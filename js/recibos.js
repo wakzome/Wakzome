@@ -212,11 +212,7 @@ async function rProcessRecibos() {
       dados: uploadResults.map(r => ({ filename: r.filename, name: r.name, mes }))
     };
     const indexBlob = new Blob([JSON.stringify(indexData, null, 2)], { type: 'application/json' });
-    // Apagar antes de re-upload para garantir que o Supabase não serve versão anterior em cache
-    await sbClient.storage.from('recibos').remove(['index.json']);
     await sbClient.storage.from('recibos').upload('index.json', indexBlob, { upsert: true, contentType: 'application/json' });
-    // Guardar token de cache-bust para o overlay usar
-    localStorage.setItem('recibos_bust', Date.now().toString());
 
     rSetProgress(100); rHideProgress();
     const uploaded = uploadResults.filter(r => r.uploaded).length;
@@ -378,21 +374,7 @@ document.getElementById('r-cfg-mes').addEventListener('input', function() {
 });
 
 // Conferir button — open recibos overlay
-// Intercept: patch the native fetch to add cache-busting on index.json requests,
-// then restore it immediately after openRecibosOverlay() finishes its async fetch.
 document.getElementById('r-conferir-btn').addEventListener('click', function() {
-  const _origFetch = window.fetch;
-  window.fetch = function(url, opts) {
-    if (typeof url === 'string' && url.includes('index.json')) {
-      const bust = localStorage.getItem('recibos_bust') || Date.now();
-      const sep  = url.includes('?') ? '&' : '?';
-      url = url + sep + '_bust=' + bust;
-      opts = Object.assign({}, opts, { cache: 'no-store' });
-    }
-    return _origFetch.call(this, url, opts);
-  };
-  // Restaurar fetch original após 5s (tempo suficiente para o overlay fazer o seu fetch)
-  setTimeout(function() { window.fetch = _origFetch; }, 5000);
   openRecibosOverlay();
 });
 
@@ -461,32 +443,3 @@ function rSanitizeName(name) {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').toLowerCase();
 }
-
-
-// ── Cache-bust patch global para openRecibosOverlay ──────────
-// Envolve a função original (definida em shared.js ou outro ficheiro)
-// para garantir que o fetch do index.json nunca usa cache,
-// independentemente de qual botão abre o overlay.
-document.addEventListener('DOMContentLoaded', function() {
-  // Espera que todos os scripts externos (shared.js, etc.) carreguem
-  setTimeout(function() {
-    if (typeof openRecibosOverlay === 'function' && !openRecibosOverlay._bustPatched) {
-      const _orig = openRecibosOverlay;
-      window.openRecibosOverlay = function() {
-        const _origFetch = window.fetch;
-        window.fetch = function(url, opts) {
-          if (typeof url === 'string' && url.includes('index.json')) {
-            const bust = localStorage.getItem('recibos_bust') || Date.now();
-            const sep  = url.includes('?') ? '&' : '?';
-            url = url + sep + '_bust=' + bust;
-            opts = Object.assign({}, opts, { cache: 'no-store' });
-          }
-          return _origFetch.call(this, url, opts);
-        };
-        setTimeout(function() { window.fetch = _origFetch; }, 5000);
-        return _orig.apply(this, arguments);
-      };
-      window.openRecibosOverlay._bustPatched = true;
-    }
-  }, 0);
-});

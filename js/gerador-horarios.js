@@ -746,7 +746,7 @@
         const hOk = Math.abs(aH - (p.hrs||40)) < 0.5;
         return `<tr>
           <td><div class="gh-p-cell">
-            <div class="gh-p-name"><span class="gh-p-dot">●</span>${p.name} <span class="gh-p-hrs-tag">${p.hrs}h</span></div>
+            <div class="gh-p-name"><span class="gh-p-dot">●</span>${p.name}</div>
             <div class="gh-p-hrs ${hOk?'ok':'bad'}">${aH}h${hOk?' ✓':' (!)'}</div>
           </div></td>${cells}</tr>`;
       }).join('');
@@ -919,22 +919,23 @@
         .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
         .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
         .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
-        .gh-al-chip { font-size:.68rem; padding:4px 11px; border-radius:20px; }
-        .gh-al-chip.red   { background:#fff5f5; color:#c0392b; border:1px solid rgba(192,57,43,.18); }
-        .gh-al-chip.amber { background:#fffbf0; color:#b8860b; border:1px solid rgba(184,134,11,.2); }
-        .gh-al-chip.info  { background:#f0f6ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.2); }
-        .gh-dec-chip { font-size:.65rem; color:#777; padding:3px 9px; background:#f5f5f5; border-radius:4px; }
+        .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
+        .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
+        .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
+        .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
+        .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
 
         /* ── TABLE LAYOUT ── */
-        .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; }
-        .gh-store-block { margin-bottom:48px; display:flex; justify-content:center; padding:0 16px; overflow-x:auto; }
-        /* Table: auto layout, width determined by content only — never stretches to fill container */
-        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; }
+        .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
+        .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
+        /* Fixed layout: all tables share same column widths so they align perfectly */
+        .gh-sched-tbl { border-collapse:collapse; table-layout:fixed; width:900px; max-width:100%; }
         .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; min-width:80px; }
-        .gh-tbl-store-hdr td:first-child { text-align:center; min-width:0; width:130px; }
+        .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; }
+        .gh-tbl-store-hdr td:first-child { text-align:center; width:140px; }
+        .gh-tbl-store-hdr td:not(:first-child) { width:calc((900px - 140px) / 7); }
         .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
-        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; overflow:hidden; }
         .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
 
         /* ── PERSON CELL ── */
@@ -951,9 +952,9 @@
         .gh-sh-td:hover { background:#f4f4f4; }
         .gh-no-click { cursor:default; }
         .gh-no-click:hover { background:transparent; }
-        .gh-sh-inner { padding:7px 4px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .gh-sh-line { display:block; font-size:.76rem; font-weight:500; line-height:1.6; color:#111; white-space:nowrap; }
-        .gh-sh-loc  { display:block; font-size:.72rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
+        .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
         .c-folga  { background:#f9f9f9; }
         .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         .c-ferias { background:#f9f9f9; }

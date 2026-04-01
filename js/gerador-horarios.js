@@ -778,7 +778,8 @@
     });
   }
 
-
+  // ── RENDER HORÁRIO ──
+  function showSchedule(active) {
     const c = getContainer(); if (!c) return;
     fixPanelLayout();
     const dates = wkDates();

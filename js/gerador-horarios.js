@@ -68,17 +68,15 @@
   function getContainer() { return document.getElementById('gh-container'); }
 
   function fixPanelLayout() {
-    // Only touch #tab-gerador — never shared/global containers
     const panel = document.getElementById('tab-gerador');
     if (panel) {
+      panel.style.display = 'flex'; // restore after cleanupGeradorLayout may have set none
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
       panel.style.overflow = 'hidden';
-      panel.style.display = 'flex';
       panel.style.flexDirection = 'column';
     }
-    // gh-container layout is handled entirely by CSS — no inline styles needed
   }
 
   function cleanupGeradorLayout() {
@@ -89,11 +87,9 @@
       panel.style.background = '';
       panel.style.color = '';
       panel.style.overflow = '';
-      panel.style.display = '';
+      panel.style.display = 'none'; // force-hide: apps may use class toggling, not display
       panel.style.flexDirection = '';
     }
-    // Force-hide the modal: position:fixed means it floats over the whole page
-    // regardless of its parent's visibility. Remove open class AND hide with display:none.
     const modal = document.getElementById('gh-modal');
     if (modal) {
       modal.classList.remove('open');
@@ -319,17 +315,28 @@
     active.forEach((p, i) => { if (MEM.offsets[p.id] === undefined) MEM.offsets[p.id] = i; });
     S.sundayAssigned = {};
     sundayStores.forEach(sid => { S.sundayAssigned[sid] = []; });
+
+    // Where would person p actually work on this day if not on folga?
+    // Mirrors buildCell logic exactly.
+    function predictStore(p, day) {
+      if (p.id === 'sandra') return S.sandraDay[day] || null;
+      if (isAbsent(p.id, day)) return null;
+      if (p.store && storeOpen(p.store, day)) return p.store;
+      return S.openStores.find(id => S.openDays[id]?.includes(day) && p.knows.includes(id)) || null;
+    }
+
+    // True coverage: count everyone's predicted store, not just their home store
     function baseCov(day) {
       const cov = {};
-      S.openStores.forEach(sid => {
-        cov[sid] = active.filter(p => {
-          if (p.id === 'sandra') return S.sandraDay[day] === sid;
-          if (!p.store || p.store !== sid) return false;
-          return !isAbsent(p.id, day);
-        }).length;
+      S.openStores.forEach(sid => { cov[sid] = 0; });
+      active.forEach(p => {
+        if (isAbsent(p.id, day)) return;
+        const sid = predictStore(p, day);
+        if (sid && cov[sid] !== undefined) cov[sid]++;
       });
       return cov;
     }
+
     const remaining = {};
     workDays.forEach(day => { remaining[day] = baseCov(day); });
     const sorted = [...active].sort((a, b) => {
@@ -346,23 +353,17 @@
       const canWorkSunday = storOpensSun && !sunQuotaFilled && p.canAlone !== false && weeksSince(p.start, S.weekStart) >= 4;
       let extraDayOff = null;
       if (canWorkSunday) {
-        // Choose the extraDayOff day: must leave the store with enough coverage after removal.
-        // Sort candidates by most coverage first (so we take from the richest day),
-        // but only pick days where removing one person still keeps coverage >= minAv.
         const candidates = workDays.filter(d => {
           if (isAbsent(p.id, d)) return false;
-          const storeMin = myStore === 'avenida' ? minAv(d) : 1;
-          const covAfter = (remaining[d]?.[myStore] || 0) - 1;
-          return covAfter >= storeMin;
+          const covStore = predictStore(p, d) || myStore;
+          if (!covStore) return false;
+          const storeMin = covStore === 'avenida' ? minAv(d) : 1;
+          return (remaining[d]?.[covStore] || 0) - 1 >= storeMin;
         });
         if (candidates.length > 0) {
           extraDayOff = candidates.sort((a, b) => (remaining[b][myStore]||0) - (remaining[a][myStore]||0))[0];
-        } else {
-          // No safe day to take off — cannot work Sunday after all
-          // (canWorkSunday will remain true but extraDayOff=null means the sunday math won't add up to target)
         }
       }
-      // canWorkSundayEffective: only true if we also found a safe extraDayOff
       const canWorkSundayEffective = canWorkSunday && extraDayOff !== null;
       let found = false, willWorkSunday = false;
       for (let t = 0; t < 12; t++) {
@@ -378,13 +379,17 @@
         if (withoutSun === target) { sundayDecision = false; }
         else if (canWorkSundayEffective && withSun === target) { sundayDecision = true; }
         else { dayIdx = (dayIdx+1) % 6; continue; }
-        const effStore = p.id === 'sandra' ? S.sandraDay[day] : p.store;
-        if (effStore && S.openStores.includes(effStore) && S.openDays[effStore]?.includes(day)) {
-          if ((remaining[day][effStore]||0) - 1 < 1) { dayIdx = (dayIdx+1) % 6; continue; }
+
+        // Use real predicted store — not just p.store
+        const effStore = predictStore(p, day);
+        if (effStore && storeOpen(effStore, day)) {
+          const storeMin = effStore === 'avenida' ? minAv(day) : 1;
+          if ((remaining[day][effStore]||0) - 1 < storeMin) { dayIdx = (dayIdx+1) % 6; continue; }
         }
+        // Count folgas already assigned whose predicted store matches
         const sameFolgas = sorted.filter(x => {
           if (x.id === p.id || !S.folgaDay[x.id] || S.folgaDay[x.id] !== day) return false;
-          return (x.id === 'sandra' ? S.sandraDay[day] : x.store) === effStore;
+          return predictStore(x, day) === effStore;
         }).length;
         if (sameFolgas >= ((day === 'TER' || day === 'QUA') ? 2 : 1)) { dayIdx = (dayIdx+1) % 6; continue; }
         if (p.id === 'matilde' && S.folgaDay['carla']   === day) { dayIdx = (dayIdx+1) % 6; continue; }
@@ -399,10 +404,11 @@
         if (!S.sundayAssigned[myStore]) S.sundayAssigned[myStore] = [];
         S.sundayAssigned[myStore].push(p.id);
       }
-      const effStore = p.id === 'sandra' ? S.sandraDay[day] : p.store;
+      const effStore = predictStore(p, day);
       if (effStore && remaining[day]?.[effStore] !== undefined) remaining[day][effStore]--;
       if (willWorkSunday && extraDayOff && extraDayOff !== day) {
-        if (effStore && remaining[extraDayOff]?.[effStore] !== undefined) remaining[extraDayOff][effStore]--;
+        const extraStore = predictStore(p, extraDayOff) || myStore;
+        if (extraStore && remaining[extraDayOff]?.[extraStore] !== undefined) remaining[extraDayOff][extraStore]--;
         if (!S.extraDayOff) S.extraDayOff = {};
         S.extraDayOff[p.id] = extraDayOff;
       }
@@ -1031,56 +1037,62 @@
       document.head.appendChild(style);
     }
 
-    // Inject HTML into panel (only once)
+    // Inject HTML into panel (only once) — only gh-container goes inside the panel
     if (!document.getElementById('gh-container')) {
-      panel.innerHTML = `
-        <div id="gh-container"></div>
-        <div id="gh-modal">
-          <div class="gh-modal">
-            <div class="gh-modal-hdr">
-              <div class="gh-modal-ttl" id="gh-me-ttl">Editar</div>
-              <button class="gh-modal-x" id="gh-modal-x">✕</button>
+      panel.innerHTML = `<div id="gh-container"></div>`;
+    }
+
+    // Modal lives in document.body — completely outside any tab panel so it never
+    // bleeds into other modules regardless of how tabs show/hide their panels.
+    if (!document.getElementById('gh-modal')) {
+      const modalEl = document.createElement('div');
+      modalEl.id = 'gh-modal';
+      modalEl.innerHTML = `
+        <div class="gh-modal">
+          <div class="gh-modal-hdr">
+            <div class="gh-modal-ttl" id="gh-me-ttl">Editar</div>
+            <button class="gh-modal-x" id="gh-modal-x">✕</button>
+          </div>
+          <div class="gh-modal-bdy">
+            <div class="gh-form-grp">
+              <label class="gh-form-lbl">Tipo</label>
+              <select class="gh-field-sm" id="gh-me-type" style="width:100%">
+                <option value="work">Trabalho</option>
+                <option value="folga">FOLGA</option>
+                <option value="ferias">FÉRIAS</option>
+              </select>
             </div>
-            <div class="gh-modal-bdy">
-              <div class="gh-form-grp">
-                <label class="gh-form-lbl">Tipo</label>
-                <select class="gh-field-sm" id="gh-me-type" style="width:100%">
-                  <option value="work">Trabalho</option>
-                  <option value="folga">FOLGA</option>
-                  <option value="ferias">FÉRIAS</option>
+            <div id="gh-me-work">
+              <div class="gh-form-grp" style="margin-top:10px">
+                <label class="gh-form-lbl">Horário</label>
+                <select class="gh-field-sm" id="gh-me-shift" style="width:100%">
+                  <option value="10:00-14:00|15:00-19:00">10:00-14:00 / 15:00-19:00</option>
+                  <option value="10:00-13:00|14:00-19:00">10:00-13:00 / 14:00-19:00</option>
+                  <option value="09:00-13:00|14:00-18:00">09:00-13:00 / 14:00-18:00</option>
+                  <option value="09:00-13:00|19:00-23:00">09:00-13:00 / 19:00-23:00 (Noite)</option>
+                  <option value="11:00-15:00|16:00-20:00">11:00-15:00 / 16:00-20:00 (Pós-noite)</option>
+                  <option value="10:00-14:00">10:00-14:00 (Meio dia)</option>
                 </select>
               </div>
-              <div id="gh-me-work">
-                <div class="gh-form-grp" style="margin-top:10px">
-                  <label class="gh-form-lbl">Horário</label>
-                  <select class="gh-field-sm" id="gh-me-shift" style="width:100%">
-                    <option value="10:00-14:00|15:00-19:00">10:00-14:00 / 15:00-19:00</option>
-                    <option value="10:00-13:00|14:00-19:00">10:00-13:00 / 14:00-19:00</option>
-                    <option value="09:00-13:00|14:00-18:00">09:00-13:00 / 14:00-18:00</option>
-                    <option value="09:00-13:00|19:00-23:00">09:00-13:00 / 19:00-23:00 (Noite)</option>
-                    <option value="11:00-15:00|16:00-20:00">11:00-15:00 / 16:00-20:00 (Pós-noite)</option>
-                    <option value="10:00-14:00">10:00-14:00 (Meio dia)</option>
-                  </select>
-                </div>
-                <div class="gh-form-grp" style="margin-top:10px">
-                  <label class="gh-form-lbl">Loja</label>
-                  <select class="gh-field-sm" id="gh-me-store" style="width:100%"></select>
-                </div>
+              <div class="gh-form-grp" style="margin-top:10px">
+                <label class="gh-form-lbl">Loja</label>
+                <select class="gh-field-sm" id="gh-me-store" style="width:100%"></select>
               </div>
-              <div class="gh-conf-note" id="gh-me-conf" style="display:none"></div>
             </div>
-            <div class="gh-modal-ftr">
-              <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-modal-cancel">Cancelar</button>
-              <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-modal-save">Guardar</button>
-            </div>
+            <div class="gh-conf-note" id="gh-me-conf" style="display:none"></div>
+          </div>
+          <div class="gh-modal-ftr">
+            <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-modal-cancel">Cancelar</button>
+            <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-modal-save">Guardar</button>
           </div>
         </div>`;
+      document.body.appendChild(modalEl);
 
       document.getElementById('gh-modal-x').addEventListener('click', closeModal);
       document.getElementById('gh-modal-cancel').addEventListener('click', closeModal);
       document.getElementById('gh-modal-save').addEventListener('click', applyEdit);
       document.getElementById('gh-me-type').addEventListener('change', meTypeChange);
-      document.getElementById('gh-modal').addEventListener('click', e => { if (e.target === document.getElementById('gh-modal')) closeModal(); });
+      modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
     }
 
     renderWiz();

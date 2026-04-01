@@ -9,20 +9,19 @@ function initSaftReminder() {
     const month = now.getMonth();
     const year = now.getFullYear();
 
-    // Next 31st: find next occurrence of day 31
-    function next31From(d) {
+    // Next end-of-month: find the last day of current month, or next month if already past it
+    function nextEndOfMonthFrom(d) {
       let y = d.getFullYear(), m = d.getMonth();
-      // Try current month's 31st
-      for (let i = 0; i < 13; i++) {
-        const candidate = new Date(y, m + i, 31);
-        // new Date handles overflow: if month has no 31, day rolls over — check it stays on 31
-        if (candidate.getDate() === 31 && candidate >= d) return candidate;
-      }
-      return null;
+      // Last day of current month: day 0 of next month
+      const endThisMonth = new Date(y, m + 1, 0);
+      endThisMonth.setHours(0, 0, 0, 0);
+      if (endThisMonth >= d) return endThisMonth;
+      // Otherwise, last day of next month
+      return new Date(y, m + 2, 0);
     }
 
     const today = new Date(year, month, day);
-    const next31 = next31From(today);
+    const next31 = nextEndOfMonthFrom(today);
     if (!next31) return;
 
     const msPerDay = 86400000;
@@ -34,17 +33,17 @@ function initSaftReminder() {
 
     if (diffDays === 0) {
       countEl.textContent = 'hoje';
-      labelEl.textContent = 'dia 31';
+      labelEl.textContent = 'fim do mês';
       titleEl.innerHTML = 'solicitar criação<br>de SAFT';
       reminder.classList.add('urgent');
     } else if (diffDays <= 5) {
       countEl.textContent = diffDays;
-      labelEl.textContent = diffDays === 1 ? 'dia para o dia 31' : 'dias para o dia 31';
+      labelEl.textContent = diffDays === 1 ? 'dia para o fim do mês' : 'dias para o fim do mês';
       titleEl.innerHTML = 'solicitar criação<br>de SAFT';
       reminder.classList.add('urgent');
     } else {
       countEl.textContent = diffDays;
-      labelEl.textContent = 'dias para o dia 31';
+      labelEl.textContent = 'dias para o fim do mês';
       titleEl.innerHTML = 'solicitar criação<br>de SAFT';
       reminder.classList.remove('urgent');
     }

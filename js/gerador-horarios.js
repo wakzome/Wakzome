@@ -517,6 +517,31 @@
         if (staff.length < 2) return;
         staff.forEach((p, i) => { S.schedule[p.id][day].shift = i < staff.length-1 ? SH_ALT : SH_DEFAULT; });
       });
+
+      // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
+      // This applies even when they're in different stores.
+      const edSch = S.schedule['edna']?.[day];
+      const caSch = S.schedule['carla']?.[day];
+      if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
+        // Try to give Carla the alternate shift — only if her store has ≥2 workers
+        // (lone worker can't stagger lunch) and the alternate shift is viable.
+        const caStore = caSch.store;
+        const caStoreStaff = wk().filter(p => S.schedule[p.id][day].store === caStore).length;
+        const altShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        if (caStoreStaff >= 2) {
+          S.schedule['carla'][day].shift = altShift;
+          S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
+        } else {
+          // Can't stagger in Carla's store — try Edna's store instead
+          const edStore = edSch.store;
+          const edStoreStaff = wk().filter(p => S.schedule[p.id][day].store === edStore).length;
+          if (edStoreStaff >= 2) {
+            S.schedule['edna'][day].shift = altShift;
+            S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
+          }
+          // If neither store has 2+ workers, nothing can be done — no alert (soft rule)
+        }
+      }
       const logged = new Set();
       wk().forEach(p => {
         (p.softAvoid || []).forEach(oid => {
@@ -767,6 +792,15 @@
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
 
+    // Sync name-column width: measure the widest first-cell across ALL tables,
+    // then set that width explicitly on every first-cell so all tables align.
+    requestAnimationFrame(() => {
+      const nameCells = [...c.querySelectorAll('.gh-sched-tbl td:first-child')];
+      nameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
+      const maxW = nameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
+      if (maxW > 0) nameCells.forEach(td => { td.style.width = maxW + 'px'; td.style.minWidth = maxW + 'px'; });
+    });
+
     // Edit on click
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
       td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
@@ -928,19 +962,21 @@
         /* ── TABLE LAYOUT ── */
         .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
         .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
-        /* Fixed layout: all tables share same column widths so they align perfectly */
-        .gh-sched-tbl { border-collapse:collapse; table-layout:fixed; width:900px; max-width:100%; }
+        /* Auto layout: name col sizes to widest name across ALL tables (via min-width on .gh-p-cell),
+           day cols all share the same explicit width so they stay aligned */
+        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
         .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; }
-        .gh-tbl-store-hdr td:first-child { text-align:center; width:140px; }
-        .gh-tbl-store-hdr td:not(:first-child) { width:calc((900px - 140px) / 7); }
+        .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
+        .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }
         .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
-        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; overflow:hidden; }
-        .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
+        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        .gh-sched-tbl td:first-child { padding:0; }
+        /* Force all day columns to be exactly 106px so tables align */
+        .gh-sh-td { width:106px; min-width:106px; max-width:106px; }
 
         /* ── PERSON CELL ── */
-        .gh-p-cell { padding:8px 12px; }
-        .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; white-space:nowrap; }
+        .gh-p-cell { padding:8px 12px; white-space:nowrap; }
+        .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
         .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
         .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
         .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }

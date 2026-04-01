@@ -541,9 +541,34 @@
           return;
         }
         // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
+        // Seniority rule: when there are more than 2 autonomous workers and staggering would
+        // leave someone alone during their lunch break, that person must be the most senior
+        // (highest seniority score). The list is already sorted ascending by seniority, so
+        // the most senior is the last element — she gets SH_DEFAULT (store covered during
+        // SH_ALT lunch slots). Workers on SH_ALT lunch alone only if they are the single
+        // person on that slot; with >2 workers some slots overlap, so we enforce: if only
+        // one person would cover the store during the SH_ALT lunch window (13:00–14:00),
+        // that person must be the most senior autonomous worker.
+        // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
+        // The autonomous list is sorted ascending by seniority, so the last element is the most senior.
         autonomous.forEach((p, i) => {
           S.schedule[p.id][day].shift = i < autonomous.length - 1 ? SH_ALT : SH_DEFAULT;
         });
+
+        // ── Lunch alone seniority rule (>2 people in the store) ──
+        // When more than 2 autonomous workers are present, staggering leaves exactly one
+        // person covering the store alone during the SH_ALT lunch gap (13:00–14:00).
+        // Rule: that lone person must be the most senior. We verify and swap if needed.
+        if (autonomous.length > 2) {
+          const senScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+          const defWorker = autonomous.find(p => S.schedule[p.id][day].shift === SH_DEFAULT);
+          const mostSenior = autonomous.reduce((best, cur) => senScore(cur) >= senScore(best) ? cur : best, autonomous[0]);
+          if (defWorker && defWorker.id !== mostSenior.id) {
+            S.schedule[mostSenior.id][day].shift = SH_DEFAULT;
+            S.schedule[defWorker.id][day].shift  = SH_ALT;
+            S.decisions.push({ type: 'info', text: `${day}: ${mostSenior.name} fica sozinha em ${sname(st.id)} na hora de almoço (mais antiga).` });
+          }
+        }
       });
 
       // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
@@ -1007,31 +1032,34 @@
 
         /* ── WIZARD ── */
         @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        #tab-gerador .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; box-sizing:border-box; }
+        #tab-gerador .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:28px 16px; animation:gh-up .3s ease; box-sizing:border-box; }
+        @media(min-width:600px){ #tab-gerador .gh-wiz-box { padding:48px 24px; } }
         #tab-gerador .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
-        #tab-gerador .gh-wiz-title { font-size:1.6rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
-        #tab-gerador .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
-        #tab-gerador .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
+        #tab-gerador .gh-wiz-title { font-size:1.3rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
+        @media(min-width:600px){ #tab-gerador .gh-wiz-title { font-size:1.6rem; } }
+        #tab-gerador .gh-wiz-sub { font-size:.82rem; color:#888; margin-bottom:24px; line-height:1.6; }
+        #tab-gerador .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:24px; color:#111; box-sizing:border-box; }
         #tab-gerador .gh-field:focus { border-color:#000; }
-        #tab-gerador .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
+        #tab-gerador .gh-wiz-nav { display:flex; gap:10px; align-items:center; margin-top:4px; flex-wrap:wrap; }
 
         /* ── BUTTONS ── */
-        #tab-gerador .gh-btn { padding:9px 20px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
+        #tab-gerador .gh-btn { padding:9px 18px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
         #tab-gerador .gh-btn-solid { background:#111 !important; color:#fff !important; border:1px solid #111 !important; }
         #tab-gerador .gh-btn-solid:hover { background:#333 !important; border-color:#333 !important; }
         #tab-gerador .gh-btn-ghost { background:#fff !important; color:#111 !important; border:1px solid #999 !important; }
         #tab-gerador .gh-btn-ghost:hover { border-color:#111 !important; }
-        #tab-gerador .gh-btn-sm { padding:6px 14px; font-size:.65rem; }
+        #tab-gerador .gh-btn-sm { padding:6px 12px; font-size:.65rem; }
         #tab-gerador .gh-wiz-back { background:none !important; border:none !important; font-size:.68rem; color:#bbb !important; cursor:pointer; font-family:inherit; letter-spacing:.06em; text-transform:uppercase; padding:6px 4px; }
         #tab-gerador .gh-wiz-back:hover { color:#111 !important; }
 
         /* ── ABSENCES ── */
         #tab-gerador .gh-ab-list { margin-bottom:14px; }
-        #tab-gerador .gh-ab-row { display:grid; grid-template-columns:1fr 110px 90px 28px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; }
-        #tab-gerador .gh-ab-sel { border:1px solid #ddd; border-radius:5px; padding:7px 9px; font-size:.78rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
+        #tab-gerador .gh-ab-row { display:grid; grid-template-columns:1fr 90px 28px; gap:6px; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+        @media(min-width:500px){ #tab-gerador .gh-ab-row { grid-template-columns:1fr 110px 90px 28px; } }
+        #tab-gerador .gh-ab-sel { border:1px solid #ddd; border-radius:5px; padding:7px 6px; font-size:.78rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
         #tab-gerador .gh-ab-x { background:none; border:none; cursor:pointer; color:#ccc; font-size:1rem; line-height:1; }
         #tab-gerador .gh-ab-x:hover { color:#c00; }
-        #tab-gerador .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; }
+        #tab-gerador .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; box-sizing:border-box; }
         #tab-gerador .gh-add-btn:hover { border-color:#111; color:#111; }
 
         /* ── STORE CONFIG ── */
@@ -1043,19 +1071,22 @@
         #tab-gerador .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
         #tab-gerador .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
         #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
-        #tab-gerador .gh-dtog { padding:5px 11px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.05em; cursor:pointer; user-select:none; color:#555; background:#fff; }
+        #tab-gerador .gh-dtog { padding:5px 9px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.05em; cursor:pointer; user-select:none; color:#555; background:#fff; }
         #tab-gerador .gh-dtog:hover { border-color:#555; }
         #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
-        #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
-        #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
-        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
-        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; flex-wrap:wrap; gap:8px; }
+        @media(min-width:600px){ #tab-gerador .gh-sched-bar { padding:12px 20px; } }
+        #tab-gerador .gh-sb-week { font-size:.65rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
+        #tab-gerador .gh-sb-dates { font-size:.84rem; font-weight:500; margin-top:2px; color:#111; }
+        #tab-gerador .gh-alert-bar { padding:8px 14px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        @media(min-width:600px){ #tab-gerador .gh-alert-bar { padding:8px 20px; } }
+        #tab-gerador .gh-dec-bar { padding:7px 14px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
+        @media(min-width:600px){ #tab-gerador .gh-dec-bar { padding:7px 20px; } }
+        #tab-gerador .gh-al-inner { display:flex; flex-wrap:wrap; gap:6px; }
         #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
-        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
+        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 11px; border-radius:20px; }
         #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
         #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
         #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
@@ -1063,39 +1094,65 @@
 
         /* ── COVERAGE BLOCKER ── */
         #tab-gerador .gh-cov-list { margin:24px 0; display:flex; flex-direction:column; gap:8px; }
-        #tab-gerador .gh-cov-row { display:grid; grid-template-columns:60px 1fr auto; gap:12px; align-items:center; padding:10px 14px; background:#fff5f5; border:1px solid rgba(169,50,38,.2); border-radius:7px; }
+        #tab-gerador .gh-cov-row { display:grid; grid-template-columns:60px 1fr auto; gap:8px; align-items:center; padding:10px 12px; background:#fff5f5; border:1px solid rgba(169,50,38,.2); border-radius:7px; }
         #tab-gerador .gh-cov-day { font-size:.72rem; font-weight:700; letter-spacing:.1em; color:#a93226; }
         #tab-gerador .gh-cov-store { font-size:.82rem; font-weight:500; color:#111; }
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
-        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
+        #tab-gerador .gh-sched-body { padding:16px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
+        @media(min-width:768px){ #tab-gerador .gh-sched-body { align-items:center; padding:20px 0 60px; } }
+
+        /* Store block: on mobile full-width with horizontal scroll */
+        #tab-gerador .gh-store-block {
+          margin-bottom:32px; width:100%; box-sizing:border-box;
+          overflow-x:auto; -webkit-overflow-scrolling:touch;
+          scrollbar-width:thin; scrollbar-color:#ccc #f5f5f5;
+          padding-bottom:6px;
+        }
+        #tab-gerador .gh-store-block::-webkit-scrollbar { height:4px; }
+        #tab-gerador .gh-store-block::-webkit-scrollbar-track { background:#f5f5f5; }
+        #tab-gerador .gh-store-block::-webkit-scrollbar-thumb { background:#ccc; border-radius:4px; }
+        @media(min-width:768px){
+          #tab-gerador .gh-store-block { overflow-x:visible; padding:0 16px; display:flex; justify-content:center; margin-bottom:48px; }
+        }
+
+        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:580px; }
+        @media(min-width:900px){ #tab-gerador .gh-sched-tbl { min-width:min(900px,100%); } }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
-        #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
-        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }
-        #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
+        #tab-gerador .gh-tbl-store-hdr td { padding:8px 6px; font-size:.7rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:88px; }
+        @media(min-width:600px){ #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; width:106px; } }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:110px; }
+        @media(min-width:600px){ #tab-gerador .gh-tbl-store-hdr td:first-child { min-width:140px; } }
+        #tab-gerador .gh-tbl-date { font-weight:500; font-size:.65rem; color:#555; }
+        @media(min-width:600px){ #tab-gerador .gh-tbl-date { font-size:.72rem; } }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
         #tab-gerador .gh-sched-tbl td:first-child { padding:0; }
-        #tab-gerador .gh-sh-td { width:106px; min-width:106px; max-width:106px; text-align:center; cursor:pointer; }
+        #tab-gerador .gh-sh-td { width:88px; min-width:88px; max-width:88px; text-align:center; cursor:pointer; }
+        @media(min-width:600px){ #tab-gerador .gh-sh-td { width:106px; min-width:106px; max-width:106px; } }
         #tab-gerador .gh-sh-td:hover { background:#f4f4f4; }
         #tab-gerador .gh-no-click { cursor:default; }
         #tab-gerador .gh-no-click:hover { background:transparent; }
 
         /* ── PERSON CELL ── */
-        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }
-        #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
-        #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
+        #tab-gerador .gh-p-cell { padding:6px 10px; white-space:nowrap; }
+        @media(min-width:600px){ #tab-gerador .gh-p-cell { padding:8px 12px; } }
+        #tab-gerador .gh-p-name { font-size:.78rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
+        @media(min-width:600px){ #tab-gerador .gh-p-name { font-size:.85rem; } }
+        #tab-gerador .gh-p-dot { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
         #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
-        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
+        #tab-gerador .gh-p-hrs { font-size:.63rem; padding-left:12px; margin-top:2px; font-weight:600; }
+        @media(min-width:600px){ #tab-gerador .gh-p-hrs { font-size:.68rem; padding-left:16px; } }
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
         #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
 
         /* ── SHIFT CELLS ── */
-        #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
-        #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .gh-sh-inner { padding:6px 3px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        @media(min-width:600px){ #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; } }
+        #tab-gerador .gh-sh-line { display:block; font-size:.72rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
+        @media(min-width:600px){ #tab-gerador .gh-sh-line { font-size:.82rem; } }
+        #tab-gerador .gh-sh-loc { display:block; font-size:.68rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        @media(min-width:600px){ #tab-gerador .gh-sh-loc { font-size:.78rem; } }
         #tab-gerador .c-folga  { background:#f9f9f9; }
         #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         #tab-gerador .c-ferias { background:#f9f9f9; }
@@ -1105,28 +1162,30 @@
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
 
-        /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
-        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+        /* ── MODAL ── */
+        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; padding:0; box-sizing:border-box; }
+        @media(min-width:500px){ #gh-modal { align-items:center; padding:16px; } }
         #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
-        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:8px; width:340px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.12); color:#111; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:12px 12px 0 0; width:100%; max-width:100%; overflow:hidden; transform:translateY(20px); transition:transform .2s; box-shadow:0 -4px 32px rgba(0,0,0,.12); color:#111; }
+        @media(min-width:500px){ #gh-modal .gh-modal { border-radius:8px; max-width:340px; box-shadow:0 8px 32px rgba(0,0,0,.12); transform:translateY(8px); } }
         #gh-modal.open .gh-modal { transform:translateY(0); }
         #gh-modal .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
         #gh-modal .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
-        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
+        #gh-modal .gh-modal-x { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
         #gh-modal .gh-modal-bdy { padding:18px; }
         #gh-modal .gh-modal-ftr { padding:12px 18px; border-top:1px solid #f0f0f0; display:flex; gap:10px; justify-content:flex-end; }
-        #gh-modal .gh-form-grp  { margin-bottom:14px; }
-        #gh-modal .gh-form-lbl  { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
-        #gh-modal .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
+        #gh-modal .gh-form-grp { margin-bottom:14px; }
+        #gh-modal .gh-form-lbl { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
+        #gh-modal .gh-field-sm { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
         #gh-modal .gh-field-sm:focus { border-color:#111; }
         #gh-modal .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
         #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
         #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
 
-        /* ── FERIAS BANNER (injected separately, also scope it) ── */
-        #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
-        #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
-        #tab-gerador .gh-ab-row-ferias { display:flex; align-items:center; gap:8px; padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8; border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a; font-weight:600; }
+        /* ── FERIAS BANNER ── */
+        #tab-gerador .gh-ferias-banner { display:flex; align-items:flex-start; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
+        #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; margin-top:1px; }
+        #tab-gerador .gh-ab-row-ferias { display:flex; align-items:center; gap:8px; padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8; border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a; font-weight:600; flex-wrap:wrap; }
         #tab-gerador .gh-ab-row-ferias .gh-ferias-tag { background:#e0f5e0; color:#1a5c1a; border-radius:4px; font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em; flex-shrink:0; }
         #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
       `;

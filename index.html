@@ -4064,11 +4064,12 @@ td                   { font-size: .96rem !important; }
     if (titleEl)     titleEl.textContent     = monthName || 'recibos';
     if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
 
-    /* Fetch do index.json — URL directo, sem cache */
-    var SUPA_BASE = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/recibos';
-    var publicUrl = SUPA_BASE + '/index.json?v=' + Date.now();
-
-    fetch(publicUrl, { cache: 'no-store' })
+    /* Fetch do index.json — bucket privado, usa signed URL */
+    sbClient.storage.from('recibos').createSignedUrl('index.json', 60)
+      .then(function (signRes) {
+        if (signRes.error) throw new Error(signRes.error.message);
+        return fetch(signRes.data.signedUrl, { cache: 'no-store' });
+      })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -4089,27 +4090,35 @@ td                   { font-size: .96rem !important; }
         }
 
         var mesPasta = indexData.mes || mes;
-        tbody.innerHTML = items.map(function (item, i) {
-          var filePath = mesPasta + '/' + item.filename;
-          var fileUrl  = SUPA_BASE + '/' + mesPasta + '/' + item.filename;
-          var name     = item.name || item.filename;
-          /* escapa HTML */
-          var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          var safeFile = String(item.filename).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          return '<tr>'
-            + '<td class="rn">' + (i + 1) + '</td>'
-            + '<td>' + safeName + '</td>'
-            + '<td><a href="' + fileUrl + '" download="' + safeFile + '" '
-            +   'style="padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;'
-            +   'border-radius:7px;background:#fff;text-decoration:none;font-weight:600;display:inline-block;"'
-            +   ' onmouseover="this.style.background=\'#555\';this.style.color=\'#fff\';this.style.borderColor=\'#555\'"'
-            +   ' onmouseout="this.style.background=\'#fff\';this.style.color=\'\';this.style.borderColor=\'#ccc\'"'
-            +   '>⬇ pdf</a></td>'
-            + '</tr>';
-        }).join('');
+        var paths = items.map(function (item) { return mesPasta + '/' + item.filename; });
 
-        loading.style.display = 'none';
-        body.style.display    = 'block';
+        /* Gerar signed URLs para os PDFs */
+        return sbClient.storage.from('recibos').createSignedUrls(paths, 300)
+          .then(function (urlRes) {
+            if (urlRes.error) throw new Error(urlRes.error.message);
+            var signed = urlRes.data; /* [{ path, signedUrl }, ...] */
+
+            tbody.innerHTML = items.map(function (item, i) {
+              var entry   = signed[i] || {};
+              var fileUrl = entry.signedUrl || '';
+              var name    = item.name || item.filename;
+              var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              var safeFile = String(item.filename).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              return '<tr>'
+                + '<td class="rn">' + (i + 1) + '</td>'
+                + '<td>' + safeName + '</td>'
+                + '<td><a href="' + fileUrl + '" download="' + safeFile + '" '
+                +   'style="padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;'
+                +   'border-radius:7px;background:#fff;text-decoration:none;font-weight:600;display:inline-block;"'
+                +   ' onmouseover="this.style.background=\'#555\';this.style.color=\'#fff\';this.style.borderColor=\'#555\'"'
+                +   ' onmouseout="this.style.background=\'#fff\';this.style.color=\'\';this.style.borderColor=\'#ccc\'"'
+                +   '>⬇ pdf</a></td>'
+                + '</tr>';
+            }).join('');
+
+            loading.style.display = 'none';
+            body.style.display    = 'block';
+          });
       })
       .catch(function (err) {
         console.error('openRecibosOverlay:', err);
@@ -4118,7 +4127,6 @@ td                   { font-size: .96rem !important; }
         errorDiv.textContent   = '⚠️ Erro ao carregar recibos: ' + err.message;
       });
   };
-
   window.closeRecibosOverlay = function () {
     var overlay = document.getElementById('recibos-overlay');
     if (!overlay) return;

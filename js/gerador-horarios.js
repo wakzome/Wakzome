@@ -64,8 +64,31 @@
   let wStep = 0;
   function getContainer() { return document.getElementById('gh-container'); }
 
+  function fixPanelLayout() {
+    // Neutralize the padding injected by #admin-app.module-open .tab-panel.active
+    const panel = document.getElementById('tab-gerador');
+    if (panel) {
+      panel.style.padding = '0';
+      panel.style.background = '#fff';
+      panel.style.color = '#111';
+      panel.style.overflow = 'hidden';
+      panel.style.display = 'flex';
+      panel.style.flexDirection = 'column';
+    }
+    const container = document.getElementById('gh-container');
+    if (container) {
+      container.style.flex = '1';
+      container.style.minHeight = '0';
+      container.style.overflowY = 'auto';
+      container.style.overflowX = 'hidden';
+      container.style.background = '#fff';
+      container.style.color = '#111';
+    }
+  }
+
   function renderWiz() {
     const c = getContainer(); if (!c) return;
+    fixPanelLayout();
     c.style.animation = 'none'; c.offsetWidth; c.style.animation = '';
     [wiz_week, wiz_absences, wiz_stores][wStep]();
   }
@@ -420,6 +443,7 @@
   // ── RENDER HORÁRIO ──
   function showSchedule(active) {
     const c = getContainer(); if (!c) return;
+    fixPanelLayout();
     const dates = wkDates();
     const today = new Date(); today.setHours(0,0,0,0);
 
@@ -585,14 +609,36 @@
     const panel = document.getElementById('tab-gerador');
     if (!panel) return;
 
+    // Force correct layout on the admin-app container so the module
+    // gets full height and doesn't bleed into the rest of the dashboard
+    const adminApp = document.getElementById('admin-app');
+    if (adminApp) {
+      // Ensure admin-app scrolls at its own level, not through the module
+      adminApp.style.overflow = 'hidden';
+    }
+
     // Inject CSS only once
     if (!document.getElementById('gh-styles')) {
       const style = document.createElement('style');
       style.id = 'gh-styles';
       style.textContent = `
-        /* ── LAYOUT ── */
-        #tab-gerador.active { display:flex; flex-direction:column; flex:1; overflow:hidden; width:100%; background:#fff; }
-        #gh-container { flex:1; overflow-y:auto; overflow-x:hidden; padding:0 0 60px; -webkit-overflow-scrolling:touch; background:#fff; color:#111; }
+        /* ── LAYOUT — isolation from admin dark theme ── */
+        #tab-gerador { background:#fff !important; color:#111 !important; }
+        #tab-gerador.active {
+          display:flex !important; flex-direction:column !important;
+          flex:1 !important; width:100% !important; height:100% !important;
+          overflow:hidden !important;
+          padding:0 !important; /* override module-open padding */
+          background:#fff !important; color:#111 !important;
+          box-sizing:border-box;
+        }
+        #gh-container {
+          flex:1; overflow-y:auto; overflow-x:hidden;
+          padding:0 0 60px; -webkit-overflow-scrolling:touch;
+          background:#fff; color:#111;
+          /* ensure container fills available height */
+          min-height:0;
+        }
 
         /* ── WIZARD ── */
         @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
@@ -651,10 +697,10 @@
         .gh-dec-chip { font-size:.65rem; color:#777; padding:3px 9px; background:#f5f5f5; border-radius:4px; }
 
         /* ── TABLE LAYOUT ── */
-        .gh-sched-body { padding:20px 16px 60px; overflow-x:auto; }
-        .gh-store-block { margin-bottom:48px; }
-        /* Table fits content — no fixed min-width, cells wrap naturally */
-        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:100%; }
+        .gh-sched-body { padding:20px 16px 60px; overflow-x:auto; width:100%; box-sizing:border-box; }
+        .gh-store-block { margin-bottom:48px; display:block; }
+        /* Table: auto layout, no forced width — expands to content */
+        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:auto; min-width:100%; }
         .gh-tbl-store-hdr { background:#efefef; }
         .gh-tbl-store-hdr td { padding:7px 10px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; white-space:nowrap; color:#111; }
         .gh-tbl-store-hdr td:first-child { text-align:left; white-space:nowrap; }

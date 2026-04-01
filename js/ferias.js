@@ -1,53 +1,37 @@
 // ══ FÉRIAS TAB ══
 (function() {
 
+  // ── SUPABASE ──
+  const SUPA_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
+  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
+
+  // Esperar a que el cliente Supabase esté disponible
+  function getSupabase() {
+    if (window.supabase && window.supabase.createClient) {
+      return window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    }
+    return null;
+  }
+
   // ── ESTADO GLOBAL ──
   const BASE_YEAR = 2026;
   let currentYear = BASE_YEAR;
-  let filterLoja  = '';      // '' = todas as lojas
-  let viewPessoa  = '';      // '' = vista normal, nome = vista por pessoa
-
-  // ── DATA BASE ──
-  const feriasDB = {};
-  feriasDB[2026] = [
-    { nome:'CARLA ALVES',        de:'12/03/2026', ate:'26/03/2026', loja:'Porto Santo' },
-    { nome:'MARILIA SILVA',      de:'27/03/2026', ate:'13/04/2026', loja:'Porto Santo' },
-    { nome:'EDNA MELIM',         de:'29/04/2026', ate:'14/05/2026', loja:'Porto Santo' },
-    { nome:'SANDRA MELIM',       de:'05/01/2026', ate:'25/01/2026', loja:'Porto Santo' },
-    { nome:'SANDRA MELIM',       de:'14/09/2026', ate:'28/09/2026', loja:'Porto Santo' },
-    { nome:'MARILIA SILVA',      de:'29/09/2026', ate:'14/10/2026', loja:'Porto Santo' },
-    { nome:'CARLA ALVES',        de:'15/10/2026', ate:'29/10/2026', loja:'Porto Santo' },
-    { nome:'EDNA MELIM',         de:'30/10/2026', ate:'13/11/2026', loja:'Porto Santo' },
-    { nome:'FERNANDA HENRIQUES', de:'05/01/2026', ate:'19/01/2026', loja:'Funchal' },
-    { nome:'FERNANDA HENRIQUES', de:'20/01/2026', ate:'03/02/2026', loja:'Funchal' },
-    { nome:'CRISTINA TEIXEIRA',  de:'04/02/2026', ate:'18/02/2026', loja:'Funchal' },
-    { nome:'JOANA BAPTISTA',     de:'19/02/2026', ate:'05/03/2026', loja:'Funchal' },
-    { nome:'SANDRA NUNES',       de:'06/03/2026', ate:'20/03/2026', loja:'Funchal' },
-    { nome:'FILIPA RODRIGUES',   de:'23/03/2026', ate:'08/04/2026', loja:'Funchal' },
-    { nome:'CATIA TEMTEM',       de:'09/04/2026', ate:'23/04/2026', loja:'Funchal' },
-    { nome:'DEBORA FERNANDES',   de:'24/04/2026', ate:'11/05/2026', loja:'Funchal' },
-    { nome:'PATRICIA SILVA',     de:'12/05/2026', ate:'26/05/2026', loja:'Funchal' },
-    { nome:'JACINTA ALVES',      de:'27/05/2026', ate:'12/06/2026', loja:'Funchal' },
-    { nome:'ISALTINA FERNANDES', de:'15/06/2026', ate:'30/06/2026', loja:'Funchal' },
-    { nome:'ALEJANDRA ABREU',    de:'02/07/2026', ate:'16/07/2026', loja:'Funchal' },
-    { nome:'JOANA BAPTISTA',     de:'17/07/2026', ate:'31/07/2026', loja:'Funchal' },
-    { nome:'DEBORA FERNANDES',   de:'03/08/2026', ate:'17/08/2026', loja:'Funchal' },
-    { nome:'CRISTINA TEIXEIRA',  de:'18/08/2026', ate:'02/09/2026', loja:'Funchal' },
-    { nome:'SANDRA NUNES',       de:'03/09/2026', ate:'17/09/2026', loja:'Funchal' },
-    { nome:'ISALTINA FERNANDES', de:'18/09/2026', ate:'02/10/2026', loja:'Funchal' },
-    { nome:'PATRICIA SILVA',     de:'06/10/2026', ate:'20/10/2026', loja:'Funchal' },
-    { nome:'CATIA TEMTEM',       de:'21/10/2026', ate:'04/11/2026', loja:'Funchal' },
-    { nome:'ALEJANDRA ABREU',    de:'05/11/2026', ate:'19/11/2026', loja:'Funchal' },
-    { nome:'FILIPA RODRIGUES',   de:'03/08/2026', ate:'17/08/2026', loja:'Funchal' },
-    { nome:'JACINTA ALVES',      de:'18/08/2026', ate:'02/09/2026', loja:'Funchal' },
-  ];
-
-  const pessoasConhecidas = new Set(feriasDB[2026].map(function(f){ return f.nome; }));
+  let filterLoja  = '';
+  let viewPessoa  = '';
+  let feriasDB    = {};           // { año: [entradas...] }
+  let _supaClient = null;
+  let _realtimeSub = null;
 
   // ── HELPERS ──
   function parseDate(str) {
-    const p = str.split('/');
-    return new Date(+p[2], +p[1]-1, +p[0]);
+    if (!str) return new Date(0);
+    // Acepta "DD/MM/YYYY" o "YYYY-MM-DD"
+    if (str.includes('/')) {
+      const p = str.split('/');
+      return new Date(+p[2], +p[1]-1, +p[0]);
+    }
+    const p = str.split('-');
+    return new Date(+p[0], +p[1]-1, +p[2]);
   }
   function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
   function pad2(n) { return String(n).padStart(2,'0'); }
@@ -56,7 +40,7 @@
   }
   function getFerias(year) { return feriasDB[year] || []; }
   function getPessoas() {
-    const all = new Set(pessoasConhecidas);
+    const all = new Set();
     Object.values(feriasDB).forEach(function(arr){
       arr.forEach(function(f){ all.add(f.nome); });
     });
@@ -69,8 +53,6 @@
     });
     return Array.from(all).sort();
   }
-
-  // Dias de férias duma pessoa num ano
   function diasFerias(nome, year) {
     return (feriasDB[year] || [])
       .filter(function(f){ return f.nome === nome; })
@@ -78,8 +60,6 @@
         return acc + daysBetween(parseDate(f.de), parseDate(f.ate)) + 1;
       }, 0);
   }
-
-  // Detectar solapamentos na mesma loja
   function getSolapamentos(year) {
     const entries = (feriasDB[year] || []).map(function(f){
       return Object.assign({}, f, { deD: parseDate(f.de), ateD: parseDate(f.ate) });
@@ -96,6 +76,103 @@
       }
     }
     return overlaps;
+  }
+
+  // ── SUPABASE: CARGAR DATOS ──
+  async function loadFromSupabase() {
+    if (!_supaClient) return;
+    showLoadingIndicator(true);
+    try {
+      const { data, error } = await _supaClient
+        .from('ferias')
+        .select('*')
+        .order('de', { ascending: true });
+
+      if (error) {
+        console.error('[Férias] Error al cargar:', error.message);
+        showToast('⚠️ Error al cargar datos');
+        return;
+      }
+
+      // Reconstruir feriasDB agrupado por año
+      feriasDB = {};
+      (data || []).forEach(function(row) {
+        const year = parseDate(row.de).getFullYear();
+        if (!feriasDB[year]) feriasDB[year] = [];
+        feriasDB[year].push({
+          id:   row.id,
+          nome: row.nome,
+          de:   row.de,   // guardado como DD/MM/YYYY
+          ate:  row.ate,
+          loja: row.loja
+        });
+      });
+    } catch(e) {
+      console.error('[Férias] Excepción:', e);
+    } finally {
+      showLoadingIndicator(false);
+    }
+  }
+
+  // ── SUPABASE: INSERTAR ──
+  async function insertFerias(entry) {
+    if (!_supaClient) return null;
+    const { data, error } = await _supaClient
+      .from('ferias')
+      .insert([{ nome: entry.nome, de: entry.de, ate: entry.ate, loja: entry.loja }])
+      .select()
+      .single();
+    if (error) { console.error('[Férias] Insert error:', error.message); return null; }
+    return data;
+  }
+
+  // ── SUPABASE: ACTUALIZAR ──
+  async function updateFerias(id, entry) {
+    if (!_supaClient) return false;
+    const { error } = await _supaClient
+      .from('ferias')
+      .update({ nome: entry.nome, de: entry.de, ate: entry.ate, loja: entry.loja })
+      .eq('id', id);
+    if (error) { console.error('[Férias] Update error:', error.message); return false; }
+    return true;
+  }
+
+  // ── SUPABASE: ELIMINAR ──
+  async function deleteFerias(id) {
+    if (!_supaClient) return false;
+    const { error } = await _supaClient
+      .from('ferias')
+      .delete()
+      .eq('id', id);
+    if (error) { console.error('[Férias] Delete error:', error.message); return false; }
+    return true;
+  }
+
+  // ── SUPABASE: REALTIME ──
+  function subscribeRealtime() {
+    if (!_supaClient || _realtimeSub) return;
+    _realtimeSub = _supaClient
+      .channel('ferias-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ferias' }, function() {
+        loadFromSupabase().then(function() { renderFerias(); });
+      })
+      .subscribe();
+  }
+
+  // ── LOADING INDICATOR ──
+  function showLoadingIndicator(show) {
+    let el = document.getElementById('f-loading');
+    if (show) {
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'f-loading';
+        el.style.cssText = 'position:fixed;bottom:28px;right:20px;background:#111;color:#fff;padding:8px 16px;border-radius:10px;font-size:.78rem;font-weight:600;z-index:99999;opacity:.85';
+        el.textContent = '⏳ sincronizando…';
+        document.body.appendChild(el);
+      }
+    } else {
+      if (el) el.remove();
+    }
   }
 
   // ── TOAST ──
@@ -128,7 +205,6 @@
       return '<option value="'+l+'"'+sel+'>'+l+'</option>';
     }).join('');
 
-    // Default dates
     let defDe  = year+'-01-01';
     let defAte = year+'-01-15';
     if (isEdit) {
@@ -200,52 +276,67 @@
     });
 
     if (isEdit) {
-      document.getElementById('f-modal-delete').addEventListener('click', function(){
+      document.getElementById('f-modal-delete').addEventListener('click', async function(){
         if (!confirm('Eliminar esta entrada de férias?')) return;
-        feriasDB[editYear].splice(editIdx, 1);
-        closeModal();
-        showToast('🗑 Férias eliminadas');
-        renderFerias();
+        const saveBtn = document.getElementById('f-modal-save');
+        if (saveBtn) saveBtn.disabled = true;
+        const ok = await deleteFerias(editEntry.id);
+        if (ok) {
+          await loadFromSupabase();
+          closeModal();
+          showToast('🗑 Férias eliminadas');
+          renderFerias();
+        } else {
+          showToast('⚠️ Erro ao eliminar');
+        }
       });
     }
 
-    document.getElementById('f-modal-save').addEventListener('click', function(){
+    document.getElementById('f-modal-save').addEventListener('click', async function(){
       const errEl = document.getElementById('f-modal-error');
       errEl.style.display = 'none';
+      const saveBtn = this;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '⏳ a guardar…';
 
       let pessoaSel = document.getElementById('f-inp-pessoa').value;
       if (pessoaSel === '__nova__') pessoaSel = (document.getElementById('f-inp-nova-pessoa').value||'').trim().toUpperCase();
-      if (!pessoaSel) { errEl.textContent='⚠ Seleciona ou insere uma pessoa.'; errEl.style.display='block'; return; }
+      if (!pessoaSel) { errEl.textContent='⚠ Seleciona ou insere uma pessoa.'; errEl.style.display='block'; saveBtn.disabled=false; saveBtn.textContent=isEdit?'Guardar alterações':'Guardar'; return; }
 
       let lojaSel = document.getElementById('f-inp-loja').value;
       if (lojaSel === '__nova__') lojaSel = (document.getElementById('f-inp-nova-loja').value||'').trim();
-      if (!lojaSel) { errEl.textContent='⚠ Seleciona ou insere uma loja.'; errEl.style.display='block'; return; }
+      if (!lojaSel) { errEl.textContent='⚠ Seleciona ou insere uma loja.'; errEl.style.display='block'; saveBtn.disabled=false; saveBtn.textContent=isEdit?'Guardar alterações':'Guardar'; return; }
 
       const deVal  = document.getElementById('f-inp-de').value;
       const ateVal = document.getElementById('f-inp-ate').value;
-      if (!deVal||!ateVal) { errEl.textContent='⚠ Preenche as datas.'; errEl.style.display='block'; return; }
+      if (!deVal||!ateVal) { errEl.textContent='⚠ Preenche as datas.'; errEl.style.display='block'; saveBtn.disabled=false; saveBtn.textContent=isEdit?'Guardar alterações':'Guardar'; return; }
 
       const deDate  = new Date(deVal);
       const ateDate = new Date(ateVal);
-      if (ateDate < deDate) { errEl.textContent='⚠ A data final não pode ser anterior à inicial.'; errEl.style.display='block'; return; }
+      if (ateDate < deDate) { errEl.textContent='⚠ A data final não pode ser anterior à inicial.'; errEl.style.display='block'; saveBtn.disabled=false; saveBtn.textContent=isEdit?'Guardar alterações':'Guardar'; return; }
 
       const deStr  = toDateStr(deDate);
       const ateStr = toDateStr(ateDate);
-      const entryYear = deDate.getFullYear();
 
-      if (!feriasDB[entryYear]) feriasDB[entryYear] = [];
-
+      let ok = false;
       if (isEdit) {
-        // Remove old (may be different year)
-        feriasDB[editYear].splice(editIdx, 1);
-        feriasDB[entryYear].push({ nome: pessoaSel, de: deStr, ate: ateStr, loja: lojaSel });
-        showToast('✅ Férias atualizadas');
+        ok = await updateFerias(editEntry.id, { nome: pessoaSel, de: deStr, ate: ateStr, loja: lojaSel });
+        if (ok) showToast('✅ Férias atualizadas');
       } else {
-        feriasDB[entryYear].push({ nome: pessoaSel, de: deStr, ate: ateStr, loja: lojaSel });
-        showToast('✅ Férias guardadas');
+        const row = await insertFerias({ nome: pessoaSel, de: deStr, ate: ateStr, loja: lojaSel });
+        ok = !!row;
+        if (ok) showToast('✅ Férias guardadas');
       }
 
-      pessoasConhecidas.add(pessoaSel);
+      if (!ok) {
+        showToast('⚠️ Erro ao guardar');
+        saveBtn.disabled = false;
+        saveBtn.textContent = isEdit ? 'Guardar alterações' : 'Guardar';
+        return;
+      }
+
+      await loadFromSupabase();
+      const entryYear = deDate.getFullYear();
       if (entryYear !== currentYear) currentYear = entryYear;
       closeModal();
       renderFerias();
@@ -286,7 +377,6 @@
       const nome = getNome();
       const errEl = document.getElementById('f-modal-error');
       if (!nome) { errEl.textContent='⚠ Insere um nome.'; errEl.style.display='block'; return; }
-      pessoasConhecidas.add(nome);
       closeModal();
       showToast('✅ Pessoa adicionada');
     });
@@ -295,7 +385,6 @@
       const nome = getNome();
       const errEl = document.getElementById('f-modal-error');
       if (!nome) { errEl.textContent='⚠ Insere um nome.'; errEl.style.display='block'; return; }
-      pessoasConhecidas.add(nome);
       closeModal();
       openModalFerias(nome);
     });
@@ -322,7 +411,7 @@
           +'<span style="font-size:.82rem;color:#111">'+deStr+' → '+ateStr+'</span>'
           +'<span style="display:flex;align-items:center;gap:10px">'
           +'<span style="font-size:.75rem;color:#666">'+dias+'d · '+f.loja+'</span>'
-          +'<button data-yr="'+yr+'" data-idx="'+i+'" class="fv-edit-btn" style="background:none;border:none;color:#888;cursor:pointer;font-size:.8rem;padding:2px 6px">✏️</button>'
+          +'<button data-id="'+f.id+'" class="fv-edit-btn" style="background:none;border:none;color:#888;cursor:pointer;font-size:.8rem;padding:2px 6px">✏️</button>'
           +'</span>'
           +'</div>';
       });
@@ -350,19 +439,20 @@
       closeModal(); openModalFerias(nome);
     });
 
-    // Edit buttons inside view
     modal.querySelectorAll('.fv-edit-btn').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        const yr  = parseInt(btn.dataset.yr);
-        const idx = parseInt(btn.dataset.idx);
-        const sorted = (feriasDB[yr]||[])
-          .filter(function(f){ return f.nome===nome; })
-          .sort(function(a,b){ return parseDate(a.de)-parseDate(b.de); });
-        // Find real index in feriasDB[yr]
-        const realIdx = feriasDB[yr].indexOf(sorted[idx]);
-        closeModal();
-        openModalFerias(nome, feriasDB[yr][realIdx], yr, realIdx);
+        const id = btn.dataset.id;
+        // Buscar la entrada por id en todos los años
+        let found = null, foundYear = null;
+        Object.keys(feriasDB).forEach(function(yr){
+          const idx = feriasDB[yr].findIndex(function(f){ return String(f.id) === String(id); });
+          if (idx >= 0) { found = feriasDB[yr][idx]; foundYear = +yr; }
+        });
+        if (found) {
+          closeModal();
+          openModalFerias(nome, found, foundYear, null);
+        }
       });
     });
   }
@@ -385,7 +475,7 @@
     const isCurrentYear = (currentYear === today.getFullYear());
     const isFutureYear  = (currentYear > today.getFullYear());
 
-    // ── Header: título + nav de ano ──
+    // ── Header ──
     let headerEl = document.getElementById('f-year-header');
     if (!headerEl) {
       headerEl = document.createElement('div');
@@ -406,7 +496,7 @@
     const prevBtn = document.getElementById('f-btn-prev-year');
     if (prevBtn) prevBtn.addEventListener('click', function(){ currentYear--; renderFerias(); });
 
-    // ── Barra de ações: botões + filtro loja ──
+    // ── Barra de acciones ──
     let actionsEl = document.getElementById('f-actions');
     if (!actionsEl) {
       actionsEl = document.createElement('div');
@@ -433,7 +523,7 @@
       renderFerias();
     });
 
-    // ── Alertas de solapamento ──
+    // ── Alertas de solapamiento ──
     let alertEl = document.getElementById('f-overlap-alert');
     if (!alertEl) {
       alertEl = document.createElement('div');
@@ -445,19 +535,19 @@
       ? overlaps.filter(function(o){ return o.a.loja === filterLoja; })
       : overlaps;
     if (filteredOverlaps.length) {
-      let ohtml = '<div style="background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.78rem;color:#111;font-weight:600">'
+      let ohtml = '<div class="f-section"><div style="background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;font-size:.78rem;color:#111;font-weight:600">'
         +'⚠️ Solapamentos detetados:<br>';
       filteredOverlaps.forEach(function(o){
         ohtml += '<span style="font-weight:400;color:#444">'+o.a.nome+' &amp; '+o.b.nome+' ('+o.a.loja+') — '
           +o.a.de.substring(0,5)+' a '+o.a.ate.substring(0,5)+' / '+o.b.de.substring(0,5)+' a '+o.b.ate.substring(0,5)+'</span><br>';
       });
-      ohtml += '</div>';
+      ohtml += '</div></div>';
       alertEl.innerHTML = ohtml;
     } else {
       alertEl.innerHTML = '';
     }
 
-    // ── Classificar entradas ──
+    // ── Clasificar entradas ──
     let FERIAS = getFerias(currentYear);
     if (filterLoja) FERIAS = FERIAS.filter(function(f){ return f.loja === filterLoja; });
 
@@ -498,7 +588,7 @@
       return '';
     }
 
-    function cardHTML(f, realYear, realIdx) {
+    function cardHTML(f) {
       const dotColor = f.status==='active' ? '#2a8a2a' : f.status==='upcoming' ? '#e09000' : '#555';
       const badgeCls = f.status==='active' ? 'active-now' : f.status==='upcoming' ? 'soon' : 'past';
       const lojaTag  = f.loja ? '<span style="font-size:.65rem;font-weight:600;color:#bbb;margin-left:6px;text-transform:lowercase;letter-spacing:.04em">'+f.loja+'</span>' : '';
@@ -508,7 +598,7 @@
       const dias     = daysBetween(f.de instanceof Date ? f.de : parseDate(f.de),
                                    f.ate instanceof Date ? f.ate : parseDate(f.ate)) + 1;
       const diasTag  = '<span style="font-size:.68rem;color:#777;margin-left:4px">'+dias+'d</span>';
-      const editBtn  = '<button class="f-edit-card-btn" data-yr="'+(realYear||currentYear)+'" data-idx="'+(realIdx||0)+'" '
+      const editBtn  = '<button class="f-edit-card-btn" data-id="'+f.id+'" '
         +'style="margin-left:auto;background:none;border:none;color:#555;cursor:pointer;font-size:.78rem;padding:0 4px;flex-shrink:0">✏️</button>';
       const nameBtn  = '<button class="f-view-pessoa-btn" data-nome="'+f.nome+'" '
         +'style="background:none;border:none;color:inherit;cursor:pointer;font-size:inherit;font-weight:inherit;font-family:inherit;padding:0;text-align:left">'+f.nome+'</button>';
@@ -521,7 +611,6 @@
         +'</div>';
     }
 
-    // Próximo a ir (mesmo sem ser esta semana) — destaque especial
     const upcoming_all = enriched.filter(function(f){ return f.status==='upcoming'; })
                                   .sort(function(a,b){ return a.de-b.de; });
     const nextUp = upcoming_all[0] || null;
@@ -529,10 +618,12 @@
     // ── Montar HTML ──
     let html = '';
 
-    // Bloco "próximo a ir" só no ano atual
+    // ── Bloco "próximo a ir" — CORREGIDO: usa f-section para respetar max-width ──
     if (isCurrentYear && nextUp && nextUp.days > 7) {
-      html += '<div style="background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem;color:#111;font-weight:600">'
+      html += '<div class="f-section">'
+        +'<div style="background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;font-size:.82rem;color:#111;font-weight:600">'
         +'🏖 Próximo: <strong>'+nextUp.nome+'</strong> ('+nextUp.loja+') — em '+nextUp.days+' dias'
+        +'</div>'
         +'</div>';
     }
 
@@ -541,12 +632,7 @@
       if (sorted.length) {
         const icon = isFutureYear ? '📅' : '📁';
         html += '<div class="f-section"><div class="f-section-title">'+icon+' calendário '+currentYear+'</div>';
-        sorted.forEach(function(f){
-          const realIdx = feriasDB[currentYear] ? feriasDB[currentYear].indexOf(
-            feriasDB[currentYear].find(function(r){ return r.nome===f.nome && r.de===toDateStr(f.de) && r.ate===toDateStr(f.ate); })
-          ) : 0;
-          html += cardHTML(f, currentYear, realIdx);
-        });
+        sorted.forEach(function(f){ html += cardHTML(f); });
         html += '</div>';
       }
     } else {
@@ -559,13 +645,7 @@
       function renderSection(title, arr) {
         if (!arr.length) return '';
         let s = '<div class="f-section"><div class="f-section-title">'+title+'</div>';
-        arr.forEach(function(f){
-          const orig = (feriasDB[currentYear]||[]).find(function(r){
-            return r.nome===f.nome && r.de===toDateStr(f.de) && r.ate===toDateStr(f.ate);
-          });
-          const realIdx = orig ? feriasDB[currentYear].indexOf(orig) : 0;
-          s += cardHTML(f, currentYear, realIdx);
-        });
+        arr.forEach(function(f){ s += cardHTML(f); });
         return s + '</div>';
       }
 
@@ -605,15 +685,17 @@
 
     area.innerHTML = html;
 
-    // ── Wiring dos botões nos cards ──
+    // ── Wiring de botones ──
     area.querySelectorAll('.f-edit-card-btn').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        const yr  = parseInt(btn.dataset.yr);
-        const idx = parseInt(btn.dataset.idx);
-        if (feriasDB[yr] && feriasDB[yr][idx]) {
-          openModalFerias(null, feriasDB[yr][idx], yr, idx);
-        }
+        const id = btn.dataset.id;
+        let found = null, foundYear = null;
+        Object.keys(feriasDB).forEach(function(yr){
+          const entry = feriasDB[yr].find(function(f){ return String(f.id) === String(id); });
+          if (entry) { found = entry; foundYear = +yr; }
+        });
+        if (found) openModalFerias(null, found, foundYear, null);
       });
     });
 
@@ -625,17 +707,45 @@
     });
   }
 
+  // ── INIT ──
+  async function initFerias() {
+    _supaClient = getSupabase();
+    if (!_supaClient) {
+      console.warn('[Férias] Supabase no disponible, reintentando…');
+      setTimeout(initFerias, 500);
+      return;
+    }
+    await loadFromSupabase();
+    subscribeRealtime();
+    renderFerias();
+  }
+
   // ── TAB LISTENER ──
   document.querySelectorAll('.tab-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      if (btn.dataset.tab === 'ferias') renderFerias();
+      if (btn.dataset.tab === 'ferias') {
+        if (!_supaClient) { initFerias(); } else { renderFerias(); }
+      }
     });
   });
 
-  // ── AUTO-REFRESH ──
+  document.addEventListener('ferias:open', function() {
+    setTimeout(function() {
+      if (!_supaClient) { initFerias(); } else { renderFerias(); }
+    }, 40);
+  });
+
+  // ── AUTO-REFRESH cada hora ──
   setInterval(function() {
     const active = document.querySelector('.tab-btn[data-tab="ferias"].active');
     if (active) renderFerias();
   }, 3600000);
+
+  // Arrancar
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initFerias);
+  } else {
+    setTimeout(initFerias, 200);
+  }
 
 })();

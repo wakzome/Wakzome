@@ -570,13 +570,31 @@
           S.schedule['carla'][day].shift = altShift;
           S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
         } else {
-          // Try flipping Edna — only safe if her store has another autonomous worker on a different shift.
+          // Try flipping Edna — only safe if:
+          // 1. Her store has another autonomous worker on a different shift, AND
+          // 2. The person who would be left alone on SH_DEFAULT is the most senior in the store
+          //    (seniority rule: the person alone at lunch must be the most senior).
           const edStore = edSch.store;
           const edStoreAutonomous = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edStore && isAutonomous(p));
           const edStaggerSafe = edStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
           if (edStoreAutonomous.length >= 1 && edStaggerSafe) {
-            S.schedule['edna'][day].shift = altShift;
-            S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
+            // Check seniority rule: after flipping Edna to SH_ALT, who stays alone on SH_DEFAULT?
+            // That person must be the most senior autonomous worker in the store.
+            const allEdStoreAuto = wk().filter(p => S.schedule[p.id][day].store === edStore && isAutonomous(p));
+            // After flip: Edna → altShift; others keep their shifts. Who would have SH_DEFAULT?
+            const wouldHaveDefault = allEdStoreAuto.filter(p => {
+              if (p.id === 'edna') return altShift === SH_DEFAULT;
+              return S.schedule[p.id][day].shift === SH_DEFAULT;
+            });
+            // The most senior autonomous worker in the store
+            const seniorityScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+            const mostSenior = allEdStoreAuto.reduce((a, b) => seniorityScore(a) >= seniorityScore(b) ? a : b, allEdStoreAuto[0]);
+            const aloneIsSenior = wouldHaveDefault.length === 0 || wouldHaveDefault.some(p => p.id === mostSenior?.id);
+            if (aloneIsSenior) {
+              S.schedule['edna'][day].shift = altShift;
+              S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
+            }
+            // If flipping Edna would leave a junior alone, skip the flip.
           }
           // If neither flip is safe, leave shifts as-is (stagger within stores takes priority).
         }
@@ -1006,7 +1024,7 @@
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:visible;
+          flex:1; overflow-y:auto; overflow-x:auto;
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
           min-height:0;
@@ -1055,11 +1073,11 @@
         #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; left:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; min-width:100vw; flex-wrap:wrap; gap:8px; }
         #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
         #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
-        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; min-width:100vw; }
+        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; min-width:100vw; }
         #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
         #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
         #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
@@ -1076,8 +1094,8 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; display:flex; justify-content:flex-start; }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; min-width:100%; width:max-content; box-sizing:border-box; display:flex; flex-direction:column; align-items:flex-start; }
+        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; box-sizing:border-box; display:flex; justify-content:flex-start; }
         #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }

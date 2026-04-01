@@ -4023,5 +4023,109 @@ td                   { font-size: .96rem !important; }
   }
 })();
 </script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   OVERLAY RECIBOS — openRecibosOverlay / closeRecibosOverlay
+   Lê o index.json do Supabase sempre sem cache
+══════════════════════════════════════════════════════════════ */
+(function () {
+  var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  window.openRecibosOverlay = function () {
+    var overlay     = document.getElementById('recibos-overlay');
+    var loading     = document.getElementById('recibos-overlay-loading');
+    var body        = document.getElementById('recibos-overlay-body');
+    var errorDiv    = document.getElementById('recibos-overlay-error');
+    var titleEl     = document.getElementById('recibos-overlay-title');
+    var pageTitleEl = document.getElementById('recibos-page-title');
+    var tbody       = document.getElementById('recibos-tbody');
+    if (!overlay) return;
+
+    /* Abrir overlay */
+    overlay.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    });
+
+    /* Reset */
+    loading.style.display  = 'block';
+    loading.textContent    = 'a carregar…';
+    body.style.display     = 'none';
+    errorDiv.style.display = 'none';
+    errorDiv.textContent   = '';
+    tbody.innerHTML        = '';
+
+    /* Título do mês */
+    var mes       = localStorage.getItem('gh_mes') || '';
+    var mmMatch   = mes.match(/^(\d{2})-(\d{4})$/);
+    var monthName = mmMatch ? (MESES[parseInt(mmMatch[1], 10) - 1] || mes) : mes;
+    if (titleEl)     titleEl.textContent     = monthName || 'recibos';
+    if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
+
+    /* Fetch do index.json — sem cache (cache-busting via timestamp) */
+    var urlData = sbClient.storage.from('recibos').getPublicUrl('index.json');
+    var publicUrl = urlData.data.publicUrl + '?v=' + Date.now();
+
+    fetch(publicUrl, { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (indexData) {
+        var items = indexData.dados || [];
+        if (!items.length && indexData.ficheiros) {
+          items = indexData.ficheiros.map(function (f) {
+            return { filename: f, name: f.replace(/_/g, ' ').replace(/\.pdf$/i, ''), mes: indexData.mes || mes };
+          });
+        }
+
+        if (!items.length) {
+          loading.style.display  = 'none';
+          errorDiv.style.display = 'block';
+          errorDiv.textContent   = 'Nenhum recibo encontrado.';
+          return;
+        }
+
+        var mesPasta = indexData.mes || mes;
+        tbody.innerHTML = items.map(function (item, i) {
+          var filePath = mesPasta + '/' + item.filename;
+          var fileUrl  = sbClient.storage.from('recibos').getPublicUrl(filePath).data.publicUrl + '?v=' + Date.now();
+          var name     = item.name || item.filename;
+          /* escapa HTML */
+          var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          var safeFile = String(item.filename).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          return '<tr>'
+            + '<td class="rn">' + (i + 1) + '</td>'
+            + '<td>' + safeName + '</td>'
+            + '<td><a href="' + fileUrl + '" download="' + safeFile + '" '
+            +   'style="padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;'
+            +   'border-radius:7px;background:#fff;text-decoration:none;font-weight:600;display:inline-block;"'
+            +   ' onmouseover="this.style.background=\'#555\';this.style.color=\'#fff\';this.style.borderColor=\'#555\'"'
+            +   ' onmouseout="this.style.background=\'#fff\';this.style.color=\'\';this.style.borderColor=\'#ccc\'"'
+            +   '>⬇ pdf</a></td>'
+            + '</tr>';
+        }).join('');
+
+        loading.style.display = 'none';
+        body.style.display    = 'block';
+      })
+      .catch(function (err) {
+        console.error('openRecibosOverlay:', err);
+        loading.style.display  = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent   = '⚠️ Erro ao carregar recibos: ' + err.message;
+      });
+  };
+
+  window.closeRecibosOverlay = function () {
+    var overlay = document.getElementById('recibos-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    setTimeout(function () { overlay.classList.remove('open'); }, 460);
+  };
+})();
+</script>
 </body>
 </html>

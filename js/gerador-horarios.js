@@ -80,14 +80,16 @@
   }
 
   function cleanupGeradorLayout() {
-    // Called when leaving the gerador tab — restore panel to neutral and fully hide modal
+    // Called when leaving the gerador tab — only hide the modal and reset inline styles
+    // we added. Do NOT set display:none on the panel itself — the tab system manages
+    // panel visibility via classes. Forcing display:none here bleeds into other modules.
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '';
       panel.style.background = '';
       panel.style.color = '';
       panel.style.overflow = '';
-      panel.style.display = 'none'; // force-hide: apps may use class toggling, not display
+      // Do NOT set panel.style.display here — let the tab system control visibility.
       panel.style.flexDirection = '';
     }
     const modal = document.getElementById('gh-modal');
@@ -512,25 +514,33 @@
       }
 
       // ── Assign shifts AFTER all relocations are final ──
-      // Sort by seniority: least senior first → gets SH_ALT (shorter lunch break),
-      // most senior last → gets SH_DEFAULT. With exactly 2 autonomous workers,
-      // they always get different shifts regardless of how they ended up in the store.
+      // Lunch staggering only applies to workers who are autonomous:
+      //   canAlone === true  AND  weeksSince(start, weekStart) >= 3
+      // Non-autonomous workers always receive SH_DEFAULT (same as everyone else if only 1 person).
+      // Among the autonomous subset: least-senior first → SH_ALT, most-senior last → SH_DEFAULT.
+      // This guarantees store coverage during every lunch slot while respecting the rule
+      // that a worker cannot be left alone unless they have ≥3 weeks seniority.
       STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
-        const staff = wk().filter(p => S.schedule[p.id][day].store === st.id)
+        const staff = wk().filter(p => S.schedule[p.id][day].store === st.id);
+        const isAutonomous = p => p.canAlone && weeksSince(p.start, S.weekStart) >= 3;
+        const autonomous = staff.filter(isAutonomous)
           .sort((a, b) => {
             const as = (a.efetiva ? 1000 : 0) + weeksSince(a.start, S.weekStart);
             const bs = (b.efetiva ? 1000 : 0) + weeksSince(b.start, S.weekStart);
             return as - bs;
           });
-        if (staff.length < 2) {
-          // Single worker: default shift
-          if (staff.length === 1) S.schedule[staff[0].id][day].shift = SH_DEFAULT;
+        // Non-autonomous workers always get SH_DEFAULT
+        staff.filter(p => !isAutonomous(p)).forEach(p => {
+          S.schedule[p.id][day].shift = SH_DEFAULT;
+        });
+        if (autonomous.length < 2) {
+          // 0 or 1 autonomous worker: no staggering possible, all get SH_DEFAULT
+          autonomous.forEach(p => { S.schedule[p.id][day].shift = SH_DEFAULT; });
           return;
         }
-        // 2+ workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
-        // This guarantees at least one person is always at lunch in each slot.
-        staff.forEach((p, i) => {
-          S.schedule[p.id][day].shift = i < staff.length - 1 ? SH_ALT : SH_DEFAULT;
+        // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
+        autonomous.forEach((p, i) => {
+          S.schedule[p.id][day].shift = i < autonomous.length - 1 ? SH_ALT : SH_DEFAULT;
         });
       });
 
@@ -696,11 +706,79 @@
     fixSunday(active);
     intelPass(active);
     saveMem();
+
+    // ── Minimum coverage gate ──
+    // If the generated schedule fails to cover any store on any open day,
+    // block the output and show the coverage error screen instead.
+    const coverageViolations = validateMinCoverage(active);
+    if (coverageViolations.length > 0) {
+      showCoverageBlocker(coverageViolations, active);
+      return;
+    }
+
     showSchedule(active);
   }
 
-  // ── RENDER HORÁRIO ──
-  function showSchedule(active) {
+  // ── MINIMUM COVERAGE VALIDATION ──
+  // Checks that every open store has the minimum required staff on every open day (Mon-Sat).
+  // Returns an array of violations. Empty array = all good.
+  function validateMinCoverage(active) {
+    const violations = [];
+    const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    workDays.forEach(day => {
+      S.openStores.forEach(sid => {
+        if (!storeOpen(sid, day)) return;
+        const min = sid === 'avenida' ? minAv(day) : 1;
+        const have = active.filter(p => {
+          const c = S.schedule[p.id]?.[day];
+          return c?.type === 'work' && c?.store === sid;
+        }).length;
+        if (have < min) {
+          violations.push({ day, sid, have, min });
+        }
+      });
+    });
+    return violations;
+  }
+
+  // ── BLOCKING COVERAGE ALERT ──
+  function showCoverageBlocker(violations, active) {
+    const c = getContainer(); if (!c) return;
+    fixPanelLayout();
+
+    const rows = violations.map(v =>
+      `<div class="gh-cov-row">
+        <span class="gh-cov-day">${v.day}</span>
+        <span class="gh-cov-store">${sname(v.sid)}</span>
+        <span class="gh-cov-count">${v.have}/${v.min} pessoa(s)</span>
+      </div>`
+    ).join('');
+
+    c.innerHTML = `
+      <div class="gh-wiz-box">
+        <div class="gh-wiz-label">Cobertura insuficiente</div>
+        <div class="gh-wiz-title">⚠ Horário não pode ser gerado</div>
+        <div class="gh-wiz-sub">
+          O horário resultante não garante a cobertura mínima indispensável de Segunda a Sábado.
+          Ajuste as ausências, as lojas abertas ou os dias de funcionamento e tente novamente.
+        </div>
+        <div class="gh-cov-list">${rows}</div>
+        <div class="gh-wiz-nav">
+          <button class="gh-btn gh-btn-ghost" id="gh-cov-back-stores">← Lojas</button>
+          <button class="gh-btn gh-btn-ghost" id="gh-cov-back-abs">← Ausências</button>
+          <button class="gh-btn gh-btn-solid" id="gh-cov-regen">↺ Tentar redistribuição</button>
+        </div>
+      </div>`;
+
+    document.getElementById('gh-cov-back-stores').addEventListener('click', () => { wStep = 2; renderWiz(); });
+    document.getElementById('gh-cov-back-abs').addEventListener('click',   () => { wStep = 1; renderWiz(); });
+    document.getElementById('gh-cov-regen').addEventListener('click', () => {
+      MEM.cycleWeek++;
+      generate();
+    });
+  }
+
+
     const c = getContainer(); if (!c) return;
     fixPanelLayout();
     const dates = wkDates();
@@ -971,6 +1049,13 @@
         #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
         #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
         #tab-gerador .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
+
+        /* ── COVERAGE BLOCKER ── */
+        #tab-gerador .gh-cov-list { margin:24px 0; display:flex; flex-direction:column; gap:8px; }
+        #tab-gerador .gh-cov-row { display:grid; grid-template-columns:60px 1fr auto; gap:12px; align-items:center; padding:10px 14px; background:#fff5f5; border:1px solid rgba(169,50,38,.2); border-radius:7px; }
+        #tab-gerador .gh-cov-day { font-size:.72rem; font-weight:700; letter-spacing:.1em; color:#a93226; }
+        #tab-gerador .gh-cov-store { font-size:.82rem; font-weight:500; color:#111; }
+        #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
         #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }

@@ -70,28 +70,24 @@
   function fixPanelLayout() {
     const panel = document.getElementById('tab-gerador');
     if (panel) {
-      // NEVER set display here — the tab system's CSS (.tab-panel.active { display:flex })
-      // is the single source of truth for visibility. Forcing display:flex here causes the
-      // gerador panel to bleed into other modules when tabs switch.
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      panel.style.overflow = 'hidden';
+      panel.style.overflowY = 'hidden';
+      panel.style.overflowX = 'clip';
       panel.style.flexDirection = 'column';
     }
   }
 
   function cleanupGeradorLayout() {
-    // Called when leaving the gerador tab — reset only the inline styles we added.
-    // NEVER touch display — the tab system's CSS controls visibility exclusively.
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '';
       panel.style.background = '';
       panel.style.color = '';
-      panel.style.overflow = '';
+      panel.style.overflowY = '';
+      panel.style.overflowX = '';
       panel.style.flexDirection = '';
-      // display must never be set inline — clear any leftover value just in case
       panel.style.display = '';
     }
     const modal = document.getElementById('gh-modal');
@@ -519,84 +515,71 @@
       // Lunch staggering only applies to workers who are autonomous:
       //   canAlone === true  AND  weeksSince(start, weekStart) >= 3
       // Non-autonomous workers always receive SH_DEFAULT (same as everyone else if only 1 person).
-      // Among the autonomous subset: least-senior first → SH_ALT, most-senior last → SH_DEFAULT.
-      // This guarantees store coverage during every lunch slot while respecting the rule
-      // that a worker cannot be left alone unless they have ≥3 weeks seniority.
+      // ── Assign lunch shifts per store ──
+      // Rules:
+      // 1. Non-autonomous workers always get SH_DEFAULT.
+      // 2. With 0 or 1 autonomous worker: no stagger possible, everyone gets SH_DEFAULT.
+      // 3. With 2+ autonomous workers: stagger so one covers the store while the other lunches.
+      //    - SH_ALT  = 10:00-13:00 | 14:00-19:00  → lunches 13:00-14:00 (leaves store at 13)
+      //    - SH_DEFAULT = 10:00-14:00 | 15:00-19:00 → lunches 14:00-15:00 (alone in store 13-14)
+      //    The worker who is ALONE in the store (13:00-14:00) gets SH_DEFAULT.
+      // 4. NEW RULE (>2 people): if someone must be alone, it must be the MOST SENIOR person.
+      //    With exactly 2: one is always alone — no seniority constraint needed.
+      //    With >2: only 1 gets SH_DEFAULT (alone 13-14), rest get SH_ALT. That 1 = most senior.
+      const isAutonomous = p => p.canAlone && weeksSince(p.start, S.weekStart) >= 3;
+      const senScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+
       STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
         const staff = wk().filter(p => S.schedule[p.id][day].store === st.id);
-        const isAutonomous = p => p.canAlone && weeksSince(p.start, S.weekStart) >= 3;
-        const autonomous = staff.filter(isAutonomous)
-          .sort((a, b) => {
-            const as = (a.efetiva ? 1000 : 0) + weeksSince(a.start, S.weekStart);
-            const bs = (b.efetiva ? 1000 : 0) + weeksSince(b.start, S.weekStart);
-            return as - bs;
-          });
-        // Non-autonomous workers always get SH_DEFAULT
+        const autonomous = staff.filter(isAutonomous);
+
+        // Non-autonomous always SH_DEFAULT
         staff.filter(p => !isAutonomous(p)).forEach(p => {
           S.schedule[p.id][day].shift = SH_DEFAULT;
         });
+
         if (autonomous.length < 2) {
-          // 0 or 1 autonomous worker: no staggering possible, all get SH_DEFAULT
           autonomous.forEach(p => { S.schedule[p.id][day].shift = SH_DEFAULT; });
           return;
         }
-        // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
-        // Seniority rule: when there are more than 2 autonomous workers and staggering would
-        // leave someone alone during their lunch break, that person must be the most senior
-        // (highest seniority score). The list is already sorted ascending by seniority, so
-        // the most senior is the last element — she gets SH_DEFAULT (store covered during
-        // SH_ALT lunch slots). Workers on SH_ALT lunch alone only if they are the single
-        // person on that slot; with >2 workers some slots overlap, so we enforce: if only
-        // one person would cover the store during the SH_ALT lunch window (13:00–14:00),
-        // that person must be the most senior autonomous worker.
-        // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
-        // The autonomous list is sorted ascending by seniority, so the last element is the most senior.
-        autonomous.forEach((p, i) => {
-          S.schedule[p.id][day].shift = i < autonomous.length - 1 ? SH_ALT : SH_DEFAULT;
-        });
 
-        // ── Lunch alone seniority rule (>2 people in the store) ──
-        // When more than 2 autonomous workers are present, staggering leaves exactly one
-        // person covering the store alone during the SH_ALT lunch gap (13:00–14:00).
-        // Rule: that lone person must be the most senior. We verify and swap if needed.
-        if (autonomous.length > 2) {
-          const senScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
-          const defWorker = autonomous.find(p => S.schedule[p.id][day].shift === SH_DEFAULT);
-          const mostSenior = autonomous.reduce((best, cur) => senScore(cur) >= senScore(best) ? cur : best, autonomous[0]);
-          if (defWorker && defWorker.id !== mostSenior.id) {
-            S.schedule[mostSenior.id][day].shift = SH_DEFAULT;
-            S.schedule[defWorker.id][day].shift  = SH_ALT;
-            S.decisions.push({ type: 'info', text: `${day}: ${mostSenior.name} fica sozinha em ${sname(st.id)} na hora de almoço (mais antiga).` });
-          }
+        if (autonomous.length === 2) {
+          // Exactly 2: stagger — sorted ascending by seniority, less senior gets SH_ALT, more senior gets SH_DEFAULT
+          const sorted = [...autonomous].sort((a, b) => senScore(a) - senScore(b));
+          S.schedule[sorted[0].id][day].shift = SH_ALT;
+          S.schedule[sorted[1].id][day].shift = SH_DEFAULT;
+        } else {
+          // >2 people: the MOST SENIOR stays alone (SH_DEFAULT), everyone else gets SH_ALT
+          const mostSenior = autonomous.reduce((best, p) => senScore(p) >= senScore(best) ? p : best, autonomous[0]);
+          autonomous.forEach(p => {
+            S.schedule[p.id][day].shift = p.id === mostSenior.id ? SH_DEFAULT : SH_ALT;
+          });
         }
       });
 
-      // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
-      // Only adjust if it does NOT break the stagger already set within each store.
+      // ── Edna & Carla: different lunch breaks when possible ──
+      // Applied AFTER store stagger. Only flip if it doesn't leave a store uncovered.
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
         const altShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-        const isAutonomous = p => p.canAlone && weeksSince(p.start, S.weekStart) >= 3;
 
-        // Try flipping Carla first — only safe if her store has another autonomous worker
-        // already on a different shift (so the stagger in her store is preserved).
+        // Try flipping Carla: safe only if her store still has someone on the other shift
         const caStore = caSch.store;
-        const caStoreAutonomous = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caStore && isAutonomous(p));
-        const caStaggerSafe = caStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
-        if (caStoreAutonomous.length >= 1 && caStaggerSafe) {
+        const caStoreOthers = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caStore && isAutonomous(p));
+        const caCanFlip = caStoreOthers.some(p => S.schedule[p.id][day].shift !== altShift);
+        if (caStoreOthers.length >= 1 && caCanFlip) {
           S.schedule['carla'][day].shift = altShift;
           S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
         } else {
-          // Try flipping Edna — only safe if her store has another autonomous worker on a different shift.
+          // Try flipping Edna
           const edStore = edSch.store;
-          const edStoreAutonomous = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edStore && isAutonomous(p));
-          const edStaggerSafe = edStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
-          if (edStoreAutonomous.length >= 1 && edStaggerSafe) {
+          const edStoreOthers = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edStore && isAutonomous(p));
+          const edCanFlip = edStoreOthers.some(p => S.schedule[p.id][day].shift !== altShift);
+          if (edStoreOthers.length >= 1 && edCanFlip) {
             S.schedule['edna'][day].shift = altShift;
             S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
           }
-          // If neither flip is safe, leave shifts as-is (stagger within stores takes priority).
         }
       }
       const logged = new Set();
@@ -1017,13 +1000,13 @@
         #tab-gerador.active {
           display:flex !important; flex-direction:column !important;
           flex:1 !important; width:100% !important; height:100% !important;
-          overflow:hidden !important;
+          overflow-y:hidden !important; overflow-x:clip !important;
           padding:0 !important;
           background:#fff !important; color:#111 !important;
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:hidden;
+          flex:1; overflow-y:auto; overflow-x:clip;
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
           min-height:0;

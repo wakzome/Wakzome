@@ -590,101 +590,124 @@
       const style = document.createElement('style');
       style.id = 'gh-styles';
       style.textContent = `
-        #tab-gerador.active { display:flex; flex-direction:column; flex:1; overflow:hidden; width:100%; }
-        #gh-container { flex:1; overflow-y:auto; overflow-x:hidden; padding:0 0 40px; -webkit-overflow-scrolling:touch; }
-        .gh-wiz-box { width:100%; max-width:460px; margin:0 auto; padding:40px 20px; animation:gh-up .3s ease; }
+        /* ── LAYOUT ── */
+        #tab-gerador.active { display:flex; flex-direction:column; flex:1; overflow:hidden; width:100%; background:#fff; }
+        #gh-container { flex:1; overflow-y:auto; overflow-x:hidden; padding:0 0 60px; -webkit-overflow-scrolling:touch; background:#fff; color:#111; }
+
+        /* ── WIZARD ── */
         @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .gh-wiz-label { font-size:.5rem; font-weight:600; letter-spacing:.25em; text-transform:uppercase; color:#bbb; margin-bottom:10px; }
-        .gh-wiz-title { font-size:1.4rem; font-weight:200; margin-bottom:6px; line-height:1.3; color:#111; }
-        .gh-wiz-sub   { font-size:.7rem; color:#888; margin-bottom:28px; line-height:1.6; }
-        .gh-field { width:100%; border:1px solid #ddd; border-radius:4px; padding:9px 11px; font-size:.8rem; font-family:inherit; font-weight:300; outline:none; transition:border-color .15s; background:#fff; margin-bottom:24px; color:#111; }
+        .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; }
+        .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
+        .gh-wiz-title { font-size:1.6rem; font-weight:200; margin-bottom:8px; line-height:1.3; color:#111; }
+        .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
+        .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:300; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
         .gh-field:focus { border-color:#000; }
-        .gh-wiz-nav { display:flex; gap:10px; align-items:center; }
-        .gh-btn { padding:6px 14px; font-size:.58rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; border-radius:4px; font-family:inherit; transition:all .15s; border:none; }
-        .gh-btn-solid { background:#000; color:#fff; border:1px solid #000; }
-        .gh-btn-solid:hover { background:#333; }
-        .gh-btn-ghost { background:transparent; border:1px solid #ccc; color:#666; }
-        .gh-btn-ghost:hover { border-color:#000; color:#000; }
-        .gh-btn-sm { padding:4px 11px; font-size:.55rem; }
-        .gh-wiz-back { background:none; border:none; font-size:.58rem; color:#bbb; cursor:pointer; font-family:inherit; letter-spacing:.08em; text-transform:uppercase; }
-        .gh-wiz-back:hover { color:#000; }
-        .gh-ab-list { margin-bottom:12px; }
-        .gh-ab-row { display:grid; grid-template-columns:1fr 100px 80px 22px; gap:5px; align-items:center; padding:6px 0; border-bottom:1px solid #f5f5f5; }
-        .gh-ab-sel { border:1px solid #ddd; border-radius:4px; padding:5px 7px; font-size:.68rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
-        .gh-ab-x { background:none; border:none; cursor:pointer; color:#ccc; font-size:.85rem; }
-        .gh-ab-x:hover { color:#000; }
-        .gh-add-btn { display:flex; align-items:center; gap:6px; font-size:.65rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:4px; padding:7px 12px; background:none; font-family:inherit; width:100%; margin-bottom:22px; }
-        .gh-add-btn:hover { border-color:#000; color:#000; }
-        .gh-store-cfg { margin-bottom:24px; }
-        .gh-sc-row { padding:10px 0; border-bottom:1px solid #f5f5f5; }
-        .gh-sc-top { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-        .gh-sc-top label { font-size:.75rem; cursor:pointer; color:#111; }
-        .gh-sc-top input[type=checkbox] { width:14px; height:14px; cursor:pointer; accent-color:#000; }
-        .gh-sc-days { display:flex; gap:4px; flex-wrap:wrap; padding-left:24px; }
+        .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
+
+        /* ── BUTTONS — always white text on dark, light outline on ghost ── */
+        .gh-btn { padding:9px 20px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
+        .gh-btn-solid { background:#111 !important; color:#fff !important; border:1px solid #111 !important; }
+        .gh-btn-solid:hover { background:#333 !important; border-color:#333 !important; }
+        .gh-btn-ghost { background:#fff !important; color:#111 !important; border:1px solid #999 !important; }
+        .gh-btn-ghost:hover { border-color:#111 !important; }
+        .gh-btn-sm { padding:6px 14px; font-size:.65rem; }
+        .gh-wiz-back { background:none !important; border:none !important; font-size:.68rem; color:#bbb !important; cursor:pointer; font-family:inherit; letter-spacing:.06em; text-transform:uppercase; padding:6px 4px; }
+        .gh-wiz-back:hover { color:#111 !important; }
+
+        /* ── ABSENCES ── */
+        .gh-ab-list { margin-bottom:14px; }
+        .gh-ab-row { display:grid; grid-template-columns:1fr 110px 90px 28px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+        .gh-ab-sel { border:1px solid #ddd; border-radius:5px; padding:7px 9px; font-size:.78rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
+        .gh-ab-x { background:none; border:none; cursor:pointer; color:#ccc; font-size:1rem; line-height:1; }
+        .gh-ab-x:hover { color:#c00; }
+        .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; }
+        .gh-add-btn:hover { border-color:#111; color:#111; }
+
+        /* ── STORE CONFIG ── */
+        .gh-store-cfg { margin-bottom:28px; }
+        .gh-sc-row { padding:12px 0; border-bottom:1px solid #f0f0f0; }
+        .gh-sc-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+        .gh-sc-top label { font-size:.85rem; cursor:pointer; color:#111; font-weight:400; }
+        .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
+        .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
         .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
         .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
-        .gh-dtog { padding:4px 9px; border:1px solid #ddd; border-radius:3px; font-size:.55rem; font-weight:600; letter-spacing:.06em; cursor:pointer; user-select:none; color:#444; }
-        .gh-dtog.on { background:#000; color:#fff; border-color:#000; }
-        .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:9px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; }
-        .gh-sb-week  { font-size:.55rem; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:#aaa; }
-        .gh-sb-dates { font-size:.75rem; font-weight:300; margin-top:1px; color:#111; }
-        .gh-alert-bar { padding:7px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; }
-        .gh-dec-bar   { padding:6px 20px; border-bottom:1px solid #f0f0f0; }
-        .gh-al-inner  { display:flex; flex-wrap:wrap; gap:5px; }
-        .gh-dec-inner { display:flex; flex-wrap:wrap; gap:4px; }
-        .gh-al-chip { font-size:.55rem; padding:3px 9px; border-radius:20px; }
+        .gh-dtog { padding:5px 11px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.05em; cursor:pointer; user-select:none; color:#555; background:#fff; }
+        .gh-dtog:hover { border-color:#555; }
+        .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
+
+        /* ── SCHEDULE BAR ── */
+        .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; }
+        .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
+        .gh-sb-dates { font-size:.88rem; font-weight:300; margin-top:2px; color:#111; }
+        .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; }
+        .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; }
+        .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
+        .gh-al-chip { font-size:.68rem; padding:4px 11px; border-radius:20px; }
         .gh-al-chip.red   { background:#fff5f5; color:#c0392b; border:1px solid rgba(192,57,43,.18); }
         .gh-al-chip.amber { background:#fffbf0; color:#b8860b; border:1px solid rgba(184,134,11,.2); }
         .gh-al-chip.info  { background:#f0f6ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.2); }
-        .gh-dec-chip { font-size:.53rem; color:#888; padding:2px 7px; background:#f5f5f5; border-radius:3px; }
-        .gh-sched-body { padding:16px 20px 60px; overflow-x:auto; }
-        .gh-store-block { margin-bottom:40px; }
-        .gh-sched-tbl { width:100%; border-collapse:collapse; min-width:700px; }
+        .gh-dec-chip { font-size:.65rem; color:#777; padding:3px 9px; background:#f5f5f5; border-radius:4px; }
+
+        /* ── TABLE LAYOUT ── */
+        .gh-sched-body { padding:20px 16px 60px; overflow-x:auto; }
+        .gh-store-block { margin-bottom:48px; }
+        /* Table fits content — no fixed min-width, cells wrap naturally */
+        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:100%; }
         .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:5px 8px; font-size:.56rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; border:1px solid #ddd; text-align:center; }
-        .gh-tbl-store-hdr td:first-child { text-align:left; width:162px; }
-        .gh-tbl-date { font-weight:300; font-size:.6rem; }
-        .gh-tbl-day-hdr th { padding:6px 3px; font-size:.5rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:#aaa; border:1px solid #e8e8e8; text-align:center; background:#f8f8f8; }
-        .gh-tbl-day-hdr th:first-child { text-align:left; padding-left:8px; }
-        .gh-th-date { display:block; font-size:.68rem; font-weight:300; color:#000; letter-spacing:0; margin-top:2px; }
+        .gh-tbl-store-hdr td { padding:7px 10px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; white-space:nowrap; color:#111; }
+        .gh-tbl-store-hdr td:first-child { text-align:left; white-space:nowrap; }
+        .gh-tbl-date { font-weight:300; font-size:.72rem; color:#555; }
+        .gh-tbl-day-hdr th { padding:7px 6px; font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; border:1px solid #e8e8e8; text-align:center; background:#f8f8f8; white-space:nowrap; }
+        .gh-tbl-day-hdr th:first-child { text-align:left; padding-left:10px; }
+        .gh-th-date { display:block; font-size:.78rem; font-weight:300; color:#111; letter-spacing:0; margin-top:2px; }
         .gh-th-closed .gh-th-date { color:#ccc; }
-        .gh-th-today .gh-th-date { font-weight:600; }
+        .gh-th-today .gh-th-date  { font-weight:700; }
         .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
-        .gh-sched-tbl td:first-child { padding:0; }
-        .gh-p-cell { padding:7px 8px; }
-        .gh-p-name { font-size:.7rem; font-weight:400; display:flex; align-items:center; gap:4px; color:#111; }
-        .gh-p-dot  { color:#e74c3c; font-size:.65rem; }
-        .gh-p-hrs-tag { font-weight:300; color:#bbb; font-size:.6rem; }
-        .gh-p-hrs  { font-size:.52rem; padding-left:14px; margin-top:1px; font-weight:500; }
+        .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
+
+        /* ── PERSON CELL ── */
+        .gh-p-cell { padding:8px 12px; }
+        .gh-p-name { font-size:.82rem; font-weight:500; display:flex; align-items:center; gap:5px; color:#111; white-space:nowrap; }
+        .gh-p-dot  { color:#e74c3c; font-size:.7rem; }
+        .gh-p-hrs-tag { font-weight:300; color:#bbb; font-size:.7rem; }
+        .gh-p-hrs  { font-size:.65rem; padding-left:16px; margin-top:2px; font-weight:500; }
         .gh-p-hrs.ok  { color:#2d6a4f; }
         .gh-p-hrs.bad { color:#c0392b; }
-        .gh-sh-td { text-align:center; cursor:pointer; min-width:86px; }
-        .gh-sh-td:hover { background:#f8f8f8; }
+
+        /* ── SHIFT CELLS ── */
+        .gh-sh-td { text-align:center; cursor:pointer; }
+        .gh-sh-td:hover { background:#f4f4f4; }
         .gh-no-click { cursor:default; }
         .gh-no-click:hover { background:transparent; }
-        .gh-sh-inner { padding:5px 3px; min-height:38px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .gh-sh-line { display:block; font-size:.58rem; font-weight:300; line-height:1.55; color:#000; }
-        .gh-sh-loc  { display:block; font-size:.6rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#000; }
-        .c-folga .gh-sh-line  { color:#bbb; font-style:italic; }
-        .c-ferias .gh-sh-line { color:#bbb; font-style:italic; background:#f8f8f8; }
-        .c-na .gh-sh-line     { color:#ddd; }
+        .gh-sh-inner { padding:8px 6px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .gh-sh-line { display:block; font-size:.75rem; font-weight:400; line-height:1.6; color:#111; white-space:nowrap; }
+        .gh-sh-loc  { display:block; font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:#111; white-space:nowrap; }
+        .c-folga  { background:#f9f9f9; }
+        .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
+        .c-ferias { background:#f9f9f9; }
+        .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
+        .c-na .gh-sh-line     { color:#e0e0e0; }
         .c-elsewhere { background:#f5f5f5; }
         .c-soft { background:#fffbf0; }
         .c-soft .gh-sh-line { color:#b8860b; }
-        /* Modal */
-        .gh-modal-ov { position:fixed; inset:0; background:rgba(0,0,0,.25); backdrop-filter:blur(3px); z-index:9000; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+
+        /* ── MODAL ── */
+        .gh-modal-ov { position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
         .gh-modal-ov.open { opacity:1; pointer-events:all; }
-        .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:7px; width:330px; max-width:92vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.09); }
+        .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:8px; width:340px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.12); color:#111; }
         .gh-modal-ov.open .gh-modal { transform:translateY(0); }
-        .gh-modal-hdr { padding:13px 16px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
-        .gh-modal-ttl { font-size:.6rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
-        .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:.9rem; }
-        .gh-modal-bdy { padding:16px; }
-        .gh-modal-ftr { padding:11px 16px; border-top:1px solid #f0f0f0; display:flex; gap:8px; justify-content:flex-end; }
-        .gh-form-grp  { margin-bottom:12px; }
-        .gh-form-lbl  { display:block; font-size:.52rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:#bbb; margin-bottom:4px; }
-        .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:4px; padding:5px 8px; font-size:.7rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; }
-        .gh-conf-note { padding:7px 9px; border-radius:4px; font-size:.6rem; margin-top:6px; line-height:1.5; }
+        .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
+        .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
+        .gh-modal-bdy { padding:18px; }
+        .gh-modal-ftr { padding:12px 18px; border-top:1px solid #f0f0f0; display:flex; gap:10px; justify-content:flex-end; }
+        .gh-form-grp  { margin-bottom:14px; }
+        .gh-form-lbl  { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
+        .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
+        .gh-field-sm:focus { border-color:#111; }
+        .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
         .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
         .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
       `;

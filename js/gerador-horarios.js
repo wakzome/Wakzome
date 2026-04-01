@@ -368,22 +368,37 @@
       const canWorkSunday = storOpensSun && !sunQuotaFilled && p.canAlone !== false && weeksSince(p.start, S.weekStart) >= 4;
       let extraDayOff = null;
       if (canWorkSunday) {
-        const candidates = workDays.filter(d => !isAbsent(p.id, d));
-        extraDayOff = candidates.sort((a, b) => (remaining[b][myStore]||0) - (remaining[a][myStore]||0))[0];
+        // Choose the extraDayOff day: must leave the store with enough coverage after removal.
+        // Sort candidates by most coverage first (so we take from the richest day),
+        // but only pick days where removing one person still keeps coverage >= minAv.
+        const candidates = workDays.filter(d => {
+          if (isAbsent(p.id, d)) return false;
+          const storeMin = myStore === 'avenida' ? minAv(d) : 1;
+          const covAfter = (remaining[d]?.[myStore] || 0) - 1;
+          return covAfter >= storeMin;
+        });
+        if (candidates.length > 0) {
+          extraDayOff = candidates.sort((a, b) => (remaining[b][myStore]||0) - (remaining[a][myStore]||0))[0];
+        } else {
+          // No safe day to take off — cannot work Sunday after all
+          // (canWorkSunday will remain true but extraDayOff=null means the sunday math won't add up to target)
+        }
       }
+      // canWorkSundayEffective: only true if we also found a safe extraDayOff
+      const canWorkSundayEffective = canWorkSunday && extraDayOff !== null;
       let found = false, willWorkSunday = false;
       for (let t = 0; t < 12; t++) {
         const day = workDays[dayIdx];
         const monSatDays = workDays.filter(d => {
           if (d === day) return false;
-          if (canWorkSunday && extraDayOff && d === extraDayOff && day !== extraDayOff) return false;
+          if (canWorkSundayEffective && extraDayOff && d === extraDayOff && day !== extraDayOff) return false;
           if (isAbsent(p.id, d)) return false;
           return true;
         }).length;
         const withSun = monSatDays + 1, withoutSun = monSatDays;
         let sundayDecision = false;
         if (withoutSun === target) { sundayDecision = false; }
-        else if (canWorkSunday && withSun === target) { sundayDecision = true; }
+        else if (canWorkSundayEffective && withSun === target) { sundayDecision = true; }
         else { dayIdx = (dayIdx+1) % 6; continue; }
         const effStore = p.id === 'sandra' ? S.sandraDay[day] : p.store;
         if (effStore && S.openStores.includes(effStore) && S.openDays[effStore]?.includes(day)) {
@@ -511,11 +526,28 @@
           if (cand) { S.schedule[cand.id][day].store = 'mercado'; S.decisions.push({ type: 'info', text: `${day}: ${cand.name} → Mercado (reequilíbrio).` }); }
         }
       }
+
+      // ── Assign shifts AFTER all relocations are final ──
+      // Sort by seniority: least senior first → gets SH_ALT (shorter lunch break),
+      // most senior last → gets SH_DEFAULT. With exactly 2 autonomous workers,
+      // they always get different shifts regardless of how they ended up in the store.
       STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
         const staff = wk().filter(p => S.schedule[p.id][day].store === st.id)
-          .sort((a, b) => { const as = (a.efetiva?1000:0)+weeksSince(a.start,S.weekStart), bs = (b.efetiva?1000:0)+weeksSince(b.start,S.weekStart); return as - bs; });
-        if (staff.length < 2) return;
-        staff.forEach((p, i) => { S.schedule[p.id][day].shift = i < staff.length-1 ? SH_ALT : SH_DEFAULT; });
+          .sort((a, b) => {
+            const as = (a.efetiva ? 1000 : 0) + weeksSince(a.start, S.weekStart);
+            const bs = (b.efetiva ? 1000 : 0) + weeksSince(b.start, S.weekStart);
+            return as - bs;
+          });
+        if (staff.length < 2) {
+          // Single worker: default shift
+          if (staff.length === 1) S.schedule[staff[0].id][day].shift = SH_DEFAULT;
+          return;
+        }
+        // 2+ workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
+        // This guarantees at least one person is always at lunch in each slot.
+        staff.forEach((p, i) => {
+          S.schedule[p.id][day].shift = i < staff.length - 1 ? SH_ALT : SH_DEFAULT;
+        });
       });
 
       // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
@@ -523,8 +555,6 @@
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
-        // Try to give Carla the alternate shift — only if her store has ≥2 workers
-        // (lone worker can't stagger lunch) and the alternate shift is viable.
         const caStore = caSch.store;
         const caStoreStaff = wk().filter(p => S.schedule[p.id][day].store === caStore).length;
         const altShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
@@ -532,14 +562,12 @@
           S.schedule['carla'][day].shift = altShift;
           S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
         } else {
-          // Can't stagger in Carla's store — try Edna's store instead
           const edStore = edSch.store;
           const edStoreStaff = wk().filter(p => S.schedule[p.id][day].store === edStore).length;
           if (edStoreStaff >= 2) {
             S.schedule['edna'][day].shift = altShift;
             S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
           }
-          // If neither store has 2+ workers, nothing can be done — no alert (soft rule)
         }
       }
       const logged = new Set();

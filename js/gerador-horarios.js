@@ -640,11 +640,11 @@
 
         /* ── WIZARD ── */
         @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; }
+        .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; box-sizing:border-box; }
         .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
-        .gh-wiz-title { font-size:1.6rem; font-weight:200; margin-bottom:8px; line-height:1.3; color:#111; }
+        .gh-wiz-title { font-size:1.6rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
         .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
-        .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:300; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
+        .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
         .gh-field:focus { border-color:#000; }
         .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
 
@@ -683,7 +683,7 @@
         /* ── SCHEDULE BAR ── */
         .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
         .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
-        .gh-sb-dates { font-size:.88rem; font-weight:300; margin-top:2px; color:#111; }
+        .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
         .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
         .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
         .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
@@ -700,18 +700,18 @@
         /* Table: auto layout, width determined by content only — never stretches to fill container */
         .gh-sched-tbl { border-collapse:collapse; table-layout:auto; }
         .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:7px 8px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; min-width:80px; }
-        .gh-tbl-store-hdr td:first-child { text-align:left; min-width:0; width:130px; }
-        .gh-tbl-date { font-weight:300; font-size:.72rem; color:#555; }
+        .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; min-width:80px; }
+        .gh-tbl-store-hdr td:first-child { text-align:center; min-width:0; width:130px; }
+        .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
         .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
 
         /* ── PERSON CELL ── */
         .gh-p-cell { padding:8px 12px; }
-        .gh-p-name { font-size:.82rem; font-weight:500; display:flex; align-items:center; gap:5px; color:#111; white-space:nowrap; }
+        .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; white-space:nowrap; }
         .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
-        .gh-p-hrs-tag { font-weight:300; color:#bbb; font-size:.7rem; flex-shrink:0; }
-        .gh-p-hrs  { font-size:.65rem; padding-left:16px; margin-top:2px; font-weight:500; }
+        .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
+        .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
         .gh-p-hrs.ok  { color:#2d6a4f; }
         .gh-p-hrs.bad { color:#c0392b; }
 
@@ -721,8 +721,8 @@
         .gh-no-click { cursor:default; }
         .gh-no-click:hover { background:transparent; }
         .gh-sh-inner { padding:7px 4px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .gh-sh-line { display:block; font-size:.73rem; font-weight:400; line-height:1.6; color:#111; white-space:nowrap; }
-        .gh-sh-loc  { display:block; font-size:.68rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        .gh-sh-line { display:block; font-size:.76rem; font-weight:500; line-height:1.6; color:#111; white-space:nowrap; }
+        .gh-sh-loc  { display:block; font-size:.72rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
         .c-folga  { background:#f9f9f9; }
         .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         .c-ferias { background:#f9f9f9; }

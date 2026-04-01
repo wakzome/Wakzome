@@ -4064,9 +4064,9 @@ td                   { font-size: .96rem !important; }
     if (titleEl)     titleEl.textContent     = monthName || 'recibos';
     if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
 
-    /* Fetch do index.json — sem cache (cache-busting via timestamp) */
-    var urlData = sbClient.storage.from('recibos').getPublicUrl('index.json');
-    var publicUrl = urlData.data.publicUrl + '?v=' + Date.now();
+    /* Fetch do index.json — URL directo, sem cache */
+    var SUPA_BASE = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/recibos';
+    var publicUrl = SUPA_BASE + '/index.json?v=' + Date.now();
 
     fetch(publicUrl, { cache: 'no-store' })
       .then(function (res) {
@@ -4091,7 +4091,7 @@ td                   { font-size: .96rem !important; }
         var mesPasta = indexData.mes || mes;
         tbody.innerHTML = items.map(function (item, i) {
           var filePath = mesPasta + '/' + item.filename;
-          var fileUrl  = sbClient.storage.from('recibos').getPublicUrl(filePath).data.publicUrl + '?v=' + Date.now();
+          var fileUrl  = SUPA_BASE + '/' + mesPasta + '/' + item.filename;
           var name     = item.name || item.filename;
           /* escapa HTML */
           var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

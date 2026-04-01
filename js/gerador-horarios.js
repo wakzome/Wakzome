@@ -545,23 +545,31 @@
       });
 
       // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
-      // This applies even when they're in different stores.
+      // Only adjust if it does NOT break the stagger already set within each store.
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
-        const caStore = caSch.store;
-        const caStoreStaff = wk().filter(p => S.schedule[p.id][day].store === caStore).length;
         const altShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-        if (caStoreStaff >= 2) {
+        const isAutonomous = p => p.canAlone && weeksSince(p.start, S.weekStart) >= 3;
+
+        // Try flipping Carla first — only safe if her store has another autonomous worker
+        // already on a different shift (so the stagger in her store is preserved).
+        const caStore = caSch.store;
+        const caStoreAutonomous = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caStore && isAutonomous(p));
+        const caStaggerSafe = caStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
+        if (caStoreAutonomous.length >= 1 && caStaggerSafe) {
           S.schedule['carla'][day].shift = altShift;
           S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
         } else {
+          // Try flipping Edna — only safe if her store has another autonomous worker on a different shift.
           const edStore = edSch.store;
-          const edStoreStaff = wk().filter(p => S.schedule[p.id][day].store === edStore).length;
-          if (edStoreStaff >= 2) {
+          const edStoreAutonomous = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edStore && isAutonomous(p));
+          const edStaggerSafe = edStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
+          if (edStoreAutonomous.length >= 1 && edStaggerSafe) {
             S.schedule['edna'][day].shift = altShift;
             S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
           }
+          // If neither flip is safe, leave shifts as-is (stagger within stores takes priority).
         }
       }
       const logged = new Set();

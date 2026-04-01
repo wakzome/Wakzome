@@ -94,7 +94,8 @@
       // display must never be set inline — clear any leftover value just in case
       panel.style.display = '';
     }
-    document.getElementById('gh-mobile-overlay')?.remove();
+    document.documentElement.style.overflowX = '';
+    document.body.style.overflowX = '';
     const modal = document.getElementById('gh-modal');
     if (modal) {
       modal.classList.remove('open');
@@ -902,81 +903,26 @@
       const maxW = nameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
       if (maxW > 0) nameCells.forEach(td => { td.style.width = maxW + 'px'; td.style.minWidth = maxW + 'px'; });
 
-      // ── MOBILE ONLY: mount schedule body as a fixed overlay on document.body ──
-      // This escapes all overflow:hidden ancestors completely.
-      // Desktop (>900px): untouched, works as before.
+      // MOBILE ONLY: allow the entire page to scroll horizontally so the table is visible.
+      // We do this by removing overflow-x restrictions up the DOM tree from the container.
       if (window.innerWidth <= 900) {
-        // Remove any previous mobile overlay
-        document.getElementById('gh-mobile-overlay')?.remove();
-
-        // Grab the rendered schedule body and top bar from the container
-        const schedBody = c.querySelector('.gh-sched-body');
-        const schedBar  = c.querySelector('.gh-sched-bar');
-        const alertBar  = c.querySelector('.gh-alert-bar');
-        const decBar    = c.querySelector('.gh-dec-bar');
-        if (!schedBody) return;
-
-        // Build overlay
-        const ov = document.createElement('div');
-        ov.id = 'gh-mobile-overlay';
-        ov.style.cssText = [
-          'position:fixed',
-          'inset:0',
-          'z-index:8500',
-          'background:#fff',
-          'display:flex',
-          'flex-direction:column',
-          'overflow:hidden',
-          'font-family:MontserratLight,sans-serif',
-          'color:#111',
-        ].join(';');
-
-        // Sticky top section (bar + alerts)
-        const topWrap = document.createElement('div');
-        topWrap.style.cssText = 'flex-shrink:0;border-bottom:1px solid #e8e8e8;background:#fff;';
-        if (schedBar)  topWrap.appendChild(schedBar.cloneNode(true));
-        if (alertBar)  topWrap.appendChild(alertBar.cloneNode(true));
-        if (decBar)    topWrap.appendChild(decBar.cloneNode(true));
-        ov.appendChild(topWrap);
-
-        // Scrollable body — vertical scroll for the whole view
-        const scrollWrap = document.createElement('div');
-        scrollWrap.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:60px;';
-
-        // Each store block scrolls horizontally independently
-        const blocks = schedBody.querySelectorAll('.gh-store-block');
-        blocks.forEach(bl => {
-          const blClone = bl.cloneNode(true);
-          blClone.style.cssText = 'display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 8px;box-sizing:border-box;margin-bottom:48px;';
-          scrollWrap.appendChild(blClone);
-        });
-
-        ov.appendChild(scrollWrap);
-        document.body.appendChild(ov);
-
-        // Wire up buttons in the overlay
-        ov.querySelector('#gh-btn-nova')?.addEventListener('click', () => { ov.remove(); startNew(); });
-        ov.querySelector('#gh-btn-regen')?.addEventListener('click', () => { ov.remove(); regenSchedule(); });
-
-        // Wire up cell edit clicks
-        ov.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
-          td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
-        });
-
-        // Sync name column widths inside the overlay
-        const ovNameCells = [...ov.querySelectorAll('.gh-sched-tbl td:first-child')];
-        ovNameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
-        const ovMaxW = ovNameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
-        if (ovMaxW > 0) ovNameCells.forEach(td => { td.style.width = ovMaxW + 'px'; td.style.minWidth = ovMaxW + 'px'; });
+        let el = c;
+        while (el && el !== document.body) {
+          const st = window.getComputedStyle(el);
+          if (st.overflowX === 'hidden' || st.overflowX === 'clip') {
+            el.style.overflowX = 'visible';
+          }
+          el = el.parentElement;
+        }
+        document.documentElement.style.overflowX = 'auto';
+        document.body.style.overflowX = 'auto';
       }
     });
 
-    // Edit on click (desktop — mobile uses overlay above)
-    if (window.innerWidth > 900) {
-      c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
-        td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
-      });
-    }
+    // Edit on click
+    c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
+      td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
+    });
   }
 
   // Re-run the engine keeping week, absences and store config — just shuffle folgas
@@ -998,6 +944,8 @@
   function openEdit(pid, day, ctxStore) {
     editCtx = { pid, day, ctxStore };
     const p = P(pid), c2 = S.schedule[pid]?.[day] || {};
+    document.documentElement.style.overflowX = '';
+    document.body.style.overflowX = '';
     const modal = document.getElementById('gh-modal');
     if (!modal) return;
     modal.style.display = ''; // restore in case cleanup had hidden it
@@ -1046,7 +994,8 @@
   }
 
   function startNew() {
-    document.getElementById('gh-mobile-overlay')?.remove();
+    document.documentElement.style.overflowX = '';
+    document.body.style.overflowX = '';
     S = blank(); wStep = 0; renderWiz();
   }
 

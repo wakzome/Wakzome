@@ -107,6 +107,8 @@
           loja: row.loja
         });
       });
+      // Notificar outros módulos (ex: gerador) que os dados foram atualizados
+      document.dispatchEvent(new CustomEvent('ferias:updated'));
     } catch(e) {
       console.error('[Férias] Excepción:', e);
     } finally {
@@ -706,6 +708,55 @@
       });
     });
   }
+
+  // ── API GLOBAL PARA GERADOR DE HORÁRIOS ──
+  // Devolve lista de { pid, nome, from } para pessoas de férias que coincidem
+  // com a semana indicada (weekStart: Date da segunda-feira).
+  // "from" é o primeiro dia da semana (SEG..DOM) em que a pessoa está de férias.
+  window.getFeriasParaSemana = function(weekStart) {
+    const DAYS = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+    // Mapas nome→id e nome→loja para cruzar com PEOPLE do gerador
+    // O gerador expõe window.GERADOR_PEOPLE; se não existir, tentamos cruzar por nome
+    const peopleLookup = window.GERADOR_PEOPLE || [];
+
+    const weekDates = DAYS.map(function(_, i) {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      d.setHours(0,0,0,0);
+      return d;
+    });
+    const weekEnd = new Date(weekDates[6]);
+    weekEnd.setHours(23,59,59,999);
+
+    const result = [];
+    const allEntries = Object.values(feriasDB).reduce(function(acc, arr) { return acc.concat(arr); }, []);
+
+    allEntries.forEach(function(f) {
+      const de  = parseDate(f.de);
+      const ate = parseDate(f.ate);
+      ate.setHours(23,59,59,999);
+      // Sobrepõe-se à semana?
+      if (de > weekEnd || ate < weekDates[0]) return;
+
+      // Encontrar o primeiro dia da semana em que está de férias
+      let fromDay = null;
+      for (var i = 0; i < DAYS.length; i++) {
+        if (weekDates[i] >= de) { fromDay = DAYS[i]; break; }
+      }
+      if (!fromDay) fromDay = 'SEG';
+
+      // Cruzar nome com PEOPLE do gerador (por nome, case-insensitive)
+      const nomeNorm = (f.nome || '').trim().toUpperCase();
+      let pid = null;
+      peopleLookup.forEach(function(p) {
+        if (p.name.toUpperCase() === nomeNorm) pid = p.id;
+      });
+
+      result.push({ pid: pid, nome: f.nome, loja: f.loja, from: fromDay });
+    });
+
+    return result;
+  };
 
   // ── INIT ──
   async function initFerias() {

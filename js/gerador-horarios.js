@@ -15,15 +15,18 @@
     { id: 'marilia', name: 'Marilia Silva', hrs: 40, store: 'shana',   efetiva: true,  start: '2020-01-01', canAlone: true,  mobile: false, coverPri: 8, knows: ['shana','mercado','avenida'],        hardAvoid: [],         softAvoid: ['sandra'] },
     { id: 'sandra',  name: 'Sandra Melim',  hrs: 40, store: null,      efetiva: true,  start: '2022-01-01', canAlone: true,  mobile: true,  coverPri: 1, knows: ['avenida','mercado','shana','maxx'], hardAvoid: [],         softAvoid: ['edna','marilia','carla'] },
     { id: 'sara',    name: 'Sara Almeida',  hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
-    { id: 'matilde', name: 'Matilde Rodrigues.',    hrs: 40, store: 'mercado', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['mercado','avenida'],                hardAvoid: [],         softAvoid: [] },
-    { id: 'djanice', name: 'Djanice Lopes.',    hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-15', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida'],                          hardAvoid: [],         softAvoid: [] },
-    { id: 'iara',    name: 'Iara Oliveira.',       hrs: 40, store: 'avenida', efetiva: false, start: '2025-04-01', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
+    { id: 'matilde', name: 'Matilde R.',    hrs: 40, store: 'mercado', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['mercado','avenida'],                hardAvoid: [],         softAvoid: [] },
+    { id: 'djanice', name: 'Djanice L.',    hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-15', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida'],                          hardAvoid: [],         softAvoid: [] },
+    { id: 'iara',    name: 'Iara O.',       hrs: 40, store: 'avenida', efetiva: false, start: '2025-04-01', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
   ];
 
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
   const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
   const SH_DEFAULT = '10:00-14:00|15:00-19:00';
   const SH_ALT     = '10:00-13:00|14:00-19:00';
+
+  // Expor PEOPLE globalmente para que ferias.js possa cruzar nomes ↔ ids
+  window.GERADOR_PEOPLE = PEOPLE;
 
   // ── MEMORY (sessionStorage) ──
   let MEM = (function () {
@@ -124,11 +127,36 @@
   // ── WIZARD: PASSO 2 ──
   function wiz_absences() {
     const c = getContainer(); if (!c) return;
+
+    // ── Consultar férias automáticas ──
+    let feriasAuto = [];
+    if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
+      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => f.pid);
+    }
+
+    // Filtrar ausências manuais para não duplicar quem já tem férias automáticas
+    const feriasAutoPids = new Set(feriasAuto.map(f => f.pid));
+    const manualAbsences = S.absences.filter(a => !feriasAutoPids.has(a.pid));
+
+    // Banner informativo se há férias detectadas
+    let bannerHTML = '';
+    if (feriasAuto.length) {
+      const nomes = feriasAuto.map(f => {
+        const p = PEOPLE.find(x => x.id === f.pid);
+        return p ? p.name.split(' ')[0] : f.nome;
+      }).join(', ');
+      bannerHTML = `<div class="gh-ferias-banner">
+        <span class="gh-ferias-banner-icon">🏖</span>
+        <span>Férias detectadas automaticamente: <strong>${nomes}</strong></span>
+      </div>`;
+    }
+
     c.innerHTML = `
       <div class="gh-wiz-box">
         <div class="gh-wiz-label">Passo 2 de 3</div>
         <div class="gh-wiz-title">Há ausências esta semana?</div>
-        <div class="gh-wiz-sub">Férias, baixas ou N/A. Se não houver, avance.</div>
+        <div class="gh-wiz-sub">Baixas ou N/A. As férias são importadas automaticamente.</div>
+        ${bannerHTML}
         <div class="gh-ab-list" id="gh-ab-list"></div>
         <button class="gh-add-btn" id="gh-add-ab">+ Adicionar ausência</button>
         <div class="gh-wiz-nav">
@@ -136,7 +164,55 @@
           <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
         </div>
       </div>`;
-    S.absences.forEach(a => addAb(a));
+
+    // Injectar CSS do banner (só uma vez)
+    if (!document.getElementById('gh-ferias-banner-css')) {
+      const s = document.createElement('style');
+      s.id = 'gh-ferias-banner-css';
+      s.textContent = `
+        .gh-ferias-banner {
+          display:flex; align-items:center; gap:9px;
+          background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px;
+          padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px;
+          font-weight:500; line-height:1.4;
+        }
+        .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
+        .gh-ab-row-ferias {
+          display:flex; align-items:center; gap:8px;
+          padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8;
+          border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a;
+          font-weight:600;
+        }
+        .gh-ab-row-ferias .gh-ferias-tag {
+          background:#e0f5e0; color:#1a5c1a; border-radius:4px;
+          font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em;
+          flex-shrink:0;
+        }
+        .gh-ab-row-ferias .gh-ferias-from {
+          font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto;
+        }
+      `;
+      document.head.appendChild(s);
+    }
+
+    // Renderizar linhas de férias automáticas (só-leitura)
+    const list = document.getElementById('gh-ab-list');
+    feriasAuto.forEach(f => {
+      const p = PEOPLE.find(x => x.id === f.pid);
+      if (!p) return;
+      const row = document.createElement('div');
+      row.className = 'gh-ab-row-ferias';
+      row.dataset.pid = f.pid;
+      row.innerHTML = `
+        <span>${p.name}</span>
+        <span class="gh-ferias-tag">🏖 FÉRIAS</span>
+        <span class="gh-ferias-from">desde ${DAY_PT[f.from] || f.from}</span>
+      `;
+      list.appendChild(row);
+    });
+
+    // Renderizar ausências manuais editáveis
+    manualAbsences.forEach(a => addAb(a));
     document.getElementById('gh-add-ab').addEventListener('click', () => addAb({}));
     document.getElementById('gh-back-1').addEventListener('click', () => { wStep = 0; renderWiz(); });
     document.getElementById('gh-sub-abs').addEventListener('click', sub_abs);
@@ -147,7 +223,8 @@
     const list = document.getElementById('gh-ab-list'); if (!list) return;
     const row = document.createElement('div'); row.className = 'gh-ab-row';
     const pO = PEOPLE.map(p => `<option value="${p.id}" ${ex.pid===p.id?'selected':''}>${p.name}</option>`).join('');
-    const tO = [['ferias','FÉRIAS'],['baixa','BAIXA'],['na','N/A']].map(([v,l]) => `<option value="${v}" ${ex.type===v?'selected':''}>${l}</option>`).join('');
+    // FÉRIAS removidas daqui — são importadas automaticamente de ferias.js
+    const tO = [['baixa','BAIXA'],['na','N/A']].map(([v,l]) => `<option value="${v}" ${ex.type===v?'selected':''}>${l}</option>`).join('');
     const dO = DAYS.map(d => `<option value="${d}" ${ex.from===d?'selected':''}>${DAY_PT[d]}</option>`).join('');
     row.innerHTML = `<select class="gh-ab-sel">${pO}</select><select class="gh-ab-sel">${tO}</select><select class="gh-ab-sel">${dO}</select><button class="gh-ab-x">×</button>`;
     row.querySelector('.gh-ab-x').addEventListener('click', () => row.remove());
@@ -155,11 +232,31 @@
   }
 
   function sub_abs() {
-    S.absences = [];
+    // Coletar ausências manuais (linhas editáveis)
+    const manual = [];
     document.querySelectorAll('.gh-ab-row').forEach(r => {
       const s = r.querySelectorAll('select');
-      S.absences.push({ pid: s[0].value, type: s[1].value, from: s[2].value });
+      manual.push({ pid: s[0].value, type: s[1].value, from: s[2].value });
     });
+
+    // Coletar férias automáticas (linhas só-leitura)
+    const feriasAutoPids = new Set();
+    const feriasAuto = [];
+    document.querySelectorAll('.gh-ab-row-ferias').forEach(r => {
+      const pid  = r.dataset.pid;
+      const from = r.querySelector('.gh-ferias-from')?.textContent?.trim() || 'SEG';
+      // Converter "desde Segunda" → "SEG"
+      const DAY_REVERSE = { 'desde Segunda':'SEG','desde Terça':'TER','desde Quarta':'QUA','desde Quinta':'QUI','desde Sexta':'SEX','desde Sábado':'SAB','desde Domingo':'DOM' };
+      const fromDay = DAY_REVERSE[from] || 'SEG';
+      feriasAutoPids.add(pid);
+      feriasAuto.push({ pid, type: 'ferias', from: fromDay });
+    });
+
+    // Excluir duplicados: se alguém foi adicionado manualmente como "ferias"
+    // e já está em feriasAuto, prevalece o automático
+    const manualFiltered = manual.filter(a => !feriasAutoPids.has(a.pid));
+
+    S.absences = [...feriasAuto, ...manualFiltered];
     wStep = 2; renderWiz();
   }
 

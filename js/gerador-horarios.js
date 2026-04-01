@@ -15,9 +15,9 @@
     { id: 'marilia', name: 'Marilia Silva', hrs: 40, store: 'shana',   efetiva: true,  start: '2020-01-01', canAlone: true,  mobile: false, coverPri: 8, knows: ['shana','mercado','avenida'],        hardAvoid: [],         softAvoid: ['sandra'] },
     { id: 'sandra',  name: 'Sandra Melim',  hrs: 40, store: null,      efetiva: true,  start: '2022-01-01', canAlone: true,  mobile: true,  coverPri: 1, knows: ['avenida','mercado','shana','maxx'], hardAvoid: [],         softAvoid: ['edna','marilia','carla'] },
     { id: 'sara',    name: 'Sara Almeida',  hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
-    { id: 'matilde', name: 'Matilde Rodrigues.',    hrs: 40, store: 'mercado', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['mercado','avenida'],                hardAvoid: [],         softAvoid: [] },
-    { id: 'djanice', name: 'Djanice Lopes.',    hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-15', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida'],                          hardAvoid: [],         softAvoid: [] },
-    { id: 'iara',    name: 'Iara Oliveira.',       hrs: 40, store: 'avenida', efetiva: false, start: '2025-04-01', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
+    { id: 'matilde', name: 'Matilde R.',    hrs: 40, store: 'mercado', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['mercado','avenida'],                hardAvoid: [],         softAvoid: [] },
+    { id: 'djanice', name: 'Djanice L.',    hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-15', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida'],                          hardAvoid: [],         softAvoid: [] },
+    { id: 'iara',    name: 'Iara O.',       hrs: 40, store: 'avenida', efetiva: false, start: '2025-04-01', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
   ];
 
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
@@ -65,7 +65,7 @@
   function getContainer() { return document.getElementById('gh-container'); }
 
   function fixPanelLayout() {
-    // Neutralize the padding injected by #admin-app.module-open .tab-panel.active
+    // Only touch #tab-gerador — never shared/global containers
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '0';
@@ -75,14 +75,19 @@
       panel.style.display = 'flex';
       panel.style.flexDirection = 'column';
     }
-    const container = document.getElementById('gh-container');
-    if (container) {
-      container.style.flex = '1';
-      container.style.minHeight = '0';
-      container.style.overflowY = 'auto';
-      container.style.overflowX = 'hidden';
-      container.style.background = '#fff';
-      container.style.color = '#111';
+    // gh-container layout is handled entirely by CSS — no inline styles needed
+  }
+
+  function cleanupGeradorLayout() {
+    // Called when leaving the gerador tab — restore panel to neutral
+    const panel = document.getElementById('tab-gerador');
+    if (panel) {
+      panel.style.padding = '';
+      panel.style.background = '';
+      panel.style.color = '';
+      panel.style.overflow = '';
+      panel.style.display = '';
+      panel.style.flexDirection = '';
     }
   }
 
@@ -608,14 +613,6 @@
     const panel = document.getElementById('tab-gerador');
     if (!panel) return;
 
-    // Force correct layout on the admin-app container so the module
-    // gets full height and doesn't bleed into the rest of the dashboard
-    const adminApp = document.getElementById('admin-app');
-    if (adminApp) {
-      // Ensure admin-app scrolls at its own level, not through the module
-      adminApp.style.overflow = 'hidden';
-    }
-
     // Inject CSS only once
     if (!document.getElementById('gh-styles')) {
       const style = document.createElement('style');
@@ -811,7 +808,12 @@
   // ── TAB LISTENER ──
   document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      if (btn.dataset.tab === 'gerador') window.initGeradorHorarios?.();
+      if (btn.dataset.tab === 'gerador') {
+        window.initGeradorHorarios?.();
+      } else {
+        // Leaving gerador — clean up any inline styles we set on #tab-gerador
+        cleanupGeradorLayout();
+      }
     });
   });
 

@@ -76,7 +76,7 @@
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      panel.style.overflow = 'hidden'; /* vertical only — container handles scroll */
+      panel.style.overflow = 'hidden';
       panel.style.flexDirection = 'column';
     }
   }
@@ -94,6 +94,7 @@
       // display must never be set inline — clear any leftover value just in case
       panel.style.display = '';
     }
+    document.getElementById('gh-mobile-overlay')?.remove();
     const modal = document.getElementById('gh-modal');
     if (modal) {
       modal.classList.remove('open');
@@ -563,25 +564,15 @@
           S.schedule['carla'][day].shift = altShift;
           S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
         } else {
-          // Try flipping Edna — only safe if her store has another autonomous worker on a different shift
-          // AND the person left alone on SH_DEFAULT after the flip is the most senior.
+          // Try flipping Edna — only safe if her store has another autonomous worker on a different shift.
           const edStore = edSch.store;
           const edStoreAutonomous = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edStore && isAutonomous(p));
           const edStaggerSafe = edStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
           if (edStoreAutonomous.length >= 1 && edStaggerSafe) {
-            // Seniority check: after flipping Edna, who would be left on SH_DEFAULT?
-            const senScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
-            const allEdAuto = wk().filter(p => S.schedule[p.id][day].store === edStore && isAutonomous(p));
-            const mostSeniorId = allEdAuto.reduce((best, p) => senScore(p) > senScore(best) ? p : best, allEdAuto[0])?.id;
-            // After flip: Edna gets altShift. Who stays on SH_DEFAULT?
-            const loneAfterFlip = allEdAuto.filter(p => p.id === 'edna' ? altShift === SH_DEFAULT : S.schedule[p.id][day].shift === SH_DEFAULT);
-            const loneIsSenior = loneAfterFlip.length === 0 || loneAfterFlip.every(p => p.id === mostSeniorId);
-            if (loneIsSenior) {
-              S.schedule['edna'][day].shift = altShift;
-              S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
-            }
+            S.schedule['edna'][day].shift = altShift;
+            S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
           }
-          // If neither flip is safe or seniority rule blocks it, leave shifts as-is.
+          // If neither flip is safe, leave shifts as-is (stagger within stores takes priority).
         }
       }
       const logged = new Set();
@@ -910,20 +901,82 @@
       nameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
       const maxW = nameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
       if (maxW > 0) nameCells.forEach(td => { td.style.width = maxW + 'px'; td.style.minWidth = maxW + 'px'; });
-      // Force horizontal scroll on each store block regardless of parent overflow settings
-      c.querySelectorAll('.gh-store-block').forEach(bl => {
-        bl.style.overflowX = 'auto';
-        bl.style.webkitOverflowScrolling = 'touch';
-        bl.style.display = 'block';
-        bl.style.width = '100%';
-        bl.style.boxSizing = 'border-box';
-      });
+
+      // ── MOBILE ONLY: mount schedule body as a fixed overlay on document.body ──
+      // This escapes all overflow:hidden ancestors completely.
+      // Desktop (>900px): untouched, works as before.
+      if (window.innerWidth <= 900) {
+        // Remove any previous mobile overlay
+        document.getElementById('gh-mobile-overlay')?.remove();
+
+        // Grab the rendered schedule body and top bar from the container
+        const schedBody = c.querySelector('.gh-sched-body');
+        const schedBar  = c.querySelector('.gh-sched-bar');
+        const alertBar  = c.querySelector('.gh-alert-bar');
+        const decBar    = c.querySelector('.gh-dec-bar');
+        if (!schedBody) return;
+
+        // Build overlay
+        const ov = document.createElement('div');
+        ov.id = 'gh-mobile-overlay';
+        ov.style.cssText = [
+          'position:fixed',
+          'inset:0',
+          'z-index:8500',
+          'background:#fff',
+          'display:flex',
+          'flex-direction:column',
+          'overflow:hidden',
+          'font-family:MontserratLight,sans-serif',
+          'color:#111',
+        ].join(';');
+
+        // Sticky top section (bar + alerts)
+        const topWrap = document.createElement('div');
+        topWrap.style.cssText = 'flex-shrink:0;border-bottom:1px solid #e8e8e8;background:#fff;';
+        if (schedBar)  topWrap.appendChild(schedBar.cloneNode(true));
+        if (alertBar)  topWrap.appendChild(alertBar.cloneNode(true));
+        if (decBar)    topWrap.appendChild(decBar.cloneNode(true));
+        ov.appendChild(topWrap);
+
+        // Scrollable body — vertical scroll for the whole view
+        const scrollWrap = document.createElement('div');
+        scrollWrap.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:60px;';
+
+        // Each store block scrolls horizontally independently
+        const blocks = schedBody.querySelectorAll('.gh-store-block');
+        blocks.forEach(bl => {
+          const blClone = bl.cloneNode(true);
+          blClone.style.cssText = 'display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 8px;box-sizing:border-box;margin-bottom:48px;';
+          scrollWrap.appendChild(blClone);
+        });
+
+        ov.appendChild(scrollWrap);
+        document.body.appendChild(ov);
+
+        // Wire up buttons in the overlay
+        ov.querySelector('#gh-btn-nova')?.addEventListener('click', () => { ov.remove(); startNew(); });
+        ov.querySelector('#gh-btn-regen')?.addEventListener('click', () => { ov.remove(); regenSchedule(); });
+
+        // Wire up cell edit clicks
+        ov.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
+          td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
+        });
+
+        // Sync name column widths inside the overlay
+        const ovNameCells = [...ov.querySelectorAll('.gh-sched-tbl td:first-child')];
+        ovNameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
+        const ovMaxW = ovNameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
+        if (ovMaxW > 0) ovNameCells.forEach(td => { td.style.width = ovMaxW + 'px'; td.style.minWidth = ovMaxW + 'px'; });
+      }
     });
 
-    // Edit on click
-    c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
-      td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
-    });
+    // Edit on click (desktop — mobile uses overlay above)
+    if (window.innerWidth > 900) {
+      c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
+        td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
+      });
+    }
   }
 
   // Re-run the engine keeping week, absences and store config — just shuffle folgas
@@ -993,6 +1046,7 @@
   }
 
   function startNew() {
+    document.getElementById('gh-mobile-overlay')?.remove();
     S = blank(); wStep = 0; renderWiz();
   }
 
@@ -1021,17 +1075,6 @@
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
           min-height:0;
-        }
-        /* ── RESPONSIVE ── */
-        @media (max-width:768px) {
-          #tab-gerador .gh-wiz-box { padding:32px 16px; }
-          #tab-gerador .gh-wiz-title { font-size:1.3rem; }
-          #tab-gerador .gh-wiz-nav { flex-wrap:wrap; }
-          #tab-gerador .gh-sched-bar { flex-wrap:wrap; gap:6px; padding:10px 14px; }
-          #tab-gerador .gh-btn { padding:7px 14px; font-size:.68rem; }
-          #tab-gerador .gh-btn-sm { padding:5px 10px; font-size:.62rem; }
-          #tab-gerador .gh-p-cell { padding:6px 8px; }
-          #tab-gerador .gh-p-name { font-size:.78rem; }
         }
 
         /* ── WIZARD ── */
@@ -1098,9 +1141,9 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; display:block; }
-        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:100%; }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
+        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
+        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }

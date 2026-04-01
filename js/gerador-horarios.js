@@ -80,7 +80,7 @@
       container.style.flex = '1';
       container.style.minHeight = '0';
       container.style.overflowY = 'auto';
-      container.style.overflowX = 'hidden';
+      container.style.overflowX = 'auto';
       container.style.background = '#fff';
       container.style.color = '#111';
     }
@@ -682,11 +682,11 @@
         .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; }
+        .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
         .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
         .gh-sb-dates { font-size:.88rem; font-weight:300; margin-top:2px; color:#111; }
-        .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; }
-        .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; }
+        .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
         .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
         .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
         .gh-al-chip { font-size:.68rem; padding:4px 11px; border-radius:20px; }
@@ -696,10 +696,10 @@
         .gh-dec-chip { font-size:.65rem; color:#777; padding:3px 9px; background:#f5f5f5; border-radius:4px; }
 
         /* ── TABLE LAYOUT ── */
-        .gh-sched-body { padding:20px 16px 60px; width:100%; box-sizing:border-box; overflow:hidden; }
-        .gh-store-block { margin-bottom:48px; display:block; width:100%; }
-        /* Table: auto layout, 100% width — columns size to content, never overflow */
-        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:100%; }
+        .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; }
+        .gh-store-block { margin-bottom:48px; display:flex; justify-content:center; padding:0 16px; overflow-x:auto; }
+        /* Table: auto layout, width determined by content only — never stretches to fill container */
+        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; }
         .gh-tbl-store-hdr { background:#efefef; }
         .gh-tbl-store-hdr td { padding:7px 8px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; }
         .gh-tbl-store-hdr td:first-child { text-align:left; white-space:nowrap; }

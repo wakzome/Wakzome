@@ -80,7 +80,7 @@
       container.style.flex = '1';
       container.style.minHeight = '0';
       container.style.overflowY = 'auto';
-      container.style.overflowX = 'auto';
+      container.style.overflowX = 'hidden';
       container.style.background = '#fff';
       container.style.color = '#111';
     }
@@ -527,10 +527,6 @@
       }).join('');
 
       bodyHTML += `<div class="gh-store-block"><table class="gh-sched-tbl">
-        <colgroup>
-          <col class="gh-col-person">
-          ${DAYS.map(() => '<col>').join('')}
-        </colgroup>
         <thead>
           <tr class="gh-tbl-store-hdr">
             <td>PORTO SANTO<br>${st.short}</td>
@@ -637,10 +633,9 @@
           box-sizing:border-box;
         }
         #gh-container {
-          flex:1; overflow-y:auto; overflow-x:auto;
+          flex:1; overflow-y:auto; overflow-x:hidden;
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
-          /* ensure container fills available height */
           min-height:0;
         }
 
@@ -701,26 +696,25 @@
         .gh-dec-chip { font-size:.65rem; color:#777; padding:3px 9px; background:#f5f5f5; border-radius:4px; }
 
         /* ── TABLE LAYOUT ── */
-        .gh-sched-body { padding:20px 16px 60px; width:100%; box-sizing:border-box; }
-        .gh-store-block { margin-bottom:48px; display:block; }
-        /* Table: fixed layout so columns stay consistent regardless of absent staff */
-        .gh-sched-tbl { border-collapse:collapse; table-layout:fixed; width:100%; min-width:760px; }
-        .gh-sched-tbl col.gh-col-person { width:160px; }
+        .gh-sched-body { padding:20px 16px 60px; width:100%; box-sizing:border-box; overflow:hidden; }
+        .gh-store-block { margin-bottom:48px; display:block; width:100%; }
+        /* Table: auto layout, 100% width — columns size to content, never overflow */
+        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:100%; }
         .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:7px 10px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; white-space:nowrap; color:#111; overflow:hidden; text-overflow:ellipsis; }
-        .gh-tbl-store-hdr td:first-child { text-align:left; white-space:nowrap; width:160px; }
+        .gh-tbl-store-hdr td { padding:7px 8px; font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; }
+        .gh-tbl-store-hdr td:first-child { text-align:left; white-space:nowrap; }
         .gh-tbl-date { font-weight:300; font-size:.72rem; color:#555; }
-        .gh-tbl-day-hdr th { padding:7px 6px; font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; border:1px solid #e8e8e8; text-align:center; background:#f8f8f8; white-space:nowrap; overflow:hidden; }
-        .gh-tbl-day-hdr th:first-child { text-align:left; padding-left:10px; width:160px; }
-        .gh-th-date { display:block; font-size:.78rem; font-weight:300; color:#111; letter-spacing:0; margin-top:2px; }
+        .gh-tbl-day-hdr th { padding:7px 4px; font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; border:1px solid #e8e8e8; text-align:center; background:#f8f8f8; white-space:nowrap; }
+        .gh-tbl-day-hdr th:first-child { text-align:left; padding-left:10px; white-space:nowrap; }
+        .gh-th-date { display:block; font-size:.72rem; font-weight:300; color:#111; letter-spacing:0; margin-top:2px; }
         .gh-th-closed .gh-th-date { color:#ccc; }
         .gh-th-today .gh-th-date  { font-weight:700; }
-        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; overflow:hidden; }
-        .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; width:160px; }
+        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
 
         /* ── PERSON CELL ── */
-        .gh-p-cell { padding:8px 12px; overflow:hidden; }
-        .gh-p-name { font-size:.82rem; font-weight:500; display:flex; align-items:center; gap:5px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .gh-p-cell { padding:8px 12px; }
+        .gh-p-name { font-size:.82rem; font-weight:500; display:flex; align-items:center; gap:5px; color:#111; white-space:nowrap; }
         .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
         .gh-p-hrs-tag { font-weight:300; color:#bbb; font-size:.7rem; flex-shrink:0; }
         .gh-p-hrs  { font-size:.65rem; padding-left:16px; margin-top:2px; font-weight:500; }
@@ -732,9 +726,9 @@
         .gh-sh-td:hover { background:#f4f4f4; }
         .gh-no-click { cursor:default; }
         .gh-no-click:hover { background:transparent; }
-        .gh-sh-inner { padding:8px 6px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .gh-sh-line { display:block; font-size:.75rem; font-weight:400; line-height:1.6; color:#111; white-space:nowrap; }
-        .gh-sh-loc  { display:block; font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:#111; white-space:nowrap; }
+        .gh-sh-inner { padding:7px 4px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .gh-sh-line { display:block; font-size:.73rem; font-weight:400; line-height:1.6; color:#111; white-space:nowrap; }
+        .gh-sh-loc  { display:block; font-size:.68rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:#111; white-space:nowrap; }
         .c-folga  { background:#f9f9f9; }
         .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         .c-ferias { background:#f9f9f9; }

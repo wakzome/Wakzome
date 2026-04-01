@@ -82,7 +82,7 @@
   }
 
   function cleanupGeradorLayout() {
-    // Called when leaving the gerador tab — restore panel to neutral
+    // Called when leaving the gerador tab — restore panel to neutral and fully hide modal
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '';
@@ -92,6 +92,14 @@
       panel.style.display = '';
       panel.style.flexDirection = '';
     }
+    // Force-hide the modal: position:fixed means it floats over the whole page
+    // regardless of its parent's visibility. Remove open class AND hide with display:none.
+    const modal = document.getElementById('gh-modal');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.style.display = 'none';
+    }
+    editCtx = null;
   }
 
   function renderWiz() {
@@ -164,36 +172,6 @@
           <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
         </div>
       </div>`;
-
-    // Injectar CSS do banner (só uma vez)
-    if (!document.getElementById('gh-ferias-banner-css')) {
-      const s = document.createElement('style');
-      s.id = 'gh-ferias-banner-css';
-      s.textContent = `
-        .gh-ferias-banner {
-          display:flex; align-items:center; gap:9px;
-          background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px;
-          padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px;
-          font-weight:500; line-height:1.4;
-        }
-        .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
-        .gh-ab-row-ferias {
-          display:flex; align-items:center; gap:8px;
-          padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8;
-          border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a;
-          font-weight:600;
-        }
-        .gh-ab-row-ferias .gh-ferias-tag {
-          background:#e0f5e0; color:#1a5c1a; border-radius:4px;
-          font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em;
-          flex-shrink:0;
-        }
-        .gh-ab-row-ferias .gh-ferias-from {
-          font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto;
-        }
-      `;
-      document.head.appendChild(s);
-    }
 
     // Renderizar linhas de férias automáticas (só-leitura)
     const list = document.getElementById('gh-ab-list');
@@ -856,6 +834,7 @@
     const p = P(pid), c2 = S.schedule[pid]?.[day] || {};
     const modal = document.getElementById('gh-modal');
     if (!modal) return;
+    modal.style.display = ''; // restore in case cleanup had hidden it
     document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
     const typeEl = document.getElementById('gh-me-type');
     typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : 'folga';
@@ -920,11 +899,11 @@
           display:flex !important; flex-direction:column !important;
           flex:1 !important; width:100% !important; height:100% !important;
           overflow:hidden !important;
-          padding:0 !important; /* override module-open padding */
+          padding:0 !important;
           background:#fff !important; color:#111 !important;
           box-sizing:border-box;
         }
-        #gh-container {
+        #tab-gerador #gh-container {
           flex:1; overflow-y:auto; overflow-x:hidden;
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
@@ -933,118 +912,121 @@
 
         /* ── WIZARD ── */
         @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; box-sizing:border-box; }
-        .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
-        .gh-wiz-title { font-size:1.6rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
-        .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
-        .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
-        .gh-field:focus { border-color:#000; }
-        .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
+        #tab-gerador .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; box-sizing:border-box; }
+        #tab-gerador .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
+        #tab-gerador .gh-wiz-title { font-size:1.6rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
+        #tab-gerador .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
+        #tab-gerador .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
+        #tab-gerador .gh-field:focus { border-color:#000; }
+        #tab-gerador .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
 
-        /* ── BUTTONS — always white text on dark, light outline on ghost ── */
-        .gh-btn { padding:9px 20px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
-        .gh-btn-solid { background:#111 !important; color:#fff !important; border:1px solid #111 !important; }
-        .gh-btn-solid:hover { background:#333 !important; border-color:#333 !important; }
-        .gh-btn-ghost { background:#fff !important; color:#111 !important; border:1px solid #999 !important; }
-        .gh-btn-ghost:hover { border-color:#111 !important; }
-        .gh-btn-sm { padding:6px 14px; font-size:.65rem; }
-        .gh-wiz-back { background:none !important; border:none !important; font-size:.68rem; color:#bbb !important; cursor:pointer; font-family:inherit; letter-spacing:.06em; text-transform:uppercase; padding:6px 4px; }
-        .gh-wiz-back:hover { color:#111 !important; }
+        /* ── BUTTONS ── */
+        #tab-gerador .gh-btn { padding:9px 20px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
+        #tab-gerador .gh-btn-solid { background:#111 !important; color:#fff !important; border:1px solid #111 !important; }
+        #tab-gerador .gh-btn-solid:hover { background:#333 !important; border-color:#333 !important; }
+        #tab-gerador .gh-btn-ghost { background:#fff !important; color:#111 !important; border:1px solid #999 !important; }
+        #tab-gerador .gh-btn-ghost:hover { border-color:#111 !important; }
+        #tab-gerador .gh-btn-sm { padding:6px 14px; font-size:.65rem; }
+        #tab-gerador .gh-wiz-back { background:none !important; border:none !important; font-size:.68rem; color:#bbb !important; cursor:pointer; font-family:inherit; letter-spacing:.06em; text-transform:uppercase; padding:6px 4px; }
+        #tab-gerador .gh-wiz-back:hover { color:#111 !important; }
 
         /* ── ABSENCES ── */
-        .gh-ab-list { margin-bottom:14px; }
-        .gh-ab-row { display:grid; grid-template-columns:1fr 110px 90px 28px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; }
-        .gh-ab-sel { border:1px solid #ddd; border-radius:5px; padding:7px 9px; font-size:.78rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
-        .gh-ab-x { background:none; border:none; cursor:pointer; color:#ccc; font-size:1rem; line-height:1; }
-        .gh-ab-x:hover { color:#c00; }
-        .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; }
-        .gh-add-btn:hover { border-color:#111; color:#111; }
+        #tab-gerador .gh-ab-list { margin-bottom:14px; }
+        #tab-gerador .gh-ab-row { display:grid; grid-template-columns:1fr 110px 90px 28px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+        #tab-gerador .gh-ab-sel { border:1px solid #ddd; border-radius:5px; padding:7px 9px; font-size:.78rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
+        #tab-gerador .gh-ab-x { background:none; border:none; cursor:pointer; color:#ccc; font-size:1rem; line-height:1; }
+        #tab-gerador .gh-ab-x:hover { color:#c00; }
+        #tab-gerador .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; }
+        #tab-gerador .gh-add-btn:hover { border-color:#111; color:#111; }
 
         /* ── STORE CONFIG ── */
-        .gh-store-cfg { margin-bottom:28px; }
-        .gh-sc-row { padding:12px 0; border-bottom:1px solid #f0f0f0; }
-        .gh-sc-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
-        .gh-sc-top label { font-size:.85rem; cursor:pointer; color:#111; font-weight:400; }
-        .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
-        .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
-        .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
-        .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
-        .gh-dtog { padding:5px 11px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.05em; cursor:pointer; user-select:none; color:#555; background:#fff; }
-        .gh-dtog:hover { border-color:#555; }
-        .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
+        #tab-gerador .gh-store-cfg { margin-bottom:28px; }
+        #tab-gerador .gh-sc-row { padding:12px 0; border-bottom:1px solid #f0f0f0; }
+        #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+        #tab-gerador .gh-sc-top label { font-size:.85rem; cursor:pointer; color:#111; font-weight:400; }
+        #tab-gerador .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
+        #tab-gerador .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
+        #tab-gerador .gh-dtog { padding:5px 11px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.05em; cursor:pointer; user-select:none; color:#555; background:#fff; }
+        #tab-gerador .gh-dtog:hover { border-color:#555; }
+        #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
-        .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
-        .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
-        .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
-        .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
-        .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
-        .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
-        .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
-        .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
-        .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
-        .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
+        #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
+        #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
+        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
+        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
+        #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
+        #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
+        #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
+        #tab-gerador .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
 
         /* ── TABLE LAYOUT ── */
-        .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
-        .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
-        /* Auto layout: name col sizes to widest name across ALL tables (via min-width on .gh-p-cell),
-           day cols all share the same explicit width so they stay aligned */
-        .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
-        .gh-tbl-store-hdr { background:#efefef; }
-        .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
-        .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }
-        .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
-        .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
-        .gh-sched-tbl td:first-child { padding:0; }
-        /* Force all day columns to be exactly 106px so tables align */
-        .gh-sh-td { width:106px; min-width:106px; max-width:106px; }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
+        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
+        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
+        #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
+        #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }
+        #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
+        #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; }
+        #tab-gerador .gh-sh-td { width:106px; min-width:106px; max-width:106px; text-align:center; cursor:pointer; }
+        #tab-gerador .gh-sh-td:hover { background:#f4f4f4; }
+        #tab-gerador .gh-no-click { cursor:default; }
+        #tab-gerador .gh-no-click:hover { background:transparent; }
 
         /* ── PERSON CELL ── */
-        .gh-p-cell { padding:8px 12px; white-space:nowrap; }
-        .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
-        .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
-        .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
-        .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
-        .gh-p-hrs.ok  { color:#2d6a4f; }
-        .gh-p-hrs.bad { color:#c0392b; }
+        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }
+        #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
+        #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
+        #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
+        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
+        #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
+        #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
 
         /* ── SHIFT CELLS ── */
-        .gh-sh-td { text-align:center; cursor:pointer; }
-        .gh-sh-td:hover { background:#f4f4f4; }
-        .gh-no-click { cursor:default; }
-        .gh-no-click:hover { background:transparent; }
-        .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
-        .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
-        .c-folga  { background:#f9f9f9; }
-        .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
-        .c-ferias { background:#f9f9f9; }
-        .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
-        .c-na .gh-sh-line     { color:#e0e0e0; }
-        .c-elsewhere { background:#f5f5f5; }
-        .c-soft { background:#fffbf0; }
-        .c-soft .gh-sh-line { color:#b8860b; }
+        #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .c-folga  { background:#f9f9f9; }
+        #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
+        #tab-gerador .c-ferias { background:#f9f9f9; }
+        #tab-gerador .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
+        #tab-gerador .c-na .gh-sh-line     { color:#e0e0e0; }
+        #tab-gerador .c-elsewhere { background:#f5f5f5; }
+        #tab-gerador .c-soft { background:#fffbf0; }
+        #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
 
-        /* ── MODAL ── */
-        .gh-modal-ov { position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
-        .gh-modal-ov.open { opacity:1; pointer-events:all; }
-        .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:8px; width:340px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.12); color:#111; }
-        .gh-modal-ov.open .gh-modal { transform:translateY(0); }
-        .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
-        .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
-        .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
-        .gh-modal-bdy { padding:18px; }
-        .gh-modal-ftr { padding:12px 18px; border-top:1px solid #f0f0f0; display:flex; gap:10px; justify-content:flex-end; }
-        .gh-form-grp  { margin-bottom:14px; }
-        .gh-form-lbl  { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
-        .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
-        .gh-field-sm:focus { border-color:#111; }
-        .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
-        .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
-        .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
+        /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
+        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+        #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:8px; width:340px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.12); color:#111; }
+        #gh-modal.open .gh-modal { transform:translateY(0); }
+        #gh-modal .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        #gh-modal .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
+        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
+        #gh-modal .gh-modal-bdy { padding:18px; }
+        #gh-modal .gh-modal-ftr { padding:12px 18px; border-top:1px solid #f0f0f0; display:flex; gap:10px; justify-content:flex-end; }
+        #gh-modal .gh-form-grp  { margin-bottom:14px; }
+        #gh-modal .gh-form-lbl  { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
+        #gh-modal .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
+        #gh-modal .gh-field-sm:focus { border-color:#111; }
+        #gh-modal .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
+        #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
+        #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
+
+        /* ── FERIAS BANNER (injected separately, also scope it) ── */
+        #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
+        #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
+        #tab-gerador .gh-ab-row-ferias { display:flex; align-items:center; gap:8px; padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8; border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a; font-weight:600; }
+        #tab-gerador .gh-ab-row-ferias .gh-ferias-tag { background:#e0f5e0; color:#1a5c1a; border-radius:4px; font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em; flex-shrink:0; }
+        #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
       `;
       document.head.appendChild(style);
     }
@@ -1053,7 +1035,7 @@
     if (!document.getElementById('gh-container')) {
       panel.innerHTML = `
         <div id="gh-container"></div>
-        <div class="gh-modal-ov" id="gh-modal">
+        <div id="gh-modal">
           <div class="gh-modal">
             <div class="gh-modal-hdr">
               <div class="gh-modal-ttl" id="gh-me-ttl">Editar</div>
@@ -1105,15 +1087,17 @@
   };
 
   // ── TAB LISTENER ──
-  document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (btn.dataset.tab === 'gerador') {
-        window.initGeradorHorarios?.();
-      } else {
-        // Leaving gerador — clean up any inline styles we set on #tab-gerador
-        cleanupGeradorLayout();
-      }
-    });
-  });
+  // Use event delegation on document so dynamically-added tab buttons are also caught.
+  // This prevents the modal/layout from bleeding into other modules when tabs are
+  // added after the IIFE runs.
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.tab-btn, .drawer-tab-btn');
+    if (!btn) return;
+    if (btn.dataset.tab === 'gerador') {
+      window.initGeradorHorarios?.();
+    } else {
+      cleanupGeradorLayout();
+    }
+  }, true); // capture phase: fires before the tab's own handler shows/hides panels
 
 })();

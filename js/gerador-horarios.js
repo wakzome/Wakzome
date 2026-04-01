@@ -76,7 +76,7 @@
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      /* overflow handled by gh-container scroll */
+      panel.style.overflow = 'hidden'; /* vertical only — container handles scroll */
       panel.style.flexDirection = 'column';
     }
   }
@@ -541,16 +541,9 @@
           return;
         }
         // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
-        // RULE: when staff > 2, the person left alone during lunch (SH_DEFAULT) must be
-        // the most senior. The ascending sort above already guarantees this naturally.
         autonomous.forEach((p, i) => {
           S.schedule[p.id][day].shift = i < autonomous.length - 1 ? SH_ALT : SH_DEFAULT;
         });
-        // Log who stays alone when there are more than 2 people in the store
-        if (staff.length > 2 && autonomous.length >= 2) {
-          const aloneWorker = autonomous[autonomous.length - 1];
-          S.decisions.push({ type: 'info', text: `${day}: ${sname(st.id)} — ${aloneWorker.name} fica sozinha no almoço (critério: mais antiga).` });
-        }
       });
 
       // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
@@ -570,33 +563,25 @@
           S.schedule['carla'][day].shift = altShift;
           S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
         } else {
-          // Try flipping Edna — only safe if:
-          // 1. Her store has another autonomous worker on a different shift, AND
-          // 2. The person who would be left alone on SH_DEFAULT is the most senior in the store
-          //    (seniority rule: the person alone at lunch must be the most senior).
+          // Try flipping Edna — only safe if her store has another autonomous worker on a different shift
+          // AND the person left alone on SH_DEFAULT after the flip is the most senior.
           const edStore = edSch.store;
           const edStoreAutonomous = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edStore && isAutonomous(p));
           const edStaggerSafe = edStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
           if (edStoreAutonomous.length >= 1 && edStaggerSafe) {
-            // Check seniority rule: after flipping Edna to SH_ALT, who stays alone on SH_DEFAULT?
-            // That person must be the most senior autonomous worker in the store.
-            const allEdStoreAuto = wk().filter(p => S.schedule[p.id][day].store === edStore && isAutonomous(p));
-            // After flip: Edna → altShift; others keep their shifts. Who would have SH_DEFAULT?
-            const wouldHaveDefault = allEdStoreAuto.filter(p => {
-              if (p.id === 'edna') return altShift === SH_DEFAULT;
-              return S.schedule[p.id][day].shift === SH_DEFAULT;
-            });
-            // The most senior autonomous worker in the store
-            const seniorityScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
-            const mostSenior = allEdStoreAuto.reduce((a, b) => seniorityScore(a) >= seniorityScore(b) ? a : b, allEdStoreAuto[0]);
-            const aloneIsSenior = wouldHaveDefault.length === 0 || wouldHaveDefault.some(p => p.id === mostSenior?.id);
-            if (aloneIsSenior) {
+            // Seniority check: after flipping Edna, who would be left on SH_DEFAULT?
+            const senScore = p => (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+            const allEdAuto = wk().filter(p => S.schedule[p.id][day].store === edStore && isAutonomous(p));
+            const mostSeniorId = allEdAuto.reduce((best, p) => senScore(p) > senScore(best) ? p : best, allEdAuto[0])?.id;
+            // After flip: Edna gets altShift. Who stays on SH_DEFAULT?
+            const loneAfterFlip = allEdAuto.filter(p => p.id === 'edna' ? altShift === SH_DEFAULT : S.schedule[p.id][day].shift === SH_DEFAULT);
+            const loneIsSenior = loneAfterFlip.length === 0 || loneAfterFlip.every(p => p.id === mostSeniorId);
+            if (loneIsSenior) {
               S.schedule['edna'][day].shift = altShift;
               S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
             }
-            // If flipping Edna would leave a junior alone, skip the flip.
           }
-          // If neither flip is safe, leave shifts as-is (stagger within stores takes priority).
+          // If neither flip is safe or seniority rule blocks it, leave shifts as-is.
         }
       }
       const logged = new Set();
@@ -925,6 +910,14 @@
       nameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
       const maxW = nameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
       if (maxW > 0) nameCells.forEach(td => { td.style.width = maxW + 'px'; td.style.minWidth = maxW + 'px'; });
+      // Force horizontal scroll on each store block regardless of parent overflow settings
+      c.querySelectorAll('.gh-store-block').forEach(bl => {
+        bl.style.overflowX = 'auto';
+        bl.style.webkitOverflowScrolling = 'touch';
+        bl.style.display = 'block';
+        bl.style.width = '100%';
+        bl.style.boxSizing = 'border-box';
+      });
     });
 
     // Edit on click
@@ -1018,16 +1011,27 @@
         #tab-gerador.active {
           display:flex !important; flex-direction:column !important;
           flex:1 !important; width:100% !important; height:100% !important;
-          overflow:visible !important;
+          overflow:hidden !important;
           padding:0 !important;
           background:#fff !important; color:#111 !important;
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:auto;
+          flex:1; overflow-y:auto; overflow-x:hidden;
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
           min-height:0;
+        }
+        /* ── RESPONSIVE ── */
+        @media (max-width:768px) {
+          #tab-gerador .gh-wiz-box { padding:32px 16px; }
+          #tab-gerador .gh-wiz-title { font-size:1.3rem; }
+          #tab-gerador .gh-wiz-nav { flex-wrap:wrap; }
+          #tab-gerador .gh-sched-bar { flex-wrap:wrap; gap:6px; padding:10px 14px; }
+          #tab-gerador .gh-btn { padding:7px 14px; font-size:.68rem; }
+          #tab-gerador .gh-btn-sm { padding:5px 10px; font-size:.62rem; }
+          #tab-gerador .gh-p-cell { padding:6px 8px; }
+          #tab-gerador .gh-p-name { font-size:.78rem; }
         }
 
         /* ── WIZARD ── */
@@ -1073,11 +1077,11 @@
         #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        #tab-gerador .gh-sched-bar { position:sticky; top:0; left:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; min-width:100vw; flex-wrap:wrap; gap:8px; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
         #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
         #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; min-width:100vw; }
-        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; min-width:100vw; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
         #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
         #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
         #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
@@ -1094,9 +1098,9 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; min-width:100%; width:max-content; box-sizing:border-box; display:flex; flex-direction:column; align-items:flex-start; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; box-sizing:border-box; display:flex; justify-content:flex-start; }
-        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
+        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; display:block; }
+        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:100%; }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }
@@ -1129,22 +1133,6 @@
         #tab-gerador .c-elsewhere { background:#f5f5f5; }
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
-
-
-        /* ── MOBILE SCROLL FIX ── */
-        @media (max-width:900px) {
-          #tab-gerador .gh-sched-bar { padding:10px 14px; flex-wrap:wrap; gap:8px; }
-          #tab-gerador .gh-sb-dates { font-size:.78rem; }
-          #tab-gerador .gh-sched-body { padding:12px 0 60px; align-items:flex-start; }
-          #tab-gerador .gh-store-block { padding:0 8px; justify-content:flex-start; max-width:100%; }
-          #tab-gerador .gh-wiz-box { padding:32px 16px; }
-          #tab-gerador .gh-wiz-title { font-size:1.3rem; }
-          #tab-gerador .gh-btn { padding:8px 16px; font-size:.68rem; }
-          #tab-gerador .gh-btn-sm { padding:6px 12px; font-size:.62rem; }
-          #tab-gerador .gh-p-cell { padding:6px 8px; }
-          #tab-gerador .gh-p-name { font-size:.78rem; }
-          #tab-gerador .gh-ab-row { grid-template-columns:1fr 90px 76px 28px; gap:5px; }
-        }
 
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
         #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }

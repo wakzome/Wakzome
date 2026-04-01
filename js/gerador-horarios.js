@@ -530,9 +530,129 @@
     });
   }
 
+  // ── SUNDAY VIABILITY CHECK ──
+  // Priority order to sacrifice: maxx → shana → mercado → avenida
+  const SUNDAY_SACRIFICE_ORDER = ['maxx', 'shana', 'mercado', 'avenida'];
+
+  // Returns how many workers can realistically cover a store on Sunday
+  // (those assigned to that store, canAlone-capable, not absent, seniority >= 4 weeks)
+  function sundayCandidatesFor(sid, active) {
+    return active.filter(p => {
+      if (isAbsent(p.id, 'DOM')) return false;
+      if (!p.knows.includes(sid)) return false;
+      if (!p.canAlone && weeksSince(p.start, S.weekStart) < 4) return false;
+      return true;
+    });
+  }
+
+  // Each person working Sunday needs a compensatory day off Mon–Sat.
+  // Simulate how many extra folgas would be required by all Sunday assignments,
+  // and check whether Mon–Sat coverage survives losing those slots.
+  function sundayWouldBreakWeek(sundayStoreIds, active) {
+    // For each sunday store, count how many people we need (minAv for avenida, 1 for rest)
+    const needed = {};
+    sundayStoreIds.forEach(sid => {
+      needed[sid] = sid === 'avenida' ? minAv('DOM') : 1;
+    });
+
+    // Count available candidates per store
+    const available = {};
+    sundayStoreIds.forEach(sid => {
+      available[sid] = sundayCandidatesFor(sid, active).length;
+    });
+
+    // Check if any store has fewer candidates than needed
+    for (const sid of sundayStoreIds) {
+      if (available[sid] < needed[sid]) return { breaks: true, reason: `${sname(sid)} não tem pessoal suficiente para abrir ao domingo (precisa ${needed[sid]}, disponível ${available[sid]}).` };
+    }
+
+    // Simulate extra day-off pressure on Mon–Sat:
+    // Each person working Sunday loses one Mon–Sat day (extraDayOff).
+    // Count per store how many people would lose a day, and check if
+    // minimum coverage (1 per store, minAv for avenida) can still be met.
+    const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    // For each open Mon–Sat store, count available workers on each day
+    // This is a conservative estimate: we just check total "person-days" budget
+    for (const sid of sundayStoreIds) {
+      const cands = sundayCandidatesFor(sid, active);
+      const toAssign = Math.min(needed[sid], cands.length);
+      // Each assigned person loses one Mon–Sat day from their store
+      // Check if that store still has enough coverage each Mon–Sat day it opens
+      const storeOpenDays = workDays.filter(d => storeOpen(sid, d));
+      if (!storeOpenDays.length) continue;
+      // Workers normally in this store on Mon–Sat (excluding absent)
+      const storeWorkers = active.filter(p => {
+        if (p.id === 'sandra') return false; // Sandra handled separately
+        if (p.store !== sid) return false;
+        return !fullyAbsent(p.id);
+      });
+      const minNeeded = sid === 'avenida' ? minAv('SEG') : 1; // conservative: use Monday value
+      // If we lose `toAssign` person-days across the week, the worst case is
+      // they all fall on the same day. Check if that day would still be covered.
+      const worstCaseRemaining = storeWorkers.length - toAssign;
+      if (worstCaseRemaining < minNeeded) {
+        return {
+          breaks: true,
+          reason: `Abrir ${sname(sid)} ao domingo deixaria sem cobertura mínima de Segunda a Sábado (${storeWorkers.length} pessoa(s) na loja, ${toAssign} iriam trabalhar domingo e precisam de folga compensatória).`
+        };
+      }
+    }
+    return { breaks: false };
+  }
+
+  // Resolve sunday stores: remove stores that would break weekday coverage,
+  // following sacrifice priority. Returns { resolvedSundayStores, sacrificed[] }
+  function resolveSundayStores(active) {
+    const requestedSundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
+    if (!requestedSundayStores.length) return { resolvedSundayStores: [], sacrificed: [] };
+
+    const sacrificed = [];
+    // Work with a mutable copy, sorted by sacrifice priority (first to go = index 0)
+    let current = [...requestedSundayStores];
+
+    // Keep trying to remove lowest-priority stores until the set is viable or empty
+    while (current.length > 0) {
+      const check = sundayWouldBreakWeek(current, active);
+      if (!check.breaks) break; // current set is viable
+
+      // Find the lowest-priority store in current set to sacrifice
+      const toRemove = SUNDAY_SACRIFICE_ORDER.find(sid => current.includes(sid));
+      if (!toRemove) break; // nothing left to sacrifice (shouldn't happen)
+
+      sacrificed.push({ sid: toRemove, reason: check.reason });
+      current = current.filter(id => id !== toRemove);
+    }
+
+    return { resolvedSundayStores: current, sacrificed };
+  }
+
   function generate() {
     S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {};
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+
+    // Save a snapshot of the original openDays/openStores (before sunday check may mutate them)
+    // so that regenSchedule() can restore the user's original intent.
+    S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
+    S._openStoresSnapshot = [...S.openStores];
+
+    // ── Sunday viability check ──
+    const { resolvedSundayStores, sacrificed } = resolveSundayStores(active);
+    if (sacrificed.length) {
+      // Patch openDays: remove DOM from sacrificed stores
+      sacrificed.forEach(({ sid, reason }) => {
+        if (S.openDays[sid]) {
+          S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM');
+          if (!S.openDays[sid].length) {
+            S.openStores = S.openStores.filter(id => id !== sid);
+          }
+        }
+        S.alerts.push({
+          type: 'red',
+          text: `DOM: ${sname(sid)} não pode abrir ao domingo — ${reason} Horário gerado sem domingo nesta loja.`
+        });
+      });
+    }
+
     computeSandraPosition(active);
     assignFolgas(active);
     buildSchedule(active);
@@ -562,7 +682,10 @@
           <div class="gh-sb-week">Porto Santo · Semana ${isoWeek(S.weekStart)}</div>
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
-        <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen" title="Redistribuir folgas mantendo as mesmas configurações">↺ Gerar Novamente</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
+        </div>
       </div>
       ${alertsHTML}${decsHTML}`;
 
@@ -642,11 +765,25 @@
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
+    document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
 
     // Edit on click
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
       td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
     });
+  }
+
+  // Re-run the engine keeping week, absences and store config — just shuffle folgas
+  function regenSchedule() {
+    // Restore original openDays/openStores from snapshot taken before the sunday check
+    // mutated them on the previous generate() call.
+    if (S._openDaysSnapshot) {
+      S.openDays   = JSON.parse(JSON.stringify(S._openDaysSnapshot));
+      S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : Object.keys(S.openDays);
+    }
+    // Advance the cycle counter so folgas rotate to a different day
+    MEM.cycleWeek++;
+    generate();
   }
 
   // ── MODAL DE EDIÇÃO ──

@@ -443,3 +443,99 @@ function rSanitizeName(name) {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').toLowerCase();
 }
+
+
+// ══════════════════════════════════════════════════════════════
+//  OVERLAY: CONFERIR RECIBOS — com cache-busting
+//  (substitui a versão do shared.js que não refrescava após
+//   apagar e reprocessar a pasta no Supabase)
+// ══════════════════════════════════════════════════════════════
+
+const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function openRecibosOverlay() {
+  const overlay  = document.getElementById('recibos-overlay');
+  const loading  = document.getElementById('recibos-overlay-loading');
+  const body     = document.getElementById('recibos-overlay-body');
+  const errorDiv = document.getElementById('recibos-overlay-error');
+  const titleEl  = document.getElementById('recibos-overlay-title');
+  const pageTitleEl = document.getElementById('recibos-page-title');
+  const tbody    = document.getElementById('recibos-tbody');
+
+  if (!overlay) return;
+
+  // Mostrar overlay
+  overlay.classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('visible')));
+
+  // Reset estado
+  loading.style.display  = 'block';
+  body.style.display     = 'none';
+  errorDiv.style.display = 'none';
+  errorDiv.textContent   = '';
+  tbody.innerHTML        = '';
+
+  // Ler o mês configurado
+  const mes = localStorage.getItem('gh_mes') || '';
+  if (mes) {
+    const mmMatch   = mes.match(/^(\d{2})-(\d{4})$/);
+    const monthName = mmMatch ? (MESES_PT[parseInt(mmMatch[1], 10) - 1] || mes) : mes;
+    if (titleEl)     titleEl.textContent     = monthName;
+    if (pageTitleEl) pageTitleEl.textContent = 'Recibo ' + monthName;
+  }
+
+  // Fetch do index.json com cache-busting (timestamp + random)
+  const bust = Date.now() + '-' + Math.random().toString(36).slice(2);
+  const { data: urlData } = sbClient.storage
+    .from('recibos')
+    .getPublicUrl('index.json');
+  const publicUrl = urlData.publicUrl + '?v=' + bust;
+
+  fetch(publicUrl, { cache: 'no-store' })
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(indexData => {
+      // Suporte a ambos os formatos: { dados: [...] } ou { ficheiros: [...] }
+      const items = indexData.dados || (indexData.ficheiros || []).map(f => ({ filename: f, name: f.replace(/_/g,' ').replace(/\.pdf$/,'') }));
+
+      if (!items.length) {
+        loading.style.display = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = 'Nenhum recibo encontrado para este mês.';
+        return;
+      }
+
+      // Construir tabela
+      tbody.innerHTML = items.map((item, i) => {
+        // Gerar URL público para download direto do Supabase
+        const filePath = (indexData.mes || mes) + '/' + item.filename;
+        const { data: fd } = sbClient.storage.from('recibos').getPublicUrl(filePath);
+        const dlUrl = fd.publicUrl + '?v=' + bust;
+        const nameDisplay = escHtml(item.name || item.filename);
+        return `<tr>
+          <td class="rn">${i + 1}</td>
+          <td>${nameDisplay}</td>
+          <td><a href="${dlUrl}" download="${escHtml(item.filename)}" style="padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;border-radius:7px;background:#fff;text-decoration:none;font-weight:600;display:inline-block;transition:background .15s,color .15s;" onmouseover="this.style.background='#555';this.style.color='#fff';this.style.borderColor='#555'" onmouseout="this.style.background='#fff';this.style.color='';this.style.borderColor='#ccc'">⬇ pdf</a></td>
+        </tr>`;
+      }).join('');
+
+      loading.style.display = 'none';
+      body.style.display    = 'block';
+    })
+    .catch(err => {
+      console.error('openRecibosOverlay fetch error:', err);
+      loading.style.display  = 'none';
+      errorDiv.style.display = 'block';
+      errorDiv.textContent   = '⚠️ Erro ao carregar recibos: ' + err.message;
+    });
+}
+
+function closeRecibosOverlay() {
+  const overlay = document.getElementById('recibos-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => overlay.classList.remove('open'), 460);
+}

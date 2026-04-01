@@ -731,6 +731,7 @@ td, th { border-radius:10px; margin:2px; }
 .adm-mod-card[data-module="agenda"]::before    { background: linear-gradient(145deg, #1a1a2e 0%, #2d1b4e 60%, #3b1f6b 100%); }
 .adm-mod-card[data-module="rotulos"]::before   { background: linear-gradient(145deg, #1c1410 0%, #2e1f0e 60%, #4a2f10 100%); }
 .adm-mod-card[data-module="horarios"]::before  { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
+.adm-mod-card[data-module="gerador"]::before   { background: linear-gradient(145deg, #0a1a10 0%, #0f2e1a 60%, #1a4a2a 100%); }
 .adm-mod-card[data-module="ferias"]::before    { background: linear-gradient(145deg, #0d1f18 0%, #143322 60%, #1a4a2e 100%); }
 .adm-mod-card[data-module="editor"]::before    { background: linear-gradient(145deg, #1a1010 0%, #2e1414 60%, #3d1515 100%); }
 .adm-mod-card[data-module="tam"]::before       { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
@@ -2992,6 +2993,23 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
+      <div class="adm-mod-card" data-module="gerador" style="animation-delay:0.28s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="4" width="18" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 9h18" stroke="rgba(255,255,255,0.55)" stroke-width="1.1"/>
+            <path d="M8 4v5M16 4v5" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M7 14h4M7 17h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="17" cy="15.5" r="2.5" stroke="rgba(255,255,255,0.7)" stroke-width="1.1"/>
+            <path d="M17 14.5v1l.7.7" stroke="rgba(255,255,255,0.85)" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">GERADOR DE HORÁRIOS</div>
+          <div class="adm-mod-desc">geração automática de horários</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
       <div class="adm-mod-card" data-module="ferias" style="animation-delay:0.30s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3043,6 +3061,7 @@ td                   { font-size: .96rem !important; }
     <button class="tab-btn" data-tab="agenda">agenda</button>
     <button class="tab-btn" data-tab="rotulos">rótulos</button>
     <button class="tab-btn" data-tab="horarios">horários</button>
+    <button class="tab-btn" data-tab="gerador">gerador de horários</button>
     <button class="tab-btn" data-tab="ferias">férias</button>
     <button class="tab-btn" data-tab="editor">editor pdf</button>
     <button class="tab-btn" data-tab="tam">tam</button>
@@ -3057,6 +3076,7 @@ td                   { font-size: .96rem !important; }
     <button class="drawer-tab-btn" data-tab="agenda">agenda</button>
     <button class="drawer-tab-btn" data-tab="rotulos">rótulos</button>
     <button class="drawer-tab-btn" data-tab="horarios">horários</button>
+    <button class="drawer-tab-btn" data-tab="gerador">gerador de horários</button>
     <button class="drawer-tab-btn" data-tab="ferias">férias</button>
     <button class="drawer-tab-btn" data-tab="editor">editor pdf</button>
     <button class="drawer-tab-btn" data-tab="tam">tam</button>
@@ -3161,6 +3181,9 @@ td                   { font-size: .96rem !important; }
     <div id="h-dashboard"></div>
     <div id="h-table-area"><div id="h-status-msg">selecione uma loja para ver o horário</div></div>
   </div>
+
+  <!-- TAB GERADOR DE HORÁRIOS -->
+  <div id="tab-gerador" class="tab-panel"></div>
 
   <!-- TAB FÉRIAS -->
   <div id="tab-ferias" class="tab-panel">
@@ -3734,6 +3757,7 @@ td                   { font-size: .96rem !important; }
     agenda:        'agenda',
     rotulos:       'rótulos',
     horarios:      'horários',
+    gerador:       'gerador de horários',
     ferias:        'férias',
     editor:        'editor pdf',
     tam:           'tam',
@@ -3772,6 +3796,9 @@ td                   { font-size: .96rem !important; }
 
     // Férias: trigger initialization if ferias.js exposes an init function,
     // otherwise dispatch a synthetic tab-change event so ferias.js can listen for it.
+    if (tab === 'gerador') {
+      if (typeof initGeradorHorarios === 'function') setTimeout(initGeradorHorarios, 40);
+    }
     if (tab === 'ferias') {
       if (typeof initFerias === 'function') {
         initFerias();
@@ -4135,5 +4162,6 @@ td                   { font-size: .96rem !important; }
   };
 })();
 </script>
+<script src="js/gerador-horarios.js"></script>
 </body>
 </html>

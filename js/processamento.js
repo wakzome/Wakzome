@@ -2381,26 +2381,50 @@
     var pEl       = document.getElementById('proc-proveedor-' + fid);
     var proveedor = pEl ? (pEl.value || '\u2014') : '\u2014';
 
-    var lines = [];
+    /* ── Build raw lines, then merge equal refs per ARM ── */
+    var rawLines = [];
     [['Funchal','A4'],['Porto Santo','A5']].forEach(function(pair) {
       var loja = pair[0], cod = pair[1];
       rows.forEach(function(r) {
         var qty = cod === 'A4' ? r.a4 : r.a5;
-        if (qty > 0) lines.push({ ref:r.ref, loja:loja, cod:cod, iva:'23', precio:r.precoCusto, qty:qty });
+        if (qty > 0) rawLines.push({ ref:r.ref, loja:loja, cod:cod, precio:r.precoCusto, qty:qty });
       });
     });
 
-    var tableRows = lines.length
-      ? lines.map(function(l) {
-          return '<tr>'
-            + '<td>' + l.ref + '</td>'
-            + '<td class="center" style="font-weight:700;letter-spacing:.05em">' + l.cod + '</td>'
-            + '<td class="center">' + l.iva + '</td>'
-            + '<td class="right">' + l.precio.toFixed(2) + '</td>'
-            + '<td class="center">' + l.qty + '</td>'
-            + '</tr>';
-        }).join('')
-      : '<tr class="empty-row"><td colspan="5">Sem linhas com dados para mostrar</td></tr>';
+    /* Merge: group by ref+cod, sum qty, average price when prices differ */
+    var map = {};
+    rawLines.forEach(function(l) {
+      var key = l.ref + '||' + l.cod;
+      if (!map[key]) {
+        map[key] = { ref:l.ref, loja:l.loja, cod:l.cod, qty:0, _prices:[], _totalQty:0 };
+      }
+      map[key].qty      += l.qty;
+      map[key]._prices.push(l.precio);
+      map[key]._totalQty += l.qty;
+    });
+    var lines = Object.keys(map).map(function(k) {
+      var m = map[k];
+      var prices = m._prices;
+      /* Average price (weighted equally per row, not per unit) */
+      var avgPrice = prices.reduce(function(s,p){ return s+p; }, 0) / prices.length;
+      return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
+    });
+
+    /* ── Render helpers ── */
+    var currentIva = '23';
+
+    function buildTableRows() {
+      if (!lines.length) return '<tr class="empty-row"><td colspan="5">Sem linhas com dados para mostrar</td></tr>';
+      return lines.map(function(l) {
+        return '<tr>'
+          + '<td>' + l.ref + '</td>'
+          + '<td class="center" style="font-weight:700;letter-spacing:.05em">' + l.cod + '</td>'
+          + '<td class="center">' + currentIva + '</td>'
+          + '<td class="right">' + l.precio.toFixed(2) + '</td>'
+          + '<td class="center">' + l.qty + '</td>'
+          + '</tr>';
+      }).join('');
+    }
 
     var totalFunchal    = lines.filter(function(l) { return l.cod==='A4'; }).reduce(function(s,l) { return s+l.qty; }, 0);
     var totalPortoSanto = lines.filter(function(l) { return l.cod==='A5'; }).reduce(function(s,l) { return s+l.qty; }, 0);
@@ -2418,7 +2442,9 @@
       +       '<span class="proc-or-panel-title-main">' + proveedor + '</span>'
       +       '<span class="proc-or-panel-title-sub">Ingresso de Stock \u00b7 ERP</span>'
       +     '</div>'
-      +     '<div class="proc-or-panel-header-btns">'
+      +     '<div class="proc-or-panel-header-btns" style="display:flex;align-items:center;gap:8px;">'
+      +       '<label style="font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#000;opacity:.6;white-space:nowrap;">IVA&nbsp;%</label>'
+      +       '<input id="proc-stock-iva-input" type="text" value="23" maxlength="6" style="width:52px;padding:4px 7px;border:1px solid #ccc;border-radius:7px;font-family:\'MontserratLight\',sans-serif;font-size:.82rem;font-weight:700;color:#000;text-align:center;background:#fafafa;outline:none;" />'
       +       '<button class="proc-or-action-btn" id="proc-stock-export-btn">\u2b07 exportar CSV</button>'
       +       '<button class="proc-or-close-btn">\u2715</button>'
       +     '</div>'
@@ -2431,7 +2457,7 @@
       +       '<th class="center"><div class="proc-guia-th2-inner" style="justify-content:center"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="3">\u29c9</button>\u20ac</div></th>'
       +       '<th class="center"><div class="proc-guia-th2-inner" style="justify-content:center"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="4">\u29c9</button>Qtd.</div></th>'
       +     '</tr></thead>'
-      +     '<tbody>' + tableRows + '</tbody>'
+      +     '<tbody id="proc-stock-tbody">' + buildTableRows() + '</tbody>'
       +     '</table>'
       +   '</div>'
       +   '<div class="proc-or-panel-footer">'
@@ -2441,12 +2467,22 @@
       +   '</div>'
       + '</div>';
 
+    /* ── IVA input: update entire column on change ── */
+    var ivaInput = modal.querySelector('#proc-stock-iva-input');
+    ivaInput.addEventListener('input', function() {
+      currentIva = ivaInput.value.trim();
+      var tbody = modal.querySelector('#proc-stock-tbody');
+      if (tbody) tbody.innerHTML = buildTableRows();
+    });
+    ivaInput.addEventListener('focus', function() { ivaInput.style.borderColor='#000'; });
+    ivaInput.addEventListener('blur',  function() { ivaInput.style.borderColor='#ccc'; });
+
     procBindClose(modal);
     procBindCopyBar(modal, COLS, function(ci) {
       return lines.map(function(l) {
         if (ci===0) return l.ref;
         if (ci===1) return l.cod;
-        if (ci===2) return l.iva;
+        if (ci===2) return currentIva;
         if (ci===3) return l.precio.toFixed(2).replace('.',',');
         return String(l.qty);
       });
@@ -2456,7 +2492,7 @@
       var bom    = '\uFEFF';
       var header = 'Refer\u00eancia;Armaz\u00e9m;IVA;Pre\u00e7o;Quantidade';
       var body   = lines.map(function(l) {
-        return [l.ref, l.cod, l.iva, l.precio.toFixed(2).replace('.',','), l.qty].join(';');
+        return [l.ref, l.cod, currentIva, l.precio.toFixed(2).replace('.',','), l.qty].join(';');
       }).join('\r\n');
       var blob = new Blob([bom + header + '\r\n' + body], { type:'text/csv;charset=utf-8;' });
       var url  = URL.createObjectURL(blob);

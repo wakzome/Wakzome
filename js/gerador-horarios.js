@@ -94,8 +94,6 @@
       // display must never be set inline — clear any leftover value just in case
       panel.style.display = '';
     }
-    document.documentElement.style.overflowX = '';
-    document.body.style.overflowX = '';
     const modal = document.getElementById('gh-modal');
     if (modal) {
       modal.classList.remove('open');
@@ -902,21 +900,6 @@
       nameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
       const maxW = nameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
       if (maxW > 0) nameCells.forEach(td => { td.style.width = maxW + 'px'; td.style.minWidth = maxW + 'px'; });
-
-      // MOBILE ONLY: allow the entire page to scroll horizontally so the table is visible.
-      // We do this by removing overflow-x restrictions up the DOM tree from the container.
-      if (window.innerWidth <= 900) {
-        let el = c;
-        while (el && el !== document.body) {
-          const st = window.getComputedStyle(el);
-          if (st.overflowX === 'hidden' || st.overflowX === 'clip') {
-            el.style.overflowX = 'visible';
-          }
-          el = el.parentElement;
-        }
-        document.documentElement.style.overflowX = 'auto';
-        document.body.style.overflowX = 'auto';
-      }
     });
 
     // Edit on click
@@ -944,8 +927,6 @@
   function openEdit(pid, day, ctxStore) {
     editCtx = { pid, day, ctxStore };
     const p = P(pid), c2 = S.schedule[pid]?.[day] || {};
-    document.documentElement.style.overflowX = '';
-    document.body.style.overflowX = '';
     const modal = document.getElementById('gh-modal');
     if (!modal) return;
     modal.style.display = ''; // restore in case cleanup had hidden it
@@ -994,8 +975,6 @@
   }
 
   function startNew() {
-    document.documentElement.style.overflowX = '';
-    document.body.style.overflowX = '';
     S = blank(); wStep = 0; renderWiz();
   }
 

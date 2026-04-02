@@ -152,7 +152,7 @@
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      panel.style.overflow = 'hidden';
+      panel.style.overflow = '';
       panel.style.flexDirection = 'column';
     }
   }
@@ -291,7 +291,7 @@
             <div class="gh-pf-field">
               <label>Tienda fixa</label>
               <select id="gh-pf-store" class="gh-field-sm">
-                <option value="">— Sem tienda fixa —</option>
+                <option value="">— Sem loja fixa —</option>
                 ${storeOptions}
               </select>
             </div>
@@ -405,16 +405,14 @@
         </div>
 
         <div class="gh-sr-col">
-          <div class="gh-sr-col-title">🏥 Baixa</div>
-          <label class="gh-inc-toggle-label"><input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}> Activa</label>
+          <div class="gh-sr-col-title">🏥 Baixa <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}></div>
           <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio||''}" placeholder="Início" style="margin-top:4px">
           <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim||''}" placeholder="Fim" style="margin-top:3px">
           <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_obs" value="${baixa.observacao||''}" placeholder="Observação" style="margin-top:3px">
         </div>
 
         <div class="gh-sr-col">
-          <div class="gh-sr-col-title">📋 Licença</div>
-          <label class="gh-inc-toggle-label"><input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}> Activa</label>
+          <div class="gh-sr-col-title">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
           <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio||''}" placeholder="Início" style="margin-top:4px">
           <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim||''}" placeholder="Fim" style="margin-top:3px">
           <select class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_tipo" style="margin-top:3px">
@@ -1957,7 +1955,7 @@
 
         /* ── STAFF MANAGEMENT PANEL ── */
         /* ── STEP 2 LAYOUT ── */
-        #tab-gerador .gh-step2-wrap { width:100%; max-width:680px; margin:0 auto; padding:16px; box-sizing:border-box; }
+        #tab-gerador .gh-step2-wrap { width:100%; max-width:780px; margin:0 auto; padding:16px 16px 40px; box-sizing:border-box; overflow:visible; }
         #tab-gerador .gh-step2-header { margin-bottom:14px; }
         #tab-gerador .gh-step2-header-top { margin-bottom:10px; }
         #tab-gerador .gh-step2-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
@@ -1987,13 +1985,13 @@
         #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
 
         /* ── STAFF ROW — layout horizontal com 4 colunas ── */
-        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
-        #tab-gerador .gh-sr { display:grid; grid-template-columns:180px repeat(4,1fr); gap:0; border:1px solid #e8e8e8; border-radius:8px; background:#fff; overflow-x:auto; }
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; overflow:visible; height:auto; }
+        #tab-gerador .gh-sr { display:grid; grid-template-columns:170px repeat(4,1fr); border:1px solid #e8e8e8; border-radius:8px; background:#fff; position:static; }
         #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
-        #tab-gerador .gh-sr-info { padding:10px 12px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; }
-        #tab-gerador .gh-sr-col { padding:10px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:140px; }
+        #tab-gerador .gh-sr-info { padding:10px 12px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; }
+        #tab-gerador .gh-sr-col { padding:10px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; }
         #tab-gerador .gh-sr-col:last-child { border-right:none; }
-        #tab-gerador .gh-sr-col-title { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#888; margin-bottom:4px; white-space:nowrap; }
+        #tab-gerador .gh-sr-col-title { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#888; margin-bottom:4px; display:flex; align-items:center; gap:5px; }
         #tab-gerador .gh-sr-btns { display:flex; gap:3px; flex-wrap:wrap; margin-top:6px; }
         #tab-gerador .gh-inc-toggle-label { display:flex; align-items:center; gap:5px; font-size:.74rem; color:#333; cursor:pointer; }
         #tab-gerador .gh-inc-saldo { font-size:.8rem; font-weight:700; padding:2px 8px; border-radius:5px; display:inline-block; margin-bottom:4px; }
@@ -2007,7 +2005,7 @@
         #tab-gerador .gh-day-btns { display:flex; gap:3px; flex-wrap:wrap; }
         #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:4px; width:26px; height:26px; font-size:.68rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
         #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
-        @media(max-width:640px) { #tab-gerador .gh-sr { grid-template-columns:150px repeat(4,minmax(130px,1fr)); } }
+        @media(max-width:700px) { #tab-gerador .gh-sr { grid-template-columns:140px repeat(4,minmax(120px,1fr)); overflow-x:auto; } }
       `;
       document.head.appendChild(style);
     }

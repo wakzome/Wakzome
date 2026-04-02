@@ -604,28 +604,31 @@
 
       // Step 2: GLOBAL rule — Edna & Carla must never share the same shift slot,
       // regardless of which store they are in.
+      // When they coincide, swap Carla's shift with the colleague in her store
+      // who has the opposite shift, so store coverage is preserved.
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
-        // They have the same shift — must fix. Prefer to flip Carla.
         const altShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
 
-        // Flip Carla: safe if her store still has someone on the other shift
-        const caStoreStaff = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store);
-        const caFlipSafe = caStoreStaff.some(p => S.schedule[p.id][day].shift !== altShift) || caStoreStaff.length === 0;
-        if (caFlipSafe) {
+        // Find a colleague in Carla's store who already has the opposite shift — swap with them
+        const caStoreColleague = wk().find(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store && S.schedule[p.id][day].shift === altShift);
+        if (caStoreColleague) {
+          // Swap: Carla takes the colleague's shift, colleague takes Carla's shift
           S.schedule['carla'][day].shift = altShift;
-          S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — intervalos separados).` });
+          S.schedule[caStoreColleague.id][day].shift = caSch.shift;
+          S.decisions.push({ type: 'info', text: `${day}: Carla e ${caStoreColleague.name.split(' ')[0]} trocaram turnos (regra global Edna/Carla — intervalos separados).` });
         } else {
-          // Try flipping Edna instead
-          const edAltShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-          const edStoreStaff = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edSch.store);
-          const edFlipSafe = edStoreStaff.some(p => S.schedule[p.id][day].shift !== edAltShift) || edStoreStaff.length === 0;
-          if (edFlipSafe) {
+          // No colleague to swap with — just flip Carla directly
+          const caStoreStaff = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store);
+          if (caStoreStaff.length > 0 || true) {
+            S.schedule['carla'][day].shift = altShift;
+            S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — intervalos separados).` });
+          } else {
+            // Try flipping Edna instead
+            const edAltShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
             S.schedule['edna'][day].shift = edAltShift;
             S.decisions.push({ type: 'info', text: `${day}: Edna ajustada (regra global Edna/Carla — intervalos separados).` });
-          } else {
-            S.alerts.push({ type: 'amber', text: `${day}: Edna e Carla no mesmo intervalo — sem alternativa segura.` });
           }
         }
       }

@@ -740,8 +740,9 @@
     const base = S._storeBaseShift[storeId];
 
     function isValidCombo(combo) {
-      // 1. Nova sozinha no intervalo — proibido
-      if (goers.length === 1 && !goers[0].efetiva) return false;
+      // 1. Nova sozinha no intervalo — proibido APENAS com 3+ pessoas
+      // Com 2 pessoas (Esc A), cada uma vai sozinha ao seu slot — é correcto
+      if (goers.length === 1 && !goers[0].efetiva && staff.length > 2) return false;
 
       // 2. Validação matemática da soma dos goers
       if (expectedGoSum !== null) {

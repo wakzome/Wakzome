@@ -49,9 +49,12 @@
     const sb = getSupabase();
     if (!sb) return null;
     try {
-      const { data: result, error } = await sb.from(table).update(data).eq('id', id).select();
+      // Remove 'id' from data payload to avoid conflict with the filter
+      const payload = { ...data };
+      delete payload.id;
+      const { data: result, error } = await sb.from(table).update(payload).eq('id', id).select();
       if (error) throw error;
-      return result;
+      return result && result.length > 0 ? result : [payload];
     } catch (e) {
       console.error(`Supabase update error (${table}):`, e);
       return null;
@@ -416,7 +419,9 @@
     if (!efetiva && !start) { alert('Data de entrada é obrigatória para pessoal novo.'); return; }
 
     const data = {
-      name, hrs, store_id: store, efetiva, start_date: start, end_date: end,
+      name, hrs, store_id: store, efetiva,
+      start_date: start || null,
+      end_date: end || null,
       can_alone: canAlone, mobile, cover_pri: efetiva ? 1 : 9,
       knows, hard_avoid: [], soft_avoid: [], active: true
     };

@@ -237,7 +237,13 @@
         ${feriasAuto.length ? `<div class="gh-ferias-banner">
           <span class="gh-ferias-banner-icon">🏖</span>
           <span>Férias esta semana: <strong>${feriasAuto.map(f => {
-            const p = PEOPLE.find(x => x.id === f.pid || x.name === f.nome);
+            // Match by pid, exact name, or partial name (ferias uses short names)
+            const nomeLower = (f.nome || '').toLowerCase();
+            const p = PEOPLE.find(x =>
+              x.id === f.pid ||
+              x.name === f.nome ||
+              nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+            );
             return p ? p.name.split(' ')[0] : (f.nome || f.pid || '?');
           }).join(', ')}</strong></span>
         </div>` : '<div class="gh-wiz-sub" style="color:#aaa;font-size:.75rem">Nenhuma férias detectada para esta semana.</div>'}
@@ -312,20 +318,32 @@
         </div>
       </div>`;
 
-    renderStaffList(feriasAutoPids);
+    renderStaffList(feriasAutoPids, feriasAuto);
     bindPersonForm(storeOptions);
 
     document.getElementById('gh-back-1').addEventListener('click', () => { wStep = 0; renderWiz(); });
     document.getElementById('gh-sub-abs').addEventListener('click', sub_abs);
   }
 
-  function renderStaffList(feriasAutoPids) {
+  function renderStaffList(feriasAutoPids, feriasAuto = []) {
     const list = document.getElementById('gh-staff-list');
     if (!list) return;
     list.innerHTML = '';
 
+    // Build a set of pids that are on ferias, matching by pid or partial name
+    const feriasMatchedPids = new Set();
+    feriasAuto.forEach(f => {
+      const nomeLower = (f.nome || '').toLowerCase();
+      const matched = PEOPLE.find(x =>
+        x.id === f.pid ||
+        x.name === f.nome ||
+        nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+      );
+      if (matched) feriasMatchedPids.add(matched.id);
+    });
+
     PEOPLE.forEach(p => {
-      const onFerias = feriasAutoPids.has(p.id);
+      const onFerias = feriasMatchedPids.has(p.id) || feriasAutoPids.has(p.id);
       const condLabel = p.efetiva ? 'Efectiva' : 'Nova';
       const startLabel = p.start ? ` · Entrada: ${p.start}` : '';
       const endLabel   = p.end   ? ` · Último dia: ${p.end}` : '';
@@ -370,7 +388,7 @@
       await loadKnowledgeBase();
       const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
         ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
-      renderStaffList(new Set(feriasAuto.map(f => f.pid)));
+      renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
     } catch(e) {
       console.error('Delete error:', e);
       alert('Erro ao eliminar. Verifique a consola.');
@@ -468,7 +486,7 @@
       _editingPid = null;
       const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
         ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
-      renderStaffList(new Set(feriasAuto.map(f => f.pid)));
+      renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
     } else {
       alert('Erro ao guardar. Verifique a ligação ao Supabase.');
     }

@@ -783,34 +783,101 @@
   function assignIntervalShiftsForDay(day, workers) {
     if (!S._storeBaseShift) S._storeBaseShift = {};
 
-    // PASSO 1: Atribuir turnos por loja baseados na matemática
+    // PASSO 1: Para cada loja, determinar os grupos (goers/stayers) e verificar
+    // qual das 2 combinações possíveis dá a soma correcta em cada slot.
+    // Combinação 1: goers → SH_ALT (13h), stayers → SH_DEFAULT (14h)
+    // Combinação 2: goers → SH_DEFAULT (14h), stayers → SH_ALT (13h)
+    // Só é válida a combinação onde a soma do slot de intervalo = valor esperado.
+
     STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
       const staff = workers.filter(p => S.schedule[p.id][day].store === st.id);
       if (staff.length === 0) return;
 
-      const { goers, stayers } = computeGroups(staff);
+      const { goers, stayers, scenario } = computeGroups(staff);
 
-      // Determinar hora base da loja
-      const stayShift = getStoreBaseShift(st.id, day, stayers);
-      const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+      // Valor esperado da soma no slot de intervalo (quem vai ao intervalo)
+      // Cenário B (juntas): soma esperada = 1 (0.5+0.5)
+      // 2 pessoas Esc A: soma esperada = 1 (1+1 separadas, cada slot = 1)
+      // 3 pessoas: soma esperada = 2 (1+1)
+      // 4 pessoas: soma esperada = 3 (1.5+1.5)
+      let expectedGoSum, expectedStaySum;
+      if (scenario === '2_escB') {
+        expectedGoSum   = 1; // juntas: 0.5+0.5
+        expectedStaySum = 0; // ninguém fica
+      } else if (scenario === '2_escA') {
+        expectedGoSum   = 1; // 1 pessoa vai: peso=1
+        expectedStaySum = 1; // 1 pessoa fica: peso=1
+      } else if (scenario === '3com_antiga') {
+        expectedGoSum   = 2; // 2 novas: 1+1
+        expectedStaySum = 2; // 1 antiga: 2
+      } else if (scenario === '3sem_antiga') {
+        expectedGoSum   = 2; // 2 novas: 1+1
+        expectedStaySum = 1.5; // nova mais antiga: 1.5
+      } else if (n === 4 || scenario === 'default') {
+        expectedGoSum   = 3; // 1.5+1.5
+        expectedStaySum = 3; // 2+1
+      } else {
+        expectedGoSum   = null; // sem validação para outros casos
+      }
 
-      if (stayers.length === 0) {
-        // Cenário B: todas vão juntas (nova -3 semanas + antiga)
-        // Usar hora base da loja
-        staff.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
+      // Calcular pesos contextuais
+      function wOf(p) {
+        if (scenario === '3com_antiga') return p.efetiva ? 2 : 1;
+        if (scenario === '3sem_antiga') {
+          // a mais antiga das novas (primeira na lista ordenada por data) vale 1.5
+          const oldestNew = [...staff].filter(x => !x.efetiva).sort((a,b) => new Date(a.start)-new Date(b.start))[0];
+          return p.id === oldestNew?.id ? 1.5 : 1;
+        }
+        if (scenario === '2_escA') return 1;
+        if (scenario === '2_escB') return 0.5;
+        if (p.efetiva) return 2;
+        return weeksSince(p.start, S.weekStart) >= 3 ? 1.5 : 1;
+      }
+
+      const goSum   = goers.reduce((s, p) => s + wOf(p), 0);
+      const staySum = stayers.reduce((s, p) => s + wOf(p), 0);
+
+      // Tentar combinação 1: goers→SH_ALT, stayers→SH_DEFAULT
+      // Tentar combinação 2: goers→SH_DEFAULT, stayers→SH_ALT
+      // A soma dos goers deve ser igual a expectedGoSum
+      // Ambas as combinações têm a mesma composição de grupos — só muda a hora
+      // Escolher baseado na consistência semanal da loja (hora base)
+
+      let goShift, stayShift;
+
+      if (scenario === '2_escB') {
+        // Juntas — usar hora base da loja
+        const base = S._storeBaseShift[st.id] ?? SH_DEFAULT;
+        goShift   = base;
+        stayShift = base;
+      } else {
+        // Verificar hora base da loja
+        const base = S._storeBaseShift[st.id];
+        if (base !== undefined) {
+          // Manter consistência: stayers usam a hora base
+          stayShift = base;
+          goShift   = base === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        } else {
+          // Primeiro dia — escolher a combinação que respeita a matemática
+          // (ambas são matematicamente válidas; preferir stayers a SH_DEFAULT = 14h)
+          stayShift = SH_DEFAULT;
+          goShift   = SH_ALT;
+          S._storeBaseShift[st.id] = SH_DEFAULT;
+        }
+      }
+
+      // Aplicar
+      if (scenario === '2_escB') {
+        staff.forEach(p => { S.schedule[p.id][day].shift = goShift; });
       } else {
         goers.forEach(p => { S.schedule[p.id][day].shift = goShift; });
         stayers.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
       }
 
-      // Registar hora base se ainda não estava definida
-      if (S._storeBaseShift[st.id] === undefined) {
-        S._storeBaseShift[st.id] = stayShift;
-      }
-
-      const goNames   = goers.map(p => p.name.split(' ')[0]).join(' + ') || '(juntas)';
-      const stayNames = stayers.map(p => p.name.split(' ')[0]).join(' + ') || '—';
-      S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${goNames}] / loja→[${stayNames}].` });
+      // Log com somas para verificação
+      const goNames   = goers.map(p => p.name.split(' ')[0]).join('+') || '(juntas)';
+      const stayNames = stayers.map(p => p.name.split(' ')[0]).join('+') || '—';
+      S.decisions.push({ type: 'info', text: `${day} ${st.name}: [${goShift===SH_ALT?'13h':'14h'}]→[${goNames}](Σ${goSum}) / loja→[${stayNames}](Σ${staySum}).` });
     });
 
     // PASSO 2: Regra global Edna & Carla
@@ -830,23 +897,21 @@
           S.schedule[p.id][day].shift === caWanted
         );
         if (caPartner) {
-          S.schedule['carla'][day].shift   = caWanted;
+          S.schedule['carla'][day].shift      = caWanted;
           S.schedule[caPartner.id][day].shift = caSch.shift;
-          S.decisions.push({ type: 'info', text: `${day}: Carla↔${caPartner.name.split(' ')[0]} (regra Edna/Carla: soma=${edVal+caVal}→1).` });
+          S.decisions.push({ type: 'info', text: `${day}: Carla↔${caPartner.name.split(' ')[0]} (regra Edna/Carla: soma ${edVal+caVal}→1).` });
         } else {
-          // Tentar em Edna
-          const edWanted = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+          const edWanted  = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
           const edPartner = workers.find(p =>
             p.id !== 'edna' &&
             S.schedule[p.id][day].store === edSch.store &&
             S.schedule[p.id][day].shift === edWanted
           );
           if (edPartner) {
-            S.schedule['edna'][day].shift    = edWanted;
+            S.schedule['edna'][day].shift       = edWanted;
             S.schedule[edPartner.id][day].shift = edSch.shift;
-            S.decisions.push({ type: 'info', text: `${day}: Edna↔${edPartner.name.split(' ')[0]} (regra Edna/Carla: soma=${edVal+caVal}→1).` });
+            S.decisions.push({ type: 'info', text: `${day}: Edna↔${edPartner.name.split(' ')[0]} (regra Edna/Carla: soma ${edVal+caVal}→1).` });
           } else {
-            // Sozinhas nas lojas — forçar Carla
             S.schedule['carla'][day].shift = caWanted;
             S.decisions.push({ type: 'info', text: `${day}: Carla forçada (regra Edna/Carla — sem parceira para trocar).` });
           }

@@ -648,62 +648,6 @@
     return { resolvedSundayStores: current, sacrificed };
   }
 
-  // ══ INTERVAL COVERAGE ENFORCEMENT ENGINE ══
-  // This is the final safety net. After ALL other logic has run, this function
-  // inspects every store on every open day and enforces one absolute rule:
-  //
-  //   A store must NEVER have all its workers on the same shift.
-  //   At least one person must be on SH_ALT and at least one on SH_DEFAULT.
-  //   (Unless the store has only 1 worker — then no stagger is possible.)
-  //
-  // If a violation is found, it is fixed by flipping the shift of the most junior
-  // worker to the opposite shift. This runs AFTER Edna/Carla global rule, so if
-  // the global rule caused the violation, this engine fixes it unconditionally.
-  //
-  // This engine does NOT change who goes to interval — only WHEN they go.
-  // It is the last word. No violation survives this pass.
-
-  function enforceIntervalCoverage(active) {
-    DAYS.forEach(day => {
-      S.openStores.forEach(sid => {
-        if (!storeOpen(sid, day)) return;
-
-        // Get all workers active in this store this day
-        const staff = active.filter(p => {
-          const cell = S.schedule[p.id]?.[day];
-          return cell?.type === 'work' && cell.store === sid;
-        });
-
-        if (staff.length < 2) return; // single worker — no stagger possible, skip
-
-        const hasAlt     = staff.some(p => S.schedule[p.id][day].shift === SH_ALT);
-        const hasDefault = staff.some(p => S.schedule[p.id][day].shift === SH_DEFAULT);
-
-        if (hasAlt && hasDefault) return; // already correct, nothing to do
-
-        // VIOLATION: all workers have the same shift — fix it
-        // Sort by seniority: flip the most junior worker to the opposite shift
-        const sorted = [...staff].sort((a, b) => {
-          const sa = (a.efetiva ? 1000 : 0) + weeksSince(a.start, S.weekStart);
-          const sb = (b.efetiva ? 1000 : 0) + weeksSince(b.start, S.weekStart);
-          return sa - sb; // ascending: index 0 = most junior
-        });
-
-        const currentShift = S.schedule[sorted[0].id][day].shift;
-        const fixShift = currentShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-
-        // For 2 people: flip the most junior
-        // For 3 people: flip the most junior (they go to interval alone — not ideal but safe)
-        // For 4+ people: flip the two most junior so they go together
-        const toFlip = staff.length >= 4 ? [sorted[0], sorted[1]] : [sorted[0]];
-
-        toFlip.forEach(p => {
-          S.schedule[p.id][day].shift = fixShift;
-          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: ${p.name.split(' ')[0]} turno corrigido pelo motor de cobertura (todos estavam no mesmo intervalo).` });
-        });
-      });
-    });
-  }
 
   // ══ MOTOR ÚNICO DE INTERVALOS — LÓGICA MATEMÁTICA RIGOROSA ══
   //
@@ -943,7 +887,6 @@
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
-    enforceIntervalCoverage(active);
     saveMem();
 
     // ── Minimum coverage gate ──

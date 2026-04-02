@@ -634,42 +634,45 @@
         S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${goNames}] / loja→[${stayNames}].` });
       });
 
-      // Step 2: GLOBAL rule — Edna & Carla must never share the same shift slot,
+      // Step 2: GLOBAL rule — Edna & Carla must NEVER share the same shift slot,
       // regardless of which store they are in.
-      // When they coincide:
-      //   1. Flip Carla to the opposite shift.
-      //   2. If Carla has a colleague in her store who now has the SAME shift as Carla,
-      //      flip that colleague to the opposite — so the store is always covered.
-      //   3. If Carla is alone in her store, try flipping Edna instead (same logic).
+      // Strategy: find a colleague in Carla's store with the OPPOSITE shift and SWAP them.
+      // This guarantees Carla changes AND the store stays covered in both slots.
+      // Only if no swap is possible (Carla alone), flip Edna using the same swap logic.
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
-        const caNewShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-        const caStoreColleagues = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store);
+        const caWantedShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
 
-        if (caStoreColleagues.length > 0) {
-          // Flip Carla
-          S.schedule['carla'][day].shift = caNewShift;
-          // Fix any colleague in Carla's store that now shares the same shift as Carla
-          caStoreColleagues.forEach(p => {
-            if (S.schedule[p.id][day].shift === caNewShift) {
-              S.schedule[p.id][day].shift = caSch.shift; // give them the opposite
-              S.decisions.push({ type: 'info', text: `${day}: ${p.name.split(' ')[0]} ajustada/o para cobrir loja (regra global Edna/Carla).` });
-            }
-          });
-          S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — intervalos separados).` });
+        // Find a colleague in Carla's store who has the opposite shift — swap with them
+        const caSwapPartner = wk().find(p =>
+          p.id !== 'carla' &&
+          S.schedule[p.id][day].store === caSch.store &&
+          S.schedule[p.id][day].shift === caWantedShift
+        );
+
+        if (caSwapPartner) {
+          // Perfect swap: Carla gets caWantedShift, partner gets Carla's current shift
+          S.schedule['carla'][day].shift = caWantedShift;
+          S.schedule[caSwapPartner.id][day].shift = caSch.shift;
+          S.decisions.push({ type: 'info', text: `${day}: Carla e ${caSwapPartner.name.split(' ')[0]} trocaram turnos (regra global Edna/Carla).` });
         } else {
-          // Carla is alone in her store — flip Edna instead and fix Edna's store colleagues
-          const edNewShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-          S.schedule['edna'][day].shift = edNewShift;
-          const edStoreColleagues = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edSch.store);
-          edStoreColleagues.forEach(p => {
-            if (S.schedule[p.id][day].shift === edNewShift) {
-              S.schedule[p.id][day].shift = edSch.shift;
-              S.decisions.push({ type: 'info', text: `${day}: ${p.name.split(' ')[0]} ajustada/o para cobrir loja (regra global Edna/Carla).` });
-            }
-          });
-          S.decisions.push({ type: 'info', text: `${day}: Edna ajustada (regra global Edna/Carla — intervalos separados).` });
+          // No swap partner in Carla's store — try Edna's store instead
+          const edWantedShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+          const edSwapPartner = wk().find(p =>
+            p.id !== 'edna' &&
+            S.schedule[p.id][day].store === edSch.store &&
+            S.schedule[p.id][day].shift === edWantedShift
+          );
+          if (edSwapPartner) {
+            S.schedule['edna'][day].shift = edWantedShift;
+            S.schedule[edSwapPartner.id][day].shift = edSch.shift;
+            S.decisions.push({ type: 'info', text: `${day}: Edna e ${edSwapPartner.name.split(' ')[0]} trocaram turnos (regra global Edna/Carla).` });
+          } else {
+            // Both alone in their stores — just flip Carla, no coverage impact
+            S.schedule['carla'][day].shift = caWantedShift;
+            S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — sozinha na loja).` });
+          }
         }
       }
       const logged = new Set();
@@ -839,11 +842,13 @@
   }
 
   // ══ MOTOR 2: ENFORCE GROUPING RULES ══
-  // Verifies and enforces the grouping rules per store per day:
-  //   2 people  → one on SH_ALT, one on SH_DEFAULT (already handled by motor 1, but re-verified)
-  //   3 people  → the 2 most junior go together to interval, the most veteran stays alone
-  //   4 people  → the most veteran stays with the most junior, the middle two go to interval
-  // This motor rebuilds the assignment from scratch for any store/day where the rule is violated.
+  // Verifies the grouping rules per store per day and rebuilds from scratch if violated.
+  // Rules:
+  //   2 people → most junior goes to interval, most veteran stays
+  //   3 people → 2 most junior go together, most veteran stays alone
+  //   4 people → most veteran stays with most junior, middle two go to interval
+  // The shift (SH_ALT vs SH_DEFAULT) assigned to each group is preserved from what
+  // intelPass already decided — this motor only checks WHO is in each group.
 
   function enforceGroupingRules(active) {
     function senScore(p) {
@@ -861,69 +866,63 @@
 
         if (staff.length < 2) return;
 
-        // Sort junior→veteran
         const sorted = [...staff].sort((a, b) => senScore(a) - senScore(b));
         const n = sorted.length;
 
-        let goers = [], stayers = [];
+        let expectedGoers = [], expectedStayers = [];
 
         if (n === 2) {
-          goers   = [sorted[0]];
-          stayers = [sorted[1]];
+          expectedGoers   = [sorted[0]];
+          expectedStayers = [sorted[1]];
         } else if (n === 3) {
-          // 2 most junior go together, most veteran stays alone
-          goers   = [sorted[0], sorted[1]];
-          stayers = [sorted[2]];
+          expectedGoers   = [sorted[0], sorted[1]];
+          expectedStayers = [sorted[2]];
         } else if (n === 4) {
-          // most veteran stays with most junior, middle two go
-          goers   = [sorted[1], sorted[2]];
-          stayers = [sorted[0], sorted[3]];
+          expectedGoers   = [sorted[1], sorted[2]];
+          expectedStayers = [sorted[0], sorted[3]];
         } else {
           const half = Math.floor(n / 2);
-          goers   = sorted.slice(0, half);
-          stayers = sorted.slice(half);
+          expectedGoers   = sorted.slice(0, half);
+          expectedStayers = sorted.slice(half);
         }
 
-        // Determine correct shifts: stayers keep their current shift if consistent,
-        // otherwise default to SH_DEFAULT for stayers and SH_ALT for goers.
-        // But critically: goers must NOT have the same shift as stayers.
-        const stayShift = S.schedule[stayers[0].id][day].shift || SH_DEFAULT;
+        // The shift the stayers currently have = the "stay shift"
+        // The goers must have the opposite shift
+        const stayShift = S.schedule[expectedStayers[0].id][day].shift || SH_DEFAULT;
         const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
 
-        // Check if current assignment matches the rule
-        const goersCorrect   = goers.every(p => S.schedule[p.id][day].shift === goShift);
-        const stayersCorrect = stayers.every(p => S.schedule[p.id][day].shift === stayShift);
-
-        if (goersCorrect && stayersCorrect) return; // all good
-
-        // Fix violations
-        goers.forEach(p => {
+        // Only fix if there's a mismatch — don't touch correct assignments
+        let fixed = false;
+        expectedGoers.forEach(p => {
           if (S.schedule[p.id][day].shift !== goShift) {
             S.schedule[p.id][day].shift = goShift;
-            S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Agrupamento] ${p.name.split(' ')[0]} → intervalo corrigido.` });
+            fixed = true;
           }
         });
-        stayers.forEach(p => {
+        expectedStayers.forEach(p => {
           if (S.schedule[p.id][day].shift !== stayShift) {
             S.schedule[p.id][day].shift = stayShift;
-            S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Agrupamento] ${p.name.split(' ')[0]} → loja corrigido.` });
+            fixed = true;
           }
         });
+        if (fixed) {
+          const goNames   = expectedGoers.map(p => p.name.split(' ')[0]).join(' + ');
+          const stayNames = expectedStayers.map(p => p.name.split(' ')[0]).join(' + ');
+          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Agrupamento] intervalo→[${goNames}] / loja→[${stayNames}].` });
+        }
       });
     });
   }
 
   // ══ MOTOR 3: ENFORCE NO NEW WORKER ALONE ══
-  // A new (non-veteran) worker must NEVER be alone in their shift slot.
-  // "Alone" means they are the only person in the store during their interval slot.
-  // If a new worker is alone, swap their shift with the most junior veteran in the same store
-  // so the new worker goes together with someone else.
+  // A new (non-veteran) worker must NEVER be the only person in their shift slot.
+  // If they are alone, find the most junior person in the opposite slot and swap.
+  // This preserves store coverage while ensuring new workers always have company.
 
   function enforceNoNewAlone(active) {
     function senScore(p) {
       return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
     }
-    function isNew(p) { return !p.efetiva; }
 
     DAYS.forEach(day => {
       S.openStores.forEach(sid => {
@@ -936,28 +935,25 @@
 
         if (staff.length < 2) return;
 
-        // Check each new worker
-        staff.filter(p => isNew(p)).forEach(newWorker => {
+        // Find new workers who are alone in their slot
+        const newWorkers = staff.filter(p => !p.efetiva);
+        newWorkers.forEach(newWorker => {
           const myShift = S.schedule[newWorker.id][day].shift;
-          const sameShift = staff.filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === myShift);
+          const companions = staff.filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === myShift);
+          if (companions.length > 0) return; // has company — OK
 
-          if (sameShift.length > 0) return; // has company, all good
-
-          // VIOLATION: new worker is alone in their slot
-          // Find someone to swap with — prefer the most junior veteran in the opposite slot
+          // Alone — find the most junior person in the opposite slot to swap with
           const otherShift = myShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-          const candidates = staff
+          const swapCandidates = staff
             .filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === otherShift)
-            .sort((a, b) => senScore(a) - senScore(b)); // most junior first
+            .sort((a, b) => senScore(a) - senScore(b));
 
-          if (candidates.length === 0) return; // no one to swap with
+          if (swapCandidates.length === 0) return;
 
-          const partner = candidates[0];
-          // Swap: new worker and partner exchange shifts so new worker has company
+          const partner = swapCandidates[0];
           S.schedule[newWorker.id][day].shift = otherShift;
           S.schedule[partner.id][day].shift   = myShift;
-
-          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Novatas] ${newWorker.name.split(' ')[0]} e ${partner.name.split(' ')[0]} trocaram — nova trabalhadora não pode ficar sozinha no intervalo.` });
+          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Novatas] ${newWorker.name.split(' ')[0]} trocou com ${partner.name.split(' ')[0]} — nova não pode ficar sozinha.` });
         });
       });
     });

@@ -559,9 +559,39 @@
         return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
       }
 
-      // Step 1: assign shifts per store based on headcount
+      // Step 1: assign shifts per store based on headcount.
+      //
+      // The rule defines WHO goes to interval together and WHO stays — not which specific
+      // shift (SH_ALT or SH_DEFAULT) they get. The shift assigned to each group is chosen
+      // to maintain weekly consistency per store:
+      //   - Look at the other days of the week for this store.
+      //   - If the store normally has its interval at 14:00 (SH_DEFAULT for the staying group,
+      //     SH_ALT for the going group), keep that pattern.
+      //   - Only deviate when the global Edna/Carla rule forces it (Step 2).
+      //
+      // Concretely: the "going" group and "staying" group are determined by seniority rules.
+      // Then we check what shift the staying group has used most this week in this store —
+      // and assign accordingly, so the store interval time stays consistent.
+
+      // Compute the most common shift used by the staying person(s) in a store across the week
+      function preferredStayShift(storeId, stayerIds) {
+        let altCount = 0, defCount = 0;
+        DAYS.forEach(d => {
+          if (d === day) return;
+          stayerIds.forEach(pid => {
+            const cell = S.schedule[pid]?.[d];
+            if (cell?.type === 'work' && cell.store === storeId) {
+              if (cell.shift === SH_ALT) altCount++;
+              else if (cell.shift === SH_DEFAULT) defCount++;
+            }
+          });
+        });
+        // If no history yet, default to SH_DEFAULT (14:00 interval = most common)
+        if (altCount === 0 && defCount === 0) return SH_DEFAULT;
+        return defCount >= altCount ? SH_DEFAULT : SH_ALT;
+      }
+
       STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
-        // ALL workers active in this store this day (not just autonomous)
         const staff = wk().filter(p => S.schedule[p.id][day].store === st.id);
         if (staff.length === 0) return;
 
@@ -569,37 +599,39 @@
         const sorted = [...staff].sort((a, b) => seniorityScore(a) - seniorityScore(b));
         const n = sorted.length;
 
-        let slotAlt = [];     // go to interval
-        let slotDefault = []; // stay in store
+        let goers  = [];  // go to interval
+        let stayers = []; // stay in store
 
         if (n === 1) {
-          slotDefault = sorted;
+          stayers = sorted;
         } else if (n === 2) {
-          // newest goes to interval, veteran stays
-          slotAlt    = [sorted[0]];
-          slotDefault = [sorted[1]];
+          goers   = [sorted[0]];
+          stayers = [sorted[1]];
         } else if (n === 3) {
           // 2 newest go to interval together, most veteran stays alone
-          slotAlt    = [sorted[0], sorted[1]];
-          slotDefault = [sorted[2]];
+          goers   = [sorted[0], sorted[1]];
+          stayers = [sorted[2]];
         } else if (n === 4) {
-          // most veteran (sorted[3]) stays with most new (sorted[0])
-          // the middle two (sorted[1], sorted[2]) go to interval
-          slotAlt    = [sorted[1], sorted[2]];
-          slotDefault = [sorted[0], sorted[3]];
+          // most veteran stays with most new, middle two go to interval
+          goers   = [sorted[1], sorted[2]];
+          stayers = [sorted[0], sorted[3]];
         } else {
-          // 5+: first half goes to interval, second half stays
           const half = Math.floor(n / 2);
-          slotAlt    = sorted.slice(0, half);
-          slotDefault = sorted.slice(half);
+          goers   = sorted.slice(0, half);
+          stayers = sorted.slice(half);
         }
 
-        slotAlt.forEach(p => { S.schedule[p.id][day].shift = SH_ALT; });
-        slotDefault.forEach(p => { S.schedule[p.id][day].shift = SH_DEFAULT; });
+        // Determine which shift the stayers should have based on weekly consistency
+        const stayerIds = stayers.map(p => p.id);
+        const stayShift = preferredStayShift(st.id, stayerIds);
+        const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
 
-        const altNames = slotAlt.map(p => p.name.split(' ')[0]).join(' + ') || '—';
-        const defNames = slotDefault.map(p => p.name.split(' ')[0]).join(' + ') || '—';
-        S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${altNames}] / loja→[${defNames}].` });
+        goers.forEach(p => { S.schedule[p.id][day].shift = goShift; });
+        stayers.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
+
+        const goNames  = goers.map(p => p.name.split(' ')[0]).join(' + ') || '—';
+        const stayNames = stayers.map(p => p.name.split(' ')[0]).join(' + ') || '—';
+        S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${goNames}] / loja→[${stayNames}].` });
       });
 
       // Step 2: GLOBAL rule — Edna & Carla must never share the same shift slot,

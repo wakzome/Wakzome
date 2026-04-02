@@ -251,12 +251,12 @@
               <label>Horas contrato</label>
               <input type="number" id="gh-pf-hrs" class="gh-field-sm" value="40" min="1" max="40">
             </div>
-            <div class="gh-pf-field">
-              <label>Data de entrada</label>
+            <div class="gh-pf-field" id="gh-pf-start-field">
+              <label id="gh-pf-start-label">Data de entrada</label>
               <input type="date" id="gh-pf-start" class="gh-field-sm">
             </div>
             <div class="gh-pf-field">
-              <label>Data de saída (opcional)</label>
+              <label>Último dia de trabalho (opcional)</label>
               <input type="date" id="gh-pf-end" class="gh-field-sm">
             </div>
             <div class="gh-pf-field">
@@ -320,18 +320,21 @@
 
     PEOPLE.forEach(p => {
       const onFerias = feriasAutoPids.has(p.id);
-      const weeksIn  = weeksSince(p.start, S.weekStart || new Date());
-      const weightLabel = p.efetiva ? 'Efectiva (peso 2)' : weeksIn >= 3 ? `Nova +3 sem (peso 1.5)` : `Nova <3 sem (peso 1)`;
-      const endLabel = p.end ? ` · Saída: ${p.end}` : '';
+      const condLabel = p.efetiva ? 'Efectiva' : 'Nova';
+      const startLabel = p.start ? ` · Entrada: ${p.start}` : '';
+      const endLabel   = p.end   ? ` · Último dia: ${p.end}` : '';
+      const storeName  = p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem tienda fixa';
 
       const row = document.createElement('div');
       row.className = `gh-staff-row${onFerias ? ' gh-staff-ferias' : ''}`;
       row.dataset.pid = p.id;
       row.innerHTML = `
         <div class="gh-staff-info">
-          <span class="gh-staff-name">${p.name}</span>
-          <span class="gh-staff-meta">${p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem tienda fixa'} · ${p.hrs}h · Entrada: ${p.start}${endLabel}</span>
-          <span class="gh-staff-weight">${weightLabel}${onFerias ? ' · 🏖 FÉRIAS' : ''}</span>
+          <div class="gh-staff-name-row">
+            <span class="gh-staff-name">${p.name}</span>
+            ${onFerias ? '<span class="gh-ferias-tag">🏖 FÉRIAS</span>' : ''}
+          </div>
+          <span class="gh-staff-meta">${storeName} · ${p.hrs}h · ${condLabel}${startLabel}${endLabel}</span>
           <span class="gh-staff-knows">Conhece: ${(p.knows||[]).map(sid => STORES.find(s=>s.id===sid)?.name||sid).join(', ')}</span>
         </div>
         <div class="gh-staff-actions">
@@ -368,6 +371,12 @@
       _editingPid = null;
     });
 
+    // Toggle start date label/required based on efectiva status
+    document.getElementById('gh-pf-efetiva').addEventListener('change', function() {
+      const lbl = document.getElementById('gh-pf-start-label');
+      if (lbl) lbl.textContent = this.value === 'true' ? 'Data de entrada (opcional)' : 'Data de entrada';
+    });
+
     document.getElementById('gh-pf-save').addEventListener('click', savePersonForm);
   }
 
@@ -378,6 +387,8 @@
     document.getElementById('gh-pf-name').value = p.name;
     document.getElementById('gh-pf-hrs').value = p.hrs || 40;
     document.getElementById('gh-pf-start').value = p.start || '';
+    const lbl = document.getElementById('gh-pf-start-label');
+    if (lbl) lbl.textContent = p.efetiva ? 'Data de entrada (opcional)' : 'Data de entrada';
     document.getElementById('gh-pf-end').value = p.end || '';
     document.getElementById('gh-pf-store').value = p.store || '';
     document.getElementById('gh-pf-efetiva').value = p.efetiva ? 'true' : 'false';
@@ -400,7 +411,9 @@
     const mobile   = document.getElementById('gh-pf-mobile').value === 'true';
     const knows    = [...document.querySelectorAll('#gh-pf-knows input:checked')].map(cb => cb.value);
 
-    if (!name || !start) { alert('Nome e data de entrada são obrigatórios.'); return; }
+    // Start date required only for new staff (efectivas may not have it)
+    if (!name) { alert('Nome é obrigatório.'); return; }
+    if (!efetiva && !start) { alert('Data de entrada é obrigatória para pessoal novo.'); return; }
 
     const data = {
       name, hrs, store_id: store, efetiva, start_date: start, end_date: end,
@@ -1535,6 +1548,7 @@
         #tab-gerador .gh-staff-row { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e8e8e8; border-radius:7px; background:#fafafa; }
         #tab-gerador .gh-staff-row.gh-staff-ferias { background:#f0fdf0; border-color:#b7ddb7; }
         #tab-gerador .gh-staff-info { display:flex; flex-direction:column; gap:2px; }
+        #tab-gerador .gh-staff-name-row { display:flex; align-items:center; gap:8px; }
         #tab-gerador .gh-staff-name { font-size:.85rem; font-weight:700; color:#111; }
         #tab-gerador .gh-staff-meta { font-size:.72rem; color:#777; }
         #tab-gerador .gh-staff-weight { font-size:.70rem; color:#555; font-weight:600; }

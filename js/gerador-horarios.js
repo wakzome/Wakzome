@@ -636,32 +636,40 @@
 
       // Step 2: GLOBAL rule — Edna & Carla must never share the same shift slot,
       // regardless of which store they are in.
-      // When they coincide, swap Carla's shift with the colleague in her store
-      // who has the opposite shift, so store coverage is preserved.
+      // When they coincide:
+      //   1. Flip Carla to the opposite shift.
+      //   2. If Carla has a colleague in her store who now has the SAME shift as Carla,
+      //      flip that colleague to the opposite — so the store is always covered.
+      //   3. If Carla is alone in her store, try flipping Edna instead (same logic).
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
-        const altShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        const caNewShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        const caStoreColleagues = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store);
 
-        // Find a colleague in Carla's store who already has the opposite shift — swap with them
-        const caStoreColleague = wk().find(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store && S.schedule[p.id][day].shift === altShift);
-        if (caStoreColleague) {
-          // Swap: Carla takes the colleague's shift, colleague takes Carla's shift
-          S.schedule['carla'][day].shift = altShift;
-          S.schedule[caStoreColleague.id][day].shift = caSch.shift;
-          S.decisions.push({ type: 'info', text: `${day}: Carla e ${caStoreColleague.name.split(' ')[0]} trocaram turnos (regra global Edna/Carla — intervalos separados).` });
+        if (caStoreColleagues.length > 0) {
+          // Flip Carla
+          S.schedule['carla'][day].shift = caNewShift;
+          // Fix any colleague in Carla's store that now shares the same shift as Carla
+          caStoreColleagues.forEach(p => {
+            if (S.schedule[p.id][day].shift === caNewShift) {
+              S.schedule[p.id][day].shift = caSch.shift; // give them the opposite
+              S.decisions.push({ type: 'info', text: `${day}: ${p.name.split(' ')[0]} ajustada/o para cobrir loja (regra global Edna/Carla).` });
+            }
+          });
+          S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — intervalos separados).` });
         } else {
-          // No colleague to swap with — just flip Carla directly
-          const caStoreStaff = wk().filter(p => p.id !== 'carla' && S.schedule[p.id][day].store === caSch.store);
-          if (caStoreStaff.length > 0 || true) {
-            S.schedule['carla'][day].shift = altShift;
-            S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — intervalos separados).` });
-          } else {
-            // Try flipping Edna instead
-            const edAltShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-            S.schedule['edna'][day].shift = edAltShift;
-            S.decisions.push({ type: 'info', text: `${day}: Edna ajustada (regra global Edna/Carla — intervalos separados).` });
-          }
+          // Carla is alone in her store — flip Edna instead and fix Edna's store colleagues
+          const edNewShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+          S.schedule['edna'][day].shift = edNewShift;
+          const edStoreColleagues = wk().filter(p => p.id !== 'edna' && S.schedule[p.id][day].store === edSch.store);
+          edStoreColleagues.forEach(p => {
+            if (S.schedule[p.id][day].shift === edNewShift) {
+              S.schedule[p.id][day].shift = edSch.shift;
+              S.decisions.push({ type: 'info', text: `${day}: ${p.name.split(' ')[0]} ajustada/o para cobrir loja (regra global Edna/Carla).` });
+            }
+          });
+          S.decisions.push({ type: 'info', text: `${day}: Edna ajustada (regra global Edna/Carla — intervalos separados).` });
         }
       }
       const logged = new Set();

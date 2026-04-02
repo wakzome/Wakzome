@@ -236,8 +236,11 @@
 
         ${feriasAuto.length ? `<div class="gh-ferias-banner">
           <span class="gh-ferias-banner-icon">🏖</span>
-          <span>Férias esta semana: <strong>${feriasAuto.map(f => { const p = PEOPLE.find(x => x.id === f.pid); return p ? p.name.split(' ')[0] : f.pid; }).join(', ')}</strong></span>
-        </div>` : ''}
+          <span>Férias esta semana: <strong>${feriasAuto.map(f => {
+            const p = PEOPLE.find(x => x.id === f.pid || x.name === f.nome);
+            return p ? p.name.split(' ')[0] : (f.nome || f.pid || '?');
+          }).join(', ')}</strong></span>
+        </div>` : '<div class="gh-wiz-sub" style="color:#aaa;font-size:.75rem">Nenhuma férias detectada para esta semana.</div>'}
 
         <div class="gh-staff-list" id="gh-staff-list"></div>
 
@@ -342,6 +345,7 @@
         </div>
         <div class="gh-staff-actions">
           <button class="gh-btn gh-btn-ghost gh-btn-xs gh-edit-person" data-pid="${p.id}">Editar</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-xs gh-del-person" data-pid="${p.id}" style="color:#c0392b;margin-left:4px">Eliminar</button>
         </div>`;
       list.appendChild(row);
     });
@@ -349,6 +353,28 @@
     list.querySelectorAll('.gh-edit-person').forEach(btn => {
       btn.addEventListener('click', () => openEditPerson(btn.dataset.pid));
     });
+    list.querySelectorAll('.gh-del-person').forEach(btn => {
+      btn.addEventListener('click', () => deletePersonConfirm(btn.dataset.pid));
+    });
+  }
+
+  async function deletePersonConfirm(pid) {
+    const p = PEOPLE.find(x => x.id === pid);
+    if (!p) return;
+    if (!confirm(`Eliminar "${p.name}"? Esta acção não pode ser desfeita.`)) return;
+    const sb = getSupabase();
+    if (!sb) { alert('Supabase não disponível.'); return; }
+    try {
+      const { error } = await sb.from('gh_people').delete().eq('id', pid);
+      if (error) throw error;
+      await loadKnowledgeBase();
+      const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
+        ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
+      renderStaffList(new Set(feriasAuto.map(f => f.pid)));
+    } catch(e) {
+      console.error('Delete error:', e);
+      alert('Erro ao eliminar. Verifique a consola.');
+    }
   }
 
   let _editingPid = null;

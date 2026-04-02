@@ -220,7 +220,7 @@
     // Férias automáticas da semana
     let feriasAuto = [];
     if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
-      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => f.pid);
+      feriasAuto = window.getFeriasParaSemana(S.weekStart); // include all, even without pid match
     }
 
     // Recolher apenas férias para S.absences — sem ausências manuais
@@ -496,7 +496,7 @@
     // Apenas férias automáticas — sem ausências manuais
     let feriasAuto = [];
     if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
-      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => f.pid);
+      feriasAuto = window.getFeriasParaSemana(S.weekStart); // include all, even without pid match
     }
 
     const DAY_REVERSE = { 'desde Segunda':'SEG','desde Terça':'TER','desde Quarta':'QUA','desde Quinta':'QUI','desde Sexta':'SEX','desde Sábado':'SAB','desde Domingo':'DOM' };

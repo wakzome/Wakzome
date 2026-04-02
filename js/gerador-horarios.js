@@ -534,147 +534,11 @@
         }
       }
 
-      // ── Assign shifts AFTER all relocations are final ──
-      //
-      // REGRAS DE INTERVALO DE ALMOÇO (por loja, sobre todos os trabalhadores activos):
-      //
-      //  Peso de antiguidade:
-      //    Peso 2 = antigas/efectivas: Edna, Carla, Marilia, Sandra
-      //    Peso 1 = novas:             Sara, Matilde, Djanice, Iara
-      //
-      //  Regras por número de pessoas activas na loja nesse dia:
-      //   1 pessoa  → SH_DEFAULT, sem escalonamento.
-      //   2 pessoas → a mais nova vai ao intervalo (SH_ALT), a mais antiga fica (SH_DEFAULT).
-      //   3 pessoas → as 2 mais novas vão juntas ao intervalo (SH_ALT), a mais antiga fica sozinha (SH_DEFAULT).
-      //   4 pessoas → a mais antiga fica com a mais nova (SH_DEFAULT), as outras 2 vão ao intervalo (SH_ALT).
-      //   5+        → dividir em pares: metade vai (SH_ALT), metade fica (SH_DEFAULT).
-      //
-      //  REGRA GLOBAL — Edna & Carla:
-      //    Nunca podem ter o mesmo horário de intervalo, independentemente da loja onde estejam.
-      //    Se Edna tem SH_ALT, Carla deve ter SH_DEFAULT, e vice-versa.
-      //    Esta regra aplica-se DEPOIS de atribuir os turnos por loja e pode forçar um ajuste.
+      // ── ATRIBUIÇÃO DE TURNOS DE INTERVALO ──
+      // Lógica matemática rigorosa. Aplicada após todas as relocações de loja.
+      // Chamada separada: assignIntervalShifts(active) — ver abaixo.
+      assignIntervalShiftsForDay(day, wk());
 
-      // Seniority score: higher = more veteran
-      function seniorityScore(p) {
-        return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
-      }
-
-      // Step 1: assign shifts per store based on headcount.
-      //
-      // The rule defines WHO goes to interval together and WHO stays — not which specific
-      // shift (SH_ALT or SH_DEFAULT) they get. The shift assigned to each group is chosen
-      // to maintain weekly consistency per store:
-      //   - Look at the other days of the week for this store.
-      //   - If the store normally has its interval at 14:00 (SH_DEFAULT for the staying group,
-      //     SH_ALT for the going group), keep that pattern.
-      //   - Only deviate when the global Edna/Carla rule forces it (Step 2).
-      //
-      // Concretely: the "going" group and "staying" group are determined by seniority rules.
-      // Then we check what shift the staying group has used most this week in this store —
-      // and assign accordingly, so the store interval time stays consistent.
-
-      // Compute the most common shift used by the staying person(s) in a store across the week
-      function preferredStayShift(storeId, stayerIds) {
-        let altCount = 0, defCount = 0;
-        DAYS.forEach(d => {
-          if (d === day) return;
-          stayerIds.forEach(pid => {
-            const cell = S.schedule[pid]?.[d];
-            if (cell?.type === 'work' && cell.store === storeId) {
-              if (cell.shift === SH_ALT) altCount++;
-              else if (cell.shift === SH_DEFAULT) defCount++;
-            }
-          });
-        });
-        // If no history yet, default to SH_DEFAULT (14:00 interval = most common)
-        if (altCount === 0 && defCount === 0) return SH_DEFAULT;
-        return defCount >= altCount ? SH_DEFAULT : SH_ALT;
-      }
-
-      STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
-        const staff = wk().filter(p => S.schedule[p.id][day].store === st.id);
-        if (staff.length === 0) return;
-
-        // Sort by seniority: index 0 = newest, last = most veteran
-        const sorted = [...staff].sort((a, b) => seniorityScore(a) - seniorityScore(b));
-        const n = sorted.length;
-
-        let goers  = [];  // go to interval
-        let stayers = []; // stay in store
-
-        if (n === 1) {
-          stayers = sorted;
-        } else if (n === 2) {
-          goers   = [sorted[0]];
-          stayers = [sorted[1]];
-        } else if (n === 3) {
-          // 2 newest go to interval together, most veteran stays alone
-          goers   = [sorted[0], sorted[1]];
-          stayers = [sorted[2]];
-        } else if (n === 4) {
-          // most veteran stays with most new, middle two go to interval
-          goers   = [sorted[1], sorted[2]];
-          stayers = [sorted[0], sorted[3]];
-        } else {
-          const half = Math.floor(n / 2);
-          goers   = sorted.slice(0, half);
-          stayers = sorted.slice(half);
-        }
-
-        // Determine which shift the stayers should have based on weekly consistency
-        const stayerIds = stayers.map(p => p.id);
-        const stayShift = preferredStayShift(st.id, stayerIds);
-        const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-
-        goers.forEach(p => { S.schedule[p.id][day].shift = goShift; });
-        stayers.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
-
-        const goNames  = goers.map(p => p.name.split(' ')[0]).join(' + ') || '—';
-        const stayNames = stayers.map(p => p.name.split(' ')[0]).join(' + ') || '—';
-        S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${goNames}] / loja→[${stayNames}].` });
-      });
-
-      // Step 2: GLOBAL rule — Edna & Carla must NEVER share the same shift slot,
-      // regardless of which store they are in.
-      // Strategy: find a colleague in Carla's store with the OPPOSITE shift and SWAP them.
-      // This guarantees Carla changes AND the store stays covered in both slots.
-      // Only if no swap is possible (Carla alone), flip Edna using the same swap logic.
-      const edSch = S.schedule['edna']?.[day];
-      const caSch = S.schedule['carla']?.[day];
-      if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
-        const caWantedShift = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-
-        // Find a colleague in Carla's store who has the opposite shift — swap with them
-        const caSwapPartner = wk().find(p =>
-          p.id !== 'carla' &&
-          S.schedule[p.id][day].store === caSch.store &&
-          S.schedule[p.id][day].shift === caWantedShift
-        );
-
-        if (caSwapPartner) {
-          // Perfect swap: Carla gets caWantedShift, partner gets Carla's current shift
-          S.schedule['carla'][day].shift = caWantedShift;
-          S.schedule[caSwapPartner.id][day].shift = caSch.shift;
-          S.decisions.push({ type: 'info', text: `${day}: Carla e ${caSwapPartner.name.split(' ')[0]} trocaram turnos (regra global Edna/Carla).` });
-        } else {
-          // No swap partner in Carla's store — try Edna's store instead
-          const edWantedShift = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-          const edSwapPartner = wk().find(p =>
-            p.id !== 'edna' &&
-            S.schedule[p.id][day].store === edSch.store &&
-            S.schedule[p.id][day].shift === edWantedShift
-          );
-          if (edSwapPartner) {
-            S.schedule['edna'][day].shift = edWantedShift;
-            S.schedule[edSwapPartner.id][day].shift = edSch.shift;
-            S.decisions.push({ type: 'info', text: `${day}: Edna e ${edSwapPartner.name.split(' ')[0]} trocaram turnos (regra global Edna/Carla).` });
-          } else {
-            // Both alone in their stores — just flip Carla, no coverage impact
-            S.schedule['carla'][day].shift = caWantedShift;
-            S.decisions.push({ type: 'info', text: `${day}: Carla ajustada (regra global Edna/Carla — sozinha na loja).` });
-          }
-        }
-      }
       const logged = new Set();
       wk().forEach(p => {
         (p.softAvoid || []).forEach(oid => {
@@ -841,126 +705,169 @@
     });
   }
 
-  // ══ MOTOR 2: ENFORCE GROUPING RULES ══
-  // Verifies the grouping rules per store per day and rebuilds from scratch if violated.
-  // Rules:
-  //   2 people → most junior goes to interval, most veteran stays
-  //   3 people → 2 most junior go together, most veteran stays alone
-  //   4 people → most veteran stays with most junior, middle two go to interval
-  // The shift (SH_ALT vs SH_DEFAULT) assigned to each group is preserved from what
-  // intelPass already decided — this motor only checks WHO is in each group.
+  // ══ MOTOR ÚNICO DE INTERVALOS — LÓGICA MATEMÁTICA RIGOROSA ══
+  //
+  // PESOS:
+  //   Antiga/efectiva                  → 2
+  //   Nova com mais de 3 semanas       → 1.5
+  //   Nova com menos de 3 semanas      → 1
+  //
+  // REGRAS POR NÚMERO DE PESSOAS (baseadas em somas de pesos):
+  //
+  //   1 pessoa  → SH_DEFAULT, sem escalonamento.
+  //
+  //   2 pessoas — Cenário A (antiga + nova +3 semanas):
+  //     Cada uma vale 1. Slot válido = 1. Vão separadas.
+  //
+  //   2 pessoas — Cenário B (antiga + nova -3 semanas):
+  //     Cada uma vale 0.5. Slot válido = 1. Vão juntas obrigatoriamente.
+  //
+  //   3 pessoas:
+  //     Slot intervalo deve somar 2 → as 2 mais novas juntas.
+  //     Slot loja = a mais antiga sozinha.
+  //     Soma total válida = 4 (com antiga) ou 3.5 (todas novas).
+  //
+  //   4 pessoas:
+  //     Slot intervalo deve somar 3 → as duas intermédias (1.5+1.5).
+  //     Slot loja deve somar 3 → antiga (2) + mais nova (1).
+  //     Soma total válida = 6.
+  //
+  // REGRA GLOBAL EDNA & CARLA:
+  //   A cada combinação válida atribui-se 1 (vai às 13h) ou 0 (vai às 14h).
+  //   Edna_valor + Carla_valor deve ser exactamente 1.
+  //   Se for 0 ou 2 → combinação inválida → trocar com colega da loja.
+  //
+  // CONSISTÊNCIA SEMANAL:
+  //   Cada loja mantém a mesma hora de intervalo toda a semana.
+  //   A hora base da loja é determinada no primeiro dia com 2+ pessoas.
+  //   Dias seguintes respeitam essa hora base.
 
-  function enforceGroupingRules(active) {
-    function senScore(p) {
-      return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
-    }
-
-    DAYS.forEach(day => {
-      S.openStores.forEach(sid => {
-        if (!storeOpen(sid, day)) return;
-
-        const staff = active.filter(p => {
-          const cell = S.schedule[p.id]?.[day];
-          return cell?.type === 'work' && cell.store === sid;
-        });
-
-        if (staff.length < 2) return;
-
-        const sorted = [...staff].sort((a, b) => senScore(a) - senScore(b));
-        const n = sorted.length;
-
-        let expectedGoers = [], expectedStayers = [];
-
-        if (n === 2) {
-          expectedGoers   = [sorted[0]];
-          expectedStayers = [sorted[1]];
-        } else if (n === 3) {
-          expectedGoers   = [sorted[0], sorted[1]];
-          expectedStayers = [sorted[2]];
-        } else if (n === 4) {
-          expectedGoers   = [sorted[1], sorted[2]];
-          expectedStayers = [sorted[0], sorted[3]];
-        } else {
-          const half = Math.floor(n / 2);
-          expectedGoers   = sorted.slice(0, half);
-          expectedStayers = sorted.slice(half);
-        }
-
-        // The shift the stayers currently have = the "stay shift"
-        // The goers must have the opposite shift
-        const stayShift = S.schedule[expectedStayers[0].id][day].shift || SH_DEFAULT;
-        const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-
-        // Only fix if there's a mismatch — don't touch correct assignments
-        let fixed = false;
-        expectedGoers.forEach(p => {
-          if (S.schedule[p.id][day].shift !== goShift) {
-            S.schedule[p.id][day].shift = goShift;
-            fixed = true;
-          }
-        });
-        expectedStayers.forEach(p => {
-          if (S.schedule[p.id][day].shift !== stayShift) {
-            S.schedule[p.id][day].shift = stayShift;
-            fixed = true;
-          }
-        });
-        if (fixed) {
-          const goNames   = expectedGoers.map(p => p.name.split(' ')[0]).join(' + ');
-          const stayNames = expectedStayers.map(p => p.name.split(' ')[0]).join(' + ');
-          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Agrupamento] intervalo→[${goNames}] / loja→[${stayNames}].` });
-        }
-      });
-    });
+  // Peso de cada pessoa neste dia
+  function intervalWeight(p) {
+    if (p.efetiva) return 2;
+    const weeks = weeksSince(p.start, S.weekStart);
+    return weeks >= 3 ? 1.5 : 1;
   }
 
-  // ══ MOTOR 3: ENFORCE NO NEW WORKER ALONE ══
-  // A new (non-veteran) worker must NEVER be the only person in their shift slot.
-  // If they are alone, find the most junior person in the opposite slot and swap.
-  // This preserves store coverage while ensuring new workers always have company.
+  // Determina goers e stayers para uma loja com n pessoas, baseado nos pesos
+  function computeGroups(sorted) {
+    const n = sorted.length;
+    if (n === 1) return { goers: [], stayers: sorted };
 
-  function enforceNoNewAlone(active) {
-    function senScore(p) {
-      return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+    if (n === 2) {
+      const w0 = intervalWeight(sorted[0]); // mais nova
+      const w1 = intervalWeight(sorted[1]); // mais antiga
+      // Cenário B: antiga + nova -3 semanas → cada uma vale 0.5 → vão juntas
+      if (w1 === 2 && w0 === 1) return { goers: sorted, stayers: [] }; // juntas
+      // Cenário A: separadas
+      return { goers: [sorted[0]], stayers: [sorted[1]] };
     }
 
-    DAYS.forEach(day => {
-      S.openStores.forEach(sid => {
-        if (!storeOpen(sid, day)) return;
+    if (n === 3) {
+      // As 2 mais novas vão juntas (soma=2 ou 3.5 total), a mais antiga fica
+      return { goers: [sorted[0], sorted[1]], stayers: [sorted[2]] };
+    }
 
-        const staff = active.filter(p => {
-          const cell = S.schedule[p.id]?.[day];
-          return cell?.type === 'work' && cell.store === sid;
-        });
+    if (n === 4) {
+      // Slot intervalo: intermedias (sorted[1]+sorted[2])
+      // Slot loja: antiga (sorted[3]) + mais nova (sorted[0])
+      return { goers: [sorted[1], sorted[2]], stayers: [sorted[0], sorted[3]] };
+    }
 
-        if (staff.length < 2) return;
+    // 5+: metade vai, metade fica
+    const half = Math.floor(n / 2);
+    return { goers: sorted.slice(0, half), stayers: sorted.slice(half) };
+  }
 
-        // Find new workers who are alone in their slot
-        const newWorkers = staff.filter(p => !p.efetiva);
-        newWorkers.forEach(newWorker => {
-          const myShift = S.schedule[newWorker.id][day].shift;
-          const companions = staff.filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === myShift);
-          if (companions.length > 0) return; // has company — OK
+  // Hora base da loja para a semana (SH_ALT=13h ou SH_DEFAULT=14h para os que ficam)
+  // Determinada pelo primeiro dia com 2+ pessoas e guardada em S._storeBaseShift
+  function getStoreBaseShift(storeId, day, stayers) {
+    if (!S._storeBaseShift) S._storeBaseShift = {};
+    if (S._storeBaseShift[storeId] !== undefined) return S._storeBaseShift[storeId];
+    // Não há histórico — usar SH_DEFAULT (14h) como padrão
+    S._storeBaseShift[storeId] = SH_DEFAULT;
+    return SH_DEFAULT;
+  }
 
-          // Alone — find the most junior person in the opposite slot to swap with
-          const otherShift = myShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-          const swapCandidates = staff
-            .filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === otherShift)
-            .sort((a, b) => senScore(a) - senScore(b));
+  function assignIntervalShiftsForDay(day, workers) {
+    if (!S._storeBaseShift) S._storeBaseShift = {};
 
-          if (swapCandidates.length === 0) return;
+    // PASSO 1: Atribuir turnos por loja baseados na matemática
+    STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
+      const staff = workers.filter(p => S.schedule[p.id][day].store === st.id);
+      if (staff.length === 0) return;
 
-          const partner = swapCandidates[0];
-          S.schedule[newWorker.id][day].shift = otherShift;
-          S.schedule[partner.id][day].shift   = myShift;
-          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Novatas] ${newWorker.name.split(' ')[0]} trocou com ${partner.name.split(' ')[0]} — nova não pode ficar sozinha.` });
-        });
-      });
+      // Ordenar por peso: index 0 = mais nova, last = mais antiga
+      const sorted = [...staff].sort((a, b) => intervalWeight(a) - intervalWeight(b) || new Date(b.start) - new Date(a.start));
+      const { goers, stayers } = computeGroups(sorted);
+
+      // Determinar hora base da loja
+      const stayShift = getStoreBaseShift(st.id, day, stayers);
+      const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+
+      if (stayers.length === 0) {
+        // Cenário B: todas vão juntas (nova -3 semanas + antiga)
+        // Usar hora base da loja
+        staff.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
+      } else {
+        goers.forEach(p => { S.schedule[p.id][day].shift = goShift; });
+        stayers.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
+      }
+
+      // Registar hora base se ainda não estava definida
+      if (S._storeBaseShift[st.id] === undefined) {
+        S._storeBaseShift[st.id] = stayShift;
+      }
+
+      const goNames   = goers.map(p => p.name.split(' ')[0]).join(' + ') || '(juntas)';
+      const stayNames = stayers.map(p => p.name.split(' ')[0]).join(' + ') || '—';
+      S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${goNames}] / loja→[${stayNames}].` });
     });
+
+    // PASSO 2: Regra global Edna & Carla
+    // Edna_valor + Carla_valor deve ser exactamente 1
+    // valor 1 = vai às 13h (SH_ALT), valor 0 = vai às 14h (SH_DEFAULT)
+    const edSch = S.schedule['edna']?.[day];
+    const caSch = S.schedule['carla']?.[day];
+    if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift) {
+      const edVal = edSch.shift === SH_ALT ? 1 : 0;
+      const caVal = caSch.shift === SH_ALT ? 1 : 0;
+      if (edVal + caVal !== 1) {
+        // Inválido — trocar Carla com colega da sua loja que tenha o turno oposto
+        const caWanted = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        const caPartner = workers.find(p =>
+          p.id !== 'carla' &&
+          S.schedule[p.id][day].store === caSch.store &&
+          S.schedule[p.id][day].shift === caWanted
+        );
+        if (caPartner) {
+          S.schedule['carla'][day].shift   = caWanted;
+          S.schedule[caPartner.id][day].shift = caSch.shift;
+          S.decisions.push({ type: 'info', text: `${day}: Carla↔${caPartner.name.split(' ')[0]} (regra Edna/Carla: soma=${edVal+caVal}→1).` });
+        } else {
+          // Tentar em Edna
+          const edWanted = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+          const edPartner = workers.find(p =>
+            p.id !== 'edna' &&
+            S.schedule[p.id][day].store === edSch.store &&
+            S.schedule[p.id][day].shift === edWanted
+          );
+          if (edPartner) {
+            S.schedule['edna'][day].shift    = edWanted;
+            S.schedule[edPartner.id][day].shift = edSch.shift;
+            S.decisions.push({ type: 'info', text: `${day}: Edna↔${edPartner.name.split(' ')[0]} (regra Edna/Carla: soma=${edVal+caVal}→1).` });
+          } else {
+            // Sozinhas nas lojas — forçar Carla
+            S.schedule['carla'][day].shift = caWanted;
+            S.decisions.push({ type: 'info', text: `${day}: Carla forçada (regra Edna/Carla — sem parceira para trocar).` });
+          }
+        }
+      }
+    }
   }
 
   function generate() {
-    S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {};
+    S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
     // Save a snapshot of the original openDays/openStores (before sunday check may mutate them)
@@ -992,8 +899,6 @@
     fixSunday(active);
     intelPass(active);
     enforceIntervalCoverage(active);
-    enforceGroupingRules(active);
-    enforceNoNewAlone(active);
     saveMem();
 
     // ── Minimum coverage gate ──

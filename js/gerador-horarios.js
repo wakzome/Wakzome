@@ -379,27 +379,19 @@
       const licenca = S._licencas?.[p.id] || {};
       const saldo   = S._banco?.[p.id]    || 0;
 
-      const row = document.createElement('div');
-      row.className = `gh-staff-row${onFerias ? ' gh-staff-ferias' : ''}`;
-      row.dataset.pid = p.id;
-
-      // Day buttons for folga
       const dayBtns = DIAS.map(d => {
         const active = (folga.dias || []).includes(d);
         return `<button class="gh-day-btn${active?' gh-day-btn-on':''}" data-pid="${p.id}" data-day="${d}" title="${DIAS_FULL[d]}">${d.charAt(0)}</button>`;
       }).join('');
 
+      const row = document.createElement('div');
+      row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}`;
+      row.dataset.pid = p.id;
       row.innerHTML = `
-        <div class="gh-sr-top">
-          <div class="gh-sr-info">
-            <div class="gh-staff-name-row">
-              <span class="gh-staff-name">${shortName(p.name)}</span>
-              ${onFerias ? '<span class="gh-ferias-tag">🏖 FÉRIAS</span>' : ''}
-              ${baixa.active ? '<span class="gh-inc-tag gh-inc-tag-baixa">🏥 Baixa</span>' : ''}
-              ${licenca.active ? '<span class="gh-inc-tag gh-inc-tag-lic">📋 Licença</span>' : ''}
-            </div>
-            <span class="gh-staff-meta">${storeName} · ${p.hrs}h · ${condLabel}</span>
-          </div>
+        <div class="gh-sr-info">
+          <div class="gh-staff-name">${shortName(p.name)}</div>
+          <div class="gh-staff-meta">${storeName} · ${condLabel}</div>
+          ${onFerias ? '<span class="gh-ferias-tag" style="margin-top:3px;display:inline-block">🏖 FÉRIAS</span>' : ''}
           <div class="gh-sr-btns">
             <button class="gh-btn gh-btn-ghost gh-btn-xs gh-edit-person" data-pid="${p.id}">Editar</button>
             <button class="gh-btn gh-btn-ghost gh-btn-xs gh-limpar-inc" data-pid="${p.id}" style="color:#b8860b">Limpar</button>
@@ -407,81 +399,40 @@
           </div>
         </div>
 
-        <!-- 4 COLUNAS SEMPRE VISÍVEIS -->
-        <div class="gh-inc-cols">
+        <div class="gh-sr-col">
+          <div class="gh-sr-col-title">📅 Folga</div>
+          <div class="gh-day-btns">${dayBtns}</div>
+        </div>
 
-          <!-- FOLGA -->
-          <div class="gh-inc-col">
-            <div class="gh-inc-col-title">📅 Folga</div>
-            <div class="gh-day-btns">${dayBtns}</div>
+        <div class="gh-sr-col">
+          <div class="gh-sr-col-title">🏥 Baixa</div>
+          <label class="gh-inc-toggle-label"><input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}> Activa</label>
+          <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio||''}" placeholder="Início" style="margin-top:4px">
+          <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim||''}" placeholder="Fim" style="margin-top:3px">
+          <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_obs" value="${baixa.observacao||''}" placeholder="Observação" style="margin-top:3px">
+        </div>
 
+        <div class="gh-sr-col">
+          <div class="gh-sr-col-title">📋 Licença</div>
+          <label class="gh-inc-toggle-label"><input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}> Activa</label>
+          <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio||''}" placeholder="Início" style="margin-top:4px">
+          <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim||''}" placeholder="Fim" style="margin-top:3px">
+          <select class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_tipo" style="margin-top:3px">
+            <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Recuperável</option>
+            <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>Não recuperável</option>
+          </select>
+          <input type="number" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="Horas" step="0.5" style="margin-top:3px">
+          <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_obs" value="${licenca.observacao||''}" placeholder="Observação desconto" style="margin-top:3px" id="gh-lic-obs-${p.id}" ${licenca.tipo!=='nao_recuperavel'?'hidden':''}>
+        </div>
+
+        <div class="gh-sr-col">
+          <div class="gh-sr-col-title">⏱ Banco Horas</div>
+          <div class="gh-inc-saldo ${saldo>0?'gh-inc-saldo-neg':saldo<0?'gh-inc-saldo-pos':''}" id="gh-saldo-${p.id}">${saldo>0?'+':''}${saldo}h</div>
+          <div class="gh-banco-add-row">
+            <input type="number" class="gh-field-sm gh-banco-h" data-pid="${p.id}" placeholder="±h" step="0.5">
+            <button class="gh-btn gh-btn-ghost gh-btn-xs gh-banco-lancar" data-pid="${p.id}">+</button>
+            <button class="gh-btn gh-btn-ghost gh-btn-xs gh-banco-zero" data-pid="${p.id}" style="color:#c0392b" title="Zerar">✕</button>
           </div>
-
-          <!-- BAIXA -->
-          <div class="gh-inc-col">
-            <div class="gh-inc-col-title">🏥 Baixa</div>
-            <label class="gh-inc-toggle-label">
-              <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active ? 'checked' : ''}>
-              Baixa activa
-            </label>
-            <div style="margin-top:6px">
-              <label class="gh-inc-label">Início</label>
-              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio||''}">
-            </div>
-            <div style="margin-top:4px">
-              <label class="gh-inc-label">Fim (opcional)</label>
-              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim||''}">
-            </div>
-            <div style="margin-top:4px">
-              <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_obs" value="${baixa.observacao||''}" placeholder="Observação">
-            </div>
-          </div>
-
-          <!-- LICENÇA -->
-          <div class="gh-inc-col">
-            <div class="gh-inc-col-title">📋 Licença</div>
-            <label class="gh-inc-toggle-label">
-              <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active ? 'checked' : ''}>
-              Licença activa
-            </label>
-            <div style="margin-top:6px">
-              <label class="gh-inc-label">Início</label>
-              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio||''}">
-            </div>
-            <div style="margin-top:4px">
-              <label class="gh-inc-label">Fim (opcional)</label>
-              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim||''}">
-            </div>
-            <div style="margin-top:4px">
-              <label class="gh-inc-label">Tipo</label>
-              <select class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_tipo">
-                <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Recuperável → Banco horas</option>
-                <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>Não recuperável → Desconto</option>
-              </select>
-            </div>
-            <div style="margin-top:4px">
-              <label class="gh-inc-label">Horas</label>
-              <input type="number" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="0" step="0.5">
-            </div>
-            <div style="margin-top:4px" id="gh-lic-obs-${p.id}" ${licenca.tipo!=='nao_recuperavel'?'style="display:none"':''}>
-              <label class="gh-inc-label">Observação (desconto)</label>
-              <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_obs" value="${licenca.observacao||''}" placeholder="Ex: desconto em folha">
-            </div>
-          </div>
-
-          <!-- BANCO DE HORAS -->
-          <div class="gh-inc-col">
-            <div class="gh-inc-col-title">⏱ Banco de Horas</div>
-            <div class="gh-inc-saldo ${saldo > 0 ? 'gh-inc-saldo-neg' : saldo < 0 ? 'gh-inc-saldo-pos' : ''}" id="gh-saldo-${p.id}">
-              Saldo: ${saldo > 0 ? '+' : ''}${saldo}h
-            </div>
-            <div class="gh-banco-add-row" style="margin-top:8px">
-              <input type="number" class="gh-field-sm gh-banco-h" data-pid="${p.id}" placeholder="±h" step="0.5" style="width:55px">
-              <button class="gh-btn gh-btn-ghost gh-btn-xs gh-banco-lancar" data-pid="${p.id}">Lançar</button>
-              <button class="gh-btn gh-btn-ghost gh-btn-xs gh-banco-zero" data-pid="${p.id}" style="color:#c0392b" title="Zerar saldo">✕</button>
-            </div>
-          </div>
-
         </div>`;
       list.appendChild(row);
     });
@@ -2035,28 +1986,28 @@
         #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
         #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
 
-        /* ── STAFF ROW + 4 COLUNAS ── */
-        #tab-gerador .gh-staff-row { flex-direction:column; align-items:stretch; gap:0; padding:10px 12px; }
-        #tab-gerador .gh-sr-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:10px; }
-        #tab-gerador .gh-sr-info { flex:1; min-width:0; }
-        #tab-gerador .gh-sr-btns { display:flex; gap:4px; flex-shrink:0; }
-        #tab-gerador .gh-inc-cols { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; border-top:1px solid #ebebeb; padding-top:10px; overflow-x:auto; }
-        @media(max-width:600px){ #tab-gerador .gh-inc-cols { grid-template-columns:repeat(4,minmax(130px,1fr)); } }
-        #tab-gerador .gh-inc-col { display:flex; flex-direction:column; gap:4px; min-width:0; }
-        #tab-gerador .gh-inc-col-title { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#555; margin-bottom:4px; white-space:nowrap; }
-        #tab-gerador .gh-inc-toggle-label { display:flex; align-items:center; gap:5px; font-size:.75rem; color:#333; cursor:pointer; }
-        #tab-gerador .gh-inc-label { font-size:.62rem; color:#999; font-weight:600; text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:2px; }
-        #tab-gerador .gh-inc-saldo { font-size:.78rem; font-weight:700; padding:3px 8px; border-radius:5px; display:inline-block; }
-        #tab-gerador .gh-inc-saldo-neg { background:#fff0f0; color:#c0392b; }
-        #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a; }
-        #tab-gerador .gh-banco-add-row { display:flex; gap:4px; align-items:center; }
-        #tab-gerador .gh-inc-tag { font-size:.65rem; font-weight:700; padding:1px 6px; border-radius:4px; }
+        /* ── STAFF ROW — layout horizontal com 4 colunas ── */
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+        #tab-gerador .gh-sr { display:grid; grid-template-columns:180px repeat(4,1fr); gap:0; border:1px solid #e8e8e8; border-radius:8px; background:#fff; overflow-x:auto; }
+        #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-sr-info { padding:10px 12px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; }
+        #tab-gerador .gh-sr-col { padding:10px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:140px; }
+        #tab-gerador .gh-sr-col:last-child { border-right:none; }
+        #tab-gerador .gh-sr-col-title { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#888; margin-bottom:4px; white-space:nowrap; }
+        #tab-gerador .gh-sr-btns { display:flex; gap:3px; flex-wrap:wrap; margin-top:6px; }
+        #tab-gerador .gh-inc-toggle-label { display:flex; align-items:center; gap:5px; font-size:.74rem; color:#333; cursor:pointer; }
+        #tab-gerador .gh-inc-saldo { font-size:.8rem; font-weight:700; padding:2px 8px; border-radius:5px; display:inline-block; margin-bottom:4px; }
+        #tab-gerador .gh-inc-saldo-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
+        #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
+        #tab-gerador .gh-banco-add-row { display:flex; gap:3px; align-items:center; margin-top:4px; }
+        #tab-gerador .gh-banco-add-row input { width:50px !important; }
+        #tab-gerador .gh-inc-tag { font-size:.62rem; font-weight:700; padding:1px 5px; border-radius:3px; display:inline-block; }
         #tab-gerador .gh-inc-tag-baixa { background:#fff0f0; color:#c0392b; }
-        #tab-gerador .gh-inc-tag-lic   { background:#fff8e0; color:#b8860b; }
-        /* Day toggle buttons */
+        #tab-gerador .gh-inc-tag-lic { background:#fff8e0; color:#b8860b; }
         #tab-gerador .gh-day-btns { display:flex; gap:3px; flex-wrap:wrap; }
-        #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:4px; width:24px; height:24px; font-size:.7rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
-        #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111; }
+        #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:4px; width:26px; height:26px; font-size:.68rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+        #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
+        @media(max-width:640px) { #tab-gerador .gh-sr { grid-template-columns:150px repeat(4,minmax(130px,1fr)); } }
       `;
       document.head.appendChild(style);
     }

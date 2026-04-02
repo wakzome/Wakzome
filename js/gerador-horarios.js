@@ -220,7 +220,7 @@
     // Férias automáticas da semana
     let feriasAuto = [];
     if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
-      feriasAuto = window.getFeriasParaSemana(S.weekStart); // include all, even without pid match
+      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => (f.loja||'').toLowerCase().includes('porto santo'));
     }
 
     // Recolher apenas férias para S.absences — sem ausências manuais
@@ -231,7 +231,12 @@
     c.innerHTML = `
       <div class="gh-wiz-box gh-wiz-box--wide">
         <div class="gh-wiz-label">Passo 2 de 3</div>
-        <div class="gh-wiz-title">Pessoal Activo</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div class="gh-wiz-title" style="margin-bottom:0">Pessoal Activo</div>
+          <div style="background:#111;color:#fff;border-radius:20px;padding:4px 14px;font-size:.78rem;font-weight:700;letter-spacing:.04em;white-space:nowrap">
+            ${PEOPLE.length} activa${PEOPLE.length !== 1 ? 's' : ''}
+          </div>
+        </div>
         <div class="gh-wiz-sub">Gere o pessoal de Porto Santo. As férias são detectadas automaticamente.</div>
 
         ${feriasAuto.length ? `<div class="gh-ferias-banner">
@@ -496,7 +501,7 @@
     // Apenas férias automáticas — sem ausências manuais
     let feriasAuto = [];
     if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
-      feriasAuto = window.getFeriasParaSemana(S.weekStart); // include all, even without pid match
+      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => (f.loja||'').toLowerCase().includes('porto santo'));
     }
 
     const DAY_REVERSE = { 'desde Segunda':'SEG','desde Terça':'TER','desde Quarta':'QUA','desde Quinta':'QUI','desde Sexta':'SEX','desde Sábado':'SAB','desde Domingo':'DOM' };

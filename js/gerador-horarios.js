@@ -1,43 +1,97 @@
 // ══ GERADOR DE HORÁRIOS — Porto Santo ══
 (function () {
 
-  // ── KNOWLEDGE BASE ──
-  const STORES = [
-    { id: 'avenida', name: 'Mezka Avenida', short: 'MEZKA AVENIDA', priority: 1 },
-    { id: 'mercado', name: 'Mezka Mercado', short: 'MEZKA MERCADO', priority: 2 },
-    { id: 'shana',   name: 'Shana',         short: 'SHANA',         priority: 3 },
-    { id: 'maxx',    name: 'Maxx',          short: 'MAXX',          priority: 4 },
-  ];
+  // ── KNOWLEDGE BASE — loaded dynamically from Supabase ──
+  // No names or personal data hardcoded here. All data comes from the database.
+  let STORES = [];
+  let PEOPLE = [];
 
-  const PEOPLE = [
-    { id: 'edna',    name: 'Edna Melim',    hrs: 40, store: 'avenida', efetiva: true,  start: '2020-01-01', canAlone: true,  mobile: false, coverPri: 9, knows: ['avenida','mercado','shana','maxx'], hardAvoid: ['carla'],  softAvoid: ['sandra'] },
-    { id: 'carla',   name: 'Carla Alves',   hrs: 40, store: 'mercado', efetiva: true,  start: '2020-01-01', canAlone: true,  mobile: true,  coverPri: 4, knows: ['avenida','mercado','shana','maxx'], hardAvoid: ['edna'],   softAvoid: ['sandra'] },
-    { id: 'marilia', name: 'Marilia Silva', hrs: 40, store: 'shana',   efetiva: true,  start: '2020-01-01', canAlone: true,  mobile: false, coverPri: 8, knows: ['shana','mercado','avenida'],        hardAvoid: [],         softAvoid: ['sandra'] },
-    { id: 'sandra',  name: 'Sandra Melim',  hrs: 40, store: null,      efetiva: true,  start: '2022-01-01', canAlone: true,  mobile: true,  coverPri: 1, knows: ['avenida','mercado','shana','maxx'], hardAvoid: [],         softAvoid: ['edna','marilia','carla'] },
-    { id: 'sara',    name: 'Sara Almeida',  hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
-    { id: 'matilde', name: 'Matilde Rodrigues.',    hrs: 40, store: 'mercado', efetiva: false, start: '2025-03-02', canAlone: true,  mobile: true,  coverPri: 2, knows: ['mercado','avenida'],                hardAvoid: [],         softAvoid: [] },
-    { id: 'djanice', name: 'Djanice Lopes.',    hrs: 40, store: 'avenida', efetiva: false, start: '2025-03-15', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida'],                          hardAvoid: [],         softAvoid: [] },
-    { id: 'iara',    name: 'Iara Oliveira.',       hrs: 40, store: 'avenida', efetiva: false, start: '2025-04-01', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
-  ];
+  // ── SUPABASE CONFIG ──
+  const SUPA_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
+  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
 
-  // ── SENIORITY WEIGHTS for lunch interval grouping ──
-  // Weight 1 = new staff (entered 2025); Weight 2 = veteran/effective staff
-  // Rule: workers sharing a lunch slot must sum to exactly 2 (one new + one veteran,
-  //       OR two new — but never two veterans together in the same slot).
-  // Special rule for Edna+Carla: each counts as weight 1 relative to each other —
-  //       their sum cannot equal 2 (they must never share the same lunch slot).
-  const LUNCH_WEIGHT = {
-    edna:    2,
-    carla:   2,
-    marilia: 2,
-    sandra:  2,
-    sara:    1,
-    matilde: 1,
-    djanice: 1,
-    iara:    1,
-  };
-  // Edna & Carla are treated as weight-1 relative to each other for the pair-exclusion rule
-  const EDNA_CARLA_PAIR_WEIGHT = 1; // each counts as 1; sum=2 → forbidden
+  function getSupabase() {
+    if (window.supabase && window.supabase.createClient) {
+      return window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    }
+    return null;
+  }
+
+  async function supabaseFetch(table, filters = {}) {
+    const sb = getSupabase();
+    if (!sb) { console.warn('Supabase client not available'); return []; }
+    try {
+      let query = sb.from(table).select('*');
+      Object.entries(filters).forEach(([col, val]) => { query = query.eq(col, val); });
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    } catch (e) {
+      console.error(`Supabase fetch error (${table}):`, e);
+      return [];
+    }
+  }
+
+  async function supabaseInsert(table, data) {
+    const sb = getSupabase();
+    if (!sb) return null;
+    try {
+      const { data: result, error } = await sb.from(table).insert(data).select();
+      if (error) throw error;
+      return result;
+    } catch (e) {
+      console.error(`Supabase insert error (${table}):`, e);
+      return null;
+    }
+  }
+
+  async function supabaseUpdate(table, id, data) {
+    const sb = getSupabase();
+    if (!sb) return null;
+    try {
+      const { data: result, error } = await sb.from(table).update(data).eq('id', id).select();
+      if (error) throw error;
+      return result;
+    } catch (e) {
+      console.error(`Supabase update error (${table}):`, e);
+      return null;
+    }
+  }
+
+  // Load STORES and PEOPLE from Supabase
+  // Expected Supabase tables:
+  //   gh_stores: id, name, short, priority, active
+  //   gh_people: id, name, hrs, store_id, efetiva, start_date, end_date,
+  //              can_alone, mobile, cover_pri, knows (array), hard_avoid (array),
+  //              soft_avoid (array), active
+  async function loadKnowledgeBase() {
+    const [storesRaw, peopleRaw] = await Promise.all([
+      supabaseFetch('gh_stores', { active: true }),
+      supabaseFetch('gh_people', { active: true })
+    ]);
+
+    STORES = storesRaw.map(s => ({
+      id: s.id, name: s.name, short: s.short, priority: s.priority
+    }));
+
+    PEOPLE = peopleRaw.map(p => ({
+      id: p.id,
+      name: p.name,
+      hrs: p.hrs || 40,
+      store: p.store_id || null,
+      efetiva: p.efetiva || false,
+      start: p.start_date,
+      end: p.end_date || null,
+      canAlone: p.can_alone !== false,
+      mobile: p.mobile || false,
+      coverPri: p.cover_pri || 9,
+      knows: p.knows || (p.store_id ? [p.store_id] : []),
+      hardAvoid: p.hard_avoid || [],
+      softAvoid: p.soft_avoid || []
+    }));
+
+    window.GERADOR_PEOPLE = PEOPLE;
+  }
 
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
   const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
@@ -151,109 +205,246 @@
     S.weekStart = d; wStep = 1; renderWiz();
   }
 
-  // ── WIZARD: PASSO 2 ──
+  // ── WIZARD: PASSO 2 — GESTÃO DE PESSOAL ──
+  // Mostra o pessoal activo carregado do Supabase.
+  // Permite adicionar novas pessoas, editar condição efectiva/nova,
+  // gerir tiendas onde podem trabalhar, e ver férias automáticas da semana.
+  // NÃO há opção de adicionar ausências manuais — só férias automáticas.
+
   function wiz_absences() {
     const c = getContainer(); if (!c) return;
 
-    // ── Consultar férias automáticas ──
+    // Férias automáticas da semana
     let feriasAuto = [];
     if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
       feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => f.pid);
     }
 
-    // Filtrar ausências manuais para não duplicar quem já tem férias automáticas
+    // Recolher apenas férias para S.absences — sem ausências manuais
     const feriasAutoPids = new Set(feriasAuto.map(f => f.pid));
-    const manualAbsences = S.absences.filter(a => !feriasAutoPids.has(a.pid));
 
-    // Banner informativo se há férias detectadas
-    let bannerHTML = '';
-    if (feriasAuto.length) {
-      const nomes = feriasAuto.map(f => {
-        const p = PEOPLE.find(x => x.id === f.pid);
-        return p ? p.name.split(' ')[0] : f.nome;
-      }).join(', ');
-      bannerHTML = `<div class="gh-ferias-banner">
-        <span class="gh-ferias-banner-icon">🏖</span>
-        <span>Férias detectadas automaticamente: <strong>${nomes}</strong></span>
-      </div>`;
-    }
+    const storeOptions = STORES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
     c.innerHTML = `
-      <div class="gh-wiz-box">
+      <div class="gh-wiz-box gh-wiz-box--wide">
         <div class="gh-wiz-label">Passo 2 de 3</div>
-        <div class="gh-wiz-title">Há ausências esta semana?</div>
-        <div class="gh-wiz-sub">Baixas ou N/A. As férias são importadas automaticamente.</div>
-        ${bannerHTML}
-        <div class="gh-ab-list" id="gh-ab-list"></div>
-        <button class="gh-add-btn" id="gh-add-ab">+ Adicionar ausência</button>
+        <div class="gh-wiz-title">Pessoal Activo</div>
+        <div class="gh-wiz-sub">Gere o pessoal de Porto Santo. As férias são detectadas automaticamente.</div>
+
+        ${feriasAuto.length ? `<div class="gh-ferias-banner">
+          <span class="gh-ferias-banner-icon">🏖</span>
+          <span>Férias esta semana: <strong>${feriasAuto.map(f => { const p = PEOPLE.find(x => x.id === f.pid); return p ? p.name.split(' ')[0] : f.pid; }).join(', ')}</strong></span>
+        </div>` : ''}
+
+        <div class="gh-staff-list" id="gh-staff-list"></div>
+
+        <button class="gh-add-btn" id="gh-add-person">+ Adicionar pessoa</button>
+
+        <div id="gh-person-form" style="display:none" class="gh-person-form">
+          <div class="gh-pf-title" id="gh-pf-title">Nova pessoa</div>
+          <div class="gh-pf-grid">
+            <div class="gh-pf-field">
+              <label>Nome completo</label>
+              <input type="text" id="gh-pf-name" class="gh-field-sm" placeholder="Nome Apelido">
+            </div>
+            <div class="gh-pf-field">
+              <label>Horas contrato</label>
+              <input type="number" id="gh-pf-hrs" class="gh-field-sm" value="40" min="1" max="40">
+            </div>
+            <div class="gh-pf-field">
+              <label>Data de entrada</label>
+              <input type="date" id="gh-pf-start" class="gh-field-sm">
+            </div>
+            <div class="gh-pf-field">
+              <label>Data de saída (opcional)</label>
+              <input type="date" id="gh-pf-end" class="gh-field-sm">
+            </div>
+            <div class="gh-pf-field">
+              <label>Tienda fixa</label>
+              <select id="gh-pf-store" class="gh-field-sm">
+                <option value="">— Sem tienda fixa —</option>
+                ${storeOptions}
+              </select>
+            </div>
+            <div class="gh-pf-field">
+              <label>Condição</label>
+              <select id="gh-pf-efetiva" class="gh-field-sm">
+                <option value="false">Nova</option>
+                <option value="true">Efectiva</option>
+              </select>
+            </div>
+            <div class="gh-pf-field">
+              <label>Pode ficar sozinha</label>
+              <select id="gh-pf-canalone" class="gh-field-sm">
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+              </select>
+            </div>
+            <div class="gh-pf-field">
+              <label>Móvel (pode ser deslocada)</label>
+              <select id="gh-pf-mobile" class="gh-field-sm">
+                <option value="false">Não</option>
+                <option value="true">Sim</option>
+              </select>
+            </div>
+          </div>
+          <div class="gh-pf-field" style="margin-top:10px">
+            <label>Tiendas onde pode trabalhar</label>
+            <div class="gh-pf-stores" id="gh-pf-knows">
+              ${STORES.map(s => `<label class="gh-pf-check"><input type="checkbox" value="${s.id}"> ${s.name}</label>`).join('')}
+            </div>
+          </div>
+          <div class="gh-pf-actions">
+            <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pf-cancel">Cancelar</button>
+            <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-pf-save">Guardar</button>
+          </div>
+        </div>
+
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-1">← Voltar</button>
           <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
         </div>
       </div>`;
 
-    // Renderizar linhas de férias automáticas (só-leitura)
-    const list = document.getElementById('gh-ab-list');
-    feriasAuto.forEach(f => {
-      const p = PEOPLE.find(x => x.id === f.pid);
-      if (!p) return;
-      const row = document.createElement('div');
-      row.className = 'gh-ab-row-ferias';
-      row.dataset.pid = f.pid;
-      row.innerHTML = `
-        <span>${p.name}</span>
-        <span class="gh-ferias-tag">🏖 FÉRIAS</span>
-        <span class="gh-ferias-from">desde ${DAY_PT[f.from] || f.from}</span>
-      `;
-      list.appendChild(row);
-    });
+    renderStaffList(feriasAutoPids);
+    bindPersonForm(storeOptions);
 
-    // Renderizar ausências manuais editáveis
-    manualAbsences.forEach(a => addAb(a));
-    document.getElementById('gh-add-ab').addEventListener('click', () => addAb({}));
     document.getElementById('gh-back-1').addEventListener('click', () => { wStep = 0; renderWiz(); });
     document.getElementById('gh-sub-abs').addEventListener('click', sub_abs);
   }
 
-  function addAb(ex) {
-    ex = ex || {};
-    const list = document.getElementById('gh-ab-list'); if (!list) return;
-    const row = document.createElement('div'); row.className = 'gh-ab-row';
-    const pO = PEOPLE.map(p => `<option value="${p.id}" ${ex.pid===p.id?'selected':''}>${p.name}</option>`).join('');
-    // FÉRIAS removidas daqui — são importadas automaticamente de ferias.js
-    const tO = [['baixa','BAIXA'],['na','N/A']].map(([v,l]) => `<option value="${v}" ${ex.type===v?'selected':''}>${l}</option>`).join('');
-    const dO = DAYS.map(d => `<option value="${d}" ${ex.from===d?'selected':''}>${DAY_PT[d]}</option>`).join('');
-    row.innerHTML = `<select class="gh-ab-sel">${pO}</select><select class="gh-ab-sel">${tO}</select><select class="gh-ab-sel">${dO}</select><button class="gh-ab-x">×</button>`;
-    row.querySelector('.gh-ab-x').addEventListener('click', () => row.remove());
-    list.appendChild(row);
+  function renderStaffList(feriasAutoPids) {
+    const list = document.getElementById('gh-staff-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    PEOPLE.forEach(p => {
+      const onFerias = feriasAutoPids.has(p.id);
+      const weeksIn  = weeksSince(p.start, S.weekStart || new Date());
+      const weightLabel = p.efetiva ? 'Efectiva (peso 2)' : weeksIn >= 3 ? `Nova +3 sem (peso 1.5)` : `Nova <3 sem (peso 1)`;
+      const endLabel = p.end ? ` · Saída: ${p.end}` : '';
+
+      const row = document.createElement('div');
+      row.className = `gh-staff-row${onFerias ? ' gh-staff-ferias' : ''}`;
+      row.dataset.pid = p.id;
+      row.innerHTML = `
+        <div class="gh-staff-info">
+          <span class="gh-staff-name">${p.name}</span>
+          <span class="gh-staff-meta">${p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem tienda fixa'} · ${p.hrs}h · Entrada: ${p.start}${endLabel}</span>
+          <span class="gh-staff-weight">${weightLabel}${onFerias ? ' · 🏖 FÉRIAS' : ''}</span>
+          <span class="gh-staff-knows">Conhece: ${(p.knows||[]).map(sid => STORES.find(s=>s.id===sid)?.name||sid).join(', ')}</span>
+        </div>
+        <div class="gh-staff-actions">
+          <button class="gh-btn gh-btn-ghost gh-btn-xs gh-edit-person" data-pid="${p.id}">Editar</button>
+        </div>`;
+      list.appendChild(row);
+    });
+
+    list.querySelectorAll('.gh-edit-person').forEach(btn => {
+      btn.addEventListener('click', () => openEditPerson(btn.dataset.pid));
+    });
+  }
+
+  let _editingPid = null;
+
+  function bindPersonForm(storeOptions) {
+    document.getElementById('gh-add-person').addEventListener('click', () => {
+      _editingPid = null;
+      document.getElementById('gh-pf-title').textContent = 'Nova pessoa';
+      document.getElementById('gh-pf-name').value = '';
+      document.getElementById('gh-pf-hrs').value = '40';
+      document.getElementById('gh-pf-start').value = '';
+      document.getElementById('gh-pf-end').value = '';
+      document.getElementById('gh-pf-store').value = '';
+      document.getElementById('gh-pf-efetiva').value = 'false';
+      document.getElementById('gh-pf-canalone').value = 'true';
+      document.getElementById('gh-pf-mobile').value = 'false';
+      document.querySelectorAll('#gh-pf-knows input').forEach(cb => { cb.checked = false; });
+      document.getElementById('gh-person-form').style.display = 'block';
+    });
+
+    document.getElementById('gh-pf-cancel').addEventListener('click', () => {
+      document.getElementById('gh-person-form').style.display = 'none';
+      _editingPid = null;
+    });
+
+    document.getElementById('gh-pf-save').addEventListener('click', savePersonForm);
+  }
+
+  function openEditPerson(pid) {
+    const p = PEOPLE.find(x => x.id === pid); if (!p) return;
+    _editingPid = pid;
+    document.getElementById('gh-pf-title').textContent = 'Editar — ' + p.name;
+    document.getElementById('gh-pf-name').value = p.name;
+    document.getElementById('gh-pf-hrs').value = p.hrs || 40;
+    document.getElementById('gh-pf-start').value = p.start || '';
+    document.getElementById('gh-pf-end').value = p.end || '';
+    document.getElementById('gh-pf-store').value = p.store || '';
+    document.getElementById('gh-pf-efetiva').value = p.efetiva ? 'true' : 'false';
+    document.getElementById('gh-pf-canalone').value = p.canAlone !== false ? 'true' : 'false';
+    document.getElementById('gh-pf-mobile').value = p.mobile ? 'true' : 'false';
+    document.querySelectorAll('#gh-pf-knows input').forEach(cb => {
+      cb.checked = (p.knows || []).includes(cb.value);
+    });
+    document.getElementById('gh-person-form').style.display = 'block';
+  }
+
+  async function savePersonForm() {
+    const name     = document.getElementById('gh-pf-name').value.trim();
+    const hrs      = parseInt(document.getElementById('gh-pf-hrs').value) || 40;
+    const start    = document.getElementById('gh-pf-start').value;
+    const end      = document.getElementById('gh-pf-end').value || null;
+    const store    = document.getElementById('gh-pf-store').value || null;
+    const efetiva  = document.getElementById('gh-pf-efetiva').value === 'true';
+    const canAlone = document.getElementById('gh-pf-canalone').value !== 'false';
+    const mobile   = document.getElementById('gh-pf-mobile').value === 'true';
+    const knows    = [...document.querySelectorAll('#gh-pf-knows input:checked')].map(cb => cb.value);
+
+    if (!name || !start) { alert('Nome e data de entrada são obrigatórios.'); return; }
+
+    const data = {
+      name, hrs, store_id: store, efetiva, start_date: start, end_date: end,
+      can_alone: canAlone, mobile, cover_pri: efetiva ? 1 : 9,
+      knows, hard_avoid: [], soft_avoid: [], active: true
+    };
+
+    let saved;
+    if (_editingPid) {
+      saved = await supabaseUpdate('gh_people', _editingPid, data);
+    } else {
+      // Generate a simple slug id from name
+      data.id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').substring(0, 20) + '_' + Date.now().toString(36);
+      saved = await supabaseInsert('gh_people', data);
+    }
+
+    if (saved) {
+      // Reload people from Supabase and re-render
+      await loadKnowledgeBase();
+      document.getElementById('gh-person-form').style.display = 'none';
+      _editingPid = null;
+      const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
+        ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
+      renderStaffList(new Set(feriasAuto.map(f => f.pid)));
+    } else {
+      alert('Erro ao guardar. Verifique a ligação ao Supabase.');
+    }
   }
 
   function sub_abs() {
-    // Coletar ausências manuais (linhas editáveis)
-    const manual = [];
-    document.querySelectorAll('.gh-ab-row').forEach(r => {
-      const s = r.querySelectorAll('select');
-      manual.push({ pid: s[0].value, type: s[1].value, from: s[2].value });
+    // Apenas férias automáticas — sem ausências manuais
+    let feriasAuto = [];
+    if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
+      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => f.pid);
+    }
+
+    const DAY_REVERSE = { 'desde Segunda':'SEG','desde Terça':'TER','desde Quarta':'QUA','desde Quinta':'QUI','desde Sexta':'SEX','desde Sábado':'SAB','desde Domingo':'DOM' };
+
+    S.absences = feriasAuto.map(f => {
+      const fromEl = document.querySelector(`.gh-ab-row-ferias[data-pid="${f.pid}"] .gh-ferias-from`);
+      const fromText = fromEl?.textContent?.trim() || 'desde Segunda';
+      return { pid: f.pid, type: 'ferias', from: DAY_REVERSE[fromText] || 'SEG' };
     });
 
-    // Coletar férias automáticas (linhas só-leitura)
-    const feriasAutoPids = new Set();
-    const feriasAuto = [];
-    document.querySelectorAll('.gh-ab-row-ferias').forEach(r => {
-      const pid  = r.dataset.pid;
-      const from = r.querySelector('.gh-ferias-from')?.textContent?.trim() || 'SEG';
-      // Converter "desde Segunda" → "SEG"
-      const DAY_REVERSE = { 'desde Segunda':'SEG','desde Terça':'TER','desde Quarta':'QUA','desde Quinta':'QUI','desde Sexta':'SEX','desde Sábado':'SAB','desde Domingo':'DOM' };
-      const fromDay = DAY_REVERSE[from] || 'SEG';
-      feriasAutoPids.add(pid);
-      feriasAuto.push({ pid, type: 'ferias', from: fromDay });
-    });
-
-    // Excluir duplicados: se alguém foi adicionado manualmente como "ferias"
-    // e já está em feriasAuto, prevalece o automático
-    const manualFiltered = manual.filter(a => !feriasAutoPids.has(a.pid));
-
-    S.absences = [...feriasAuto, ...manualFiltered];
     wStep = 2; renderWiz();
   }
 
@@ -1337,6 +1528,29 @@
         #tab-gerador .gh-ab-row-ferias { display:flex; align-items:center; gap:8px; padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8; border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a; font-weight:600; }
         #tab-gerador .gh-ab-row-ferias .gh-ferias-tag { background:#e0f5e0; color:#1a5c1a; border-radius:4px; font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em; flex-shrink:0; }
         #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
+
+        /* ── STAFF MANAGEMENT PANEL ── */
+        #tab-gerador .gh-wiz-box--wide { max-width:680px; }
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; max-height:340px; overflow-y:auto; }
+        #tab-gerador .gh-staff-row { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e8e8e8; border-radius:7px; background:#fafafa; }
+        #tab-gerador .gh-staff-row.gh-staff-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-staff-info { display:flex; flex-direction:column; gap:2px; }
+        #tab-gerador .gh-staff-name { font-size:.85rem; font-weight:700; color:#111; }
+        #tab-gerador .gh-staff-meta { font-size:.72rem; color:#777; }
+        #tab-gerador .gh-staff-weight { font-size:.70rem; color:#555; font-weight:600; }
+        #tab-gerador .gh-staff-knows { font-size:.68rem; color:#999; }
+        #tab-gerador .gh-staff-actions { flex-shrink:0; margin-left:10px; }
+        #tab-gerador .gh-btn-xs { font-size:.68rem; padding:3px 8px; }
+
+        /* ── PERSON FORM ── */
+        #tab-gerador .gh-person-form { border:1px solid #e0e0e0; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; }
+        #tab-gerador .gh-pf-title { font-size:.78rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#555; margin-bottom:12px; }
+        #tab-gerador .gh-pf-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        #tab-gerador .gh-pf-field { display:flex; flex-direction:column; gap:4px; }
+        #tab-gerador .gh-pf-field label { font-size:.65rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999; }
+        #tab-gerador .gh-pf-stores { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+        #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
+        #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
       `;
       document.head.appendChild(style);
     }
@@ -1399,7 +1613,13 @@
       modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
     }
 
-    renderWiz();
+    // Load knowledge base from Supabase before rendering
+    loadKnowledgeBase().then(() => {
+      renderWiz();
+    }).catch(err => {
+      console.error('Failed to load knowledge base:', err);
+      renderWiz(); // render anyway with empty data
+    });
   };
 
   // ── TAB LISTENER ──

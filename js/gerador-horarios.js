@@ -1019,18 +1019,17 @@
         // Se não — reatribuir os turnos correctamente
         // Há apenas 2 combinações possíveis: goers→ALT/stayers→DEF ou goers→DEF/stayers→ALT
         // Escolher baseado na hora base da loja (consistência semanal)
-        const storeBase = S._storeBaseShift?.[sid];
-
+        // Hora base da loja: SH_DEFAULT (14h) para stayers por defeito.
+        // goers recebem SEMPRE o oposto — garantia absoluta, sem excepção.
         let goShift, stayShift;
 
         if (stayers.length === 0) {
-          // Esc B: todos juntos → hora base da loja
-          goShift = storeBase ?? SH_DEFAULT;
-          stayShift = goShift;
+          // Esc B: todos juntos → SH_DEFAULT (14h) por defeito
+          stayShift = SH_DEFAULT;
+          goShift   = SH_DEFAULT;
         } else {
-          // Usar hora base da loja para os stayers
-          stayShift = storeBase ?? SH_DEFAULT;
-          goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+          stayShift = SH_DEFAULT;
+          goShift   = SH_ALT;
         }
 
         // Aplicar — forçar a atribuição correcta independentemente do que estava antes

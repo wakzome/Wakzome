@@ -650,14 +650,17 @@
 
 
   // ══ MOTOR DE INTERVALOS ══
-  // Arquitectura limpa com separação clara de responsabilidades:
-  // 1. buildWeights   — pesos fixos por cenário, calculados uma vez
-  // 2. computeGroups  — grupos goers/stayers baseados em regras de negócio
-  // 3. resolveCombo   — testa as 2 combinações e valida matematicamente
-  // 4. enforceEdnaCarla — regra global aplicada no final, fora do loop de lojas
+  // Arquitectura determinista com separação total de responsabilidades.
+  // Orden de execução: buildWeights → computeGroups → resolveCombo → enforceEdnaCarla
 
-  // PASSO 1: Construir pesos fixos para o dia/loja
-  // Os pesos dependem do cenário, não são recalculados dentro de funções internas
+  // PASSO 1: Pesos base de cada pessoa (sem contexto de cenário)
+  function baseWeight(p) {
+    if (p.efetiva) return 2;
+    return weeksSince(p.start, S.weekStart) >= 3 ? 1.5 : 1;
+  }
+
+  // PASSO 2: Construir pesos contextuais fixos por cenário
+  // Calculados uma única vez — nunca recalculados dentro de validações
   function buildWeights(staff, scenario) {
     const weights = {};
     if (scenario === '2_escA') {
@@ -665,21 +668,30 @@
     } else if (scenario === '2_escB') {
       staff.forEach(p => { weights[p.id] = 0.5; });
     } else if (scenario === '3com_antiga') {
+      // Com antiga: novas valem 1, antiga vale 2
       staff.forEach(p => { weights[p.id] = p.efetiva ? 2 : 1; });
     } else if (scenario === '3sem_antiga') {
+      // Sem antiga: mais antiga das novas vale 1.5, restantes valem 1
       const byDate = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
       staff.forEach(p => { weights[p.id] = (p.id === byDate[0].id) ? 1.5 : 1; });
     } else {
-      // default / 4+ pessoas: pesos base
-      staff.forEach(p => {
-        if (p.efetiva) weights[p.id] = 2;
-        else weights[p.id] = weeksSince(p.start, S.weekStart) >= 3 ? 1.5 : 1;
-      });
+      // 4+ pessoas: pesos base
+      staff.forEach(p => { weights[p.id] = baseWeight(p); });
     }
     return weights;
   }
 
-  // PASSO 2: Determinar grupos e cenário
+  // PASSO 3: Calcular soma esperada dinamicamente a partir dos pesos reais
+  // Regra: a soma ideal de cada slot = totalWeight / 2
+  // Excepção 2_escB: todos juntos, sem divisão
+  function calculateExpectedSums(staff, weights, scenario) {
+    const totalWeight = staff.reduce((s,p) => s + (weights[p.id] || 0), 0);
+    if (scenario === '2_escB') return { idealSum: totalWeight, isFlexible: true };
+    if (scenario === '2_escA') return { idealSum: null, isFlexible: true }; // apenas separadas
+    return { idealSum: totalWeight / 2, isFlexible: false };
+  }
+
+  // PASSO 4: Determinar grupos e cenário
   function computeGroups(staff) {
     const n = staff.length;
     if (n === 1) return { goers: [], stayers: staff, scenario: '1' };
@@ -691,13 +703,9 @@
       const newbie  = staff.find(p => !p.efetiva);
       if (veteran && newbie) {
         const weeks = weeksSince(newbie.start, S.weekStart);
-        if (weeks < 3) {
-          return { goers: [...staff], stayers: [], scenario: '2_escB' };
-        } else {
-          return { goers: [newbie], stayers: [veteran], scenario: '2_escA' };
-        }
+        if (weeks < 3) return { goers: [...staff], stayers: [], scenario: '2_escB' };
+        return { goers: [newbie], stayers: [veteran], scenario: '2_escA' };
       }
-      // Duas novas ou duas antigas
       const sorted = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
       return { goers: [sorted[1]], stayers: [sorted[0]], scenario: 'default' };
     }
@@ -708,30 +716,56 @@
         const veteran = byDate.find(p => p.efetiva);
         const newbies = byDate.filter(p => !p.efetiva);
         return { goers: newbies, stayers: [veteran], scenario: '3com_antiga' };
-      } else {
-        // mais antiga fica, as 2 mais novas vão
-        return { goers: [byDate[1], byDate[2]], stayers: [byDate[0]], scenario: '3sem_antiga' };
       }
+      return { goers: [byDate[1], byDate[2]], stayers: [byDate[0]], scenario: '3sem_antiga' };
     }
 
     if (n === 4) {
-      const sorted = [...staff].sort((a,b) => {
-        const wa = a.efetiva ? 2 : (weeksSince(a.start, S.weekStart) >= 3 ? 1.5 : 1);
-        const wb = b.efetiva ? 2 : (weeksSince(b.start, S.weekStart) >= 3 ? 1.5 : 1);
-        return wa - wb || new Date(a.start) - new Date(b.start);
-      });
+      const sorted = [...staff].sort((a,b) => baseWeight(a) - baseWeight(b) || new Date(a.start) - new Date(b.start));
+      // sorted[0]=mais nova(1), sorted[1]=intermedia(1.5), sorted[2]=intermedia(1.5), sorted[3]=antiga(2)
       return { goers: [sorted[1], sorted[2]], stayers: [sorted[0], sorted[3]], scenario: 'default' };
     }
 
-    // 5+
     const sorted = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
     const half = Math.floor(n / 2);
     return { goers: sorted.slice(n - half), stayers: sorted.slice(0, n - half), scenario: 'default' };
   }
 
-  // PASSO 3: Solver determinista — testa as 2 combinações, valida TUDO,
-  // nunca aceita estados inválidos, respeita consistência semanal.
-  function resolveCombo({ staff, goers, stayers, scenario, storeId, weights, expectedGoSum }) {
+  // PASSO 5: Recalcular a tienda de Carla com restrição forçada
+  // Usada por enforceEdnaCarla para mudar a combinação completa da tienda
+  function recalculateStoreCombo(staff, scenario, weights, idealSum, isFlexible, forcedShiftForCarla) {
+    const combos = [
+      { goShift: SH_ALT,     stayShift: SH_DEFAULT },
+      { goShift: SH_DEFAULT, stayShift: SH_ALT     },
+    ];
+
+    const { goers, stayers } = computeGroups(staff);
+
+    for (const combo of combos) {
+      // Verificar restrição forçada para Carla
+      const carlaInGoers  = goers.some(p => p.id === 'carla');
+      const carlaShift    = carlaInGoers ? combo.goShift : combo.stayShift;
+      if (carlaShift !== forcedShiftForCarla) continue;
+
+      // Validação matemática dinâmica
+      if (!isFlexible && idealSum !== null) {
+        const goSum = goers.reduce((s,p) => s + (weights[p.id]||0), 0);
+        if (Math.abs(goSum - idealSum) > 0.01) continue;
+      }
+
+      // Regra nova sozinha (3+ pessoas)
+      if (staff.length > 2 && goers.length === 1 && !goers[0].efetiva) continue;
+
+      // Nunca todos no mesmo slot (excepto 2_escB)
+      if (scenario !== '2_escB' && (goers.length === 0 || goers.length === staff.length)) continue;
+
+      return { combo, goers, stayers, valid: true };
+    }
+    return { valid: false };
+  }
+
+  // PASSO 6: Solver determinista — valida matematicamente antes de aceitar
+  function resolveCombo({ staff, goers, stayers, scenario, storeId, weights, idealSum, isFlexible }) {
     const combos = [
       { goShift: SH_ALT,     stayShift: SH_DEFAULT },
       { goShift: SH_DEFAULT, stayShift: SH_ALT     },
@@ -740,25 +774,24 @@
     const base = S._storeBaseShift[storeId];
 
     function isValidCombo(combo) {
-      // 1. Nova sozinha no intervalo — proibido APENAS com 3+ pessoas
-      // Com 2 pessoas (Esc A), cada uma vai sozinha ao seu slot — é correcto
-      if (goers.length === 1 && !goers[0].efetiva && staff.length > 2) return false;
-
-      // 2. Validação matemática da soma dos goers
-      if (expectedGoSum !== null) {
-        const sum = goers.reduce((s,p) => s + (weights[p.id] || 0), 0);
-        if (Math.abs(sum - expectedGoSum) > 0.01) return false;
+      // 1. Validação matemática dinâmica (soma = totalWeight / 2)
+      if (!isFlexible && idealSum !== null) {
+        const goSum = goers.reduce((s,p) => s + (weights[p.id]||0), 0);
+        if (Math.abs(goSum - idealSum) > 0.01) return false;
       }
 
-      // 3. Cenário 2_escB: todos devem ir juntos
+      // 2. Cenário 2_escB: todos juntos obrigatoriamente
       if (scenario === '2_escB') {
         if (goers.length !== staff.length) return false;
       }
 
-      // 4. Nunca todos no mesmo slot (excepto 2_escB onde é obrigatório)
+      // 3. Nunca todos no mesmo slot (excepto 2_escB)
       if (scenario !== '2_escB') {
         if (goers.length === 0 || goers.length === staff.length) return false;
       }
+
+      // 4. Nova sozinha no intervalo — proibido com 3+ pessoas
+      if (staff.length > 2 && goers.length === 1 && !goers[0].efetiva) return false;
 
       return true;
     }
@@ -766,7 +799,7 @@
     const validCombos = combos.filter(isValidCombo);
     if (validCombos.length === 0) return null;
 
-    // Respeitar consistência semanal
+    // Respeitar consistência semanal (storeBase)
     if (base !== undefined) {
       const match = validCombos.find(c => stayers.length === 0 || c.stayShift === base);
       if (match) return match;
@@ -775,7 +808,8 @@
     return validCombos[0];
   }
 
-  // PASSO 4: Regra global Edna & Carla — executada APÓS todas as lojas
+  // PASSO 7: Regra global Edna & Carla
+  // Não faz swap individual — recalcula a tienda de Carla com combinação alternativa
   function enforceEdnaCarla(day, workers) {
     const edSch = S.schedule['edna']?.[day];
     const caSch = S.schedule['carla']?.[day];
@@ -787,73 +821,68 @@
     const caVal = caSch.shift === SH_ALT ? 1 : 0;
     if (edVal + caVal === 1) return; // OK
 
-    // Inválido — trocar Carla com colega da sua loja que tenha turno oposto
-    const caWanted  = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-    const caPartner = workers.find(p =>
-      p.id !== 'carla' &&
-      S.schedule[p.id][day].store === caSch.store &&
-      S.schedule[p.id][day].shift === caWanted
-    );
-    if (caPartner) {
-      S.schedule['carla'][day].shift      = caWanted;
-      S.schedule[caPartner.id][day].shift = caSch.shift;
-      S.decisions.push({ type: 'info', text: `${day}: Carla↔${caPartner.name.split(' ')[0]} (Edna+Carla soma ${edVal+caVal}→1).` });
-      return;
+    // Carla deve ter o turno oposto ao de Edna
+    const requiredCarlaShift = edSch.shift === SH_ALT ? SH_DEFAULT : SH_ALT;
+
+    // Recalcular a tienda de Carla com a restrição forçada
+    const caStaff = workers.filter(p => S.schedule[p.id][day].store === caSch.store);
+    const { goers: caGoers, stayers: caStayers, scenario: caScenario } = computeGroups(caStaff);
+    const caWeights = buildWeights(caStaff, caScenario);
+    const { idealSum: caIdeal, isFlexible: caFlex } = calculateExpectedSums(caStaff, caWeights, caScenario);
+
+    const result = recalculateStoreCombo(caStaff, caScenario, caWeights, caIdeal, caFlex, requiredCarlaShift);
+
+    if (result.valid) {
+      // Aplicar nova combinação completa à tienda de Carla
+      result.goers.forEach(p => { S.schedule[p.id][day].shift = result.combo.goShift; });
+      result.stayers.forEach(p => { S.schedule[p.id][day].shift = result.combo.stayShift; });
+      // Actualizar storeBase da tienda de Carla se a nova combinação for óptima
+      if (!caFlex) S._storeBaseShift[caSch.store] = result.combo.stayShift;
+      S.decisions.push({ type: 'info', text: `${day}: tienda ${sname(caSch.store)} recalculada (regra Edna/Carla).` });
+    } else {
+      // Fallback: tentar recalcular tienda de Edna
+      const edStaff = workers.filter(p => S.schedule[p.id][day].store === edSch.store);
+      const requiredEdnaShift = caSch.shift === SH_ALT ? SH_DEFAULT : SH_ALT;
+      const { goers: edGoers, stayers: edStayers, scenario: edScenario } = computeGroups(edStaff);
+      const edWeights = buildWeights(edStaff, edScenario);
+      const { idealSum: edIdeal, isFlexible: edFlex } = calculateExpectedSums(edStaff, edWeights, edScenario);
+      const edResult = recalculateStoreCombo(edStaff, edScenario, edWeights, edIdeal, edFlex, requiredEdnaShift);
+      if (edResult.valid) {
+        edResult.goers.forEach(p => { S.schedule[p.id][day].shift = edResult.combo.goShift; });
+        edResult.stayers.forEach(p => { S.schedule[p.id][day].shift = edResult.combo.stayShift; });
+        if (!edFlex) S._storeBaseShift[edSch.store] = edResult.combo.stayShift;
+        S.decisions.push({ type: 'info', text: `${day}: tienda ${sname(edSch.store)} recalculada (regra Edna/Carla).` });
+      } else {
+        S.alerts.push({ type: 'amber', text: `${day}: Edna e Carla — sem solução matemática válida para separar intervalos.` });
+      }
     }
-    // Tentar em Edna
-    const edWanted  = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
-    const edPartner = workers.find(p =>
-      p.id !== 'edna' &&
-      S.schedule[p.id][day].store === edSch.store &&
-      S.schedule[p.id][day].shift === edWanted
-    );
-    if (edPartner) {
-      S.schedule['edna'][day].shift       = edWanted;
-      S.schedule[edPartner.id][day].shift = edSch.shift;
-      S.decisions.push({ type: 'info', text: `${day}: Edna↔${edPartner.name.split(' ')[0]} (Edna+Carla soma ${edVal+caVal}→1).` });
-      return;
-    }
-    // Sozinhas — forçar Carla
-    S.schedule['carla'][day].shift = caWanted;
-    S.decisions.push({ type: 'info', text: `${day}: Carla forçada (Edna+Carla — sem parceira).` });
   }
 
-  // Orquestrador: chamado por intelPass para cada dia
+  // ORQUESTRADOR: chamado por intelPass para cada dia
   function assignIntervalShiftsForDay(day, workers) {
     if (!S._storeBaseShift) S._storeBaseShift = {};
 
-    // Para cada loja: construir pesos → grupos → combo → aplicar
     STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
       const staff = workers.filter(p => S.schedule[p.id][day].store === st.id);
       if (staff.length === 0) return;
-      if (staff.length === 1) {
-        S.schedule[staff[0].id][day].shift = SH_DEFAULT;
-        return;
-      }
+      if (staff.length === 1) { S.schedule[staff[0].id][day].shift = SH_DEFAULT; return; }
 
       const { goers, stayers, scenario } = computeGroups(staff);
-      const weights = buildWeights(staff, scenario);
+      const weights  = buildWeights(staff, scenario);
+      const { idealSum, isFlexible } = calculateExpectedSums(staff, weights, scenario);
 
-      // Soma esperada dos goers por cenário (null = sem validação de soma)
-      const expectedGoSum = {
-        '2_escA': 1, '2_escB': 1,
-        '3com_antiga': 2, '3sem_antiga': 2,
-      }[scenario] ?? null;
-
-      // Pesos calculados uma única vez — nunca recalculados dentro de validações
-      const combo = resolveCombo({ staff, goers, stayers, scenario, storeId: st.id, weights, expectedGoSum });
+      const combo = resolveCombo({ staff, goers, stayers, scenario, storeId: st.id, weights, idealSum, isFlexible });
 
       if (!combo) {
         S.alerts.push({ type: 'red', text: `${day} ${sname(st.id)}: sem combinação válida de intervalos.` });
         return;
       }
 
-      // Guardar hora base da loja DEPOIS de validar (nunca antes)
-      if (S._storeBaseShift[st.id] === undefined && stayers.length > 0) {
+      // Guardar storeBase DEPOIS de validar e APENAS se a combinação é óptima
+      if (S._storeBaseShift[st.id] === undefined && stayers.length > 0 && !isFlexible) {
         S._storeBaseShift[st.id] = combo.stayShift;
       }
 
-      // Aplicar turnos
       if (scenario === '2_escB') {
         staff.forEach(p => { S.schedule[p.id][day].shift = combo.goShift; });
       } else {

@@ -233,8 +233,8 @@
         <div class="gh-wiz-label">Passo 2 de 3</div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div class="gh-wiz-title" style="margin-bottom:0">Pessoal Activo</div>
-          <div style="background:#111;color:#fff;border-radius:20px;padding:4px 14px;font-size:.78rem;font-weight:700;letter-spacing:.04em;white-space:nowrap">
-            ${PEOPLE.length} activa${PEOPLE.length !== 1 ? 's' : ''}
+          <div style="background:#111;color:#fff;border-radius:20px;padding:5px 16px;font-size:.78rem;font-weight:700;letter-spacing:.04em;white-space:nowrap;-webkit-text-fill-color:#fff">
+            ${(PEOPLE.length - feriasAuto.length)} activa${(PEOPLE.length - feriasAuto.length) !== 1 ? 's' : ''} · ${feriasAuto.length} férias
           </div>
         </div>
         <div class="gh-wiz-sub">Gere o pessoal de Porto Santo. As férias são detectadas automaticamente.</div>

@@ -838,6 +838,131 @@
     });
   }
 
+  // ══ MOTOR 2: ENFORCE GROUPING RULES ══
+  // Verifies and enforces the grouping rules per store per day:
+  //   2 people  → one on SH_ALT, one on SH_DEFAULT (already handled by motor 1, but re-verified)
+  //   3 people  → the 2 most junior go together to interval, the most veteran stays alone
+  //   4 people  → the most veteran stays with the most junior, the middle two go to interval
+  // This motor rebuilds the assignment from scratch for any store/day where the rule is violated.
+
+  function enforceGroupingRules(active) {
+    function senScore(p) {
+      return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+    }
+
+    DAYS.forEach(day => {
+      S.openStores.forEach(sid => {
+        if (!storeOpen(sid, day)) return;
+
+        const staff = active.filter(p => {
+          const cell = S.schedule[p.id]?.[day];
+          return cell?.type === 'work' && cell.store === sid;
+        });
+
+        if (staff.length < 2) return;
+
+        // Sort junior→veteran
+        const sorted = [...staff].sort((a, b) => senScore(a) - senScore(b));
+        const n = sorted.length;
+
+        let goers = [], stayers = [];
+
+        if (n === 2) {
+          goers   = [sorted[0]];
+          stayers = [sorted[1]];
+        } else if (n === 3) {
+          // 2 most junior go together, most veteran stays alone
+          goers   = [sorted[0], sorted[1]];
+          stayers = [sorted[2]];
+        } else if (n === 4) {
+          // most veteran stays with most junior, middle two go
+          goers   = [sorted[1], sorted[2]];
+          stayers = [sorted[0], sorted[3]];
+        } else {
+          const half = Math.floor(n / 2);
+          goers   = sorted.slice(0, half);
+          stayers = sorted.slice(half);
+        }
+
+        // Determine correct shifts: stayers keep their current shift if consistent,
+        // otherwise default to SH_DEFAULT for stayers and SH_ALT for goers.
+        // But critically: goers must NOT have the same shift as stayers.
+        const stayShift = S.schedule[stayers[0].id][day].shift || SH_DEFAULT;
+        const goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+
+        // Check if current assignment matches the rule
+        const goersCorrect   = goers.every(p => S.schedule[p.id][day].shift === goShift);
+        const stayersCorrect = stayers.every(p => S.schedule[p.id][day].shift === stayShift);
+
+        if (goersCorrect && stayersCorrect) return; // all good
+
+        // Fix violations
+        goers.forEach(p => {
+          if (S.schedule[p.id][day].shift !== goShift) {
+            S.schedule[p.id][day].shift = goShift;
+            S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Agrupamento] ${p.name.split(' ')[0]} → intervalo corrigido.` });
+          }
+        });
+        stayers.forEach(p => {
+          if (S.schedule[p.id][day].shift !== stayShift) {
+            S.schedule[p.id][day].shift = stayShift;
+            S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Agrupamento] ${p.name.split(' ')[0]} → loja corrigido.` });
+          }
+        });
+      });
+    });
+  }
+
+  // ══ MOTOR 3: ENFORCE NO NEW WORKER ALONE ══
+  // A new (non-veteran) worker must NEVER be alone in their shift slot.
+  // "Alone" means they are the only person in the store during their interval slot.
+  // If a new worker is alone, swap their shift with the most junior veteran in the same store
+  // so the new worker goes together with someone else.
+
+  function enforceNoNewAlone(active) {
+    function senScore(p) {
+      return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+    }
+    function isNew(p) { return !p.efetiva; }
+
+    DAYS.forEach(day => {
+      S.openStores.forEach(sid => {
+        if (!storeOpen(sid, day)) return;
+
+        const staff = active.filter(p => {
+          const cell = S.schedule[p.id]?.[day];
+          return cell?.type === 'work' && cell.store === sid;
+        });
+
+        if (staff.length < 2) return;
+
+        // Check each new worker
+        staff.filter(p => isNew(p)).forEach(newWorker => {
+          const myShift = S.schedule[newWorker.id][day].shift;
+          const sameShift = staff.filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === myShift);
+
+          if (sameShift.length > 0) return; // has company, all good
+
+          // VIOLATION: new worker is alone in their slot
+          // Find someone to swap with — prefer the most junior veteran in the opposite slot
+          const otherShift = myShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+          const candidates = staff
+            .filter(p => p.id !== newWorker.id && S.schedule[p.id][day].shift === otherShift)
+            .sort((a, b) => senScore(a) - senScore(b)); // most junior first
+
+          if (candidates.length === 0) return; // no one to swap with
+
+          const partner = candidates[0];
+          // Swap: new worker and partner exchange shifts so new worker has company
+          S.schedule[newWorker.id][day].shift = otherShift;
+          S.schedule[partner.id][day].shift   = myShift;
+
+          S.decisions.push({ type: 'warn', text: `${day} ${sname(sid)}: [Motor Novatas] ${newWorker.name.split(' ')[0]} e ${partner.name.split(' ')[0]} trocaram — nova trabalhadora não pode ficar sozinha no intervalo.` });
+        });
+      });
+    });
+  }
+
   function generate() {
     S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {};
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -871,6 +996,8 @@
     fixSunday(active);
     intelPass(active);
     enforceIntervalCoverage(active);
+    enforceGroupingRules(active);
+    enforceNoNewAlone(active);
     saveMem();
 
     // ── Minimum coverage gate ──

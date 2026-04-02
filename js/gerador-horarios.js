@@ -229,34 +229,46 @@
     const storeOptions = STORES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
     c.innerHTML = `
-      <div class="gh-wiz-box gh-wiz-box--wide">
-        <div class="gh-wiz-label">Passo 2 de 3</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div class="gh-wiz-title" style="margin-bottom:0">Pessoal Activo</div>
-          <div style="background:#111;color:#fff;border-radius:20px;padding:5px 16px;font-size:.78rem;font-weight:700;letter-spacing:.04em;white-space:nowrap;-webkit-text-fill-color:#fff">
-            ${(PEOPLE.length - feriasAuto.length)} activa${(PEOPLE.length - feriasAuto.length) !== 1 ? 's' : ''} · ${feriasAuto.length} férias
+      <div class="gh-step2-wrap">
+
+        <!-- HEADER: título + contador + nav + adicionar -->
+        <div class="gh-step2-header">
+          <div class="gh-step2-header-top">
+            <div>
+              <div class="gh-wiz-label">Passo 2 de 3</div>
+              <div class="gh-step2-title-row">
+                <div class="gh-wiz-title" style="margin-bottom:0">Pessoal Activo</div>
+                <div class="gh-step2-badge">
+                  ${(PEOPLE.length - feriasAuto.length)} activa${(PEOPLE.length - feriasAuto.length) !== 1 ? 's' : ''} · ${feriasAuto.length} férias
+                </div>
+              </div>
+              <div class="gh-wiz-sub">Gere o pessoal de Porto Santo.</div>
+            </div>
           </div>
+
+          <!-- NAV + ADICIONAR -->
+          <div class="gh-step2-actions">
+            <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-1">← Voltar</button>
+            <button class="gh-add-btn" id="gh-add-person" style="margin:0">+ Adicionar pessoa</button>
+            <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
+          </div>
+
+          <!-- FÉRIAS BANNER -->
+          ${feriasAuto.length ? `<div class="gh-ferias-banner" style="margin-top:10px">
+            <span class="gh-ferias-banner-icon">🏖</span>
+            <span>Férias esta semana: <strong>${feriasAuto.map(f => {
+              const nomeLower = (f.nome || '').toLowerCase();
+              const p = PEOPLE.find(x =>
+                x.id === f.pid ||
+                x.name === f.nome ||
+                nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+              );
+              return p ? p.name.split(' ')[0] : (f.nome || f.pid || '?');
+            }).join(', ')}</strong></span>
+          </div>` : ''}
         </div>
-        <div class="gh-wiz-sub">Gere o pessoal de Porto Santo. As férias são detectadas automaticamente.</div>
 
-        ${feriasAuto.length ? `<div class="gh-ferias-banner">
-          <span class="gh-ferias-banner-icon">🏖</span>
-          <span>Férias esta semana: <strong>${feriasAuto.map(f => {
-            // Match by pid, exact name, or partial name (ferias uses short names)
-            const nomeLower = (f.nome || '').toLowerCase();
-            const p = PEOPLE.find(x =>
-              x.id === f.pid ||
-              x.name === f.nome ||
-              nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
-            );
-            return p ? p.name.split(' ')[0] : (f.nome || f.pid || '?');
-          }).join(', ')}</strong></span>
-        </div>` : '<div class="gh-wiz-sub" style="color:#aaa;font-size:.75rem">Nenhuma férias detectada para esta semana.</div>'}
-
-        <div class="gh-staff-list" id="gh-staff-list"></div>
-
-        <button class="gh-add-btn" id="gh-add-person">+ Adicionar pessoa</button>
-
+        <!-- FORM ADICIONAR/EDITAR -->
         <div id="gh-person-form" style="display:none" class="gh-person-form">
           <div class="gh-pf-title" id="gh-pf-title">Nova pessoa</div>
           <div class="gh-pf-grid">
@@ -317,10 +329,9 @@
           </div>
         </div>
 
-        <div class="gh-wiz-nav">
-          <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-1">← Voltar</button>
-          <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
-        </div>
+        <!-- LISTA DE PESSOAL — scroll natural de página, sem contenedor interno -->
+        <div class="gh-staff-list" id="gh-staff-list"></div>
+
       </div>`;
 
     renderStaffList(feriasAutoPids, feriasAuto);
@@ -1597,8 +1608,15 @@
         #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
 
         /* ── STAFF MANAGEMENT PANEL ── */
+        /* ── STEP 2 LAYOUT ── */
+        #tab-gerador .gh-step2-wrap { width:100%; max-width:680px; margin:0 auto; padding:16px; box-sizing:border-box; }
+        #tab-gerador .gh-step2-header { margin-bottom:14px; }
+        #tab-gerador .gh-step2-header-top { margin-bottom:10px; }
+        #tab-gerador .gh-step2-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+        #tab-gerador .gh-step2-badge { background:#111; color:#fff; border-radius:20px; padding:4px 14px; font-size:.75rem; font-weight:700; letter-spacing:.04em; white-space:nowrap; flex-shrink:0; }
+        #tab-gerador .gh-step2-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
         #tab-gerador .gh-wiz-box--wide { max-width:680px; }
-        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; max-height:340px; overflow-y:auto; }
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
         #tab-gerador .gh-staff-row { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e8e8e8; border-radius:7px; background:#fafafa; }
         #tab-gerador .gh-staff-row.gh-staff-ferias { background:#f0fdf0; border-color:#b7ddb7; }
         #tab-gerador .gh-staff-info { display:flex; flex-direction:column; gap:2px; }

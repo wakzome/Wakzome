@@ -742,41 +742,88 @@
   //   A hora base da loja é determinada no primeiro dia com 2+ pessoas.
   //   Dias seguintes respeitam essa hora base.
 
-  // Peso de cada pessoa neste dia
-  function intervalWeight(p) {
+  // Peso contextual de cada pessoa para o cálculo de intervalos.
+  // No cenário de 3 pessoas:
+  //   - Se há uma antiga na loja, todas as novas valem 1 (para que slot intervalo = 1+1 = 2)
+  //   - Se não há antiga, a nova mais antiga vale 1.5 e as restantes valem 1
+  // No cenário de 2 pessoas:
+  //   - Antiga + nova +3 semanas → cada uma vale 1 (separadas, slot = 1)
+  //   - Antiga + nova -3 semanas → cada uma vale 0.5 (juntas, slot = 0.5+0.5 = 1)
+  // No cenário de 4 pessoas: pesos base (2 / 1.5 / 1)
+
+  function intervalWeight(p, staff, scenario) {
+    if (scenario === '3com_antiga') {
+      // Com antiga presente: novas todas valem 1, antiga vale 2
+      return p.efetiva ? 2 : 1;
+    }
+    if (scenario === '3sem_antiga') {
+      // Sem antiga: a mais antiga das novas vale 1.5, restantes valem 1
+      // staff está ordenado por antiguidade desc, index 0 = mais antiga das novas
+      return p.id === staff[0].id ? 1.5 : 1;
+    }
+    if (scenario === '2_escA') return 1;   // antiga + nova +3sem → cada uma vale 1
+    if (scenario === '2_escB') return 0.5; // antiga + nova -3sem → cada uma vale 0.5
+    // Default / 4 pessoas: pesos base
     if (p.efetiva) return 2;
     const weeks = weeksSince(p.start, S.weekStart);
     return weeks >= 3 ? 1.5 : 1;
   }
 
-  // Determina goers e stayers para uma loja com n pessoas, baseado nos pesos
-  function computeGroups(sorted) {
-    const n = sorted.length;
-    if (n === 1) return { goers: [], stayers: sorted };
+  // Determina goers e stayers para uma loja com n pessoas
+  function computeGroups(staff) {
+    const n = staff.length;
+    if (n === 1) return { goers: [], stayers: staff };
+
+    const hasVeteran = staff.some(p => p.efetiva);
 
     if (n === 2) {
-      const w0 = intervalWeight(sorted[0]); // mais nova
-      const w1 = intervalWeight(sorted[1]); // mais antiga
-      // Cenário B: antiga + nova -3 semanas → cada uma vale 0.5 → vão juntas
-      if (w1 === 2 && w0 === 1) return { goers: sorted, stayers: [] }; // juntas
-      // Cenário A: separadas
-      return { goers: [sorted[0]], stayers: [sorted[1]] };
+      const veteran = staff.find(p => p.efetiva);
+      const newbie  = staff.find(p => !p.efetiva);
+      if (veteran && newbie) {
+        const weeks = weeksSince(newbie.start, S.weekStart);
+        if (weeks < 3) {
+          // Cenário B: juntas (soma = 0.5+0.5 = 1)
+          return { goers: staff, stayers: [], scenario: '2_escB' };
+        } else {
+          // Cenário A: separadas (soma = 1, cada uma)
+          return { goers: [newbie], stayers: [veteran], scenario: '2_escA' };
+        }
+      }
+      // Duas novas ou duas antigas — a mais nova vai, a mais antiga fica
+      const sorted2 = [...staff].sort((a, b) => new Date(a.start) - new Date(b.start));
+      return { goers: [sorted2[1]], stayers: [sorted2[0]], scenario: 'default' };
     }
 
     if (n === 3) {
-      // As 2 mais novas vão juntas (soma=2 ou 3.5 total), a mais antiga fica
-      return { goers: [sorted[0], sorted[1]], stayers: [sorted[2]] };
+      // Ordenar por data de início: index 0 = mais antiga, last = mais nova
+      const sorted3 = [...staff].sort((a, b) => new Date(a.start) - new Date(b.start));
+      if (hasVeteran) {
+        // Com antiga: novas valem 1. As 2 mais novas vão juntas (1+1=2), antiga fica (2)
+        const veteran = sorted3.find(p => p.efetiva);
+        const newbies = sorted3.filter(p => !p.efetiva);
+        return { goers: newbies, stayers: [veteran], scenario: '3com_antiga' };
+      } else {
+        // Sem antiga: mais antiga das novas fica (1.5), as 2 mais novas vão (1+1=2)
+        return { goers: [sorted3[1], sorted3[2]], stayers: [sorted3[0]], scenario: '3sem_antiga' };
+      }
     }
 
     if (n === 4) {
-      // Slot intervalo: intermedias (sorted[1]+sorted[2])
-      // Slot loja: antiga (sorted[3]) + mais nova (sorted[0])
-      return { goers: [sorted[1], sorted[2]], stayers: [sorted[0], sorted[3]] };
+      // Ordenar por peso base: index 0 = mais nova (peso 1), last = mais antiga (peso 2)
+      const sorted4 = [...staff].sort((a, b) => {
+        const wa = a.efetiva ? 2 : (weeksSince(a.start, S.weekStart) >= 3 ? 1.5 : 1);
+        const wb = b.efetiva ? 2 : (weeksSince(b.start, S.weekStart) >= 3 ? 1.5 : 1);
+        return wa - wb || new Date(a.start) - new Date(b.start);
+      });
+      // Slot intervalo: intermedias sorted4[1]+sorted4[2] = 1.5+1.5 = 3
+      // Slot loja: antiga sorted4[3] + mais nova sorted4[0] = 2+1 = 3
+      return { goers: [sorted4[1], sorted4[2]], stayers: [sorted4[0], sorted4[3]], scenario: 'default' };
     }
 
-    // 5+: metade vai, metade fica
+    // 5+: metade vai, metade fica ordenado por antiguidade
+    const sorted5 = [...staff].sort((a, b) => new Date(a.start) - new Date(b.start));
     const half = Math.floor(n / 2);
-    return { goers: sorted.slice(0, half), stayers: sorted.slice(half) };
+    return { goers: sorted5.slice(n - half), stayers: sorted5.slice(0, n - half), scenario: 'default' };
   }
 
   // Hora base da loja para a semana (SH_ALT=13h ou SH_DEFAULT=14h para os que ficam)
@@ -797,9 +844,7 @@
       const staff = workers.filter(p => S.schedule[p.id][day].store === st.id);
       if (staff.length === 0) return;
 
-      // Ordenar por peso: index 0 = mais nova, last = mais antiga
-      const sorted = [...staff].sort((a, b) => intervalWeight(a) - intervalWeight(b) || new Date(b.start) - new Date(a.start));
-      const { goers, stayers } = computeGroups(sorted);
+      const { goers, stayers } = computeGroups(staff);
 
       // Determinar hora base da loja
       const stayShift = getStoreBaseShift(st.id, day, stayers);

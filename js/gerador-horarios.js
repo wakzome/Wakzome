@@ -20,6 +20,25 @@
     { id: 'iara',    name: 'Iara Oliveira.',       hrs: 40, store: 'avenida', efetiva: false, start: '2025-04-01', canAlone: false, mobile: false, coverPri: 9, knows: ['avenida','mercado'],                hardAvoid: [],         softAvoid: [] },
   ];
 
+  // ── SENIORITY WEIGHTS for lunch interval grouping ──
+  // Weight 1 = new staff (entered 2025); Weight 2 = veteran/effective staff
+  // Rule: workers sharing a lunch slot must sum to exactly 2 (one new + one veteran,
+  //       OR two new — but never two veterans together in the same slot).
+  // Special rule for Edna+Carla: each counts as weight 1 relative to each other —
+  //       their sum cannot equal 2 (they must never share the same lunch slot).
+  const LUNCH_WEIGHT = {
+    edna:    2,
+    carla:   2,
+    marilia: 2,
+    sandra:  2,
+    sara:    1,
+    matilde: 1,
+    djanice: 1,
+    iara:    1,
+  };
+  // Edna & Carla are treated as weight-1 relative to each other for the pair-exclusion rule
+  const EDNA_CARLA_PAIR_WEIGHT = 1; // each counts as 1; sum=2 → forbidden
+
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
   const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
   const SH_DEFAULT = '10:00-14:00|15:00-19:00';
@@ -516,38 +535,173 @@
       }
 
       // ── Assign shifts AFTER all relocations are final ──
-      // Lunch staggering only applies to workers who are autonomous:
-      //   canAlone === true  AND  weeksSince(start, weekStart) >= 3
-      // Non-autonomous workers always receive SH_DEFAULT (same as everyone else if only 1 person).
-      // Among the autonomous subset: least-senior first → SH_ALT, most-senior last → SH_DEFAULT.
-      // This guarantees store coverage during every lunch slot while respecting the rule
-      // that a worker cannot be left alone unless they have ≥3 weeks seniority.
+      //
+      // LUNCH INTERVAL GROUPING RULES (applied per store):
+      //
+      //  Workers have a seniority weight:
+      //    Weight 2 = veteran/effective: Edna, Carla, Marilia, Sandra
+      //    Weight 1 = new staff:         Sara, Matilde, Djanice, Iara
+      //
+      //  A worker is "autonomous" if canAlone === true AND seniority >= 3 weeks.
+      //  Non-autonomous workers always receive SH_DEFAULT (no staggering).
+      //
+      //  Grouping rules for the autonomous subset in a store:
+      //
+      //   1 person  → gets SH_DEFAULT, no stagger needed.
+      //
+      //   2 people  → standard stagger: one gets SH_ALT, one gets SH_DEFAULT.
+      //               (No pair validation needed for 2 — one always stays, one always goes.)
+      //
+      //   3 people  → PREFERRED: the most veteran (highest weight, longest tenure)
+      //               stays alone in the store (SH_DEFAULT). The other two go to
+      //               interval together (SH_ALT). Their pair must sum to 2 (new+new).
+      //               If the two going out are both veterans (sum=4), try permutations.
+      //
+      //   4 people  → Two go to interval (SH_ALT), two stay (SH_DEFAULT).
+      //               The most veteran stays paired with the most new (veteran covers new).
+      //               The pair going out (SH_ALT) must sum to 2 (new+new preferred).
+      //               Fallback: try all permutations to find a valid grouping.
+      //
+      //   5+ people → split into two groups of 2 (or 2+3 if odd), each group going at
+      //               different times. Validated by the pair-sum rule.
+      //
+      //  SPECIAL RULE — Edna & Carla:
+      //    Each counts as weight 1 relative to the other.
+      //    Their pair sum = 1+1 = 2 → FORBIDDEN. They must never share the same slot.
+      //
+      //  "Does not count" means the system keeps trying permutations until the rule is met.
+
       STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
         const staff = wk().filter(p => S.schedule[p.id][day].store === st.id);
         const isAutonomous = p => p.canAlone && weeksSince(p.start, S.weekStart) >= 3;
-        const autonomous = staff.filter(isAutonomous)
-          .sort((a, b) => {
-            const as = (a.efetiva ? 1000 : 0) + weeksSince(a.start, S.weekStart);
-            const bs = (b.efetiva ? 1000 : 0) + weeksSince(b.start, S.weekStart);
-            return as - bs;
-          });
-        // Non-autonomous workers always get SH_DEFAULT
+
+        // Non-autonomous workers always get SH_DEFAULT, excluded from grouping logic
         staff.filter(p => !isAutonomous(p)).forEach(p => {
           S.schedule[p.id][day].shift = SH_DEFAULT;
         });
+
+        const autonomous = staff.filter(isAutonomous);
+
+        // 0 or 1 autonomous worker: no stagger needed
         if (autonomous.length < 2) {
-          // 0 or 1 autonomous worker: no staggering possible, all get SH_DEFAULT
           autonomous.forEach(p => { S.schedule[p.id][day].shift = SH_DEFAULT; });
           return;
         }
-        // 2+ autonomous workers: stagger lunches. All but the last get SH_ALT, last gets SH_DEFAULT.
-        autonomous.forEach((p, i) => {
-          S.schedule[p.id][day].shift = i < autonomous.length - 1 ? SH_ALT : SH_DEFAULT;
-        });
+
+        // ── Helpers ──
+        function lunchWeight(pid) { return LUNCH_WEIGHT[pid] ?? 1; }
+
+        // Seniority score: efetiva bonus + weeks worked (higher = more veteran)
+        function seniorityScore(p) {
+          return (p.efetiva ? 1000 : 0) + weeksSince(p.start, S.weekStart);
+        }
+
+        // A pair going to interval together must sum to exactly 2 (new+new = 1+1).
+        // Two veterans (2+2=4) going together is INVALID — a veteran must stay alone.
+        // Edna+Carla are both treated as weight 1 relative to each other → sum=2 → FORBIDDEN.
+        function intervalPairIsValid(a, b) {
+          const isEdnaCarla = (a.id === 'edna' && b.id === 'carla') ||
+                              (a.id === 'carla' && b.id === 'edna');
+          if (isEdnaCarla) return false; // Edna+Carla forbidden even though sum=2
+          const sum = lunchWeight(a.id) + lunchWeight(b.id);
+          return sum === 2; // only new+new is valid for interval pair
+        }
+
+        // Validate a full slot split:
+        //   slotAlt     = workers going to interval (SH_ALT)   — must be pairs, sum=2 each
+        //   slotDefault = workers staying in store  (SH_DEFAULT) — veterans preferred alone
+        function splitIsValid(slotAlt, slotDefault) {
+          // Each slot can have at most 2 people (pairs only)
+          if (slotAlt.length > 2 || slotDefault.length > 2) return false;
+          // The pair going to interval must sum to 2
+          if (slotAlt.length === 2 && !intervalPairIsValid(slotAlt[0], slotAlt[1])) return false;
+          // The pair staying in store has no sum restriction — veteran+new is fine
+          // (they're working, not taking interval together)
+          return true;
+        }
+
+        // Generate all permutations of an array (used for fallback search)
+        function permutations(arr) {
+          if (arr.length <= 1) return [arr];
+          const result = [];
+          arr.forEach((el, i) => {
+            const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+            permutations(rest).forEach(sub => result.push([el, ...sub]));
+          });
+          return result;
+        }
+
+        // Sort by seniority: most veteran last (stays), least senior first (goes to interval)
+        const byJuniorFirst = [...autonomous].sort((a, b) => seniorityScore(a) - seniorityScore(b));
+
+        // Build the preferred split based on count:
+        //   3 people: most veteran stays alone → the 2 newest go to interval
+        //   4 people: most veteran stays with most new → middle two go to interval
+        //   2 people: junior goes to interval, senior stays
+        //   5+:       first half to interval, second half stays (two-by-two)
+        function buildPreferredSplit(ordered) {
+          const n = ordered.length;
+          if (n === 2) {
+            return { slotAlt: [ordered[0]], slotDefault: [ordered[1]] };
+          }
+          if (n === 3) {
+            // 2 newest go to interval, most veteran stays alone
+            return { slotAlt: [ordered[0], ordered[1]], slotDefault: [ordered[2]] };
+          }
+          if (n === 4) {
+            // Most veteran (ordered[3]) stays with most new (ordered[0])
+            // The middle two (ordered[1], ordered[2]) go to interval
+            return { slotAlt: [ordered[1], ordered[2]], slotDefault: [ordered[0], ordered[3]] };
+          }
+          // 5+: split in half; first half to interval, second stays
+          const half = Math.floor(n / 2);
+          return { slotAlt: ordered.slice(0, half), slotDefault: ordered.slice(half) };
+        }
+
+        let slotAlt, slotDefault, valid = false;
+
+        // Try preferred split first
+        const preferred = buildPreferredSplit(byJuniorFirst);
+        if (splitIsValid(preferred.slotAlt, preferred.slotDefault)) {
+          slotAlt = preferred.slotAlt;
+          slotDefault = preferred.slotDefault;
+          valid = true;
+        } else {
+          // Fallback: try all permutations (capped at 120 = 5!)
+          const perms = autonomous.length <= 5
+            ? permutations(autonomous)
+            : permutations(autonomous).slice(0, 120);
+          for (const perm of perms) {
+            const candidate = buildPreferredSplit(perm);
+            if (splitIsValid(candidate.slotAlt, candidate.slotDefault)) {
+              slotAlt = candidate.slotAlt;
+              slotDefault = candidate.slotDefault;
+              valid = true;
+              break;
+            }
+          }
+          if (!valid) {
+            // Best-effort: veterans stay, newest go out — even if pair is not ideal
+            slotAlt = byJuniorFirst.slice(0, Math.floor(autonomous.length / 2));
+            slotDefault = byJuniorFirst.slice(Math.floor(autonomous.length / 2));
+            S.decisions.push({ type: 'warn', text: `${day} ${st.name}: não foi possível cumprir regra de pesos no intervalo — melhor esforço aplicado.` });
+          }
+        }
+
+        // Apply the shifts
+        slotAlt.forEach(p => { S.schedule[p.id][day].shift = SH_ALT; });
+        slotDefault.forEach(p => { S.schedule[p.id][day].shift = SH_DEFAULT; });
+
+        // Log the grouping decision
+        const altNames = slotAlt.map(p => p.name.split(' ')[0]).join(' + ') || '—';
+        const defNames = slotDefault.map(p => p.name.split(' ')[0]).join(' + ') || '—';
+        const label = valid ? 'pesos OK' : 'melhor esforço';
+        S.decisions.push({ type: 'info', text: `${day} ${st.name}: intervalo→[${altNames}] / loja→[${defNames}] (${label}).` });
       });
 
-      // ── Soft rule: Edna & Carla should have different lunch breaks when both work ──
-      // Only adjust if it does NOT break the stagger already set within each store.
+      // ── Weight rule: Edna & Carla must never share the same lunch slot ──
+      // Each counts as weight 1 relative to each other; sum=2 → forbidden.
+      // This check runs AFTER the per-store grouping so it can override if needed.
       const edSch = S.schedule['edna']?.[day];
       const caSch = S.schedule['carla']?.[day];
       if (edSch?.type === 'work' && caSch?.type === 'work' && edSch.shift && caSch.shift && edSch.shift === caSch.shift) {
@@ -561,7 +715,7 @@
         const caStaggerSafe = caStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
         if (caStoreAutonomous.length >= 1 && caStaggerSafe) {
           S.schedule['carla'][day].shift = altShift;
-          S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (almoço separado de Edna).` });
+          S.decisions.push({ type: 'info', text: `${day}: Carla turno ajustado (peso Edna+Carla=2 → separar intervalo).` });
         } else {
           // Try flipping Edna — only safe if her store has another autonomous worker on a different shift.
           const edStore = edSch.store;
@@ -569,9 +723,10 @@
           const edStaggerSafe = edStoreAutonomous.some(p => S.schedule[p.id][day].shift !== altShift);
           if (edStoreAutonomous.length >= 1 && edStaggerSafe) {
             S.schedule['edna'][day].shift = altShift;
-            S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (almoço separado de Carla).` });
+            S.decisions.push({ type: 'info', text: `${day}: Edna turno ajustado (peso Edna+Carla=2 → separar intervalo).` });
+          } else {
+            S.alerts.push({ type: 'amber', text: `${day}: Edna e Carla no mesmo intervalo (peso=2) — sem alternativa segura.` });
           }
-          // If neither flip is safe, leave shifts as-is (stagger within stores takes priority).
         }
       }
       const logged = new Set();

@@ -813,7 +813,7 @@
       } else if (scenario === '3sem_antiga') {
         expectedGoSum   = 2; // 2 novas: 1+1
         expectedStaySum = 1.5; // nova mais antiga: 1.5
-      } else if (n === 4 || scenario === 'default') {
+      } else if (scenario === 'default') {
         expectedGoSum   = 3; // 1.5+1.5
         expectedStaySum = 3; // 2+1
       } else {

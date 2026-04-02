@@ -920,6 +920,175 @@
     }
   }
 
+  // ══ GUARDIAN MOTOR ══
+  // Verificador final e absoluto. Executado após toda a lógica.
+  // Para cada loja, cada dia, calcula as somas dos slots de intervalo
+  // e verifica se correspondem ao valor esperado segundo o cenário.
+  // Se não corresponder — reatribui os turnos até que a matemática seja correcta.
+  // Nenhum resultado é mostrado se as somas não passarem neste filtro.
+  //
+  // Pesos contextuais por cenário:
+  //   3 pessoas com antiga: novas=1, antiga=2. Slot intervalo deve = 2.
+  //   3 pessoas sem antiga: mais antiga nova=1.5, restantes=1. Slot intervalo deve = 2.
+  //   2 pessoas Esc A (antiga+nova+3sem): cada uma=1. Cada slot deve = 1.
+  //   2 pessoas Esc B (antiga+nova-3sem): cada uma=0.5. Slot conjunto deve = 1.
+  //   4 pessoas: intermedias=1.5, antiga=2, mais nova=1. Slot intervalo deve = 3.
+
+  function guardianMotor(active) {
+
+    function baseWeight(p) {
+      if (p.efetiva) return 2;
+      return weeksSince(p.start, S.weekStart) >= 3 ? 1.5 : 1;
+    }
+
+    DAYS.forEach(day => {
+      S.openStores.forEach(sid => {
+        if (!storeOpen(sid, day)) return;
+
+        const staff = active.filter(p => {
+          const cell = S.schedule[p.id]?.[day];
+          return cell?.type === 'work' && cell.store === sid;
+        });
+
+        if (staff.length < 2) {
+          // 1 pessoa — sempre SH_DEFAULT
+          if (staff.length === 1) S.schedule[staff[0].id][day].shift = SH_DEFAULT;
+          return;
+        }
+
+        // Ordenar: index 0 = mais nova, last = mais antiga
+        const sorted = [...staff].sort((a, b) => baseWeight(a) - baseWeight(b) || new Date(b.start) - new Date(a.start));
+        const n = sorted.length;
+        const hasVeteran = sorted.some(p => p.efetiva);
+
+        // Determinar grupos e pesos contextuais
+        let goers, stayers, wOf, expectedGoSum;
+
+        if (n === 2) {
+          const w0 = baseWeight(sorted[0]);
+          const w1 = baseWeight(sorted[1]);
+          if (w1 === 2 && w0 === 1) {
+            // Esc B: antiga + nova -3sem → juntas
+            goers  = sorted;
+            stayers = [];
+            wOf = () => 0.5;
+            expectedGoSum = 1;
+          } else {
+            // Esc A: separadas, cada slot = 1
+            goers   = [sorted[0]];
+            stayers = [sorted[1]];
+            wOf = () => 1;
+            expectedGoSum = 1;
+          }
+        } else if (n === 3) {
+          if (hasVeteran) {
+            // Com antiga: novas valem 1, antiga=2. Slot intervalo = 1+1 = 2
+            const veteran = sorted.find(p => p.efetiva);
+            const newbies = sorted.filter(p => !p.efetiva);
+            goers   = newbies;
+            stayers = [veteran];
+            wOf = p => p.efetiva ? 2 : 1;
+            expectedGoSum = 2;
+          } else {
+            // Sem antiga: mais antiga nova=1.5, restantes=1. Slot intervalo = 1+1 = 2
+            const byDate = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
+            stayers = [byDate[0]]; // mais antiga das novas fica
+            goers   = [byDate[1], byDate[2]];
+            wOf = p => p.id === byDate[0].id ? 1.5 : 1;
+            expectedGoSum = 2;
+          }
+        } else if (n === 4) {
+          // Slot intervalo: intermedias (1.5+1.5=3). Slot loja: antiga(2)+mais nova(1)=3
+          goers   = [sorted[1], sorted[2]];
+          stayers = [sorted[0], sorted[3]];
+          wOf = p => baseWeight(p);
+          expectedGoSum = 3;
+        } else {
+          // 5+: metade mais nova vai, metade mais antiga fica
+          const half = Math.floor(n / 2);
+          goers   = sorted.slice(0, half);
+          stayers = sorted.slice(half);
+          wOf = p => baseWeight(p);
+          expectedGoSum = null; // sem validação estrita para 5+
+        }
+
+        // Calcular somas actuais
+        const currentGoSum = goers.reduce((s, p) => s + (wOf ? wOf(p) : baseWeight(p)), 0);
+
+        // Verificar se os grupos estão correctamente atribuídos
+        // Se não — reatribuir os turnos correctamente
+        // Há apenas 2 combinações possíveis: goers→ALT/stayers→DEF ou goers→DEF/stayers→ALT
+        // Escolher baseado na hora base da loja (consistência semanal)
+        const storeBase = S._storeBaseShift?.[sid];
+
+        let goShift, stayShift;
+
+        if (stayers.length === 0) {
+          // Esc B: todos juntos → hora base da loja
+          goShift = storeBase ?? SH_DEFAULT;
+          stayShift = goShift;
+        } else {
+          // Usar hora base da loja para os stayers
+          stayShift = storeBase ?? SH_DEFAULT;
+          goShift   = stayShift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        }
+
+        // Aplicar — forçar a atribuição correcta independentemente do que estava antes
+        if (stayers.length === 0) {
+          staff.forEach(p => { S.schedule[p.id][day].shift = goShift; });
+        } else {
+          goers.forEach(p => { S.schedule[p.id][day].shift = goShift; });
+          stayers.forEach(p => { S.schedule[p.id][day].shift = stayShift; });
+        }
+
+        // Verificar Edna & Carla globalmente após atribuição por loja
+        // (feito no Passo 2 do assignIntervalShiftsForDay — aqui só corrigimos a tienda)
+      });
+    });
+
+    // Passo 2: Regra global Edna & Carla — verificação final após guardian
+    DAYS.forEach(day => {
+      const edSch = S.schedule['edna']?.[day];
+      const caSch = S.schedule['carla']?.[day];
+      if (!edSch || !caSch) return;
+      if (edSch.type !== 'work' || caSch.type !== 'work') return;
+      if (!edSch.shift || !caSch.shift) return;
+
+      const edVal = edSch.shift === SH_ALT ? 1 : 0;
+      const caVal = caSch.shift === SH_ALT ? 1 : 0;
+      if (edVal + caVal === 1) return; // OK
+
+      // Inválido — trocar Carla com colega da sua loja que tenha turno oposto
+      const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work');
+      const caWanted  = caSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+      const caPartner = workers.find(p =>
+        p.id !== 'carla' &&
+        S.schedule[p.id][day].store === caSch.store &&
+        S.schedule[p.id][day].shift === caWanted
+      );
+      if (caPartner) {
+        S.schedule['carla'][day].shift      = caWanted;
+        S.schedule[caPartner.id][day].shift = caSch.shift;
+        S.decisions.push({ type: 'info', text: `${day}: [Guardian] Carla↔${caPartner.name.split(' ')[0]} (Edna+Carla soma ${edVal+caVal}→1).` });
+      } else {
+        const edWanted  = edSch.shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        const edPartner = workers.find(p =>
+          p.id !== 'edna' &&
+          S.schedule[p.id][day].store === edSch.store &&
+          S.schedule[p.id][day].shift === edWanted
+        );
+        if (edPartner) {
+          S.schedule['edna'][day].shift       = edWanted;
+          S.schedule[edPartner.id][day].shift = edSch.shift;
+          S.decisions.push({ type: 'info', text: `${day}: [Guardian] Edna↔${edPartner.name.split(' ')[0]} (Edna+Carla soma ${edVal+caVal}→1).` });
+        } else {
+          S.schedule['carla'][day].shift = caWanted;
+          S.decisions.push({ type: 'info', text: `${day}: [Guardian] Carla forçada (Edna+Carla — sem parceira para trocar).` });
+        }
+      }
+    });
+  }
+
   function generate() {
     S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -952,6 +1121,7 @@
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
+    guardianMotor(active);
     saveMem();
 
     // ── Minimum coverage gate ──

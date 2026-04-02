@@ -342,6 +342,13 @@
     document.getElementById('gh-sub-abs').addEventListener('click', sub_abs);
   }
 
+
+  // Primeiro nome + último apelido
+  function shortName(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    return parts[0] + ' ' + parts[parts.length - 1];
+  }
   function renderStaffList(feriasAutoPids, feriasAuto = []) {
     const list = document.getElementById('gh-staff-list');
     if (!list) return;
@@ -359,115 +366,120 @@
       if (matched) feriasMatchedPids.add(matched.id);
     });
 
+    const DIAS_PT = {SEG:'S',TER:'T',QUA:'Q',QUI:'Q',SEX:'S',SAB:'S'};
+    const DIAS_FULL = {SEG:'Segunda',TER:'Terça',QUA:'Quarta',QUI:'Quinta',SEX:'Sexta',SAB:'Sábado'};
+    const DIAS = ['SEG','TER','QUA','QUI','SEX','SAB'];
+
     PEOPLE.forEach(p => {
       const onFerias = feriasMatchedPids.has(p.id) || feriasAutoPids.has(p.id);
       const condLabel = p.efetiva ? 'Efectiva' : 'Nova';
-      const startLabel = p.start ? ` · Entrada: ${p.start}` : '';
-      const endLabel   = p.end   ? ` · Último dia: ${p.end}` : '';
-      const storeName  = p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem tienda fixa';
-
-      // Load saved incidence data for this person
-      const inc = S._incidencias?.[p.id] || {};
-      const hasFolga  = inc.folga?.active;
-      const hasBanco  = inc.banco?.saldo !== undefined && inc.banco.saldo !== 0;
-      const hasBaixa  = inc.baixa?.active;
-      const hasLic    = inc.licencia?.active;
+      const storeName = p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem loja fixa';
+      const folga   = S._folgas?.[p.id]   || {};
+      const baixa   = S._baixas?.[p.id]   || {};
+      const licenca = S._licencas?.[p.id] || {};
+      const saldo   = S._banco?.[p.id]    || 0;
 
       const row = document.createElement('div');
       row.className = `gh-staff-row${onFerias ? ' gh-staff-ferias' : ''}`;
       row.dataset.pid = p.id;
+
+      // Day buttons for folga
+      const dayBtns = DIAS.map(d => {
+        const active = (folga.dias || []).includes(d);
+        return `<button class="gh-day-btn${active?' gh-day-btn-on':''}" data-pid="${p.id}" data-day="${d}" title="${DIAS_FULL[d]}">${d.charAt(0)}</button>`;
+      }).join('');
+
       row.innerHTML = `
-        <div class="gh-staff-main">
-          <div class="gh-staff-info">
+        <div class="gh-sr-top">
+          <div class="gh-sr-info">
             <div class="gh-staff-name-row">
-              <span class="gh-staff-name">${p.name}</span>
+              <span class="gh-staff-name">${shortName(p.name)}</span>
               ${onFerias ? '<span class="gh-ferias-tag">🏖 FÉRIAS</span>' : ''}
-              ${hasFolga  ? '<span class="gh-inc-dot gh-inc-folga"  title="Folga direccionada">📅</span>' : ''}
-              ${hasBanco  ? '<span class="gh-inc-dot gh-inc-banco"  title="Banco de horas">⏱</span>' : ''}
-              ${hasBaixa  ? '<span class="gh-inc-dot gh-inc-baixa"  title="Baixa activa">🏥</span>' : ''}
-              ${hasLic    ? '<span class="gh-inc-dot gh-inc-lic"    title="Licença activa">📋</span>' : ''}
+              ${baixa.active ? '<span class="gh-inc-tag gh-inc-tag-baixa">🏥 Baixa</span>' : ''}
+              ${licenca.active ? '<span class="gh-inc-tag gh-inc-tag-lic">📋 Licença</span>' : ''}
             </div>
-            <span class="gh-staff-meta">${storeName} · ${p.hrs}h · ${condLabel}${startLabel}${endLabel}</span>
-            <span class="gh-staff-knows">Conhece: ${(p.knows||[]).map(sid => STORES.find(s=>s.id===sid)?.name||sid).join(', ')}</span>
+            <span class="gh-staff-meta">${storeName} · ${p.hrs}h · ${condLabel}</span>
           </div>
-          <div class="gh-staff-actions">
-            <button class="gh-btn gh-btn-ghost gh-btn-xs gh-expand-person" data-pid="${p.id}">▼ Detalhes</button>
+          <div class="gh-sr-btns">
             <button class="gh-btn gh-btn-ghost gh-btn-xs gh-edit-person" data-pid="${p.id}">Editar</button>
+            <button class="gh-btn gh-btn-ghost gh-btn-xs gh-limpar-inc" data-pid="${p.id}" style="color:#b8860b">Limpar</button>
             <button class="gh-btn gh-btn-ghost gh-btn-xs gh-del-person" data-pid="${p.id}" style="color:#c0392b">Eliminar</button>
           </div>
         </div>
 
-        <!-- PANEL EXPANDÍVEL COM 4 COLUNAS -->
-        <div class="gh-inc-panel" id="gh-inc-${p.id}" style="display:none">
+        <!-- 4 COLUNAS SEMPRE VISÍVEIS -->
+        <div class="gh-inc-cols">
 
-          <!-- COLUNA 1: FOLGA DIRECCIONADA -->
+          <!-- FOLGA -->
           <div class="gh-inc-col">
             <div class="gh-inc-col-title">📅 Folga</div>
-            <label class="gh-inc-toggle-label">
-              <input type="checkbox" class="gh-inc-chk" data-pid="${p.id}" data-col="folga_active" ${inc.folga?.active ? 'checked' : ''}>
-              Activar esta semana
-            </label>
-            <select class="gh-field-sm gh-inc-sel" data-pid="${p.id}" data-col="folga_day" style="margin-top:6px">
-              ${['SEG','TER','QUA','QUI','SEX','SAB'].map(d => `<option value="${d}" ${inc.folga?.day===d?'selected':''}>${{SEG:'Segunda',TER:'Terça',QUA:'Quarta',QUI:'Quinta',SEX:'Sexta',SAB:'Sábado'}[d]}</option>`).join('')}
-            </select>
+            <div class="gh-day-btns">${dayBtns}</div>
+
           </div>
 
-          <!-- COLUNA 2: BANCO DE HORAS -->
-          <div class="gh-inc-col">
-            <div class="gh-inc-col-title">⏱ Banco Horas</div>
-            <div class="gh-inc-saldo ${(inc.banco?.saldo||0) > 0 ? 'gh-inc-saldo-neg' : 'gh-inc-saldo-pos'}">
-              Saldo: ${inc.banco?.saldo > 0 ? '+' : ''}${inc.banco?.saldo || 0}h
-            </div>
-            <label class="gh-inc-toggle-label" style="margin-top:6px">
-              <input type="checkbox" class="gh-inc-chk" data-pid="${p.id}" data-col="banco_usar" ${inc.banco?.usar ? 'checked' : ''}>
-              Usar esta semana
-            </label>
-            <div style="display:flex;gap:4px;margin-top:6px;align-items:center">
-              <input type="number" class="gh-field-sm gh-inc-num" data-pid="${p.id}" data-col="banco_add" placeholder="±h" style="width:60px" step="0.5">
-              <button class="gh-btn gh-btn-ghost gh-btn-xs gh-inc-banco-add" data-pid="${p.id}">+ Lançar</button>
-            </div>
-          </div>
-
-          <!-- COLUNA 3: BAIXA -->
+          <!-- BAIXA -->
           <div class="gh-inc-col">
             <div class="gh-inc-col-title">🏥 Baixa</div>
             <label class="gh-inc-toggle-label">
-              <input type="checkbox" class="gh-inc-chk" data-pid="${p.id}" data-col="baixa_active" ${inc.baixa?.active ? 'checked' : ''}>
+              <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active ? 'checked' : ''}>
               Baixa activa
             </label>
             <div style="margin-top:6px">
-              <label class="gh-inc-label">Desde</label>
-              <input type="date" class="gh-field-sm gh-inc-date" data-pid="${p.id}" data-col="baixa_from" value="${inc.baixa?.from||''}">
+              <label class="gh-inc-label">Início</label>
+              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio||''}">
             </div>
             <div style="margin-top:4px">
-              <label class="gh-inc-label">Até</label>
-              <input type="date" class="gh-field-sm gh-inc-date" data-pid="${p.id}" data-col="baixa_to" value="${inc.baixa?.to||''}">
+              <label class="gh-inc-label">Fim (opcional)</label>
+              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim||''}">
+            </div>
+            <div style="margin-top:4px">
+              <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="baixa_obs" value="${baixa.observacao||''}" placeholder="Observação">
             </div>
           </div>
 
-          <!-- COLUNA 4: LICENÇA -->
+          <!-- LICENÇA -->
           <div class="gh-inc-col">
             <div class="gh-inc-col-title">📋 Licença</div>
             <label class="gh-inc-toggle-label">
-              <input type="checkbox" class="gh-inc-chk" data-pid="${p.id}" data-col="lic_active" ${inc.licencia?.active ? 'checked' : ''}>
+              <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active ? 'checked' : ''}>
               Licença activa
             </label>
             <div style="margin-top:6px">
+              <label class="gh-inc-label">Início</label>
+              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio||''}">
+            </div>
+            <div style="margin-top:4px">
+              <label class="gh-inc-label">Fim (opcional)</label>
+              <input type="date" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim||''}">
+            </div>
+            <div style="margin-top:4px">
               <label class="gh-inc-label">Tipo</label>
-              <select class="gh-field-sm gh-inc-sel" data-pid="${p.id}" data-col="lic_tipo">
-                <option value="recuperavel" ${inc.licencia?.tipo==='recuperavel'?'selected':''}>Recuperável</option>
-                <option value="nao_recuperavel" ${inc.licencia?.tipo==='nao_recuperavel'?'selected':''}>Não recuperável</option>
+              <select class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_tipo">
+                <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Recuperável → Banco horas</option>
+                <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>Não recuperável → Desconto</option>
               </select>
             </div>
             <div style="margin-top:4px">
               <label class="gh-inc-label">Horas</label>
-              <input type="number" class="gh-field-sm gh-inc-num" data-pid="${p.id}" data-col="lic_horas" value="${inc.licencia?.horas||''}" placeholder="h" step="0.5">
+              <input type="number" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="0" step="0.5">
             </div>
-            <div style="margin-top:4px">
-              <label class="gh-inc-label">Observação</label>
-              <input type="text" class="gh-field-sm" data-pid="${p.id}" data-col="lic_obs" value="${inc.licencia?.obs||''}" placeholder="Desconto, etc.">
+            <div style="margin-top:4px" id="gh-lic-obs-${p.id}" ${licenca.tipo!=='nao_recuperavel'?'style="display:none"':''}>
+              <label class="gh-inc-label">Observação (desconto)</label>
+              <input type="text" class="gh-field-sm gh-inc-inp" data-pid="${p.id}" data-col="lic_obs" value="${licenca.observacao||''}" placeholder="Ex: desconto em folha">
             </div>
-            <button class="gh-btn gh-btn-ghost gh-btn-xs gh-inc-lic-save" data-pid="${p.id}" style="margin-top:6px">Guardar</button>
+          </div>
+
+          <!-- BANCO DE HORAS -->
+          <div class="gh-inc-col">
+            <div class="gh-inc-col-title">⏱ Banco de Horas</div>
+            <div class="gh-inc-saldo ${saldo > 0 ? 'gh-inc-saldo-neg' : saldo < 0 ? 'gh-inc-saldo-pos' : ''}" id="gh-saldo-${p.id}">
+              Saldo: ${saldo > 0 ? '+' : ''}${saldo}h
+            </div>
+            <div class="gh-banco-add-row" style="margin-top:8px">
+              <input type="number" class="gh-field-sm gh-banco-h" data-pid="${p.id}" placeholder="±h" step="0.5" style="width:55px">
+              <button class="gh-btn gh-btn-ghost gh-btn-xs gh-banco-lancar" data-pid="${p.id}">Lançar</button>
+              <button class="gh-btn gh-btn-ghost gh-btn-xs gh-banco-zero" data-pid="${p.id}" style="color:#c0392b" title="Zerar saldo">✕</button>
+            </div>
           </div>
 
         </div>`;
@@ -481,109 +493,270 @@
       btn.addEventListener('click', () => deletePersonConfirm(btn.dataset.pid));
     });
 
-    // Expand/collapse panel
-    list.querySelectorAll('.gh-expand-person').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const panel = document.getElementById('gh-inc-' + btn.dataset.pid);
-        if (!panel) return;
-        const open = panel.style.display !== 'none';
-        panel.style.display = open ? 'none' : 'grid';
-        btn.textContent = open ? '▼ Detalhes' : '▲ Fechar';
+    // Folga: botões de dia
+    list.querySelectorAll('.gh-day-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        const day = btn.dataset.day;
+        if (!S._folgas) S._folgas = {};
+        if (!S._folgas[pid]) S._folgas[pid] = { dias: [] };
+        const dias = S._folgas[pid].dias || [];
+        const idx = dias.indexOf(day);
+        if (idx >= 0) dias.splice(idx, 1); else dias.push(day);
+        S._folgas[pid].dias = dias;
+        btn.classList.toggle('gh-day-btn-on', dias.includes(day));
+        await saveFolga(pid, dias);
       });
     });
 
-    // Auto-save incidencia on any change
-    list.querySelectorAll('.gh-inc-chk, .gh-inc-sel, .gh-inc-date').forEach(el => {
-      el.addEventListener('change', () => saveIncidencia(el.dataset.pid));
+    // Baixa: toggle e datas
+    list.querySelectorAll('.gh-inc-usar[data-col="baixa_active"]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const pid = el.dataset.pid;
+        const from = document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value || null;
+        const to   = document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value || null;
+        const obs  = document.querySelector(`[data-col="baixa_obs"][data-pid="${pid}"]`)?.value || '';
+        await saveBaixa(pid, { active: el.checked, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, observacao: obs });
+      });
+    });
+    list.querySelectorAll('.gh-inc-inp[data-col^="baixa"]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const pid = el.dataset.pid;
+        if (!S._baixas?.[pid]) return;
+        const from = document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value || null;
+        const to   = document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value || null;
+        const obs  = document.querySelector(`[data-col="baixa_obs"][data-pid="${pid}"]`)?.value || '';
+        const active = document.querySelector(`[data-col="baixa_active"][data-pid="${pid}"]`)?.checked || false;
+        await saveBaixa(pid, { active, data_inicio: from, data_fim: to || null, observacao: obs });
+      });
     });
 
-    // Banco horas: add entry
-    list.querySelectorAll('.gh-inc-banco-add').forEach(btn => {
-      btn.addEventListener('click', () => {
+    // Licença: toggle, datas e tipo
+    list.querySelectorAll('.gh-inc-usar[data-col="lic_active"], .gh-inc-inp[data-col^="lic"]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const pid = el.dataset.pid;
+        const active  = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`)?.checked || false;
+        const from    = document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value || null;
+        const to      = document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value || null;
+        const tipo    = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
+        const horas   = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
+        const obs     = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
+        // Mostrar/ocultar campo observação
+        if (el.dataset.col === 'lic_tipo') {
+          const obsEl = document.getElementById('gh-lic-obs-' + pid);
+          if (obsEl) obsEl.style.display = tipo === 'nao_recuperavel' ? '' : 'none';
+        }
+        const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas, observacao: obs };
+        await saveLicenca(pid, licData);
+        // Se recuperável e activa → lançar horas no banco automaticamente
+        if (active && tipo === 'recuperavel' && horas > 0) {
+          if (!S._licencas?.[pid]?._addedToBanco) {
+            const novoSaldo = await lancarBanco(pid, horas);
+            if (S._licencas) S._licencas[pid] = { ...(S._licencas[pid]||{}), _addedToBanco: true };
+            const saldoEl = document.getElementById('gh-saldo-' + pid);
+            if (saldoEl && novoSaldo !== undefined) {
+              saldoEl.textContent = `Saldo: ${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
+              saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
+            }
+          }
+        }
+      });
+    });
+
+    // Banco de horas: lançar
+    list.querySelectorAll('.gh-banco-lancar').forEach(btn => {
+      btn.addEventListener('click', async () => {
         const pid = btn.dataset.pid;
-        const input = list.querySelector(`.gh-inc-num[data-pid="${pid}"][data-col="banco_add"]`);
+        const input = list.querySelector(`.gh-banco-h[data-pid="${pid}"]`);
         const h = parseFloat(input?.value || 0);
         if (!h) return;
-        if (!S._incidencias) S._incidencias = {};
-        if (!S._incidencias[pid]) S._incidencias[pid] = {};
-        if (!S._incidencias[pid].banco) S._incidencias[pid].banco = { saldo: 0 };
-        S._incidencias[pid].banco.saldo = (S._incidencias[pid].banco.saldo || 0) + h;
+        const novoSaldo = await lancarBanco(pid, h);
         input.value = '';
-        saveIncidencia(pid);
-        // refresh saldo display
-        const saldoEl = list.querySelector(`.gh-inc-saldo[data-pid-saldo="${pid}"]`);
-        const saldo = S._incidencias[pid].banco.saldo;
-        if (saldoEl) saldoEl.textContent = `Saldo: ${saldo > 0 ? '+' : ''}${saldo}h`;
+        const saldoEl = document.getElementById('gh-saldo-' + pid);
+        if (saldoEl && novoSaldo !== undefined) {
+          saldoEl.textContent = `Saldo: ${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
+          saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
+        }
       });
     });
 
-    // Licença save
-    list.querySelectorAll('.gh-inc-lic-save').forEach(btn => {
-      btn.addEventListener('click', () => saveIncidencia(btn.dataset.pid));
+    // Banco de horas: zerar saldo
+    list.querySelectorAll('.gh-banco-zero').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        const p = PEOPLE.find(x => x.id === pid);
+        if (!confirm(`Zerar banco de horas de ${shortName(p?.name||pid)}?`)) return;
+        if (!S._banco) S._banco = {};
+        S._banco[pid] = 0;
+        const sb = getSupabase();
+        if (sb) {
+          try {
+            await sb.from('gh_banco_horas').upsert(
+              { pessoa_id: pid, saldo: 0, updated_at: new Date().toISOString() },
+              { onConflict: 'pessoa_id' }
+            );
+          } catch(e) { console.error('Erro ao zerar banco:', e); }
+        }
+        const saldoEl = document.getElementById('gh-saldo-' + pid);
+        if (saldoEl) { saldoEl.textContent = 'Saldo: 0h'; saldoEl.className = 'gh-inc-saldo'; }
+        const input = list.querySelector(`.gh-banco-h[data-pid="${pid}"]`);
+        if (input) input.value = '';
+      });
+    });
+
+    // Limpar incidências
+    list.querySelectorAll('.gh-limpar-inc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        const p = PEOPLE.find(x => x.id === pid);
+        if (!confirm(`Limpar todas as incidências de ${shortName(p?.name||pid)}?`)) return;
+        await limparIncidencias(pid);
+        // Reset day buttons
+        list.querySelectorAll(`.gh-day-btn[data-pid="${pid}"]`).forEach(b => b.classList.remove('gh-day-btn-on'));
+        // Reset checkboxes
+        list.querySelectorAll(`.gh-inc-usar[data-pid="${pid}"]`).forEach(b => { b.checked = false; });
+        // Reset inputs
+        list.querySelectorAll(`.gh-inc-inp[data-pid="${pid}"]`).forEach(b => { b.value = ''; });
+        // Reset saldo
+        const saldoEl = document.getElementById('gh-saldo-' + pid);
+        if (saldoEl) { saldoEl.textContent = 'Saldo: 0h'; saldoEl.className = 'gh-inc-saldo'; }
+      });
     });
   }
 
-  // Save incidencia data for a person to Supabase and local state
-  async function saveIncidencia(pid) {
-    if (!S._incidencias) S._incidencias = {};
-    if (!S._incidencias[pid]) S._incidencias[pid] = {};
-    const inc = S._incidencias[pid];
-    const panel = document.getElementById('gh-inc-' + pid);
-    if (!panel) return;
+  // ══ INCIDÊNCIAS — 4 tabelas separadas ══
+  // gh_baixas: pessoa_id, data_inicio, data_fim, observacao, active
+  // gh_licencas: pessoa_id, data_inicio, data_fim, tipo, horas, observacao, active
+  // gh_folgas: pessoa_id, semana, dias[]  (por semana)
+  // gh_banco_horas: pessoa_id, saldo  (acumulado, um registo por pessoa)
 
-    // Collect all values from panel
-    const get = (col) => panel.querySelector(`[data-col="${col}"]`);
-    inc.folga = {
-      active: get('folga_active')?.checked || false,
-      day:    get('folga_day')?.value || 'SEG'
-    };
-    inc.banco = {
-      ...( inc.banco || {} ),
-      usar: get('banco_usar')?.checked || false,
-    };
-    inc.baixa = {
-      active: get('baixa_active')?.checked || false,
-      from:   get('baixa_from')?.value || null,
-      to:     get('baixa_to')?.value || null
-    };
-    inc.licencia = {
-      active: get('lic_active')?.checked || false,
-      tipo:   get('lic_tipo')?.value || 'recuperavel',
-      horas:  parseFloat(get('lic_horas')?.value || 0) || 0,
-      obs:    panel.querySelector(`[data-col="lic_obs"]`)?.value || ''
-    };
-
-    // If licença recuperável → add to banco horas
-    if (inc.licencia.active && inc.licencia.tipo === 'recuperavel' && inc.licencia.horas) {
-      if (!inc.banco) inc.banco = { saldo: 0 };
-      // Only add once — track with a flag
-      if (!inc.licencia._addedToBanco) {
-        inc.banco.saldo = (inc.banco.saldo || 0) + inc.licencia.horas;
-        inc.licencia._addedToBanco = true;
-      }
-    }
-
-    // Save to Supabase
-    const sb = getSupabase();
-    if (sb) {
-      await sb.from('gh_incidencias').upsert({
-        pessoa_id: pid,
-        semana: S.weekStart ? S.weekStart.toISOString().split('T')[0] : null,
-        data: inc
-      }, { onConflict: 'pessoa_id,semana' });
-    }
-  }
-
-  // Load incidencias for current week from Supabase
+  // Carrega TUDO para a semana actual
   async function loadIncidencias() {
     if (!S.weekStart) return;
     const sb = getSupabase();
     if (!sb) return;
-    const weekKey = S.weekStart.toISOString().split('T')[0];
-    const { data, error } = await sb.from('gh_incidencias').select('*').eq('semana', weekKey);
-    if (error || !data) return;
-    S._incidencias = {};
-    data.forEach(r => { S._incidencias[r.pessoa_id] = r.data; });
+    const weekKey  = S.weekStart.toISOString().split('T')[0];
+    const weekEnd  = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndKey = weekEnd.toISOString().split('T')[0];
+
+    // Reset state
+    S._baixas   = {};  // pid → {id, data_inicio, data_fim, observacao, active}
+    S._licencas = {};  // pid → {id, data_inicio, data_fim, tipo, horas, observacao, active}
+    S._folgas   = {};  // pid → {id, dias[]}
+    S._banco    = {};  // pid → saldo
+
+    try {
+      // Baixas activas que se sobrepõem à semana
+      const { data: baixas } = await sb.from('gh_baixas')
+        .select('*').eq('active', true)
+        .lte('data_inicio', weekEndKey);
+      (baixas || []).forEach(b => {
+        if (!b.data_fim || b.data_fim >= weekKey) S._baixas[b.pessoa_id] = b;
+      });
+
+      // Licenças activas que se sobrepõem à semana
+      const { data: licencas } = await sb.from('gh_licencas')
+        .select('*').eq('active', true)
+        .lte('data_inicio', weekEndKey);
+      (licencas || []).forEach(l => {
+        if (!l.data_fim || l.data_fim >= weekKey) S._licencas[l.pessoa_id] = l;
+      });
+
+      // Folgas desta semana
+      const { data: folgas } = await sb.from('gh_folgas')
+        .select('*').eq('semana', weekKey);
+      (folgas || []).forEach(f => { S._folgas[f.pessoa_id] = f; });
+
+      // Banco de horas
+      const { data: banco } = await sb.from('gh_banco_horas').select('*');
+      (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
+
+    } catch(e) { console.error('Erro ao carregar incidências:', e); }
+  }
+
+  // Guardar folga da semana
+  async function saveFolga(pid, dias) {
+    const sb = getSupabase(); if (!sb) return;
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    if (!weekKey) return;
+    if (!S._folgas) S._folgas = {};
+    S._folgas[pid] = { ...(S._folgas[pid] || {}), pessoa_id: pid, semana: weekKey, dias };
+    try {
+      await sb.from('gh_folgas').upsert({ pessoa_id: pid, semana: weekKey, dias },
+        { onConflict: 'pessoa_id,semana' });
+    } catch(e) { console.error('Erro ao guardar folga:', e); }
+  }
+
+  // Guardar/actualizar baixa
+  async function saveBaixa(pid, data) {
+    const sb = getSupabase(); if (!sb) return;
+    if (!S._baixas) S._baixas = {};
+    try {
+      if (S._baixas[pid]?.id) {
+        await sb.from('gh_baixas').update(data).eq('id', S._baixas[pid].id);
+        S._baixas[pid] = { ...S._baixas[pid], ...data };
+      } else {
+        const { data: res } = await sb.from('gh_baixas')
+          .insert({ pessoa_id: pid, ...data }).select().single();
+        if (res) S._baixas[pid] = res;
+      }
+    } catch(e) { console.error('Erro ao guardar baixa:', e); }
+  }
+
+  // Guardar/actualizar licença
+  async function saveLicenca(pid, data) {
+    const sb = getSupabase(); if (!sb) return;
+    if (!S._licencas) S._licencas = {};
+    try {
+      if (S._licencas[pid]?.id) {
+        await sb.from('gh_licencas').update(data).eq('id', S._licencas[pid].id);
+        S._licencas[pid] = { ...S._licencas[pid], ...data };
+      } else {
+        const { data: res } = await sb.from('gh_licencas')
+          .insert({ pessoa_id: pid, ...data }).select().single();
+        if (res) S._licencas[pid] = res;
+      }
+    } catch(e) { console.error('Erro ao guardar licença:', e); }
+  }
+
+  // Lançar horas no banco
+  async function lancarBanco(pid, horas) {
+    const sb = getSupabase(); if (!sb) return;
+    if (!S._banco) S._banco = {};
+    const novoSaldo = Math.round(((S._banco[pid] || 0) + horas) * 10) / 10;
+    S._banco[pid] = novoSaldo;
+    try {
+      await sb.from('gh_banco_horas').upsert(
+        { pessoa_id: pid, saldo: novoSaldo, updated_at: new Date().toISOString() },
+        { onConflict: 'pessoa_id' }
+      );
+    } catch(e) { console.error('Erro ao lançar banco de horas:', e); }
+    return novoSaldo;
+  }
+
+  // Limpar incidências da semana para uma pessoa (folga + baixa + licença)
+  async function limparIncidencias(pid) {
+    const sb = getSupabase(); if (!sb) return;
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    try {
+      // Folga desta semana
+      if (S._folgas?.[pid]?.id) {
+        await sb.from('gh_folgas').delete().eq('id', S._folgas[pid].id);
+        delete S._folgas[pid];
+      } else if (weekKey) {
+        await sb.from('gh_folgas').delete().eq('pessoa_id', pid).eq('semana', weekKey);
+      }
+      // Baixa activa
+      if (S._baixas?.[pid]?.id) {
+        await sb.from('gh_baixas').update({ active: false }).eq('id', S._baixas[pid].id);
+        delete S._baixas[pid];
+      }
+      // Licença activa
+      if (S._licencas?.[pid]?.id) {
+        await sb.from('gh_licencas').update({ active: false }).eq('id', S._licencas[pid].id);
+        delete S._licencas[pid];
+      }
+    } catch(e) { console.error('Erro ao limpar incidências:', e); }
   }
 
   async function deletePersonConfirm(pid) {
@@ -703,19 +876,49 @@
   }
 
   function sub_abs() {
-    // Apenas férias automáticas — sem ausências manuais
+    // Férias automáticas de Porto Santo
     let feriasAuto = [];
     if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
       feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => (f.loja||'').toLowerCase().includes('porto santo'));
     }
 
-    const DAY_REVERSE = { 'desde Segunda':'SEG','desde Terça':'TER','desde Quarta':'QUA','desde Quinta':'QUI','desde Sexta':'SEX','desde Sábado':'SAB','desde Domingo':'DOM' };
-
+    // Build absences from férias
     S.absences = feriasAuto.map(f => {
-      const fromEl = document.querySelector(`.gh-ab-row-ferias[data-pid="${f.pid}"] .gh-ferias-from`);
-      const fromText = fromEl?.textContent?.trim() || 'desde Segunda';
-      return { pid: f.pid, type: 'ferias', from: DAY_REVERSE[fromText] || 'SEG' };
-    });
+      // Match person by pid or name
+      const nomeLower = (f.nome || '').toLowerCase();
+      const p = PEOPLE.find(x =>
+        x.id === f.pid ||
+        x.name === f.nome ||
+        nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+      );
+      return { pid: p ? p.id : f.pid, type: 'ferias', from: f.from || 'SEG' };
+    }).filter(a => a.pid);
+
+    // Adicionar baixas activas à lista de ausências
+    if (S._baixas) {
+      Object.entries(S._baixas).forEach(([pid, b]) => {
+        if (!b.active) return;
+        if (S.absences.find(a => a.pid === pid)) return;
+        S.absences.push({ pid, type: 'baixa', from: 'SEG' });
+      });
+    }
+
+    // Adicionar licenças não recuperáveis como ausência
+    if (S._licencas) {
+      Object.entries(S._licencas).forEach(([pid, l]) => {
+        if (!l.active || l.tipo !== 'nao_recuperavel') return;
+        if (S.absences.find(a => a.pid === pid)) return;
+        S.absences.push({ pid, type: 'na', from: 'SEG' });
+      });
+    }
+
+    // Folgas direccionadas — o algoritmo usa estes dias como folga fixa
+    S._folgaDirigida = {};
+    if (S._folgas) {
+      Object.entries(S._folgas).forEach(([pid, f]) => {
+        if (f.dias?.length) S._folgaDirigida[pid] = f.dias;
+      });
+    }
 
     wStep = 2; renderWiz();
   }
@@ -1543,7 +1746,7 @@
         const hOk = Math.abs(aH - (p.hrs||40)) < 0.5;
         return `<tr>
           <td><div class="gh-p-cell">
-            <div class="gh-p-name"><span class="gh-p-dot">●</span>${p.name}</div>
+            <div class="gh-p-name"><span class="gh-p-dot">●</span>${shortName(p.name)}</div>
             <div class="gh-p-hrs ${hOk?'ok':'bad'}">${aH}h${hOk?' ✓':' (!)'}</div>
           </div></td>${cells}</tr>`;
       }).join('');
@@ -1832,18 +2035,28 @@
         #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
         #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
 
-        /* ── INCIDENCIAS PANEL ── */
-        #tab-gerador .gh-staff-main { display:flex; justify-content:space-between; align-items:flex-start; width:100%; gap:8px; }
-        #tab-gerador .gh-staff-row { flex-direction:column; align-items:stretch; gap:0; }
-        #tab-gerador .gh-inc-panel { display:none; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; padding:12px; margin-top:10px; border-top:1px solid #e8e8e8; background:#fafafa; border-radius:0 0 7px 7px; }
+        /* ── STAFF ROW + 4 COLUNAS ── */
+        #tab-gerador .gh-staff-row { flex-direction:column; align-items:stretch; gap:0; padding:10px 12px; }
+        #tab-gerador .gh-sr-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:10px; }
+        #tab-gerador .gh-sr-info { flex:1; min-width:0; }
+        #tab-gerador .gh-sr-btns { display:flex; gap:4px; flex-shrink:0; }
+        #tab-gerador .gh-inc-cols { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; border-top:1px solid #ebebeb; padding-top:10px; overflow-x:auto; }
+        @media(max-width:600px){ #tab-gerador .gh-inc-cols { grid-template-columns:repeat(4,minmax(130px,1fr)); } }
         #tab-gerador .gh-inc-col { display:flex; flex-direction:column; gap:4px; min-width:0; }
-        #tab-gerador .gh-inc-col-title { font-size:.72rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#555; margin-bottom:4px; }
-        #tab-gerador .gh-inc-toggle-label { display:flex; align-items:center; gap:6px; font-size:.78rem; color:#333; cursor:pointer; }
-        #tab-gerador .gh-inc-label { font-size:.65rem; color:#999; font-weight:600; text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:2px; }
-        #tab-gerador .gh-inc-saldo { font-size:.82rem; font-weight:700; padding:3px 8px; border-radius:5px; display:inline-block; }
+        #tab-gerador .gh-inc-col-title { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#555; margin-bottom:4px; white-space:nowrap; }
+        #tab-gerador .gh-inc-toggle-label { display:flex; align-items:center; gap:5px; font-size:.75rem; color:#333; cursor:pointer; }
+        #tab-gerador .gh-inc-label { font-size:.62rem; color:#999; font-weight:600; text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:2px; }
+        #tab-gerador .gh-inc-saldo { font-size:.78rem; font-weight:700; padding:3px 8px; border-radius:5px; display:inline-block; }
         #tab-gerador .gh-inc-saldo-neg { background:#fff0f0; color:#c0392b; }
         #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a; }
-        #tab-gerador .gh-inc-dot { font-size:.8rem; cursor:default; }
+        #tab-gerador .gh-banco-add-row { display:flex; gap:4px; align-items:center; }
+        #tab-gerador .gh-inc-tag { font-size:.65rem; font-weight:700; padding:1px 6px; border-radius:4px; }
+        #tab-gerador .gh-inc-tag-baixa { background:#fff0f0; color:#c0392b; }
+        #tab-gerador .gh-inc-tag-lic   { background:#fff8e0; color:#b8860b; }
+        /* Day toggle buttons */
+        #tab-gerador .gh-day-btns { display:flex; gap:3px; flex-wrap:wrap; }
+        #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:4px; width:24px; height:24px; font-size:.7rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+        #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111; }
       `;
       document.head.appendChild(style);
     }

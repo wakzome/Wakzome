@@ -5963,7 +5963,7 @@
       '.tam-rec-collapsed .tam-rec-collapsible { display:none!important; }',
 
 /* ── Invoice blocks (proc style — clean, white) ── */
-      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:40px; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; contain:layout style; content-visibility:auto; contain-intrinsic-size:0 500px; }',
+      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:40px; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; contain:layout style; }',
       '.tam-invoice-block:last-of-type { border-bottom:none; padding-bottom:0; }',
       '.tam-invoice-block-header { display:flex; align-items:center; gap:10px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; border:1px solid #e0e0e0; border-bottom:none; flex-wrap:wrap; }',
       /* Single unified header look — no color variants */

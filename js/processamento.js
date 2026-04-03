@@ -2869,8 +2869,6 @@
     if (!overlay) return;
     overlay.classList.add('open');
     requestAnimationFrame(function() { overlay.classList.add('visible'); });
-    document.body.style.overflow = 'auto';
-    window.scrollTo(0, 0);
 
     var root = document.getElementById('proc-root');
     if (!root) return;
@@ -2924,8 +2922,6 @@
     if (_activeSessionKey) procDoCloseSession();
     overlay.classList.remove('visible');
     setTimeout(function() { overlay.classList.remove('open'); }, 600);
-    document.body.style.overflow = '';
-    window.scrollTo(0, 0);
   }
 
   /* ── 19. GUIA DE TRANSPORTE ── */

@@ -1766,9 +1766,9 @@
           <div class="gh-sb-week">Porto Santo · Semana ${isoWeek(S.weekStart)}</div>
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen" title="Redistribuir folgas mantendo as mesmas configurações">↺ Gerar Novamente</button>
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
+        <div class="gh-sb-btns">
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Regenerar</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Semana</button>
         </div>
       </div>
       ${alertsHTML}`;
@@ -1957,9 +1957,13 @@
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow:visible;
-          padding:0 0 60px;
+          flex:1;
+          overflow-y:auto;
+          overflow-x:hidden;
+          -webkit-overflow-scrolling:touch;
+          padding:0;
           background:#fff; color:#111;
+          display:flex; flex-direction:column;
         }
 
         /* ── WIZARD ── */
@@ -2013,10 +2017,11 @@
         #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; flex-shrink:0; gap:8px; }
         #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
         #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        #tab-gerador .gh-alert-bar { padding:6px 16px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; }
+        #tab-gerador .gh-sb-btns  { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+        #tab-gerador .gh-alert-bar { padding:6px 16px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; flex-shrink:0; }
         #tab-gerador .gh-al-inner  { display:flex; flex-wrap:nowrap; gap:6px; width:max-content; }
         #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
         #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
@@ -2030,9 +2035,9 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
-        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; }
+        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 0 0 0; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; }
+        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; margin:0 16px; }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }

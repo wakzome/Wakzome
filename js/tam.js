@@ -719,10 +719,6 @@
     document.getElementById('tam-file-name').textContent =
       tamInvoices.map(function(r){ var m = r._fileName.match(/ZY-\d+/i); return m ? m[0] : r._fileName.replace(/\.pdf$/i, ''); }).join(' · ');
 
-    /* Force reception table rebuild on full render (structure may have changed) */
-    var area = document.getElementById('tam-reception-area');
-    if (area) area._tamSig = null;
-
     tamRenderInvoices();
     tamRenderReception();
     tamRenderAnomalies();
@@ -1424,11 +1420,13 @@
     tamRepairBoxInvIdx();
 
     var quickDistrib = (tamSession.quickDistrib) || {};
+    var quickCount   = Object.keys(quickDistrib).length;
 
     // Sort boxes: pending first, complete last, hidden removed
     var boxOrder = boxes.map(function(box, bi){
       var received = 0;
       if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
+      // A box in tamBoxLockPending is in the 3s transition window: treat as NOT yet complete
       var isComplete = box.total && received >= box.total && !tamBoxLockPending[bi];
       var isHidden   = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
       return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
@@ -1436,72 +1434,33 @@
 
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
+    /* If a box is being edited, move it to front of pending so it renders leftmost */
     if (tamEditingBoxBi >= 0 && pendingBoxes.length > 1) {
       var eIdx = -1;
       for (var _i=0; _i<pendingBoxes.length; _i++) { if (pendingBoxes[_i].bi===tamEditingBoxBi){ eIdx=_i; break; } }
       if (eIdx > 0) { var _eb = pendingBoxes.splice(eIdx,1); pendingBoxes.unshift(_eb[0]); }
     }
+    // Show ALL pending boxes — user can fill any box freely, not forced to go in order
     var sortedBoxes = pendingBoxes.concat(completedBoxes);
 
+    // Only refs needing manual work
     var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
       .filter(function(i){ return quickDistrib[i] === undefined; });
     var consolidatedForSummary = consolidated.filter(function(c){
       return c.invoices.some(function(inv){ return manualInvoiceIdxs.indexOf(inv.invIdx) >= 0; });
     });
 
-    // ── Structural signature: if boxes or refs changed, full rebuild ──
-    var newSig = sortedBoxes.map(function(b){ return b.bi + ':' + (b.isComplete?'c':'p') + ':' + (b.box.locked?'L':''); }).join('|')
-               + '||' + consolidatedForSummary.map(function(c){ return c.ref; }).join(',');
+    // ── Build HTML ────────────────────────────────────────────
+    // Header row 1: ref | total | F | PS | [for each box: F PS QUICK_BTNS]
+    var hdr1 =
+      '<th class="tam-rec-ref-col">referência</th>' +
+      '<th class="tam-rec-total-col">total</th>' +
+      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
+      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
-    if (area._tamSig === newSig && area._tamBuilt) {
-      // ── Fast path: only update input values and row classes ──
-      consolidatedForSummary.forEach(function(c){
-        var totals  = tamGetRefTotals(c.ref);
-        var recv    = totals.f + totals.p;
-        var isDone  = recv >= c.totalPieces && c.totalPieces > 0;
-        var isOver  = recv > c.totalPieces  && c.totalPieces > 0;
-        var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
-        var safeSelector = c.ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
-        var row = area.querySelector('tr[data-ref="' + safeSelector + '"]');
-        if (row) {
-          row.classList.remove('tam-ref-over','tam-ref-complete');
-          if (isOver)      row.classList.add('tam-ref-over');
-          else if (isDone) row.classList.add('tam-ref-complete');
-        }
-        // Update summary F/P cells
-        var fEl = document.getElementById('tam-sum-f-' + safeRef);
-        var pEl = document.getElementById('tam-sum-p-' + safeRef);
-        if (fEl) fEl.textContent = totals.f > 0 ? totals.f : '—';
-        if (pEl) pEl.textContent = totals.p > 0 ? totals.p : '—';
-        // Update each box input
-        sortedBoxes.forEach(function(bObj){
-          var bi  = bObj.bi;
-          var box = bObj.box;
-          var fInp = document.getElementById('tam-inp-f-' + bi + '-' + safeRef);
-          var pInp = document.getElementById('tam-inp-p-' + bi + '-' + safeRef);
-          if (fInp) { var fv = (box.refs[c.ref] && box.refs[c.ref].f) || ''; if (fInp.value !== String(fv)) fInp.value = fv; }
-          if (pInp) { var pv = (box.refs[c.ref] && box.refs[c.ref].p) || ''; if (pInp.value !== String(pv)) pInp.value = pv; }
-        });
-      });
-      // Update box total inputs and pct labels
-      sortedBoxes.forEach(function(bObj){
-        var bi  = bObj.bi;
-        var box = bObj.box;
-        var inp = document.getElementById('tam-box-total-' + bi);
-        if (inp && inp.value !== String(box.total||'')) inp.value = box.total || '';
-      });
-      tamUpdateUndoButtons();
-      return;
-    }
-
-    // ── Full rebuild (structure changed) ──
-    area._tamSig   = newSig;
-    area._tamBuilt = true;
-
-    var quickCount = Object.keys(quickDistrib).length;
-
+    // Pre-compute per-box style info used in both hdr1 and hdr2
     var boxStyleInfo = sortedBoxes.map(function(bObj, boxPos){
-      var isActiveBox    = !bObj.isComplete;
+      var isActiveBox    = !bObj.isComplete;   // every pending box is "active" — user chooses which to fill
       var isCompletedBox = bObj.isComplete;
       var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
       var greyShade = isCompletedBox ? ((completedCount % 2 === 0) ? 'tam-box-col-grey-odd' : 'tam-box-col-grey-even') : '';
@@ -1511,12 +1470,6 @@
       var colParity = (boxPos % 2 === 0) ? 'tam-col-odd' : 'tam-col-even';
       return { isActiveBox:isActiveBox, isCompletedBox:isCompletedBox, greyShade:greyShade, boxCls:boxCls, colParity:colParity };
     });
-
-    var hdr1 =
-      '<th class="tam-rec-ref-col">referência</th>' +
-      '<th class="tam-rec-total-col">total</th>' +
-      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
-      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
     sortedBoxes.forEach(function(bObj, boxPos){
       var bi  = bObj.bi;
@@ -1529,6 +1482,7 @@
       hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + boxLabel + '</th>';
     });
 
+    // Header row 2: sub-labels
     var hdr2 =
       '<th class="tam-rec-ref-col">' +
         '<input type="text" id="tam-ref-filter" class="tam-ref-filter-input" placeholder="\uD83D\uDD0D filtrar\u2026" autocomplete="off" spellcheck="false">' +
@@ -1553,6 +1507,7 @@
       var info      = boxStyleInfo[boxPos];
       var isPending = info.isActiveBox;
       var colSpan   = isPending ? 3 : 2;
+      // Sub-header gets both complete and grey shade classes
       var subCls = (bObj.isComplete ? ' tam-box-sub-complete' : '') + (info.greyShade ? ' ' + info.greyShade : '');
 
       hdr2 +=
@@ -1573,7 +1528,9 @@
         '</th>';
     });
 
+    // Ref rows — keep original invoice order regardless of completion state
     var sortedRefs = consolidatedForSummary;
+
     var rowsHtml = '';
     sortedRefs.forEach(function(c){
       var totals  = tamGetRefTotals(c.ref);
@@ -1603,6 +1560,7 @@
         var compactCls = (!info.isActiveBox) ? ' tam-box-compact' : '';
         var isPending  = info.isActiveBox;
 
+        // Quick buttons in every active pending box, only for pending/completing refs
         var quickCell = '';
         var boxHasTotal = !!(box.total);
         if (isPending && !isDone && !isOver) {
@@ -1619,6 +1577,7 @@
         } else if (isPending) {
           quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
         }
+        // Non-active boxes: NO quick cell at all
 
         rowsHtml +=
           '<td class="tam-rec-cell-f' + cellCls + colParity + compactCls + greyCls + '">' +
@@ -1634,9 +1593,9 @@
               'value="' + pVal + '" min="0" ' + disabled + 'placeholder="\u2014">' +
           '</td>' +
           quickCell;
-
-        rowsHtml += '</tr>';
       });
+
+      rowsHtml += '</tr>';
     });
 
     var tableHtml =
@@ -1652,300 +1611,348 @@
         '</table></div>' +
       '</div>';
 
+    // Global quick buttons bar
     var globalBar =
       '<div class="tam-rec-quick-btns">' +
         '<span class="tam-quick-label">tudo:</span>' +
         '<button class="tam-quick-btn" id="tam-quick-funchal">100%FNC</button>' +
         '<button class="tam-quick-btn" id="tam-quick-porto">100%PXO</button>' +
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
-        (Object.keys(quickDistrib).length > 0
-          ? '<button class="tam-quick-btn tam-quick-btn-undo" id="tam-quick-undo">\u21A9 desfazer tudo</button>'
-          : '') +
       '</div>';
 
-    var recTitle =
-      '<div class="tam-rec-area-title">' +
-        '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" data-target="distrib" title="expandir / minimizar">&#9660;</button>' +
-        '<span class="tam-rec-title-text">distribuição por caixa</span>' +
-      '</div>';
-
+    var distribCollapsed = !!tamCollapseState['distrib'];
     area.innerHTML =
-      recTitle +
-      '<div class="tam-rec-collapsible">' +
-        globalBar +
-        tableHtml +
+      '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
+      '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
+        '<div class="tam-rec-area-title">' +
+          '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" title="expandir / minimizar" style="margin-right:8px;">' +
+            (distribCollapsed ? '&#9654;' : '&#9660;') +
+          '</button>' +
+          tamInvoices.length + ' fatura(s) · ' + consolidatedForSummary.length + ' referências' +
+          (quickCount > 0 ? ' · ' + quickCount + ' com distribuição rápida' : '') +
+        '</div>' +
+        '<div class="tam-rec-collapsible">' +
+          globalBar +
+          tableHtml +
+        '</div>' +
       '</div>';
 
-    if (tamCollapseState['distrib']) area.classList.add('tam-rec-collapsed');
-    else area.classList.remove('tam-rec-collapsed');
-
-    tamUpdateUndoButtons();
-
-    // ── Bind all events ──
-
-    // Toggle collapse
+    // ── BIND DISTRIBUTION TOGGLE ─────────────────────────────────
     (function(){
-      var toggleBtn = area.querySelector('#tam-rec-toggle-btn');
-      if (!toggleBtn) return;
-      toggleBtn.addEventListener('click', function(){
+      var recToggleBtn = area.querySelector('#tam-rec-toggle-btn');
+      if (recToggleBtn) recToggleBtn.addEventListener('click', function(){
         tamCollapseState['distrib'] = !tamCollapseState['distrib'];
-        area.classList.toggle('tam-rec-collapsed', !!tamCollapseState['distrib']);
-        toggleBtn.innerHTML = tamCollapseState['distrib'] ? '&#9654;' : '&#9660;';
+        var recArea2 = area.querySelector('.tam-rec-area');
+        if (recArea2) recArea2.classList.toggle('tam-rec-collapsed', !!tamCollapseState['distrib']);
+        recToggleBtn.innerHTML = tamCollapseState['distrib'] ? '&#9654;' : '&#9660;';
       });
     })();
 
-    // Global quick distribution buttons
-    (function(){
-      var qf = area.querySelector('#tam-quick-funchal');
-      var qp = area.querySelector('#tam-quick-porto');
-      var qs = area.querySelector('#tam-quick-split');
-      var qu = area.querySelector('#tam-quick-undo');
-      if (qf) qf.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
-      if (qp) qp.addEventListener('click', function(){ tamQuickDistrib('porto'); });
-      if (qs) qs.addEventListener('click', function(){ tamQuickDistrib('split'); });
-      if (qu) qu.addEventListener('click', function(){ tamQuickDistrib('undo'); });
-    })();
-
-    // Box total inputs
-    (function(){
-      area.querySelectorAll('.tam-box-total-input').forEach(function(inp){
-        inp.addEventListener('change', function(){
-          var bi  = parseInt(inp.getAttribute('data-box'));
-          var val = parseInt(inp.value);
-          if (!tamSession || isNaN(bi)) return;
-          tamSession.boxes[bi].total = (val > 0) ? val : null;
-          tamEditingBoxBi = bi;
-          area._tamSig = null; // force rebuild next render
-          tamRenderReception();
-          tamScheduleSave();
-        });
-        inp.addEventListener('focus', function(){
-          var bi = parseInt(inp.getAttribute('data-box'));
-          tamEditingBoxBi = bi;
-        });
-      });
-    })();
-
-    // Box edit buttons (unlock)
-    (function(){
-      area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
-        btn.addEventListener('click', function(){
-          var bi = parseInt(btn.getAttribute('data-box'));
-          if (!tamSession || isNaN(bi)) return;
-          tamSession.boxes[bi].locked = false;
-          if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
-          delete tamBoxLockPending[bi];
-          tamEditingBoxBi = bi;
-          area._tamSig = null;
-          tamRenderReception();
-          tamScheduleSave();
-        });
-      });
-    })();
-
-    // Box filter buttons
-    (function(){
-      area.querySelectorAll('.tam-box-filter-btn').forEach(function(btn){
-        btn.addEventListener('click', function(){
-          var bi = parseInt(btn.getAttribute('data-box'));
-          var tbody = area.querySelector('.tam-rec-boxes-table tbody');
-          if (!tbody || isNaN(bi)) return;
-          var rows = tbody.querySelectorAll('tr[data-ref]');
-          var active = btn.classList.toggle('tam-box-filter-active');
-          rows.forEach(function(row){
-            if (!active) { row.style.display = ''; return; }
-            var ref = row.getAttribute('data-ref') || '';
-            var box = tamSession && tamSession.boxes[bi];
-            var hasVal = box && box.refs[ref] && ((box.refs[ref].f||0) + (box.refs[ref].p||0)) > 0;
-            row.style.display = hasVal ? '' : 'none';
-          });
-        });
-      });
-    })();
-
-    // Reception inputs (F/P values)
-    (function(){
-      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
-      if (!tbody) return;
-      if (tbody._recListening) return;
-      tbody._recListening = true;
-
-      tbody.addEventListener('change', function(e){
-        var inp = e.target;
-        if (!inp.classList.contains('tam-rec-input')) return;
-        var bi   = parseInt(inp.getAttribute('data-box'));
-        var ref  = inp.getAttribute('data-ref');
-        var city = inp.getAttribute('data-city');
-        var val  = parseInt(inp.value) || 0;
-        if (!tamSession || isNaN(bi) || !ref) return;
-        tamPushUndo();
-        var box = tamSession.boxes[bi];
-        if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
-        box.refs[ref][city] = val;
-        if (val === 0 && box.refs[ref].f === 0 && box.refs[ref].p === 0) delete box.refs[ref];
-        tamDetectRefCompletions();
-        tamUpdateSummaryRow(ref);
-        tamUpdateInvoicesRows(ref);
-        tamCheckBoxLock(bi);
-        tamScheduleSave();
-      });
-
-      tbody.addEventListener('focus', function(e){
-        var inp = e.target;
-        if (!inp.classList.contains('tam-rec-input')) return;
-        var bi = parseInt(inp.getAttribute('data-box'));
-        if (!isNaN(bi)) tamEditingBoxBi = bi;
-      }, true);
-
-      tbody.addEventListener('keydown', function(e){
-        var inp = e.target;
-        if (!inp.classList.contains('tam-rec-input')) return;
-        if (e.key !== 'Enter' && e.key !== 'Tab') return;
-        var allInputs = Array.from(tbody.querySelectorAll('.tam-rec-input:not([disabled])'));
-        var idx = allInputs.indexOf(inp);
-        if (idx < 0) return;
-        if (e.key === 'Enter') { e.preventDefault(); var next = allInputs[idx+1]; if (next) { next.focus(); next.select(); } }
-      });
-    })();
-
-    // Quick row buttons (F / PS / ½)
-    (function(){
-      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
-      if (!tbody) return;
-      tbody.addEventListener('click', function(e){
-        var btn = e.target.closest('.tam-row-quick-btn');
-        if (!btn) return;
-        var bi   = parseInt(btn.getAttribute('data-box'));
-        var ref  = btn.getAttribute('data-ref');
-        var mode = btn.getAttribute('data-mode');
-        if (!tamSession || isNaN(bi) || !ref) return;
-        var box = tamSession.boxes[bi];
-        if (!box || !box.total) return;
-        tamPushUndo();
-
-        // Find this ref's total pieces across all invoices
-        var consolidated2 = tamConsolidatedRefs();
-        var cRef = consolidated2.find(function(c){ return c.ref === ref; });
-        var total = cRef ? cRef.totalPieces : 0;
-        if (!total) return;
-
-        if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
-        if (mode === 'funchal') { box.refs[ref].f = total; box.refs[ref].p = 0; }
-        else if (mode === 'porto') { box.refs[ref].f = 0; box.refs[ref].p = total; }
-        else if (mode === 'split') {
-          var half = Math.floor(total / 2);
-          box.refs[ref].f = half; box.refs[ref].p = total - half;
-        }
-
-        // Update inputs directly without full rebuild
-        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-        var fInp = document.getElementById('tam-inp-f-' + bi + '-' + safeRef);
-        var pInp = document.getElementById('tam-inp-p-' + bi + '-' + safeRef);
-        if (fInp) fInp.value = box.refs[ref].f || '';
-        if (pInp) pInp.value = box.refs[ref].p || '';
-
-        tamDetectRefCompletions();
-        tamUpdateSummaryRow(ref);
-        tamUpdateInvoicesRows(ref);
-        tamCheckBoxLock(bi);
-        tamScheduleSave();
-      });
-    })();
-
-    // Undo / Redo / Clear buttons
+    // ── BIND UNDO / REDO / CLEAR BUTTONS ─────────────────────
     (function(){
       var undoBtn  = area.querySelector('#tam-undo-btn');
       var redoBtn  = area.querySelector('#tam-redo-btn');
       var clearBtn = area.querySelector('#tam-clear-btn');
-      if (undoBtn)  undoBtn.addEventListener('click',  tamUndo);
-      if (redoBtn)  redoBtn.addEventListener('click',  tamRedo);
-      if (clearBtn) clearBtn.addEventListener('click', function(){
-        if (confirm('Borrar toda a distribuição?')) tamClearAll();
+
+      tamUpdateUndoButtons();   // sync disabled state on every render
+
+      if (undoBtn)  undoBtn.addEventListener('click',  function(e){ e.stopPropagation(); tamUndo(); });
+      if (redoBtn)  redoBtn.addEventListener('click',  function(e){ e.stopPropagation(); tamRedo(); });
+      if (clearBtn) clearBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        // Confirm before clearing everything
+        if (!confirm('Borrar toda la distribución?\n\nPuedes deshacer con el botón ↩')) return;
+        tamClearAll();
       });
     })();
 
-    // Tooltip for completed ref cells
-    (function(){
-      var tip = document.getElementById('tam-rec-tip');
-      if (!tip) {
-        tip = document.createElement('div');
-        tip.id = 'tam-rec-tip';
-        tip.className = 'tam-rec-tip';
-        tip.innerHTML =
-          '<div class="tam-tip-body"></div>' +
-          '<button class="tam-tip-cancel">↩ desbloquear</button>';
-        document.body.appendChild(tip);
-      }
+    // ── BIND PER-ROW QUICK BUTTONS ────────────────────────────
+    area.querySelectorAll('.tam-row-quick-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var ref  = btn.getAttribute('data-ref');
+        var mode = btn.getAttribute('data-mode');
+        var bi   = parseInt(btn.getAttribute('data-box'));
+        var c    = consolidatedForSummary.find(function(x){ return x.ref === ref; });
+        if (!c) return;
+        tamPushUndo();
+        // Apply to the specific box this button belongs to
+        var targetBox = tamSession.boxes[bi];
+        var boxList = targetBox ? [targetBox] : [];
+        if (!boxList.length) return;
+        if (mode === 'funchal') {
+          tamDistribToBoxesFiltered(ref, c.totalPieces, c.totalPieces, 0, boxList);
+        } else if (mode === 'porto') {
+          tamDistribToBoxesFiltered(ref, c.totalPieces, 0, c.totalPieces, boxList);
+        } else if (mode === 'split') {
+          var half  = Math.floor(c.totalPieces / 2);
+          var isOdd = c.totalPieces % 2 !== 0;
+          tamDistribToBoxesFiltered(ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0), boxList);
+          if (isOdd) {
+            tamOddPieceDialogFiltered([{ ref:ref, totalPieces:c.totalPieces }], 0, boxList, function(){
+              tamDetectRefCompletions();
+              tamCheckBoxLock(bi);
+              tamRenderAll(); tamSaveSession(false);
+            });
+            return;
+          }
+        }
+        // Detect completions BEFORE re-render so 3s state is set
+        tamDetectRefCompletions();
+        tamCheckBoxLock(bi);
+        tamRenderAll();
+        tamSaveSession(false);
+      });
+    });
 
-      document.addEventListener('click', function(e){
-        if (tip.classList.contains('tam-tip-visible') && !tip.contains(e.target)) {
-          tip.classList.remove('tam-tip-visible');
-          window.tamTipState = null;
+    // ── BIND GLOBAL QUICK BUTTONS ─────────────────────────────
+    var qF = area.querySelector('#tam-quick-funchal');
+    var qP = area.querySelector('#tam-quick-porto');
+    var qS = area.querySelector('#tam-quick-split');
+    if (qF) qF.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
+    if (qP) qP.addEventListener('click', function(){ tamQuickDistrib('porto'); });
+    if (qS) qS.addEventListener('click', function(){ tamQuickDistrib('split'); });
+
+    // ── BIND BOX TOTAL INPUT ──────────────────────────────────
+    area.querySelectorAll('.tam-box-total-input').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var bi  = parseInt(inp.getAttribute('data-box'));
+        var val = parseInt(inp.value);
+        tamSession.boxes[bi].total = (!isNaN(val) && val > 0) ? val : null;
+        tamRenderAll();
+        tamScheduleSave();
+      });
+    });
+
+    // ── BIND EDIT BOX BUTTON ──────────────────────────────────
+    area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var bi = parseInt(btn.getAttribute('data-box'));
+        var box = tamSession.boxes[bi];
+        if (box) {
+          Object.keys(box.refs).forEach(function(ref){ tamRefDone.delete(ref); });
+          box.locked = false;
+        }
+        tamEditingBoxBi = bi;   // move this box to leftmost position
+        tamRenderAll(); tamScheduleSave();
+      });
+    });
+
+    // ── BIND FILTER BUTTON ────────────────────────────────────
+    var _activeFilterBi = -1;
+    area.querySelectorAll('.tam-box-filter-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var bi = parseInt(btn.getAttribute('data-box'));
+        if (_activeFilterBi === bi) {
+          /* Deactivate filter — show all rows */
+          _activeFilterBi = -1;
+          btn.style.background = ''; btn.style.borderColor = '';
+          area.querySelectorAll('tr[data-ref]').forEach(function(r){ r.style.display = ''; });
+        } else {
+          /* Activate filter for this box */
+          area.querySelectorAll('.tam-box-filter-btn').forEach(function(b){
+            b.style.background = ''; b.style.borderColor = '';
+          });
+          _activeFilterBi = bi;
+          btn.style.background = '#f0f0f0'; btn.style.borderColor = '#000';
+          var box = tamSession.boxes[bi];
+          var filled = box ? Object.keys(box.refs).filter(function(ref){
+            return (box.refs[ref].f||0) + (box.refs[ref].p||0) > 0;
+          }) : [];
+          area.querySelectorAll('tr[data-ref]').forEach(function(row){
+            row.style.display = (filled.indexOf(row.getAttribute('data-ref')) >= 0) ? '' : 'none';
+          });
         }
       });
+    });
 
-      tip.querySelector('.tam-tip-cancel').addEventListener('click', function(){
-        var state = window.tamTipState;
-        if (!state || !state.ref || !tamSession) return;
-        var ref = state.ref;
-
-        tip.classList.remove('tam-tip-visible');
-        window.tamTipState = null;
-
-        var unlockedBis = [];
-        tamSession.boxes.forEach(function(box, bi){
-          if (box.locked && box.refs[ref] !== undefined) {
-            box.locked = false;
-            if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
-            delete tamBoxLockPending[bi];
-            unlockedBis.push(bi);
-          }
-        });
-
-        tamRefDone.delete(ref);
-        tamRefCompleting.delete(ref);
-        if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
-
-        if (!unlockedBis.length) return;
-        tamScheduleSave();
-        area._tamSig = null;
-        tamRenderAll();
-
-        requestAnimationFrame(function(){
-          var recArea = document.getElementById('tam-reception-area');
-          if (!recArea) return;
-          unlockedBis.forEach(function(bi){
-            recArea.querySelectorAll('.tam-rec-input[data-box="' + bi + '"]').forEach(function(inp){
-              var td = inp.closest('td');
-              if (td) td.classList.add('tam-col-unlocked');
-            });
-            var hdrInput = recArea.querySelector('#tam-box-total-' + bi);
-            if (hdrInput) { var th = hdrInput.closest('th'); if (th) th.classList.add('tam-col-unlocked-hdr'); }
-          });
-          recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
-            if (inp.getAttribute('data-ref') === ref && !inp.disabled) {
-              var td = inp.closest('td'); if (td) td.classList.add('tam-cell-ref-edit');
-            }
-          });
-          var allEditable = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
-            .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
-          if (allEditable[0]) { allEditable[0].focus(); allEditable[0].select(); }
-        });
+    // ── BIND F/P INPUTS ───────────────────────────────────────
+    area.querySelectorAll('.tam-rec-input').forEach(function(inp){
+      // Push undo when the user starts editing a field (on focus)
+      inp.addEventListener('focus', function(){
+        tamPushUndo();
       });
 
+      inp.addEventListener('input', function(){
+        var bi   = parseInt(inp.getAttribute('data-box'));
+        var ref  = inp.getAttribute('data-ref');
+        var city = inp.getAttribute('data-city');
+        var val  = parseInt(inp.value) || 0;
+        if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f:0, p:0 };
+        tamSession.boxes[bi].refs[ref][city] = val;
+        /* Cap check: F+P must not exceed DN qty for this ref */
+        var capBox = tamSession.boxes[bi];
+        if (capBox.dnZyCode) {
+          var capDn = tamDeliveryNotes[capBox.dnZyCode];
+          if (capDn) {
+            var capRef = null;
+            for (var _ci=0; _ci<capDn.refs.length; _ci++) { if (capDn.refs[_ci].ref===ref){ capRef=capDn.refs[_ci]; break; } }
+            if (capRef) {
+              var curF = capBox.refs[ref].f || 0, curP = capBox.refs[ref].p || 0;
+              if (curF + curP > capRef.qty && !inp._capWarning) {
+                inp._capWarning = true;
+                var keep = confirm('\u26a0 ATEN\u00c7\u00c3O\n\nEstas a distribuir ' + (curF+curP) +
+                  ' pcs para "' + ref + '"\nmas a DN s\u00f3 tem ' + capRef.qty + ' pcs.\n\n' +
+                  'Confirmas que h\u00e1 efectivamente mais pe\u00e7as?');
+                if (!keep) {
+                  capBox.refs[ref][city] = Math.max(0, capRef.qty - (city==='f' ? curP : curF));
+                  inp.value = capBox.refs[ref][city];
+                }
+                inp._capWarning = false;
+              }
+            }
+          }
+        }
+        tamUpdateSummaryRow(ref);
+        tamUpdateInvoicesRows(ref);  /* also refresh invoice table columns */
+        tamDetectRefCompletions();
+        tamCheckBoxLock(bi);
+        tamScheduleSave();
+      });
+
+      inp.addEventListener('keydown', function(e){
+        if (e.key !== 'Tab' && e.key !== 'Enter') return;
+        var bi  = parseInt(inp.getAttribute('data-box'));
+        var ref = inp.getAttribute('data-ref');
+        // Navigation only — detection already handled by input event
+        var isF  = inp.classList.contains('tam-rec-input-f');
+        var isPS = inp.classList.contains('tam-rec-input-p');
+        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
+        if (isF && e.key === 'Enter') {
+          e.preventDefault();
+          var ps = document.getElementById('tam-inp-p-' + inp.getAttribute('data-box') + '-' + safeRef);
+          if (ps && !ps.disabled) { ps.focus(); ps.select(); }
+          return;
+        }
+        if (isPS && (e.key === 'Tab' || e.key === 'Enter')) {
+          e.preventDefault();
+          var allF = Array.from(area.querySelectorAll('.tam-rec-input-f:not([disabled])'));
+          var curF = document.getElementById('tam-inp-f-' + inp.getAttribute('data-box') + '-' + safeRef);
+          var nxt  = allF[allF.indexOf(curF) + 1];
+          if (nxt) { nxt.focus(); nxt.select(); }
+        }
+      });
+    });
+
+    // ── CLICK-TO-MODIFY on completed ref rows ─────────────────
+    (function(){
+      // ── Singleton tooltip — created once, reused across renders ──
+      var tip = document.getElementById('tam-modify-tip');
+      if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'tam-modify-tip';
+        tip.innerHTML =
+          '<span class="tam-tip-msg">\u00BFModificar esta referencia?</span>' +
+          '<button class="tam-tip-btn" id="tam-tip-yes">S\u00ED</button>' +
+          '<button class="tam-tip-cancel" id="tam-tip-cancel">No</button>';
+        document.body.appendChild(tip);
+
+        // ── Close on outside click ────────────────────────────────
+        document.addEventListener('click', function(e){
+          if (!tip.classList.contains('tam-tip-visible')) return;
+          if (tip.contains(e.target)) return;
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+        }, true);
+
+        // ── Cancel button ─────────────────────────────────────────
+        tip.querySelector('#tam-tip-cancel').addEventListener('click', function(e){
+          e.stopPropagation();
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+        });
+
+        // ── "Sí" button ───────────────────────────────────────────
+        tip.querySelector('#tam-tip-yes').addEventListener('click', function(e){
+          e.stopPropagation();
+          var state = window.tamTipState;
+          if (!state || !state.ref || !tamSession) return;
+          var ref = state.ref;
+
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+
+          // Find which boxes are locked AND contain this ref
+          var unlockedBis = [];
+          tamSession.boxes.forEach(function(box, bi){
+            if (box.locked && box.refs[ref] !== undefined) {
+              box.locked = false;
+              if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+              delete tamBoxLockPending[bi];
+              unlockedBis.push(bi);
+            }
+          });
+
+          // Reset animation state so it can flash again when re-completed
+          tamRefDone.delete(ref);
+          tamRefCompleting.delete(ref);
+          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
+
+          if (!unlockedBis.length) return;
+          tamScheduleSave();
+          tamRenderAll();
+
+          // After re-render: illuminate the unlocked column(s) and grey out ref cells
+          requestAnimationFrame(function(){
+            var recArea = document.getElementById('tam-reception-area');
+            if (!recArea) return;
+
+            // 1. Illuminate entire column for each unlocked box (white column highlight)
+            unlockedBis.forEach(function(bi){
+              recArea.querySelectorAll('.tam-rec-input[data-box="' + bi + '"]').forEach(function(inp){
+                var td = inp.closest('td');
+                if (td) td.classList.add('tam-col-unlocked');
+              });
+              // Also header cells
+              var hdrInput = recArea.querySelector('#tam-box-total-' + bi);
+              if (hdrInput) {
+                var th = hdrInput.closest('th');
+                if (th) th.classList.add('tam-col-unlocked-hdr');
+              }
+            });
+
+            // 2. Grey-highlight (relieve) the specific ref cells
+            recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
+              if (inp.getAttribute('data-ref') === ref && !inp.disabled) {
+                var td = inp.closest('td');
+                if (td) td.classList.add('tam-cell-ref-edit');
+              }
+            });
+
+            // 3. Focus first editable cell of this ref
+            var first = recArea.querySelector('.tam-rec-input[data-ref]:not([disabled])');
+            recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
+              if (inp.getAttribute('data-ref') === ref && !inp.disabled && !first) first = inp;
+              if (inp.getAttribute('data-ref') === ref && !inp.disabled) first = inp; // get last matched; use first
+            });
+            // Get actual first
+            var allEditable = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
+              .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
+            if (allEditable[0]) { allEditable[0].focus(); allEditable[0].select(); }
+          });
+        });
+      }
+
+      // ── Event delegation: click on ref cell of completed rows ──
       var tbody = area.querySelector('.tam-rec-boxes-table tbody');
       if (!tbody) return;
+
       tbody.addEventListener('click', function(e){
         var row = e.target.closest('tr[data-ref]');
         if (!row) return;
         if (!row.classList.contains('tam-ref-complete') && !row.classList.contains('tam-ref-over')) return;
+
         var refCell = e.target.closest('.tam-rec-ref-col');
-        if (!refCell) return;
+        if (!refCell) return;   // only clicking the ref cell triggers the tooltip
+
         e.stopPropagation();
         window.tamTipState = { ref: row.getAttribute('data-ref') };
+
+        // Position to the RIGHT of the ref cell, vertically centered on the row
         var rect    = refCell.getBoundingClientRect();
         var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
         var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
         tip.style.visibility = 'hidden';
         tip.classList.add('tam-tip-visible');
         requestAnimationFrame(function(){
@@ -1953,6 +1960,7 @@
           var rowRect = row.getBoundingClientRect();
           var leftPos = rect.right + scrollX + 12;
           var topPos  = rowRect.top + scrollY + (rowRect.height - tipH) / 2;
+          // Clamp so it doesn't go off the right edge of the viewport
           var maxLeft = scrollX + window.innerWidth - tip.offsetWidth - 16;
           if (leftPos > maxLeft) leftPos = rect.left + scrollX - tip.offsetWidth - 12;
           tip.style.left = leftPos + 'px';
@@ -1962,39 +1970,60 @@
       });
     })();
 
-    // Ref filter
+    // ── BIND REF FILTER INPUT ─────────────────────────────────
     (function(){
       var filterInp = area.querySelector('#tam-ref-filter');
       if (!filterInp) return;
       filterInp.addEventListener('input', function(){
         var q = filterInp.value.trim().toLowerCase();
-        var tbody2 = area.querySelector('.tam-rec-boxes-table tbody');
-        if (!tbody2) return;
-        tbody2.querySelectorAll('tr[data-ref]').forEach(function(row){
-          if (!q) { row.style.display = ''; return; }
-          var ref = (row.getAttribute('data-ref') || '').toLowerCase();
-          row.style.display = (ref.indexOf(q) >= 0) ? '' : 'none';
+        var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+        if (!tbody) return;
+        var rows = tbody.querySelectorAll('tr[data-ref]');
+        rows.forEach(function(row){
+          if (!q) {
+            row.style.display = '';
+          } else {
+            var ref = (row.getAttribute('data-ref') || '').toLowerCase();
+            row.style.display = (ref.indexOf(q) >= 0) ? '' : 'none';
+          }
         });
       });
+      // Clear on Escape
       filterInp.addEventListener('keydown', function(e){
-        if (e.key === 'Escape') { filterInp.value = ''; filterInp.dispatchEvent(new Event('input')); filterInp.blur(); }
+        if (e.key === 'Escape') {
+          filterInp.value = '';
+          filterInp.dispatchEvent(new Event('input'));
+          filterInp.blur();
+        }
       });
     })();
 
-    // Sync top + bottom scrollbars
+    // ── SYNC TOP + BOTTOM SCROLLBARS ─────────────────────────
     (function(){
-      var topBar    = area.querySelector('.tam-rec-scroll-top-bar');
+      var topBar   = area.querySelector('.tam-rec-scroll-top-bar');
       var botScroll = area.querySelector('.tam-rec-boxes-scroll');
-      var inner     = area.querySelector('.tam-rec-scroll-top-inner');
+      var inner    = area.querySelector('.tam-rec-scroll-top-inner');
       if (!topBar || !botScroll || !inner) return;
-      function syncInnerWidth(){ inner.style.width = botScroll.scrollWidth + 'px'; inner.style.height = '1px'; }
+
+      function syncInnerWidth(){
+        inner.style.width = botScroll.scrollWidth + 'px';
+        inner.style.height = '1px';
+      }
       syncInnerWidth();
+
       var syncing = false;
-      topBar.addEventListener('scroll', function(){ if (syncing) return; syncing = true; botScroll.scrollLeft = topBar.scrollLeft; syncing = false; });
-      botScroll.addEventListener('scroll', function(){ if (syncing) return; syncing = true; topBar.scrollLeft = botScroll.scrollLeft; syncing = false; });
+      topBar.addEventListener('scroll', function(){
+        if (syncing) return; syncing = true;
+        botScroll.scrollLeft = topBar.scrollLeft;
+        syncing = false;
+      });
+      botScroll.addEventListener('scroll', function(){
+        if (syncing) return; syncing = true;
+        topBar.scrollLeft = botScroll.scrollLeft;
+        syncing = false;
+      });
     })();
   }
-
 
   /* ──────────────────────────────────────────────────────────────
      Verificar si una caja alcanzó el total → bloquear
@@ -2093,63 +2122,7 @@
 
   /* Actualizar filas de facturas superiores para un ref */
   function tamUpdateInvoicesRows(ref) {
-    /* Update only the FNC/PXO cells and anomaly cells for this ref
-       across all invoice tables — no full re-render */
-    tamInvoices.forEach(function(r, invIdx){
-      var g = r.grouped.find(function(g){ return g.ref === ref; });
-      if (!g) return;
-      var distrib = tamGetRefDistribForInvoice(ref, invIdx);
-      var fVal = distrib.f || 0;
-      var pVal = distrib.p || 0;
-      var total = fVal + pVal;
-      var diff  = total - g.pieces;
-
-      /* Find the row in the invoice table by scanning for the ref text */
-      var wrap = document.getElementById('tam-invoice-block-' + invIdx);
-      if (!wrap) {
-        /* Single invoice layout */
-        wrap = document.getElementById('tam-results-wrap');
-      }
-      if (!wrap) return;
-
-      var rows = wrap.querySelectorAll('tbody tr');
-      rows.forEach(function(tr){
-        var refCell = tr.querySelector('td strong');
-        if (!refCell || refCell.textContent.trim() !== ref) return;
-
-        /* Update FNC cell (7th td, index 6) */
-        var tds = tr.querySelectorAll('td');
-        if (tds[6]) tds[6].textContent = fVal > 0 ? fVal : '—';
-        if (tds[7]) tds[7].textContent = pVal > 0 ? pVal : '—';
-
-        /* Update anomaly cell if present (8th td, index 8) */
-        if (tds[8] && tds[8].className.indexOf('tam-cell-anomaly') >= 0) {
-          if (total === 0) {
-            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-empty';
-            tds[8].textContent = '';
-            tds[8].title = '';
-          } else if (diff === 0) {
-            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-ok';
-            tds[8].textContent = '✓';
-            tds[8].title = 'completo';
-          } else if (diff < 0) {
-            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-low';
-            tds[8].textContent = String(diff);
-            tds[8].title = 'faltam ' + Math.abs(diff) + ' peças';
-          } else {
-            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-high';
-            tds[8].textContent = '+' + diff;
-            tds[8].title = diff + ' peças a mais';
-          }
-        }
-
-        /* Update row class for completion state */
-        var refDone = total === g.pieces && g.pieces > 0;
-        var isOver  = total > g.pieces && g.pieces > 0;
-        tr.classList.remove('tam-ref-complete');
-        if (refDone && !isOver) tr.classList.add('tam-ref-complete');
-      });
-    });
+    tamRenderInvoices();
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -3947,7 +3920,7 @@
               'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
               'border:1px solid ' + (isUserConf ? '#4A7C6F' : '#ccc') + ';border-radius:6px;background:transparent;' +
               'color:' + (isUserConf ? '#4A7C6F' : '#000') + ";font-family:'MontserratLight',sans-serif;" +
-              'transition:background .12s,border-color .12s,color .12s;white-space:nowrap;flex-shrink:0;">' +
+              'transition:all .12s;white-space:nowrap;flex-shrink:0;">' +
               btnLabel + '</button>'
           : '<span style="font-size:.65rem;color:#000;opacity:.3;font-weight:600;white-space:nowrap;">sem foto</span>';
         return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
@@ -5889,7 +5862,7 @@
       '.tam-dialog-title { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; margin-bottom:12px; }',
       '.tam-dialog-body { font-size:.88rem; font-weight:600; color:#000; line-height:1.6; margin-bottom:22px; }',
       '.tam-dialog-btns { display:flex; flex-direction:column; gap:8px; }',
-      '.tam-dialog-btn { padding:12px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:10px; border:1px solid #e0e0e0; background:transparent; text-align:left; transition:background 0.14s,border-color 0.14s,color 0.14s; color:#000; text-transform:lowercase; }',
+      '.tam-dialog-btn { padding:12px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:10px; border:1px solid #e0e0e0; background:transparent; text-align:left; transition:all 0.14s; color:#000; text-transform:lowercase; }',
       '.tam-dialog-btn:hover { background:#f5f5f5; border-color:#ccc; }',
       '.tam-dialog-btn-new { border-color:#555; background:#fff; color:#000; }',
       '.tam-dialog-btn-new:hover { background:#f0f0f0; border-color:#555; }',
@@ -5902,14 +5875,14 @@
       '#tam-dn-count { color:#000!important; font-weight:700!important; font-size:.75rem; }',
       '#tam-session-status.saved { color:#4A7C6F!important; }',
       /* Save button */
-      '#tam-save-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; line-height:1; }',
+      '#tam-save-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
       '#tam-save-btn:hover { background:#f0f0f0; border-color:#555; }',
       '#tam-save-btn.visible { display:inline-flex!important; align-items:center; justify-content:center; }',
       /* Guia bar button (icon-only, same as save/fechar) */
-      '#tam-guia-bar-btn { display:none; padding:7px 12px; font-size:.92rem; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-guia-bar-btn { display:none; padding:7px 12px; font-size:.92rem; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-guia-bar-btn:hover { background:#f0f0f0; border-color:#555; }',
       /* Fechar button icon-only sizing */
-      '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; line-height:1; }',
+      '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
       '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
       /* DN buttons icon-only sizing */
       '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { padding:7px 12px!important; font-size:.92rem!important; line-height:1!important; }',
@@ -5929,9 +5902,9 @@
       '.tam-dd-item-info { flex:1; min-width:0; }',
       '.tam-dd-item-name { font-size:.82rem; font-weight:700; color:#000; white-space:normal; word-break:break-word; }',
       '.tam-dd-item-meta { font-size:.67rem; color:#000; font-weight:600; margin-top:1px; opacity:.5; }',
-      '.tam-dd-load-btn { padding:3px 10px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s; white-space:nowrap; }',
+      '.tam-dd-load-btn { padding:3px 10px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
       '.tam-dd-load-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-dd-del-btn { background:none; border:1px solid #ddd; cursor:pointer; font-size:.7rem; font-weight:700; color:#000; padding:3px 8px; border-radius:6px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; transition:background .14s,border-color .14s,color .14s; }',
+      '.tam-dd-del-btn { background:none; border:1px solid #ddd; cursor:pointer; font-size:.7rem; font-weight:700; color:#000; padding:3px 8px; border-radius:6px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; transition:all .14s; }',
       '.tam-dd-del-btn:hover { color:#9B4D4D; border-color:#9B4D4D; background:#F5EAEA; }',
       '.tam-sessions-empty { color:#000; opacity:.4; text-align:center; padding:28px 0; font-size:.82rem; font-weight:700; }',
 
@@ -5967,7 +5940,7 @@
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */
-      '.tam-session-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; }',
+      '.tam-session-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; }',
       '.tam-session-btn:hover { background:#f0f0f0; border-color:#555; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
@@ -5990,7 +5963,7 @@
       '.tam-rec-collapsed .tam-rec-collapsible { display:none!important; }',
 
 /* ── Invoice blocks (proc style — clean, white) ── */
-      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:40px; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; contain:layout style; }',
+      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:40px; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; }',
       '.tam-invoice-block:last-of-type { border-bottom:none; padding-bottom:0; }',
       '.tam-invoice-block-header { display:flex; align-items:center; gap:10px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; border:1px solid #e0e0e0; border-bottom:none; flex-wrap:wrap; }',
       /* Single unified header look — no color variants */
@@ -6002,7 +5975,7 @@
       /* Toggle button: dark on white */
       '.tam-inv-color-0 .tam-inv-toggle-btn,.tam-inv-color-1 .tam-inv-toggle-btn,.tam-inv-color-2 .tam-inv-toggle-btn,.tam-inv-color-3 .tam-inv-toggle-btn,.tam-inv-color-4 .tam-inv-toggle-btn,.tam-inv-color-5 .tam-inv-toggle-btn { color:#bbb!important; }',
       /* Buttons inside header: proc style */
-      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
+      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
       '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):hover { background:#f0f0f0!important; border-color:#555!important; }',
       /* Quick active badge */
       '.tam-inv-color-0 .tam-inv-quick-active,.tam-inv-color-1 .tam-inv-quick-active,.tam-inv-color-2 .tam-inv-quick-active,.tam-inv-color-3 .tam-inv-quick-active,.tam-inv-color-4 .tam-inv-quick-active,.tam-inv-color-5 .tam-inv-quick-active { color:#000!important; font-weight:700!important; text-shadow:none!important; border:1px solid #e0e0e0!important; background:#f5f5f5!important; border-radius:6px; padding:3px 8px; }',
@@ -6038,7 +6011,7 @@
       /* Engine selector buttons (proc style) */
       '.tam-engine-sel-wrap { grid-column:1/-1; width:100%; margin-top:4px; }',
       '.tam-engine-btns { display:flex; gap:8px; margin-top:6px; justify-content:flex-start; flex-wrap:wrap; }',
-      '.tam-ebtn { border:1px solid #ccc; background:transparent; padding:7px 16px; border-radius:8px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; line-height:1.45; text-align:center; transition:background 0.15s,border-color 0.15s,color 0.15s; min-width:110px; color:#000; font-weight:700; text-transform:lowercase; }',
+      '.tam-ebtn { border:1px solid #ccc; background:transparent; padding:7px 16px; border-radius:8px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; line-height:1.45; text-align:center; transition:all 0.15s; min-width:110px; color:#000; font-weight:700; text-transform:lowercase; }',
       '.tam-ebtn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-ebtn-active { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-ebtn-label { display:block; font-weight:700; font-size:.82rem; }',
@@ -6060,7 +6033,7 @@
       /* ── Quick distribution buttons (proc style — white bg) ── */
       '.tam-rec-quick-btns { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid #e0e0e0; background:#fafafa!important; flex-wrap:wrap; border-radius:0; }',
       '.tam-quick-label { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000!important; white-space:nowrap; opacity:.5; }',
-      '.tam-quick-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc!important; border-radius:8px; background:transparent!important; color:#000!important; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; }',
+      '.tam-quick-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc!important; border-radius:8px; background:transparent!important; color:#000!important; transition:all 0.15s; white-space:nowrap; }',
       '.tam-quick-btn:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-quick-btn-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
       '.tam-quick-btn-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
@@ -6079,7 +6052,7 @@
       '.tam-rec-quick-col { min-width:100px; padding:2px 6px!important; background:#fafafa!important; border-left:2px solid #e0e0e0!important; }',
       '.tam-boxes-hdr-row .tam-rec-quick-col { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; background:#fafafa!important; }',
       '.tam-row-quick { display:flex; gap:3px; justify-content:center; }',
-      '.tam-row-quick-btn { padding:3px 8px; font-size:.68rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ddd; border-radius:6px; background:transparent; color:#000; transition:background 0.12s,border-color 0.12s,color 0.12s; white-space:nowrap; line-height:1.4; }',
+      '.tam-row-quick-btn { padding:3px 8px; font-size:.68rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ddd; border-radius:6px; background:transparent; color:#000; transition:all 0.12s; white-space:nowrap; line-height:1.4; }',
       '.tam-row-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-row-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; }',
       '.tam-row-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
@@ -6169,7 +6142,7 @@
       '.tam-box-total-input:disabled { background:#fafafa; color:#bbb; border-color:#e0e0e0; }',
       '.tam-box-pct { font-size:.68rem; font-weight:700; color:#000; opacity:.4; white-space:nowrap; }',
       '.tam-box-edit-btn { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.75rem; padding:1px 5px; transition:background .15s; }',
-      '.tam-box-filter-btn { background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:1px 5px; transition:background .15s,border-color .15s,color .15s; margin-left:2px; }',
+      '.tam-box-filter-btn { background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:1px 5px; transition:all .15s; margin-left:2px; }',
       '.tam-box-filter-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-box-edit-btn:hover { background:#f0f0f0; border-color:#000; }',
       '.tam-box-sub-labels { display:flex; justify-content:space-around; }',
@@ -6177,15 +6150,15 @@
       '.tam-sub-p { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',
 
       /* Columnas fijas — sticky con background OPACO (proc style) */
-      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background-color:#fff!important; background:#fff!important; border-right:2px solid #e0e0e0!important; text-align:left!important; position:sticky; left:0; z-index:2; }',
+      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background-color:#fff!important; background:#fff!important; border-right:2px solid #e0e0e0!important; text-align:left!important; position:sticky; left:0; z-index:2; box-shadow:2px 0 5px rgba(0,0,0,.08); will-change:transform; }',
       '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background-color:#fff!important; background:#fff!important; border-right:1px solid #e0e0e0!important; font-variant-numeric:tabular-nums; }',
       /* Sticky header cells */
-      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; }',
-      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; padding:4px 6px!important; }',
+      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 5px rgba(0,0,0,.08); }',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 5px rgba(0,0,0,.07); padding:4px 6px!important; }',
       /* Mobile sticky */
       '@media (max-width:768px) {',
       '  .tam-rec-boxes-scroll { overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }',
-      '  .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:10!important; min-width:110px!important; background-color:#fff!important; background:#fff!important; }',
+      '  .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:10!important; min-width:110px!important; background-color:#fff!important; background:#fff!important; box-shadow:3px 0 10px rgba(0,0,0,.1)!important; }',
       '  .tam-boxes-hdr-row .tam-rec-ref-col,',
       '  .tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:12!important; background-color:#fafafa!important; background:#fafafa!important; }',
       '  .tam-ref-over .tam-rec-ref-col { background-color:#fdf0f0!important; background:#fdf0f0!important; }',
@@ -6198,7 +6171,7 @@
       '.tam-tip-msg { color:#000; font-weight:700; }',
       '.tam-tip-btn { padding:3px 14px; font-size:.74rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #555; border-radius:7px; background:#fff; color:#000; transition:background .12s; text-transform:lowercase; }',
       '.tam-tip-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-tip-cancel { padding:3px 10px; font-size:.74rem; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:background .12s,border-color .12s,color .12s; text-transform:lowercase; }',
+      '.tam-tip-cancel { padding:3px 10px; font-size:.74rem; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:all .12s; text-transform:lowercase; }',
       '.tam-tip-cancel:hover { background:#f0f0f0; border-color:#555; }',
       /* pointer on clickable ref cells */
       '.tam-ref-complete .tam-rec-ref-col, .tam-ref-over .tam-rec-ref-col { cursor:pointer; }',
@@ -6215,7 +6188,7 @@
 
       /* ── Undo / Redo / Clear action buttons (proc style) ── */
       '.tam-hdr-action-col { padding:2px 4px!important; text-align:center!important; vertical-align:middle!important; }',
-      '.tam-action-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:26px; font-size:.9rem; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:background .12s,border-color .12s,color .12s; line-height:1; padding:0; }',
+      '.tam-action-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:26px; font-size:.9rem; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:all .12s; line-height:1; padding:0; }',
       '.tam-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
       '.tam-action-btn:disabled { opacity:.25; cursor:not-allowed; }',
       '.tam-undo-btn:hover:not(:disabled) { background:#5F7B94!important; border-color:#5F7B94!important; color:#fff!important; }',
@@ -6252,7 +6225,7 @@
 
       /* ── Per-invoice quick distribution buttons (proc style) ── */
       '.tam-inv-quick-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }',
-      '.tam-inv-quick-btn { padding:3px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:background 0.14s,border-color 0.14s,color 0.14s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-inv-quick-btn { padding:3px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.14s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-inv-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-inv-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
       '.tam-inv-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
@@ -6261,11 +6234,11 @@
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
-      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { padding:5px 13px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { padding:5px 13px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#f0f0f0; border-color:#555; }',
 
       /* ── Edit mode button (proc style) ── */
-      '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-edit-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-inv-edit-btn.active { background:#4A7C6F; color:#fff; border-color:#4A7C6F; }',
       '.tam-inv-edit-btn.active:hover { background:#3a6b60; border-color:#3a6b60; }',
@@ -6277,18 +6250,18 @@
       '.tam-edit-input:focus { border-color:#000; background:#fff; }',
       '.tam-edit-wide { min-width:160px; }',
       '.tam-edit-num { width:70px; text-align:center; }',
-      '.tam-edit-del-row { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.8rem; color:#ccc; padding:2px 7px; transition:background .15s,border-color .15s,color .15s; }',
+      '.tam-edit-del-row { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.8rem; color:#ccc; padding:2px 7px; transition:all .15s; }',
       '.tam-edit-del-row:hover { color:#9B4D4D; border-color:#9B4D4D; background:rgba(155,77,77,.08); }',
       '.tam-edit-actions { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px solid #e0e0e0; flex-wrap:wrap; }',
-      '.tam-edit-add-row { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background .15s,border-color .15s,color .15s; }',
+      '.tam-edit-add-row { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .15s; }',
       '.tam-edit-add-row:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-edit-save { padding:6px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background .15s,border-color .15s,color .15s; }',
+      '.tam-edit-save { padding:6px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .15s; }',
       '.tam-edit-save:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-edit-cancel { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:background .15s,border-color .15s,color .15s; }',
+      '.tam-edit-cancel { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:all .15s; }',
       '.tam-edit-cancel:hover { background:#f5f5f5; opacity:1; }',
 
       /* ── Remove button per invoice (proc style) ── */
-      '.tam-inv-remove-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:background 0.15s,border-color 0.15s,color 0.15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-remove-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-remove-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
 
             /* ── Stock modal (proc-or-modal system — identical to processamento.js) ── */
@@ -6302,13 +6275,13 @@
       '#tam-stock-inv-label { font-size:1rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-stock-sub-label { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:\'MontserratLight\',sans-serif; opacity:.55; }',
       '#tam-stock-actions { display:flex; gap:8px; align-items:center; }',
-      '.tam-stock-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s; white-space:nowrap; }',
+      '.tam-stock-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
       '.tam-stock-action-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-stock-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:background 0.14s,border-color 0.14s,color 0.14s; }',
+      '.tam-stock-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-stock-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       /* Copy bar — 5 cols, identical to proc-or-copy-bar */
       '.tam-stock-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
-      '.tam-stock-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
+      '.tam-stock-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
       '.tam-stock-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-stock-copy-btn.tam-stock-copy-active { border-color:#555!important; color:#000!important; background:#f0f0f0!important; }',
       '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
@@ -6342,7 +6315,7 @@
       '#tam-guia-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }',
       '#tam-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }',
       /* ── Banner sessões anteriores ── */
-      '.tam-guia-other-banner { display:flex; align-items:center; gap:7px; border-radius:8px; padding:5px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; max-width:340px; transition:background .3s,border-color .3s; }',
+      '.tam-guia-other-banner { display:flex; align-items:center; gap:7px; border-radius:8px; padding:5px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; max-width:340px; transition:all .3s; }',
       '.tam-guia-other-loading { background:#f5f5f5; color:#000; opacity:.55; }',
       '.tam-guia-other-none    { background:transparent; color:#4A7C6F; border:1px solid #c8e6c9; }',
       '.tam-guia-other-found   { background:#FFFBF5; border:1px solid #E8A44A; color:#000; flex-wrap:wrap; max-width:none; }',
@@ -6350,25 +6323,25 @@
       '.tam-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
       '.tam-guia-other-text strong { color:#000!important; }',
       '.tam-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
-      '.tam-guia-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000!important; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s; white-space:nowrap; }',
+      '.tam-guia-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000!important; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
       '.tam-guia-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
       '.tam-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
       '.tam-guia-confirm { border-color:#000!important; color:#000!important; background:transparent!important; }',
       '.tam-guia-confirm:hover:not(:disabled) { background:#f0f0f0!important; border-color:#555!important; }',
-      '.tam-guia-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:background 0.14s,border-color 0.14s,color 0.14s; }',
+      '.tam-guia-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
       '.tam-guia-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
       /* Address bar — 4 cols grid for Lisboa/Placa/FNC/PXO buttons */
       '.tam-guia-addr-bar-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
-      '.tam-guia-addr-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; white-space:nowrap; }',
+      '.tam-guia-addr-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; white-space:nowrap; }',
       '.tam-guia-addr-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-guia-addr-copied { background:#e8e8e8!important; border-color:#555!important; }',
       /* Inline header copy buttons (small, beside Referência label in th2) */
       '.tam-guia-copy-label { display:none; }',
-      '.tam-guia-copy-btn { background:transparent; border:1px solid #ccc; border-radius:5px; color:#888; font-size:.58rem; font-weight:700; padding:2px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,border-color .12s,color .12s; flex-shrink:0; display:inline-flex; align-items:center; }',
+      '.tam-guia-copy-btn { background:transparent; border:1px solid #ccc; border-radius:5px; color:#888; font-size:.58rem; font-weight:700; padding:2px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all .12s; flex-shrink:0; display:inline-flex; align-items:center; }',
       '.tam-guia-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; color:#4A7C6F; }',
-      '.tam-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:background .12s,border-color .12s,color .12s; flex-shrink:0; }',
+      '.tam-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
       '.tam-guia-hdr-copy:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-guia-hdr-copy.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
       '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
@@ -6406,7 +6379,7 @@
       '.tam-gc-title { font-size:.9rem; font-weight:700; color:#000; margin-bottom:12px; }',
       '.tam-gc-body { font-size:.82rem; color:#000; line-height:1.6; margin-bottom:18px; }',
       '.tam-gc-btns { display:flex; gap:8px; }',
-      '.tam-gc-btn { padding:8px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; color:#000; transition:background .12s,border-color .12s,color .12s; text-transform:lowercase; }',
+      '.tam-gc-btn { padding:8px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; color:#000; transition:all .12s; text-transform:lowercase; }',
       '.tam-gc-ok { border-color:#000!important; color:#000!important; background:#f0f0f0!important; }',
       '.tam-gc-ok:hover { background:#e8e8e8!important; border-color:#555!important; }',
       '.tam-gc-cancel:hover { background:#f0f0f0; border-color:#000; }',
@@ -6421,7 +6394,7 @@
       /* ── Anomaly report block (proc style) ── */
       '#tam-anomaly-area { width:100%; max-width:960px; margin-top:16px; }',
       '.tam-anomaly-btn-wrap { display:flex; justify-content:center; margin-bottom:10px; }',
-      '.tam-anomaly-btn { padding:9px 32px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #E8A44A; border-radius:10px; background:transparent; color:#C47A1E; transition:background .15s,border-color .15s,color .15s; letter-spacing:.02em; }',
+      '.tam-anomaly-btn { padding:9px 32px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #E8A44A; border-radius:10px; background:transparent; color:#C47A1E; transition:all .15s; letter-spacing:.02em; }',
       '.tam-anomaly-btn:hover { background:#E8A44A; color:#fff; }',
       '#tam-anomaly-report { border:1px solid #e0e0e0; border-radius:14px; overflow:hidden; font-family:\'MontserratLight\',sans-serif; }',
       '.tam-anomaly-title { padding:10px 16px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; background:#fafafa; border-radius:14px 14px 0 0; }',
@@ -6475,7 +6448,7 @@
       '.tam-dn-inp-p:focus { border-color:#000; }',
       '.tam-dn-btns { display:flex; gap:4px; align-items:center; white-space:nowrap; }',
       '.tam-dn-btns-cell { width:1%; white-space:nowrap; }',
-      '.tam-dn-qbtn { padding:4px 8px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:background .12s,border-color .12s,color .12s; white-space:nowrap; }',  /* compact buttons */
+      '.tam-dn-qbtn { padding:4px 8px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; }',  /* compact buttons */
       '.tam-dn-f100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
       '.tam-dn-f100:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-p100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
@@ -6487,16 +6460,16 @@
       '.tam-dn-odd-dlg { padding:10px 16px; background:#fafafa; border-top:1px solid #e0e0e0; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-family:\'MontserratLight\',sans-serif; }',
       '.tam-dn-odd-body { font-size:.82rem; font-weight:700; color:#000; }',
       '.tam-dn-odd-btns { display:flex; gap:6px; flex-wrap:wrap; }',
-      '.tam-dn-odd-btn { padding:5px 12px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:background .12s,border-color .12s,color .12s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-dn-odd-btn { padding:5px 12px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-dn-odd-f { border-color:#ccc!important; color:#000!important; }',
       '.tam-dn-odd-f:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-odd-p { border-color:#ccc!important; color:#000!important; }',
       '.tam-dn-odd-p:hover { background:#f0f0f0!important; border-color:#555!important; }',
       '.tam-dn-odd-skip:hover { background:#f5f5f5!important; }',
       '#tam-dn-footer { display:flex; align-items:center; gap:10px; padding:12px 20px; border-top:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
-      '.tam-dn-action-btn { padding:7px 22px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:background .13s,border-color .13s,color .13s; text-transform:lowercase; }',
+      '.tam-dn-action-btn { padding:7px 22px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .13s; text-transform:lowercase; }',
       '.tam-dn-action-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-dn-cancel-btn { padding:7px 16px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:background .13s,border-color .13s,color .13s; text-transform:lowercase; }',
+      '.tam-dn-cancel-btn { padding:7px 16px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:all .13s; text-transform:lowercase; }',
       '.tam-dn-cancel-btn:hover { background:#f5f5f5; opacity:1; }',
       '#tam-dn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:#fff; color:#000; border:1.5px solid #000; padding:10px 20px; border-radius:10px; font-size:.84rem; font-family:\'MontserratLight\',sans-serif; opacity:0; transition:opacity .3s,transform .3s; z-index:20000; pointer-events:none; font-weight:700; box-shadow:0 4px 20px rgba(0,0,0,.15); }',
       '#tam-dn-toast.tam-dn-toast-show { opacity:1; transform:translateX(-50%) translateY(0); }',
@@ -6506,7 +6479,7 @@
       '#tam-motord-spin { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(16px); background:#fff; color:#000; border:1.5px solid #000; padding:9px 20px; border-radius:12px; font-size:.82rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:20001; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,.15); }',
 
       /* ── Motor D update badge ── */
-      '.tam-motord-update-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #E8A44A; border-radius:8px; background:transparent; color:#C47A1E; transition:background .13s,border-color .13s,color .13s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-motord-update-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #E8A44A; border-radius:8px; background:transparent; color:#C47A1E; transition:all .13s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-motord-update-badge:hover { background:#E8A44A; color:#fff; }',
 
       /* ── Motor D update modal ── */
@@ -6516,7 +6489,7 @@
       '#tam-motord-update-panel { position:relative; z-index:1; width:min(480px,94vw); background:#fff; border-radius:16px; box-shadow:0 16px 60px rgba(0,0,0,.28); overflow:hidden; transform:translateY(10px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
       '#tam-motord-update-modal.tam-motord-update-visible #tam-motord-update-panel { transform:translateY(0); }',
       '#tam-motord-update-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fafafa; border-bottom:1px solid #e0e0e0; font-size:.84rem; font-weight:700; color:#000; }',
-      '#tam-motord-update-close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:1rem; background:none; border:1px solid #ddd; border-radius:7px; cursor:pointer; color:#000; transition:background .12s,border-color .12s,color .12s; }',
+      '#tam-motord-update-close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:1rem; background:none; border:1px solid #ddd; border-radius:7px; cursor:pointer; color:#000; transition:all .12s; }',
       '#tam-motord-update-close:hover { background:#9B4D4D; color:#fff; border-color:#9B4D4D; }',
       '#tam-motord-update-body { padding:20px 22px; font-size:.85rem; font-weight:600; color:#000; line-height:1.7; }',
       '#tam-motord-update-body p { margin:0 0 10px; }',
@@ -6569,7 +6542,7 @@
 
       /* Action buttons inside table (proc style) */
       '.tam-dnv-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }',
-      '.tam-dnv-btn { padding:3px 10px; font-size:.73rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:6px; border:1px solid #ccc; background:transparent; color:#000; transition:background .12s,border-color .12s,color .12s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-dnv-btn { padding:3px 10px; font-size:.73rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:6px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-dnv-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-dnv-btn-edit { border-color:#5F7B94!important; color:#5F7B94!important; }',
       '.tam-dnv-btn-edit:hover { background:#5F7B94!important; color:#fff!important; }',
@@ -6792,13 +6765,13 @@
             'display:flex;align-items:center;justify-content:center;gap:10px;' +
             'padding:10px 20px;border-radius:8px;border:1px solid #9B4D4D;cursor:pointer;' +
             'background:transparent;color:#9B4D4D;font-size:.82rem;font-weight:700;font-family:\'MontserratLight\',sans-serif;' +
-            'transition:background .15s,border-color .15s,color .15s;margin-bottom:8px;text-transform:lowercase;' +
+            'transition:all .15s;margin-bottom:8px;text-transform:lowercase;' +
           '">guardar e fechar</button>' +
           '<button id="tam-close-confirm-no" style="' +
             'display:flex;align-items:center;justify-content:center;' +
             'padding:10px 20px;border-radius:8px;border:1px solid #e0e0e0;' +
             'background:transparent;color:#000;font-size:.82rem;font-weight:700;font-family:\'MontserratLight\',sans-serif;cursor:pointer;' +
-            'transition:background .15s,border-color .15s,color .15s;text-transform:lowercase' +
+            'transition:all .15s;text-transform:lowercase' +
           '">cancelar</button>';
 
         overlay.appendChild(box);

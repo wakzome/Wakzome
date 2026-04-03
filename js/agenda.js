@@ -89,8 +89,8 @@ input,textarea{cursor:text!important}
 .ag-fbs-l{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000}
 .ag-fbs-v{font-size:1rem;font-weight:bold;color:#000}
 .ag-fbs-v.r{color:#c62828}.ag-fbs-v.a{color:#e65100}
-#ag-table-outer{text-align:center;margin-bottom:0}
-#ag-table-wrap{background:#fff;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden;display:inline-block;width:auto;text-align:left}
+#ag-table-outer{text-align:center;margin-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
+#ag-table-wrap{background:#fff;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden;display:block;width:max-content;min-width:100%;text-align:left}
 #ag-table{width:auto;border-collapse:collapse;font-family:'MontserratLight',sans-serif;font-size:.95rem;white-space:nowrap}
 #ag-table thead th{background:#f0f0f0;padding:11px 14px;text-align:left;font-size:.75rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;color:#000;border-bottom:1px solid #e6e6e6;position:sticky;top:0;z-index:2}
 #ag-table thead th[data-sort]{cursor:crosshair!important}
@@ -187,9 +187,6 @@ input,textarea{cursor:text!important}
 .ag-edit-once-msg{font-size:.78rem;font-weight:bold;color:#000;display:none}
 .ag-edit-once-msg.show{display:block}
 @media(max-width:768px){#ag-summary{grid-template-columns:repeat(2,1fr)}#ag-by-forn{grid-template-columns:repeat(2,1fr)}#ag-filter-wrap{margin-left:0}#ag-chart-wrap{flex-direction:column}.ag-fg2{grid-template-columns:1fr}#ag-hero-value{font-size:2.2rem}
-  /* Scroll horizontal na tabela — só mobile */
-  #ag-table-outer{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
-  #ag-table-wrap{display:block;width:max-content;min-width:100%}
   /* Cards por fornecedor — layout limpo em mobile */
   #ag-by-forn{grid-template-columns:1fr!important;gap:10px}
   .ag-fb-block{width:100%}

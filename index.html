@@ -440,6 +440,7 @@ body {
   display: flex; flex-direction: column; align-items: center;
   padding: 0; font-family: 'MontserratLight', sans-serif;
   -webkit-overflow-scrolling: touch;
+  will-change: scroll-position;
 }
 
 /* ─── FATURAS SUB-OVERLAY ─── */
@@ -2134,6 +2135,10 @@ body::before {
   60%     { transform: translate(4%, -2%); }
 }
 
+/* ── Pausa glow en módulos pesados (TAM + Processamento) ── */
+body.no-glow #glow-layer-1,
+body.no-glow #glow-layer-2 { animation: none; }
+
 /* ── Button micro-interactions ── */
 button, .tab-btn, #key-submit, #recibos-link,
 .modal-btn, #r-process-btn, #r-save-config,
@@ -3337,7 +3342,7 @@ td                   { font-size: .96rem !important; }
 <!-- PROCESSAMENTO OVERLAY -->
 <div id="processamento-overlay">
   <div id="processamento-overlay-bar">
-    <button id="processamento-overlay-back" onclick="closeProcessamentoOverlay()">← voltar</button>
+    <button id="processamento-overlay-back" onclick="closeProcessamentoOverlay();document.body.classList.remove('no-glow')">← voltar</button>
     <div id="processamento-overlay-title">processamento de faturas</div>
   </div>
   <div id="processamento-overlay-content">
@@ -3797,7 +3802,8 @@ td                   { font-size: .96rem !important; }
     // we trigger their overlay functions if they exist.
     if (tab === 'agenda'        && typeof openAgendaOverlay        === 'function') { openAgendaOverlay();        adminApp.classList.remove('module-open'); }
     if (tab === 'rotulos'       && typeof openRotulosOverlay       === 'function') { openRotulosOverlay();       adminApp.classList.remove('module-open'); }
-    if (tab === 'processamento' && typeof openProcessamentoOverlay === 'function') { openProcessamentoOverlay(); adminApp.classList.remove('module-open'); }
+    if (tab === 'processamento' && typeof openProcessamentoOverlay === 'function') { openProcessamentoOverlay(); adminApp.classList.remove('module-open'); document.body.classList.add('no-glow'); }
+    if (tab === 'tam') { document.body.classList.add('no-glow'); }
 
     // Férias: trigger initialization if ferias.js exposes an init function,
     // otherwise dispatch a synthetic tab-change event so ferias.js can listen for it.
@@ -3826,6 +3832,7 @@ td                   { font-size: .96rem !important; }
   function goToDashboard() {
     var adminApp = document.getElementById('admin-app');
     adminApp.classList.remove('module-open');
+    document.body.classList.remove('no-glow');
     // Reset tab panels
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
 

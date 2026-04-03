@@ -79,7 +79,7 @@
       '#proc-content .proc-table-wrap thead th.left { text-align:left; padding-left:10px; }',
       '#proc-content .proc-table-wrap thead th.th-a4 { color:#000; background:transparent; }',
       '#proc-content .proc-table-wrap thead th.th-a5 { color:#000; background:transparent; }',
-      '#proc-content .proc-table-wrap tbody tr { border-bottom:1px solid #f0f0f0; transition:background 0.1s; }',
+      '#proc-content .proc-table-wrap tbody tr { border-bottom:1px solid #f0f0f0; }',
       '#proc-content .proc-table-wrap tbody tr:hover { background:#f5f5f5 !important; }',
       '#proc-content .proc-table-wrap tbody tr.has-data { background:#fff; }',
       '#proc-content .proc-table-wrap td { padding:3px 4px; vertical-align:middle; white-space:nowrap; border:none; border-radius:0; font-size:.9rem; font-weight:800; color:#000; }',

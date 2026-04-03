@@ -366,9 +366,9 @@
       if (matched) feriasMatchedPids.add(matched.id);
     });
 
-    const DIAS_PT = {SEG:'S',TER:'T',QUA:'Q',QUI:'Q',SEX:'S',SAB:'S'};
-    const DIAS_FULL = {SEG:'Segunda',TER:'Terça',QUA:'Quarta',QUI:'Quinta',SEX:'Sexta',SAB:'Sábado'};
-    const DIAS = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    const DIAS_PT = {SEG:'S',TER:'T',QUA:'Q',QUI:'Q',SEX:'S',SAB:'S',DOM:'D'};
+    const DIAS_FULL = {SEG:'Segunda',TER:'Terça',QUA:'Quarta',QUI:'Quinta',SEX:'Sexta',SAB:'Sábado',DOM:'Domingo'};
+    const DIAS = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
 
     PEOPLE.forEach(p => {
       const onFerias = feriasMatchedPids.has(p.id) || feriasAutoPids.has(p.id);
@@ -1972,7 +1972,7 @@
         #tab-gerador .gh-staff-weight { font-size:.70rem; color:#555; font-weight:600; }
         #tab-gerador .gh-staff-knows { font-size:.68rem; color:#999; }
         #tab-gerador .gh-staff-actions { flex-shrink:0; margin-left:10px; }
-        #tab-gerador .gh-btn-xs { font-size:.68rem; padding:3px 8px; }
+        #tab-gerador .gh-btn-xs { font-size:.62rem; padding:2px 6px; }
 
         /* ── PERSON FORM ── */
         #tab-gerador .gh-person-form { border:1px solid #e0e0e0; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; }
@@ -2005,7 +2005,11 @@
         #tab-gerador .gh-day-btns { display:flex; gap:3px; flex-wrap:wrap; }
         #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:4px; width:26px; height:26px; font-size:.68rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
         #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
-        @media(max-width:700px) { #tab-gerador .gh-sr { grid-template-columns:140px repeat(4,minmax(120px,1fr)); overflow-x:auto; } }
+        @media(max-width:700px) {
+          #tab-gerador .gh-sr { display:flex; flex-direction:row; overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
+          #tab-gerador .gh-sr-info { min-width:140px; flex-shrink:0; }
+          #tab-gerador .gh-sr-col { min-width:130px; flex-shrink:0; }
+        }
       `;
       document.head.appendChild(style);
     }

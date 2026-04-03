@@ -1203,15 +1203,22 @@
       return { type: 'work', shift: SH_DEFAULT, store: sid };
     }
     if (p.store && storeOpen(p.store, day)) return { type: 'work', shift: SH_DEFAULT, store: p.store };
-    // Tienda fija cerrada este día: buscar tienda que conoce con menos personal (cubrir férias/folgas)
-    // Ordenar por: tiendas con menos cobertura actual primero (se calcula en intelPass; aquí primer match)
+    // Sin tienda fija o con tienda fija cerrada: asignar respetando máximos
+    // Prioridad: avenida → mercado → shana → maxx (por priority del STORE)
     const alt = S.openStores
-      .filter(id => S.openDays[id]?.includes(day) && p.knows.includes(id))
+      .filter(id => {
+        if (!S.openDays[id]?.includes(day)) return false;
+        if (!p.knows.includes(id)) return false;
+        // Contar cuántas personas ya asignadas a esta tienda este día
+        const cnt = active.filter(x =>
+          x.id !== p.id && S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === id
+        ).length;
+        return cnt < storeMax(id);
+      })
       .sort((a, b) => {
-        // Priorizar tiendas donde esta persona es más útil (sin tienda fija propia abierta)
-        const aHasFixed = active.some(x => x.id !== p.id && x.store === a && storeOpen(a, day));
-        const bHasFixed = active.some(x => x.id !== p.id && x.store === b && storeOpen(b, day));
-        return (aHasFixed ? 0 : -1) - (bHasFixed ? 0 : -1);
+        const stA = STORES.find(s => s.id === a);
+        const stB = STORES.find(s => s.id === b);
+        return (stA?.priority ?? 9) - (stB?.priority ?? 9);
       })[0];
     if (alt) return { type: 'work', shift: SH_DEFAULT, store: alt };
     return { type: 'folga', shift: null, store: null };
@@ -1313,9 +1320,10 @@
           .filter(p => p.store !== st.id) // NUNCA mover a alguien con tienda fija aquí
           .slice(0, overWorkers.length - max);
 
+        // Round-robin entre avenida y mercado para distribuir excedentes equitativamente
         toMove.forEach(p => {
-          // Destino: tienda con menos gente que conoce, respetando su máximo
-          const dest = S.openStores
+          const dest = ['avenida', 'mercado', ...S.openStores]
+            .filter((id, idx, arr) => arr.indexOf(id) === idx) // deduplicar
             .filter(id => {
               if (id === st.id) return false;
               if (!storeOpen(id, day)) return false;
@@ -1324,6 +1332,7 @@
               return cnt < storeMax(id);
             })
             .sort((a, b) => {
+              // Round-robin: ir a la que tiene menos personas ahora
               const ca = wk().filter(x => S.schedule[x.id][day].store === a).length;
               const cb = wk().filter(x => S.schedule[x.id][day].store === b).length;
               return ca - cb;
@@ -1438,12 +1447,19 @@
           .filter(p => p.store !== st.id)
           .slice(0, over.length - max)
           .forEach(p => {
-            const dest = S.openStores.find(id => {
-              if (id === st.id) return false;
-              if (!storeOpen(id, day)) return false;
-              if (!p.knows.includes(id)) return false;
-              return wk().filter(x => S.schedule[x.id][day].store === id).length < storeMax(id);
-            });
+            const dest = ['avenida', 'mercado', ...S.openStores]
+              .filter((id, idx, arr) => arr.indexOf(id) === idx)
+              .filter(id => {
+                if (id === st.id) return false;
+                if (!storeOpen(id, day)) return false;
+                if (!p.knows.includes(id)) return false;
+                return wk().filter(x => S.schedule[x.id][day].store === id).length < storeMax(id);
+              })
+              .sort((a, b) => {
+                const ca = wk().filter(x => S.schedule[x.id][day].store === a).length;
+                const cb = wk().filter(x => S.schedule[x.id][day].store === b).length;
+                return ca - cb;
+              })[0];
             if (dest) {
               S.schedule[p.id][day].store = dest;
               S.decisions.push({ type: 'info', text: `${day}: ${p.name} → ${sname(dest)} (máx ${max} em ${sname(st.id)}).` });

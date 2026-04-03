@@ -1672,6 +1672,8 @@
     S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
+    try {
+
     // Save a snapshot of the original openDays/openStores (before sunday check may mutate them)
     // so that regenSchedule() can restore the user's original intent.
     S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
@@ -1703,8 +1705,6 @@
     saveMem();
 
     // ── Minimum coverage gate ──
-    // If the generated schedule fails to cover any store on any open day,
-    // block the output and show the coverage error screen instead.
     const coverageViolations = validateMinCoverage(active);
     if (coverageViolations.length > 0) {
       showCoverageBlocker(coverageViolations, active);
@@ -1712,11 +1712,28 @@
     }
 
     showSchedule(active);
+
+    } catch(err) {
+      console.error('Gerador error:', err);
+      const c = getContainer();
+      if (c) {
+        fixPanelLayout('schedule');
+        c.innerHTML = `<div class="gh-wiz-box">
+          <div class="gh-wiz-label">Erro interno</div>
+          <div class="gh-wiz-title">⚠ Erro ao gerar horário</div>
+          <div class="gh-wiz-sub" style="color:#a93226;font-family:monospace;font-size:.75rem">${err.message}</div>
+          <div class="gh-wiz-nav">
+            <button class="gh-btn gh-btn-ghost" id="gh-err-back">← Voltar às lojas</button>
+            <button class="gh-btn gh-btn-solid" id="gh-err-regen">↺ Tentar novamente</button>
+          </div>
+        </div>`;
+        document.getElementById('gh-err-back')?.addEventListener('click', () => { wStep = 2; renderWiz(); });
+        document.getElementById('gh-err-regen')?.addEventListener('click', () => generate());
+      }
+    }
   }
 
   // ── MINIMUM COVERAGE VALIDATION ──
-  // Checks that every open store has the minimum required staff on every open day (Mon-Sat).
-  // Returns an array of violations. Empty array = all good.
   function validateMinCoverage(active) {
     const violations = [];
     const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
@@ -1729,6 +1746,19 @@
           return c?.type === 'work' && c?.store === sid;
         }).length;
         if (have < min) {
+          // Se o máximo configurado é menor que o mínimo, é uma configuração inválida — alertar mas não bloquear
+          const max = storeMax(sid);
+          if (max < min) {
+            S.alerts.push({ type: 'amber', text: `${day}: ${sname(sid)} — máximo (${max}) inferior ao mínimo (${min}). Verifique a configuração.` });
+            return;
+          }
+          // Se o total de activos é insuficiente para cobrir o mínimo, alertar mas não bloquear
+          const totalActive = active.filter(p => !isAbsent(p.id, day)).length;
+          const totalMin = S.openStores.filter(s => storeOpen(s, day)).reduce((sum, s) => sum + storeMin(s), 0);
+          if (totalActive < totalMin) {
+            S.alerts.push({ type: 'red', text: `${day}: ${sname(sid)} sem cobertura mínima (${have}/${min}) — pessoal insuficiente.` });
+            return;
+          }
           violations.push({ day, sid, have, min });
         }
       });

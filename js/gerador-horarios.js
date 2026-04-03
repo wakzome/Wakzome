@@ -448,15 +448,6 @@
       list.appendChild(row);
     });
 
-    // Set uniform name column width based on longest name
-    requestAnimationFrame(() => {
-      const infoCols = list.querySelectorAll('.gh-sr-info');
-      let maxW = 0;
-      infoCols.forEach(el => { maxW = Math.max(maxW, el.scrollWidth); });
-      if (maxW > 0) list.style.setProperty('--gh-name-col-width', maxW + 'px');
-      infoCols.forEach(el => { el.style.width = maxW + 'px'; });
-    });
-
     list.querySelectorAll('.gh-edit-person').forEach(btn => {
       btn.addEventListener('click', () => openEditPerson(btn.dataset.pid));
     });
@@ -1842,7 +1833,7 @@
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:hidden;
+          flex:1; overflow-y:auto; overflow-x:auto;
           padding:0 0 60px; -webkit-overflow-scrolling:touch;
           background:#fff; color:#111;
           min-height:0;
@@ -1975,7 +1966,7 @@
 
         /* ── STAFF MANAGEMENT PANEL ── */
         /* ── STEP 2 LAYOUT ── */
-        #tab-gerador .gh-step2-wrap { width:100%; max-width:780px; margin:0 auto; padding:16px 16px 40px; box-sizing:border-box; overflow:visible; }
+        #tab-gerador .gh-step2-wrap { width:100%; max-width:780px; margin:0 auto; padding:12px 8px 40px; box-sizing:border-box; }
         #tab-gerador .gh-step2-header { margin-bottom:14px; }
         #tab-gerador .gh-step2-header-top { margin-bottom:10px; }
         #tab-gerador .gh-step2-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
@@ -2006,12 +1997,12 @@
 
         /* ── STAFF ROW ── */
         #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
-        #tab-gerador .gh-sr { display:flex; flex-direction:row; border:1px solid #e8e8e8; border-radius:8px; background:#fff; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        #tab-gerador .gh-sr { display:flex; flex-direction:row; border:1px solid #e8e8e8; border-radius:8px; background:#fff; overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; box-sizing:border-box; }
         #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
-        #tab-gerador .gh-sr-info { padding:8px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:2px; width:var(--gh-name-col-width, 130px); flex-shrink:0; }
+        #tab-gerador .gh-sr-info { padding:8px 8px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:2px; min-width:90px; max-width:130px; flex-shrink:0; }
         #tab-gerador .gh-sr-name { font-size:.78rem; font-weight:700; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         #tab-gerador .gh-sr-meta { font-size:.66rem; color:#888; }
-        #tab-gerador .gh-sr-col { padding:8px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:0; flex-shrink:0; }
+        #tab-gerador .gh-sr-col { padding:8px 8px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; flex-shrink:0; }
         #tab-gerador .gh-sr-col:last-child { border-right:none; }
         #tab-gerador .gh-sr-col-title { font-size:.63rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
         #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; margin-top:6px; }

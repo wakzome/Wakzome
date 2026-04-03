@@ -382,6 +382,9 @@
     const DIAS = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
 
     const sortedPeople = [...PEOPLE].sort((a,b) => a.name.localeCompare(b.name));
+    // Pre-calculate max name width for uniform column
+    const maxNameLen = sortedPeople.reduce((max, p) => Math.max(max, shortName(p.name).length), 0);
+    const nameColW = Math.min(Math.max(maxNameLen * 7 + 20, 100), 160);
     sortedPeople.forEach(p => {
       const onFerias = feriasMatchedPids.has(p.id) || feriasAutoPids.has(p.id);
       const condLabel = p.efetiva ? 'Efectiva' : 'Nova';
@@ -399,7 +402,7 @@
       const row = document.createElement('div');
       row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}`;
       row.dataset.pid = p.id;
-      row.innerHTML = `
+      row.innerHTML = `<div class="gh-sr-inner" style="--nw:${nameColW}px">
         <!-- COL 1: INFO + ÍCONES -->
         <div class="gh-sr-info">
           <div class="gh-sr-name">${shortName(p.name)}</div>
@@ -412,6 +415,7 @@
           </div>
         </div>
 
+        </div><div class="gh-sr-cols">
         <!-- COL 2: FOLGA + LICENÇA -->
         <div class="gh-sr-col">
           <div class="gh-sr-col-title">📅 Folga</div>
@@ -1997,7 +2001,10 @@
 
         /* ── STAFF ROW ── */
         #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
-        #tab-gerador .gh-sr { display:flex; flex-direction:row; border:1px solid #e8e8e8; border-radius:8px; background:#fff; overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; box-sizing:border-box; }
+        #tab-gerador .gh-sr { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-sizing:border-box; width:100%; }
+        #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-sr-inner { display:flex; flex-direction:row; width:100%; }
+        #tab-gerador .gh-sr-cols { display:flex; flex-direction:row; flex:1; overflow-x:auto; -webkit-overflow-scrolling:touch; }
         #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
         #tab-gerador .gh-sr-info { padding:8px 8px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:2px; min-width:90px; max-width:130px; flex-shrink:0; }
         #tab-gerador .gh-sr-name { font-size:.78rem; font-weight:700; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -2073,7 +2080,7 @@
             <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-modal-cancel">Cancelar</button>
             <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-modal-save">Guardar</button>
           </div>
-        </div>`;
+        </div></div></div>`;
       document.body.appendChild(modalEl);
 
       document.getElementById('gh-modal-x').addEventListener('click', closeModal);

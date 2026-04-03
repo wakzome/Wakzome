@@ -148,14 +148,9 @@
   function fixPanelLayout() {
     const panel = document.getElementById('tab-gerador');
     if (panel) {
-      // NEVER set display here — the tab system's CSS (.tab-panel.active { display:flex })
-      // is the single source of truth for visibility. Forcing display:flex here causes the
-      // gerador panel to bleed into other modules when tabs switch.
-      panel.style.padding = '0';
+      // Only set colours — overflow and layout are controlled by HTML CSS
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      panel.style.overflow = 'hidden';
-      panel.style.flexDirection = 'column';
     }
   }
 
@@ -164,13 +159,8 @@
     // NEVER touch display — the tab system's CSS controls visibility exclusively.
     const panel = document.getElementById('tab-gerador');
     if (panel) {
-      panel.style.padding = '';
       panel.style.background = '';
       panel.style.color = '';
-      panel.style.overflow = '';
-      panel.style.flexDirection = '';
-      // display must never be set inline — clear any leftover value just in case
-      panel.style.display = '';
     }
     const modal = document.getElementById('gh-modal');
     if (modal) {
@@ -1938,20 +1928,6 @@
       style.textContent = `
         /* ── LAYOUT — isolation from admin dark theme ── */
         #tab-gerador { background:#fff !important; color:#111 !important; }
-        #tab-gerador.active {
-          display:flex !important; flex-direction:column !important;
-          flex:1 !important; width:100% !important;
-          overflow:hidden !important;
-          padding:0 !important;
-          background:#fff !important; color:#111 !important;
-          box-sizing:border-box;
-        }
-        #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:auto;
-          padding:0 0 60px;
-          background:#fff; color:#111;
-          -webkit-overflow-scrolling:touch;
-        }
 
         /* ── WIZARD ── */
         @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }

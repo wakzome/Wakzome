@@ -1956,7 +1956,7 @@
     tip.id = 'proc-onboarding-tip';
     tip.innerHTML =
       '<div class="proc-tip-bubble">'
-      + '<span>&#8594; começa aqui &mdash; escreve o fornecedor</span>'
+      + '<span style="color:#fff!important">&#8594; começa aqui &mdash; escreve o fornecedor</span>'
       + '</div>'
       + '<div class="proc-tip-arrow"></div>';
 

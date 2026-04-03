@@ -2026,35 +2026,43 @@
 
         /* ── TABLE LAYOUT ── */
         #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0; overflow-x:auto; overflow-y:visible; box-sizing:border-box; -webkit-overflow-scrolling:touch; }
-        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); margin:0 16px; }
 
-        /* ── STICKY FIRST COLUMN ── */
-        #tab-gerador .gh-sched-tbl td:first-child,
-        #tab-gerador .gh-sched-tbl th:first-child {
-          position:sticky;
-          left:0;
-          background-color:#fff;
-          z-index:2;
-          box-shadow:2px 0 5px rgba(0,0,0,0.05);
-          width:140px;
-          min-width:140px;
-          max-width:140px;
+        /* 1. CONTENEDOR: bloque desplazable */
+        #tab-gerador .gh-store-block {
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          width: 100% !important;
+          display: block !important;
+          margin-bottom: 48px;
+          padding-bottom: 15px !important;
+          box-sizing: border-box;
         }
-        #tab-gerador .gh-tbl-store-hdr td:first-child {
-          background-color:#efefef;
-          z-index:3;
+
+        /* 2. TABLA: obligada a NO encogerse */
+        #tab-gerador .gh-sched-tbl {
+          width: max-content !important;
+          min-width: 100% !important;
+          border-collapse: collapse !important;
+          table-layout: auto;
         }
+
+        /* 3. CELDAS: sin saltos de linea, fondo solido */
+        #tab-gerador .gh-sched-tbl th,
+        #tab-gerador .gh-sched-tbl td {
+          white-space: nowrap !important;
+          background-color: #ffffff !important;
+        }
+
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
-        #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
+        #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; width:106px; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
         #tab-gerador .gh-sched-tbl td:first-child { padding:0; }
         #tab-gerador .gh-sh-td { width:106px; min-width:106px; max-width:106px; text-align:center; cursor:pointer; }
-        #tab-gerador .gh-sh-td:hover { background:#f4f4f4; }
+        #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
         #tab-gerador .gh-no-click { cursor:default; }
-        #tab-gerador .gh-no-click:hover { background:transparent; }
+        #tab-gerador .gh-no-click:hover { background:transparent !important; }
 
         /* ── PERSON CELL ── */
         #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }

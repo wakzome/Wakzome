@@ -221,7 +221,7 @@
       '#proc-content .proc-audit-pair-err { color:#E8A44A; font-weight:600; font-size:.75rem; }',
       '#proc-content .proc-audit-note { font-size:.68rem; font-weight:600; color:#000; opacity:.35; margin-top:10px; }',
       /* Onboarding tooltip */
-      '#proc-onboarding-tip { position:absolute; z-index:2000; pointer-events:none; animation:proc-tip-in 0.3s ease both; }',
+      '#proc-onboarding-tip { position:absolute; z-index:2000; pointer-events:none; animation:proc-tip-in 0.3s ease both; color:#fff !important; }',
       '@keyframes proc-tip-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }',
       '#proc-onboarding-tip .proc-tip-bubble { background:#1a1a1a; color:#fff !important; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; padding:8px 14px; border-radius:10px; white-space:nowrap; box-shadow:0 4px 18px rgba(0,0,0,.28); display:flex; align-items:center; gap:8px; }',
       '#proc-onboarding-tip .proc-tip-arrow { position:absolute; top:100%; left:18px; border:7px solid transparent; border-top-color:#1a1a1a; }',

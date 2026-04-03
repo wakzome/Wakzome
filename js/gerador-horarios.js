@@ -145,40 +145,23 @@
   let wStep = 0;
   function getContainer() { return document.getElementById('gh-container'); }
 
-  function fixPanelLayout(mode) {
+  function fixPanelLayout() {
     const panel = document.getElementById('tab-gerador');
     if (panel) {
+      // NEVER set display here — the tab system's CSS (.tab-panel.active { display:flex })
+      // is the single source of truth for visibility. Forcing display:flex here causes the
+      // gerador panel to bleed into other modules when tabs switch.
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
+      panel.style.overflow = 'visible';
       panel.style.flexDirection = 'column';
-      if (mode === 'schedule') {
-        // Schedule view: panel clips, container scrolls
-        panel.style.overflow = 'hidden';
-      } else {
-        // Wizard: content can overflow naturally
-        panel.style.overflow = 'visible';
-      }
-    }
-    const container = document.getElementById('gh-container');
-    if (container) {
-      if (mode === 'schedule') {
-        container.style.overflowY = 'auto';
-        container.style.overflowX = 'hidden';
-        container.style.webkitOverflowScrolling = 'touch';
-        container.style.flex = '1';
-        container.style.minHeight = '0';
-      } else {
-        container.style.overflowY = '';
-        container.style.overflowX = '';
-        container.style.webkitOverflowScrolling = '';
-        container.style.flex = '';
-        container.style.minHeight = '';
-      }
     }
   }
 
   function cleanupGeradorLayout() {
+    // Called when leaving the gerador tab — reset only the inline styles we added.
+    // NEVER touch display — the tab system's CSS controls visibility exclusively.
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '';
@@ -186,15 +169,8 @@
       panel.style.color = '';
       panel.style.overflow = '';
       panel.style.flexDirection = '';
+      // display must never be set inline — clear any leftover value just in case
       panel.style.display = '';
-    }
-    const container = document.getElementById('gh-container');
-    if (container) {
-      container.style.overflowY = '';
-      container.style.overflowX = '';
-      container.style.webkitOverflowScrolling = '';
-      container.style.flex = '';
-      container.style.minHeight = '';
     }
     const modal = document.getElementById('gh-modal');
     if (modal) {
@@ -1672,8 +1648,6 @@
     S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
-    try {
-
     // Save a snapshot of the original openDays/openStores (before sunday check may mutate them)
     // so that regenSchedule() can restore the user's original intent.
     S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
@@ -1705,6 +1679,8 @@
     saveMem();
 
     // ── Minimum coverage gate ──
+    // If the generated schedule fails to cover any store on any open day,
+    // block the output and show the coverage error screen instead.
     const coverageViolations = validateMinCoverage(active);
     if (coverageViolations.length > 0) {
       showCoverageBlocker(coverageViolations, active);
@@ -1712,28 +1688,11 @@
     }
 
     showSchedule(active);
-
-    } catch(err) {
-      console.error('Gerador error:', err);
-      const c = getContainer();
-      if (c) {
-        fixPanelLayout('schedule');
-        c.innerHTML = `<div class="gh-wiz-box">
-          <div class="gh-wiz-label">Erro interno</div>
-          <div class="gh-wiz-title">⚠ Erro ao gerar horário</div>
-          <div class="gh-wiz-sub" style="color:#a93226;font-family:monospace;font-size:.75rem">${err.message}</div>
-          <div class="gh-wiz-nav">
-            <button class="gh-btn gh-btn-ghost" id="gh-err-back">← Voltar às lojas</button>
-            <button class="gh-btn gh-btn-solid" id="gh-err-regen">↺ Tentar novamente</button>
-          </div>
-        </div>`;
-        document.getElementById('gh-err-back')?.addEventListener('click', () => { wStep = 2; renderWiz(); });
-        document.getElementById('gh-err-regen')?.addEventListener('click', () => generate());
-      }
-    }
   }
 
   // ── MINIMUM COVERAGE VALIDATION ──
+  // Checks that every open store has the minimum required staff on every open day (Mon-Sat).
+  // Returns an array of violations. Empty array = all good.
   function validateMinCoverage(active) {
     const violations = [];
     const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
@@ -1746,19 +1705,6 @@
           return c?.type === 'work' && c?.store === sid;
         }).length;
         if (have < min) {
-          // Se o máximo configurado é menor que o mínimo, é uma configuração inválida — alertar mas não bloquear
-          const max = storeMax(sid);
-          if (max < min) {
-            S.alerts.push({ type: 'amber', text: `${day}: ${sname(sid)} — máximo (${max}) inferior ao mínimo (${min}). Verifique a configuração.` });
-            return;
-          }
-          // Se o total de activos é insuficiente para cobrir o mínimo, alertar mas não bloquear
-          const totalActive = active.filter(p => !isAbsent(p.id, day)).length;
-          const totalMin = S.openStores.filter(s => storeOpen(s, day)).reduce((sum, s) => sum + storeMin(s), 0);
-          if (totalActive < totalMin) {
-            S.alerts.push({ type: 'red', text: `${day}: ${sname(sid)} sem cobertura mínima (${have}/${min}) — pessoal insuficiente.` });
-            return;
-          }
           violations.push({ day, sid, have, min });
         }
       });
@@ -1769,7 +1715,7 @@
   // ── BLOCKING COVERAGE ALERT ──
   function showCoverageBlocker(violations, active) {
     const c = getContainer(); if (!c) return;
-    fixPanelLayout('schedule');
+    fixPanelLayout();
 
     const rows = violations.map(v =>
       `<div class="gh-cov-row">
@@ -1806,7 +1752,7 @@
   // ── RENDER HORÁRIO ──
   function showSchedule(active) {
     const c = getContainer(); if (!c) return;
-    fixPanelLayout('schedule');
+    fixPanelLayout();
     const dates = wkDates();
     const today = new Date(); today.setHours(0,0,0,0);
 
@@ -1820,9 +1766,9 @@
           <div class="gh-sb-week">Porto Santo · Semana ${isoWeek(S.weekStart)}</div>
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
-        <div class="gh-sb-btns">
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Regenerar</button>
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Semana</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen" title="Redistribuir folgas mantendo as mesmas configurações">↺ Gerar Novamente</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
         </div>
       </div>
       ${alertsHTML}`;
@@ -2011,10 +1957,9 @@
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1;
-          padding:0;
+          flex:1; overflow:visible;
+          padding:0 0 60px;
           background:#fff; color:#111;
-          display:flex; flex-direction:column;
         }
 
         /* ── WIZARD ── */
@@ -2068,11 +2013,10 @@
         #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
 
         /* ── SCHEDULE BAR ── */
-        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; flex-shrink:0; gap:8px; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
         #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
         #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        #tab-gerador .gh-sb-btns  { display:flex; gap:8px; align-items:center; flex-shrink:0; }
-        #tab-gerador .gh-alert-bar { padding:6px 16px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; flex-shrink:0; }
+        #tab-gerador .gh-alert-bar { padding:6px 16px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; }
         #tab-gerador .gh-al-inner  { display:flex; flex-wrap:nowrap; gap:6px; width:max-content; }
         #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
         #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
@@ -2086,9 +2030,9 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 80px; width:100%; box-sizing:border-box; }
-        #tab-gerador .gh-store-block { margin-bottom:40px; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; }
-        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; margin:0 16px; }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; }
+        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 16px; overflow-x:auto; box-sizing:border-box; display:flex; justify-content:center; }
+        #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }

@@ -343,6 +343,17 @@
   }
 
 
+  // Converter dd/mm/aa ou dd/mm/aaaa para ISO YYYY-MM-DD
+  function parseDateInput(val) {
+    if (!val) return null;
+    if (val.includes('-')) return val; // already ISO
+    const parts = val.split('/');
+    if (parts.length < 3) return null;
+    let [d, m, y] = parts;
+    if (y.length === 2) y = '20' + y;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+
   // Primeiro nome + último apelido
   function shortName(fullName) {
     const parts = (fullName || '').trim().split(/\s+/);
@@ -388,15 +399,15 @@
       row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}`;
       row.dataset.pid = p.id;
       row.innerHTML = `
-        <!-- COL 1: INFO + BOTÕES -->
+        <!-- COL 1: INFO + ÍCONES -->
         <div class="gh-sr-info">
           <div class="gh-sr-name">${shortName(p.name)}</div>
           <div class="gh-sr-meta">${storeName} · ${condLabel}</div>
           ${onFerias ? '<span class="gh-ferias-tag">🏖</span>' : ''}
           <div class="gh-sr-btns">
-            <button class="gh-ibtn gh-edit-person" data-pid="${p.id}">Editar</button>
-            <button class="gh-ibtn gh-limpar-inc" data-pid="${p.id}" style="color:#b8860b">Limpar</button>
-            <button class="gh-ibtn gh-del-person" data-pid="${p.id}" style="color:#c0392b">Eliminar</button>
+            <button class="gh-icon-btn gh-edit-person" data-pid="${p.id}" title="Editar">✏️</button>
+            <button class="gh-icon-btn gh-limpar-inc" data-pid="${p.id}" title="Limpar incidências" style="color:#b8860b">↺</button>
+            <button class="gh-icon-btn gh-del-person" data-pid="${p.id}" title="Eliminar" style="color:#c0392b">🗑</button>
           </div>
         </div>
 
@@ -404,37 +415,33 @@
         <div class="gh-sr-col">
           <div class="gh-sr-col-title">📅 Folga</div>
           <div class="gh-day-btns">${dayBtns}</div>
-          <div class="gh-sr-col-title" style="margin-top:8px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
+          <div class="gh-sr-col-title" style="margin-top:7px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
           <div class="gh-date-row">
-            <input type="date" class="gh-field-sm gh-inc-inp gh-date-mini" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio||''}">
-            <input type="date" class="gh-field-sm gh-inc-inp gh-date-mini" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim||''}">
+            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio ? licenca.data_inicio.slice(5).split('-').reverse().join('/')+'/'+licenca.data_inicio.slice(2,4) : ''}" placeholder="dd/mm/aa">
+            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim ? licenca.data_fim.slice(5).split('-').reverse().join('/')+'/'+licenca.data_fim.slice(2,4) : ''}" placeholder="dd/mm/aa">
           </div>
           <div class="gh-date-row" style="margin-top:3px">
             <select class="gh-field-sm gh-inc-inp gh-sel-mini" data-pid="${p.id}" data-col="lic_tipo">
-              <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Recup.</option>
-              <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>Não recup.</option>
+              <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Rec.</option>
+              <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>N.Rec.</option>
             </select>
             <input type="number" class="gh-field-sm gh-inc-inp gh-num-mini" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="h" step="0.5">
           </div>
         </div>
 
-        <!-- COL 3: BAIXA -->
+        <!-- COL 3: BAIXA + BANCO -->
         <div class="gh-sr-col">
           <div class="gh-sr-col-title">🏥 Baixa <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}></div>
           <div class="gh-date-row">
-            <input type="date" class="gh-field-sm gh-inc-inp gh-date-mini" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio||''}">
-            <input type="date" class="gh-field-sm gh-inc-inp gh-date-mini" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim||''}">
+            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio ? baixa.data_inicio.slice(5).split('-').reverse().join('/')+'/'+baixa.data_inicio.slice(2,4) : ''}" placeholder="dd/mm/aa">
+            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim ? baixa.data_fim.slice(5).split('-').reverse().join('/')+'/'+baixa.data_fim.slice(2,4) : ''}" placeholder="dd/mm/aa">
           </div>
-        </div>
-
-        <!-- COL 4: BANCO DE HORAS -->
-        <div class="gh-sr-col">
-          <div class="gh-sr-col-title">⏱ Banco</div>
+          <div class="gh-sr-col-title" style="margin-top:7px">⏱ Banco</div>
           <div class="gh-inc-saldo ${saldo>0?'gh-inc-saldo-neg':saldo<0?'gh-inc-saldo-pos':''}" id="gh-saldo-${p.id}">${saldo>0?'+':''}${saldo}h</div>
           <div class="gh-banco-add-row">
             <input type="number" class="gh-field-sm gh-banco-h gh-num-mini" data-pid="${p.id}" placeholder="±h" step="0.5">
-            <button class="gh-ibtn gh-banco-lancar" data-pid="${p.id}">+</button>
-            <button class="gh-ibtn gh-banco-zero" data-pid="${p.id}" style="color:#c0392b">✕</button>
+            <button class="gh-icon-btn gh-banco-lancar" data-pid="${p.id}" title="Lançar">＋</button>
+            <button class="gh-icon-btn gh-banco-zero" data-pid="${p.id}" title="Zerar" style="color:#c0392b">✕</button>
           </div>
         </div>`;
       list.appendChild(row);
@@ -467,21 +474,19 @@
     list.querySelectorAll('.gh-inc-usar[data-col="baixa_active"]').forEach(el => {
       el.addEventListener('change', async () => {
         const pid = el.dataset.pid;
-        const from = document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value || null;
-        const to   = document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value || null;
-        const obs  = document.querySelector(`[data-col="baixa_obs"][data-pid="${pid}"]`)?.value || '';
-        await saveBaixa(pid, { active: el.checked, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, observacao: obs });
+        const from = parseDateInput(document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value);
+        const to   = parseDateInput(document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value);
+        await saveBaixa(pid, { active: el.checked, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, observacao: '' });
       });
     });
     list.querySelectorAll('.gh-inc-inp[data-col^="baixa"]').forEach(el => {
       el.addEventListener('change', async () => {
         const pid = el.dataset.pid;
         if (!S._baixas?.[pid]) return;
-        const from = document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value || null;
-        const to   = document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value || null;
-        const obs  = document.querySelector(`[data-col="baixa_obs"][data-pid="${pid}"]`)?.value || '';
+        const from = parseDateInput(document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value);
+        const to   = parseDateInput(document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value);
         const active = document.querySelector(`[data-col="baixa_active"][data-pid="${pid}"]`)?.checked || false;
-        await saveBaixa(pid, { active, data_inicio: from, data_fim: to || null, observacao: obs });
+        await saveBaixa(pid, { active, data_inicio: from, data_fim: to || null, observacao: '' });
       });
     });
 
@@ -490,8 +495,8 @@
       el.addEventListener('change', async () => {
         const pid = el.dataset.pid;
         const active  = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`)?.checked || false;
-        const from    = document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value || null;
-        const to      = document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value || null;
+        const from    = parseDateInput(document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value);
+        const to      = parseDateInput(document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value);
         const tipo    = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
         const horas   = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
         const obs     = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
@@ -2000,8 +2005,9 @@
         #tab-gerador .gh-sr-col:last-child { border-right:none; }
         #tab-gerador .gh-sr-col-title { font-size:.63rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
         #tab-gerador .gh-sr-btns { display:flex; flex-direction:column; gap:2px; margin-top:4px; }
-        #tab-gerador .gh-ibtn { font-size:.6rem; padding:2px 5px; border:1px solid #ddd; border-radius:3px; background:#fff; color:#555; cursor:pointer; white-space:nowrap; line-height:1.4; }
-        #tab-gerador .gh-ibtn:hover { background:#f5f5f5; }
+        #tab-gerador .gh-icon-btn { font-size:.85rem; padding:1px 3px; border:none; background:none; cursor:pointer; line-height:1; opacity:.7; }
+        #tab-gerador .gh-icon-btn:hover { opacity:1; }
+        #tab-gerador .gh-date-txt { width:68px !important; font-size:.65rem !important; padding:2px 3px !important; }
         #tab-gerador .gh-day-btns { display:flex; flex-direction:row; gap:2px; flex-wrap:nowrap; }
         #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:3px; width:22px; height:22px; font-size:.62rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
         #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }

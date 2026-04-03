@@ -621,6 +621,26 @@ td, th { border-radius:10px; margin:2px; }
 #admin-app.s-loaded { overflow-y: auto; overflow-x: hidden; }
 #tab-horarios.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; width: 100%; }
 
+/* ── GERADOR: mismo patrón que tab-horarios ── */
+#tab-gerador.active {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+#tab-gerador #gh-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+  width: 100%;
+}
+
 /* ══════════════════════════════════════════════════════════
    ADMIN DASHBOARD — new module landing screen
 ══════════════════════════════════════════════════════════ */

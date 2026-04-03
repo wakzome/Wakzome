@@ -916,7 +916,7 @@
           <div class="gh-sc-minmax">
             <div class="gh-sc-mm-field">
               <span class="gh-sc-mm-label">mín</span>
-              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" value="${savedMin}">
+              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" placeholder="—" value="${savedMin > 1 ? savedMin : ''}">
             </div>
             <div class="gh-sc-mm-sep">·</div>
             <div class="gh-sc-mm-field">
@@ -943,7 +943,17 @@
     c.querySelectorAll('[data-store]').forEach(el => {
       if (el.type === 'checkbox') {
         el.addEventListener('change', () => {
-          document.getElementById(`gh-scr-${el.dataset.store}`).classList.toggle('closed', !el.checked);
+          const row = document.getElementById(`gh-scr-${el.dataset.store}`);
+          row.classList.toggle('closed', !el.checked);
+          // Al activar: encender SEG→SAB por defecto; al desactivar: apagar todos
+          if (el.checked) {
+            row.querySelectorAll('.gh-dtog').forEach(tog => {
+              if (['SEG','TER','QUA','QUI','SEX','SAB'].includes(tog.dataset.day)) tog.classList.add('on');
+              else tog.classList.remove('on'); // DOM no se activa por defecto
+            });
+          } else {
+            row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
+          }
         });
       } else if (el.classList.contains('gh-dtog')) {
         el.addEventListener('click', () => el.classList.toggle('on'));
@@ -963,8 +973,9 @@
       S.openStores.push(st.id); S.openDays[st.id] = days;
       const minInp = document.getElementById(`gh-min-${st.id}`);
       const maxInp = document.getElementById(`gh-max-${st.id}`);
-      S.storeMin[st.id] = Math.max(1, parseInt(minInp?.value || 1) || 1);
-      const maxVal = parseInt(maxInp?.value || 0) || 0;
+      const minVal = parseInt(minInp?.value) || 0;
+      if (minVal > 0) S.storeMin[st.id] = minVal;
+      const maxVal = parseInt(maxInp?.value) || 0;
       if (maxVal > 0) S.storeMax[st.id] = maxVal;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
@@ -1220,6 +1231,8 @@
         for (let i = 0; i < min - have; i++) {
           const cand = wk().filter(p => p.mobile !== false && p.knows.includes(st.id) && S.schedule[p.id][day].store !== st.id)
             .filter(p => {
+              // No mover a alguien con tienda fija fuera de su tienda
+              if (p.store && p.store !== st.id) return false;
               // No superar el máximo del destino
               const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
               return destCount + 1 <= storeMax(st.id);
@@ -1264,6 +1277,8 @@
               if (p.mobile === false) return false;
               if (!p.knows.includes(poorest)) return false;
               if (p.id === 'sandra') return false;
+              // No mover a alguien con tienda fija fuera de su tienda
+              if (p.store && p.store === richest) return false;
               // La tienda richest debe mantener su mínimo tras la salida
               if ((cov[richest] - 1) < storeMin(richest)) return false;
               // La tienda poorest no debe superar su máximo

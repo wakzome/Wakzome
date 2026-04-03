@@ -145,23 +145,40 @@
   let wStep = 0;
   function getContainer() { return document.getElementById('gh-container'); }
 
-  function fixPanelLayout() {
+  function fixPanelLayout(mode) {
     const panel = document.getElementById('tab-gerador');
     if (panel) {
-      // NEVER set display here — the tab system's CSS (.tab-panel.active { display:flex })
-      // is the single source of truth for visibility. Forcing display:flex here causes the
-      // gerador panel to bleed into other modules when tabs switch.
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      panel.style.overflow = 'visible';
       panel.style.flexDirection = 'column';
+      if (mode === 'schedule') {
+        // Schedule view: panel clips, container scrolls
+        panel.style.overflow = 'hidden';
+      } else {
+        // Wizard: content can overflow naturally
+        panel.style.overflow = 'visible';
+      }
+    }
+    const container = document.getElementById('gh-container');
+    if (container) {
+      if (mode === 'schedule') {
+        container.style.overflowY = 'auto';
+        container.style.overflowX = 'hidden';
+        container.style.webkitOverflowScrolling = 'touch';
+        container.style.flex = '1';
+        container.style.minHeight = '0';
+      } else {
+        container.style.overflowY = '';
+        container.style.overflowX = '';
+        container.style.webkitOverflowScrolling = '';
+        container.style.flex = '';
+        container.style.minHeight = '';
+      }
     }
   }
 
   function cleanupGeradorLayout() {
-    // Called when leaving the gerador tab — reset only the inline styles we added.
-    // NEVER touch display — the tab system's CSS controls visibility exclusively.
     const panel = document.getElementById('tab-gerador');
     if (panel) {
       panel.style.padding = '';
@@ -169,8 +186,15 @@
       panel.style.color = '';
       panel.style.overflow = '';
       panel.style.flexDirection = '';
-      // display must never be set inline — clear any leftover value just in case
       panel.style.display = '';
+    }
+    const container = document.getElementById('gh-container');
+    if (container) {
+      container.style.overflowY = '';
+      container.style.overflowX = '';
+      container.style.webkitOverflowScrolling = '';
+      container.style.flex = '';
+      container.style.minHeight = '';
     }
     const modal = document.getElementById('gh-modal');
     if (modal) {
@@ -1715,7 +1739,7 @@
   // ── BLOCKING COVERAGE ALERT ──
   function showCoverageBlocker(violations, active) {
     const c = getContainer(); if (!c) return;
-    fixPanelLayout();
+    fixPanelLayout('schedule');
 
     const rows = violations.map(v =>
       `<div class="gh-cov-row">
@@ -1752,7 +1776,7 @@
   // ── RENDER HORÁRIO ──
   function showSchedule(active) {
     const c = getContainer(); if (!c) return;
-    fixPanelLayout();
+    fixPanelLayout('schedule');
     const dates = wkDates();
     const today = new Date(); today.setHours(0,0,0,0);
 
@@ -1958,9 +1982,6 @@
         }
         #tab-gerador #gh-container {
           flex:1;
-          overflow-y:auto;
-          overflow-x:hidden;
-          -webkit-overflow-scrolling:touch;
           padding:0;
           background:#fff; color:#111;
           display:flex; flex-direction:column;
@@ -2035,8 +2056,8 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; }
-        #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0 0 0 0; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; }
+        #tab-gerador .gh-sched-body { padding:20px 0 80px; width:100%; box-sizing:border-box; }
+        #tab-gerador .gh-store-block { margin-bottom:40px; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; }
         #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; margin:0 16px; }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }

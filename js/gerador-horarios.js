@@ -152,7 +152,7 @@
       panel.style.padding = '0';
       panel.style.background = '#fff';
       panel.style.color = '#111';
-      panel.style.overflow = '';
+      panel.style.overflow = 'visible';
       panel.style.flexDirection = 'column';
     }
   }
@@ -422,7 +422,7 @@
         </div>
 
         <!-- CORPO colapsável -->
-        <div class="gh-sr-body" id="gh-body-${p.id}">
+        <div class="gh-sr-body" id="gh-body-${p.id}" style="display:none">
           <div class="gh-sr-cols">
             <div class="gh-sr-col">
               <div class="gh-sr-col-title">📅 Folga</div>
@@ -1850,17 +1850,16 @@
         #tab-gerador { background:#fff !important; color:#111 !important; }
         #tab-gerador.active {
           display:flex !important; flex-direction:column !important;
-          flex:1 !important; width:100% !important; height:100% !important;
-          overflow:hidden !important;
+          flex:1 !important; width:100% !important;
+          overflow:visible !important;
           padding:0 !important;
           background:#fff !important; color:#111 !important;
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:auto;
-          padding:0 0 60px; -webkit-overflow-scrolling:touch;
+          flex:1; overflow:visible;
+          padding:0 0 60px;
           background:#fff; color:#111;
-          min-height:0;
         }
 
         /* ── WIZARD ── */

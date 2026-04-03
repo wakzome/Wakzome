@@ -410,7 +410,8 @@ body {
 
 /* ─── PROCESSAMENTO OVERLAY ─── */
 #processamento-overlay {
-  display: none; position: fixed; inset: 0;
+  display: none; position: absolute; top: 0; left: 0; right: 0;
+  min-height: 100vh;
   background: #fff; z-index: 200;
   flex-direction: column; opacity: 0;
   transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
@@ -421,6 +422,7 @@ body {
   display: flex; align-items: center; gap: 16px;
   padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
   background: #fff; flex-shrink: 0;
+  position: sticky; top: 0; z-index: 201;
 }
 #processamento-overlay-title {
   font-size: .82rem; font-weight: bold; text-transform: lowercase;
@@ -436,10 +438,9 @@ body {
 }
 #processamento-overlay-back:hover { background: #333; border-color: #333; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
 #processamento-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
+  flex: 1; overflow: visible;
   display: flex; flex-direction: column; align-items: center;
   padding: 0; font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* ─── FATURAS SUB-OVERLAY ─── */
@@ -2134,6 +2135,10 @@ body::before {
   60%     { transform: translate(4%, -2%); }
 }
 
+/* ── Pausa glow en módulos pesados (TAM + Processamento) ── */
+body.no-glow #glow-layer-1,
+body.no-glow #glow-layer-2 { animation: none; }
+
 /* ── Button micro-interactions ── */
 button, .tab-btn, #key-submit, #recibos-link,
 .modal-btn, #r-process-btn, #r-save-config,
@@ -3337,7 +3342,7 @@ td                   { font-size: .96rem !important; }
 <!-- PROCESSAMENTO OVERLAY -->
 <div id="processamento-overlay">
   <div id="processamento-overlay-bar">
-    <button id="processamento-overlay-back" onclick="closeProcessamentoOverlay()">← voltar</button>
+    <button id="processamento-overlay-back" onclick="closeProcessamentoOverlay();document.body.classList.remove('no-glow')">← voltar</button>
     <div id="processamento-overlay-title">processamento de faturas</div>
   </div>
   <div id="processamento-overlay-content">
@@ -3797,7 +3802,8 @@ td                   { font-size: .96rem !important; }
     // we trigger their overlay functions if they exist.
     if (tab === 'agenda'        && typeof openAgendaOverlay        === 'function') { openAgendaOverlay();        adminApp.classList.remove('module-open'); }
     if (tab === 'rotulos'       && typeof openRotulosOverlay       === 'function') { openRotulosOverlay();       adminApp.classList.remove('module-open'); }
-    if (tab === 'processamento' && typeof openProcessamentoOverlay === 'function') { openProcessamentoOverlay(); adminApp.classList.remove('module-open'); }
+    if (tab === 'processamento' && typeof openProcessamentoOverlay === 'function') { openProcessamentoOverlay(); adminApp.classList.remove('module-open'); document.body.classList.add('no-glow'); }
+    if (tab === 'tam') { document.body.classList.add('no-glow'); }
 
     // Férias: trigger initialization if ferias.js exposes an init function,
     // otherwise dispatch a synthetic tab-change event so ferias.js can listen for it.
@@ -3826,6 +3832,7 @@ td                   { font-size: .96rem !important; }
   function goToDashboard() {
     var adminApp = document.getElementById('admin-app');
     adminApp.classList.remove('module-open');
+    document.body.classList.remove('no-glow');
     // Reset tab panels
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
 

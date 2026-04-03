@@ -6150,15 +6150,15 @@
       '.tam-sub-p { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',
 
       /* Columnas fijas — sticky con background OPACO (proc style) */
-      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background-color:#fff!important; background:#fff!important; border-right:2px solid #e0e0e0!important; text-align:left!important; position:sticky; left:0; z-index:2; box-shadow:2px 0 5px rgba(0,0,0,.08); will-change:transform; }',
+      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background-color:#fff!important; background:#fff!important; border-right:2px solid #e0e0e0!important; text-align:left!important; position:sticky; left:0; z-index:2; }',
       '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background-color:#fff!important; background:#fff!important; border-right:1px solid #e0e0e0!important; font-variant-numeric:tabular-nums; }',
       /* Sticky header cells */
-      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 5px rgba(0,0,0,.08); }',
-      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 5px rgba(0,0,0,.07); padding:4px 6px!important; }',
+      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; }',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; padding:4px 6px!important; }',
       /* Mobile sticky */
       '@media (max-width:768px) {',
       '  .tam-rec-boxes-scroll { overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }',
-      '  .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:10!important; min-width:110px!important; background-color:#fff!important; background:#fff!important; box-shadow:3px 0 10px rgba(0,0,0,.1)!important; }',
+      '  .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:10!important; min-width:110px!important; background-color:#fff!important; background:#fff!important; }',
       '  .tam-boxes-hdr-row .tam-rec-ref-col,',
       '  .tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:12!important; background-color:#fafafa!important; background:#fafafa!important; }',
       '  .tam-ref-over .tam-rec-ref-col { background-color:#fdf0f0!important; background:#fdf0f0!important; }',

@@ -246,15 +246,8 @@
             </div>
           </div>
 
-          <!-- NAV + ADICIONAR -->
-          <div class="gh-step2-actions">
-            <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-1">← Voltar</button>
-            <button class="gh-add-btn" id="gh-add-person" style="margin:0">+ Adicionar pessoa</button>
-            <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
-          </div>
-
           <!-- FÉRIAS BANNER -->
-          ${feriasAuto.length ? `<div class="gh-ferias-banner" style="margin-top:10px">
+          ${feriasAuto.length ? `<div class="gh-ferias-banner" style="margin-top:6px;margin-bottom:6px">
             <span class="gh-ferias-banner-icon">🏖</span>
             <span>Férias esta semana: <strong>${feriasAuto.map(f => {
               const nomeLower = (f.nome || '').toLowerCase();
@@ -266,6 +259,13 @@
               return p ? p.name.split(' ')[0] : (f.nome || f.pid || '?');
             }).join(', ')}</strong></span>
           </div>` : ''}
+
+          <!-- NAV + ADICIONAR -->
+          <div class="gh-step2-actions">
+            <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-1">← Voltar</button>
+            <button class="gh-add-btn" id="gh-add-person" style="margin:0">+ Adicionar pessoa</button>
+            <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
+          </div>
         </div>
 
         <!-- FORM ADICIONAR/EDITAR -->
@@ -405,9 +405,15 @@
           <div class="gh-sr-meta">${storeName} · ${condLabel}</div>
           ${onFerias ? '<span class="gh-ferias-tag">🏖</span>' : ''}
           <div class="gh-sr-btns">
-            <button class="gh-icon-btn gh-edit-person" data-pid="${p.id}" title="Editar">✏️</button>
-            <button class="gh-icon-btn gh-limpar-inc" data-pid="${p.id}" title="Limpar incidências" style="color:#b8860b">↺</button>
-            <button class="gh-icon-btn gh-del-person" data-pid="${p.id}" title="Eliminar" style="color:#c0392b">🗑</button>
+            <button class="gh-icon-btn gh-edit-person" data-pid="${p.id}" title="Editar">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="gh-icon-btn gh-limpar-inc" data-pid="${p.id}" title="Limpar incidências" style="color:#b8860b">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+            </button>
+            <button class="gh-icon-btn gh-del-person" data-pid="${p.id}" title="Eliminar" style="color:#c0392b">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
           </div>
         </div>
 
@@ -445,6 +451,15 @@
           </div>
         </div>`;
       list.appendChild(row);
+    });
+
+    // Set uniform name column width based on longest name
+    requestAnimationFrame(() => {
+      const infoCols = list.querySelectorAll('.gh-sr-info');
+      let maxW = 0;
+      infoCols.forEach(el => { maxW = Math.max(maxW, el.scrollWidth); });
+      if (maxW > 0) list.style.setProperty('--gh-name-col-width', maxW + 'px');
+      infoCols.forEach(el => { el.style.width = maxW + 'px'; });
     });
 
     list.querySelectorAll('.gh-edit-person').forEach(btn => {
@@ -1998,15 +2013,15 @@
         #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
         #tab-gerador .gh-sr { display:flex; flex-direction:row; border:1px solid #e8e8e8; border-radius:8px; background:#fff; overflow-x:auto; -webkit-overflow-scrolling:touch; }
         #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
-        #tab-gerador .gh-sr-info { padding:8px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:2px; min-width:110px; flex-shrink:0; }
+        #tab-gerador .gh-sr-info { padding:8px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:2px; width:var(--gh-name-col-width, 130px); flex-shrink:0; }
         #tab-gerador .gh-sr-name { font-size:.8rem; font-weight:700; color:#111; line-height:1.2; }
         #tab-gerador .gh-sr-meta { font-size:.66rem; color:#888; }
         #tab-gerador .gh-sr-col { padding:8px 10px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:0; flex-shrink:0; }
         #tab-gerador .gh-sr-col:last-child { border-right:none; }
         #tab-gerador .gh-sr-col-title { font-size:.63rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
-        #tab-gerador .gh-sr-btns { display:flex; flex-direction:column; gap:2px; margin-top:4px; }
-        #tab-gerador .gh-icon-btn { font-size:.85rem; padding:1px 3px; border:none; background:none; cursor:pointer; line-height:1; opacity:.7; }
-        #tab-gerador .gh-icon-btn:hover { opacity:1; }
+        #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; margin-top:6px; }
+        #tab-gerador .gh-icon-btn { width:26px; height:26px; border:1px solid #e8e8e8; border-radius:6px; background:#fff; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#555; transition:all .15s; flex-shrink:0; }
+        #tab-gerador .gh-icon-btn:hover { background:#f5f5f5; border-color:#ccc; color:#111; }
         #tab-gerador .gh-date-txt { width:68px !important; font-size:.65rem !important; padding:2px 3px !important; }
         #tab-gerador .gh-day-btns { display:flex; flex-direction:row; gap:2px; flex-wrap:nowrap; }
         #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:3px; width:22px; height:22px; font-size:.62rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }

@@ -1759,10 +1759,6 @@
     const alertsHTML = S.alerts.length
       ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
       : '';
-    const decsHTML = S.decisions.length
-      ? `<div class="gh-dec-bar"><div class="gh-dec-inner">${S.decisions.map(d => `<div class="gh-dec-chip">${d.text}</div>`).join('')}</div></div>`
-      : '';
-
     const topBar = `
       <div class="gh-sched-bar">
         <div>
@@ -1774,7 +1770,7 @@
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
         </div>
       </div>
-      ${alertsHTML}${decsHTML}`;
+      ${alertsHTML}`;
 
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {

@@ -130,7 +130,15 @@
     return DAYS.map((_, i) => { const d = new Date(S.weekStart); d.setDate(d.getDate() + i); return d; });
   }
   function fmt(d) { if (!d) return ''; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
-  function nextMonday() { const t = new Date(), dow = t.getDay(); t.setDate(t.getDate() + (dow === 0 ? 1 : 8 - dow)); return t.toISOString().split('T')[0]; }
+  function nextMonday() {
+    const t = new Date();
+    const dow = t.getDay(); // 0=dom, 1=seg, ..., 6=sab
+    // Días hasta el próximo lunes:
+    // dom(0)→+1, seg(1)→+7, ter(2)→+6, qua(3)→+5, qui(4)→+4, sex(5)→+3, sab(6)→+2
+    const daysUntilMonday = dow === 0 ? 1 : dow === 1 ? 7 : 8 - dow;
+    t.setDate(t.getDate() + daysUntilMonday);
+    return t.toISOString().split('T')[0];
+  }
   function isoWeek(date) { const d = new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()+3-(d.getDay()+6)%7); const w1 = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
   function weeksSince(s, ref) { return Math.floor((ref - new Date(s)) / (7*864e5)); }
   function absOf(pid)       { return S.absences.find(a => a.pid === pid) || null; }
@@ -1253,15 +1261,24 @@
       return { type: 'work', shift: SH_DEFAULT, store: sid };
     }
     if (p.store && storeOpen(p.store, day)) return { type: 'work', shift: SH_DEFAULT, store: p.store };
-    // Tienda fija cerrada este día: buscar tienda que conoce con menos personal (cubrir férias/folgas)
-    // Ordenar por: tiendas con menos cobertura actual primero (se calcula en intelPass; aquí primer match)
+    // Sin tienda fija o con tienda fija cerrada: asignar respetando storeMax.
+    // Prioridad: avenida → mercado → shana → maxx (por priority).
+    // Contar asignaciones ya hechas en S.schedule para respetar el máximo.
     const alt = S.openStores
-      .filter(id => S.openDays[id]?.includes(day) && p.knows.includes(id))
+      .filter(id => {
+        if (!S.openDays[id]?.includes(day)) return false;
+        if (!p.knows.includes(id)) return false;
+        const already = active.filter(x =>
+          x.id !== p.id &&
+          S.schedule[x.id]?.[day]?.type === 'work' &&
+          S.schedule[x.id][day].store === id
+        ).length;
+        return already < storeMax(id);
+      })
       .sort((a, b) => {
-        // Priorizar tiendas donde esta persona es más útil (sin tienda fija propia abierta)
-        const aHasFixed = active.some(x => x.id !== p.id && x.store === a && storeOpen(a, day));
-        const bHasFixed = active.some(x => x.id !== p.id && x.store === b && storeOpen(b, day));
-        return (aHasFixed ? 0 : -1) - (bHasFixed ? 0 : -1);
+        const pa = STORES.find(s => s.id === a)?.priority ?? 9;
+        const pb = STORES.find(s => s.id === b)?.priority ?? 9;
+        return pa - pb; // avenida=1 > mercado=2 > shana=3 > maxx=4
       })[0];
     if (alt) return { type: 'work', shift: SH_DEFAULT, store: alt };
     return { type: 'folga', shift: null, store: null };
@@ -1314,6 +1331,11 @@
       wk().filter(p => !p.canAlone && weeksSince(p.start, S.weekStart) < 4).forEach(p => {
         const myStore = S.schedule[p.id][day].store;
         if (wk().some(o => o.id !== p.id && o.canAlone && S.schedule[o.id][day].store === myStore)) return;
+        const currentInStore = wk().filter(x => S.schedule[x.id][day].store === myStore).length;
+        if (currentInStore >= storeMax(myStore)) {
+          S.alerts.push({ type: 'amber', text: `${day}: ${p.name} em ${sname(myStore)} sem supervisão (máximo já atingido).` });
+          return;
+        }
         const sup = wk().filter(o => o.canAlone && o.id !== p.id && o.knows.includes(myStore))
           .sort((a, b) => {
             const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;
@@ -1327,10 +1349,11 @@
         const min = storeMin(st.id);
         const have = wk().filter(p => S.schedule[p.id][day].store === st.id).length;
         if (have >= min) return;
+        if (have >= storeMax(st.id)) return; // ya está al máximo, no traer más
         for (let i = 0; i < min - have; i++) {
           const candPool = wk().filter(p => p.mobile !== false && p.knows.includes(st.id) && S.schedule[p.id][day].store !== st.id)
             .filter(p => {
-              // No superar el máximo del destino
+              // No superar el máximo del destino — verificar SIEMPRE
               const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
               return destCount + 1 <= storeMax(st.id);
             });

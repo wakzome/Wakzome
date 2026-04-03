@@ -719,6 +719,10 @@
     document.getElementById('tam-file-name').textContent =
       tamInvoices.map(function(r){ var m = r._fileName.match(/ZY-\d+/i); return m ? m[0] : r._fileName.replace(/\.pdf$/i, ''); }).join(' · ');
 
+    /* Force reception table rebuild on full render (structure may have changed) */
+    var area = document.getElementById('tam-reception-area');
+    if (area) area._tamSig = null;
+
     tamRenderInvoices();
     tamRenderReception();
     tamRenderAnomalies();
@@ -1420,13 +1424,11 @@
     tamRepairBoxInvIdx();
 
     var quickDistrib = (tamSession.quickDistrib) || {};
-    var quickCount   = Object.keys(quickDistrib).length;
 
     // Sort boxes: pending first, complete last, hidden removed
     var boxOrder = boxes.map(function(box, bi){
       var received = 0;
       if (box.total) Object.values(box.refs).forEach(function(v){ received += (v.f||0)+(v.p||0); });
-      // A box in tamBoxLockPending is in the 3s transition window: treat as NOT yet complete
       var isComplete = box.total && received >= box.total && !tamBoxLockPending[bi];
       var isHidden   = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
       return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
@@ -1434,33 +1436,72 @@
 
     var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
     var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
-    /* If a box is being edited, move it to front of pending so it renders leftmost */
     if (tamEditingBoxBi >= 0 && pendingBoxes.length > 1) {
       var eIdx = -1;
       for (var _i=0; _i<pendingBoxes.length; _i++) { if (pendingBoxes[_i].bi===tamEditingBoxBi){ eIdx=_i; break; } }
       if (eIdx > 0) { var _eb = pendingBoxes.splice(eIdx,1); pendingBoxes.unshift(_eb[0]); }
     }
-    // Show ALL pending boxes — user can fill any box freely, not forced to go in order
     var sortedBoxes = pendingBoxes.concat(completedBoxes);
 
-    // Only refs needing manual work
     var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
       .filter(function(i){ return quickDistrib[i] === undefined; });
     var consolidatedForSummary = consolidated.filter(function(c){
       return c.invoices.some(function(inv){ return manualInvoiceIdxs.indexOf(inv.invIdx) >= 0; });
     });
 
-    // ── Build HTML ────────────────────────────────────────────
-    // Header row 1: ref | total | F | PS | [for each box: F PS QUICK_BTNS]
-    var hdr1 =
-      '<th class="tam-rec-ref-col">referência</th>' +
-      '<th class="tam-rec-total-col">total</th>' +
-      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
-      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
+    // ── Structural signature: if boxes or refs changed, full rebuild ──
+    var newSig = sortedBoxes.map(function(b){ return b.bi + ':' + (b.isComplete?'c':'p') + ':' + (b.box.locked?'L':''); }).join('|')
+               + '||' + consolidatedForSummary.map(function(c){ return c.ref; }).join(',');
 
-    // Pre-compute per-box style info used in both hdr1 and hdr2
+    if (area._tamSig === newSig && area._tamBuilt) {
+      // ── Fast path: only update input values and row classes ──
+      consolidatedForSummary.forEach(function(c){
+        var totals  = tamGetRefTotals(c.ref);
+        var recv    = totals.f + totals.p;
+        var isDone  = recv >= c.totalPieces && c.totalPieces > 0;
+        var isOver  = recv > c.totalPieces  && c.totalPieces > 0;
+        var safeRef = c.ref.replace(/[^a-z0-9]/gi,'_');
+        var safeSelector = c.ref.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+        var row = area.querySelector('tr[data-ref="' + safeSelector + '"]');
+        if (row) {
+          row.classList.remove('tam-ref-over','tam-ref-complete');
+          if (isOver)      row.classList.add('tam-ref-over');
+          else if (isDone) row.classList.add('tam-ref-complete');
+        }
+        // Update summary F/P cells
+        var fEl = document.getElementById('tam-sum-f-' + safeRef);
+        var pEl = document.getElementById('tam-sum-p-' + safeRef);
+        if (fEl) fEl.textContent = totals.f > 0 ? totals.f : '—';
+        if (pEl) pEl.textContent = totals.p > 0 ? totals.p : '—';
+        // Update each box input
+        sortedBoxes.forEach(function(bObj){
+          var bi  = bObj.bi;
+          var box = bObj.box;
+          var fInp = document.getElementById('tam-inp-f-' + bi + '-' + safeRef);
+          var pInp = document.getElementById('tam-inp-p-' + bi + '-' + safeRef);
+          if (fInp) { var fv = (box.refs[c.ref] && box.refs[c.ref].f) || ''; if (fInp.value !== String(fv)) fInp.value = fv; }
+          if (pInp) { var pv = (box.refs[c.ref] && box.refs[c.ref].p) || ''; if (pInp.value !== String(pv)) pInp.value = pv; }
+        });
+      });
+      // Update box total inputs and pct labels
+      sortedBoxes.forEach(function(bObj){
+        var bi  = bObj.bi;
+        var box = bObj.box;
+        var inp = document.getElementById('tam-box-total-' + bi);
+        if (inp && inp.value !== String(box.total||'')) inp.value = box.total || '';
+      });
+      tamUpdateUndoButtons();
+      return;
+    }
+
+    // ── Full rebuild (structure changed) ──
+    area._tamSig   = newSig;
+    area._tamBuilt = true;
+
+    var quickCount = Object.keys(quickDistrib).length;
+
     var boxStyleInfo = sortedBoxes.map(function(bObj, boxPos){
-      var isActiveBox    = !bObj.isComplete;   // every pending box is "active" — user chooses which to fill
+      var isActiveBox    = !bObj.isComplete;
       var isCompletedBox = bObj.isComplete;
       var completedCount = sortedBoxes.slice(0, boxPos).filter(function(b){ return b.isComplete; }).length;
       var greyShade = isCompletedBox ? ((completedCount % 2 === 0) ? 'tam-box-col-grey-odd' : 'tam-box-col-grey-even') : '';
@@ -1470,6 +1511,12 @@
       var colParity = (boxPos % 2 === 0) ? 'tam-col-odd' : 'tam-col-even';
       return { isActiveBox:isActiveBox, isCompletedBox:isCompletedBox, greyShade:greyShade, boxCls:boxCls, colParity:colParity };
     });
+
+    var hdr1 =
+      '<th class="tam-rec-ref-col">referência</th>' +
+      '<th class="tam-rec-total-col">total</th>' +
+      '<th class="tam-rec-total-col tam-th-funchal">F</th>' +
+      '<th class="tam-rec-total-col tam-th-porto">PS</th>';
 
     sortedBoxes.forEach(function(bObj, boxPos){
       var bi  = bObj.bi;
@@ -1482,7 +1529,6 @@
       hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + boxLabel + '</th>';
     });
 
-    // Header row 2: sub-labels
     var hdr2 =
       '<th class="tam-rec-ref-col">' +
         '<input type="text" id="tam-ref-filter" class="tam-ref-filter-input" placeholder="\uD83D\uDD0D filtrar\u2026" autocomplete="off" spellcheck="false">' +
@@ -1507,7 +1553,6 @@
       var info      = boxStyleInfo[boxPos];
       var isPending = info.isActiveBox;
       var colSpan   = isPending ? 3 : 2;
-      // Sub-header gets both complete and grey shade classes
       var subCls = (bObj.isComplete ? ' tam-box-sub-complete' : '') + (info.greyShade ? ' ' + info.greyShade : '');
 
       hdr2 +=
@@ -1528,9 +1573,7 @@
         '</th>';
     });
 
-    // Ref rows — keep original invoice order regardless of completion state
     var sortedRefs = consolidatedForSummary;
-
     var rowsHtml = '';
     sortedRefs.forEach(function(c){
       var totals  = tamGetRefTotals(c.ref);
@@ -1560,7 +1603,6 @@
         var compactCls = (!info.isActiveBox) ? ' tam-box-compact' : '';
         var isPending  = info.isActiveBox;
 
-        // Quick buttons in every active pending box, only for pending/completing refs
         var quickCell = '';
         var boxHasTotal = !!(box.total);
         if (isPending && !isDone && !isOver) {
@@ -1577,7 +1619,6 @@
         } else if (isPending) {
           quickCell = '<td class="tam-rec-cell-quick' + colParity + '"></td>';
         }
-        // Non-active boxes: NO quick cell at all
 
         rowsHtml +=
           '<td class="tam-rec-cell-f' + cellCls + colParity + compactCls + greyCls + '">' +
@@ -1593,9 +1634,9 @@
               'value="' + pVal + '" min="0" ' + disabled + 'placeholder="\u2014">' +
           '</td>' +
           quickCell;
-      });
 
-      rowsHtml += '</tr>';
+        rowsHtml += '</tr>';
+      });
     });
 
     var tableHtml =
@@ -1611,348 +1652,300 @@
         '</table></div>' +
       '</div>';
 
-    // Global quick buttons bar
     var globalBar =
       '<div class="tam-rec-quick-btns">' +
         '<span class="tam-quick-label">tudo:</span>' +
         '<button class="tam-quick-btn" id="tam-quick-funchal">100%FNC</button>' +
         '<button class="tam-quick-btn" id="tam-quick-porto">100%PXO</button>' +
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
+        (Object.keys(quickDistrib).length > 0
+          ? '<button class="tam-quick-btn tam-quick-btn-undo" id="tam-quick-undo">\u21A9 desfazer tudo</button>'
+          : '') +
       '</div>';
 
-    var distribCollapsed = !!tamCollapseState['distrib'];
+    var recTitle =
+      '<div class="tam-rec-area-title">' +
+        '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" data-target="distrib" title="expandir / minimizar">&#9660;</button>' +
+        '<span class="tam-rec-title-text">distribuição por caixa</span>' +
+      '</div>';
+
     area.innerHTML =
-      '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
-      '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
-        '<div class="tam-rec-area-title">' +
-          '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" title="expandir / minimizar" style="margin-right:8px;">' +
-            (distribCollapsed ? '&#9654;' : '&#9660;') +
-          '</button>' +
-          tamInvoices.length + ' fatura(s) · ' + consolidatedForSummary.length + ' referências' +
-          (quickCount > 0 ? ' · ' + quickCount + ' com distribuição rápida' : '') +
-        '</div>' +
-        '<div class="tam-rec-collapsible">' +
-          globalBar +
-          tableHtml +
-        '</div>' +
+      recTitle +
+      '<div class="tam-rec-collapsible">' +
+        globalBar +
+        tableHtml +
       '</div>';
 
-    // ── BIND DISTRIBUTION TOGGLE ─────────────────────────────────
+    if (tamCollapseState['distrib']) area.classList.add('tam-rec-collapsed');
+    else area.classList.remove('tam-rec-collapsed');
+
+    tamUpdateUndoButtons();
+
+    // ── Bind all events ──
+
+    // Toggle collapse
     (function(){
-      var recToggleBtn = area.querySelector('#tam-rec-toggle-btn');
-      if (recToggleBtn) recToggleBtn.addEventListener('click', function(){
+      var toggleBtn = area.querySelector('#tam-rec-toggle-btn');
+      if (!toggleBtn) return;
+      toggleBtn.addEventListener('click', function(){
         tamCollapseState['distrib'] = !tamCollapseState['distrib'];
-        var recArea2 = area.querySelector('.tam-rec-area');
-        if (recArea2) recArea2.classList.toggle('tam-rec-collapsed', !!tamCollapseState['distrib']);
-        recToggleBtn.innerHTML = tamCollapseState['distrib'] ? '&#9654;' : '&#9660;';
+        area.classList.toggle('tam-rec-collapsed', !!tamCollapseState['distrib']);
+        toggleBtn.innerHTML = tamCollapseState['distrib'] ? '&#9654;' : '&#9660;';
       });
     })();
 
-    // ── BIND UNDO / REDO / CLEAR BUTTONS ─────────────────────
+    // Global quick distribution buttons
     (function(){
-      var undoBtn  = area.querySelector('#tam-undo-btn');
-      var redoBtn  = area.querySelector('#tam-redo-btn');
-      var clearBtn = area.querySelector('#tam-clear-btn');
+      var qf = area.querySelector('#tam-quick-funchal');
+      var qp = area.querySelector('#tam-quick-porto');
+      var qs = area.querySelector('#tam-quick-split');
+      var qu = area.querySelector('#tam-quick-undo');
+      if (qf) qf.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
+      if (qp) qp.addEventListener('click', function(){ tamQuickDistrib('porto'); });
+      if (qs) qs.addEventListener('click', function(){ tamQuickDistrib('split'); });
+      if (qu) qu.addEventListener('click', function(){ tamQuickDistrib('undo'); });
+    })();
 
-      tamUpdateUndoButtons();   // sync disabled state on every render
-
-      if (undoBtn)  undoBtn.addEventListener('click',  function(e){ e.stopPropagation(); tamUndo(); });
-      if (redoBtn)  redoBtn.addEventListener('click',  function(e){ e.stopPropagation(); tamRedo(); });
-      if (clearBtn) clearBtn.addEventListener('click', function(e){
-        e.stopPropagation();
-        // Confirm before clearing everything
-        if (!confirm('Borrar toda la distribución?\n\nPuedes deshacer con el botón ↩')) return;
-        tamClearAll();
+    // Box total inputs
+    (function(){
+      area.querySelectorAll('.tam-box-total-input').forEach(function(inp){
+        inp.addEventListener('change', function(){
+          var bi  = parseInt(inp.getAttribute('data-box'));
+          var val = parseInt(inp.value);
+          if (!tamSession || isNaN(bi)) return;
+          tamSession.boxes[bi].total = (val > 0) ? val : null;
+          tamEditingBoxBi = bi;
+          area._tamSig = null; // force rebuild next render
+          tamRenderReception();
+          tamScheduleSave();
+        });
+        inp.addEventListener('focus', function(){
+          var bi = parseInt(inp.getAttribute('data-box'));
+          tamEditingBoxBi = bi;
+        });
       });
     })();
 
-    // ── BIND PER-ROW QUICK BUTTONS ────────────────────────────
-    area.querySelectorAll('.tam-row-quick-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var ref  = btn.getAttribute('data-ref');
-        var mode = btn.getAttribute('data-mode');
-        var bi   = parseInt(btn.getAttribute('data-box'));
-        var c    = consolidatedForSummary.find(function(x){ return x.ref === ref; });
-        if (!c) return;
-        tamPushUndo();
-        // Apply to the specific box this button belongs to
-        var targetBox = tamSession.boxes[bi];
-        var boxList = targetBox ? [targetBox] : [];
-        if (!boxList.length) return;
-        if (mode === 'funchal') {
-          tamDistribToBoxesFiltered(ref, c.totalPieces, c.totalPieces, 0, boxList);
-        } else if (mode === 'porto') {
-          tamDistribToBoxesFiltered(ref, c.totalPieces, 0, c.totalPieces, boxList);
-        } else if (mode === 'split') {
-          var half  = Math.floor(c.totalPieces / 2);
-          var isOdd = c.totalPieces % 2 !== 0;
-          tamDistribToBoxesFiltered(ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0), boxList);
-          if (isOdd) {
-            tamOddPieceDialogFiltered([{ ref:ref, totalPieces:c.totalPieces }], 0, boxList, function(){
-              tamDetectRefCompletions();
-              tamCheckBoxLock(bi);
-              tamRenderAll(); tamSaveSession(false);
-            });
-            return;
-          }
-        }
-        // Detect completions BEFORE re-render so 3s state is set
-        tamDetectRefCompletions();
-        tamCheckBoxLock(bi);
-        tamRenderAll();
-        tamSaveSession(false);
+    // Box edit buttons (unlock)
+    (function(){
+      area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var bi = parseInt(btn.getAttribute('data-box'));
+          if (!tamSession || isNaN(bi)) return;
+          tamSession.boxes[bi].locked = false;
+          if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+          delete tamBoxLockPending[bi];
+          tamEditingBoxBi = bi;
+          area._tamSig = null;
+          tamRenderReception();
+          tamScheduleSave();
+        });
       });
-    });
+    })();
 
-    // ── BIND GLOBAL QUICK BUTTONS ─────────────────────────────
-    var qF = area.querySelector('#tam-quick-funchal');
-    var qP = area.querySelector('#tam-quick-porto');
-    var qS = area.querySelector('#tam-quick-split');
-    if (qF) qF.addEventListener('click', function(){ tamQuickDistrib('funchal'); });
-    if (qP) qP.addEventListener('click', function(){ tamQuickDistrib('porto'); });
-    if (qS) qS.addEventListener('click', function(){ tamQuickDistrib('split'); });
-
-    // ── BIND BOX TOTAL INPUT ──────────────────────────────────
-    area.querySelectorAll('.tam-box-total-input').forEach(function(inp){
-      inp.addEventListener('change', function(){
-        var bi  = parseInt(inp.getAttribute('data-box'));
-        var val = parseInt(inp.value);
-        tamSession.boxes[bi].total = (!isNaN(val) && val > 0) ? val : null;
-        tamRenderAll();
-        tamScheduleSave();
-      });
-    });
-
-    // ── BIND EDIT BOX BUTTON ──────────────────────────────────
-    area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var bi = parseInt(btn.getAttribute('data-box'));
-        var box = tamSession.boxes[bi];
-        if (box) {
-          Object.keys(box.refs).forEach(function(ref){ tamRefDone.delete(ref); });
-          box.locked = false;
-        }
-        tamEditingBoxBi = bi;   // move this box to leftmost position
-        tamRenderAll(); tamScheduleSave();
-      });
-    });
-
-    // ── BIND FILTER BUTTON ────────────────────────────────────
-    var _activeFilterBi = -1;
-    area.querySelectorAll('.tam-box-filter-btn').forEach(function(btn){
-      btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        var bi = parseInt(btn.getAttribute('data-box'));
-        if (_activeFilterBi === bi) {
-          /* Deactivate filter — show all rows */
-          _activeFilterBi = -1;
-          btn.style.background = ''; btn.style.borderColor = '';
-          area.querySelectorAll('tr[data-ref]').forEach(function(r){ r.style.display = ''; });
-        } else {
-          /* Activate filter for this box */
-          area.querySelectorAll('.tam-box-filter-btn').forEach(function(b){
-            b.style.background = ''; b.style.borderColor = '';
+    // Box filter buttons
+    (function(){
+      area.querySelectorAll('.tam-box-filter-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var bi = parseInt(btn.getAttribute('data-box'));
+          var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+          if (!tbody || isNaN(bi)) return;
+          var rows = tbody.querySelectorAll('tr[data-ref]');
+          var active = btn.classList.toggle('tam-box-filter-active');
+          rows.forEach(function(row){
+            if (!active) { row.style.display = ''; return; }
+            var ref = row.getAttribute('data-ref') || '';
+            var box = tamSession && tamSession.boxes[bi];
+            var hasVal = box && box.refs[ref] && ((box.refs[ref].f||0) + (box.refs[ref].p||0)) > 0;
+            row.style.display = hasVal ? '' : 'none';
           });
-          _activeFilterBi = bi;
-          btn.style.background = '#f0f0f0'; btn.style.borderColor = '#000';
-          var box = tamSession.boxes[bi];
-          var filled = box ? Object.keys(box.refs).filter(function(ref){
-            return (box.refs[ref].f||0) + (box.refs[ref].p||0) > 0;
-          }) : [];
-          area.querySelectorAll('tr[data-ref]').forEach(function(row){
-            row.style.display = (filled.indexOf(row.getAttribute('data-ref')) >= 0) ? '' : 'none';
-          });
-        }
+        });
       });
-    });
+    })();
 
-    // ── BIND F/P INPUTS ───────────────────────────────────────
-    area.querySelectorAll('.tam-rec-input').forEach(function(inp){
-      // Push undo when the user starts editing a field (on focus)
-      inp.addEventListener('focus', function(){
-        tamPushUndo();
-      });
+    // Reception inputs (F/P values)
+    (function(){
+      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+      if (!tbody) return;
+      if (tbody._recListening) return;
+      tbody._recListening = true;
 
-      inp.addEventListener('input', function(){
+      tbody.addEventListener('change', function(e){
+        var inp = e.target;
+        if (!inp.classList.contains('tam-rec-input')) return;
         var bi   = parseInt(inp.getAttribute('data-box'));
         var ref  = inp.getAttribute('data-ref');
         var city = inp.getAttribute('data-city');
         var val  = parseInt(inp.value) || 0;
-        if (!tamSession.boxes[bi].refs[ref]) tamSession.boxes[bi].refs[ref] = { f:0, p:0 };
-        tamSession.boxes[bi].refs[ref][city] = val;
-        /* Cap check: F+P must not exceed DN qty for this ref */
-        var capBox = tamSession.boxes[bi];
-        if (capBox.dnZyCode) {
-          var capDn = tamDeliveryNotes[capBox.dnZyCode];
-          if (capDn) {
-            var capRef = null;
-            for (var _ci=0; _ci<capDn.refs.length; _ci++) { if (capDn.refs[_ci].ref===ref){ capRef=capDn.refs[_ci]; break; } }
-            if (capRef) {
-              var curF = capBox.refs[ref].f || 0, curP = capBox.refs[ref].p || 0;
-              if (curF + curP > capRef.qty && !inp._capWarning) {
-                inp._capWarning = true;
-                var keep = confirm('\u26a0 ATEN\u00c7\u00c3O\n\nEstas a distribuir ' + (curF+curP) +
-                  ' pcs para "' + ref + '"\nmas a DN s\u00f3 tem ' + capRef.qty + ' pcs.\n\n' +
-                  'Confirmas que h\u00e1 efectivamente mais pe\u00e7as?');
-                if (!keep) {
-                  capBox.refs[ref][city] = Math.max(0, capRef.qty - (city==='f' ? curP : curF));
-                  inp.value = capBox.refs[ref][city];
-                }
-                inp._capWarning = false;
-              }
-            }
-          }
-        }
-        tamUpdateSummaryRow(ref);
-        tamUpdateInvoicesRows(ref);  /* also refresh invoice table columns */
+        if (!tamSession || isNaN(bi) || !ref) return;
+        tamPushUndo();
+        var box = tamSession.boxes[bi];
+        if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
+        box.refs[ref][city] = val;
+        if (val === 0 && box.refs[ref].f === 0 && box.refs[ref].p === 0) delete box.refs[ref];
         tamDetectRefCompletions();
+        tamUpdateSummaryRow(ref);
+        tamUpdateInvoicesRows(ref);
         tamCheckBoxLock(bi);
         tamScheduleSave();
       });
 
-      inp.addEventListener('keydown', function(e){
-        if (e.key !== 'Tab' && e.key !== 'Enter') return;
-        var bi  = parseInt(inp.getAttribute('data-box'));
-        var ref = inp.getAttribute('data-ref');
-        // Navigation only — detection already handled by input event
-        var isF  = inp.classList.contains('tam-rec-input-f');
-        var isPS = inp.classList.contains('tam-rec-input-p');
-        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
-        if (isF && e.key === 'Enter') {
-          e.preventDefault();
-          var ps = document.getElementById('tam-inp-p-' + inp.getAttribute('data-box') + '-' + safeRef);
-          if (ps && !ps.disabled) { ps.focus(); ps.select(); }
-          return;
-        }
-        if (isPS && (e.key === 'Tab' || e.key === 'Enter')) {
-          e.preventDefault();
-          var allF = Array.from(area.querySelectorAll('.tam-rec-input-f:not([disabled])'));
-          var curF = document.getElementById('tam-inp-f-' + inp.getAttribute('data-box') + '-' + safeRef);
-          var nxt  = allF[allF.indexOf(curF) + 1];
-          if (nxt) { nxt.focus(); nxt.select(); }
-        }
+      tbody.addEventListener('focus', function(e){
+        var inp = e.target;
+        if (!inp.classList.contains('tam-rec-input')) return;
+        var bi = parseInt(inp.getAttribute('data-box'));
+        if (!isNaN(bi)) tamEditingBoxBi = bi;
+      }, true);
+
+      tbody.addEventListener('keydown', function(e){
+        var inp = e.target;
+        if (!inp.classList.contains('tam-rec-input')) return;
+        if (e.key !== 'Enter' && e.key !== 'Tab') return;
+        var allInputs = Array.from(tbody.querySelectorAll('.tam-rec-input:not([disabled])'));
+        var idx = allInputs.indexOf(inp);
+        if (idx < 0) return;
+        if (e.key === 'Enter') { e.preventDefault(); var next = allInputs[idx+1]; if (next) { next.focus(); next.select(); } }
       });
-    });
+    })();
 
-    // ── CLICK-TO-MODIFY on completed ref rows ─────────────────
+    // Quick row buttons (F / PS / ½)
     (function(){
-      // ── Singleton tooltip — created once, reused across renders ──
-      var tip = document.getElementById('tam-modify-tip');
-      if (!tip) {
-        tip = document.createElement('div');
-        tip.id = 'tam-modify-tip';
-        tip.innerHTML =
-          '<span class="tam-tip-msg">\u00BFModificar esta referencia?</span>' +
-          '<button class="tam-tip-btn" id="tam-tip-yes">S\u00ED</button>' +
-          '<button class="tam-tip-cancel" id="tam-tip-cancel">No</button>';
-        document.body.appendChild(tip);
-
-        // ── Close on outside click ────────────────────────────────
-        document.addEventListener('click', function(e){
-          if (!tip.classList.contains('tam-tip-visible')) return;
-          if (tip.contains(e.target)) return;
-          tip.classList.remove('tam-tip-visible');
-          window.tamTipState = null;
-        }, true);
-
-        // ── Cancel button ─────────────────────────────────────────
-        tip.querySelector('#tam-tip-cancel').addEventListener('click', function(e){
-          e.stopPropagation();
-          tip.classList.remove('tam-tip-visible');
-          window.tamTipState = null;
-        });
-
-        // ── "Sí" button ───────────────────────────────────────────
-        tip.querySelector('#tam-tip-yes').addEventListener('click', function(e){
-          e.stopPropagation();
-          var state = window.tamTipState;
-          if (!state || !state.ref || !tamSession) return;
-          var ref = state.ref;
-
-          tip.classList.remove('tam-tip-visible');
-          window.tamTipState = null;
-
-          // Find which boxes are locked AND contain this ref
-          var unlockedBis = [];
-          tamSession.boxes.forEach(function(box, bi){
-            if (box.locked && box.refs[ref] !== undefined) {
-              box.locked = false;
-              if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
-              delete tamBoxLockPending[bi];
-              unlockedBis.push(bi);
-            }
-          });
-
-          // Reset animation state so it can flash again when re-completed
-          tamRefDone.delete(ref);
-          tamRefCompleting.delete(ref);
-          if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
-
-          if (!unlockedBis.length) return;
-          tamScheduleSave();
-          tamRenderAll();
-
-          // After re-render: illuminate the unlocked column(s) and grey out ref cells
-          requestAnimationFrame(function(){
-            var recArea = document.getElementById('tam-reception-area');
-            if (!recArea) return;
-
-            // 1. Illuminate entire column for each unlocked box (white column highlight)
-            unlockedBis.forEach(function(bi){
-              recArea.querySelectorAll('.tam-rec-input[data-box="' + bi + '"]').forEach(function(inp){
-                var td = inp.closest('td');
-                if (td) td.classList.add('tam-col-unlocked');
-              });
-              // Also header cells
-              var hdrInput = recArea.querySelector('#tam-box-total-' + bi);
-              if (hdrInput) {
-                var th = hdrInput.closest('th');
-                if (th) th.classList.add('tam-col-unlocked-hdr');
-              }
-            });
-
-            // 2. Grey-highlight (relieve) the specific ref cells
-            recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
-              if (inp.getAttribute('data-ref') === ref && !inp.disabled) {
-                var td = inp.closest('td');
-                if (td) td.classList.add('tam-cell-ref-edit');
-              }
-            });
-
-            // 3. Focus first editable cell of this ref
-            var first = recArea.querySelector('.tam-rec-input[data-ref]:not([disabled])');
-            recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
-              if (inp.getAttribute('data-ref') === ref && !inp.disabled && !first) first = inp;
-              if (inp.getAttribute('data-ref') === ref && !inp.disabled) first = inp; // get last matched; use first
-            });
-            // Get actual first
-            var allEditable = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
-              .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
-            if (allEditable[0]) { allEditable[0].focus(); allEditable[0].select(); }
-          });
-        });
-      }
-
-      // ── Event delegation: click on ref cell of completed rows ──
       var tbody = area.querySelector('.tam-rec-boxes-table tbody');
       if (!tbody) return;
+      tbody.addEventListener('click', function(e){
+        var btn = e.target.closest('.tam-row-quick-btn');
+        if (!btn) return;
+        var bi   = parseInt(btn.getAttribute('data-box'));
+        var ref  = btn.getAttribute('data-ref');
+        var mode = btn.getAttribute('data-mode');
+        if (!tamSession || isNaN(bi) || !ref) return;
+        var box = tamSession.boxes[bi];
+        if (!box || !box.total) return;
+        tamPushUndo();
 
+        // Find this ref's total pieces across all invoices
+        var consolidated2 = tamConsolidatedRefs();
+        var cRef = consolidated2.find(function(c){ return c.ref === ref; });
+        var total = cRef ? cRef.totalPieces : 0;
+        if (!total) return;
+
+        if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
+        if (mode === 'funchal') { box.refs[ref].f = total; box.refs[ref].p = 0; }
+        else if (mode === 'porto') { box.refs[ref].f = 0; box.refs[ref].p = total; }
+        else if (mode === 'split') {
+          var half = Math.floor(total / 2);
+          box.refs[ref].f = half; box.refs[ref].p = total - half;
+        }
+
+        // Update inputs directly without full rebuild
+        var safeRef = ref.replace(/[^a-z0-9]/gi,'_');
+        var fInp = document.getElementById('tam-inp-f-' + bi + '-' + safeRef);
+        var pInp = document.getElementById('tam-inp-p-' + bi + '-' + safeRef);
+        if (fInp) fInp.value = box.refs[ref].f || '';
+        if (pInp) pInp.value = box.refs[ref].p || '';
+
+        tamDetectRefCompletions();
+        tamUpdateSummaryRow(ref);
+        tamUpdateInvoicesRows(ref);
+        tamCheckBoxLock(bi);
+        tamScheduleSave();
+      });
+    })();
+
+    // Undo / Redo / Clear buttons
+    (function(){
+      var undoBtn  = area.querySelector('#tam-undo-btn');
+      var redoBtn  = area.querySelector('#tam-redo-btn');
+      var clearBtn = area.querySelector('#tam-clear-btn');
+      if (undoBtn)  undoBtn.addEventListener('click',  tamUndo);
+      if (redoBtn)  redoBtn.addEventListener('click',  tamRedo);
+      if (clearBtn) clearBtn.addEventListener('click', function(){
+        if (confirm('Borrar toda a distribuição?')) tamClearAll();
+      });
+    })();
+
+    // Tooltip for completed ref cells
+    (function(){
+      var tip = document.getElementById('tam-rec-tip');
+      if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'tam-rec-tip';
+        tip.className = 'tam-rec-tip';
+        tip.innerHTML =
+          '<div class="tam-tip-body"></div>' +
+          '<button class="tam-tip-cancel">↩ desbloquear</button>';
+        document.body.appendChild(tip);
+      }
+
+      document.addEventListener('click', function(e){
+        if (tip.classList.contains('tam-tip-visible') && !tip.contains(e.target)) {
+          tip.classList.remove('tam-tip-visible');
+          window.tamTipState = null;
+        }
+      });
+
+      tip.querySelector('.tam-tip-cancel').addEventListener('click', function(){
+        var state = window.tamTipState;
+        if (!state || !state.ref || !tamSession) return;
+        var ref = state.ref;
+
+        tip.classList.remove('tam-tip-visible');
+        window.tamTipState = null;
+
+        var unlockedBis = [];
+        tamSession.boxes.forEach(function(box, bi){
+          if (box.locked && box.refs[ref] !== undefined) {
+            box.locked = false;
+            if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+            delete tamBoxLockPending[bi];
+            unlockedBis.push(bi);
+          }
+        });
+
+        tamRefDone.delete(ref);
+        tamRefCompleting.delete(ref);
+        if (tamRefCompletingTimers[ref]) { clearTimeout(tamRefCompletingTimers[ref]); delete tamRefCompletingTimers[ref]; }
+
+        if (!unlockedBis.length) return;
+        tamScheduleSave();
+        area._tamSig = null;
+        tamRenderAll();
+
+        requestAnimationFrame(function(){
+          var recArea = document.getElementById('tam-reception-area');
+          if (!recArea) return;
+          unlockedBis.forEach(function(bi){
+            recArea.querySelectorAll('.tam-rec-input[data-box="' + bi + '"]').forEach(function(inp){
+              var td = inp.closest('td');
+              if (td) td.classList.add('tam-col-unlocked');
+            });
+            var hdrInput = recArea.querySelector('#tam-box-total-' + bi);
+            if (hdrInput) { var th = hdrInput.closest('th'); if (th) th.classList.add('tam-col-unlocked-hdr'); }
+          });
+          recArea.querySelectorAll('.tam-rec-input[data-ref]').forEach(function(inp){
+            if (inp.getAttribute('data-ref') === ref && !inp.disabled) {
+              var td = inp.closest('td'); if (td) td.classList.add('tam-cell-ref-edit');
+            }
+          });
+          var allEditable = Array.from(recArea.querySelectorAll('.tam-rec-input[data-ref]'))
+            .filter(function(inp){ return inp.getAttribute('data-ref') === ref && !inp.disabled; });
+          if (allEditable[0]) { allEditable[0].focus(); allEditable[0].select(); }
+        });
+      });
+
+      var tbody = area.querySelector('.tam-rec-boxes-table tbody');
+      if (!tbody) return;
       tbody.addEventListener('click', function(e){
         var row = e.target.closest('tr[data-ref]');
         if (!row) return;
         if (!row.classList.contains('tam-ref-complete') && !row.classList.contains('tam-ref-over')) return;
-
         var refCell = e.target.closest('.tam-rec-ref-col');
-        if (!refCell) return;   // only clicking the ref cell triggers the tooltip
-
+        if (!refCell) return;
         e.stopPropagation();
         window.tamTipState = { ref: row.getAttribute('data-ref') };
-
-        // Position to the RIGHT of the ref cell, vertically centered on the row
         var rect    = refCell.getBoundingClientRect();
         var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
         var scrollY = window.pageYOffset || document.documentElement.scrollTop;
-
         tip.style.visibility = 'hidden';
         tip.classList.add('tam-tip-visible');
         requestAnimationFrame(function(){
@@ -1960,7 +1953,6 @@
           var rowRect = row.getBoundingClientRect();
           var leftPos = rect.right + scrollX + 12;
           var topPos  = rowRect.top + scrollY + (rowRect.height - tipH) / 2;
-          // Clamp so it doesn't go off the right edge of the viewport
           var maxLeft = scrollX + window.innerWidth - tip.offsetWidth - 16;
           if (leftPos > maxLeft) leftPos = rect.left + scrollX - tip.offsetWidth - 12;
           tip.style.left = leftPos + 'px';
@@ -1970,60 +1962,39 @@
       });
     })();
 
-    // ── BIND REF FILTER INPUT ─────────────────────────────────
+    // Ref filter
     (function(){
       var filterInp = area.querySelector('#tam-ref-filter');
       if (!filterInp) return;
       filterInp.addEventListener('input', function(){
         var q = filterInp.value.trim().toLowerCase();
-        var tbody = area.querySelector('.tam-rec-boxes-table tbody');
-        if (!tbody) return;
-        var rows = tbody.querySelectorAll('tr[data-ref]');
-        rows.forEach(function(row){
-          if (!q) {
-            row.style.display = '';
-          } else {
-            var ref = (row.getAttribute('data-ref') || '').toLowerCase();
-            row.style.display = (ref.indexOf(q) >= 0) ? '' : 'none';
-          }
+        var tbody2 = area.querySelector('.tam-rec-boxes-table tbody');
+        if (!tbody2) return;
+        tbody2.querySelectorAll('tr[data-ref]').forEach(function(row){
+          if (!q) { row.style.display = ''; return; }
+          var ref = (row.getAttribute('data-ref') || '').toLowerCase();
+          row.style.display = (ref.indexOf(q) >= 0) ? '' : 'none';
         });
       });
-      // Clear on Escape
       filterInp.addEventListener('keydown', function(e){
-        if (e.key === 'Escape') {
-          filterInp.value = '';
-          filterInp.dispatchEvent(new Event('input'));
-          filterInp.blur();
-        }
+        if (e.key === 'Escape') { filterInp.value = ''; filterInp.dispatchEvent(new Event('input')); filterInp.blur(); }
       });
     })();
 
-    // ── SYNC TOP + BOTTOM SCROLLBARS ─────────────────────────
+    // Sync top + bottom scrollbars
     (function(){
-      var topBar   = area.querySelector('.tam-rec-scroll-top-bar');
+      var topBar    = area.querySelector('.tam-rec-scroll-top-bar');
       var botScroll = area.querySelector('.tam-rec-boxes-scroll');
-      var inner    = area.querySelector('.tam-rec-scroll-top-inner');
+      var inner     = area.querySelector('.tam-rec-scroll-top-inner');
       if (!topBar || !botScroll || !inner) return;
-
-      function syncInnerWidth(){
-        inner.style.width = botScroll.scrollWidth + 'px';
-        inner.style.height = '1px';
-      }
+      function syncInnerWidth(){ inner.style.width = botScroll.scrollWidth + 'px'; inner.style.height = '1px'; }
       syncInnerWidth();
-
       var syncing = false;
-      topBar.addEventListener('scroll', function(){
-        if (syncing) return; syncing = true;
-        botScroll.scrollLeft = topBar.scrollLeft;
-        syncing = false;
-      });
-      botScroll.addEventListener('scroll', function(){
-        if (syncing) return; syncing = true;
-        topBar.scrollLeft = botScroll.scrollLeft;
-        syncing = false;
-      });
+      topBar.addEventListener('scroll', function(){ if (syncing) return; syncing = true; botScroll.scrollLeft = topBar.scrollLeft; syncing = false; });
+      botScroll.addEventListener('scroll', function(){ if (syncing) return; syncing = true; topBar.scrollLeft = botScroll.scrollLeft; syncing = false; });
     })();
   }
+
 
   /* ──────────────────────────────────────────────────────────────
      Verificar si una caja alcanzó el total → bloquear
@@ -2122,7 +2093,63 @@
 
   /* Actualizar filas de facturas superiores para un ref */
   function tamUpdateInvoicesRows(ref) {
-    tamRenderInvoices();
+    /* Update only the FNC/PXO cells and anomaly cells for this ref
+       across all invoice tables — no full re-render */
+    tamInvoices.forEach(function(r, invIdx){
+      var g = r.grouped.find(function(g){ return g.ref === ref; });
+      if (!g) return;
+      var distrib = tamGetRefDistribForInvoice(ref, invIdx);
+      var fVal = distrib.f || 0;
+      var pVal = distrib.p || 0;
+      var total = fVal + pVal;
+      var diff  = total - g.pieces;
+
+      /* Find the row in the invoice table by scanning for the ref text */
+      var wrap = document.getElementById('tam-invoice-block-' + invIdx);
+      if (!wrap) {
+        /* Single invoice layout */
+        wrap = document.getElementById('tam-results-wrap');
+      }
+      if (!wrap) return;
+
+      var rows = wrap.querySelectorAll('tbody tr');
+      rows.forEach(function(tr){
+        var refCell = tr.querySelector('td strong');
+        if (!refCell || refCell.textContent.trim() !== ref) return;
+
+        /* Update FNC cell (7th td, index 6) */
+        var tds = tr.querySelectorAll('td');
+        if (tds[6]) tds[6].textContent = fVal > 0 ? fVal : '—';
+        if (tds[7]) tds[7].textContent = pVal > 0 ? pVal : '—';
+
+        /* Update anomaly cell if present (8th td, index 8) */
+        if (tds[8] && tds[8].className.indexOf('tam-cell-anomaly') >= 0) {
+          if (total === 0) {
+            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-empty';
+            tds[8].textContent = '';
+            tds[8].title = '';
+          } else if (diff === 0) {
+            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-ok';
+            tds[8].textContent = '✓';
+            tds[8].title = 'completo';
+          } else if (diff < 0) {
+            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-low';
+            tds[8].textContent = String(diff);
+            tds[8].title = 'faltam ' + Math.abs(diff) + ' peças';
+          } else {
+            tds[8].className = 'tam-td tam-td-num tam-cell-anomaly-high';
+            tds[8].textContent = '+' + diff;
+            tds[8].title = diff + ' peças a mais';
+          }
+        }
+
+        /* Update row class for completion state */
+        var refDone = total === g.pieces && g.pieces > 0;
+        var isOver  = total > g.pieces && g.pieces > 0;
+        tr.classList.remove('tam-ref-complete');
+        if (refDone && !isOver) tr.classList.add('tam-ref-complete');
+      });
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════

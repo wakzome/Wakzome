@@ -1759,6 +1759,9 @@
     const alertsHTML = S.alerts.length
       ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
       : '';
+    const decsHTML = S.decisions.length
+      ? `<div class="gh-dec-bar"><div class="gh-dec-inner">${S.decisions.map(d => `<div class="gh-dec-chip">${d.text}</div>`).join('')}</div></div>`
+      : '';
 
     const topBar = `
       <div class="gh-sched-bar">
@@ -1771,7 +1774,7 @@
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
         </div>
       </div>
-      ${alertsHTML}`;
+      ${alertsHTML}${decsHTML}`;
 
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
@@ -2016,11 +2019,15 @@
         #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
         #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
         #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
-        #tab-gerador .gh-alert-bar { padding:6px 16px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; }
-        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:nowrap; gap:6px; width:max-content; }
-        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
+        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
+        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
         #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
         #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
+        #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
+        #tab-gerador .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
 
         /* ── COVERAGE BLOCKER ── */
         #tab-gerador .gh-cov-list { margin:24px 0; display:flex; flex-direction:column; gap:8px; }

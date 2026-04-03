@@ -114,7 +114,7 @@
   // ── STATE ──
   function blank() {
     return {
-      weekStart: null, openStores: [], openDays: {}, storeMin: {}, absences: [],
+      weekStart: null, openStores: [], openDays: {}, storeMin: {}, storeMax: {}, absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: []
     };
@@ -139,6 +139,7 @@
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
   function minAv(day) { const m = S.weekStart.getMonth()+1; return day === 'DOM' ? (m < 6 ? 1 : 2) : 3; }
   function storeMin(sid) { return S.storeMin?.[sid] || 1; }
+  function storeMax(sid) { const m = S.storeMax?.[sid]; return (m && m > 0) ? m : Infinity; }
 
   // ── WIZARD STATE ──
   let wStep = 0;
@@ -916,14 +917,22 @@
       const open = S.openStores.length ? S.openStores.includes(st.id) : st.id !== 'maxx';
       const days = S.openDays[st.id] || (open ? [...defD] : []);
       const savedMin = S.storeMin?.[st.id] || 1;
+      const savedMax = S.storeMax?.[st.id] || '';
       const togs = DAYS.map(d => `<span class="gh-dtog ${days.includes(d)?'on':''}" data-store="${st.id}" data-day="${d}">${d}</span>`).join('');
       return `<div class="gh-sc-row ${!open?'closed':''}" id="gh-scr-${st.id}">
         <div class="gh-sc-top">
           <input type="checkbox" id="gh-chk-${st.id}" ${open?'checked':''} data-store="${st.id}">
           <label for="gh-chk-${st.id}">${st.name}</label>
-          <div class="gh-sc-min-wrap" title="Pessoas mínimas indispensáveis por dia">
-            <span class="gh-sc-min-label">mín.</span>
-            <input type="number" class="gh-sc-min-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" value="${savedMin}">
+          <div class="gh-sc-minmax">
+            <div class="gh-sc-mm-field">
+              <span class="gh-sc-mm-label">mín</span>
+              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" value="${savedMin}">
+            </div>
+            <div class="gh-sc-mm-sep">·</div>
+            <div class="gh-sc-mm-field">
+              <span class="gh-sc-mm-label">máx</span>
+              <input type="number" class="gh-sc-mm-inp" id="gh-max-${st.id}" data-store="${st.id}" min="1" max="20" placeholder="—" value="${savedMax}">
+            </div>
           </div>
         </div>
         <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div></div>`;
@@ -956,14 +965,17 @@
   }
 
   function sub_stores() {
-    S.openStores = []; S.openDays = {}; S.storeMin = {};
+    S.openStores = []; S.openDays = {}; S.storeMin = {}; S.storeMax = {};
     STORES.forEach(st => {
       const chk = document.getElementById(`gh-chk-${st.id}`); if (!chk?.checked) return;
       const days = [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].map(e => e.dataset.day);
       if (!days.length) return;
       S.openStores.push(st.id); S.openDays[st.id] = days;
       const minInp = document.getElementById(`gh-min-${st.id}`);
+      const maxInp = document.getElementById(`gh-max-${st.id}`);
       S.storeMin[st.id] = Math.max(1, parseInt(minInp?.value || 1) || 1);
+      const maxVal = parseInt(maxInp?.value || 0) || 0;
+      if (maxVal > 0) S.storeMax[st.id] = maxVal;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
     generate();
@@ -1174,6 +1186,11 @@
         if (have >= min) return;
         for (let i = 0; i < min - have; i++) {
           const cand = wk().filter(p => p.mobile !== false && p.knows.includes(st.id) && S.schedule[p.id][day].store !== st.id)
+            .filter(p => {
+              // No superar el máximo del destino
+              const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
+              return destCount + 1 <= storeMax(st.id);
+            })
             .sort((a, b) => {
               const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;
               const bc = wk().filter(x => S.schedule[x.id][day].store === S.schedule[b.id][day].store).length;
@@ -1214,8 +1231,11 @@
               if (p.mobile === false) return false;
               if (!p.knows.includes(poorest)) return false;
               if (p.id === 'sandra') return false;
-              // Loja richest deve manter o mínimo após saída
-              return (cov[richest] - 1) >= storeMin(richest);
+              // La tienda richest debe mantener su mínimo tras la salida
+              if ((cov[richest] - 1) < storeMin(richest)) return false;
+              // La tienda poorest no debe superar su máximo
+              if (cov[poorest] + 1 > storeMax(poorest)) return false;
+              return true;
             })
             .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];
           if (!cand) break;
@@ -1937,11 +1957,14 @@
         #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
         #tab-gerador .gh-sc-top label { font-size:.85rem; cursor:pointer; color:#111; font-weight:400; }
         #tab-gerador .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
-        #tab-gerador .gh-sc-min-wrap { margin-left:auto; display:flex; align-items:center; gap:5px; }
-        #tab-gerador .gh-sc-min-label { font-size:.62rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#aaa; }
-        #tab-gerador .gh-sc-min-inp { width:38px; font-size:.78rem; font-weight:700; text-align:center; border:1px solid #ddd; border-radius:4px; padding:3px 4px; color:#111; background:#fafafa; font-family:inherit; }
-        #tab-gerador .gh-sc-min-inp:focus { outline:none; border-color:#111; background:#fff; }
-        #tab-gerador .gh-sc-row.closed .gh-sc-min-wrap { opacity:.3; pointer-events:none; }
+        #tab-gerador .gh-sc-minmax { display:flex; align-items:center; gap:4px; margin-left:10px; background:#f5f5f5; border:1px solid #e8e8e8; border-radius:6px; padding:3px 8px; }
+        #tab-gerador .gh-sc-mm-field { display:flex; align-items:center; gap:3px; }
+        #tab-gerador .gh-sc-mm-label { font-size:.58rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#aaa; }
+        #tab-gerador .gh-sc-mm-inp { width:32px; font-size:.78rem; font-weight:700; text-align:center; border:1px solid #ddd; border-radius:3px; padding:2px 3px; color:#111; background:#fff; font-family:inherit; }
+        #tab-gerador .gh-sc-mm-inp:focus { outline:none; border-color:#111; }
+        #tab-gerador .gh-sc-mm-inp::placeholder { color:#ccc; font-weight:400; }
+        #tab-gerador .gh-sc-mm-sep { font-size:.7rem; color:#ccc; padding:0 1px; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-minmax { opacity:.3; pointer-events:none; }
         #tab-gerador .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
         #tab-gerador .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
         #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }

@@ -1620,6 +1620,10 @@
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
       '</div>';
 
+    var isIpad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIpad && tamCollapseState['distrib'] === undefined) {
+      tamCollapseState['distrib'] = true;
+    }
     var distribCollapsed = !!tamCollapseState['distrib'];
     area.innerHTML =
       '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
@@ -5946,6 +5950,14 @@
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
       '.tam-inv-toggle-btn:hover { color:#000; }',
+      /* iPad: bigger toggle button and touch-action fixes */
+      '@media (pointer:coarse) and (min-width:768px) {',
+      '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#555; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',
+      '  #tam-rec-toggle-btn { font-size:1.6rem; padding:6px 12px; color:#333; min-width:44px; min-height:44px; }',
+      '  #admin-app.tam-loaded { touch-action:pan-y; }',
+      '  .tam-rec-boxes-scroll { touch-action:pan-x; }',
+      '  .tam-inv-table-wrap { touch-action:pan-x; }',
+      '}',
 
       /* ── Invoice block collapsed state ── */
       '.tam-inv-collapsed .tam-inv-banner { display:none!important; }',

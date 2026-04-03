@@ -114,7 +114,7 @@
   // ── STATE ──
   function blank() {
     return {
-      weekStart: null, openStores: [], openDays: {}, absences: [],
+      weekStart: null, openStores: [], openDays: {}, storeMin: {}, absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: []
     };
@@ -138,6 +138,7 @@
   function fullyAbsent(pid)   { const a = absOf(pid); if (!a) return false; return DAYS.indexOf(a.from) === 0; }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
   function minAv(day) { const m = S.weekStart.getMonth()+1; return day === 'DOM' ? (m < 6 ? 1 : 2) : 3; }
+  function storeMin(sid) { return S.storeMin?.[sid] || 1; }
 
   // ── WIZARD STATE ──
   let wStep = 0;
@@ -914,9 +915,17 @@
     const rows = STORES.map(st => {
       const open = S.openStores.length ? S.openStores.includes(st.id) : st.id !== 'maxx';
       const days = S.openDays[st.id] || (open ? [...defD] : []);
+      const savedMin = S.storeMin?.[st.id] || 1;
       const togs = DAYS.map(d => `<span class="gh-dtog ${days.includes(d)?'on':''}" data-store="${st.id}" data-day="${d}">${d}</span>`).join('');
       return `<div class="gh-sc-row ${!open?'closed':''}" id="gh-scr-${st.id}">
-        <div class="gh-sc-top"><input type="checkbox" id="gh-chk-${st.id}" ${open?'checked':''} data-store="${st.id}"><label for="gh-chk-${st.id}">${st.name}</label></div>
+        <div class="gh-sc-top">
+          <input type="checkbox" id="gh-chk-${st.id}" ${open?'checked':''} data-store="${st.id}">
+          <label for="gh-chk-${st.id}">${st.name}</label>
+          <div class="gh-sc-min-wrap" title="Pessoas mínimas indispensáveis por dia">
+            <span class="gh-sc-min-label">mín.</span>
+            <input type="number" class="gh-sc-min-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" value="${savedMin}">
+          </div>
+        </div>
         <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div></div>`;
     }).join('');
 
@@ -924,7 +933,7 @@
       <div class="gh-wiz-box">
         <div class="gh-wiz-label">Passo 3 de 3</div>
         <div class="gh-wiz-title">Quais lojas abrem e em que dias?</div>
-        <div class="gh-wiz-sub">Selecione as lojas e os dias de funcionamento desta semana.</div>
+        <div class="gh-wiz-sub">Selecione as lojas, os dias de funcionamento e o mínimo de pessoas indispensáveis por loja.</div>
         <div class="gh-store-cfg">${rows}</div>
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
@@ -947,12 +956,14 @@
   }
 
   function sub_stores() {
-    S.openStores = []; S.openDays = {};
+    S.openStores = []; S.openDays = {}; S.storeMin = {};
     STORES.forEach(st => {
       const chk = document.getElementById(`gh-chk-${st.id}`); if (!chk?.checked) return;
       const days = [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].map(e => e.dataset.day);
       if (!days.length) return;
       S.openStores.push(st.id); S.openDays[st.id] = days;
+      const minInp = document.getElementById(`gh-min-${st.id}`);
+      S.storeMin[st.id] = Math.max(1, parseInt(minInp?.value || 1) || 1);
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
     generate();
@@ -973,7 +984,7 @@
       }
       if (storeOpen('avenida', day)) {
         const avWorkers = active.filter(p => p.id !== 'sandra' && p.store === 'avenida' && !isAbsent(p.id, day)).length;
-        if (avWorkers < minAv(day)) { S.sandraDay[day] = 'avenida'; return; }
+        if (avWorkers < storeMin('avenida')) { S.sandraDay[day] = 'avenida'; return; }
       }
       if (storeOpen('mercado', day)) { S.sandraDay[day] = 'mercado'; return; }
       const fb = S.openStores.find(id => S.openDays[id]?.includes(day));
@@ -1022,7 +1033,7 @@
       const myStore = p.id === 'sandra' ? null : p.store;
       const storOpensSun = myStore && sundayStores.includes(myStore) && !isAbsent(p.id, 'DOM');
       const target = Math.round((p.hrs || 40) / 8);
-      const sunQuotaFilled = storOpensSun && (S.sundayAssigned[myStore]||[]).length >= (myStore === 'avenida' ? minAv('DOM') : 1);
+      const sunQuotaFilled = storOpensSun && (S.sundayAssigned[myStore]||[]).length >= storeMin(myStore);
       const canWorkSunday = storOpensSun && !sunQuotaFilled && p.canAlone !== false && weeksSince(p.start, S.weekStart) >= 4;
       let extraDayOff = null;
       if (canWorkSunday) {
@@ -1030,8 +1041,8 @@
           if (isAbsent(p.id, d)) return false;
           const covStore = predictStore(p, d) || myStore;
           if (!covStore) return false;
-          const storeMin = covStore === 'avenida' ? minAv(d) : 1;
-          return (remaining[d]?.[covStore] || 0) - 1 >= storeMin;
+        const storeMin_ = storeMin(covStore);
+          return (remaining[d]?.[covStore] || 0) - 1 >= storeMin_;
         });
         if (candidates.length > 0) {
           extraDayOff = candidates.sort((a, b) => (remaining[b][myStore]||0) - (remaining[a][myStore]||0))[0];
@@ -1056,8 +1067,8 @@
         // Use real predicted store — not just p.store
         const effStore = predictStore(p, day);
         if (effStore && storeOpen(effStore, day)) {
-          const storeMin = effStore === 'avenida' ? minAv(day) : 1;
-          if ((remaining[day][effStore]||0) - 1 < storeMin) { dayIdx = (dayIdx+1) % 6; continue; }
+          const storeMin_ = storeMin(effStore);
+          if ((remaining[day][effStore]||0) - 1 < storeMin_) { dayIdx = (dayIdx+1) % 6; continue; }
         }
         // Count folgas already assigned whose predicted store matches
         const sameFolgas = sorted.filter(x => {
@@ -1158,7 +1169,7 @@
         else S.alerts.push({ type: 'amber', text: `${day}: ${p.name} em ${sname(myStore)} sem supervisão.` });
       });
       STORES.filter(st => storeOpen(st.id, day)).sort((a, b) => a.priority - b.priority).forEach(st => {
-        const min = st.id === 'avenida' ? minAv(day) : 1;
+        const min = storeMin(st.id);
         const have = wk().filter(p => S.schedule[p.id][day].store === st.id).length;
         if (have >= min) return;
         for (let i = 0; i < min - have; i++) {
@@ -1172,17 +1183,46 @@
           else S.alerts.push({ type: 'red', text: `${day}: ${sname(st.id)} sem cobertura suficiente.` });
         }
       });
-      if (storeOpen('avenida', day) && storeOpen('mercado', day)) {
-        const avStaff = wk().filter(p => S.schedule[p.id][day].store === 'avenida');
-        const mcStaff = wk().filter(p => S.schedule[p.id][day].store === 'mercado');
-        if (avStaff.length >= 4 && mcStaff.length === 1) {
-          const avCanAlone = avStaff.filter(p => p.canAlone && p.id !== 'sandra');
-          const cand = avStaff.filter(p => p.mobile !== false && p.id !== 'sandra' && p.knows.includes('mercado'))
-            .filter(p => !(p.canAlone && avCanAlone.length <= 1))
-            .sort((a, b) => new Date(b.start) - new Date(a.start))[0];
-          if (cand) { S.schedule[cand.id][day].store = 'mercado'; S.decisions.push({ type: 'info', text: `${day}: ${cand.name} → Mercado (reequilíbrio).` }); }
+      // ── REEQUILÍBRIO: distribuir sobrantes entre tiendas ──
+      // Após garantir mínimos, qualquer trabalhador cujo local tem excesso
+      // é candidato a reforçar a loja com menos pessoas nesse dia.
+      (() => {
+        const workers = wk();
+        // Contar cobertura actual por loja
+        function covNow() {
+          const cov = {};
+          S.openStores.forEach(sid => { cov[sid] = 0; });
+          workers.forEach(p => { const s = S.schedule[p.id][day]?.store; if (s && cov[s] !== undefined) cov[s]++; });
+          return cov;
         }
-      }
+        // Tentar mover um sobrante de loja com excesso para loja com défice relativo
+        // Repetir até não haver melhora (máx. n iterações)
+        for (let iter = 0; iter < workers.length; iter++) {
+          const cov = covNow();
+          // Loja mais cheia vs loja mais vazia (só lojas abertas neste dia)
+          const openNow = S.openStores.filter(id => storeOpen(id, day));
+          if (openNow.length < 2) break;
+          const richest  = openNow.reduce((a, b) => cov[a] > cov[b] ? a : b);
+          const poorest  = openNow.reduce((a, b) => cov[a] < cov[b] ? a : b);
+          if (richest === poorest) break;
+          const gap = cov[richest] - cov[poorest];
+          if (gap <= 1) break; // diferença de 1 é aceitável
+          // O local richest tem pessoal a mais — ver quem pode mover-se
+          const cand = workers
+            .filter(p => {
+              if (S.schedule[p.id][day]?.store !== richest) return false;
+              if (p.mobile === false) return false;
+              if (!p.knows.includes(poorest)) return false;
+              if (p.id === 'sandra') return false;
+              // Loja richest deve manter o mínimo após saída
+              return (cov[richest] - 1) >= storeMin(richest);
+            })
+            .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];
+          if (!cand) break;
+          S.schedule[cand.id][day].store = poorest;
+          S.decisions.push({ type: 'info', text: `${day}: ${cand.name} → ${sname(poorest)} (reequilíbrio — ${sname(richest)} tinha excesso).` });
+        }
+      })();
 
       // ── ATRIBUIÇÃO DE TURNOS DE INTERVALO ──
       // Lógica matemática rigorosa. Aplicada após todas as relocações de loja.
@@ -1224,7 +1264,7 @@
     // For each sunday store, count how many people we need (minAv for avenida, 1 for rest)
     const needed = {};
     sundayStoreIds.forEach(sid => {
-      needed[sid] = sid === 'avenida' ? minAv('DOM') : 1;
+      needed[sid] = storeMin(sid);
     });
 
     // Count available candidates per store
@@ -1258,7 +1298,7 @@
         if (p.store !== sid) return false;
         return !fullyAbsent(p.id);
       });
-      const minNeeded = sid === 'avenida' ? minAv('SEG') : 1; // conservative: use Monday value
+      const minNeeded = storeMin(sid); // conservative: same min applies all days
       // If we lose `toAssign` person-days across the week, the worst case is
       // they all fall on the same day. Check if that day would still be covered.
       const worstCaseRemaining = storeWorkers.length - toAssign;
@@ -1596,7 +1636,7 @@
     workDays.forEach(day => {
       S.openStores.forEach(sid => {
         if (!storeOpen(sid, day)) return;
-        const min = sid === 'avenida' ? minAv(day) : 1;
+        const min = storeMin(sid);
         const have = active.filter(p => {
           const c = S.schedule[p.id]?.[day];
           return c?.type === 'work' && c?.store === sid;
@@ -1897,6 +1937,11 @@
         #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
         #tab-gerador .gh-sc-top label { font-size:.85rem; cursor:pointer; color:#111; font-weight:400; }
         #tab-gerador .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
+        #tab-gerador .gh-sc-min-wrap { margin-left:auto; display:flex; align-items:center; gap:5px; }
+        #tab-gerador .gh-sc-min-label { font-size:.62rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#aaa; }
+        #tab-gerador .gh-sc-min-inp { width:38px; font-size:.78rem; font-weight:700; text-align:center; border:1px solid #ddd; border-radius:4px; padding:3px 4px; color:#111; background:#fafafa; font-family:inherit; }
+        #tab-gerador .gh-sc-min-inp:focus { outline:none; border-color:#111; background:#fff; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-min-wrap { opacity:.3; pointer-events:none; }
         #tab-gerador .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
         #tab-gerador .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
         #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }

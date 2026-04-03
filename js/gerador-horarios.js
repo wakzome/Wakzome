@@ -1265,17 +1265,23 @@
           if (!storeOpen(id, day)) return false;
           if (!P('carla')?.knows.includes(id)) return false;
           const cnt = wk().filter(x => S.schedule[x.id][day].store === id).length;
+          // Respetar máximo estrictamente
           return cnt < storeMax(id);
         });
         if (alt) { S.schedule['carla'][day].store = alt; S.decisions.push({ type: 'info', text: `${day}: Carla → ${sname(alt)} (separar de Edna).` }); }
         else S.alerts.push({ type: 'amber', text: `${day}: Edna e Carla na mesma loja — sem alternativa.` });
       }
 
-      // ── SUPERVISIÓN ──
+      // ── SUPERVISIÓN ── (respeta máximos siempre)
       wk().filter(p => !p.canAlone && weeksSince(p.start, S.weekStart) < 4).forEach(p => {
         const myStore = S.schedule[p.id][day].store;
         if (wk().some(o => o.id !== p.id && o.canAlone && S.schedule[o.id][day].store === myStore)) return;
-        // Solo mover si no supera el máximo del destino
+        const currentCount = wk().filter(x => S.schedule[x.id][day].store === myStore).length;
+        // Solo traer supervisor si no supera el máximo de la tienda
+        if (currentCount >= storeMax(myStore)) {
+          S.alerts.push({ type: 'amber', text: `${day}: ${p.name} em ${sname(myStore)} sem supervisão (máximo já atingido).` });
+          return;
+        }
         const sup = wk()
           .filter(o => o.canAlone && o.id !== p.id && o.knows.includes(myStore) && !o.store)
           .sort((a, b) => {
@@ -1418,6 +1424,34 @@
           S.decisions.push({ type: 'info', text: `${day}: ${cand.name} → ${sname(dest)} (redistribuição).` });
         }
       })();
+
+      // ── VERIFICACIÓN FINAL DE MÁXIMOS (seguro absoluto) ──
+      // Después de todos los movimientos, asegurar que ninguna tienda supere su máximo.
+      STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
+        const max = storeMax(st.id);
+        if (max === Infinity) return;
+        const over = wk().filter(p => S.schedule[p.id][day].store === st.id);
+        if (over.length <= max) return;
+        // Sacar excedentes: primero los sin tienda fija aquí
+        [...over]
+          .sort((a, b) => ((a.store === st.id) ? 1 : 0) - ((b.store === st.id) ? 1 : 0))
+          .filter(p => p.store !== st.id)
+          .slice(0, over.length - max)
+          .forEach(p => {
+            const dest = S.openStores.find(id => {
+              if (id === st.id) return false;
+              if (!storeOpen(id, day)) return false;
+              if (!p.knows.includes(id)) return false;
+              return wk().filter(x => S.schedule[x.id][day].store === id).length < storeMax(id);
+            });
+            if (dest) {
+              S.schedule[p.id][day].store = dest;
+              S.decisions.push({ type: 'info', text: `${day}: ${p.name} → ${sname(dest)} (máx ${max} em ${sname(st.id)}).` });
+            } else {
+              S.alerts.push({ type: 'amber', text: `${day}: ${sname(st.id)} ainda excede máximo após redistribuição.` });
+            }
+          });
+      });
 
       // ── ATRIBUIÇÃO DE TURNOS DE INTERVALO ──
       assignIntervalShiftsForDay(day, wk());

@@ -1131,10 +1131,20 @@
         const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid);
         if (workers.length <= max) return;
 
-        // Ordenar: os mais móveis e de menor prioridade de cobertura saem primeiro
+        // Ordenar: primero salen los sin tienda fija, luego los móviles, nunca los de tienda fija
         const toRedirect = [...workers]
-          .sort((a, b) => (b.coverPri||9) - (a.coverPri||9) || (a.mobile === false ? -1 : 1))
-          .slice(max); // os que ficam a mais
+          .sort((a, b) => {
+            // Con tienda fija en esta tienda: nunca salen (pesan 0, van al final)
+            const aFixed = (a.store === sid) ? 1 : 0;
+            const bFixed = (b.store === sid) ? 1 : 0;
+            if (aFixed !== bFixed) return aFixed - bFixed; // sin tienda fija primero
+            return (b.coverPri||9) - (a.coverPri||9) || (a.mobile === false ? -1 : 1);
+          })
+          .filter((p, i) => {
+            // Nunca redirigir a alguien con tienda fija en esta tienda
+            if (p.store === sid) return false;
+            return i < workers.length - max; // solo los excedentes sin tienda fija
+          });
 
         toRedirect.forEach(p => {
           // Procurar a loja mais vazia que o trabalhador conhece, aberta neste dia, sem máximo excedido
@@ -1229,15 +1239,21 @@
         const have = wk().filter(p => S.schedule[p.id][day].store === st.id).length;
         if (have >= min) return;
         for (let i = 0; i < min - have; i++) {
-          const cand = wk().filter(p => p.mobile !== false && p.knows.includes(st.id) && S.schedule[p.id][day].store !== st.id)
+          const candPool = wk().filter(p => p.mobile !== false && p.knows.includes(st.id) && S.schedule[p.id][day].store !== st.id)
             .filter(p => {
-              // No mover a alguien con tienda fija fuera de su tienda
-              if (p.store && p.store !== st.id) return false;
               // No superar el máximo del destino
               const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
               return destCount + 1 <= storeMax(st.id);
-            })
+            });
+          // Primero intentar con personas SIN tienda fija; solo si no hay, usar tienda fija
+          const candNoFixed = candPool.filter(p => !p.store || p.store === st.id);
+          const candFixed   = candPool.filter(p => p.store && p.store !== st.id);
+          const cand = [...candNoFixed, ...candFixed]
             .sort((a, b) => {
+              // Penalizar personas con tienda fija en otra tienda
+              const aFixed = (a.store && a.store !== st.id) ? 1 : 0;
+              const bFixed = (b.store && b.store !== st.id) ? 1 : 0;
+              if (aFixed !== bFixed) return aFixed - bFixed;
               const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;
               const bc = wk().filter(x => S.schedule[x.id][day].store === S.schedule[b.id][day].store).length;
               return bc - ac || (a.coverPri||9) - (b.coverPri||9);
@@ -1277,15 +1293,19 @@
               if (p.mobile === false) return false;
               if (!p.knows.includes(poorest)) return false;
               if (p.id === 'sandra') return false;
-              // No mover a alguien con tienda fija fuera de su tienda
-              if (p.store && p.store === richest) return false;
               // La tienda richest debe mantener su mínimo tras la salida
               if ((cov[richest] - 1) < storeMin(richest)) return false;
               // La tienda poorest no debe superar su máximo
               if (cov[poorest] + 1 > storeMax(poorest)) return false;
               return true;
             })
-            .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];
+            .sort((a, b) => {
+              // Personas con tienda fija en richest salen al final (última opción)
+              const aFixed = (a.store && a.store === richest) ? 1 : 0;
+              const bFixed = (b.store && b.store === richest) ? 1 : 0;
+              if (aFixed !== bFixed) return aFixed - bFixed;
+              return (a.coverPri||9) - (b.coverPri||9);
+            })[0];
           if (!cand) break;
           S.schedule[cand.id][day].store = poorest;
           S.decisions.push({ type: 'info', text: `${day}: ${cand.name} → ${sname(poorest)} (reequilíbrio — ${sname(richest)} tinha excesso).` });
@@ -1705,12 +1725,23 @@
       S.openStores.forEach(sid => {
         if (!storeOpen(sid, day)) return;
         const min = storeMin(sid);
+        if (!min || min <= 0) return; // sin mínimo configurado, no validar
         const have = active.filter(p => {
           const c = S.schedule[p.id]?.[day];
           return c?.type === 'work' && c?.store === sid;
         }).length;
         if (have < min) {
-          violations.push({ day, sid, have, min });
+          // Verificar si es físicamente posible cubrir este mínimo
+          // (hay trabajadoras disponibles ese día que conocen esta tienda)
+          const available = active.filter(p => {
+            const c = S.schedule[p.id]?.[day];
+            if (!c || c.type !== 'work') return false;
+            return p.knows.includes(sid);
+          }).length;
+          // Solo bloquear si ni siquiera hay personas disponibles que conozcan la tienda
+          if (available >= min) {
+            violations.push({ day, sid, have, min });
+          }
         }
       });
     });

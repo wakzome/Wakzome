@@ -402,12 +402,18 @@
       const row = document.createElement('div');
       row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}`;
       row.dataset.pid = p.id;
-      row.innerHTML = `<div class="gh-sr-inner" style="--nw:${nameColW}px">
-        <!-- COL 1: INFO + ÍCONES -->
-        <div class="gh-sr-info">
-          <div class="gh-sr-name">${shortName(p.name)}</div>
-          <div class="gh-sr-meta">${storeName} · ${condLabel}</div>
-          ${onFerias ? '<span class="gh-ferias-tag">🏖</span>' : ''}
+      const saldoTag = saldo !== 0 ? `<sup class="gh-saldo-sup ${saldo>0?'gh-saldo-sup-neg':'gh-saldo-sup-pos'}">${saldo>0?'+':''}${saldo}h</sup>` : '';
+
+      row.innerHTML = `
+        <!-- HEADER sempre visível -->
+        <div class="gh-sr-header">
+          <div class="gh-sr-header-left">
+            <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
+            <div class="gh-sr-nameblock">
+              <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
+              <span class="gh-sr-meta">${storeName} · ${condLabel}${onFerias?' · 🏖':''}</span>
+            </div>
+          </div>
           <div class="gh-sr-btns">
             <button class="gh-icon-btn gh-edit-person" data-pid="${p.id}" title="Editar">✏</button>
             <button class="gh-icon-btn gh-limpar-inc" data-pid="${p.id}" title="Limpar" style="color:#b8860b">↺</button>
@@ -415,41 +421,55 @@
           </div>
         </div>
 
-        </div><div class="gh-sr-cols">
-        <!-- COL 2: FOLGA + LICENÇA -->
-        <div class="gh-sr-col">
-          <div class="gh-sr-col-title">📅 Folga</div>
-          <div class="gh-day-btns">${dayBtns}</div>
-          <div class="gh-sr-col-title" style="margin-top:7px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
-          <div class="gh-date-row">
-            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio ? licenca.data_inicio.slice(5).split('-').reverse().join('/')+'/'+licenca.data_inicio.slice(2,4) : ''}" placeholder="dd/mm/aa">
-            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim ? licenca.data_fim.slice(5).split('-').reverse().join('/')+'/'+licenca.data_fim.slice(2,4) : ''}" placeholder="dd/mm/aa">
-          </div>
-          <div class="gh-date-row" style="margin-top:3px">
-            <select class="gh-field-sm gh-inc-inp gh-sel-mini" data-pid="${p.id}" data-col="lic_tipo">
-              <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Rec.</option>
-              <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>N.Rec.</option>
-            </select>
-            <input type="number" class="gh-field-sm gh-inc-inp gh-num-mini" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="h" step="0.5">
-          </div>
-        </div>
-
-        <!-- COL 3: BAIXA + BANCO -->
-        <div class="gh-sr-col">
-          <div class="gh-sr-col-title">🏥 Baixa <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}></div>
-          <div class="gh-date-row">
-            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio ? baixa.data_inicio.slice(5).split('-').reverse().join('/')+'/'+baixa.data_inicio.slice(2,4) : ''}" placeholder="dd/mm/aa">
-            <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim ? baixa.data_fim.slice(5).split('-').reverse().join('/')+'/'+baixa.data_fim.slice(2,4) : ''}" placeholder="dd/mm/aa">
-          </div>
-          <div class="gh-sr-col-title" style="margin-top:7px">⏱ Banco</div>
-          <div class="gh-inc-saldo ${saldo>0?'gh-inc-saldo-neg':saldo<0?'gh-inc-saldo-pos':''}" id="gh-saldo-${p.id}">${saldo>0?'+':''}${saldo}h</div>
-          <div class="gh-banco-add-row">
-            <input type="number" class="gh-field-sm gh-banco-h gh-num-mini" data-pid="${p.id}" placeholder="±h" step="0.5">
-            <button class="gh-icon-btn gh-banco-lancar" data-pid="${p.id}" title="Lançar">＋</button>
-            <button class="gh-icon-btn gh-banco-zero" data-pid="${p.id}" title="Zerar" style="color:#c0392b">✕</button>
+        <!-- CORPO colapsável -->
+        <div class="gh-sr-body" id="gh-body-${p.id}">
+          <div class="gh-sr-cols">
+            <div class="gh-sr-col">
+              <div class="gh-sr-col-title">📅 Folga</div>
+              <div class="gh-day-btns">${dayBtns}</div>
+              <div class="gh-sr-col-title" style="margin-top:8px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
+              <div class="gh-date-row">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio?licenca.data_inicio.slice(5).split('-').reverse().join('/')+'/'+licenca.data_inicio.slice(2,4):''}" placeholder="dd/mm/aa">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim?licenca.data_fim.slice(5).split('-').reverse().join('/')+'/'+licenca.data_fim.slice(2,4):''}" placeholder="dd/mm/aa">
+              </div>
+              <div class="gh-date-row" style="margin-top:3px">
+                <select class="gh-field-sm gh-inc-inp gh-sel-mini" data-pid="${p.id}" data-col="lic_tipo">
+                  <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Rec.</option>
+                  <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>N.Rec.</option>
+                </select>
+                <input type="number" class="gh-field-sm gh-inc-inp gh-num-mini" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="h" step="0.5">
+              </div>
+            </div>
+            <div class="gh-sr-col">
+              <div class="gh-sr-col-title">🏥 Baixa <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}></div>
+              <div class="gh-date-row">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio?baixa.data_inicio.slice(5).split('-').reverse().join('/')+'/'+baixa.data_inicio.slice(2,4):''}" placeholder="dd/mm/aa">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim?baixa.data_fim.slice(5).split('-').reverse().join('/')+'/'+baixa.data_fim.slice(2,4):''}" placeholder="dd/mm/aa">
+              </div>
+              <div class="gh-sr-col-title" style="margin-top:8px">⏱ Banco</div>
+              <div class="gh-inc-saldo ${saldo>0?'gh-inc-saldo-neg':saldo<0?'gh-inc-saldo-pos':''}" id="gh-saldo-${p.id}">${saldo>0?'+':''}${saldo}h</div>
+              <div class="gh-banco-add-row">
+                <input type="number" class="gh-field-sm gh-banco-h gh-num-mini" data-pid="${p.id}" placeholder="±h" step="0.5">
+                <button class="gh-icon-btn gh-banco-lancar" data-pid="${p.id}" title="Lançar">＋</button>
+                <button class="gh-icon-btn gh-banco-zero" data-pid="${p.id}" title="Zerar" style="color:#c0392b">✕</button>
+              </div>
+            </div>
           </div>
         </div>`;
       list.appendChild(row);
+    });
+
+    // Toggle collapse/expand
+    list.querySelectorAll('.gh-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.pid;
+        const body = document.getElementById('gh-body-' + pid);
+        if (!body) return;
+        const open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        btn.textContent = open ? '▶' : '▼';
+        btn.style.transform = '';
+      });
     });
 
     list.querySelectorAll('.gh-edit-person').forEach(btn => {
@@ -1999,31 +2019,36 @@
         #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
         #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
 
-        /* ── STAFF ROW ── */
-        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+        /* ── STAFF ROW colapsável ── */
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:5px; margin-top:12px; }
         #tab-gerador .gh-sr { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-sizing:border-box; width:100%; }
         #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
-        #tab-gerador .gh-sr-inner { display:flex; flex-direction:row; width:100%; }
-        #tab-gerador .gh-sr-cols { display:flex; flex-direction:row; flex:1; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-        #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
-        #tab-gerador .gh-sr-info { padding:8px 8px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:2px; min-width:90px; max-width:130px; flex-shrink:0; }
-        #tab-gerador .gh-sr-name { font-size:.78rem; font-weight:700; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        #tab-gerador .gh-sr-meta { font-size:.66rem; color:#888; }
-        #tab-gerador .gh-sr-col { padding:8px 8px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; flex-shrink:0; }
-        #tab-gerador .gh-sr-col:last-child { border-right:none; }
-        #tab-gerador .gh-sr-col-title { font-size:.63rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
-        #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; margin-top:6px; }
-        #tab-gerador .gh-icon-btn { width:24px; height:24px; border:1px solid #e0e0e0; border-radius:5px; background:#fafafa; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#555; font-size:.8rem; font-weight:600; line-height:1; transition:background .15s; flex-shrink:0; }
+        #tab-gerador .gh-sr-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:8px; }
+        #tab-gerador .gh-sr-header-left { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
+        #tab-gerador .gh-toggle-btn { background:none; border:none; cursor:pointer; font-size:.65rem; color:#bbb; padding:0; width:14px; flex-shrink:0; }
+        #tab-gerador .gh-toggle-btn:hover { color:#555; }
+        #tab-gerador .gh-sr-nameblock { display:flex; flex-direction:column; gap:1px; min-width:0; }
+        #tab-gerador .gh-sr-name { font-size:.82rem; font-weight:700; color:#111; white-space:nowrap; display:flex; align-items:baseline; gap:3px; }
+        #tab-gerador .gh-sr-meta { font-size:.62rem; color:#999; white-space:nowrap; }
+        #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; flex-shrink:0; }
+        #tab-gerador .gh-icon-btn { width:24px; height:24px; border:1px solid #e0e0e0; border-radius:5px; background:#fafafa; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#555; font-size:.78rem; font-weight:600; line-height:1; transition:background .15s; flex-shrink:0; }
         #tab-gerador .gh-icon-btn:hover { background:#efefef; border-color:#bbb; }
-        #tab-gerador .gh-date-txt { width:68px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-sr-body { border-top:1px solid #f0f0f0; }
+        #tab-gerador .gh-sr-cols { display:flex; flex-direction:row; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        #tab-gerador .gh-sr-col { padding:10px 12px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; flex-shrink:0; }
+        #tab-gerador .gh-sr-col:last-child { border-right:none; }
+        #tab-gerador .gh-sr-col-title { font-size:.62rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
+        #tab-gerador .gh-saldo-sup { font-size:.58rem; font-weight:700; padding:1px 4px; border-radius:3px; vertical-align:super; margin-left:2px; }
+        #tab-gerador .gh-saldo-sup-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
+        #tab-gerador .gh-saldo-sup-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
         #tab-gerador .gh-day-btns { display:flex; flex-direction:row; gap:2px; flex-wrap:nowrap; }
         #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:3px; width:22px; height:22px; font-size:.62rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
         #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
         #tab-gerador .gh-date-row { display:flex; flex-direction:row; gap:3px; }
-        #tab-gerador .gh-date-mini { width:110px !important; font-size:.68rem !important; padding:3px 4px !important; }
-        #tab-gerador .gh-sel-mini { width:auto !important; max-width:90px; font-size:.68rem !important; padding:3px 4px !important; }
-        #tab-gerador .gh-num-mini { width:44px !important; font-size:.68rem !important; padding:3px 4px !important; }
-        #tab-gerador .gh-inc-saldo { font-size:.76rem; font-weight:700; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:3px; }
+        #tab-gerador .gh-date-txt { width:68px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-sel-mini { width:auto !important; max-width:80px; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-num-mini { width:40px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-inc-saldo { font-size:.74rem; font-weight:700; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:3px; }
         #tab-gerador .gh-inc-saldo-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
         #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
         #tab-gerador .gh-banco-add-row { display:flex; flex-direction:row; gap:3px; align-items:center; }

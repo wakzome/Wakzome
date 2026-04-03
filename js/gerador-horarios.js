@@ -1044,9 +1044,26 @@
     sorted.forEach(p => {
       let dayIdx = (MEM.offsets[p.id] + MEM.cycleWeek) % 6;
       const myStore = p.id === 'sandra' ? null : p.store;
-      const storOpensSun = myStore && sundayStores.includes(myStore) && !isAbsent(p.id, 'DOM');
       const target = Math.round((p.hrs || 40) / 8);
-      const sunQuotaFilled = storOpensSun && (S.sundayAssigned[myStore]||[]).length >= storeMin(myStore);
+      // Una persona puede trabajar el domingo si su tienda abre O si conoce alguna tienda que abre
+      // y esa tienda aún no tiene su cuota cubierta. Tienda fija tiene prioridad en su tienda.
+      const sunStore = (() => {
+        // Primero: ¿su tienda fija abre el domingo?
+        if (myStore && sundayStores.includes(myStore)) {
+          const quota = sundayMinFor(myStore);
+          if ((S.sundayAssigned[myStore]||[]).length < quota) return myStore;
+        }
+        // Segundo: ¿conoce alguna tienda que abre el domingo y necesita gente?
+        if (!myStore) { // solo para personas sin tienda fija
+          for (const sid of sundayStores) {
+            const quota = sundayMinFor(sid);
+            if ((S.sundayAssigned[sid]||[]).length < quota && p.knows.includes(sid)) return sid;
+          }
+        }
+        return null;
+      })();
+      const storOpensSun = !!sunStore && !isAbsent(p.id, 'DOM');
+      const sunQuotaFilled = !sunStore;
       const canWorkSunday = storOpensSun && !sunQuotaFilled && p.canAlone !== false && weeksSince(p.start, S.weekStart) >= 4;
       let extraDayOff = null;
       if (canWorkSunday) {
@@ -1054,11 +1071,13 @@
           if (isAbsent(p.id, d)) return false;
           const covStore = predictStore(p, d) || myStore;
           if (!covStore) return false;
-        const storeMin_ = storeMin(covStore);
+          // El día compensatorio debe respetar el mínimo SEMANAL (no el de domingo)
+          const storeMin_ = storeMin(covStore);
           return (remaining[d]?.[covStore] || 0) - 1 >= storeMin_;
         });
         if (candidates.length > 0) {
-          extraDayOff = candidates.sort((a, b) => (remaining[b][myStore]||0) - (remaining[a][myStore]||0))[0];
+          const refStore = sunStore || myStore;
+          extraDayOff = candidates.sort((a, b) => (remaining[b][refStore]||0) - (remaining[a][refStore]||0))[0];
         }
       }
       const canWorkSundayEffective = canWorkSunday && extraDayOff !== null;
@@ -1098,8 +1117,11 @@
       const day = workDays[dayIdx];
       S.folgaDay[p.id] = day;
       if (willWorkSunday) {
-        if (!S.sundayAssigned[myStore]) S.sundayAssigned[myStore] = [];
-        S.sundayAssigned[myStore].push(p.id);
+        const assignStore = sunStore || myStore;
+        if (assignStore) {
+          if (!S.sundayAssigned[assignStore]) S.sundayAssigned[assignStore] = [];
+          S.sundayAssigned[assignStore].push(p.id);
+        }
       }
       const effStore = predictStore(p, day);
       if (effStore && remaining[day]?.[effStore] !== undefined) remaining[day][effStore]--;
@@ -1188,7 +1210,16 @@
       return { type: 'work', shift: SH_DEFAULT, store: sid };
     }
     if (p.store && storeOpen(p.store, day)) return { type: 'work', shift: SH_DEFAULT, store: p.store };
-    const alt = S.openStores.find(id => S.openDays[id]?.includes(day) && p.knows.includes(id));
+    // Tienda fija cerrada este día: buscar tienda que conoce con menos personal (cubrir férias/folgas)
+    // Ordenar por: tiendas con menos cobertura actual primero (se calcula en intelPass; aquí primer match)
+    const alt = S.openStores
+      .filter(id => S.openDays[id]?.includes(day) && p.knows.includes(id))
+      .sort((a, b) => {
+        // Priorizar tiendas donde esta persona es más útil (sin tienda fija propia abierta)
+        const aHasFixed = active.some(x => x.id !== p.id && x.store === a && storeOpen(a, day));
+        const bHasFixed = active.some(x => x.id !== p.id && x.store === b && storeOpen(b, day));
+        return (aHasFixed ? 0 : -1) - (bHasFixed ? 0 : -1);
+      })[0];
     if (alt) return { type: 'work', shift: SH_DEFAULT, store: alt };
     return { type: 'folga', shift: null, store: null };
   }
@@ -1209,6 +1240,18 @@
           MEM.sundays[pid] = (MEM.sundays[pid] || 0) + 1;
         }
       });
+    });
+    // Asegurar que el máximo de domingo no se supere (usar mínimo domingo, no semanal)
+    sundayStores.forEach(sid => {
+      const domMax = sundayMinFor(sid); // el domingo opera con el mínimo reducido como techo
+      const domWorkers = active.filter(p => S.schedule[p.id]?.['DOM']?.type === 'work' && S.schedule[p.id]['DOM'].store === sid);
+      if (domWorkers.length > domMax) {
+        // Quitar los excedentes (sin tienda fija primero) — vuelven a folga
+        [...domWorkers]
+          .sort((a, b) => ((a.store === sid) ? 1 : 0) - ((b.store === sid) ? 1 : 0))
+          .slice(domMax)
+          .forEach(p => { S.schedule[p.id]['DOM'] = { type: 'folga', shift: null, store: null }; });
+      }
     });
   }
 
@@ -1334,25 +1377,39 @@
   // Priority order to sacrifice: maxx → shana → mercado → avenida
   const SUNDAY_SACRIFICE_ORDER = ['maxx', 'shana', 'mercado', 'avenida'];
 
-  // Returns how many workers can realistically cover a store on Sunday
-  // (those assigned to that store, canAlone-capable, not absent, seniority >= 4 weeks)
+  // Returns workers who can realistically cover a store on Sunday.
+  // Priority: mobile/no-fixed-store first, fixed-store workers last.
   function sundayCandidatesFor(sid, active) {
     return active.filter(p => {
       if (isAbsent(p.id, 'DOM')) return false;
       if (!p.knows.includes(sid)) return false;
       if (!p.canAlone && weeksSince(p.start, S.weekStart) < 4) return false;
       return true;
+    }).sort((a, b) => {
+      // Personas sin tienda fija o cuya tienda fija es sid: primero
+      const aFixed = (a.store && a.store !== sid) ? 1 : 0;
+      const bFixed = (b.store && b.store !== sid) ? 1 : 0;
+      return aFixed - bFixed;
     });
   }
 
-  // Each person working Sunday needs a compensatory day off Mon–Sat.
+  // Mínimo real para el domingo: puede ser menor que el mínimo semanal.
+  // Avenida y Mercado: domingo puede operar con max(1, min-1).
+  // Resto: mínimo igual al semanal (o 1 si no configurado).
+  function sundayMinFor(sid) {
+    const weekMin = storeMin(sid) || 1;
+    if (sid === 'avenida' || sid === 'mercado') return Math.max(1, weekMin - 1);
+    return weekMin;
+  }
+
   // Check whether Mon–Sat coverage survives the extra folgas generated by Sunday work.
   function sundayWouldBreakWeek(sundayStoreIds, active) {
     const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
-    // For each sunday store, check there are enough candidates
+    // 1. Para cada tienda que abre el domingo, verificar que hay suficientes candidatas
+    //    usando el mínimo reducido de domingo
     for (const sid of sundayStoreIds) {
-      const needed = storeMin(sid) || 1;
+      const needed = sundayMinFor(sid);
       const cands = sundayCandidatesFor(sid, active);
       if (cands.length < needed) {
         return {
@@ -1362,40 +1419,38 @@
       }
     }
 
-    // Simulate worst-case: all sunday workers need their compensatory day off
-    // on the SAME Mon-Sat day. Check if total coverage across ALL open stores
-    // that day can still meet every store's minimum.
-    //
-    // "Workers covering a store on a given day" = everyone whose predicted
-    // store that day is sid (fixed store OR mobile who lands there).
-    // We use a simple but sound count: for each store, how many non-absent
-    // workers know that store and are not fully absent.
-    const totalSundayWorkers = sundayStoreIds.reduce((sum, sid) => {
-      const needed = storeMin(sid) || 1;
-      return sum + Math.min(needed, sundayCandidatesFor(sid, active).length);
-    }, 0);
+    // 2. Calcular cuántas personas trabajarán el domingo en total (usando mínimo domingo)
+    //    Estas personas necesitan un día compensatorio de lunes a sábado.
+    const sundayWorkerIds = new Set();
+    for (const sid of sundayStoreIds) {
+      const needed = sundayMinFor(sid);
+      const cands = sundayCandidatesFor(sid, active);
+      cands.slice(0, needed).forEach(p => sundayWorkerIds.add(p.id));
+    }
+    const totalSundayWorkers = sundayWorkerIds.size;
 
-    // For each open Mon-Sat store, count realistic coverage: workers who know
-    // the store and are not fully absent (mobile workers count too).
+    // 3. Para cada tienda abierta entre SEG-SAB, verificar que aunque todas las personas
+    //    del domingo coincidan en folga el mismo día, sigue habiendo cobertura mínima.
+    //    Usamos el mínimo SEMANAL (no el de domingo) para la validación semanal.
     for (const sid of S.openStores) {
       const storeOpenDays = workDays.filter(d => storeOpen(sid, d));
       if (!storeOpenDays.length) continue;
-      const minNeeded = storeMin(sid) || 1;
+      const weekMin = storeMin(sid) || 1;
 
-      // Workers who can realistically cover this store on a weekday
+      // Personas que pueden cubrir esta tienda cualquier día de semana
       const weekWorkers = active.filter(p => {
         if (fullyAbsent(p.id)) return false;
         if (p.id === 'sandra') return false;
         return p.knows.includes(sid);
       }).length;
 
-      // Worst case: totalSundayWorkers all take their comp day on the same day in this store
-      // Conservative: subtract all sunday workers from this store's pool
+      // Peor caso conservador: todas las que trabajan el domingo toman folga el mismo día aquí
+      // Pero no puede ser peor que el total de personas que trabajan el domingo
       const worstCase = weekWorkers - totalSundayWorkers;
-      if (worstCase < minNeeded) {
+      if (worstCase < weekMin) {
         return {
           breaks: true,
-          reason: `Abrir ao domingo deixaria ${sname(sid)} sem cobertura mínima de Segunda a Sábado.`
+          reason: `Abrir ao domingo deixaria ${sname(sid)} sem cobertura mínima de Segunda a Sábado (${weekWorkers} disponíveis, ${totalSundayWorkers} trabalham domingo).`
         };
       }
     }

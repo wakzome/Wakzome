@@ -1850,15 +1850,6 @@
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
 
-    // Sync name-column width: measure the widest first-cell across ALL tables,
-    // then set that width explicitly on every first-cell so all tables align.
-    requestAnimationFrame(() => {
-      const nameCells = [...c.querySelectorAll('.gh-sched-tbl td:first-child')];
-      nameCells.forEach(td => { td.style.width = ''; td.style.minWidth = ''; });
-      const maxW = nameCells.reduce((m, td) => Math.max(m, td.getBoundingClientRect().width), 0);
-      if (maxW > 0) nameCells.forEach(td => { td.style.width = maxW + 'px'; td.style.minWidth = maxW + 'px'; });
-    });
-
     // Edit on click
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
       td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
@@ -1956,7 +1947,7 @@
           box-sizing:border-box;
         }
         #tab-gerador #gh-container {
-          flex:1; overflow-y:auto; overflow-x:hidden;
+          flex:1; overflow-y:auto; overflow-x:auto;
           padding:0 0 60px;
           background:#fff; color:#111;
           -webkit-overflow-scrolling:touch;
@@ -2037,6 +2028,23 @@
         #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
         #tab-gerador .gh-store-block { margin-bottom:48px; width:100%; padding:0; overflow-x:auto; overflow-y:visible; box-sizing:border-box; -webkit-overflow-scrolling:touch; }
         #tab-gerador .gh-sched-tbl { border-collapse:collapse; table-layout:auto; width:max-content; min-width:min(900px,100%); margin:0 16px; }
+
+        /* ── STICKY FIRST COLUMN ── */
+        #tab-gerador .gh-sched-tbl td:first-child,
+        #tab-gerador .gh-sched-tbl th:first-child {
+          position:sticky;
+          left:0;
+          background-color:#fff;
+          z-index:2;
+          box-shadow:2px 0 5px rgba(0,0,0,0.05);
+          width:140px;
+          min-width:140px;
+          max-width:140px;
+        }
+        #tab-gerador .gh-tbl-store-hdr td:first-child {
+          background-color:#efefef;
+          z-index:3;
+        }
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; word-break:keep-all; width:106px; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:auto; min-width:140px; }

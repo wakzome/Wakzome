@@ -1117,6 +1117,49 @@
       S.schedule[p.id] = {};
       DAYS.forEach(day => { S.schedule[p.id][day] = buildCell(p, day, active); });
     });
+
+    // ── Aplicar máximo por tienda ──
+    // Depois de a atribuição base estar feita, para cada dia verificamos se alguma
+    // loja excede o seu máximo. Os excedentes são redirecionados para a loja aberta
+    // com menos pessoas que ainda não atingiu o máximo e que o trabalhador conhece.
+    const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    workDays.forEach(day => {
+      S.openStores.forEach(sid => {
+        const max = storeMax(sid);
+        if (max === Infinity) return; // sem máximo definido
+        const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid);
+        if (workers.length <= max) return;
+
+        // Ordenar: os mais móveis e de menor prioridade de cobertura saem primeiro
+        const toRedirect = [...workers]
+          .sort((a, b) => (b.coverPri||9) - (a.coverPri||9) || (a.mobile === false ? -1 : 1))
+          .slice(max); // os que ficam a mais
+
+        toRedirect.forEach(p => {
+          // Procurar a loja mais vazia que o trabalhador conhece, aberta neste dia, sem máximo excedido
+          const dest = S.openStores
+            .filter(id => {
+              if (id === sid) return false;
+              if (!storeOpen(id, day)) return false;
+              if (!p.knows.includes(id)) return false;
+              const cnt = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === id).length;
+              return cnt < storeMax(id);
+            })
+            .sort((a, b) => {
+              const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
+              const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
+              return ca - cb; // a mais vazia primeiro
+            })[0];
+
+          if (dest) {
+            S.schedule[p.id][day].store = dest;
+            S.decisions.push({ type: 'info', text: `${day}: ${p.name} → ${sname(dest)} (máximo de ${max} em ${sname(sid)}).` });
+          } else {
+            S.alerts.push({ type: 'amber', text: `${day}: ${sname(sid)} excede máximo (${workers.length}/${max}) — sem destino alternativo para ${p.name}.` });
+          }
+        });
+      });
+    });
   }
 
   function buildCell(p, day, active) {

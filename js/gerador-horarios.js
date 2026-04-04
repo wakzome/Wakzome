@@ -1400,8 +1400,22 @@
   }
 
   function buildSchedule(active) {
+    // Inicializar todas as células como NA
     PEOPLE.forEach(p => {
       S.schedule[p.id] = {};
+      DAYS.forEach(day => { S.schedule[p.id][day] = { type: 'na', shift: null, store: null }; });
+    });
+
+    // Ordem de processamento estrita — o mais importante primeiro:
+    // 1. Coordenadoras (posição pré-calculada)
+    // 2. Pessoal com tienda fija
+    // 3. Pessoal sem tienda fija (preenche o que sobrar)
+    const coordinators = active.filter(p => S.sandraDay?.[p.id]);
+    const fixedStore   = active.filter(p => !S.sandraDay?.[p.id] && p.store);
+    const noFixed      = active.filter(p => !S.sandraDay?.[p.id] && !p.store);
+    const ordered      = [...coordinators, ...fixedStore, ...noFixed];
+
+    ordered.forEach(p => {
       DAYS.forEach(day => { S.schedule[p.id][day] = buildCell(p, day, active); });
     });
 
@@ -1433,9 +1447,8 @@
           });
 
         toRedirect.forEach(p => {
-          // Destino: lojas por ordem de prioridade (as de maior prioridade primeiro), sem nomes hardcoded
-          const dest = [...S.openStores]
-            .sort((a, b) => (STORES.find(s=>s.id===a)?.priority??9) - (STORES.find(s=>s.id===b)?.priority??9))
+          // Destino: preferir tienda fija da pessoa se aberta; depois por necessidade
+          const allDest = [...S.openStores]
             .filter(id => {
               if (id === sid) return false;
               if (!storeOpen(id, day)) return false;
@@ -1444,10 +1457,19 @@
               return cnt < storeMax(id);
             })
             .sort((a, b) => {
+              // Prioridade 1: tienda fija da pessoa
+              const aHome = (a === p.store) ? 0 : 1;
+              const bHome = (b === p.store) ? 0 : 1;
+              if (aHome !== bHome) return aHome - bHome;
+              // Prioridade 2: lojas com défice de cobertura
               const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
               const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
-              return ca - cb; // la más vacía primero → round-robin natural
-            })[0];
+              const defA = storeMin(a) - ca;
+              const defB = storeMin(b) - cb;
+              if (defA !== defB) return defB - defA; // mais défice primeiro
+              return ca - cb;
+            });
+          const dest = allDest[0];
 
           if (dest) {
             S.schedule[p.id][day].store = dest;
@@ -1594,34 +1616,38 @@
         if (have >= min) return;
         if (have >= storeMax(st.id)) return; // ya está al máximo, no traer más
         for (let i = 0; i < min - have; i++) {
-          const candPool = wk().filter(p => {
+          // Candidatos SEM tienda fija (ou cuja tienda fija é esta) — preferência absoluta
+          const candNoFixed = wk().filter(p => {
             if (!p.knows.includes(st.id)) return false;
             if (S.schedule[p.id][day].store === st.id) return false;
-            // Não superar o máximo do destino
+            if (p.store && p.store !== st.id) return false; // tem tienda fija noutra — excluído desta pool
             const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
-            if (destCount + 1 > storeMax(st.id)) return false;
-            // Regra 99%: só mover pessoa com tienda fija se a sua tienda de origem
-            // NÃO ficará abaixo do mínimo sem ela
-            if (p.store && p.store !== st.id && storeOpen(p.store, day)) {
-              const homeCount = wk().filter(x => S.schedule[x.id][day].store === p.store).length;
-              if (homeCount - 1 < storeMin(p.store)) return false; // a sua tienda ficaria a descoberto
-            }
-            return true;
+            return destCount + 1 <= storeMax(st.id);
           });
-          // Prioridade: sem tienda fija → tienda fija noutra loja (só se a origem tem margem)
-          const candNoFixed = candPool.filter(p => !p.store || p.store === st.id);
-          const candFixed   = candPool.filter(p => p.store && p.store !== st.id);
+
+          // Só se não há candidatos sem tienda fija: tentar com tienda fija, mas apenas se
+          // a tienda de origem tem MARGEM (pelo menos 1 pessoa acima do mínimo)
+          const candFixed = candNoFixed.length > 0 ? [] : wk().filter(p => {
+            if (!p.knows.includes(st.id)) return false;
+            if (S.schedule[p.id][day].store === st.id) return false;
+            if (!p.store || p.store === st.id) return false;
+            if (!storeOpen(p.store, day)) return true; // tienda fija fechada — pode mover
+            const homeCount = wk().filter(x => S.schedule[x.id][day].store === p.store).length;
+            if (homeCount - 1 < storeMin(p.store)) return false; // tienda de origem ficaria a descoberto
+            const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
+            return destCount + 1 <= storeMax(st.id);
+          });
+
           const cand = [...candNoFixed, ...candFixed]
-            .sort((a, b) => {
-              const aFixed = (a.store && a.store !== st.id) ? 1 : 0;
-              const bFixed = (b.store && b.store !== st.id) ? 1 : 0;
-              if (aFixed !== bFixed) return aFixed - bFixed;
-              const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;
-              const bc = wk().filter(x => S.schedule[x.id][day].store === S.schedule[b.id][day].store).length;
-              return bc - ac || (a.coverPri||9) - (b.coverPri||9);
-            })[0];
-          if (cand) { S.schedule[cand.id][day].store = st.id; S.decisions.push({ type: 'warn', text: `${day}: ${cand.name.split(' ')[0]} → ${sname(st.id)} (cobertura mínima).` }); }
-          else S.alerts.push({ type: 'red', text: `${day}: ${sname(st.id)} sem cobertura suficiente.` });
+            .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];
+
+          if (cand) {
+            S.schedule[cand.id][day].store = st.id;
+            const isFixed = cand.store && cand.store !== st.id;
+            S.decisions.push({ type: isFixed ? 'warn' : 'info', text: `${day}: ${cand.name.split(' ')[0]} → ${sname(st.id)} (cobertura mínima${isFixed ? ' — tienda fija' : ''}).` });
+          } else {
+            S.alerts.push({ type: 'red', text: `${day}: ${sname(st.id)} sem cobertura suficiente.` });
+          }
         }
       });
       // ── REEQUILÍBRIO: entre as 2 lojas de maior prioridade abertas hoje ──
@@ -1645,15 +1671,16 @@
                        (c[flexIds[1]] - c[flexIds[0]] > 1 ? flexIds[1] : null);
           if (!src) break;
           const dest = flexIds.find(id => id !== src);
+          // Só reequilibrar se src tem EXCEDENTE real (acima do mínimo)
           if (c[src] <= storeMin(src)) break;
           if (c[dest] >= storeMax(dest)) break;
-          // Solo personas sin tienda fija
+          // Só pessoas sem tienda fija, nunca coordenadoras
           const cand = workers
             .filter(p => {
               if (S.schedule[p.id][day]?.store !== src) return false;
-              if (p.store) return false; // nunca mover fijas
+              if (p.store) return false; // NUNCA mover pessoal com tienda fija
               if (!p.knows.includes(dest)) return false;
-              if (S.sandraDay?.[p.id]) return false; // coordenadoras não são reequilibradas
+              if (S.sandraDay?.[p.id]) return false;
               return true;
             })
             .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];

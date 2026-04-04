@@ -98,8 +98,59 @@
 
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
   const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
-  const SH_DEFAULT = '10:00-14:00|15:00-19:00';
-  const SH_ALT     = '10:00-13:00|14:00-19:00';
+
+  // ── 6 HORÁRIOS PERMITIDOS (Prompt §5) ──
+  // A  10-13 / 14-19   (8h, intervalo 13h)
+  // B  10-14 / 15-19   (8h, intervalo 14h)  ← default standard
+  // C  10-15 / 16-19   (8h, intervalo 15h)
+  // D  09-12 / 13-18   (8h, abertura 9h)
+  // E  11-15 / 16-20   (8h, fecho 20h — pós-noite)
+  // F  09-13 / 19-23   (8h, turno noite)
+  const SH_A = '10:00-13:00|14:00-19:00';
+  const SH_B = '10:00-14:00|15:00-19:00';
+  const SH_C = '10:00-15:00|16:00-19:00';
+  const SH_D = '09:00-12:00|13:00-18:00';
+  const SH_E = '11:00-15:00|16:00-20:00';
+  const SH_F = '09:00-13:00|19:00-23:00';
+
+  // Aliases para compatibilidade com o código existente
+  const SH_DEFAULT = SH_B;
+  const SH_ALT     = SH_A;
+
+  // Modos de abertura por loja (configurados no Passo 3)
+  // 'standard'  → 10-19 (B/A)
+  // 'early'     → 09-18/19 (D/B)  +2h manhã
+  // 'extended'  → 10-20 (B/E)     +2h tarde (até 20h)
+  // 'night'     → turno F ativo   (até 23h)
+  // 'sunday'    → 10-19 standard ao domingo (B/A)
+  const STORE_MODES = [
+    { id: 'standard', label: '10:00-19:00',        desc: 'Horário padrão',            shifts: [SH_B, SH_A] },
+    { id: 'early',    label: '09:00-19:00 (+1h)',   desc: 'Abertura às 9h',            shifts: [SH_D, SH_B] },
+    { id: 'extended', label: '10:00-20:00 (+2h)',   desc: 'Fecho às 20h',             shifts: [SH_B, SH_E] },
+    { id: 'night',    label: '09:00-23:00 (noite)', desc: 'Turno noite até 23h',       shifts: [SH_D, SH_F] },
+  ];
+
+  // Devolve o par [shiftPrincipal, shiftAlternativo] para uma loja num dado modo
+  function modeShifts(sid) {
+    const mode = S.storeMode?.[sid] || 'standard';
+    return STORE_MODES.find(m => m.id === mode)?.shifts || [SH_B, SH_A];
+  }
+  // Shift "base" da loja (o que fica quando apenas 1 pessoa)
+  function storeBaseShift(sid) { return modeShifts(sid)[0]; }
+  // Shift "alternativo" (quem sai ao intervalo mais cedo)
+  function storeAltShift(sid)  { return modeShifts(sid)[1]; }
+
+  // Calcula horas de um shift string ('HH:MM-HH:MM|HH:MM-HH:MM')
+  function shiftHours(sh) {
+    if (!sh) return 0;
+    return sh.split('|').reduce((tot, seg) => {
+      const [a, b] = seg.split('-').map(s => { const [h, m] = s.split(':').map(Number); return h + m/60; });
+      return tot + (b - a);
+    }, 0);
+  }
+
+  // Devolve true se o shift fecha às 23h
+  function closesAt23(sh) { return sh && sh.includes('23:00'); }
 
   // Expor PEOPLE globalmente para que ferias.js possa cruzar nomes ↔ ids
   window.GERADOR_PEOPLE = PEOPLE;
@@ -114,7 +165,9 @@
   // ── STATE ──
   function blank() {
     return {
-      weekStart: null, openStores: [], openDays: {}, storeMin: {}, storeMax: {}, absences: [],
+      weekStart: null, openStores: [], openDays: {}, storeMin: {}, storeMax: {},
+      storeMode: {},
+      absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: []
     };
@@ -911,16 +964,41 @@
   function wiz_stores() {
     const c = getContainer(); if (!c) return;
     const defD = ['SEG','TER','QUA','QUI','SEX','SAB'];
+
+    // Detectar temporada para mostrar sugestão
+    const month = S.weekStart ? S.weekStart.getMonth() + 1 : new Date().getMonth() + 1;
+    function detectSeason(m) {
+      if (m >= 1 && m <= 3)  return { id: 'baja1',  label: 'Baja 1 (Jan–Mar)', hint: 'Horário de guerra · 3 lojas · Seg–Sáb · 10-19h' };
+      if (m >= 4 && m <= 5)  return { id: 'int1',   label: 'Intermedia 1 (Abr–Mai)', hint: 'Aumento progressivo · Domingos se houver pessoal' };
+      if (m >= 6 && m <= 8)  return { id: 'alta',   label: 'Alta (Jun–Ago)', hint: 'Máxima optimização · L-S 9-23 em Avda/Mcdo · Domingos 10-19' };
+      if (m >= 9 && m <= 10) return { id: 'int2',   label: 'Intermedia 2 (Set–Out)', hint: 'Redução gradual · Domingos opcionais' };
+      return { id: 'baja2', label: 'Baja 2 (Nov–Dez)', hint: 'Só pessoal efectivo · Horário de guerra' };
+    }
+    const season = detectSeason(month);
+
+    const modeOptionsHTML = STORE_MODES.map(m =>
+      `<option value="${m.id}">${m.label} — ${m.desc}</option>`
+    ).join('');
+
     const rows = STORES.map(st => {
-      const open = S.openStores.length ? S.openStores.includes(st.id) : st.id !== 'maxx';
-      const days = S.openDays[st.id] || (open ? [...defD] : []);
-      const savedMin = S.storeMin?.[st.id] || 1;
-      const savedMax = S.storeMax?.[st.id] || '';
-      const togs = DAYS.map(d => `<span class="gh-dtog ${days.includes(d)?'on':''}" data-store="${st.id}" data-day="${d}">${d}</span>`).join('');
-      return `<div class="gh-sc-row ${!open?'closed':''}" id="gh-scr-${st.id}">
+      const open    = S.openStores.length ? S.openStores.includes(st.id) : st.id !== 'maxx';
+      const days    = S.openDays[st.id]   || (open ? [...defD] : []);
+      const savedMin  = S.storeMin?.[st.id]  || 1;
+      const savedMax  = S.storeMax?.[st.id]  || '';
+      const savedMode = S.storeMode?.[st.id] || 'standard';
+
+      const togs = DAYS.map(d => {
+        const isOn = days.includes(d);
+        const isDom = d === 'DOM';
+        return `<span class="gh-dtog ${isOn ? 'on' : ''} ${isDom ? 'gh-dtog-dom' : ''}" data-store="${st.id}" data-day="${d}">${d}</span>`;
+      }).join('');
+
+      return `
+      <div class="gh-sc-row ${!open ? 'closed' : ''}" id="gh-scr-${st.id}">
+        <!-- LINHA 1: checkbox + nome + mín/máx -->
         <div class="gh-sc-top">
-          <input type="checkbox" id="gh-chk-${st.id}" ${open?'checked':''} data-store="${st.id}">
-          <label for="gh-chk-${st.id}">${st.name}</label>
+          <input type="checkbox" id="gh-chk-${st.id}" ${open ? 'checked' : ''} data-store="${st.id}">
+          <label for="gh-chk-${st.id}" class="gh-sc-name">${st.name}</label>
           <div class="gh-sc-minmax">
             <div class="gh-sc-mm-field">
               <span class="gh-sc-mm-label">mín</span>
@@ -933,14 +1011,33 @@
             </div>
           </div>
         </div>
-        <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div></div>`;
+        <!-- LINHA 2: dias da semana -->
+        <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div>
+        <!-- LINHA 3: modo de horário -->
+        <div class="gh-sc-mode-row" id="gh-scm-${st.id}">
+          <span class="gh-sc-mode-label">Horário</span>
+          <select class="gh-sc-mode-sel" id="gh-mode-${st.id}" data-store="${st.id}">
+            ${modeOptionsHTML}
+          </select>
+          <span class="gh-sc-mode-hint" id="gh-mode-hint-${st.id}"></span>
+        </div>
+      </div>`;
     }).join('');
 
     c.innerHTML = `
-      <div class="gh-wiz-box">
+      <div class="gh-wiz-box gh-wiz-box--wide">
         <div class="gh-wiz-label">Passo 3 de 3</div>
-        <div class="gh-wiz-title">Quais lojas abrem e em que dias?</div>
-        <div class="gh-wiz-sub">Selecione as lojas, os dias de funcionamento e o mínimo de pessoas indispensáveis por loja.</div>
+        <div class="gh-wiz-title">Lojas, dias e horários</div>
+
+        <!-- BANNER TEMPORADA -->
+        <div class="gh-season-banner">
+          <span class="gh-season-icon">📅</span>
+          <div>
+            <div class="gh-season-name">${season.label}</div>
+            <div class="gh-season-hint">${season.hint}</div>
+          </div>
+        </div>
+
         <div class="gh-store-cfg">${rows}</div>
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
@@ -948,24 +1045,49 @@
         </div>
       </div>`;
 
-    c.querySelectorAll('[data-store]').forEach(el => {
-      if (el.type === 'checkbox') {
-        el.addEventListener('change', () => {
-          const row = document.getElementById(`gh-scr-${el.dataset.store}`);
-          row.classList.toggle('closed', !el.checked);
-          // Al activar: encender SEG→SAB por defecto; al desactivar: apagar todos
-          if (el.checked) {
-            row.querySelectorAll('.gh-dtog').forEach(tog => {
-              if (['SEG','TER','QUA','QUI','SEX','SAB'].includes(tog.dataset.day)) tog.classList.add('on');
-              else tog.classList.remove('on'); // DOM no se activa por defecto
-            });
-          } else {
-            row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
-          }
-        });
-      } else if (el.classList.contains('gh-dtog')) {
-        el.addEventListener('click', () => el.classList.toggle('on'));
+    // Inicializar valores dos selects de modo e hints
+    STORES.forEach(st => {
+      const modeEl = document.getElementById(`gh-mode-${st.id}`);
+      if (modeEl) {
+        const savedMode = S.storeMode?.[st.id] || 'standard';
+        modeEl.value = savedMode;
+        updateModeHint(st.id, savedMode);
+        modeEl.addEventListener('change', () => updateModeHint(st.id, modeEl.value));
       }
+    });
+
+    function updateModeHint(sid, modeId) {
+      const hint = document.getElementById(`gh-mode-hint-${sid}`);
+      if (!hint) return;
+      const m = STORE_MODES.find(x => x.id === modeId);
+      if (!m) return;
+      const [sh1, sh2] = m.shifts;
+      const label1 = sh1.replace('|', ' / ');
+      const label2 = sh2.replace('|', ' / ');
+      hint.textContent = `Principal: ${label1}  ·  Alt: ${label2}`;
+      // Highlight noite
+      hint.style.color = modeId === 'night' ? '#b05000' : '#888';
+    }
+
+    // Eventos: checkbox loja
+    c.querySelectorAll('input[type=checkbox][data-store]').forEach(el => {
+      el.addEventListener('change', () => {
+        const row = document.getElementById(`gh-scr-${el.dataset.store}`);
+        row.classList.toggle('closed', !el.checked);
+        if (el.checked) {
+          row.querySelectorAll('.gh-dtog').forEach(tog => {
+            if (['SEG','TER','QUA','QUI','SEX','SAB'].includes(tog.dataset.day)) tog.classList.add('on');
+            else tog.classList.remove('on');
+          });
+        } else {
+          row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
+        }
+      });
+    });
+
+    // Eventos: toggle dias
+    c.querySelectorAll('.gh-dtog').forEach(el => {
+      el.addEventListener('click', () => el.classList.toggle('on'));
     });
 
     document.getElementById('gh-back-2').addEventListener('click', () => { wStep = 1; renderWiz(); });
@@ -973,7 +1095,7 @@
   }
 
   function sub_stores() {
-    S.openStores = []; S.openDays = {}; S.storeMin = {}; S.storeMax = {};
+    S.openStores = []; S.openDays = {}; S.storeMin = {}; S.storeMax = {}; S.storeMode = {};
     STORES.forEach(st => {
       const chk = document.getElementById(`gh-chk-${st.id}`); if (!chk?.checked) return;
       const days = [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].map(e => e.dataset.day);
@@ -985,6 +1107,9 @@
       if (minVal > 0) S.storeMin[st.id] = minVal;
       const maxVal = parseInt(maxInp?.value) || 0;
       if (maxVal > 0) S.storeMax[st.id] = maxVal;
+      // Ler modo de horário
+      const modeEl = document.getElementById(`gh-mode-${st.id}`);
+      if (modeEl?.value) S.storeMode[st.id] = modeEl.value;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
     generate();
@@ -1258,12 +1383,11 @@
     if (p.id === 'sandra') {
       const sid = S.sandraDay[day];
       if (!sid) return { type: 'folga', shift: null, store: null };
-      return { type: 'work', shift: SH_DEFAULT, store: sid };
+      return { type: 'work', shift: storeBaseShift(sid), store: sid };
     }
-    if (p.store && storeOpen(p.store, day)) return { type: 'work', shift: SH_DEFAULT, store: p.store };
+    if (p.store && storeOpen(p.store, day)) return { type: 'work', shift: storeBaseShift(p.store), store: p.store };
     // Sin tienda fija o con tienda fija cerrada: asignar respetando storeMax.
     // Prioridad: avenida → mercado → shana → maxx (por priority).
-    // Contar asignaciones ya hechas en S.schedule para respetar el máximo.
     const alt = S.openStores
       .filter(id => {
         if (!S.openDays[id]?.includes(day)) return false;
@@ -1278,9 +1402,9 @@
       .sort((a, b) => {
         const pa = STORES.find(s => s.id === a)?.priority ?? 9;
         const pb = STORES.find(s => s.id === b)?.priority ?? 9;
-        return pa - pb; // avenida=1 > mercado=2 > shana=3 > maxx=4
+        return pa - pb;
       })[0];
-    if (alt) return { type: 'work', shift: SH_DEFAULT, store: alt };
+    if (alt) return { type: 'work', shift: storeBaseShift(alt), store: alt };
     return { type: 'folga', shift: null, store: null };
   }
 
@@ -1297,7 +1421,7 @@
     Object.entries(S.sundayAssigned || {}).forEach(([sid, pids]) => {
       pids.forEach(pid => {
         if (!isAbsent(pid, 'DOM')) {
-          S.schedule[pid]['DOM'] = { type: 'work', shift: SH_DEFAULT, store: sid };
+          S.schedule[pid]['DOM'] = { type: 'work', shift: storeBaseShift(sid), store: sid };
           MEM.sundays[pid] = (MEM.sundays[pid] || 0) + 1;
         }
       });
@@ -1544,10 +1668,12 @@
 
   // PASSO 5: Recalcular a tienda de Carla com restrição forçada
   // Usada por enforceEdnaCarla para mudar a combinação completa da tienda
-  function recalculateStoreCombo(staff, scenario, weights, idealSum, isFlexible, forcedShiftForCarla) {
+  function recalculateStoreCombo(staff, scenario, weights, idealSum, isFlexible, forcedShiftForCarla, storeId) {
+    const BASE = storeBaseShift(storeId || (staff[0] ? (S.schedule[staff[0].id] ? Object.values(S.schedule[staff[0].id]).find(c => c.store)?.store : null) : null) || '');
+    const ALT  = storeAltShift(storeId  || '');
     const combos = [
-      { goShift: SH_ALT,     stayShift: SH_DEFAULT },
-      { goShift: SH_DEFAULT, stayShift: SH_ALT     },
+      { goShift: ALT,  stayShift: BASE },
+      { goShift: BASE, stayShift: ALT  },
     ];
 
     const { goers, stayers } = computeGroups(staff);
@@ -1577,9 +1703,11 @@
 
   // PASSO 6: Solver determinista — valida matemática dinâmica
   function resolveCombo({ staff, goers, stayers, scenario, storeId, weights }) {
+    const BASE = storeBaseShift(storeId);
+    const ALT  = storeAltShift(storeId);
     const combos = [
-      { goShift: SH_ALT,     stayShift: SH_DEFAULT },
-      { goShift: SH_DEFAULT, stayShift: SH_ALT     },
+      { goShift: ALT,  stayShift: BASE },
+      { goShift: BASE, stayShift: ALT  },
     ];
 
     const base = S._storeBaseShift[storeId];
@@ -1632,9 +1760,11 @@
     if (edSch.type !== 'work' || caSch.type !== 'work') return;
     if (!edSch.shift || !caSch.shift) return;
 
-    const edVal = edSch.shift === SH_ALT ? 1 : 0;
-    const caVal = caSch.shift === SH_ALT ? 1 : 0;
-    if (edVal + caVal === 1) return; // OK
+    const edAlt = storeAltShift(edSch.store);
+    const caAlt = storeAltShift(caSch.store);
+    const edVal = edSch.shift === edAlt ? 1 : 0;
+    const caVal = caSch.shift === caAlt ? 1 : 0;
+    if (edVal + caVal === 1) return; // OK — já cruzadas
 
     const caBase = S._storeBaseShift[caSch.store];
     const edBase = S._storeBaseShift[edSch.store];
@@ -1644,8 +1774,10 @@
     const edCanFlip = !edBase || edSch.shift !== edBase;
 
     function flipStoreCombo(storeId) {
+      const BASE = storeBaseShift(storeId);
+      const ALT  = storeAltShift(storeId);
       workers.filter(p => S.schedule[p.id][day].store === storeId).forEach(p => {
-        S.schedule[p.id][day].shift = S.schedule[p.id][day].shift === SH_DEFAULT ? SH_ALT : SH_DEFAULT;
+        S.schedule[p.id][day].shift = S.schedule[p.id][day].shift === BASE ? ALT : BASE;
       });
     }
 
@@ -1667,7 +1799,7 @@
     STORES.filter(st => storeOpen(st.id, day)).forEach(st => {
       const staff = workers.filter(p => S.schedule[p.id][day].store === st.id);
       if (staff.length === 0) return;
-      if (staff.length === 1) { S.schedule[staff[0].id][day].shift = SH_DEFAULT; return; }
+      if (staff.length === 1) { S.schedule[staff[0].id][day].shift = storeBaseShift(st.id); return; }
 
       const { goers, stayers, scenario } = computeGroups(staff);
       const weights = buildWeights(staff, scenario);
@@ -1697,7 +1829,8 @@
 
       const goNames   = goers.map(p => p.name.split(' ')[0]).join('+') || '(juntas)';
       const stayNames = stayers.map(p => p.name.split(' ')[0]).join('+') || '—';
-      S.decisions.push({ type: 'info', text: `${day} ${st.name}: [${combo.goShift===SH_ALT?'13h':'14h'}]→[${goNames}](Σ${goSum}) / loja→[${stayNames}](Σ${staySum}).` });
+      const goEnd = (combo.goShift || '').split('|')[0]?.split('-')[1] || '?';
+      S.decisions.push({ type: 'info', text: `${day} ${st.name}: [saída ${goEnd}]→[${goNames}](Σ${goSum}) / loja→[${stayNames}](Σ${staySum}).` });
     });
 
     enforceEdnaCarla(day, workers);
@@ -1734,6 +1867,7 @@
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
+    applyNightShiftRule(active);  // Regra §5: fecho 23h → folga ou entrada tardia no dia seguinte
     saveMem();
 
     // ── Minimum coverage gate ──
@@ -1746,6 +1880,38 @@
     }
 
     showSchedule(active);
+  }
+
+  // ── REGRA §5: FECHO ÀS 23H ──
+  // Quem fechar às 23:00 deve ter folga no dia seguinte OU entrar o mais tarde possível (SH_E).
+  function applyNightShiftRule(active) {
+    const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    workDays.forEach((day, idx) => {
+      const nextDay = workDays[idx + 1] || null;
+      if (!nextDay) return; // SAB não tem dia seguinte útil
+      active.forEach(p => {
+        const cell = S.schedule[p.id]?.[day];
+        if (!cell || cell.type !== 'work') return;
+        if (!closesAt23(cell.shift)) return;
+        // Esta pessoa fecha às 23h — verificar dia seguinte
+        const nextCell = S.schedule[p.id]?.[nextDay];
+        if (!nextCell || nextCell.type !== 'work') return; // já tem folga — OK
+        // Tem trabalho no dia seguinte — forçar SH_E (11:00-15:00|16:00-20:00)
+        const prevShift = nextCell.shift;
+        S.schedule[p.id][nextDay].shift = SH_E;
+        S.decisions.push({
+          type: 'warn',
+          text: `${nextDay}: entrada tardia (11h) por fecho às 23h na ${DAY_PT[day]}.`
+        });
+        if (prevShift !== SH_E) {
+          // Re-check interval consistency for that store on nextDay — just alert, do not block
+          S.alerts.push({
+            type: 'amber',
+            text: `${nextDay}: ${p.name.split(' ')[0]} entra às 11h (regra 23h) — verificar cobertura de ${sname(nextCell.store)} de manhã.`
+          });
+        }
+      });
+    });
   }
 
   // ── MINIMUM COVERAGE VALIDATION ──
@@ -2038,25 +2204,41 @@
         #tab-gerador .gh-add-btn:hover { border-color:#111; color:#111; }
 
         /* ── STORE CONFIG ── */
-        #tab-gerador .gh-store-cfg { margin-bottom:28px; }
-        #tab-gerador .gh-sc-row { padding:12px 0; border-bottom:1px solid #f0f0f0; }
-        #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
-        #tab-gerador .gh-sc-top label { font-size:.85rem; cursor:pointer; color:#111; font-weight:400; }
+        #tab-gerador .gh-store-cfg { margin-bottom:28px; display:flex; flex-direction:column; gap:0; }
+        #tab-gerador .gh-sc-row { padding:14px 0 10px; border-bottom:1px solid #f0f0f0; display:flex; flex-direction:column; gap:8px; }
+        #tab-gerador .gh-sc-row:last-child { border-bottom:none; }
+        #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        #tab-gerador .gh-sc-name { font-size:.88rem; cursor:pointer; color:#111; font-weight:600; flex:1; min-width:80px; }
         #tab-gerador .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
-        #tab-gerador .gh-sc-minmax { display:flex; align-items:center; gap:4px; margin-left:10px; background:#f5f5f5; border:1px solid #e8e8e8; border-radius:6px; padding:3px 8px; }
+        #tab-gerador .gh-sc-minmax { display:flex; align-items:center; gap:4px; background:#f5f5f5; border:1px solid #e8e8e8; border-radius:6px; padding:3px 8px; margin-left:auto; }
         #tab-gerador .gh-sc-mm-field { display:flex; align-items:center; gap:3px; }
         #tab-gerador .gh-sc-mm-label { font-size:.58rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#aaa; }
         #tab-gerador .gh-sc-mm-inp { width:32px; font-size:.78rem; font-weight:700; text-align:center; border:1px solid #ddd; border-radius:3px; padding:2px 3px; color:#111; background:#fff; font-family:inherit; }
         #tab-gerador .gh-sc-mm-inp:focus { outline:none; border-color:#111; }
         #tab-gerador .gh-sc-mm-inp::placeholder { color:#ccc; font-weight:400; }
         #tab-gerador .gh-sc-mm-sep { font-size:.7rem; color:#ccc; padding:0 1px; }
-        #tab-gerador .gh-sc-row.closed .gh-sc-minmax { opacity:.3; pointer-events:none; }
-        #tab-gerador .gh-sc-days { display:flex; gap:6px; flex-wrap:wrap; padding-left:28px; }
-        #tab-gerador .gh-sc-row.closed .gh-sc-top label { color:#bbb; }
+        #tab-gerador .gh-sc-days { display:flex; gap:5px; flex-wrap:wrap; padding-left:26px; }
+        #tab-gerador .gh-sc-mode-row { display:flex; align-items:center; gap:8px; padding-left:26px; flex-wrap:wrap; }
+        #tab-gerador .gh-sc-mode-label { font-size:.58rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#aaa; white-space:nowrap; }
+        #tab-gerador .gh-sc-mode-sel { font-size:.72rem; border:1px solid #ddd; border-radius:5px; padding:4px 8px; font-family:inherit; color:#111; background:#fff; cursor:pointer; flex:1; min-width:180px; max-width:340px; }
+        #tab-gerador .gh-sc-mode-sel:focus { outline:none; border-color:#111; }
+        #tab-gerador .gh-sc-mode-hint { font-size:.62rem; color:#888; white-space:nowrap; flex-shrink:0; }
+        /* Disabled state */
+        #tab-gerador .gh-sc-row.closed .gh-sc-minmax,
+        #tab-gerador .gh-sc-row.closed .gh-sc-mode-row { opacity:.3; pointer-events:none; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-name { color:#bbb; }
         #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
-        #tab-gerador .gh-dtog { padding:5px 11px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.05em; cursor:pointer; user-select:none; color:#555; background:#fff; }
+        /* Day toggles */
+        #tab-gerador .gh-dtog { padding:5px 9px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.04em; cursor:pointer; user-select:none; color:#555; background:#fff; transition:all .12s; }
         #tab-gerador .gh-dtog:hover { border-color:#555; }
         #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
+        #tab-gerador .gh-dtog-dom { border-style:dashed; }
+        #tab-gerador .gh-dtog-dom.on { background:#1a5c9e; border-color:#1a5c9e; border-style:solid; }
+        /* Season banner */
+        #tab-gerador .gh-season-banner { display:flex; align-items:flex-start; gap:10px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:8px; padding:10px 14px; margin-bottom:18px; }
+        #tab-gerador .gh-season-icon { font-size:1.1rem; flex-shrink:0; margin-top:1px; }
+        #tab-gerador .gh-season-name { font-size:.78rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
+        #tab-gerador .gh-season-hint { font-size:.7rem; color:#4a6a9c; line-height:1.4; }
 
         /* ── SCHEDULE BAR ── */
         #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
@@ -2264,12 +2446,12 @@
               <div class="gh-form-grp" style="margin-top:10px">
                 <label class="gh-form-lbl">Horário</label>
                 <select class="gh-field-sm" id="gh-me-shift" style="width:100%">
-                  <option value="10:00-14:00|15:00-19:00">10:00-14:00 / 15:00-19:00</option>
-                  <option value="10:00-13:00|14:00-19:00">10:00-13:00 / 14:00-19:00</option>
-                  <option value="09:00-13:00|14:00-18:00">09:00-13:00 / 14:00-18:00</option>
-                  <option value="09:00-13:00|19:00-23:00">09:00-13:00 / 19:00-23:00 (Noite)</option>
-                  <option value="11:00-15:00|16:00-20:00">11:00-15:00 / 16:00-20:00 (Pós-noite)</option>
-                  <option value="10:00-14:00">10:00-14:00 (Meio dia)</option>
+                  <option value="10:00-13:00|14:00-19:00">[A] 10:00-13:00 / 14:00-19:00 (intervalo 13h)</option>
+                  <option value="10:00-14:00|15:00-19:00">[B] 10:00-14:00 / 15:00-19:00 (intervalo 14h)</option>
+                  <option value="10:00-15:00|16:00-19:00">[C] 10:00-15:00 / 16:00-19:00 (intervalo 15h)</option>
+                  <option value="09:00-12:00|13:00-18:00">[D] 09:00-12:00 / 13:00-18:00 (abertura 9h)</option>
+                  <option value="11:00-15:00|16:00-20:00">[E] 11:00-15:00 / 16:00-20:00 (pós-noite)</option>
+                  <option value="09:00-13:00|19:00-23:00">[F] 09:00-13:00 / 19:00-23:00 (noite 23h)</option>
                 </select>
               </div>
               <div class="gh-form-grp" style="margin-top:10px">

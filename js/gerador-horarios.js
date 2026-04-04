@@ -198,7 +198,6 @@
   function isAbsent(pid, day) { const a = absOf(pid); if (!a) return false; return DAYS.indexOf(day) >= DAYS.indexOf(a.from); }
   function fullyAbsent(pid)   { const a = absOf(pid); if (!a) return false; return DAYS.indexOf(a.from) === 0; }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
-  function minAv(day) { const m = S.weekStart.getMonth()+1; return day === 'DOM' ? (m < 6 ? 1 : 2) : 3; }
   function storeMin(sid) { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
   function storeMax(sid) { const m = S.storeMax?.[sid]; return (m && m > 0) ? m : Infinity; }
 
@@ -981,7 +980,8 @@
     ).join('');
 
     const rows = STORES.map(st => {
-      const open    = S.openStores.length ? S.openStores.includes(st.id) : st.id !== 'maxx';
+      // Default: lojas com priority < 4 abrem por defeito; Maxx (priority=4) fechada por defeito
+      const open    = S.openStores.length ? S.openStores.includes(st.id) : (STORES.find(s=>s.id===st.id)?.priority ?? 9) < 4;
       const days    = S.openDays[st.id]   || (open ? [...defD] : []);
       const savedMin  = S.storeMin?.[st.id]  || 1;
       const savedMax  = S.storeMax?.[st.id]  || '';
@@ -1117,24 +1117,44 @@
 
   // ══ ENGINE ══
 
-  function computeSandraPosition(active) {
+  // Coordenadora(s): pessoal com coverPri < 5 (campo na BD — sem nomes hardcoded).
+  // Atribuição por prioridade de loja: loja própria se aberta → loja mais prioritária com défice → fallback.
+  function computeCoordinatorPosition(active) {
     S.sandraDay = {};
-    if (!active.find(p => p.id === 'sandra')) return;
-    ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(day => {
-      if (isAbsent('sandra', day)) { S.sandraDay[day] = null; return; }
-      if (storeOpen('maxx', day)) { S.sandraDay[day] = 'maxx'; return; }
-      if (storeOpen('shana', day) && isAbsent('marilia', day)) {
-        S.sandraDay[day] = 'shana';
-        S.decisions.push({ type: 'info', text: `${day}: Sandra cobre Shana (Marilia ausente).` });
-        return;
-      }
-      if (storeOpen('avenida', day)) {
-        const avWorkers = active.filter(p => p.id !== 'sandra' && p.store === 'avenida' && !isAbsent(p.id, day)).length;
-        if (avWorkers < storeMin('avenida')) { S.sandraDay[day] = 'avenida'; return; }
-      }
-      if (storeOpen('mercado', day)) { S.sandraDay[day] = 'mercado'; return; }
-      const fb = S.openStores.find(id => S.openDays[id]?.includes(day));
-      S.sandraDay[day] = fb || null;
+    const coordinators = active.filter(p => (p.coverPri || 9) < 5).sort((a, b) => (a.coverPri||9) - (b.coverPri||9));
+    if (!coordinators.length) return;
+
+    // Cada coordenadora fica associada à sua posição via S.sandraDay[pid][day]
+    // Para compatibilidade com buildCell (que ainda lê S.sandraDay[pid]),
+    // generalizamos: S.sandraDay é agora { pid: { day: storeId } }
+    coordinators.forEach(coord => {
+      S.sandraDay[coord.id] = {};
+      ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(day => {
+        if (isAbsent(coord.id, day)) { S.sandraDay[coord.id][day] = null; return; }
+
+        // 1. Loja própria se aberta
+        if (coord.store && storeOpen(coord.store, day)) {
+          S.sandraDay[coord.id][day] = coord.store; return;
+        }
+
+        // 2. Loja aberta mais prioritária onde ela conhece E que está com défice
+        const deficit = S.openStores
+          .filter(id => storeOpen(id, day) && coord.knows.includes(id))
+          .sort((a, b) => (STORES.find(s=>s.id===a)?.priority??9) - (STORES.find(s=>s.id===b)?.priority??9))
+          .find(id => {
+            const current = active.filter(p => p.id !== coord.id && p.store === id && !isAbsent(p.id, day)).length;
+            return current < storeMin(id);
+          });
+        if (deficit) {
+          S.sandraDay[coord.id][day] = deficit;
+          S.decisions.push({ type: 'info', text: `${day}: ${coord.name.split(' ')[0]} → ${sname(deficit)} (cobertura coordenadora).` });
+          return;
+        }
+
+        // 3. Fallback: primeira loja aberta que conhece
+        const fb = S.openStores.find(id => S.openDays[id]?.includes(day) && coord.knows.includes(id));
+        S.sandraDay[coord.id][day] = fb || null;
+      });
     });
   }
 
@@ -1172,9 +1192,12 @@
     return { breaks: false };
   }
 
+  // Lojas com priority <= 2 (as mais importantes: Avenida e Mercado) podem operar
+  // ao domingo com 1 pessoa a menos do que o mínimo semanal — definido pelo campo priority da BD.
   function sundayMinFor(sid) {
     const weekMin = storeMin(sid) || 1;
-    if (sid === 'avenida' || sid === 'mercado') return Math.max(1, weekMin - 1);
+    const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
+    if (storePriority <= 2) return Math.max(1, weekMin - 1);
     return weekMin;
   }
 
@@ -1189,7 +1212,7 @@
     // Where would person p actually work on this day if not on folga?
     // Mirrors buildCell logic exactly.
     function predictStore(p, day) {
-      if (p.id === 'sandra') return S.sandraDay[day] || null;
+      if (S.sandraDay?.[p.id]) return S.sandraDay[p.id][day] || null;
       if (isAbsent(p.id, day)) return null;
       if (p.store && storeOpen(p.store, day)) return p.store;
       return S.openStores.find(id => S.openDays[id]?.includes(day) && p.knows.includes(id)) || null;
@@ -1216,8 +1239,11 @@
     });
     sorted.forEach(p => {
       let dayIdx = (MEM.offsets[p.id] + MEM.cycleWeek) % 6;
-      const myStore = p.id === 'sandra' ? null : p.store;
-      const target = Math.round((p.hrs || 40) / 8);
+      const myStore = S.sandraDay?.[p.id] ? null : p.store; // coordenadoras não têm loja fixa
+      // Dias de trabalho necessários: horas contrato ÷ horas do turno base da loja prevista
+      const predictedStore = myStore || S.openStores[0];
+      const hoursPerDay = shiftHours(storeBaseShift(predictedStore)) || 8;
+      const target = Math.round((p.hrs || 40) / hoursPerDay);
       // Una persona puede trabajar el domingo si su tienda abre O si conoce alguna tienda que abre
       // y esa tienda aún no tiene su cuota cubierta. Tienda fija tiene prioridad en su tienda.
       const sunStore = (() => {
@@ -1283,10 +1309,9 @@
           return predictStore(x, day) === effStore;
         }).length;
         if (sameFolgas >= ((day === 'TER' || day === 'QUA') ? 2 : 1)) { dayIdx = (dayIdx+1) % 6; continue; }
-        if (p.id === 'matilde' && S.folgaDay['carla']   === day) { dayIdx = (dayIdx+1) % 6; continue; }
-        if (p.id === 'carla'   && S.folgaDay['matilde'] === day) { dayIdx = (dayIdx+1) % 6; continue; }
-        if (p.id === 'sara'    && S.folgaDay['edna']    === day) { dayIdx = (dayIdx+1) % 6; continue; }
-        if (p.id === 'edna'    && S.folgaDay['sara']    === day) { dayIdx = (dayIdx+1) % 6; continue; }
+        // Evitar folgas no mesmo dia para pares softAvoid (atributo da BD, sem nomes hardcoded)
+        const hasSoftConflict = (p.softAvoid || []).some(oid => S.folgaDay[oid] === day);
+        if (hasSoftConflict) { dayIdx = (dayIdx+1) % 6; continue; }
         willWorkSunday = sundayDecision; found = true; break;
       }
       const day = workDays[dayIdx];
@@ -1344,9 +1369,9 @@
           });
 
         toRedirect.forEach(p => {
-          // Destino: avenida/mercado primero en round-robin (la más vacía), luego el resto
-          const dest = ['avenida', 'mercado', ...S.openStores]
-            .filter((id, i, arr) => arr.indexOf(id) === i) // deduplicar
+          // Destino: lojas por ordem de prioridade (as de maior prioridade primeiro), sem nomes hardcoded
+          const dest = [...S.openStores]
+            .sort((a, b) => (STORES.find(s=>s.id===a)?.priority??9) - (STORES.find(s=>s.id===b)?.priority??9))
             .filter(id => {
               if (id === sid) return false;
               if (!storeOpen(id, day)) return false;
@@ -1380,8 +1405,9 @@
     if (day === 'DOM') return { type: 'folga', shift: null, store: null };
     if (S.folgaDay[p.id] === day) return { type: 'folga', shift: null, store: null };
     if (S.extraDayOff?.[p.id] === day) return { type: 'folga', shift: null, store: null };
-    if (p.id === 'sandra') {
-      const sid = S.sandraDay[day];
+    if (S.sandraDay?.[p.id]) {
+      // Coordenadora — posição pré-calculada por computeCoordinatorPosition
+      const sid = S.sandraDay[p.id][day];
       if (!sid) return { type: 'folga', shift: null, store: null };
       return { type: 'work', shift: storeBaseShift(sid), store: sid };
     }
@@ -1442,16 +1468,32 @@
   function intelPass(active) {
     DAYS.forEach(day => {
       const wk = () => active.filter(p => S.schedule[p.id]?.[day]?.type === 'work');
-      const ed = S.schedule['edna']?.[day], ca = S.schedule['carla']?.[day];
-      if (ed?.type === 'work' && ca?.type === 'work' && ed.store === ca.store) {
-        const edStore = ed.store;
-        const alt = S.openStores.find(id => {
-          if (id === edStore || !storeOpen(id, day) || !P('carla')?.knows.includes(id)) return false;
-          return wk().filter(x => S.schedule[x.id][day].store === id).length < storeMax(id);
+      // Separar pares softAvoid que coincidam na mesma loja (sem nomes hardcoded)
+      const separated = new Set();
+      wk().forEach(p => {
+        (p.softAvoid || []).forEach(oid => {
+          const o = P(oid); if (!o) return;
+          const pSch = S.schedule[p.id][day], oSch = S.schedule[oid]?.[day];
+          if (!pSch || !oSch || pSch.type !== 'work' || oSch.type !== 'work') return;
+          if (pSch.store !== oSch.store) return;
+          const pairKey = [p.id, oid].sort().join('-');
+          if (separated.has(pairKey)) return;
+          separated.add(pairKey);
+          // Tentar mover a pessoa com menor prioridade de cobertura para outra loja
+          const mover = (p.coverPri || 9) >= (o.coverPri || 9) ? p : o;
+          const currentStore = pSch.store;
+          const alt = S.openStores.find(id => {
+            if (id === currentStore || !storeOpen(id, day) || !mover.knows.includes(id)) return false;
+            return wk().filter(x => S.schedule[x.id][day].store === id).length < storeMax(id);
+          });
+          if (alt) {
+            S.schedule[mover.id][day].store = alt;
+            S.decisions.push({ type: 'info', text: `\${day}: \${mover.name.split(' ')[0]} → \${sname(alt)} (evitar par softAvoid).` });
+          } else {
+            S.alerts.push({ type: 'amber', text: `\${day}: \${p.name.split(' ')[0]} e \${o.name.split(' ')[0]} na mesma loja — sem alternativa.` });
+          }
         });
-        if (alt) { S.schedule['carla'][day].store = alt; S.decisions.push({ type: 'info', text: `${day}: Carla → ${sname(alt)} (separar de Edna).` }); }
-        else S.alerts.push({ type: 'amber', text: `${day}: Edna e Carla na mesma loja — sem alternativa.` });
-      }
+      });
       wk().filter(p => !p.canAlone && weeksSince(p.start, S.weekStart) < 4).forEach(p => {
         const myStore = S.schedule[p.id][day].store;
         if (wk().some(o => o.id !== p.id && o.canAlone && S.schedule[o.id][day].store === myStore)) return;
@@ -1498,9 +1540,12 @@
           else S.alerts.push({ type: 'red', text: `${day}: ${sname(st.id)} sem cobertura suficiente.` });
         }
       });
-      // ── REEQUILÍBRIO: só entre avenida↔mercado, nunca mover pessoas com loja fixa ──
+      // ── REEQUILÍBRIO: entre as 2 lojas de maior prioridade abertas hoje ──
       (() => {
-        const flexIds = ['avenida', 'mercado'].filter(id => storeOpen(id, day));
+        const flexIds = [...S.openStores]
+          .filter(id => storeOpen(id, day))
+          .sort((a, b) => (STORES.find(s=>s.id===a)?.priority??9) - (STORES.find(s=>s.id===b)?.priority??9))
+          .slice(0, 2);
         if (flexIds.length < 2) return;
         const workers = wk();
         function covFlex() {
@@ -1524,7 +1569,7 @@
               if (S.schedule[p.id][day]?.store !== src) return false;
               if (p.store) return false; // nunca mover fijas
               if (!p.knows.includes(dest)) return false;
-              if (p.id === 'sandra') return false;
+              if (S.sandraDay?.[p.id]) return false; // coordenadoras não são reequilibradas
               return true;
             })
             .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];
@@ -1553,8 +1598,9 @@
   }
 
   // ── SUNDAY VIABILITY CHECK ──
-  // Priority order to sacrifice: maxx → shana → mercado → avenida
-  const SUNDAY_SACRIFICE_ORDER = ['maxx', 'shana', 'mercado', 'avenida'];
+  // Ordem de sacrifício ao domingo: lojas de menor prioridade primeiro (priority DESC).
+  // Derivado dinamicamente dos dados — sem store IDs hardcoded.
+  const SUNDAY_SACRIFICE_ORDER = [...STORES].sort((a, b) => b.priority - a.priority).map(s => s.id);
 
 
   // Resolve sunday stores: remove stores that would break weekday coverage,
@@ -1666,40 +1712,7 @@
     return { goers: sorted.slice(n - half), stayers: sorted.slice(0, n - half), scenario: 'default' };
   }
 
-  // PASSO 5: Recalcular a tienda de Carla com restrição forçada
-  // Usada por enforceEdnaCarla para mudar a combinação completa da tienda
-  function recalculateStoreCombo(staff, scenario, weights, idealSum, isFlexible, forcedShiftForCarla, storeId) {
-    const BASE = storeBaseShift(storeId || (staff[0] ? (S.schedule[staff[0].id] ? Object.values(S.schedule[staff[0].id]).find(c => c.store)?.store : null) : null) || '');
-    const ALT  = storeAltShift(storeId  || '');
-    const combos = [
-      { goShift: ALT,  stayShift: BASE },
-      { goShift: BASE, stayShift: ALT  },
-    ];
 
-    const { goers, stayers } = computeGroups(staff);
-
-    for (const combo of combos) {
-      // Verificar restrição forçada para Carla
-      const carlaInGoers  = goers.some(p => p.id === 'carla');
-      const carlaShift    = carlaInGoers ? combo.goShift : combo.stayShift;
-      if (carlaShift !== forcedShiftForCarla) continue;
-
-      // Validação matemática dinâmica
-      if (!isFlexible && idealSum !== null) {
-        const goSum = goers.reduce((s,p) => s + (weights[p.id]||0), 0);
-        if (Math.abs(goSum - idealSum) > 0.01) continue;
-      }
-
-      // Regra nova sozinha (3+ pessoas)
-      if (staff.length > 2 && goers.length === 1 && !goers[0].efetiva) continue;
-
-      // Nunca todos no mesmo slot (excepto 2_escB)
-      if (scenario !== '2_escB' && (goers.length === 0 || goers.length === staff.length)) continue;
-
-      return { combo, goers, stayers, valid: true };
-    }
-    return { valid: false };
-  }
 
   // PASSO 6: Solver determinista — valida matemática dinâmica
   function resolveCombo({ staff, goers, stayers, scenario, storeId, weights }) {
@@ -1750,47 +1763,64 @@
 
     return validCombos[0];
   }
-  // PASSO 7: Regra global Edna & Carla
-  // Inverte a combinação COMPLETA da tienda — nunca troca pessoas individuais.
-  // Assim a matemática (somas de peso dos slots) fica sempre intacta.
-  function enforceEdnaCarla(day, workers) {
-    const edSch = S.schedule['edna']?.[day];
-    const caSch = S.schedule['carla']?.[day];
-    if (!edSch || !caSch) return;
-    if (edSch.type !== 'work' || caSch.type !== 'work') return;
-    if (!edSch.shift || !caSch.shift) return;
+  // PASSO 7: Separação de intervalos para pares softAvoid na mesma loja
+  // Inverte a combinação COMPLETA da loja — nunca troca pessoas individuais.
+  // Sem nomes hardcoded: usa o atributo softAvoid de cada pessoa.
+  function enforceIntervalSeparation(day, workers) {
+    const checked = new Set();
+    workers.forEach(p => {
+      (p.softAvoid || []).forEach(oid => {
+        const pairKey = [p.id, oid].sort().join('-');
+        if (checked.has(pairKey)) return;
+        checked.add(pairKey);
 
-    const edAlt = storeAltShift(edSch.store);
-    const caAlt = storeAltShift(caSch.store);
-    const edVal = edSch.shift === edAlt ? 1 : 0;
-    const caVal = caSch.shift === caAlt ? 1 : 0;
-    if (edVal + caVal === 1) return; // OK — já cruzadas
+        const pSch = S.schedule[p.id]?.[day];
+        const oSch = S.schedule[oid]?.[day];
+        if (!pSch || !oSch) return;
+        if (pSch.type !== 'work' || oSch.type !== 'work') return;
+        if (!pSch.shift || !oSch.shift) return;
 
-    const caBase = S._storeBaseShift[caSch.store];
-    const edBase = S._storeBaseShift[edSch.store];
+        // Verificar se estão em lojas diferentes — nesse caso os turnos de almoço já não colidem
+        if (pSch.store !== oSch.store) {
+          // Lojas diferentes: garantir que os turnos de SAÍDA são cruzados entre os pares
+          const pAlt = storeAltShift(pSch.store);
+          const oAlt = storeAltShift(oSch.store);
+          const pIsAlt = pSch.shift === pAlt ? 1 : 0;
+          const oIsAlt = oSch.shift === oAlt ? 1 : 0;
+          if (pIsAlt + oIsAlt === 1) return; // já cruzados — OK
+        } else {
+          // Mesma loja: garantir que os turnos de almoço são opostos
+          const storeAlt = storeAltShift(pSch.store);
+          const pIsAlt = pSch.shift === storeAlt ? 1 : 0;
+          const oIsAlt = oSch.shift === storeAlt ? 1 : 0;
+          if (pIsAlt + oIsAlt === 1) return; // já cruzados — OK
+        }
 
-    // Preferir inverter a loja que não quebre a sua storeBase semanal
-    const caCanFlip = !caBase || caSch.shift !== caBase;
-    const edCanFlip = !edBase || edSch.shift !== edBase;
+        // Precisam de ser cruzados — inverter a loja de quem tem menor prioridade de cobertura
+        const o = P(oid);
+        const flipTarget = (!o || (p.coverPri || 9) >= (o.coverPri || 9)) ? pSch.store : oSch.store;
+        const BASE = storeBaseShift(flipTarget);
+        const ALT  = storeAltShift(flipTarget);
+        const canFlip = !S._storeBaseShift[flipTarget] || S._storeBaseShift[flipTarget] !== BASE;
 
-    function flipStoreCombo(storeId) {
-      const BASE = storeBaseShift(storeId);
-      const ALT  = storeAltShift(storeId);
-      workers.filter(p => S.schedule[p.id][day].store === storeId).forEach(p => {
-        S.schedule[p.id][day].shift = S.schedule[p.id][day].shift === BASE ? ALT : BASE;
+        function flipCombo(storeId) {
+          const B = storeBaseShift(storeId), A = storeAltShift(storeId);
+          workers.filter(x => S.schedule[x.id][day].store === storeId).forEach(x => {
+            S.schedule[x.id][day].shift = S.schedule[x.id][day].shift === B ? A : B;
+          });
+        }
+
+        if (canFlip) {
+          flipCombo(flipTarget);
+          S.decisions.push({ type: 'info', text: `${day}: ${sname(flipTarget)} invertida (separar par softAvoid).` });
+        } else {
+          // Tentar a outra loja do par
+          const altTarget = flipTarget === pSch.store ? oSch.store : pSch.store;
+          flipCombo(altTarget);
+          S.decisions.push({ type: 'warn', text: `${day}: ${sname(altTarget)} forçada a inverter (par softAvoid).` });
+        }
       });
-    }
-
-    if (caCanFlip) {
-      flipStoreCombo(caSch.store);
-      S.decisions.push({ type: 'info', text: `${day}: ${sname(caSch.store)} invertida (separar Edna/Carla).` });
-    } else if (edCanFlip) {
-      flipStoreCombo(edSch.store);
-      S.decisions.push({ type: 'info', text: `${day}: ${sname(edSch.store)} invertida (separar Edna/Carla).` });
-    } else {
-      flipStoreCombo(caSch.store);
-      S.decisions.push({ type: 'warn', text: `${day}: ${sname(caSch.store)} forçada a inverter (separar Edna/Carla — quebra storeBase).` });
-    }
+    });
   }
   // ORQUESTRADOR: chamado por intelPass para cada dia
   function assignIntervalShiftsForDay(day, workers) {
@@ -1833,7 +1863,7 @@
       S.decisions.push({ type: 'info', text: `${day} ${st.name}: [saída ${goEnd}]→[${goNames}](Σ${goSum}) / loja→[${stayNames}](Σ${staySum}).` });
     });
 
-    enforceEdnaCarla(day, workers);
+    enforceIntervalSeparation(day, workers);
   }
     function generate() {
     S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
@@ -1862,7 +1892,7 @@
       });
     }
 
-    computeSandraPosition(active);
+    computeCoordinatorPosition(active);
     assignFolgas(active);
     buildSchedule(active);
     fixSunday(active);

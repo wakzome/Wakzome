@@ -1550,11 +1550,15 @@
             if (id === currentStore || !storeOpen(id, day) || !mover.knows.includes(id)) return false;
             return wk().filter(x => S.schedule[x.id][day].store === id).length < storeMax(id);
           });
-          if (alt) {
+          // Só mover se a tienda de origem não fica a descoberto
+          const moverCurStore = S.schedule[mover.id][day].store;
+          const moverCanMove = !mover.store || !storeOpen(mover.store, day) ||
+            wk().filter(x => S.schedule[x.id][day].store === moverCurStore).length - 1 >= storeMin(moverCurStore);
+          if (alt && moverCanMove) {
             S.schedule[mover.id][day].store = alt;
-            S.decisions.push({ type: 'info', text: `\${day}: \${mover.name.split(' ')[0]} → \${sname(alt)} (evitar par softAvoid).` });
+            S.decisions.push({ type: 'info', text: `${day}: ${mover.name.split(' ')[0]} → ${sname(alt)} (evitar par softAvoid).` });
           } else {
-            S.alerts.push({ type: 'amber', text: `\${day}: \${p.name.split(' ')[0]} e \${o.name.split(' ')[0]} na mesma loja — sem alternativa.` });
+            S.alerts.push({ type: 'amber', text: `${day}: ${p.name.split(' ')[0]} e ${o.name.split(' ')[0]} na mesma loja — sem alternativa.` });
           }
         });
       });
@@ -1567,14 +1571,22 @@
           S.alerts.push({ type: 'amber', text: `${day}: ${p.name} em ${sname(myStore)} sem supervisão (máximo já atingido).` });
           return;
         }
-        const sup = wk().filter(o => o.canAlone && o.id !== p.id && o.knows.includes(myStore)) // efectiva ou autónoma plena
-          .sort((a, b) => {
+        const sup = wk().filter(o => {
+          if (!o.canAlone || o.id === p.id || !o.knows.includes(myStore)) return false;
+          // Só mover se a tienda de origem não fica a descoberto
+          const oStore = S.schedule[o.id][day].store;
+          if (o.store && o.store !== myStore && storeOpen(o.store, day)) {
+            const homeCount = wk().filter(x => S.schedule[x.id][day].store === oStore).length;
+            if (homeCount - 1 < storeMin(oStore)) return false;
+          }
+          return true;
+        }).sort((a, b) => {
             const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;
             const bc = wk().filter(x => S.schedule[x.id][day].store === S.schedule[b.id][day].store).length;
             return bc - ac || (a.coverPri||9) - (b.coverPri||9);
           })[0];
-        if (sup) { S.schedule[sup.id][day].store = myStore; S.decisions.push({ type: 'info', text: `${day}: ${sup.name} → ${sname(myStore)} (supervisão ${p.name}).` }); }
-        else S.alerts.push({ type: 'amber', text: `${day}: ${p.name} em ${sname(myStore)} sem supervisão.` });
+        if (sup) { S.schedule[sup.id][day].store = myStore; S.decisions.push({ type: 'info', text: `${day}: ${sup.name.split(' ')[0]} → ${sname(myStore)} (supervisão).` }); }
+        else S.alerts.push({ type: 'amber', text: `${day}: ${p.name.split(' ')[0]} em ${sname(myStore)} sem supervisão.` });
       });
       STORES.filter(st => storeOpen(st.id, day)).sort((a, b) => a.priority - b.priority).forEach(st => {
         const min = storeMin(st.id);
@@ -1582,18 +1594,25 @@
         if (have >= min) return;
         if (have >= storeMax(st.id)) return; // ya está al máximo, no traer más
         for (let i = 0; i < min - have; i++) {
-          const candPool = wk().filter(p => p.mobile !== false && p.knows.includes(st.id) && S.schedule[p.id][day].store !== st.id)
-            .filter(p => {
-              // No superar el máximo del destino — verificar SIEMPRE
-              const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
-              return destCount + 1 <= storeMax(st.id);
-            });
-          // Primero intentar con personas SIN tienda fija; solo si no hay, usar tienda fija
+          const candPool = wk().filter(p => {
+            if (!p.knows.includes(st.id)) return false;
+            if (S.schedule[p.id][day].store === st.id) return false;
+            // Não superar o máximo do destino
+            const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
+            if (destCount + 1 > storeMax(st.id)) return false;
+            // Regra 99%: só mover pessoa com tienda fija se a sua tienda de origem
+            // NÃO ficará abaixo do mínimo sem ela
+            if (p.store && p.store !== st.id && storeOpen(p.store, day)) {
+              const homeCount = wk().filter(x => S.schedule[x.id][day].store === p.store).length;
+              if (homeCount - 1 < storeMin(p.store)) return false; // a sua tienda ficaria a descoberto
+            }
+            return true;
+          });
+          // Prioridade: sem tienda fija → tienda fija noutra loja (só se a origem tem margem)
           const candNoFixed = candPool.filter(p => !p.store || p.store === st.id);
           const candFixed   = candPool.filter(p => p.store && p.store !== st.id);
           const cand = [...candNoFixed, ...candFixed]
             .sort((a, b) => {
-              // Penalizar personas con tienda fija en otra tienda
               const aFixed = (a.store && a.store !== st.id) ? 1 : 0;
               const bFixed = (b.store && b.store !== st.id) ? 1 : 0;
               if (aFixed !== bFixed) return aFixed - bFixed;
@@ -1601,7 +1620,7 @@
               const bc = wk().filter(x => S.schedule[x.id][day].store === S.schedule[b.id][day].store).length;
               return bc - ac || (a.coverPri||9) - (b.coverPri||9);
             })[0];
-          if (cand) { S.schedule[cand.id][day].store = st.id; S.decisions.push({ type: 'warn', text: `${day}: ${cand.name} → ${sname(st.id)} (cobertura mínima).` }); }
+          if (cand) { S.schedule[cand.id][day].store = st.id; S.decisions.push({ type: 'warn', text: `${day}: ${cand.name.split(' ')[0]} → ${sname(st.id)} (cobertura mínima).` }); }
           else S.alerts.push({ type: 'red', text: `${day}: ${sname(st.id)} sem cobertura suficiente.` });
         }
       });

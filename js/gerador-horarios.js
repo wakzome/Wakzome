@@ -375,6 +375,12 @@
               ${STORES.map(s => `<label class="gh-pf-check"><input type="checkbox" value="${s.id}"> ${s.name}</label>`).join('')}
             </div>
           </div>
+          <div class="gh-pf-field" style="margin-top:10px">
+            <label>Evitar coincidência de folga/turno com (softAvoid)</label>
+            <div class="gh-pf-stores" id="gh-pf-softavoid">
+              <!-- preenchido dinamicamente por renderSoftAvoidOptions() -->
+            </div>
+          </div>
           <div class="gh-pf-actions">
             <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pf-cancel">Cancelar</button>
             <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-pf-save">Guardar</button>
@@ -829,6 +835,7 @@
       document.getElementById('gh-pf-canalone').value = 'true';
       document.getElementById('gh-pf-mobile').value = 'false';
       document.querySelectorAll('#gh-pf-knows input').forEach(cb => { cb.checked = false; });
+      renderSoftAvoidOptions(null, []);
       document.getElementById('gh-person-form').style.display = 'block';
     });
 
@@ -863,7 +870,22 @@
     document.querySelectorAll('#gh-pf-knows input').forEach(cb => {
       cb.checked = (p.knows || []).includes(cb.value);
     });
+    renderSoftAvoidOptions(p.id, p.softAvoid || []);
     document.getElementById('gh-person-form').style.display = 'block';
+  }
+
+  // Renderiza checkboxes de softAvoid (excluindo a própria pessoa)
+  function renderSoftAvoidOptions(selfPid, currentSoftAvoid) {
+    const container = document.getElementById('gh-pf-softavoid');
+    if (!container) return;
+    const others = PEOPLE.filter(p => p.id !== selfPid).sort((a,b) => a.name.localeCompare(b.name));
+    if (!others.length) { container.innerHTML = '<span style="font-size:.72rem;color:#bbb">Sem outras pessoas na BD.</span>'; return; }
+    container.innerHTML = others.map(p =>
+      `<label class="gh-pf-check">
+        <input type="checkbox" name="gh-pf-softavoid-cb" value="${p.id}" ${(currentSoftAvoid||[]).includes(p.id) ? 'checked' : ''}>
+        ${p.name.split(' ')[0]}
+      </label>`
+    ).join('');
   }
 
   async function savePersonForm() {
@@ -875,18 +897,31 @@
     const efetiva  = document.getElementById('gh-pf-efetiva').value === 'true';
     const canAlone = document.getElementById('gh-pf-canalone').value !== 'false';
     const mobile   = document.getElementById('gh-pf-mobile').value === 'true';
-    const knows    = [...document.querySelectorAll('#gh-pf-knows input:checked')].map(cb => cb.value);
+    const knows     = [...document.querySelectorAll('#gh-pf-knows input:checked')].map(cb => cb.value);
+    const newSoftAvoid = [...document.querySelectorAll('[name="gh-pf-softavoid-cb"]:checked')].map(cb => cb.value);
 
     // Start date required only for new staff (efectivas may not have it)
     if (!name) { alert('Nome é obrigatório.'); return; }
     if (!efetiva && !start) { alert('Data de entrada é obrigatória para pessoal novo.'); return; }
 
+    // soft_avoid vem do formulário (checkboxes); hard_avoid preservado da BD
+    const existingP = _editingPid ? PEOPLE.find(x => x.id === _editingPid) : null;
+    const softAvoid = newSoftAvoid; // lido dos checkboxes do formulário
+    const hardAvoid = existingP?.hardAvoid || []; // preservado — sem UI por enquanto
+
+    // cover_pri: efectiva=1, nova com > 3 semanas=5, nova recente=9
+    // Preservar valor existente se não houver alteração de condição
+    let coverPri = existingP?.coverPri ?? (efetiva ? 1 : 9);
+    if (!existingP || existingP.efetiva !== efetiva) {
+      coverPri = efetiva ? 1 : 9; // reset ao mudar condição
+    }
+
     const data = {
       name, hrs, store_id: store, efetiva,
       start_date: start || null,
       end_date: end || null,
-      can_alone: canAlone, mobile, cover_pri: efetiva ? 1 : 9,
-      knows, hard_avoid: [], soft_avoid: [], active: true
+      can_alone: canAlone, mobile, cover_pri: coverPri,
+      knows, hard_avoid: hardAvoid, soft_avoid: softAvoid, active: true
     };
 
     let saved;

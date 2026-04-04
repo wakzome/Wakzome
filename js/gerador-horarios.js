@@ -219,7 +219,15 @@
   function fullyAbsent(pid)   { const a = absOf(pid); if (!a) return false; return DAYS.indexOf(a.from) === 0; }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
   function storeMin(sid) { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
-  function storeMax(sid) { const m = S.storeMax?.[sid]; return (m && m > 0) ? m : Infinity; }
+  function storeMax(sid) {
+    // Shana y Maxx (priority >= 3) tienen máximo estructural de 1 persona — inamovible.
+    // El usuario no puede sobrescribir este límite desde el Paso 3.
+    const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
+    if (storePriority >= 3) return 1;
+    // Para Avenida y Mercado: respetar el máximo configurado manualmente, o sin límite.
+    const m = S.storeMax?.[sid];
+    return (m && m > 0) ? m : Infinity;
+  }
 
   // ── WIZARD STATE ──
   let wStep = 0;
@@ -1044,13 +1052,18 @@
         return `<span class="gh-dtog ${isOn ? 'on' : ''} ${isDom ? 'gh-dtog-dom' : ''}" data-store="${st.id}" data-day="${d}">${d}</span>`;
       }).join('');
 
+      // Shana y Maxx (priority >= 3): máximo estructural de 1, no configurable
+      const isSmallStore = (STORES.find(s => s.id === st.id)?.priority ?? 9) >= 3;
+
       return `
       <div class="gh-sc-row ${!open ? 'closed' : ''}" id="gh-scr-${st.id}">
         <!-- LINHA 1: checkbox + nome + mín/máx -->
         <div class="gh-sc-top">
           <input type="checkbox" id="gh-chk-${st.id}" ${open ? 'checked' : ''} data-store="${st.id}">
           <label for="gh-chk-${st.id}" class="gh-sc-name">${st.name}</label>
-          <div class="gh-sc-minmax">
+          ${isSmallStore
+            ? `<span class="gh-sc-fixed-cap">máx 1 pessoa</span>`
+            : `<div class="gh-sc-minmax">
             <div class="gh-sc-mm-field">
               <span class="gh-sc-mm-label">mín</span>
               <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" placeholder="—" value="${savedMin > 1 ? savedMin : ''}">
@@ -1060,7 +1073,7 @@
               <span class="gh-sc-mm-label">máx</span>
               <input type="number" class="gh-sc-mm-inp" id="gh-max-${st.id}" data-store="${st.id}" min="1" max="20" placeholder="—" value="${savedMax}">
             </div>
-          </div>
+          </div>`}
         </div>
         <!-- LINHA 2: dias da semana -->
         <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div>
@@ -2323,6 +2336,7 @@
         #tab-gerador .gh-sc-mm-inp:focus { outline:none; border-color:#111; }
         #tab-gerador .gh-sc-mm-inp::placeholder { color:#ccc; font-weight:400; }
         #tab-gerador .gh-sc-mm-sep { font-size:.7rem; color:#ccc; padding:0 1px; }
+        #tab-gerador .gh-sc-fixed-cap { font-size:.62rem; font-weight:700; color:#888; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:5px; padding:3px 9px; margin-left:auto; white-space:nowrap; }
         #tab-gerador .gh-sc-days { display:flex; gap:5px; flex-wrap:wrap; padding-left:26px; }
         #tab-gerador .gh-sc-mode-row { display:flex; align-items:center; gap:8px; padding-left:26px; flex-wrap:wrap; }
         #tab-gerador .gh-sc-mode-label { font-size:.58rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#aaa; white-space:nowrap; }

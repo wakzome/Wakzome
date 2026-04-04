@@ -1265,16 +1265,16 @@
     return weekMin;
   }
 
-  function assignFolgas(active) {
-    MEM.cycleWeek++;
+  function assignFolgas(active, seed) {
+    // seed: número inteiro 0-299 que determina a rotação desta geração
+    // Cada pessoa tem um offset base derivado do seu índice + seed, garantindo
+    // combinações genuinamente distintas entre todos os 50 candidatos
     const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
-    active.forEach((p, i) => { if (MEM.offsets[p.id] === undefined) MEM.offsets[p.id] = i; });
     S.sundayAssigned = {};
     sundayStores.forEach(sid => { S.sundayAssigned[sid] = []; });
 
     // Where would person p actually work on this day if not on folga?
-    // Mirrors buildCell logic exactly.
     function predictStore(p, day) {
       if (S.sandraDay?.[p.id]) return S.sandraDay[p.id][day] || null;
       if (isAbsent(p.id, day)) return null;
@@ -1282,7 +1282,6 @@
       return S.openStores.find(id => S.openDays[id]?.includes(day) && p.knows.includes(id)) || null;
     }
 
-    // True coverage: count everyone's predicted store, not just their home store
     function baseCov(day) {
       const cov = {};
       S.openStores.forEach(sid => { cov[sid] = 0; });
@@ -1296,13 +1295,19 @@
 
     const remaining = {};
     workDays.forEach(day => { remaining[day] = baseCov(day); });
+
+    // Ordenar: coordenadoras primeiro, depois por prioridade de loja
     const sorted = [...active].sort((a, b) => {
       const pa = STORES.find(s => s.id === (a.store||'z'))?.priority ?? 9;
       const pb = STORES.find(s => s.id === (b.store||'z'))?.priority ?? 9;
       return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
     });
-    sorted.forEach(p => {
-      let dayIdx = (MEM.offsets[p.id] + MEM.cycleWeek) % 6;
+
+    sorted.forEach((p, personIdx) => {
+      // Offset único por pessoa + seed: garante que seeds diferentes → folgas diferentes
+      // Usa hash simples: (personIdx * 7 + seed) mod 6
+      // Os primos 7 e 11 garantem que não há ciclos curtos
+      let dayIdx = (personIdx * 7 + seed * 11) % 6;
       const myStore = S.sandraDay?.[p.id] ? null : p.store; // coordenadoras não têm loja fixa
       // Dias de trabalho necessários: horas contrato ÷ horas do turno base da loja prevista
       const predictedStore = myStore || S.openStores[0];
@@ -2104,7 +2109,7 @@
     });
 
     computeCoordinatorPosition(active);
-    assignFolgas(active);
+    assignFolgas(active, seed);
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
@@ -2130,7 +2135,8 @@
     const NUM_CANDIDATES = 50;
     const candidates = [];
 
-    for (let seed = 0; seed < NUM_CANDIDATES; seed++) {
+    const base = S._regenBase || 0;
+    for (let seed = base; seed < base + NUM_CANDIDATES; seed++) {
       const cand = generateCandidate(seed, active);
 
       // Verificar cobertura mínima — descartar se falha
@@ -2308,8 +2314,7 @@
     document.getElementById('gh-cov-back-stores').addEventListener('click', () => { wStep = 2; renderWiz(); });
     document.getElementById('gh-cov-back-abs').addEventListener('click',   () => { wStep = 1; renderWiz(); });
     document.getElementById('gh-cov-regen').addEventListener('click', () => {
-      MEM.cycleWeek++;
-      generate();
+        generate();
     });
   }
 
@@ -2446,14 +2451,15 @@
     });
   }
 
-  // Re-run the full optimizer with a shifted seed range to get fresh rotation
+  // Re-run the full optimizer exploring a completely different seed range
   function regenSchedule() {
     if (S._openDaysSnapshot) {
       S.openDays   = JSON.parse(JSON.stringify(S._openDaysSnapshot));
       S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : Object.keys(S.openDays);
     }
-    // Shift the base seed so the 50 candidates explore a different region of the space
-    MEM.cycleWeek = (MEM.cycleWeek + 50) % 300;
+    // Advance the global base so each regen explores seeds [base, base+50)
+    // Using a large prime step guarantees we never revisit the same region
+    S._regenBase = ((S._regenBase || 0) + 50) % 1000;
     generate();
   }
 

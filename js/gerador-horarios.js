@@ -1973,50 +1973,214 @@
 
     enforceIntervalSeparation(day, workers);
   }
-    function generate() {
-    S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
-    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+  // ══ FISCALIZADOR E OPTIMIZADOR ══
+  // Gera 50 candidatos com seeds diferentes, pontua cada um e apresenta os 2 melhores.
 
-    // Save a snapshot of the original openDays/openStores (before sunday check may mutate them)
-    // so that regenSchedule() can restore the user's original intent.
-    S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
-    S._openStoresSnapshot = [...S.openStores];
+  function scoreCandidate(scheduleSnap, active) {
+    let score = 0;
+    const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
-    // ── Sunday viability check ──
-    const { resolvedSundayStores, sacrificed } = resolveSundayStores(active);
-    if (sacrificed.length) {
-      // Patch openDays: remove DOM from sacrificed stores
-      sacrificed.forEach(({ sid, reason }) => {
-        if (S.openDays[sid]) {
-          S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM');
-          if (!S.openDays[sid].length) {
-            S.openStores = S.openStores.filter(id => id !== sid);
+    active.forEach(p => {
+      // Contar tiendas distintas na semana
+      const storesThisWeek = new Set(
+        DAYS.map(d => scheduleSnap[p.id]?.[d])
+          .filter(c => c?.type === 'work' && c.store)
+          .map(c => c.store)
+      );
+
+      // Bonus: trabalha só na sua tienda fixa
+      if (p.store) {
+        const daysInHome = workDays.filter(d => scheduleSnap[p.id]?.[d]?.type === 'work' && scheduleSnap[p.id][d].store === p.store).length;
+        const daysWorked = workDays.filter(d => scheduleSnap[p.id]?.[d]?.type === 'work').length;
+        score += daysInHome * 2;                         // +2 por dia na tienda própria
+        if (daysWorked > 0 && daysInHome === daysWorked) score += 10; // +10 se nunca saiu
+      }
+
+      // Penalização: movida de tienda fixa
+      if (p.store) {
+        workDays.forEach(d => {
+          const c = scheduleSnap[p.id]?.[d];
+          if (c?.type === 'work' && c.store !== p.store && storeOpen(p.store, d)) {
+            score -= 25; // -25 por cada dia fora da tienda fixa desnecessariamente
           }
-        }
-        S.alerts.push({
-          type: 'red',
-          text: `DOM: ${sname(sid)} não pode abrir ao domingo — ${reason} Horário gerado sem domingo nesta loja.`
         });
+      }
+
+      // Penalização: trabalha em 3+ tiendas distintas
+      if (storesThisWeek.size >= 3) score -= 12;
+
+      // Penalização: domingo repetido vs semana anterior
+      const domCell = scheduleSnap[p.id]?.['DOM'];
+      if (domCell?.type === 'work') {
+        if (MEM.sundays[p.id] && MEM.sundays[p.id] > 1) score -= 10; // insiste no mesmo
+        else score += 8; // rotação nova
+      }
+    });
+
+    // Penalização: não-autónoma com autónoma-H na mesma tienda no mesmo dia
+    workDays.forEach(day => {
+      S.openStores.forEach(sid => {
+        const inStore = active.filter(p => scheduleSnap[p.id]?.[day]?.type === 'work' && scheduleSnap[p.id][day].store === sid);
+        const hasNaoAuto = inStore.some(p => p.autonomia === 'nao_autonoma');
+        const hasAutoH   = inStore.some(p => p.autonomia === 'autonoma_h');
+        if (hasNaoAuto && hasAutoH && inStore.length === 2) score -= 15;
       });
+    });
+
+    // Bonus: cobertura exacta (sem excedentes)
+    workDays.forEach(day => {
+      S.openStores.forEach(sid => {
+        if (!storeOpen(sid, day)) return;
+        const cnt = active.filter(p => scheduleSnap[p.id]?.[day]?.type === 'work' && scheduleSnap[p.id][day].store === sid).length;
+        const mn = storeMin(sid), mx = storeMax(sid) === Infinity ? mn + 2 : storeMax(sid);
+        if (cnt >= mn && cnt <= mx) score += 3;
+        else if (cnt > mx) score -= 4 * (cnt - mx);
+      });
+    });
+
+    return score;
+  }
+
+  function hasFixedStoreViolation(scheduleSnap, active) {
+    const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    return active.some(p => {
+      if (!p.store) return false;
+      return workDays.some(d => {
+        const c = scheduleSnap[p.id]?.[d];
+        return c?.type === 'work' && c.store !== p.store && storeOpen(p.store, d);
+      });
+    });
+  }
+
+  function generateCandidate(seed, active) {
+    // Snapshot do estado antes de gerar
+    const savedMem = JSON.parse(JSON.stringify(MEM));
+    MEM.cycleWeek = seed;
+
+    // Reset state parcial (mantém openDays/openStores/storeMode já configurados)
+    S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {};
+    S.extraDayOff = {}; S._storeBaseShift = {};
+
+    // Restaurar openDays do snapshot original (pode ter sido mutado pelo sunday check)
+    if (S._openDaysSnapshot) {
+      S.openDays   = JSON.parse(JSON.stringify(S._openDaysSnapshot));
+      S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : Object.keys(S.openDays);
     }
+
+    // Sunday viability check
+    const { sacrificed } = resolveSundayStores(active);
+    sacrificed.forEach(({ sid }) => {
+      if (S.openDays[sid]) {
+        S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM');
+        if (!S.openDays[sid].length) S.openStores = S.openStores.filter(id => id !== sid);
+      }
+    });
 
     computeCoordinatorPosition(active);
     assignFolgas(active);
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
-    applyNightShiftRule(active);  // Regra §5: fecho 23h → folga ou entrada tardia no dia seguinte
-    saveMem();
+    applyNightShiftRule(active);
 
-    // ── Minimum coverage gate ──
-    // If the generated schedule fails to cover any store on any open day,
-    // block the output and show the coverage error screen instead.
-    const coverageViolations = validateMinCoverage(active);
-    if (coverageViolations.length > 0) {
-      showCoverageBlocker(coverageViolations, active);
+    const snap = JSON.parse(JSON.stringify(S.schedule));
+    const alerts = [...S.alerts];
+    const decisions = [...S.decisions];
+
+    // Restaurar MEM original (não avançar o ciclo permanentemente)
+    Object.assign(MEM, savedMem);
+
+    return { schedule: snap, alerts, decisions, seed };
+  }
+
+  function generate() {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+
+    // Guardar snapshot inicial de openDays/openStores
+    S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
+    S._openStoresSnapshot = [...S.openStores];
+
+    const NUM_CANDIDATES = 50;
+    const candidates = [];
+
+    for (let seed = 0; seed < NUM_CANDIDATES; seed++) {
+      const cand = generateCandidate(seed, active);
+
+      // Verificar cobertura mínima — descartar se falha
+      S.schedule = cand.schedule;
+      S.alerts   = cand.alerts;
+      S.openDays = S._openDaysSnapshot ? JSON.parse(JSON.stringify(S._openDaysSnapshot)) : S.openDays;
+      S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : S.openStores;
+
+      // Restaurar sunday check para validação
+      const { sacrificed } = resolveSundayStores(active);
+      sacrificed.forEach(({ sid }) => {
+        if (S.openDays[sid]) {
+          S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM');
+          if (!S.openDays[sid].length) S.openStores = S.openStores.filter(id => id !== sid);
+        }
+      });
+
+      const violations = validateMinCoverage(active);
+      if (violations.length > 0) continue; // descartar
+
+      const hasViolation = hasFixedStoreViolation(cand.schedule, active);
+      const score = scoreCandidate(cand.schedule, active);
+
+      candidates.push({ ...cand, score, hasViolation });
+    }
+
+    if (candidates.length === 0) {
+      // Nenhum candidato válido — mostrar bloqueador com último gerado
+      S.schedule = {}; S.alerts = [{ type: 'red', text: 'Não foi possível gerar horário válido com a configuração actual.' }];
+      const cand = generateCandidate(0, active);
+      S.schedule = cand.schedule; S.alerts = cand.alerts;
+      S.openDays = S._openDaysSnapshot ? JSON.parse(JSON.stringify(S._openDaysSnapshot)) : S.openDays;
+      S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : S.openStores;
+      const { sacrificed } = resolveSundayStores(active);
+      sacrificed.forEach(({ sid }) => {
+        if (S.openDays[sid]) { S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM'); }
+      });
+      showCoverageBlocker(validateMinCoverage(active), active);
       return;
     }
 
+    // Separar candidatos sem violação de tienda fixa; se não houver, usar todos
+    const clean   = candidates.filter(c => !c.hasViolation);
+    const pool    = clean.length > 0 ? clean : candidates;
+    const sorted  = pool.sort((a, b) => b.score - a.score);
+
+    const best   = sorted[0];
+    const second = sorted[1] || sorted[0];
+
+    // Guardar os 2 melhores no estado global
+    S._candidates = [best, second];
+    S._activeCandidate = 0;
+
+    // Avançar MEM.cycleWeek para o seed do melhor (para memória de folgas)
+    MEM.cycleWeek = best.seed;
+    saveMem();
+
+    // Aplicar o melhor e mostrar
+    applyCandidate(best, active);
+  }
+
+  function applyCandidate(cand, active) {
+    S.schedule  = JSON.parse(JSON.stringify(cand.schedule));
+    S.alerts    = [...cand.alerts];
+    S.decisions = [...cand.decisions];
+    // Restaurar openDays correcto para render
+    if (S._openDaysSnapshot) {
+      S.openDays   = JSON.parse(JSON.stringify(S._openDaysSnapshot));
+      S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : Object.keys(S.openDays);
+    }
+    const { sacrificed } = resolveSundayStores(active);
+    sacrificed.forEach(({ sid }) => {
+      if (S.openDays[sid]) {
+        S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM');
+        if (!S.openDays[sid].length) S.openStores = S.openStores.filter(id => id !== sid);
+      }
+    });
     showSchedule(active);
   }
 
@@ -2132,14 +2296,22 @@
     const alertsHTML = S.alerts.length
       ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
       : '';
+    const candIdx   = S._activeCandidate ?? 0;
+    const hasBoth   = S._candidates?.length >= 2 && S._candidates[0] !== S._candidates[1];
+    const scoreInfo = S._candidates?.[candIdx] ? ` · ${S._candidates[candIdx].score}pts` : '';
+
     const topBar = `
       <div class="gh-sched-bar">
         <div>
-          <div class="gh-sb-week">Porto Santo · Semana ${isoWeek(S.weekStart)}</div>
+          <div class="gh-sb-week">Porto Santo · Semana ${isoWeek(S.weekStart)}${scoreInfo}</div>
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen" title="Redistribuir folgas mantendo as mesmas configurações">↺ Gerar Novamente</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${hasBoth ? `
+            <button class="gh-btn gh-btn-sm ${candIdx===0?'gh-btn-solid':'gh-btn-ghost'}" id="gh-btn-opt1">Opção 1</button>
+            <button class="gh-btn gh-btn-sm ${candIdx===1?'gh-btn-solid':'gh-btn-ghost'}" id="gh-btn-opt2">Opção 2</button>
+          ` : ''}
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Gerar Novamente</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
         </div>
       </div>
@@ -2228,6 +2400,18 @@
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
+    document.getElementById('gh-btn-opt1')?.addEventListener('click', () => {
+      if (S._activeCandidate === 0) return;
+      S._activeCandidate = 0;
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      applyCandidate(S._candidates[0], active);
+    });
+    document.getElementById('gh-btn-opt2')?.addEventListener('click', () => {
+      if (S._activeCandidate === 1) return;
+      S._activeCandidate = 1;
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      applyCandidate(S._candidates[1], active);
+    });
 
     // Edit on click
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
@@ -2235,16 +2419,14 @@
     });
   }
 
-  // Re-run the engine keeping week, absences and store config — just shuffle folgas
+  // Re-run the full optimizer with a shifted seed range to get fresh rotation
   function regenSchedule() {
-    // Restore original openDays/openStores from snapshot taken before the sunday check
-    // mutated them on the previous generate() call.
     if (S._openDaysSnapshot) {
       S.openDays   = JSON.parse(JSON.stringify(S._openDaysSnapshot));
       S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : Object.keys(S.openDays);
     }
-    // Advance the cycle counter so folgas rotate to a different day
-    MEM.cycleWeek++;
+    // Shift the base seed so the 50 candidates explore a different region of the space
+    MEM.cycleWeek = (MEM.cycleWeek + 50) % 300;
     generate();
   }
 

@@ -77,21 +77,41 @@
       id: s.id, name: s.name, short: s.short, priority: s.priority
     }));
 
-    PEOPLE = peopleRaw.map(p => ({
-      id: p.id,
-      name: p.name,
-      hrs: p.hrs || 40,
-      store: p.store_id || null,
-      efetiva: p.efetiva || false,
-      start: p.start_date,
-      end: p.end_date || null,
-      canAlone: p.can_alone !== false,
-      mobile: p.mobile || false,
-      coverPri: p.cover_pri || 9,
-      knows: p.knows || (p.store_id ? [p.store_id] : []),
-      hardAvoid: p.hard_avoid || [],
-      softAvoid: p.soft_avoid || []
-    }));
+    PEOPLE = peopleRaw.map(p => {
+      // Derivar autonomia: campo 'autonomia' na BD tem prioridade.
+      // Fallback de compatibilidade para registos antigos (efetiva + can_alone).
+      let autonomia = p.autonomia || null;
+      if (!autonomia) {
+        if (p.efetiva)          autonomia = 'efectiva';
+        else if (p.can_alone)   autonomia = 'autonoma';
+        else                    autonomia = 'nao_autonoma';
+      }
+      // Derivar flags operacionais a partir de autonomia
+      const efetiva        = autonomia === 'efectiva';
+      const canAlone       = autonomia === 'efectiva' || autonomia === 'autonoma';
+      const canAloneInterval = autonomia !== 'nao_autonoma'; // efectiva, autonoma, autonoma_h
+      // Peso: efectiva=2, autonoma/autonoma_h=1.5, nao_autonoma=1
+      const pesoBase = efetiva ? 2 : (autonomia === 'nao_autonoma' ? 1 : 1.5);
+
+      return {
+        id: p.id,
+        name: p.name,
+        hrs: p.hrs || 40,
+        store: p.store_id || null,
+        autonomia,          // 'efectiva'|'autonoma'|'autonoma_h'|'nao_autonoma'
+        efetiva,            // true só para efectivas
+        canAlone,           // pode ficar sozinha o dia todo
+        canAloneInterval,   // pode ficar sozinha só no intervalo
+        pesoBase,           // peso para cálculos de almoço
+        start: p.start_date,
+        end: p.end_date || null,
+        mobile: p.mobile || false,
+        coverPri: p.cover_pri || 9,
+        knows: p.knows || (p.store_id ? [p.store_id] : []),
+        hardAvoid: p.hard_avoid || [],
+        softAvoid: p.soft_avoid || []
+      };
+    });
 
     window.GERADOR_PEOPLE = PEOPLE;
   }
@@ -347,18 +367,13 @@
                 ${storeOptions}
               </select>
             </div>
-            <div class="gh-pf-field">
-              <label>Condição</label>
-              <select id="gh-pf-efetiva" class="gh-field-sm">
-                <option value="false">Nova</option>
-                <option value="true">Efectiva</option>
-              </select>
-            </div>
-            <div class="gh-pf-field">
-              <label>Pode ficar sozinha</label>
-              <select id="gh-pf-canalone" class="gh-field-sm">
-                <option value="true">Sim</option>
-                <option value="false">Não</option>
+            <div class="gh-pf-field" style="grid-column:1/-1">
+              <label>Autonomia</label>
+              <select id="gh-pf-autonomia" class="gh-field-sm">
+                <option value="efectiva">Efectiva — vínculo permanente, pode ficar sozinha todo o dia (peso 2)</option>
+                <option value="autonoma">Autónoma — pode ficar sozinha todo o dia (peso 1.5)</option>
+                <option value="autonoma_h">Autónoma-H — pode fazer intervalo sozinha, não fica sozinha o dia todo (peso 1.5)</option>
+                <option value="nao_autonoma">Não autónoma — precisa sempre de supervisão (peso 1)</option>
               </select>
             </div>
             <div class="gh-pf-field">
@@ -445,7 +460,8 @@
     const nameColW = Math.min(Math.max(maxNameLen * 7 + 20, 100), 160);
     sortedPeople.forEach(p => {
       const onFerias = feriasMatchedPids.has(p.id) || feriasAutoPids.has(p.id);
-      const condLabel = p.efetiva ? 'Efectiva' : 'Nova';
+      const autoLabels = { efectiva: 'Efectiva', autonoma: 'Autónoma', autonoma_h: 'Autónoma-H', nao_autonoma: 'Não autónoma' };
+      const condLabel = autoLabels[p.autonomia] || (p.efetiva ? 'Efectiva' : 'Nova');
       const storeName = p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem loja fixa';
       const folga   = S._folgas?.[p.id]   || {};
       const baixa   = S._baixas?.[p.id]   || {};
@@ -469,7 +485,7 @@
             <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
             <div class="gh-sr-nameblock">
               <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
-              <span class="gh-sr-meta">${storeName} · ${condLabel}${onFerias?' · 🏖':''}</span>
+              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}</span>
             </div>
           </div>
           <div class="gh-sr-btns">
@@ -831,8 +847,7 @@
       document.getElementById('gh-pf-start').value = '';
       document.getElementById('gh-pf-end').value = '';
       document.getElementById('gh-pf-store').value = '';
-      document.getElementById('gh-pf-efetiva').value = 'false';
-      document.getElementById('gh-pf-canalone').value = 'true';
+      document.getElementById('gh-pf-autonomia').value = 'autonoma';
       document.getElementById('gh-pf-mobile').value = 'false';
       document.querySelectorAll('#gh-pf-knows input').forEach(cb => { cb.checked = false; });
       renderSoftAvoidOptions(null, []);
@@ -844,10 +859,10 @@
       _editingPid = null;
     });
 
-    // Toggle start date label/required based on efectiva status
-    document.getElementById('gh-pf-efetiva').addEventListener('change', function() {
+    // Toggle start date label/required based on autonomia
+    document.getElementById('gh-pf-autonomia').addEventListener('change', function() {
       const lbl = document.getElementById('gh-pf-start-label');
-      if (lbl) lbl.textContent = this.value === 'true' ? 'Data de entrada (opcional)' : 'Data de entrada';
+      if (lbl) lbl.textContent = this.value === 'efectiva' ? 'Data de entrada (opcional)' : 'Data de entrada';
     });
 
     document.getElementById('gh-pf-save').addEventListener('click', savePersonForm);
@@ -861,11 +876,10 @@
     document.getElementById('gh-pf-hrs').value = p.hrs || 40;
     document.getElementById('gh-pf-start').value = p.start || '';
     const lbl = document.getElementById('gh-pf-start-label');
-    if (lbl) lbl.textContent = p.efetiva ? 'Data de entrada (opcional)' : 'Data de entrada';
+    if (lbl) lbl.textContent = p.autonomia === 'efectiva' ? 'Data de entrada (opcional)' : 'Data de entrada';
     document.getElementById('gh-pf-end').value = p.end || '';
     document.getElementById('gh-pf-store').value = p.store || '';
-    document.getElementById('gh-pf-efetiva').value = p.efetiva ? 'true' : 'false';
-    document.getElementById('gh-pf-canalone').value = p.canAlone !== false ? 'true' : 'false';
+    document.getElementById('gh-pf-autonomia').value = p.autonomia || 'autonoma';
     document.getElementById('gh-pf-mobile').value = p.mobile ? 'true' : 'false';
     document.querySelectorAll('#gh-pf-knows input').forEach(cb => {
       cb.checked = (p.knows || []).includes(cb.value);
@@ -894,15 +908,16 @@
     const start    = document.getElementById('gh-pf-start').value;
     const end      = document.getElementById('gh-pf-end').value || null;
     const store    = document.getElementById('gh-pf-store').value || null;
-    const efetiva  = document.getElementById('gh-pf-efetiva').value === 'true';
-    const canAlone = document.getElementById('gh-pf-canalone').value !== 'false';
+    const autonomia  = document.getElementById('gh-pf-autonomia').value || 'autonoma';
+    const efetiva    = autonomia === 'efectiva';
+    const canAlone   = autonomia === 'efectiva' || autonomia === 'autonoma';
     const mobile   = document.getElementById('gh-pf-mobile').value === 'true';
     const knows     = [...document.querySelectorAll('#gh-pf-knows input:checked')].map(cb => cb.value);
     const newSoftAvoid = [...document.querySelectorAll('[name="gh-pf-softavoid-cb"]:checked')].map(cb => cb.value);
 
     // Start date required only for new staff (efectivas may not have it)
     if (!name) { alert('Nome é obrigatório.'); return; }
-    if (!efetiva && !start) { alert('Data de entrada é obrigatória para pessoal novo.'); return; }
+    if (autonomia !== 'efectiva' && !start) { alert('Data de entrada é obrigatória para pessoal não-efectivo.'); return; }
 
     // soft_avoid vem do formulário (checkboxes); hard_avoid preservado da BD
     const existingP = _editingPid ? PEOPLE.find(x => x.id === _editingPid) : null;
@@ -911,16 +926,22 @@
 
     // cover_pri: efectiva=1, nova com > 3 semanas=5, nova recente=9
     // Preservar valor existente se não houver alteração de condição
-    let coverPri = existingP?.coverPri ?? (efetiva ? 1 : 9);
-    if (!existingP || existingP.efetiva !== efetiva) {
-      coverPri = efetiva ? 1 : 9; // reset ao mudar condição
+    // cover_pri: efectiva=1, autonoma/autonoma_h=5, nao_autonoma=9
+    // Reset ao mudar autonomia; preservar se não mudou
+    const autoPriMap = { efectiva: 1, autonoma: 3, autonoma_h: 5, nao_autonoma: 9 };
+    let coverPri = existingP?.coverPri ?? autoPriMap[autonomia] ?? 9;
+    if (!existingP || existingP.autonomia !== autonomia) {
+      coverPri = autoPriMap[autonomia] ?? 9;
     }
 
     const data = {
-      name, hrs, store_id: store, efetiva,
+      name, hrs, store_id: store,
+      autonomia,                          // novo campo principal
+      efetiva,                            // derivado — mantido para compatibilidade
+      can_alone: canAlone,                // derivado
       start_date: start || null,
       end_date: end || null,
-      can_alone: canAlone, mobile, cover_pri: coverPri,
+      mobile, cover_pri: coverPri,
       knows, hard_avoid: hardAvoid, soft_avoid: softAvoid, active: true
     };
 
@@ -1202,7 +1223,7 @@
     return active.filter(p => {
       if (isAbsent(p.id, 'DOM')) return false;
       if (!p.knows.includes(sid)) return false;
-      if (!p.canAlone && weeksSince(p.start, S.weekStart) < 4) return false;
+      if (!p.canAlone) return false; // autonoma_h e nao_autonoma não ficam sozinhas o dia todo
       return true;
     }).sort((a, b) => {
       // Personas sin tienda fija o cuya tienda fija es sid: primero
@@ -1298,7 +1319,7 @@
       })();
       const storOpensSun = !!sunStore && !isAbsent(p.id, 'DOM');
       const sunQuotaFilled = !sunStore;
-      const canWorkSunday = storOpensSun && !sunQuotaFilled && p.canAlone !== false && weeksSince(p.start, S.weekStart) >= 4;
+      const canWorkSunday = storOpensSun && !sunQuotaFilled && p.canAlone === true; // só efectivas e autónomas plenas
       let extraDayOff = null;
       if (canWorkSunday) {
         const candidates = workDays.filter(d => {
@@ -1529,7 +1550,8 @@
           }
         });
       });
-      wk().filter(p => !p.canAlone && weeksSince(p.start, S.weekStart) < 4).forEach(p => {
+      // Verificar supervisão: nao_autonoma (canAlone=false, canAloneInterval=false) precisa de supervisão o dia todo
+      wk().filter(p => !p.canAlone && !p.canAloneInterval).forEach(p => {
         const myStore = S.schedule[p.id][day].store;
         if (wk().some(o => o.id !== p.id && o.canAlone && S.schedule[o.id][day].store === myStore)) return;
         const currentInStore = wk().filter(x => S.schedule[x.id][day].store === myStore).length;
@@ -1537,7 +1559,7 @@
           S.alerts.push({ type: 'amber', text: `${day}: ${p.name} em ${sname(myStore)} sem supervisão (máximo já atingido).` });
           return;
         }
-        const sup = wk().filter(o => o.canAlone && o.id !== p.id && o.knows.includes(myStore))
+        const sup = wk().filter(o => o.canAlone && o.id !== p.id && o.knows.includes(myStore)) // efectiva ou autónoma plena
           .sort((a, b) => {
             const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;
             const bc = wk().filter(x => S.schedule[x.id][day].store === S.schedule[b.id][day].store).length;
@@ -1670,9 +1692,14 @@
   // Orden de execução: buildWeights → computeGroups → resolveCombo → enforceEdnaCarla
 
   // PASSO 1: Pesos base de cada pessoa (sem contexto de cenário)
+  // Efectiva=2, Autónoma/Autónoma-H=1.5, Não-autónoma=1
+  // Antigüidade < 3 semanas reduz o peso em 0.5 (menos experiente na loja)
   function baseWeight(p) {
-    if (p.efetiva) return 2;
-    return weeksSince(p.start, S.weekStart) >= 3 ? 1.5 : 1;
+    // pesoBase é sempre derivado de autonomia em loadKnowledgeBase
+    // Fallback para dados antigos sem campo autonomia
+    const base = p.pesoBase ?? (p.autonomia === 'efectiva' ? 2 : p.autonomia === 'nao_autonoma' ? 1 : 1.5);
+    const isJunior = p.autonomia !== 'efectiva' && p.start && weeksSince(p.start, S.weekStart) < 3;
+    return isJunior ? Math.max(1, base - 0.5) : base;
   }
 
   // PASSO 2: Construir pesos contextuais fixos por cenário
@@ -1680,16 +1707,17 @@
   function buildWeights(staff, scenario) {
     const weights = {};
     if (scenario === '2_escA') {
-      staff.forEach(p => { weights[p.id] = 1; });
+      // Turnos cruzados: peso contextual = baseWeight real de cada uma
+      staff.forEach(p => { weights[p.id] = baseWeight(p); });
     } else if (scenario === '2_escB') {
+      // Saem juntas: peso simbólico igual (não há separação)
       staff.forEach(p => { weights[p.id] = 0.5; });
     } else if (scenario === '3com_antiga') {
-      // Com antiga: novas valem 1, antiga vale 2
-      staff.forEach(p => { weights[p.id] = p.efetiva ? 2 : 1; });
+      // Com efectiva: pesos reais (efectiva=2, autónoma=1.5, não-autónoma=1)
+      staff.forEach(p => { weights[p.id] = baseWeight(p); });
     } else if (scenario === '3sem_antiga') {
-      // Sem antiga: mais antiga das novas vale 1.5, restantes valem 1
-      const byDate = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
-      staff.forEach(p => { weights[p.id] = (p.id === byDate[0].id) ? 1.5 : 1; });
+      // Sem efectiva: pesos reais — a mais pesada fica sozinha
+      staff.forEach(p => { weights[p.id] = baseWeight(p); });
     } else {
       // 4+ pessoas: pesos base
       staff.forEach(p => { weights[p.id] = baseWeight(p); });
@@ -1707,44 +1735,57 @@
     return { idealSum: totalWeight / 2, isFlexible: false };
   }
 
-  // PASSO 4: Determinar grupos e cenário
+  // PASSO 4: Determinar grupos e cenário (usando autonomia em vez de efetiva/canAlone binárias)
+  //
+  // Regras §6 do prompt (mapeamento):
+  //   canAloneInterval=false → nunca pode ficar sozinha no intervalo → ambas saem juntas (2_escB)
+  //   canAloneInterval=true  → pode ficar sozinha no intervalo → turnos cruzados (2_escA / normal)
+  //   canAlone=false + canAloneInterval=true → Autónoma-H: só no intervalo
   function computeGroups(staff) {
     const n = staff.length;
     if (n === 1) return { goers: [], stayers: staff, scenario: '1' };
 
-    const hasVeteran = staff.some(p => p.efetiva);
+    const hasEfetiva  = staff.some(p => p.autonomia === 'efectiva');
+    const hasNaoAuto  = staff.some(p => !p.canAloneInterval); // nao_autonoma
+    const byWeight    = [...staff].sort((a,b) => baseWeight(b) - baseWeight(a) || new Date(a.start) - new Date(b.start));
 
     if (n === 2) {
-      const veteran = staff.find(p => p.efetiva);
-      const newbie  = staff.find(p => !p.efetiva);
-      if (veteran && newbie) {
-        const weeks = weeksSince(newbie.start, S.weekStart);
-        if (weeks < 3) return { goers: [...staff], stayers: [], scenario: '2_escB' };
-        return { goers: [newbie], stayers: [veteran], scenario: '2_escA' };
-      }
-      const sorted = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
-      return { goers: [sorted[1]], stayers: [sorted[0]], scenario: 'default' };
+      const [heavier, lighter] = byWeight;
+      // Se alguma não pode ficar sozinha nem no intervalo → saem juntas
+      if (hasNaoAuto) return { goers: [...staff], stayers: [], scenario: '2_escB' };
+      // Ambas podem ficar sozinhas no intervalo → turnos cruzados
+      // Quem tem menos peso sai mais cedo (vai ao intervalo primeiro)
+      return { goers: [lighter], stayers: [heavier], scenario: '2_escA' };
     }
 
     if (n === 3) {
-      const byDate = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
-      if (hasVeteran) {
-        const veteran = byDate.find(p => p.efetiva);
-        const newbies = byDate.filter(p => !p.efetiva);
-        return { goers: newbies, stayers: [veteran], scenario: '3com_antiga' };
+      if (hasEfetiva) {
+        const veteran = byWeight[0]; // efectiva — maior peso
+        const others  = byWeight.slice(1);
+        // Verificar se alguma das outras não pode ficar sozinha no intervalo
+        if (others.some(p => !p.canAloneInterval)) {
+          // Efectiva fica; as outras saem juntas
+          return { goers: others, stayers: [veteran], scenario: '3com_antiga' };
+        }
+        return { goers: others, stayers: [veteran], scenario: '3com_antiga' };
       }
-      return { goers: [byDate[1], byDate[2]], stayers: [byDate[0]], scenario: '3sem_antiga' };
+      // Sem efectiva: a mais antiga (maior peso) fica sozinha se for canAloneInterval
+      const senior = byWeight[0];
+      if (senior.canAloneInterval) {
+        return { goers: byWeight.slice(1), stayers: [senior], scenario: '3sem_antiga' };
+      }
+      // Ninguém pode ficar sozinha → escalonado se possível, senão 2_escB
+      return { goers: [...staff], stayers: [], scenario: '2_escB' };
     }
 
     if (n === 4) {
-      const sorted = [...staff].sort((a,b) => baseWeight(a) - baseWeight(b) || new Date(a.start) - new Date(b.start));
-      // sorted[0]=mais nova(1), sorted[1]=intermedia(1.5), sorted[2]=intermedia(1.5), sorted[3]=antiga(2)
-      return { goers: [sorted[1], sorted[2]], stayers: [sorted[0], sorted[3]], scenario: 'default' };
+      // Agrupar por peso: heavier pair stays, lighter pair goes
+      return { goers: [byWeight[2], byWeight[3]], stayers: [byWeight[0], byWeight[1]], scenario: 'default' };
     }
 
-    const sorted = [...staff].sort((a,b) => new Date(a.start) - new Date(b.start));
+    // 5+ pessoas: dividir ao meio por peso
     const half = Math.floor(n / 2);
-    return { goers: sorted.slice(n - half), stayers: sorted.slice(0, n - half), scenario: 'default' };
+    return { goers: byWeight.slice(half), stayers: byWeight.slice(0, half), scenario: 'default' };
   }
 
 
@@ -1768,8 +1809,13 @@
     const isFlexible = (scenario === '2_escA' || scenario === '3sem_antiga');
 
     function isValidCombo(combo) {
-      // Regra 1: Nova sozinha — proibido com 3+ pessoas, verifica ambos os grupos
-      const isNovaSozinha = (group) => group.length === 1 && weights[group[0].id] === 1;
+      // Regra 1: Não-autónoma nunca fica sozinha no intervalo
+      // Se uma não-autónoma (weight=1, canAloneInterval=false) ficasse no grupo stayers sozinha → inválido
+      const isNaoAutoSozinha = (group) =>
+        group.length === 1 && !group[0].canAloneInterval;
+      if (isNaoAutoSozinha(stayers)) return false;
+      // Com 3+ pessoas: pessoa com peso 1 nunca fica sozinha em nenhum grupo
+      const isNovaSozinha = (group) => group.length === 1 && (weights[group[0].id] || 0) <= 1;
       if (staff.length >= 3 && (isNovaSozinha(goers) || isNovaSozinha(stayers))) return false;
 
       // Regra 2: Validação matemática dinâmica
@@ -2455,6 +2501,11 @@
         #tab-gerador .gh-sr-nameblock { display:flex; flex-direction:column; gap:1px; min-width:0; }
         #tab-gerador .gh-sr-name { font-size:.82rem; font-weight:700; color:#111; white-space:nowrap; display:flex; align-items:baseline; gap:3px; }
         #tab-gerador .gh-sr-meta { font-size:.62rem; color:#999; white-space:nowrap; }
+        #tab-gerador .gh-auto-badge { font-size:.58rem; font-weight:700; padding:1px 5px; border-radius:3px; letter-spacing:.03em; }
+        #tab-gerador .gh-auto-efectiva   { background:#e8f5e9; color:#2e7d32; }
+        #tab-gerador .gh-auto-autonoma   { background:#e3f2fd; color:#1565c0; }
+        #tab-gerador .gh-auto-autonoma_h { background:#fff3e0; color:#e65100; }
+        #tab-gerador .gh-auto-nao_autonoma { background:#fce4ec; color:#c62828; }
         #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; flex-shrink:0; }
         #tab-gerador .gh-icon-btn { width:24px; height:24px; border:1px solid #e0e0e0; border-radius:5px; background:#fafafa; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#555; font-size:.78rem; font-weight:600; line-height:1; transition:background .15s; flex-shrink:0; }
         #tab-gerador .gh-icon-btn:hover { background:#efefef; border-color:#bbb; }

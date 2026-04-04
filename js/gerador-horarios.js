@@ -2149,6 +2149,12 @@
           const c2 = sched[day] || { type: 'na' };
           const open = S.openDays[st.id]?.includes(day);
           if (!open) {
+            // Día cerrado para esta tienda — pero puede que la persona esté trabajando en otra
+            if (c2.type === 'work' && c2.store && c2.store !== st.id) {
+              // Está trabajando en otra tienda — mostrar dónde
+              const content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
+              return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-elsewhere">${content}</div></td>`;
+            }
             const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'BAIXA' : 'FOLGA';
             const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;

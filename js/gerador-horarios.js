@@ -924,15 +924,10 @@
     const softAvoid = newSoftAvoid; // lido dos checkboxes do formulário
     const hardAvoid = existingP?.hardAvoid || []; // preservado — sem UI por enquanto
 
-    // cover_pri: efectiva=1, nova com > 3 semanas=5, nova recente=9
-    // Preservar valor existente se não houver alteração de condição
-    // cover_pri: efectiva=1, autonoma/autonoma_h=5, nao_autonoma=9
-    // Reset ao mudar autonomia; preservar se não mudou
+    // cover_pri é sempre derivado de autonomia — nunca preservado de dados antigos.
+    // efectiva=1 (maior prioridade de cobertura), autonoma=3, autonoma_h=5, nao_autonoma=9
     const autoPriMap = { efectiva: 1, autonoma: 3, autonoma_h: 5, nao_autonoma: 9 };
-    let coverPri = existingP?.coverPri ?? autoPriMap[autonomia] ?? 9;
-    if (!existingP || existingP.autonomia !== autonomia) {
-      coverPri = autoPriMap[autonomia] ?? 9;
-    }
+    const coverPri = autoPriMap[autonomia] ?? 9;
 
     const data = {
       name, hrs, store_id: store,

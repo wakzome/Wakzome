@@ -1279,13 +1279,12 @@
     //     1 día de folga entre semana cualquiera (SEG/TER/QUA/QUI/SEX)
     //   DOM libre para quien no trabaja.
 
+    // Combos permitidas — exactamente las definidas, sin inventar
+    // Con domingo abierto: SEG+QUI, TER+SEX, QUA+DOM, SAB+DOM
+    // Sin domingo abierto: SEG+DOM, TER+DOM, QUA+DOM, QUI+DOM, SEX+DOM
+    // Quien trabaja domingo tiene su folga dentro de la combo (QUA+DOM o SAB+DOM)
+    // y el DOM se trabaja en vez de descansar.
     const WEEKDAYS = ['SEG','TER','QUA','QUI','SEX'];
-    // Combos para quien trabaja el domingo (2 días libres entre semana)
-    const SUN_COMBOS = [
-      ['SEG','QUI'],
-      ['TER','SEX'],
-      ['QUA','SAB'],
-    ];
 
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
     const hasSunday = sundayStores.length > 0;
@@ -1316,62 +1315,71 @@
     // Contador de folgas por día para equilibrio
     const folgaCount = { SEG:0, TER:0, QUA:0, QUI:0, SEX:0 };
 
-    // Ordenar: coordenadoras → tienda fija por prioridad → sin tienda fija
+    // Ordenar: tienda fija por prioridad → sin tienda fija
     const sorted = [...active].sort((a, b) => {
       const pa = STORES.find(s => s.id === (a.store||'z'))?.priority ?? 9;
       const pb = STORES.find(s => s.id === (b.store||'z'))?.priority ?? 9;
       return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
     });
 
-    sorted.forEach((p, personIdx) => {
-      const myStore = S.sandraDay?.[p.id] ? null : p.store;
+    // Candidatas a trabajar domingo: autónomas y efectivas disponibles.
+    // Se rotan con el seed para que cada regeneración asigne personas distintas.
+    const sundayCandidatePool = hasSunday
+      ? [...active]
+          .filter(p => p.canAlone === true && !isAbsent(p.id, 'DOM'))
+          .sort((a, b) => {
+            // Rotar por seed: offset distinto en cada regeneración
+            const idxA = active.indexOf(a);
+            const idxB = active.indexOf(b);
+            return ((idxA + seed * 3) % active.length) - ((idxB + seed * 3) % active.length);
+          })
+      : [];
 
-      // ¿Puede trabajar el domingo?
-      const canWorkSunday = hasSunday && p.canAlone === true && !isAbsent(p.id, 'DOM');
-      const sunStore = (() => {
-        if (!canWorkSunday) return null;
-        if (myStore && sundayStores.includes(myStore)) {
-          if ((S.sundayAssigned[myStore]||[]).length < sundayMinFor(myStore)) return myStore;
-        }
-        if (!myStore) {
-          for (const sid of sundayStores) {
-            if ((S.sundayAssigned[sid]||[]).length < sundayMinFor(sid) && p.knows.includes(sid)) return sid;
-          }
-        }
-        return null;
-      })();
-      const willWorkSunday = !!sunStore;
+    // Pre-asignar quién trabaja domingo antes de asignar folgas,
+    // para que la rotación sea independiente del orden de folgas.
+    const willWorkSundaySet = new Set();
+    for (const sid of sundayStores) {
+      const quota = sundayMinFor(sid);
+      let filled = 0;
+      for (const p of sundayCandidatePool) {
+        if (filled >= quota) break;
+        if (willWorkSundaySet.has(p.id)) continue;
+        if (!p.knows.includes(sid) && !(p.store === sid)) continue;
+        willWorkSundaySet.add(p.id);
+        if (!S.sundayAssigned[sid]) S.sundayAssigned[sid] = [];
+        S.sundayAssigned[sid].push(p.id);
+        filled++;
+      }
+    }
+
+    sorted.forEach((p, personIdx) => {
+      const myStore = p.store;
+      const willWorkSunday = willWorkSundaySet.has(p.id);
 
       if (willWorkSunday) {
-        // ── CASO: trabaja domingo → 2 días libres entre semana (combo fija) ──
-        const startIdx = (personIdx * 7 + seed * 11) % SUN_COMBOS.length;
-        let assigned = null;
-        for (let t = 0; t < SUN_COMBOS.length; t++) {
-          const combo = SUN_COMBOS[(startIdx + t) % SUN_COMBOS.length];
-          let feasible = true;
-          for (const offDay of combo) {
-            if (isAbsent(p.id, offDay)) { feasible = false; break; }
-            const effStore = predictStore(p, offDay);
-            if (effStore && storeOpen(effStore, offDay)) {
-              if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) { feasible = false; break; }
-            }
+        // Trabaja domingo → su folga es 1 día entre semana (equilibrado)
+        // El DOM ya está ocupado trabajando, no es día libre
+        const startIdx = (personIdx * 7 + seed * 11) % WEEKDAYS.length;
+        let chosenDay = null;
+        for (let t = 0; t < WEEKDAYS.length * 2; t++) {
+          const day = WEEKDAYS[(startIdx + t) % WEEKDAYS.length];
+          if (isAbsent(p.id, day)) continue;
+          const effStore = predictStore(p, day);
+          if (effStore && storeOpen(effStore, day)) {
+            if ((remaining[day]?.[effStore] || 0) - 1 < storeMin(effStore)) continue;
           }
-          if (!feasible) continue;
-          assigned = combo;
+          const maxPerDay = Math.ceil(active.length / 5);
+          if ((folgaCount[day] || 0) >= maxPerDay) continue;
+          chosenDay = day;
           break;
         }
-        if (!assigned) assigned = SUN_COMBOS[(personIdx) % SUN_COMBOS.length];
-
-        S.folgaDay[p.id] = assigned[0];
-        if (!S.extraDayOff) S.extraDayOff = {};
-        S.extraDayOff[p.id] = assigned[1];
-        S.sundayAssigned[sunStore].push(p.id);
-
-        for (const offDay of assigned) {
-          folgaCount[offDay] = (folgaCount[offDay] || 0) + 1;
-          const effStore = predictStore(p, offDay);
-          if (effStore && remaining[offDay]?.[effStore] !== undefined) remaining[offDay][effStore]--;
+        if (!chosenDay) {
+          chosenDay = WEEKDAYS.reduce((best, d) => (folgaCount[d]||0) < (folgaCount[best]||0) ? d : best, WEEKDAYS[0]);
         }
+        S.folgaDay[p.id] = chosenDay;
+        folgaCount[chosenDay] = (folgaCount[chosenDay] || 0) + 1;
+        const effStoreSun = predictStore(p, chosenDay);
+        if (effStoreSun && remaining[chosenDay]?.[effStoreSun] !== undefined) remaining[chosenDay][effStoreSun]--;
 
       } else {
         // ── CASO: no trabaja domingo → 1 día libre entre semana ──

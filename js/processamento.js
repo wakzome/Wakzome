@@ -3747,6 +3747,7 @@
   window.procRecalcRow           = procRecalcRow;
   window.procCheckAutoExpand     = procCheckAutoExpand;
   window.procAutoSplit           = procAutoSplit;
+  window.procFillAll             = procFillAll;
   window.procShowStockModal      = procShowStockModal;
   window.procToggleSessionMenu   = procToggleSessionMenu;
   window.procLoadSession         = procLoadSession;

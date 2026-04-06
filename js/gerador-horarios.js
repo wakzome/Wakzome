@@ -1643,18 +1643,9 @@
             return destCount + 1 <= storeMax(st.id);
           });
 
-          // Só se não há candidatos sem tienda fija: tentar com tienda fija, mas apenas se
-          // a tienda de origem tem MARGEM (pelo menos 1 pessoa acima do mínimo)
-          const candFixed = candNoFixed.length > 0 ? [] : wk().filter(p => {
-            if (!p.knows.includes(st.id)) return false;
-            if (S.schedule[p.id][day].store === st.id) return false;
-            if (!p.store || p.store === st.id) return false;
-            if (!storeOpen(p.store, day)) return true; // tienda fija fechada — pode mover
-            const homeCount = wk().filter(x => S.schedule[x.id][day].store === p.store).length;
-            if (homeCount - 1 < storeMin(p.store)) return false; // tienda de origem ficaria a descoberto
-            const destCount = wk().filter(x => S.schedule[x.id][day].store === st.id).length;
-            return destCount + 1 <= storeMax(st.id);
-          });
+          // REGLA ABSOLUTA: nunca mover a alguien con tienda fija abierta a otra tienda.
+          // Si no hay candidatos sin tienda fija, la tienda queda con déficit — se alerta pero no se viola la regla.
+          const candFixed = [];
 
           const cand = [...candNoFixed, ...candFixed]
             .sort((a, b) => (a.coverPri||9) - (b.coverPri||9))[0];

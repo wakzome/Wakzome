@@ -1417,17 +1417,15 @@
     });
 
     // Ordem de processamento estrita:
-    // 1. Coordenadoras
-    // 2. Tienda fija abierta (efectiva primero, luego resto)
-    // 3. Tienda fija cerrada ese día
-    // 4. Sin tienda fija: autónoma → autónoma_h → nao_autonoma
-    const coordinators    = active.filter(p => S.sandraDay?.[p.id]);
-    const fixedEfetiva    = active.filter(p => !S.sandraDay?.[p.id] && p.store && p.autonomia === 'efectiva');
-    const fixedOther      = active.filter(p => !S.sandraDay?.[p.id] && p.store && p.autonomia !== 'efectiva');
-    const noFixedAuto     = active.filter(p => !S.sandraDay?.[p.id] && !p.store && p.autonomia === 'autonoma');
-    const noFixedAutoH    = active.filter(p => !S.sandraDay?.[p.id] && !p.store && p.autonomia === 'autonoma_h');
-    const noFixedNaoAuto  = active.filter(p => !S.sandraDay?.[p.id] && !p.store && p.autonomia === 'nao_autonoma');
-    const ordered         = [...coordinators, ...fixedEfetiva, ...fixedOther, ...noFixedAuto, ...noFixedAutoH, ...noFixedNaoAuto];
+    // 1. Tienda fija abierta (efectiva primero, luego resto)
+    // 2. Tienda fija cerrada ese día
+    // 3. Sin tienda fija: autónoma → autónoma_h → nao_autonoma
+    const fixedEfetiva    = active.filter(p => p.store && p.autonomia === 'efectiva');
+    const fixedOther      = active.filter(p => p.store && p.autonomia !== 'efectiva');
+    const noFixedAuto     = active.filter(p => !p.store && p.autonomia === 'autonoma');
+    const noFixedAutoH    = active.filter(p => !p.store && p.autonomia === 'autonoma_h');
+    const noFixedNaoAuto  = active.filter(p => !p.store && p.autonomia === 'nao_autonoma');
+    const ordered         = [...fixedEfetiva, ...fixedOther, ...noFixedAuto, ...noFixedAutoH, ...noFixedNaoAuto];
 
     ordered.forEach(p => {
       DAYS.forEach(day => { S.schedule[p.id][day] = buildCell(p, day, active); });
@@ -1445,19 +1443,19 @@
         const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid);
         if (workers.length <= max) return;
 
-        // Ordenar: primero salen los sin tienda fija, luego los móviles, nunca los de tienda fija
+        // REGLA ABSOLUTA: nunca redirigir a alguien con tienda fija abierta en esta tienda.
+        // Solo se redirigen personas sin tienda fija, o con tienda fija en OTRA tienda.
         const toRedirect = [...workers]
           .sort((a, b) => {
-            // Con tienda fija en esta tienda: nunca salen (pesan 0, van al final)
             const aFixed = (a.store === sid) ? 1 : 0;
             const bFixed = (b.store === sid) ? 1 : 0;
-            if (aFixed !== bFixed) return aFixed - bFixed; // sin tienda fija primero
+            if (aFixed !== bFixed) return aFixed - bFixed;
             return (b.coverPri||9) - (a.coverPri||9) || (a.mobile === false ? -1 : 1);
           })
           .filter((p, i) => {
-            // Nunca redirigir a alguien con tienda fija en esta tienda
-            if (p.store === sid) return false;
-            return i < workers.length - max; // solo los excedentes sin tienda fija
+            // NUNCA mover a alguien cuya tienda fija ES esta tienda y está abierta
+            if (p.store === sid && storeOpen(sid, day)) return false;
+            return i < workers.length - max;
           });
 
         toRedirect.forEach(p => {
@@ -1511,9 +1509,11 @@
       if (!sid) return { type: 'folga', shift: null, store: null };
       return { type: 'work', shift: storeBaseShift(sid), store: sid };
     }
-    if (p.store && storeOpen(p.store, day)) return { type: 'work', shift: storeBaseShift(p.store), store: p.store };
-    // Sin tienda fija o tienda fija cerrada: asignar por défice respetando autonomia.
-    // El orden de ordered en buildSchedule ya prioriza las más autónomas.
+    // REGLA ABSOLUTA: tienda fija abierta → su tienda. NUNCA otra. JAMÁS.
+    if (p.store && storeOpen(p.store, day)) {
+      return { type: 'work', shift: storeBaseShift(p.store), store: p.store };
+    }
+    // Solo llegan aquí: sin tienda fija, o tienda fija cerrada ese día.
     const alt = S.openStores
       .filter(id => {
         if (!S.openDays[id]?.includes(day)) return false;

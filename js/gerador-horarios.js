@@ -1350,7 +1350,10 @@
         .sort((a, b) => {
           const idxA = active.indexOf(a);
           const idxB = active.indexOf(b);
-          return ((idxA * 17 + seed * 31) % (active.length + 1)) - ((idxB * 17 + seed * 31) % (active.length + 1));
+          // Hash de Fisher-Yates deterministico: seed diferente → orden genuinamente distinto
+          const hashA = (idxA * 2654435761 + seed * 40503 + idxA * seed) >>> 0;
+          const hashB = (idxB * 2654435761 + seed * 40503 + idxB * seed) >>> 0;
+          return hashA - hashB;
         });
 
       let filled = 0;
@@ -1387,7 +1390,8 @@
 
       // Filtrar combos válidas para esta persona
       const validCombos = COMBOS.filter(c => c.workSun === willWorkSunday);
-      const startIdx = (personIdx * 7 + seed * 11) % validCombos.length;
+      // Hash robusto: seed diferente → índice inicial genuinamente distinto
+      const startIdx = ((personIdx * 2654435761 + seed * 40503 + personIdx * seed) >>> 0) % validCombos.length;
 
       let assigned = null;
       for (let t = 0; t < validCombos.length; t++) {
@@ -2300,7 +2304,7 @@
       S.openStores = S._openStoresSnapshot ? [...S._openStoresSnapshot] : Object.keys(S.openDays);
     }
     // Avançar seed para garantir rotação diferente
-    S._regenSeed = ((S._regenSeed || 0) + 1) % 42;
+    S._regenSeed = (S._regenSeed || 0) + 1;
     generate();
   }
 

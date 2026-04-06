@@ -1350,7 +1350,7 @@
         .sort((a, b) => {
           const idxA = active.indexOf(a);
           const idxB = active.indexOf(b);
-          return ((idxA + seed * 3) % active.length) - ((idxB + seed * 3) % active.length);
+          return ((idxA * 17 + seed * 31) % (active.length + 1)) - ((idxB * 17 + seed * 31) % (active.length + 1));
         });
 
       let filled = 0;
@@ -1554,6 +1554,13 @@
         return already < storeMax(id);
       })
       .sort((a, b) => {
+        // Prioridad 1: tienda con más déficit (necesita más gente)
+        const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
+        const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
+        const defA = storeMin(a) - ca;
+        const defB = storeMin(b) - cb;
+        if (defA !== defB) return defB - defA;
+        // Prioridad 2: por priority de tienda
         const pa = STORES.find(s => s.id === a)?.priority ?? 9;
         const pb = STORES.find(s => s.id === b)?.priority ?? 9;
         return pa - pb;
@@ -1890,19 +1897,17 @@
     const totalSum = goSum + staySum;
 
     // Cenários onde simetria perfeita não é exigida
-    const isFlexible = (scenario === '2_escA' || scenario === '3sem_antiga');
+    const isFlexible = (scenario === '2_escA' || scenario === '3sem_antiga' || scenario === '3com_antiga');
 
     function isValidCombo(combo) {
       // Regra 1: Não-autónoma nunca fica sozinha no intervalo
-      // Se uma não-autónoma (weight=1, canAloneInterval=false) ficasse no grupo stayers sozinha → inválido
       const isNaoAutoSozinha = (group) =>
         group.length === 1 && !group[0].canAloneInterval;
       if (isNaoAutoSozinha(stayers)) return false;
-      // Com 3+ pessoas: pessoa com peso 1 nunca fica sozinha em nenhum grupo
-      const isNovaSozinha = (group) => group.length === 1 && (weights[group[0].id] || 0) <= 1;
-      if (staff.length >= 3 && (isNovaSozinha(goers) || isNovaSozinha(stayers))) return false;
+      // Não-autónoma nunca vai para goers sozinha
+      if (isNaoAutoSozinha(goers)) return false;
 
-      // Regra 2: Validação matemática dinâmica
+      // Regra 2: Validação matemática — só para cenários não-flexíveis
       if (scenario === '2_escB') {
         if (goers.length !== staff.length) return false;
       } else if (!isFlexible) {

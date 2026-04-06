@@ -2269,6 +2269,16 @@
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
+    // Sincronizar ancho de la primera columna en todas las tablas
+    // Usar el ancho máximo encontrado entre todas las primeras celdas
+    requestAnimationFrame(() => {
+      const firstCells = c.querySelectorAll('.gh-sched-tbl td:first-child, .gh-sched-tbl th:first-child');
+      firstCells.forEach(el => { el.style.width = ''; }); // reset
+      let maxW = 0;
+      firstCells.forEach(el => { maxW = Math.max(maxW, el.getBoundingClientRect().width); });
+      if (maxW > 0) firstCells.forEach(el => { el.style.width = maxW + 'px'; });
+    });
+
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
 

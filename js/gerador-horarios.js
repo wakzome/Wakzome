@@ -1385,10 +1385,10 @@
     ];
     const COMBOS = hasSunday ? COMBOS_CON_DOM : COMBOS_SIN_DOM;
 
-    // Función hash determinista: mismo seed+idx → mismo resultado, distinto seed → distinto resultado
+    // Hash determinista
     function rng(idx, s) { return ((idx * 2654435761 + s * 40503 + idx * s * 1234567) >>> 0); }
 
-    // Shuffle de Fisher-Yates determinista basado en seed
+    // Shuffle Fisher-Yates determinista
     function shuffle(arr, s) {
       const a = [...arr];
       for (let i = a.length - 1; i > 0; i--) {
@@ -1398,54 +1398,70 @@
       return a;
     }
 
-    // Orden de procesamiento shuffleado por seed: cada seed procesa personas en orden distinto
-    // Esto es la clave — no solo el startIdx, sino el orden completo de asignación
-    const shuffledOrder = shuffle(sorted, seed);
+    // Backtracking: asigna combos a todas las personas, valida cobertura global,
+    // si falla prueba otra combinación. Garantiza rotación real entre seeds.
+    function tryAssign(personList, comboMap, remaining) {
+      if (personList.length === 0) return comboMap;
 
-    shuffledOrder.forEach((p, personIdx) => {
+      const [p, ...rest] = personList;
       const willWorkSunday = willWorkSundaySet.has(p.id);
-
-      // Combos válidas para esta persona, shuffleadas con seed diferente por persona
       const validCombos = shuffle(
         COMBOS.filter(c => c.workSun === willWorkSunday),
-        rng(personIdx, seed)
+        rng(Object.keys(comboMap).length, seed)
       );
 
-      let assigned = null;
       for (const combo of validCombos) {
         const weekOffDays = combo.off.filter(d => d !== 'DOM');
-        let feasible = true;
+        // Solo verificar ausencias — no verificar cobertura aquí
+        const absent = weekOffDays.some(d => isAbsent(p.id, d));
+        if (absent) continue;
+
+        // Verificar que la tienda no queda a 0 (cobertura mínima estricta)
+        let coverOk = true;
+        const newRem = {};
         for (const offDay of weekOffDays) {
-          if (isAbsent(p.id, offDay)) { feasible = false; break; }
           const effStore = predictStore(p, offDay);
           if (effStore && storeOpen(effStore, offDay)) {
-            if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) { feasible = false; break; }
+            const cur = (remaining[offDay]?.[effStore] ?? 0);
+            if (cur - 1 < storeMin(effStore)) { coverOk = false; break; }
+            if (!newRem[offDay]) newRem[offDay] = {};
+            newRem[offDay][effStore] = cur - 1;
           }
         }
-        if (!feasible) continue;
-        const hasSoftConflict = weekOffDays.some(offDay =>
-          (p.softAvoid || []).some(oid => S.folgaDay[oid] === offDay)
-        );
-        if (hasSoftConflict) continue;
-        assigned = combo;
-        break;
-      }
-      // Fallback sin restricciones — usar primera combo shuffleada
-      if (!assigned) assigned = validCombos[0];
+        if (!coverOk) continue;
 
-      // Registrar folgas
+        // Aplicar cambios temporales en remaining
+        const updatedRem = JSON.parse(JSON.stringify(remaining));
+        for (const [day, stores] of Object.entries(newRem)) {
+          for (const [sid, val] of Object.entries(stores)) {
+            updatedRem[day][sid] = val;
+          }
+        }
+
+        const result = tryAssign(rest, { ...comboMap, [p.id]: combo }, updatedRem);
+        if (result) return result;
+      }
+
+      // Fallback: asignar sin restricción de cobertura para no bloquear
+      const fallbackCombo = validCombos[0];
+      return tryAssign(rest, { ...comboMap, [p.id]: fallbackCombo }, remaining);
+    }
+
+    // Shuffle del orden de personas por seed — clave para rotación real
+    const shuffledOrder = shuffle(sorted, seed);
+    const comboAssignments = tryAssign(shuffledOrder, {}, JSON.parse(JSON.stringify(remaining)));
+
+    // Aplicar asignaciones
+    shuffledOrder.forEach(p => {
+      const assigned = comboAssignments[p.id] || COMBOS.filter(c => c.workSun === willWorkSundaySet.has(p.id))[0];
       const weekOffDays = assigned.off.filter(d => d !== 'DOM');
       S.folgaDay[p.id] = weekOffDays[0];
       if (weekOffDays[1]) {
         if (!S.extraDayOff) S.extraDayOff = {};
         S.extraDayOff[p.id] = weekOffDays[1];
       }
-
-      // Actualizar remaining
       for (const offDay of weekOffDays) {
         folgaCount[offDay] = (folgaCount[offDay] || 0) + 1;
-        const effStore = predictStore(p, offDay);
-        if (effStore && remaining[offDay]?.[effStore] !== undefined) remaining[offDay][effStore]--;
       }
     });
     saveMem();

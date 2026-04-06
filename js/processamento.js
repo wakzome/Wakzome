@@ -137,6 +137,11 @@
       '#proc-content .proc-split-btn:hover { border-color:#000; color:#000; background:#f0f0f0; }',
       '#proc-content .proc-split-btn.active { border-color:#000; color:#000; background:#f0f0f0; }',
 
+      /* Fill-all header buttons (FNC / PXO column headers) */
+      '#proc-content .proc-fill-all-btn { cursor:pointer; padding:3px 8px; border:1px solid #ccc; border-radius:6px; color:#000; font-size:.68rem; font-weight:700; background:transparent; font-family:\'MontserratLight\',sans-serif; transition:background 0.15s,border-color 0.15s,color 0.15s,box-shadow 0.15s; user-select:none; white-space:nowrap; line-height:1.4; }',
+      '#proc-content .proc-fill-all-btn:hover { border-color:#000; background:#f0f0f0; box-shadow:0 1px 4px rgba(0,0,0,.10); }',
+      '#proc-content .proc-fill-all-btn.flashed { border-color:#4A7C6F; color:#fff; background:#4A7C6F; box-shadow:0 2px 8px rgba(74,124,111,.35); }',
+
       /* Toggle +1 */
       '#proc-content .proc-toggle-plus { display:flex; justify-content:center; align-items:center; white-space:nowrap; }',
       '#proc-content .proc-toggle-plus input[type="checkbox"] { display:none; }',
@@ -1466,8 +1471,8 @@
       +   '<th class="left">Refer\u00eancia</th>'
       +   '<th class="left">Descri\u00e7\u00e3o</th>'
       +   '<th>QTD.</th>'
-      +   '<th class="th-a4">FNC</th>'
-      +   '<th class="th-a5">PXO</th>'
+      +   '<th class="th-a4" title="Atribuir toda a quantidade a Funchal"><button class="proc-fill-all-btn" onclick="procFillAll(' + fid + ',\'fnc\')">FNC</button></th>'
+      +   '<th class="th-a5" title="Atribuir toda a quantidade a Porto Santo"><button class="proc-fill-all-btn" onclick="procFillAll(' + fid + ',\'pxo\')">PXO</button></th>'
       +   '<th title="Dividir Qtd. FT igualmente">\u00f7</th>'
       +   '<th>€</th>'
       +   '<th>%-</th>'
@@ -1797,6 +1802,47 @@
     overlay.appendChild(panel);
     overlay.addEventListener('click', function(e){ if(e.target===overlay){ document.body.removeChild(overlay); } });
     document.body.appendChild(overlay);
+  }
+
+  /* ── 8a-bis. FILL ALL → FNC or PXO ── */
+  /* Al hacer clic en el encabezado FNC o PXO, copia la cantidad total de cada
+     fila al almacén correspondiente y pone 0 en el otro.
+     Solo actúa en filas que tengan QTD > 0. */
+  function procFillAll(fid, target) {
+    var tbody = document.getElementById('proc-tableBody-' + fid);
+    if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr');
+    var affected = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var inputs = rows[i].querySelectorAll('input[type="number"]');
+      /* inputs[0] = QTD FT, inputs[1] = FNC, inputs[2] = PXO */
+      if (!inputs || inputs.length < 3) continue;
+      var qtd = parseInt(inputs[0].value) || 0;
+      if (!qtd) continue;
+      if (target === 'fnc') {
+        inputs[1].value = qtd;
+        inputs[2].value = 0;
+      } else {
+        inputs[1].value = 0;
+        inputs[2].value = qtd;
+      }
+      var rowId = parseInt(rows[i].id.replace('proc-row-' + fid + '-', ''));
+      if (!isNaN(rowId)) procRecalcRow(fid, rowId);
+      affected++;
+    }
+    if (!affected) return;
+    /* Flash visual no botão clicado */
+    var thClass = target === 'fnc' ? 'th-a4' : 'th-a5';
+    var table = document.getElementById('proc-mainTable-' + fid);
+    if (table) {
+      var th = table.querySelector('thead th.' + thClass + ' .proc-fill-all-btn');
+      if (th) {
+        th.classList.add('flashed');
+        setTimeout(function() { th.classList.remove('flashed'); }, 700);
+      }
+    }
+    procUpdateSummary(fid);
+    procSaveSession(false);
   }
 
   /* ── 8b. EXCEL-LIKE KEYBOARD NAVIGATION ── */

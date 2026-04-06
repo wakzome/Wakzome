@@ -1416,19 +1416,23 @@
       DAYS.forEach(day => { S.schedule[p.id][day] = { type: 'na', shift: null, store: null }; });
     });
 
-    // Ordem de processamento estrita:
-    // 1. Tienda fija abierta (efectiva primero, luego resto)
-    // 2. Tienda fija cerrada ese día
-    // 3. Sin tienda fija: autónoma → autónoma_h → nao_autonoma
-    const fixedEfetiva    = active.filter(p => p.store && p.autonomia === 'efectiva');
-    const fixedOther      = active.filter(p => p.store && p.autonomia !== 'efectiva');
-    const noFixedAuto     = active.filter(p => !p.store && p.autonomia === 'autonoma');
-    const noFixedAutoH    = active.filter(p => !p.store && p.autonomia === 'autonoma_h');
-    const noFixedNaoAuto  = active.filter(p => !p.store && p.autonomia === 'nao_autonoma');
-    const ordered         = [...fixedEfetiva, ...fixedOther, ...noFixedAuto, ...noFixedAutoH, ...noFixedNaoAuto];
+    // 5 grupos procesados en secuencia estricta.
+    // Grupo 1 completo antes de empezar grupo 2, etc.
+    // Grupo 1: tienda fija (su tienda si abierta, otra si cerrada)
+    // Grupo 2: sin tienda fija, autónoma
+    // Grupo 3: sin tienda fija, autónoma_h
+    // Grupo 4: sin tienda fija, nao_autonoma
+    // Grupo 5: efectiva sin tienda fija (caso raro)
+    const g1 = active.filter(p => p.store);
+    const g2 = active.filter(p => !p.store && p.autonomia === 'autonoma');
+    const g3 = active.filter(p => !p.store && p.autonomia === 'autonoma_h');
+    const g4 = active.filter(p => !p.store && p.autonomia === 'nao_autonoma');
+    const g5 = active.filter(p => !p.store && p.autonomia === 'efectiva');
 
-    ordered.forEach(p => {
-      DAYS.forEach(day => { S.schedule[p.id][day] = buildCell(p, day, active); });
+    [g1, g2, g3, g4, g5].forEach(grupo => {
+      grupo.forEach(p => {
+        DAYS.forEach(day => { S.schedule[p.id][day] = buildCell(p, day, active); });
+      });
     });
 
     // ── Aplicar máximo por tienda ──

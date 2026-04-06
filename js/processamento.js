@@ -623,7 +623,7 @@
     'MACAQUINHO','MALA','MINI SAIA','MOCHILA','PANTUFA','PAREO',
     'PASHMINA','PIJAMA','PIRATA','POLO','PONCHO','PULSEIRA','REGATA',
     'SABRINAS','SAIA','SANDÁLIA','SAPATILHAS','SAPATO','SHOPPER',
-    'SINGLET','SWEATSHIRT','T-SHIRT','TOP','TÚNICA','VESTIDO',
+    'SINGLET','SWEATSHIRT','T-SHIRT','TOP','TÚNICA','VESTIDO','FATO DE BANHO CRIANÇA','CUECA CRIANÇA','BIQUÍNI CRIANÇA',
     /* ── English ── */
     'BIKINI','BOOTS','COAT','DRESS','HOODIE','JACKET',
     'JEANS','JUMPSUIT','LEGGINGS','PANTS','ROMPER','SANDALS',
@@ -660,7 +660,9 @@
     'ANIMAL PRINT','BASIC','BOHO','CLASSIC','DENIM','EMBROIDERED',
     'FLORAL','FLOWY','FRINGE','GRAPHIC','KNIT','LACE','LINEN',
     'LONG','LOOSE','MINI','OVERSIZED','PLAID','PLEATED','PRINTED',
-    'RIBBED','SHORT','SLIM FIT','STRIPED','VELVET','WRAP'
+    'RIBBED','SHORT','SLIM FIT','STRIPED','VELVET','WRAP',
+    /* ── Público / faixa etária ── */
+    'CRIANÇA','BEBÉ','INFANTIL','JÚNIOR','ADULTO'
   ];
 
   /* Tabelas normalizadas pré-calculadas (evita normalizar em cada keystroke) */
@@ -686,16 +688,16 @@
       /* Buscar en TIPOS (solo en primera palabra) o MODS */
       var candidates = idx === 0 ? DESC_TIPOS.concat(DESC_MODS) : DESC_MODS;
       var candidatesN = idx === 0 ? _DESC_TIPOS_N.concat(_DESC_MODS_N) : _DESC_MODS_N;
-      var bestDist = 3; /* umbral máximo */
+      var bestDist = 2; /* umbral máximo */
       var bestMatch = null;
       for (var i = 0; i < candidatesN.length; i++) {
         var cn = candidatesN[i];
-        if (Math.abs(cn.length - partN.length) > 2) continue;
+        if (Math.abs(cn.length - partN.length) > 1) continue;
         var d = procLevenshtein(partN, cn);
         if (d < bestDist) { bestDist = d; bestMatch = candidates[i]; }
         if (d === 0) break; /* coincidencia exacta */
       }
-      return (bestDist <= 2 && bestMatch) ? bestMatch : part;
+      return (bestDist <= 1 && bestMatch) ? bestMatch : part;
     });
     var result = correctedParts.join(' ');
     return result !== raw.toUpperCase() ? result : null;

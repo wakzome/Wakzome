@@ -1267,23 +1267,34 @@
 
   function assignFolgas(active, seed) {
     // ── COMBINACIONES DE FOLGA FIJAS ──
-    // Con domingo abierto: SEG+QUI, TER+SEX, QUA+DOM, SAB+DOM
-    // Sin domingo abierto: SEG+DOM, TER+DOM, QUA+DOM, QUI+DOM, SEX+DOM
-    // Cada combo = [día1, día2]. DOM como folga = no trabaja domingo.
+    // Con domingo abierto (hasSunday=true):
+    //   SEG+QUI, TER+SEX, QUA+DOM, SAB+DOM
+    //   (las que trabajan domingo tienen uno de los días anteriores + DOM trabajado)
+    // Sin domingo abierto (hasSunday=false):
+    //   SEG+DOM, TER+DOM, QUA+DOM, QUI+DOM, SEX+DOM
+    //
+    // workSun:true = la persona trabaja el domingo (DOM es día trabajado, no folga)
+    //   en ese caso off[] tiene los 2 días de folga entre semana
+    // workSun:false = la persona descansa el domingo
+    //   off[] puede incluir DOM como uno de los 2 días de folga
+
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
     const hasSunday = sundayStores.length > 0;
     S.sundayAssigned = {};
     sundayStores.forEach(sid => { S.sundayAssigned[sid] = []; });
 
-    // Combos disponibles según si hay domingo abierto
-    // Cada combo: [folgaDia1, folgaDia2]
-    // DOM en folga = descansa domingo (no trabaja)
-    // DOM en trabajo = trabaja domingo (necesita folgaDia entre semana)
+    // Combos: off = los 2 días de descanso, workSun = si trabaja el domingo
     const COMBOS_CON_DOM = [
       { off: ['SEG','QUI'], workSun: false },
       { off: ['TER','SEX'], workSun: false },
-      { off: ['QUA','DOM'], workSun: false },  // descansa miérc y dom
-      { off: ['SAB','DOM'], workSun: false },  // descansa sáb y dom
+      { off: ['QUA','DOM'], workSun: false },
+      { off: ['SAB','DOM'], workSun: false },
+    ];
+    // Cuando hay domingo abierto, quienes trabajan domingo tienen 2 días de folga entre semana
+    const COMBOS_TRABAJA_DOM = [
+      { off: ['SEG','QUI'], workSun: true },
+      { off: ['TER','SEX'], workSun: true },
+      { off: ['QUA','SAB'], workSun: true },
     ];
     const COMBOS_SIN_DOM = [
       { off: ['SEG','DOM'], workSun: false },
@@ -1292,19 +1303,12 @@
       { off: ['QUI','DOM'], workSun: false },
       { off: ['SEX','DOM'], workSun: false },
     ];
-    // Cuando hay domingo abierto, también se puede trabajar domingo con día compensatorio
-    // Eso se representa como workSun:true con el día de folga compensatorio entre semana
-    const COMBOS_TRABAJA_DOM = hasSunday ? [
-      { off: ['SEG','QUI'], workSun: true },
-      { off: ['TER','SEX'], workSun: true },
-      { off: ['QUA','SAB'], workSun: true },
-    ] : [];
 
+    // Pool total según si hay domingo
     const COMBOS = hasSunday
       ? [...COMBOS_CON_DOM, ...COMBOS_TRABAJA_DOM]
       : COMBOS_SIN_DOM;
 
-    // Where would person p actually work on this day if not on folga?
     function predictStore(p, day) {
       if (S.sandraDay?.[p.id]) return S.sandraDay[p.id][day] || null;
       if (isAbsent(p.id, day)) return null;
@@ -1327,7 +1331,7 @@
     const remaining = {};
     allDays.forEach(day => { remaining[day] = baseCov(day); });
 
-    // Ordenar: coordenadoras primeiro, depois por prioridade de loja, depois por autonomia
+    // Orden: coordenadoras → tienda fija por prioridad → sin tienda
     const sorted = [...active].sort((a, b) => {
       const pa = STORES.find(s => s.id === (a.store||'z'))?.priority ?? 9;
       const pb = STORES.find(s => s.id === (b.store||'z'))?.priority ?? 9;
@@ -1336,15 +1340,10 @@
     });
 
     sorted.forEach((p, personIdx) => {
-      // Índice de combo inicial: rotación por persona + seed
-      let comboIdx = (personIdx * 3 + seed * 7) % COMBOS.length;
       const myStore = S.sandraDay?.[p.id] ? null : p.store;
 
-      // ¿Puede trabajar el domingo? Solo efectivas y autónomas plenas (canAlone=true)
-      // y solo si hay una tienda abierta el domingo que necesite cobertura
+      // ¿Puede trabajar el domingo?
       const canWorkSunday = p.canAlone === true && hasSunday && !isAbsent(p.id, 'DOM');
-
-      // Buscar qué tienda cubriría el domingo
       const sunStore = (() => {
         if (!canWorkSunday) return null;
         if (myStore && sundayStores.includes(myStore)) {
@@ -1360,71 +1359,72 @@
         return null;
       })();
 
-      // Intentar cada combo en rotación hasta encontrar uno válido
+      // Rotación por seed: índice inicial distinto por persona y por seed
+      // primo 7 y 13 garantizan ciclos largos sin repetición
+      const startIdx = (personIdx * 7 + seed * 13) % COMBOS.length;
+
       let assigned = null;
       for (let t = 0; t < COMBOS.length; t++) {
-        const combo = COMBOS[comboIdx % COMBOS.length];
+        const combo = COMBOS[(startIdx + t) % COMBOS.length];
 
-        // Si el combo requiere trabajar domingo pero la persona no puede → saltar
-        if (combo.workSun && !sunStore) { comboIdx++; continue; }
-        // Si el combo tiene DOM como folga y hay domingo abierto con cuota sin cubrir
-        // y la persona puede trabajar domingo → preferir combo workSun en su lugar
-        // (no forzamos, solo es una preferencia de orden de COMBOS)
+        // Si requiere trabajar domingo pero no puede → saltar
+        if (combo.workSun && !sunStore) continue;
+        // Si no requiere trabajar domingo pero la cuota aún necesita gente,
+        // preferimos no bloquear — simplemente dejamos pasar (no forzamos)
 
-        // Verificar que los días de folga del combo son viables (cobertura mínima)
+        // Verificar viabilidad de cobertura para cada día de folga entre semana
         const weekOffDays = combo.off.filter(d => d !== 'DOM');
         let feasible = true;
         for (const offDay of weekOffDays) {
           if (isAbsent(p.id, offDay)) { feasible = false; break; }
           const effStore = predictStore(p, offDay);
           if (effStore && storeOpen(effStore, offDay)) {
-            const storeMin_ = storeMin(effStore);
-            if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin_) { feasible = false; break; }
+            if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) {
+              feasible = false; break;
+            }
           }
         }
-        if (!feasible) { comboIdx++; continue; }
+        if (!feasible) continue;
 
-        // Verificar softAvoid: evitar que dos personas en softAvoid compartan mismo día de folga
+        // softAvoid: evitar compartir días de folga con personas del mismo par
         const hasSoftConflict = weekOffDays.some(offDay =>
           (p.softAvoid || []).some(oid => {
             const oCombo = S._folgaCombo?.[oid];
             return oCombo && oCombo.off.includes(offDay);
           })
         );
-        if (hasSoftConflict) { comboIdx++; continue; }
+        if (hasSoftConflict) continue;
 
         assigned = combo;
         break;
       }
 
-      // Fallback: si ningún combo es viable, usar el primero sin verificar cobertura
-      if (!assigned) assigned = COMBOS[personIdx % COMBOS.length];
+      // Fallback sin restricciones si ningún combo fue viable
+      if (!assigned) assigned = COMBOS[(startIdx) % COMBOS.length];
 
-      // Guardar combo asignado
-      if (!S._folgaCombo) S._folgaCombo = {};
+      // Registrar combo
       S._folgaCombo[p.id] = assigned;
 
-      // folgaDay = primer día de folga entre semana (para compatibilidad con buildCell)
-      const weekOffDay = assigned.off.find(d => d !== 'DOM') || assigned.off[0];
-      S.folgaDay[p.id] = weekOffDay;
+      // folgaDay = primer día de folga entre semana (compat. con buildCell)
+      const weekOffDays = assigned.off.filter(d => d !== 'DOM');
+      S.folgaDay[p.id] = weekOffDays[0] || 'SEG';
 
-      // Segundo día de folga entre semana (si existe)
-      const secondOffDay = assigned.off.find(d => d !== 'DOM' && d !== weekOffDay) || null;
-      if (secondOffDay) {
-        if (!S.extraDayOff) S.extraDayOff = {};
-        S.extraDayOff[p.id] = secondOffDay;
+      // Segundo día de folga entre semana
+      if (weekOffDays[1]) {
+        S.extraDayOff[p.id] = weekOffDays[1];
       }
 
-      // Si trabaja domingo: registrar en sundayAssigned
+      // Si trabaja domingo: registrar
       if (assigned.workSun && sunStore) {
-        if (!S.sundayAssigned[sunStore]) S.sundayAssigned[sunStore] = [];
         S.sundayAssigned[sunStore].push(p.id);
       }
 
-      // Actualizar remaining para los días de folga entre semana
-      for (const offDay of assigned.off.filter(d => d !== 'DOM')) {
+      // Descontar del remaining los días de folga entre semana
+      for (const offDay of weekOffDays) {
         const effStore = predictStore(p, offDay);
-        if (effStore && remaining[offDay]?.[effStore] !== undefined) remaining[offDay][effStore]--;
+        if (effStore && remaining[offDay]?.[effStore] !== undefined) {
+          remaining[offDay][effStore]--;
+        }
       }
     });
     saveMem();
@@ -1526,24 +1526,35 @@
       const a = absOf(p.id);
       return { type: a.type === 'ferias' ? 'ferias' : a.type === 'na' ? 'na' : 'folga', shift: null, store: null };
     }
-    if (day === 'DOM') return { type: 'folga', shift: null, store: null };
+
+    // DOM: trabaja si su combo es workSun=true, descansa en cualquier otro caso
+    if (day === 'DOM') {
+      const combo = S._folgaCombo?.[p.id];
+      if (!combo || !combo.workSun) return { type: 'folga', shift: null, store: null };
+      // workSun=true: el domingo se construye en fixSunday, aquí ponemos folga provisional
+      return { type: 'folga', shift: null, store: null };
+    }
+
+    // Días de folga del combo
+    const combo = S._folgaCombo?.[p.id];
+    if (combo && combo.off.includes(day)) return { type: 'folga', shift: null, store: null };
+
+    // Compat. con folgaDay/extraDayOff (por si acaso)
     if (S.folgaDay[p.id] === day) return { type: 'folga', shift: null, store: null };
     if (S.extraDayOff?.[p.id] === day) return { type: 'folga', shift: null, store: null };
+
     if (S.sandraDay?.[p.id]) {
-      // Coordenadora — posição pré-calculada por computeCoordinatorPosition
       const sid = S.sandraDay[p.id][day];
       if (!sid) return { type: 'folga', shift: null, store: null };
       return { type: 'work', shift: storeBaseShift(sid), store: sid };
     }
 
-    // ── REGLA FUNDAMENTAL: tienda fija abierta → SIEMPRE va a su tienda, nunca a otra ──
+    // ── REGLA FUNDAMENTAL: tienda fija abierta → SIEMPRE va a su tienda ──
     if (p.store && storeOpen(p.store, day)) {
       return { type: 'work', shift: storeBaseShift(p.store), store: p.store };
     }
 
-    // Tienda fija cerrada, o sin tienda fija: buscar destino respetando orden de autonomia.
-    // El orden de procesamiento en buildSchedule ya garantiza que las más autónomas
-    // ocupan primero. Aquí solo asignamos respetando storeMax y knows.
+    // Tienda fija cerrada o sin tienda fija: buscar destino por défice y autonomia
     const alt = S.openStores
       .filter(id => {
         if (!S.openDays[id]?.includes(day)) return false;
@@ -1556,17 +1567,14 @@
         return already < storeMax(id);
       })
       .sort((a, b) => {
-        // Prioridad 1: tienda propia de la persona si estuviera abierta (preferencia de regreso)
         const aHome = (a === p.store) ? 0 : 1;
         const bHome = (b === p.store) ? 0 : 1;
         if (aHome !== bHome) return aHome - bHome;
-        // Prioridad 2: tiendas con défice de cobertura
         const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
         const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
         const defA = storeMin(a) - ca;
         const defB = storeMin(b) - cb;
         if (defA !== defB) return defB - defA;
-        // Prioridad 3: por prioridad de loja
         const pa = STORES.find(s => s.id === a)?.priority ?? 9;
         const pb = STORES.find(s => s.id === b)?.priority ?? 9;
         return pa - pb;

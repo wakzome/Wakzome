@@ -104,6 +104,15 @@
       '#proc-content td[id^="proc-marg-"] { text-align:center !important; }',
       '#proc-content td[id^="proc-pvp-"].has-val { font-size:.88rem; font-weight:800; }',
       '#proc-content td[id^="proc-marg-"].has-val { font-size:.88rem; font-weight:800; }',
+      /* PVP editable wrap */
+      '#proc-content .proc-pvp-wrap { display:inline-flex; align-items:center; justify-content:center; gap:3px; }',
+      '#proc-content .proc-pvp-display { font-size:.88rem; font-weight:800; color:#000; }',
+      '#proc-content .proc-pvp-edit-input { width:52px; font-size:.85rem; font-weight:800; font-family:\'MontserratLight\',sans-serif; text-align:center; border:1px solid #ccc; border-radius:5px; background:#fff; color:#000; padding:2px 4px; display:none; -moz-appearance:textfield; }',
+      '#proc-content .proc-pvp-edit-input::-webkit-inner-spin-button { -webkit-appearance:none; }',
+      '#proc-content .proc-pvp-edit-input:focus { border-color:#000; outline:none; }',
+      '#proc-content .proc-pvp-edit-btn { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; padding:0; border:1px solid #d0d0d0; background:transparent; cursor:pointer; color:#aaa; font-size:.55rem; border-radius:4px; flex-shrink:0; transition:background .15s,border-color .15s,color .15s; }',
+      '#proc-content .proc-pvp-edit-btn:hover { color:#000; background:#f0f0f0; border-color:#ccc; }',
+      '#proc-content .proc-pvp-edit-btn.active { color:#000; background:#e8e8e8; border-color:#999; }',
       '#proc-content .proc-cell-status { text-align:center; font-size:.75rem; font-weight:700; padding:3px 6px; white-space:nowrap; border-radius:6px; }',
       '#proc-content .proc-cell-status.ok { color:#fff; background:#4A7C6F; }',
       '#proc-content .proc-cell-status.err { color:#fff; background:#9B4D4D; }',
@@ -156,6 +165,9 @@
       '#proc-content .proc-flag-btn:hover { color:#000; background:#f0f0f0; border-color:#ccc; }',
       '#proc-content .proc-flag-btn.flagged { color:#fff; background:#9B4D4D; border-color:#7a3535; box-shadow:0 1px 6px rgba(155,77,77,.5); animation:proc-flag-pulse 1.8s ease-in-out infinite; }',
       '@keyframes proc-flag-pulse { 0%,100%{box-shadow:0 1px 6px rgba(155,77,77,.5)} 50%{box-shadow:0 2px 12px rgba(155,77,77,.8)} }',
+      /* Active row highlight (when ref copy button is clicked) */
+      '#proc-content .proc-table-wrap tbody tr.proc-row-active { background:linear-gradient(90deg,rgba(255,210,60,.18) 0%,rgba(255,243,180,.45) 100%) !important; outline:2px solid rgba(220,180,0,.45); outline-offset:-1px; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-active td.td-ref { background:#fffbe6 !important; }',
       /* Flagged row highlight */
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged { background:linear-gradient(90deg,rgba(155,77,77,.10) 0%,rgba(255,235,238,.45) 100%) !important; outline:2px solid rgba(155,77,77,.35); outline-offset:-1px; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover { background:linear-gradient(90deg,rgba(155,77,77,.16) 0%,rgba(255,235,238,.6) 100%) !important; }',
@@ -951,7 +963,7 @@
       faturas: activeFaturas.map(function(fid) {
         var rows = procCollectRows(fid).map(function(r) {
           return { ref:r.ref, desc:r.desc, qtdFt:r.qtdFt, a4:r.a4, a5:r.a5,
-                   preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs, flagged:r.flagged };
+                   preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs, flagged:r.flagged, pvpManual:r.pvpManual };
         });
         return {
           proveedor:    (document.getElementById('proc-proveedor-'    + fid) || {}).value || '',
@@ -1395,6 +1407,18 @@
           if (flagTr)  flagTr.classList.add('proc-row-flagged');
         }
         procRecalcRow(fid, rid);
+        /* Restore manual PVP override after recalc */
+        if (row.pvpManual != null && !isNaN(row.pvpManual)) {
+          var pvpElR  = document.getElementById('proc-pvp-' + fid + '-' + rid);
+          if (pvpElR) {
+            pvpElR._manualOverride = true;
+            var dispR   = pvpElR.querySelector('.proc-pvp-display');
+            var copyBR  = pvpElR.querySelector('.proc-pvp-copy-btn');
+            if (dispR)  dispR.textContent = parseFloat(row.pvpManual).toFixed(2);
+            if (copyBR) copyBR.style.display = 'inline-flex';
+            pvpElR.className = 'proc-cell-computed has-val';
+          }
+        }
       });
       procUpdateHeader(fid);
       procSyncRefColWidth(fid);
@@ -1545,13 +1569,32 @@
         setTimeout(function() {
           var sg = document.getElementById('proc-desc-global-sugg');
           if (sg) { sg.style.display = 'none'; sg._activeInput = null; }
-          /* ── Correção silenciosa da descrição ── */
           var inp = e.target;
           var raw = inp.value.trim();
           if (!raw) return;
+          var rawUpper = raw.toUpperCase();
+          /* Se o utilizador rejeitou esta palavra antes, não volta a corrigir */
+          if (inp._userRejectedValues && inp._userRejectedValues[rawUpper]) return;
           var corrected = procSilentCorrectDesc(raw);
-          if (corrected && corrected !== raw) inp.value = corrected;
+          if (corrected && corrected !== raw) {
+            /* Guarda o valor original que o sistema vai substituir,
+               para que se o utilizador o voltar a escrever, não seja corrigido novamente */
+            inp._lastAutoCorrectFrom = rawUpper;
+            inp.value = corrected;
+          }
         }, 180);
+      });
+
+      /* Detecta quando o utilizador reescreve uma palavra que foi autocorrigida → rejeição */
+      tbody.addEventListener('keydown', function(e) {
+        if (!e.target || !e.target.classList.contains('proc-desc-input')) return;
+        var inp = e.target;
+        /* Se o utilizador apaga para corrigir a autocorreção, registar rejeição */
+        if ((e.key === 'Backspace' || e.key === 'Delete') && inp._lastAutoCorrectFrom) {
+          if (!inp._userRejectedValues) inp._userRejectedValues = {};
+          inp._userRejectedValues[inp._lastAutoCorrectFrom] = true;
+          inp._lastAutoCorrectFrom = null;
+        }
       });
     }
     if (!tbody._obsListening) {
@@ -1608,7 +1651,21 @@
         + '" onchange="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
         + '<label for="proc-plus-' + f + '-' + r + '">+1\u20ac</label></div>'
         + '</div></td>'
-        + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '">\u2014</td>'
+        + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '" style="padding:2px 4px;text-align:center;">'
+        + '<div class="proc-pvp-wrap">'
+        + '<button class="proc-copy-btn proc-pvp-copy-btn" title="Copiar PVP" style="display:none" onclick="procCopyPVP(this,\'' + f + '\',\'' + r + '\')">'
+        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+        + '</button>'
+        + '<span class="proc-pvp-display">\u2014</span>'
+        + '<input type="number" class="proc-pvp-edit-input" step="0.01" min="0" placeholder="0.00"'
+        + ' onblur="procPVPEditBlur(this,\'' + f + '\',\'' + r + '\')"'
+        + ' oninput="procPVPEditInput(this,\'' + f + '\',\'' + r + '\')"'
+        + ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
+        + '<button class="proc-pvp-edit-btn" title="Editar PVP" onclick="procPVPToggleEdit(this,\'' + f + '\',\'' + r + '\')">'
+        + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+        + '</button>'
+        + '</div>'
+        + '</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-obs-cell">'
         +   '<input type="text" class="proc-obs-input" size="7" id="proc-obs-' + f + '-' + r + '">'
@@ -1887,11 +1944,22 @@
     var pvpResult = procCalcPVP(preco);
     var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
     if (pvpEl) {
-      if (pvpResult !== null) {
-        pvpEl.textContent = pvpResult.pvpFinal.toFixed(2) + ' \u20ac';
-        pvpEl.className = 'proc-cell-computed has-val';
-      } else {
-        pvpEl.textContent = '\u2014'; pvpEl.className = 'proc-cell-computed';
+      var pvpDisplay = pvpEl.querySelector('.proc-pvp-display');
+      var pvpCopyBtn = pvpEl.querySelector('.proc-pvp-copy-btn');
+      var pvpEditInput = pvpEl.querySelector('.proc-pvp-edit-input');
+      /* Only update the auto-calculated value if user hasn't manually overridden */
+      if (!pvpEl._manualOverride) {
+        if (pvpResult !== null) {
+          pvpEl.className = 'proc-cell-computed has-val';
+          pvpEl._calcValue = pvpResult.pvpFinal;
+          if (pvpDisplay) pvpDisplay.textContent = pvpResult.pvpFinal.toFixed(2);
+          if (pvpCopyBtn) pvpCopyBtn.style.display = 'inline-flex';
+        } else {
+          pvpEl.className = 'proc-cell-computed';
+          pvpEl._calcValue = null;
+          if (pvpDisplay) pvpDisplay.textContent = '\u2014';
+          if (pvpCopyBtn) pvpCopyBtn.style.display = 'none';
+        }
       }
     }
 
@@ -2326,9 +2394,12 @@
       var flagged = flagBtn ? flagBtn.classList.contains('flagged') : false;
       if (!ref && !preco && !flagged) continue;
       var pc3 = procCalcPrecoCusto(preco, plus3, hasD3, qtdFt, a4, a5);
+      /* Collect manual PVP override if any */
+      var pvpEl3    = document.getElementById('proc-pvp-' + fid + '-' + i);
+      var pvpManual = (pvpEl3 && pvpEl3._manualOverride) ? parseFloat((pvpEl3.querySelector('.proc-pvp-display') || {}).textContent) || null : null;
       result.push({ ref:ref, desc:desc, qtdFt:qtdFt, a4:a4, a5:a5,
                     preco:preco, descPct:dPct, hasD:hasD3, plus1:plus3,
-                    precoCusto:pc3, obs:obs, flagged:flagged });
+                    precoCusto:pc3, obs:obs, flagged:flagged, pvpManual:pvpManual });
     }
     return result;
   }
@@ -3643,6 +3714,10 @@
   window.procCopyBtn             = procCopyBtn;
   window.procLimitDigits         = procLimitDigits;
   window.procToggleFlag          = procToggleFlag;
+  window.procCopyPVP             = procCopyPVP;
+  window.procPVPToggleEdit       = procPVPToggleEdit;
+  window.procPVPEditInput        = procPVPEditInput;
+  window.procPVPEditBlur         = procPVPEditBlur;
 
   function procLimitDigits(input, max) {
     var v = input.value.replace(/[^0-9.]/g,'');
@@ -3676,6 +3751,101 @@
       btn.classList.remove('copied');
       btn.innerHTML = origHTML;
     }, 900);
+    /* Highlight the row if this is a ref copy button (first column) */
+    var td = btn.closest ? btn.closest('td') : null;
+    if (td && td.classList.contains('td-ref')) {
+      var tr = td.closest ? td.closest('tr') : null;
+      if (tr) {
+        /* Remove active from any other row in the same table */
+        var tbody = tr.closest ? tr.closest('tbody') : null;
+        if (tbody) {
+          var activeRows = tbody.querySelectorAll('tr.proc-row-active');
+          for (var i = 0; i < activeRows.length; i++) {
+            activeRows[i].classList.remove('proc-row-active');
+          }
+        }
+        tr.classList.add('proc-row-active');
+      }
+    }
+  }
+
+  function procCopyPVP(btn, fid, id) {
+    var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
+    var display = pvpEl ? pvpEl.querySelector('.proc-pvp-display') : null;
+    var text = display ? display.textContent.trim() : '';
+    if (!text || text === '\u2014') return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+    } catch(e) {}
+    btn.classList.add('copied');
+    var origHTML = btn.innerHTML;
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(function() { btn.classList.remove('copied'); btn.innerHTML = origHTML; }, 900);
+  }
+
+  function procPVPToggleEdit(btn, fid, id) {
+    var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
+    if (!pvpEl) return;
+    var display   = pvpEl.querySelector('.proc-pvp-display');
+    var editInput = pvpEl.querySelector('.proc-pvp-edit-input');
+    var copyBtn   = pvpEl.querySelector('.proc-pvp-copy-btn');
+    var isEditing = editInput && editInput.style.display === 'block';
+    if (isEditing) {
+      /* Commit */
+      var val = parseFloat(editInput.value);
+      if (!isNaN(val) && val > 0) {
+        pvpEl._manualOverride = true;
+        if (display) display.textContent = val.toFixed(2);
+        pvpEl.className = 'proc-cell-computed has-val';
+        if (copyBtn) copyBtn.style.display = 'inline-flex';
+      } else if (!editInput.value.trim()) {
+        /* Clear override — revert to auto */
+        pvpEl._manualOverride = false;
+        var calcVal = pvpEl._calcValue;
+        if (calcVal !== null && calcVal !== undefined) {
+          if (display) display.textContent = calcVal.toFixed(2);
+          pvpEl.className = 'proc-cell-computed has-val';
+          if (copyBtn) copyBtn.style.display = 'inline-flex';
+        } else {
+          if (display) display.textContent = '\u2014';
+          pvpEl.className = 'proc-cell-computed';
+          if (copyBtn) copyBtn.style.display = 'none';
+        }
+      }
+      editInput.style.display = 'none';
+      if (display) display.style.display = '';
+      btn.classList.remove('active');
+    } else {
+      /* Start editing */
+      var currentVal = pvpEl._manualOverride
+        ? (display ? display.textContent.trim() : '')
+        : (pvpEl._calcValue !== null && pvpEl._calcValue !== undefined ? pvpEl._calcValue.toFixed(2) : '');
+      editInput.value = currentVal;
+      editInput.style.display = 'block';
+      if (display) display.style.display = 'none';
+      editInput.focus();
+      editInput.select();
+      btn.classList.add('active');
+    }
+  }
+
+  function procPVPEditInput(input, fid, id) {
+    /* live preview while editing — no op needed, value is committed on blur/enter */
+  }
+
+  function procPVPEditBlur(input, fid, id) {
+    var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
+    if (!pvpEl) return;
+    var btn = pvpEl.querySelector('.proc-pvp-edit-btn');
+    procPVPToggleEdit(btn, fid, id);
   }
 
   function procToggleFlag(fid, id) {

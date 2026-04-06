@@ -1322,29 +1322,41 @@
       return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
     });
 
-    // Candidatas a trabajar domingo: autónomas y efectivas disponibles.
-    // Se rotan con el seed para que cada regeneración asigne personas distintas.
-    const sundayCandidatePool = hasSunday
-      ? [...active]
-          .filter(p => p.canAlone === true && !isAbsent(p.id, 'DOM'))
-          .sort((a, b) => {
-            // Rotar por seed: offset distinto en cada regeneración
-            const idxA = active.indexOf(a);
-            const idxB = active.indexOf(b);
-            return ((idxA + seed * 3) % active.length) - ((idxB + seed * 3) % active.length);
-          })
-      : [];
-
-    // Pre-asignar quién trabaja domingo antes de asignar folgas,
-    // para que la rotación sea independiente del orden de folgas.
+    // Pre-asignar quién trabaja domingo.
+    // Regla: persona con tienda fija abierta el domingo → trabaja en su tienda (no se mueve).
+    // Solo personas sin tienda fija, o cuya tienda fija NO abre el domingo, pueden cubrir otras tiendas.
+    // Rotación por seed para que cada regeneración asigne personas distintas.
     const willWorkSundaySet = new Set();
+
     for (const sid of sundayStores) {
       const quota = sundayMinFor(sid);
+
+      // Primero: personas cuya tienda fija ES esta tienda y abre el domingo
+      const fixedHere = active.filter(p =>
+        p.canAlone === true &&
+        !isAbsent(p.id, 'DOM') &&
+        p.store === sid &&
+        storeOpen(sid, 'DOM')
+      );
+      // Después: personas sin tienda fija o cuya tienda fija está cerrada el domingo, rotadas por seed
+      const floaters = [...active]
+        .filter(p =>
+          p.canAlone === true &&
+          !isAbsent(p.id, 'DOM') &&
+          (!p.store || !storeOpen(p.store, 'DOM')) &&
+          p.knows.includes(sid) &&
+          !willWorkSundaySet.has(p.id)
+        )
+        .sort((a, b) => {
+          const idxA = active.indexOf(a);
+          const idxB = active.indexOf(b);
+          return ((idxA + seed * 3) % active.length) - ((idxB + seed * 3) % active.length);
+        });
+
       let filled = 0;
-      for (const p of sundayCandidatePool) {
+      for (const p of [...fixedHere, ...floaters]) {
         if (filled >= quota) break;
         if (willWorkSundaySet.has(p.id)) continue;
-        if (!p.knows.includes(sid) && !(p.store === sid)) continue;
         willWorkSundaySet.add(p.id);
         if (!S.sundayAssigned[sid]) S.sundayAssigned[sid] = [];
         S.sundayAssigned[sid].push(p.id);
@@ -1352,66 +1364,70 @@
       }
     }
 
+    // Combos con domingo abierto: SEG+QUI (trabaja DOM), TER+SEX (trabaja DOM), QUA+DOM (descansa DOM), SAB+DOM (descansa DOM)
+    // Combos sin domingo: SEG+DOM, TER+DOM, QUA+DOM, QUI+DOM, SEX+DOM (todos descansan DOM)
+    // Siempre 2 días de descanso = 5 días trabajados
+    const COMBOS_CON_DOM = [
+      { off: ['SEG','QUI'], workSun: true  },
+      { off: ['TER','SEX'], workSun: true  },
+      { off: ['QUA','DOM'], workSun: false },
+      { off: ['SAB','DOM'], workSun: false },
+    ];
+    const COMBOS_SIN_DOM = [
+      { off: ['SEG','DOM'], workSun: false },
+      { off: ['TER','DOM'], workSun: false },
+      { off: ['QUA','DOM'], workSun: false },
+      { off: ['QUI','DOM'], workSun: false },
+      { off: ['SEX','DOM'], workSun: false },
+    ];
+    const COMBOS = hasSunday ? COMBOS_CON_DOM : COMBOS_SIN_DOM;
+
     sorted.forEach((p, personIdx) => {
-      const myStore = p.store;
       const willWorkSunday = willWorkSundaySet.has(p.id);
 
-      if (willWorkSunday) {
-        // Trabaja domingo → su folga es 1 día entre semana (equilibrado)
-        // El DOM ya está ocupado trabajando, no es día libre
-        const startIdx = (personIdx * 7 + seed * 11) % WEEKDAYS.length;
-        let chosenDay = null;
-        for (let t = 0; t < WEEKDAYS.length * 2; t++) {
-          const day = WEEKDAYS[(startIdx + t) % WEEKDAYS.length];
-          if (isAbsent(p.id, day)) continue;
-          const effStore = predictStore(p, day);
-          if (effStore && storeOpen(effStore, day)) {
-            if ((remaining[day]?.[effStore] || 0) - 1 < storeMin(effStore)) continue;
-          }
-          const maxPerDay = Math.ceil(active.length / 5);
-          if ((folgaCount[day] || 0) >= maxPerDay) continue;
-          chosenDay = day;
-          break;
-        }
-        if (!chosenDay) {
-          chosenDay = WEEKDAYS.reduce((best, d) => (folgaCount[d]||0) < (folgaCount[best]||0) ? d : best, WEEKDAYS[0]);
-        }
-        S.folgaDay[p.id] = chosenDay;
-        folgaCount[chosenDay] = (folgaCount[chosenDay] || 0) + 1;
-        const effStoreSun = predictStore(p, chosenDay);
-        if (effStoreSun && remaining[chosenDay]?.[effStoreSun] !== undefined) remaining[chosenDay][effStoreSun]--;
+      // Filtrar combos válidas para esta persona
+      const validCombos = COMBOS.filter(c => c.workSun === willWorkSunday);
+      const startIdx = (personIdx * 7 + seed * 11) % validCombos.length;
 
-      } else {
-        // ── CASO: no trabaja domingo → 1 día libre entre semana ──
-        // Rotar por seed y equilibrar: preferir el día con menos folgas asignadas
-        const startIdx = (personIdx * 7 + seed * 11) % WEEKDAYS.length;
-        let chosenDay = null;
-        // Intentar hasta 10 veces buscando día viable y equilibrado
-        for (let t = 0; t < WEEKDAYS.length * 2; t++) {
-          const day = WEEKDAYS[(startIdx + t) % WEEKDAYS.length];
-          if (isAbsent(p.id, day)) continue;
-          const effStore = predictStore(p, day);
-          if (effStore && storeOpen(effStore, day)) {
-            if ((remaining[day]?.[effStore] || 0) - 1 < storeMin(effStore)) continue;
+      let assigned = null;
+      for (let t = 0; t < validCombos.length; t++) {
+        const combo = validCombos[(startIdx + t) % validCombos.length];
+        const weekOffDays = combo.off.filter(d => d !== 'DOM');
+        let feasible = true;
+        for (const offDay of weekOffDays) {
+          if (isAbsent(p.id, offDay)) { feasible = false; break; }
+          const effStore = predictStore(p, offDay);
+          if (effStore && storeOpen(effStore, offDay)) {
+            if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) { feasible = false; break; }
           }
-          // Límite de folgas por día: máximo ceil(active.length / 5) por día
-          const maxPerDay = Math.ceil(active.length / 5);
-          if ((folgaCount[day] || 0) >= maxPerDay) continue;
-          // softAvoid: evitar mismo día de folga que pares
-          const hasSoftConflict = (p.softAvoid || []).some(oid => S.folgaDay[oid] === day);
-          if (hasSoftConflict) continue;
-          chosenDay = day;
-          break;
+          const maxPerDay = Math.ceil(active.length / (hasSunday ? 4 : 5));
+          if ((folgaCount[offDay] || 0) >= maxPerDay) { feasible = false; break; }
         }
-        // Fallback sin restricciones
-        if (!chosenDay) {
-          chosenDay = WEEKDAYS.reduce((best, d) => (folgaCount[d]||0) < (folgaCount[best]||0) ? d : best, WEEKDAYS[0]);
-        }
+        if (!feasible) continue;
+        // softAvoid
+        const hasSoftConflict = weekOffDays.some(offDay =>
+          (p.softAvoid || []).some(oid => S.folgaDay[oid] === offDay)
+        );
+        if (hasSoftConflict) continue;
+        assigned = combo;
+        break;
+      }
+      // Fallback
+      if (!assigned) assigned = validCombos[personIdx % validCombos.length];
 
-        S.folgaDay[p.id] = chosenDay;
-        folgaCount[chosenDay] = (folgaCount[chosenDay] || 0) + 1;
-        const effStore = predictStore(p, chosenDay);
-        if (effStore && remaining[chosenDay]?.[effStore] !== undefined) remaining[chosenDay][effStore]--;
+      // Registrar folgas
+      const weekOffDays = assigned.off.filter(d => d !== 'DOM');
+      S.folgaDay[p.id] = weekOffDays[0];
+      if (weekOffDays[1]) {
+        if (!S.extraDayOff) S.extraDayOff = {};
+        S.extraDayOff[p.id] = weekOffDays[1];
+      }
+
+      // Actualizar contadores
+      for (const offDay of weekOffDays) {
+        folgaCount[offDay] = (folgaCount[offDay] || 0) + 1;
+        const effStore = predictStore(p, offDay);
+        if (effStore && remaining[offDay]?.[effStore] !== undefined) remaining[offDay][effStore]--;
       }
     });
     saveMem();

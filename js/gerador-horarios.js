@@ -1592,7 +1592,8 @@
           });
           // Só mover se a tienda de origem não fica a descoberto
           const moverCurStore = S.schedule[mover.id][day].store;
-          const moverCanMove = !mover.store || !storeOpen(mover.store, day) ||
+          // REGLA ABSOLUTA: nunca mover a alguien con tienda fija abierta
+          const moverCanMove = (!mover.store || !storeOpen(mover.store, day)) &&
             wk().filter(x => S.schedule[x.id][day].store === moverCurStore).length - 1 >= storeMin(moverCurStore);
           if (alt && moverCanMove) {
             S.schedule[mover.id][day].store = alt;
@@ -1613,12 +1614,8 @@
         }
         const sup = wk().filter(o => {
           if (!o.canAlone || o.id === p.id || !o.knows.includes(myStore)) return false;
-          // Só mover se a tienda de origem não fica a descoberto
-          const oStore = S.schedule[o.id][day].store;
-          if (o.store && o.store !== myStore && storeOpen(o.store, day)) {
-            const homeCount = wk().filter(x => S.schedule[x.id][day].store === oStore).length;
-            if (homeCount - 1 < storeMin(oStore)) return false;
-          }
+          // REGLA ABSOLUTA: nunca mover a alguien con tienda fija abierta
+          if (o.store && storeOpen(o.store, day)) return false;
           return true;
         }).sort((a, b) => {
             const ac = wk().filter(x => S.schedule[x.id][day].store === S.schedule[a.id][day].store).length;

@@ -1385,17 +1385,34 @@
     ];
     const COMBOS = hasSunday ? COMBOS_CON_DOM : COMBOS_SIN_DOM;
 
-    sorted.forEach((p, personIdx) => {
+    // Función hash determinista: mismo seed+idx → mismo resultado, distinto seed → distinto resultado
+    function rng(idx, s) { return ((idx * 2654435761 + s * 40503 + idx * s * 1234567) >>> 0); }
+
+    // Shuffle de Fisher-Yates determinista basado en seed
+    function shuffle(arr, s) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = rng(i, s) % (i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // Orden de procesamiento shuffleado por seed: cada seed procesa personas en orden distinto
+    // Esto es la clave — no solo el startIdx, sino el orden completo de asignación
+    const shuffledOrder = shuffle(sorted, seed);
+
+    shuffledOrder.forEach((p, personIdx) => {
       const willWorkSunday = willWorkSundaySet.has(p.id);
 
-      // Filtrar combos válidas para esta persona
-      const validCombos = COMBOS.filter(c => c.workSun === willWorkSunday);
-      // Hash robusto: seed diferente → índice inicial genuinamente distinto
-      const startIdx = ((personIdx * 2654435761 + seed * 40503 + personIdx * seed) >>> 0) % validCombos.length;
+      // Combos válidas para esta persona, shuffleadas con seed diferente por persona
+      const validCombos = shuffle(
+        COMBOS.filter(c => c.workSun === willWorkSunday),
+        rng(personIdx, seed)
+      );
 
       let assigned = null;
-      for (let t = 0; t < validCombos.length; t++) {
-        const combo = validCombos[(startIdx + t) % validCombos.length];
+      for (const combo of validCombos) {
         const weekOffDays = combo.off.filter(d => d !== 'DOM');
         let feasible = true;
         for (const offDay of weekOffDays) {
@@ -1404,11 +1421,8 @@
           if (effStore && storeOpen(effStore, offDay)) {
             if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) { feasible = false; break; }
           }
-          const maxPerDay = Math.ceil(active.length / (hasSunday ? 4 : 5));
-          if ((folgaCount[offDay] || 0) >= maxPerDay) { feasible = false; break; }
         }
         if (!feasible) continue;
-        // softAvoid
         const hasSoftConflict = weekOffDays.some(offDay =>
           (p.softAvoid || []).some(oid => S.folgaDay[oid] === offDay)
         );
@@ -1416,8 +1430,8 @@
         assigned = combo;
         break;
       }
-      // Fallback
-      if (!assigned) assigned = validCombos[personIdx % validCombos.length];
+      // Fallback sin restricciones — usar primera combo shuffleada
+      if (!assigned) assigned = validCombos[0];
 
       // Registrar folgas
       const weekOffDays = assigned.off.filter(d => d !== 'DOM');
@@ -1427,7 +1441,7 @@
         S.extraDayOff[p.id] = weekOffDays[1];
       }
 
-      // Actualizar contadores
+      // Actualizar remaining
       for (const offDay of weekOffDays) {
         folgaCount[offDay] = (folgaCount[offDay] || 0) + 1;
         const effStore = predictStore(p, offDay);

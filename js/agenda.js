@@ -10,6 +10,7 @@ var AG_CSS = `
 *{cursor:crosshair!important}
 input,textarea{cursor:text!important}
 #ag-app{position:relative;z-index:1;max-width:920px;margin:0 auto;padding:28px 20px 60px}
+@media(min-width:1100px){#ag-app{max-width:1200px}#ag-table-outer{overflow-x:visible}}
 #ag-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px}
 #ag-title{font-size:2.4rem;font-weight:300;text-transform:lowercase;letter-spacing:.1em;color:#000;line-height:1}
 #ag-today{font-size:.88rem;font-weight:bold;text-transform:lowercase;letter-spacing:.05em;color:#000}
@@ -92,7 +93,6 @@ input,textarea{cursor:text!important}
 #ag-table-outer{text-align:center;margin-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
 #ag-table-wrap{background:#fff;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden;display:block;width:max-content;min-width:100%;text-align:left}
 #ag-table{width:auto;border-collapse:collapse;font-family:'MontserratLight',sans-serif;font-size:.95rem;white-space:nowrap}
-@media(min-width:768px){#ag-table-outer{overflow-x:visible}#ag-table-wrap{width:100%;min-width:unset}#ag-table{width:100%}}
 #ag-table thead th{background:#f0f0f0;padding:11px 14px;text-align:left;font-size:.75rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;color:#000;border-bottom:1px solid #e6e6e6;position:sticky;top:0;z-index:2}
 #ag-table thead th[data-sort]{cursor:crosshair!important}
 .ag-thr{text-align:right}.ag-thc{text-align:center}

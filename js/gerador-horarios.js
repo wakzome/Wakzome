@@ -1266,26 +1266,6 @@
   }
 
   function assignFolgas(active, seed) {
-    // ── LÓGICA DE FOLGAS ──
-    // Sin domingo abierto:
-    //   Cada persona tiene 1 día de folga entre semana (SEG/TER/QUA/QUI/SEX).
-    //   DOM siempre libre para todos — no cuenta como "combo", es automático.
-    //   Distribución equilibrada: no acumular demasiadas folgas el mismo día.
-    //
-    // Con domingo abierto:
-    //   Quien trabaja domingo (canAlone=true, cuota disponible):
-    //     2 días de folga entre semana de combos fijas: SEG+QUI, TER+SEX, QUA+SAB
-    //   Quien NO trabaja domingo:
-    //     1 día de folga entre semana cualquiera (SEG/TER/QUA/QUI/SEX)
-    //   DOM libre para quien no trabaja.
-
-    // Combos permitidas — exactamente las definidas, sin inventar
-    // Con domingo abierto: SEG+QUI, TER+SEX, QUA+DOM, SAB+DOM
-    // Sin domingo abierto: SEG+DOM, TER+DOM, QUA+DOM, QUI+DOM, SEX+DOM
-    // Quien trabaja domingo tiene su folga dentro de la combo (QUA+DOM o SAB+DOM)
-    // y el DOM se trabaja en vez de descansar.
-    const WEEKDAYS = ['SEG','TER','QUA','QUI','SEX'];
-
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
     const hasSunday = sundayStores.length > 0;
     S.sundayAssigned = {};
@@ -1309,67 +1289,24 @@
       return cov;
     }
 
+    const allDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
     const remaining = {};
-    ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(day => { remaining[day] = baseCov(day); });
+    allDays.forEach(day => { remaining[day] = baseCov(day); });
 
-    // Contador de folgas por día para equilibrio
-    const folgaCount = { SEG:0, TER:0, QUA:0, QUI:0, SEX:0 };
+    // Hash determinista robusto
+    function rng(a, b) { return ((a * 2654435761 ^ b * 40503 + a * b * 1234567) >>> 0); }
 
-    // Ordenar: tienda fija por prioridad → sin tienda fija
-    const sorted = [...active].sort((a, b) => {
-      const pa = STORES.find(s => s.id === (a.store||'z'))?.priority ?? 9;
-      const pb = STORES.find(s => s.id === (b.store||'z'))?.priority ?? 9;
-      return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
-    });
-
-    // Pre-asignar quién trabaja domingo.
-    // Regla: persona con tienda fija abierta el domingo → trabaja en su tienda (no se mueve).
-    // Solo personas sin tienda fija, o cuya tienda fija NO abre el domingo, pueden cubrir otras tiendas.
-    // Rotación por seed para que cada regeneración asigne personas distintas.
-    const willWorkSundaySet = new Set();
-
-    for (const sid of sundayStores) {
-      const quota = sundayMinFor(sid);
-
-      // Primero: personas cuya tienda fija ES esta tienda y abre el domingo
-      const fixedHere = active.filter(p =>
-        p.canAlone === true &&
-        !isAbsent(p.id, 'DOM') &&
-        p.store === sid &&
-        storeOpen(sid, 'DOM')
-      );
-      // Después: personas sin tienda fija o cuya tienda fija está cerrada el domingo, rotadas por seed
-      const floaters = [...active]
-        .filter(p =>
-          p.canAlone === true &&
-          !isAbsent(p.id, 'DOM') &&
-          (!p.store || !storeOpen(p.store, 'DOM')) &&
-          p.knows.includes(sid) &&
-          !willWorkSundaySet.has(p.id)
-        )
-        .sort((a, b) => {
-          const idxA = active.indexOf(a);
-          const idxB = active.indexOf(b);
-          // Hash de Fisher-Yates deterministico: seed diferente → orden genuinamente distinto
-          const hashA = (idxA * 2654435761 + seed * 40503 + idxA * seed) >>> 0;
-          const hashB = (idxB * 2654435761 + seed * 40503 + idxB * seed) >>> 0;
-          return hashA - hashB;
-        });
-
-      let filled = 0;
-      for (const p of [...fixedHere, ...floaters]) {
-        if (filled >= quota) break;
-        if (willWorkSundaySet.has(p.id)) continue;
-        willWorkSundaySet.add(p.id);
-        if (!S.sundayAssigned[sid]) S.sundayAssigned[sid] = [];
-        S.sundayAssigned[sid].push(p.id);
-        filled++;
+    // Fisher-Yates shuffle determinista
+    function shuffle(arr, s) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = rng(i, s) % (i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
       }
+      return a;
     }
 
-    // Combos con domingo abierto: SEG+QUI (trabaja DOM), TER+SEX (trabaja DOM), QUA+DOM (descansa DOM), SAB+DOM (descansa DOM)
-    // Combos sin domingo: SEG+DOM, TER+DOM, QUA+DOM, QUI+DOM, SEX+DOM (todos descansan DOM)
-    // Siempre 2 días de descanso = 5 días trabajados
+    // Combos fijas
     const COMBOS_CON_DOM = [
       { off: ['SEG','QUI'], workSun: true  },
       { off: ['TER','SEX'], workSun: true  },
@@ -1385,75 +1322,88 @@
     ];
     const COMBOS = hasSunday ? COMBOS_CON_DOM : COMBOS_SIN_DOM;
 
-    // Hash determinista
-    function rng(idx, s) { return ((idx * 2654435761 + s * 40503 + idx * s * 1234567) >>> 0); }
-
-    // Shuffle Fisher-Yates determinista
-    function shuffle(arr, s) {
-      const a = [...arr];
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = rng(i, s) % (i + 1);
-        [a[i], a[j]] = [a[j], a[i]];
+    // Pre-asignar quién trabaja domingo — rotación por seed
+    const willWorkSundaySet = new Set();
+    for (const sid of sundayStores) {
+      const quota = sundayMinFor(sid);
+      const fixedHere = active.filter(p =>
+        p.canAlone === true && !isAbsent(p.id, 'DOM') &&
+        p.store === sid && storeOpen(sid, 'DOM')
+      );
+      const floaters = shuffle(
+        active.filter(p =>
+          p.canAlone === true && !isAbsent(p.id, 'DOM') &&
+          (!p.store || !storeOpen(p.store, 'DOM')) &&
+          p.knows.includes(sid) && !willWorkSundaySet.has(p.id)
+        ), rng(sid.length, seed)
+      );
+      let filled = 0;
+      for (const p of [...fixedHere, ...floaters]) {
+        if (filled >= quota) break;
+        if (willWorkSundaySet.has(p.id)) continue;
+        willWorkSundaySet.add(p.id);
+        S.sundayAssigned[sid].push(p.id);
+        filled++;
       }
-      return a;
     }
 
-    // Backtracking: asigna combos a todas las personas, valida cobertura global,
-    // si falla prueba otra combinación. Garantiza rotación real entre seeds.
-    function tryAssign(personList, comboMap, remaining) {
-      if (personList.length === 0) return comboMap;
+    // Orden de personas shuffleado por seed — clave para rotación real
+    const sorted = [...active].sort((a, b) => {
+      const pa = STORES.find(s => s.id === (a.store||'z'))?.priority ?? 9;
+      const pb = STORES.find(s => s.id === (b.store||'z'))?.priority ?? 9;
+      return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
+    });
+    const shuffledOrder = shuffle(sorted, seed);
 
-      const [p, ...rest] = personList;
+    shuffledOrder.forEach((p, personIdx) => {
       const willWorkSunday = willWorkSundaySet.has(p.id);
+      // Combos válidas para esta persona, shuffleadas con seed único por persona
       const validCombos = shuffle(
         COMBOS.filter(c => c.workSun === willWorkSunday),
-        rng(Object.keys(comboMap).length, seed)
+        rng(personIdx, seed)
       );
 
+      let assigned = null;
       for (const combo of validCombos) {
         const weekOffDays = combo.off.filter(d => d !== 'DOM');
-        // Solo verificar ausencias — no verificar cobertura aquí
-        const absent = weekOffDays.some(d => isAbsent(p.id, d));
-        if (absent) continue;
-
-        // Verificar que la tienda no queda a 0 (cobertura mínima estricta)
+        // Solo rechazar si la persona está ausente ese día
+        if (weekOffDays.some(d => isAbsent(p.id, d))) continue;
+        // Verificar cobertura mínima — pero solo si quedaría a 0
         let coverOk = true;
-        const newRem = {};
         for (const offDay of weekOffDays) {
           const effStore = predictStore(p, offDay);
           if (effStore && storeOpen(effStore, offDay)) {
-            const cur = (remaining[offDay]?.[effStore] ?? 0);
-            if (cur - 1 < storeMin(effStore)) { coverOk = false; break; }
-            if (!newRem[offDay]) newRem[offDay] = {};
-            newRem[offDay][effStore] = cur - 1;
+            if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) {
+              coverOk = false; break;
+            }
           }
         }
         if (!coverOk) continue;
-
-        // Aplicar cambios temporales en remaining
-        const updatedRem = JSON.parse(JSON.stringify(remaining));
-        for (const [day, stores] of Object.entries(newRem)) {
-          for (const [sid, val] of Object.entries(stores)) {
-            updatedRem[day][sid] = val;
-          }
-        }
-
-        const result = tryAssign(rest, { ...comboMap, [p.id]: combo }, updatedRem);
-        if (result) return result;
+        assigned = combo;
+        break;
       }
 
-      // Fallback: asignar sin restricción de cobertura para no bloquear
-      const fallbackCombo = validCombos[0];
-      return tryAssign(rest, { ...comboMap, [p.id]: fallbackCombo }, remaining);
-    }
+      // Fallback: si todas las combos violan cobertura, usar la menos dañina
+      if (!assigned) {
+        assigned = validCombos.reduce((best, combo) => {
+          if (!best) return combo;
+          const weekOffDays = combo.off.filter(d => d !== 'DOM');
+          const bestOffDays = best.off.filter(d => d !== 'DOM');
+          const defCombo = weekOffDays.reduce((sum, d) => {
+            const effStore = predictStore(p, d);
+            if (!effStore) return sum;
+            return sum + Math.max(0, storeMin(effStore) - (remaining[d]?.[effStore] || 0) + 1);
+          }, 0);
+          const defBest = bestOffDays.reduce((sum, d) => {
+            const effStore = predictStore(p, d);
+            if (!effStore) return sum;
+            return sum + Math.max(0, storeMin(effStore) - (remaining[d]?.[effStore] || 0) + 1);
+          }, 0);
+          return defCombo < defBest ? combo : best;
+        }, null) || validCombos[0];
+      }
 
-    // Shuffle del orden de personas por seed — clave para rotación real
-    const shuffledOrder = shuffle(sorted, seed);
-    const comboAssignments = tryAssign(shuffledOrder, {}, JSON.parse(JSON.stringify(remaining)));
-
-    // Aplicar asignaciones
-    shuffledOrder.forEach(p => {
-      const assigned = comboAssignments[p.id] || COMBOS.filter(c => c.workSun === willWorkSundaySet.has(p.id))[0];
+      // Registrar
       const weekOffDays = assigned.off.filter(d => d !== 'DOM');
       S.folgaDay[p.id] = weekOffDays[0];
       if (weekOffDays[1]) {
@@ -1461,12 +1411,12 @@
         S.extraDayOff[p.id] = weekOffDays[1];
       }
       for (const offDay of weekOffDays) {
-        folgaCount[offDay] = (folgaCount[offDay] || 0) + 1;
+        const effStore = predictStore(p, offDay);
+        if (effStore && remaining[offDay]?.[effStore] !== undefined) remaining[offDay][effStore]--;
       }
     });
     saveMem();
   }
-
   function buildSchedule(active) {
     // Inicializar todas as células como NA
     PEOPLE.forEach(p => {
@@ -1474,19 +1424,15 @@
       DAYS.forEach(day => { S.schedule[p.id][day] = { type: 'na', shift: null, store: null }; });
     });
 
-    // 5 grupos procesados en secuencia estricta.
-    // Grupo 1 completo antes de empezar grupo 2, etc.
-    // Grupo 1: tienda fija (su tienda si abierta, otra si cerrada)
-    // Grupo 2: sin tienda fija, autónoma
-    // Grupo 3: sin tienda fija, autónoma_h
-    // Grupo 4: sin tienda fija, nao_autonoma
-    // Grupo 5: efectiva sin tienda fija (caso raro)
+    // Grupo 1: tienda fija (primero) — se procesan TODOS antes de pasar al siguiente grupo
+    // Grupo 2: autónoma sin tienda fija
+    // Grupo 3: autónoma_h sin tienda fija
+    // Grupo 4: nao_autonoma sin tienda fija
     const g1 = active.filter(p => p.store);
     const g2 = active.filter(p => !p.store && p.autonomia === 'autonoma');
     const g3 = active.filter(p => !p.store && p.autonomia === 'autonoma_h');
     const g4 = active.filter(p => !p.store && p.autonomia === 'nao_autonoma');
     const g5 = active.filter(p => !p.store && p.autonomia === 'efectiva');
-
     [g1, g2, g3, g4, g5].forEach(grupo => {
       grupo.forEach(p => {
         DAYS.forEach(day => { S.schedule[p.id][day] = buildCell(p, day, active); });
@@ -1505,17 +1451,17 @@
         const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid);
         if (workers.length <= max) return;
 
-        // REGLA ABSOLUTA: nunca redirigir a alguien con tienda fija abierta en esta tienda.
-        // Solo se redirigen personas sin tienda fija, o con tienda fija en OTRA tienda.
+        // Ordenar: primero salen los sin tienda fija, luego los móviles, nunca los de tienda fija
         const toRedirect = [...workers]
           .sort((a, b) => {
+            // Con tienda fija en esta tienda: nunca salen (pesan 0, van al final)
             const aFixed = (a.store === sid) ? 1 : 0;
             const bFixed = (b.store === sid) ? 1 : 0;
-            if (aFixed !== bFixed) return aFixed - bFixed;
+            if (aFixed !== bFixed) return aFixed - bFixed; // sin tienda fija primero
             return (b.coverPri||9) - (a.coverPri||9) || (a.mobile === false ? -1 : 1);
           })
           .filter((p, i) => {
-            // NUNCA mover a alguien cuya tienda fija ES esta tienda y está abierta
+            // Nunca redirigir a alguien con tienda fija en esta tienda
             if (p.store === sid && storeOpen(sid, day)) return false;
             return i < workers.length - max;
           });
@@ -1571,11 +1517,11 @@
       if (!sid) return { type: 'folga', shift: null, store: null };
       return { type: 'work', shift: storeBaseShift(sid), store: sid };
     }
-    // REGLA ABSOLUTA: tienda fija abierta → su tienda. NUNCA otra. JAMÁS.
+    // REGLA ABSOLUTA: tienda fija abierta → su tienda. NUNCA otra.
     if (p.store && storeOpen(p.store, day)) {
       return { type: 'work', shift: storeBaseShift(p.store), store: p.store };
     }
-    // Solo llegan aquí: sin tienda fija, o tienda fija cerrada ese día.
+    // Solo llegan aquí: sin tienda fija o tienda fija cerrada ese día
     const alt = S.openStores
       .filter(id => {
         if (!S.openDays[id]?.includes(day)) return false;
@@ -1588,13 +1534,10 @@
         return already < storeMax(id);
       })
       .sort((a, b) => {
-        // Prioridad 1: tienda con más déficit (necesita más gente)
         const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
         const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
-        const defA = storeMin(a) - ca;
-        const defB = storeMin(b) - cb;
+        const defA = storeMin(a) - ca, defB = storeMin(b) - cb;
         if (defA !== defB) return defB - defA;
-        // Prioridad 2: por priority de tienda
         const pa = STORES.find(s => s.id === a)?.priority ?? 9;
         const pb = STORES.find(s => s.id === b)?.priority ?? 9;
         return pa - pb;
@@ -1657,7 +1600,6 @@
           });
           // Só mover se a tienda de origem não fica a descoberto
           const moverCurStore = S.schedule[mover.id][day].store;
-          // REGLA ABSOLUTA: nunca mover a alguien con tienda fija abierta
           const moverCanMove = (!mover.store || !storeOpen(mover.store, day)) &&
             wk().filter(x => S.schedule[x.id][day].store === moverCurStore).length - 1 >= storeMin(moverCurStore);
           if (alt && moverCanMove) {
@@ -1679,7 +1621,7 @@
         }
         const sup = wk().filter(o => {
           if (!o.canAlone || o.id === p.id || !o.knows.includes(myStore)) return false;
-          // REGLA ABSOLUTA: nunca mover a alguien con tienda fija abierta
+          // REGLA ABSOLUTA: nunca mover tienda fija abierta
           if (o.store && storeOpen(o.store, day)) return false;
           return true;
         }).sort((a, b) => {
@@ -1705,8 +1647,7 @@
             return destCount + 1 <= storeMax(st.id);
           });
 
-          // REGLA ABSOLUTA: nunca mover a alguien con tienda fija abierta a otra tienda.
-          // Si no hay candidatos sin tienda fija, la tienda queda con déficit — se alerta pero no se viola la regla.
+          // REGLA ABSOLUTA: nunca mover tienda fija abierta
           const candFixed = [];
 
           const cand = [...candNoFixed, ...candFixed]
@@ -1935,13 +1876,13 @@
 
     function isValidCombo(combo) {
       // Regra 1: Não-autónoma nunca fica sozinha no intervalo
+      // Se uma não-autónoma (weight=1, canAloneInterval=false) ficasse no grupo stayers sozinha → inválido
       const isNaoAutoSozinha = (group) =>
         group.length === 1 && !group[0].canAloneInterval;
       if (isNaoAutoSozinha(stayers)) return false;
-      // Não-autónoma nunca vai para goers sozinha
       if (isNaoAutoSozinha(goers)) return false;
 
-      // Regra 2: Validação matemática — só para cenários não-flexíveis
+      // Regra 2: Validação matemática dinâmica
       if (scenario === '2_escB') {
         if (goers.length !== staff.length) return false;
       } else if (!isFlexible) {
@@ -2308,11 +2249,10 @@
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
-    // Sincronizar ancho de la primera columna en todas las tablas
-    // Usar el ancho máximo encontrado entre todas las primeras celdas
+    // Sincronizar ancho primera columna entre todas las tablas
     requestAnimationFrame(() => {
       const firstCells = c.querySelectorAll('.gh-sched-tbl td:first-child, .gh-sched-tbl th:first-child');
-      firstCells.forEach(el => { el.style.width = ''; }); // reset
+      firstCells.forEach(el => { el.style.width = ''; });
       let maxW = 0;
       firstCells.forEach(el => { maxW = Math.max(maxW, el.getBoundingClientRect().width); });
       if (maxW > 0) firstCells.forEach(el => { el.style.width = maxW + 'px'; });

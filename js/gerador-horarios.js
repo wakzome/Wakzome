@@ -2463,10 +2463,11 @@
 
         /* 2. TABLA: obligada a NO encogerse */
         #tab-gerador .gh-sched-tbl {
-          width: max-content !important;
-          min-width: 100% !important;
+          width: auto !important;
+          min-width: unset !important;
           border-collapse: collapse !important;
-          table-layout: auto;
+          table-layout: auto !important;
+          margin: 0 auto !important;
         }
 
         /* 3. CELDAS: sin saltos de linea, fondo solido */
@@ -2477,12 +2478,12 @@
         }
 
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
-        #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; width:106px; }
-        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; width:1%; white-space:nowrap; }
+        #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
-        #tab-gerador .gh-sched-tbl td:first-child { padding:0; width:1%; white-space:nowrap; }
-        #tab-gerador .gh-sh-td { width:106px; min-width:106px; max-width:106px; text-align:center; cursor:pointer; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
+        #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
         #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
         #tab-gerador .gh-no-click { cursor:default; }
         #tab-gerador .gh-no-click:hover { background:transparent !important; }

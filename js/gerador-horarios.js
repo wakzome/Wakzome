@@ -1335,14 +1335,18 @@
     try {
       const { data } = await sb.from('gh_aprendizaje')
         .select('tienda_id,dia,n_pessoas,combinacion_usuario,combinacion_sistema,igual')
-        .eq('igual', false); // só registos onde o utilizador corrigiu
+        .eq('igual', false);
       const map = {};
       (data || []).forEach(r => {
-        const key = `${r.tienda_id}|${r.dia}|${r.n_pessoas}`;
+        const combo = r.combinacion_usuario;
+        // Ignorar registos com formato antigo (sem ;;;) ou sem turnos válidos
+        if (!combo || !combo.includes(':::') && !combo.includes(';;; ') && !combo.includes('::')) return;
+        // Validar que contém shifts reais (HH:MM)
+        if (!combo.includes(':00')) return;
+        const key = `${r.tienda_id}|||${r.dia}|||${r.n_pessoas}`;
         if (!map[key]) map[key] = [];
-        map[key].push(r.combinacion_usuario);
+        map[key].push(combo);
       });
-      // Para cada chave, usar o padrão mais frequente
       const result = {};
       Object.entries(map).forEach(([key, combos]) => {
         const freq = {};
@@ -1353,10 +1357,9 @@
     } catch(e) { console.warn('Erro ao carregar aprendizagem:', e); return {}; }
   }
 
-  // Dado o mapa de aprendizagem, devolver a combinação aprendida para uma tienda+dia+n
   function getAprendidoShifts(sid, day, n) {
     if (!_aprendizaje) return null;
-    return _aprendizaje[`${sid}|${day}|${n}`] || null;
+    return _aprendizaje[`${sid}|||${day}|||${n}`] || null;
   }
 
   // ── NUEVA assignFolgas — basada en gh_combinaciones + gh_patrones + gh_folgas ──
@@ -2074,15 +2077,16 @@
       // Tipo 2: verificar se há padrão aprendido para esta tienda+dia+n
       const aprendido = getAprendidoShifts(st.id, day, staff.length);
       if (aprendido) {
-        // O padrão aprendido é "id:shift|id:shift|..." — extrair shifts por pessoa
-        const parts = aprendido.split('|');
+        const parts = aprendido.split(';;;');
         const shiftMap = {};
         parts.forEach(part => {
-          const [idSlice, shift] = part.split(':');
+          const sepIdx = part.indexOf('::');
+          if (sepIdx < 0) return;
+          const idSlice = part.slice(0, sepIdx);
+          const shift = part.slice(sepIdx + 2);
           const pessoa = staff.find(p => p.id.startsWith(idSlice));
           if (pessoa && shift) shiftMap[pessoa.id] = shift;
         });
-        // Aplicar se todos os membros do staff têm shift aprendido
         if (staff.every(p => shiftMap[p.id])) {
           staff.forEach(p => { S.schedule[p.id][day].shift = shiftMap[p.id]; });
           S.decisions.push({ type: 'info', text: `${day} ${st.name}: turnos de intervalo aprendidos aplicados.` });
@@ -2370,10 +2374,16 @@
         let aH = 0;
         DAYS.forEach(d => {
           const cl = S.schedule[p.id]?.[d];
-          if (cl?.type === 'work' && cl.shift) cl.shift.split('|').forEach(sg => {
-            const [a, b] = sg.split('-').map(s => { const [h, m] = s.split(':').map(Number); return h + m/60; });
-            aH += b - a;
-          });
+          if (cl?.type === 'work' && cl.shift && cl.shift.includes(':')) {
+            cl.shift.split('|').forEach(sg => {
+              const parts = sg.split('-');
+              if (parts.length < 2) return;
+              const [h1, m1] = parts[0].split(':').map(Number);
+              const [h2, m2] = parts[1].split(':').map(Number);
+              if (isNaN(h1) || isNaN(h2)) return;
+              aH += (h2 + m2/60) - (h1 + m1/60);
+            });
+          }
         });
         aH = Math.round(aH * 10) / 10;
         const hOk = Math.abs(aH - (p.hrs||40)) < 0.5;
@@ -2663,8 +2673,8 @@
           );
           const combSist = workersSist
             .sort((a,b) => a.id.localeCompare(b.id))
-            .map(p => `${p.id.slice(0,8)}:${snapSistema[p.id][day].shift||''}`)
-            .join('|');
+            .map(p => `${p.id.slice(0,8)}::${snapSistema[p.id][day].shift||''}`)
+            .join(';;;');
 
           // User: who works here now and what shift
           const workersUser = active.filter(p =>
@@ -2673,8 +2683,8 @@
           );
           const combUser = workersUser
             .sort((a,b) => a.id.localeCompare(b.id))
-            .map(p => `${p.id.slice(0,8)}:${S.schedule[p.id][day].shift||''}`)
-            .join('|');
+            .map(p => `${p.id.slice(0,8)}::${S.schedule[p.id][day].shift||''}`)
+            .join(';;;');
 
           registos.push({
             semana:              weekKey,

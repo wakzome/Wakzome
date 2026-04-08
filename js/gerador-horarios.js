@@ -190,7 +190,7 @@
       storeMode: {},
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
-      schedule: {}, alerts: [], decisions: []
+      schedule: {}, alerts: [], decisions: [], _storeOverride: {}
     };
   }
   let S = blank();
@@ -1564,10 +1564,17 @@
     if (S.folgaDay[p.id] === day) return { type: 'folga', shift: null, store: null };
     if (S.extraDayOff?.[p.id] === day) return { type: 'folga', shift: null, store: null };
     if (S.sandraDay?.[p.id]) {
-      // Coordenadora — posição pré-calculada por computeCoordinatorPosition
       const sid = S.sandraDay[p.id][day];
       if (!sid) return { type: 'folga', shift: null, store: null };
       return { type: 'work', shift: storeBaseShift(sid), store: sid };
+    }
+    // Store override — person was manually moved to another store this week
+    const overrideSid = S._storeOverride?.[p.id];
+    if (overrideSid) {
+      if (!S.openDays[overrideSid]) S.openDays[overrideSid] = [];
+      if (!S.openDays[overrideSid].includes(day)) S.openDays[overrideSid].push(day);
+      if (!S.openStores.includes(overrideSid)) S.openStores.push(overrideSid);
+      return { type: 'work', shift: storeBaseShift(overrideSid), store: overrideSid };
     }
     // REGLA ABSOLUTA: tienda fija abierta → su tienda. NUNCA otra.
     if (p.store && storeOpen(p.store, day)) {
@@ -2631,77 +2638,46 @@
   async function applyRemoveReplace(removeId, replaceId, sid) {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
-    // 1. Identify days removed person worked in sid
-    const daysInSid = DAYS.filter(d =>
-      S.schedule[removeId]?.[d]?.type === 'work' &&
-      S.schedule[removeId][d].store === sid
-    );
-
-    // 2. Identify days replacement person worked in their current store
+    // 1. Identify which store the replacement person currently works in
     const replaceSid = DAYS.reduce((store, d) => {
+      if (store) return store;
       const cell = S.schedule[replaceId]?.[d];
       if (cell?.type === 'work' && cell.store && cell.store !== sid) return cell.store;
-      return store;
+      return null;
     }, null);
 
-    const daysInReplaceSid = replaceSid ? DAYS.filter(d =>
-      S.schedule[replaceId]?.[d]?.type === 'work' &&
-      S.schedule[replaceId][d].store === replaceSid
-    ) : [];
+    // 2. Record the store overrides BEFORE wiping schedule:
+    //    - removeId → goes to replaceSid (replacement's old store)
+    //    - replaceId → goes to sid (the store we're managing)
+    S._storeOverride = S._storeOverride || {};
+    if (replaceSid) S._storeOverride[removeId] = replaceSid;
+    S._storeOverride[replaceId] = sid;
 
-    // 3. Do the swap
-    // Replacement person → takes over sid on the days removed person was there
-    daysInSid.forEach(day => {
-      if (!S.openDays[sid]) S.openDays[sid] = [];
-      if (!S.openDays[sid].includes(day)) S.openDays[sid].push(day);
-      if (!S.openStores.includes(sid)) S.openStores.push(sid);
-      S.schedule[replaceId][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
+    // 3. Fully wipe schedule for BOTH people so assignFolgas starts clean
+    DAYS.forEach(day => {
+      S.schedule[removeId][day]  = { type: 'na', shift: null, store: null };
+      S.schedule[replaceId][day] = { type: 'na', shift: null, store: null };
     });
 
-    // Removed person → takes over replacement's store on the days replacement was there
-    if (replaceSid) {
-      daysInReplaceSid.forEach(day => {
-        S.schedule[removeId][day] = { type: 'work', shift: storeBaseShift(replaceSid), store: replaceSid };
-      });
-    }
-
-    // 4. Recalculate folgas for ALL active people to ensure coverage is valid
-    // Reset folga assignments
+    // 4. Reset folga state completely
     S.folgaDay = {};
     S.extraDayOff = {};
-    S.alerts = S.alerts || [];
+    S.alerts = [];
+    S.decisions = [];
+    S._storeBaseShift = {};
 
+    // 5. Recalculate all folgas from scratch respecting historical debt
     const seed = S._regenSeed || 0;
+    computeCoordinatorPosition(active);
     await assignFolgas(active, seed);
 
-    // 5. Rebuild schedule respecting the manual store assignments we just made
-    // Store the manual overrides before buildSchedule overwrites them
-    const manualOverrides = {};
-    active.forEach(p => {
-      manualOverrides[p.id] = {};
-      DAYS.forEach(day => {
-        const cell = S.schedule[p.id]?.[day];
-        if (cell) manualOverrides[p.id][day] = { ...cell };
-      });
-    });
-
+    // 6. Rebuild full schedule — buildCell uses _storeOverride to route swapped people
     buildSchedule(active);
     fixSunday(active);
-
-    // Reapply manual store overrides for the two swapped people
-    [removeId, replaceId].forEach(pid => {
-      DAYS.forEach(day => {
-        const override = manualOverrides[pid]?.[day];
-        if (override?.type === 'work') {
-          S.schedule[pid][day] = override;
-        }
-      });
-    });
-
     intelPass(active);
     applyNightShiftRule(active);
 
-    // 6. Check coverage
+    // 7. Check coverage and alert
     DAYS.forEach(day => {
       S.openStores.forEach(storeSid => {
         if (!S.openDays[storeSid]?.includes(day)) return;
@@ -2715,6 +2691,8 @@
       });
     });
 
+    // 8. Clear overrides and render
+    S._storeOverride = {};
     showSchedule(active);
   }
 

@@ -2585,8 +2585,8 @@
         <div style="font-size:.72rem;color:#ccc;padding:6px;">Seleccione primeiro quem remover</div>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button id="gh-rem-cancel" style="padding:7px 16px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:.78rem;">Cancelar</button>
-        <button id="gh-rem-confirm" style="padding:7px 16px;border:1px solid #111;border-radius:6px;background:#111;color:#fff;cursor:pointer;font-size:.78rem;font-weight:600;" disabled>Confirmar</button>
+        <button id="gh-rem-cancel" style="padding:7px 16px;border:1px solid #ddd;border-radius:6px;background:#ffffff !important;color:#111111 !important;cursor:pointer;font-size:.78rem;">Cancelar</button>
+        <button id="gh-rem-confirm" style="padding:7px 16px;border:1px solid #111;border-radius:6px;background:#111111 !important;color:#ffffff !important;cursor:pointer;font-size:.78rem;font-weight:600;opacity:0.4;" disabled>Confirmar</button>
       </div>`;
 
     document.body.appendChild(panel);
@@ -2618,15 +2618,17 @@
             sb.style.background = '#e8f0fe';
             sb.style.borderColor = '#3b82f6';
             confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
           });
         });
       });
     });
 
     confirmBtn.addEventListener('click', async () => {
-      if (!removeId || !replaceId) return;
+      if (!removeId || !replaceId) { alert('Seleccione ambas pessoas.'); return; }
+      const r1 = removeId, r2 = replaceId;
       panel.remove();
-      await applyRemoveReplace(removeId, replaceId, sid);
+      await applyRemoveReplace(r1, r2, sid);
     });
   }
 

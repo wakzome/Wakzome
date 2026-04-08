@@ -2446,8 +2446,7 @@
       const { pid, sid } = _addCtx;
       const days = [...document.querySelectorAll('.gh-add-day-chk:checked')].map(cb => cb.value);
       if (!days.length) { alert('Seleccione pelo menos um dia.'); return; }
-      const p = P(pid);
-      if (!p?.knows?.includes(sid)) { alert(`${shortName(p?.name)} não conhece ${sname(sid)}.`); return; }
+      // Warning already shown in modal — allow save regardless of knows
       days.forEach(day => {
         S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
       });
@@ -2498,9 +2497,6 @@
     let injected = bdy.querySelector('#gh-add-person-list');
     if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
 
-    // Days open in this store
-    const openDays = S.openDays[sid] || [];
-
     injected.innerHTML = `
       <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Escolha a pessoa:</div>
       <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;">
@@ -2512,23 +2508,31 @@
       </div>
       <div style="font-size:.7rem;color:#888;margin-bottom:6px;">Dia(s) a atribuir:</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
-        ${DAYS.map(d => {
-          const isOpen = openDays.includes(d);
-          return `<label style="display:flex;align-items:center;gap:3px;font-size:.75rem;cursor:${isOpen?'pointer':'default'};opacity:${isOpen?1:0.35}">
-            <input type="checkbox" class="gh-add-day-chk" value="${d}" ${isOpen?'':'disabled'}> ${d}
-          </label>`;
-        }).join('')}
-      </div>`;
+        ${DAYS.map(d =>
+          `<label style="display:flex;align-items:center;gap:3px;font-size:.75rem;cursor:pointer;">
+            <input type="checkbox" class="gh-add-day-chk" value="${d}"> ${d}
+          </label>`
+        ).join('')}
+      </div>
+      <div id="gh-add-warn" style="display:none;margin-top:8px;font-size:.7rem;color:#b05000;background:#fff8e8;border:1px solid #f0d080;border-radius:5px;padding:6px 8px;"></div>`;
 
     injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
       btn.addEventListener('click', () => {
         injected.querySelectorAll('.gh-add-person-pick').forEach(b => b.style.background = '#fff');
         btn.style.background = '#e8f0fe';
         _addCtx = { pid: btn.dataset.pid, sid };
+        // Show warning if person doesn't know this store
+        const p = P(btn.dataset.pid);
+        const warn = injected.querySelector('#gh-add-warn');
+        if (!p?.knows?.includes(sid)) {
+          warn.textContent = `⚠ ${shortName(p?.name)} não tem ${sname(sid)} no seu perfil. Pode continuar, mas verifique se tem experiência.`;
+          warn.style.display = 'block';
+        } else {
+          warn.style.display = 'none';
+        }
       });
     });
 
-    // Wire save button to handle add
     modal.dataset.mode = 'add';
     modal.classList.add('open');
   }

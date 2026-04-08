@@ -2601,7 +2601,7 @@
       btn.addEventListener('click', () => {
         removeId = btn.dataset.pid;
         replaceId = null;
-        confirmBtn.disabled = true;
+        confirmBtn.style.opacity = '0.4';
         panel.querySelectorAll('.gh-rem-pick').forEach(b => { b.style.background = '#fff'; b.style.borderColor = '#e0e0e0'; });
         btn.style.background = '#fff0f0';
         btn.style.borderColor = '#ef5350';
@@ -2617,7 +2617,6 @@
             replaceList.querySelectorAll('.gh-sub-pick').forEach(b => { b.style.background = '#fff'; b.style.borderColor = '#e0e0e0'; });
             sb.style.background = '#e8f0fe';
             sb.style.borderColor = '#3b82f6';
-            confirmBtn.disabled = false;
             confirmBtn.style.opacity = '1';
           });
         });

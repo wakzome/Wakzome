@@ -2720,11 +2720,13 @@
         );
         snap[sid][day] = {
           n: workers.length,
-          combinacion: workers.map(p => S.schedule[p.id][day].shift || '').join('|')
+          // Deep copy each shift value so later edits don't affect this snapshot
+          combinacion: workers.map(p => String(S.schedule[p.id][day].shift || '')).join('|'),
+          workers: workers.map(p => ({ id: p.id, shift: String(S.schedule[p.id][day].shift || ''), store: sid }))
         };
       });
     });
-    return snap;
+    return JSON.parse(JSON.stringify(snap)); // deep copy
   }
 
   async function learnFromSchedule(active) {

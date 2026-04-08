@@ -3070,9 +3070,11 @@
 
       document.getElementById('gh-modal-x').addEventListener('click', closeModal);
       document.getElementById('gh-modal-cancel').addEventListener('click', closeModal);
-      document.getElementById('gh-modal-save').addEventListener('click', applyEdit);
+      document.getElementById('gh-modal-save').addEventListener('click', () => applyEdit());
       document.getElementById('gh-me-type').addEventListener('change', meTypeChange);
-      modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
+      modalEl.addEventListener('click', e => {
+        if (e.target === modalEl) closeModal();
+      });
     }
 
     // Load knowledge base from Supabase before rendering

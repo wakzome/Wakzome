@@ -2426,7 +2426,8 @@
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
-    stEl.innerHTML = S.openStores.filter(id => p?.knows?.includes(id)).map(id => `<option value="${id}" ${c2.store===id?'selected':''}>${sname(id)}</option>`).join('');
+    // Mostrar TODAS las tiendas que la persona conoce, no solo las abiertas esta semana
+    stEl.innerHTML = STORES.filter(st => p?.knows?.includes(st.id)).map(st => `<option value="${st.id}" ${c2.store===st.id?'selected':''}>${sname(st.id)}</option>`).join('');
     document.getElementById('gh-me-conf').style.display = 'none';
     meTypeChange();
     modal.classList.add('open');
@@ -2438,11 +2439,29 @@
   }
 
   function applyEdit() {
+    // Handle add person mode
+    const modal = document.getElementById('gh-modal');
+    if (modal?.dataset.mode === 'add') {
+      if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
+      const { pid, sid } = _addCtx;
+      const days = [...document.querySelectorAll('.gh-add-day-chk:checked')].map(cb => cb.value);
+      if (!days.length) { alert('Seleccione pelo menos um dia.'); return; }
+      const p = P(pid);
+      if (!p?.knows?.includes(sid)) { alert(`${shortName(p?.name)} não conhece ${sname(sid)}.`); return; }
+      days.forEach(day => {
+        S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
+      });
+      cleanupModalExtras();
+      closeModal();
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      showSchedule(active);
+      return;
+    }
+
     if (!editCtx) return;
     const { pid, day } = editCtx;
     const type = document.getElementById('gh-me-type').value;
     if (type !== 'work') {
-      // Solo modifica este día concreto
       S.schedule[pid][day] = { type: type === 'ferias' ? 'ferias' : 'folga', shift: null, store: null };
     } else {
       const shift = document.getElementById('gh-me-shift').value;
@@ -2453,7 +2472,6 @@
       const soft = PEOPLE.find(o => o.id !== pid && p?.softAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);
       if (soft) { ce.textContent = `Atenção: ${p?.name} e ${soft.name} — preferido evitar.`; ce.className = 'gh-conf-note soft'; ce.style.display = ''; }
       else ce.style.display = 'none';
-      // Solo modifica este día concreto — no afecta al resto de la semana
       S.schedule[pid][day] = { type: 'work', shift, store: sid };
     }
     closeModal();
@@ -2471,46 +2489,48 @@
     const modal = document.getElementById('gh-modal');
     if (!modal) return;
 
-    // Reuse modal with custom content
     document.getElementById('gh-me-ttl').textContent = `Adicionar pessoa — ${sname(sid)}`;
     document.getElementById('gh-me-work').style.display = 'none';
     document.getElementById('gh-me-conf').style.display = 'none';
+    document.getElementById('gh-me-type').style.display = 'none';
 
-    const typeEl = document.getElementById('gh-me-type');
-    typeEl.style.display = 'none';
-
-    // Inject person list into modal body
     const bdy = modal.querySelector('.gh-modal-bdy');
     let injected = bdy.querySelector('#gh-add-person-list');
-    if (!injected) {
-      injected = document.createElement('div');
-      injected.id = 'gh-add-person-list';
-      bdy.appendChild(injected);
-    }
+    if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
+
+    // Days open in this store
+    const openDays = S.openDays[sid] || [];
+
     injected.innerHTML = `
-      <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Escolha a pessoa a adicionar:</div>
-      <div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;">
+      <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Escolha a pessoa:</div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;">
         ${active.map(p => `
-          <button class="gh-add-person-pick" data-pid="${p.id}" data-store="${sid}"
+          <button class="gh-add-person-pick" data-pid="${p.id}"
             style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
             ${shortName(p.name)}
           </button>`).join('')}
       </div>
-      <div id="gh-add-day-prompt" style="display:none;margin-top:12px;font-size:.7rem;color:#1a3a6c;font-weight:600;">
-        ✓ Pessoa seleccionada. Feche e clique no dia que quer atribuir.
+      <div style="font-size:.7rem;color:#888;margin-bottom:6px;">Dia(s) a atribuir:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+        ${DAYS.map(d => {
+          const isOpen = openDays.includes(d);
+          return `<label style="display:flex;align-items:center;gap:3px;font-size:.75rem;cursor:${isOpen?'pointer':'default'};opacity:${isOpen?1:0.35}">
+            <input type="checkbox" class="gh-add-day-chk" value="${d}" ${isOpen?'':'disabled'}> ${d}
+          </label>`;
+        }).join('')}
       </div>`;
 
     injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
       btn.addEventListener('click', () => {
-        _addCtx = { pid: btn.dataset.pid, sid: btn.dataset.store };
         injected.querySelectorAll('.gh-add-person-pick').forEach(b => b.style.background = '#fff');
         btn.style.background = '#e8f0fe';
-        injected.querySelector('#gh-add-day-prompt').style.display = 'block';
+        _addCtx = { pid: btn.dataset.pid, sid };
       });
     });
 
-    modal.classList.add('open');
+    // Wire save button to handle add
     modal.dataset.mode = 'add';
+    modal.classList.add('open');
   }
 
   // ── REMOVER PERSONA DE TIENDA ──

@@ -1410,21 +1410,20 @@
       if (vEl) vEl.value = data.valorFactura || '';
       procUpdateBannerProvider(fid);
       procUpdateTableLock(fid);
-      /* Restore guia ERP */
+      /* Restore guia ERP — if present, always collapse on load */
       if (data.guiaErp) {
         var gEl = document.getElementById('proc-guia-erp-' + fid);
         if (gEl) {
           gEl.value = data.guiaErp;
-          procGuiaErpChange(fid);
-          /* If collapsed flag is false but guia exists, keep expanded */
-          if (data.collapsed === false) {
-            var wrapEl = document.getElementById('proc-fatura-' + fid);
-            if (wrapEl && wrapEl.classList.contains('proc-collapsed')) procToggleCollapse(fid);
-          }
+          gEl.classList.add('proc-guia-done');
+          var bannerEl = document.getElementById('proc-fatura-banner-' + fid);
+          if (bannerEl) bannerEl.classList.add('proc-banner-done');
+          /* Always collapse when guia exists, regardless of previous collapsed state */
+          var wrapEl = document.getElementById('proc-fatura-' + fid);
+          if (wrapEl && !wrapEl.classList.contains('proc-collapsed')) procToggleCollapse(fid);
         }
-      }
-      /* Restore collapsed state explicitly (even without guia) */
-      if (data.collapsed && !data.guiaErp) {
+      } else if (data.collapsed) {
+        /* No guia but was manually collapsed — restore that too */
         var wrapEl2 = document.getElementById('proc-fatura-' + fid);
         if (wrapEl2 && !wrapEl2.classList.contains('proc-collapsed')) procToggleCollapse(fid);
       }

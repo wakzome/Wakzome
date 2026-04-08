@@ -52,6 +52,26 @@
       '#proc-content .proc-remove-fatura-btn { padding:3px 11px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.68rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background 0.14s,border-color 0.14s,color 0.14s; }',
       '#proc-content .proc-remove-fatura-btn:hover { border-color:#c47a7a; color:#c47a7a; background:rgba(155,77,77,.12); }',
 
+      /* Guia ERP input in banner */
+      '#proc-content .proc-guia-erp-wrap { display:flex; align-items:center; gap:6px; margin-left:auto; }',
+      '#proc-content .proc-guia-erp-label { font-size:.58rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
+      '#proc-content .proc-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:130px; outline:none; transition:border-color .15s,background .15s; }',
+      '#proc-content .proc-guia-erp-input:focus { border-color:#000; background:#fff; }',
+      '#proc-content .proc-guia-erp-input.proc-guia-done { border-color:#4A7C6F; background:#F0F7F5; color:#4A7C6F; }',
+
+      /* Collapse toggle triangle in banner */
+      '#proc-content .proc-collapse-btn { display:flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0; border:1px solid #ddd; border-radius:7px; background:transparent; cursor:pointer; color:#888; font-size:.75rem; transition:background .13s,border-color .13s,color .13s; flex-shrink:0; }',
+      '#proc-content .proc-collapse-btn:hover { background:#f0f0f0; border-color:#ccc; color:#000; }',
+      '#proc-content .proc-collapse-btn.collapsed { color:#000; border-color:#ccc; background:#f5f5f5; }',
+
+      /* Collapsed state: hide everything below banner */
+      '#proc-content .proc-fatura-instance.proc-collapsed .proc-header-card { display:none !important; }',
+      '#proc-content .proc-fatura-instance.proc-collapsed .proc-table-lock  { display:none !important; }',
+      '#proc-content .proc-fatura-instance.proc-collapsed #proc-table-block-1,'+
+      '#proc-content .proc-fatura-instance.proc-collapsed [id^="proc-table-block-"] { display:none !important; }',
+      '#proc-content .proc-fatura-instance.proc-collapsed { padding-bottom:12px; margin-bottom:16px; border-bottom-width:1px; border-bottom-style:dashed; }',
+      '#proc-content .proc-fatura-banner.proc-banner-done { background:#F0F7F5; border-color:#b5d9d0; }',
+
       /* Connect banner to header-card */
       '#proc-content .proc-fatura-instance .proc-header-card { border-radius:0; border-top:none; margin-top:0; }',
       '#proc-content .proc-fatura-instance .proc-table-footer { border-radius:0 0 12px 12px; }',
@@ -979,6 +999,8 @@
         return {
           proveedor:    (document.getElementById('proc-proveedor-'    + fid) || {}).value || '',
           valorFactura: (document.getElementById('proc-valorFactura-' + fid) || {}).value || '',
+          guiaErp:      (document.getElementById('proc-guia-erp-'     + fid) || {}).value || '',
+          collapsed:    !!(document.getElementById('proc-fatura-' + fid) || {}).classList && (document.getElementById('proc-fatura-' + fid)).classList.contains('proc-collapsed'),
           rows: rows
         };
       })
@@ -1388,6 +1410,24 @@
       if (vEl) vEl.value = data.valorFactura || '';
       procUpdateBannerProvider(fid);
       procUpdateTableLock(fid);
+      /* Restore guia ERP */
+      if (data.guiaErp) {
+        var gEl = document.getElementById('proc-guia-erp-' + fid);
+        if (gEl) {
+          gEl.value = data.guiaErp;
+          procGuiaErpChange(fid);
+          /* If collapsed flag is false but guia exists, keep expanded */
+          if (data.collapsed === false) {
+            var wrapEl = document.getElementById('proc-fatura-' + fid);
+            if (wrapEl && wrapEl.classList.contains('proc-collapsed')) procToggleCollapse(fid);
+          }
+        }
+      }
+      /* Restore collapsed state explicitly (even without guia) */
+      if (data.collapsed && !data.guiaErp) {
+        var wrapEl2 = document.getElementById('proc-fatura-' + fid);
+        if (wrapEl2 && !wrapEl2.classList.contains('proc-collapsed')) procToggleCollapse(fid);
+      }
       dataRows.forEach(function(row, idx) {
         var rid = idx + 1;
         var tr  = document.getElementById('proc-row-' + fid + '-' + rid);
@@ -1445,11 +1485,19 @@
     return ''
       + '<div class="proc-fatura-banner" id="proc-fatura-banner-' + fid + '">'
       +   '<div class="proc-fatura-banner-left">'
+      +     '<button class="proc-collapse-btn" id="proc-collapse-btn-' + fid + '" title="Colapsar / expandir fatura" onclick="procToggleCollapse(' + fid + ')">&#9660;</button>'
       +     '<span style="font-size:1rem">&#128196;</span>'
       +     '<span class="proc-fatura-banner-num" id="proc-fatura-banner-num-' + fid + '">Fatura ' + fid + '</span>'
       +     '<span class="proc-fatura-banner-provider" id="proc-banner-provider-' + fid + '"></span>'
       +   '</div>'
-      +   '<button class="proc-remove-fatura-btn" id="proc-remove-btn-' + fid + '" onclick="procRemoveFatura(' + fid + ')" style="display:none">\u2715 remover</button>'
+      +   '<div style="display:flex;align-items:center;gap:10px;">'
+      +     '<div class="proc-guia-erp-wrap">'
+      +       '<span class="proc-guia-erp-label">N.º Guia ERP</span>'
+      +       '<input type="text" class="proc-guia-erp-input" id="proc-guia-erp-' + fid + '" placeholder="ex: 2025/001" autocomplete="off"'
+      +       ' oninput="procGuiaErpChange(' + fid + ')" />'
+      +     '</div>'
+      +     '<button class="proc-remove-fatura-btn" id="proc-remove-btn-' + fid + '" onclick="procRemoveFatura(' + fid + ')" style="display:none">\u2715 remover</button>'
+      +   '</div>'
       + '</div>'
       + '<div class="proc-header-card">'
       +   '<div class="proc-field-group">'
@@ -1527,6 +1575,40 @@
     var bEl = document.getElementById('proc-banner-provider-' + fid);
     var val = (pEl && pEl.value) ? pEl.value : '';
     if (bEl) bEl.textContent = val ? '\u2014 ' + val : '';
+  }
+
+  /* ── GUIA ERP: colapsar / expandir factura ── */
+  function procGuiaErpChange(fid) {
+    var input   = document.getElementById('proc-guia-erp-' + fid);
+    var banner  = document.getElementById('proc-fatura-banner-' + fid);
+    var wrap    = document.getElementById('proc-fatura-' + fid);
+    var colBtn  = document.getElementById('proc-collapse-btn-' + fid);
+    if (!input) return;
+    var hasGuia = input.value.trim().length > 0;
+    if (hasGuia) {
+      input.classList.add('proc-guia-done');
+      if (banner) banner.classList.add('proc-banner-done');
+      /* Auto-collapse when guia is set and not yet collapsed */
+      if (wrap && !wrap.classList.contains('proc-collapsed')) {
+        procToggleCollapse(fid);
+      }
+    } else {
+      input.classList.remove('proc-guia-done');
+      if (banner) banner.classList.remove('proc-banner-done');
+    }
+    procSaveSession(false);
+  }
+
+  function procToggleCollapse(fid) {
+    var wrap   = document.getElementById('proc-fatura-' + fid);
+    var colBtn = document.getElementById('proc-collapse-btn-' + fid);
+    if (!wrap) return;
+    var isCollapsed = wrap.classList.toggle('proc-collapsed');
+    if (colBtn) {
+      colBtn.innerHTML = isCollapsed ? '&#9654;' : '&#9660;';
+      colBtn.classList.toggle('collapsed', isCollapsed);
+      colBtn.title = isCollapsed ? 'Expandir fatura' : 'Colapsar fatura';
+    }
   }
 
   /* ── 7. ROW CREATION ── */
@@ -2445,7 +2527,9 @@
       var flagBtn = document.getElementById('proc-flag-' + fid + '-' + i);
       var flagged = flagBtn ? flagBtn.classList.contains('flagged') : false;
       if (!ref && !preco && !flagged) continue;
-      var pc3 = procCalcPrecoCusto(preco, plus3, hasD3, qtdFt, a4, a5);
+      var pc3raw = procCalcPrecoCusto(preco, plus3, hasD3, qtdFt, a4, a5);
+      /* Apply row discount to cost price (descPct column) */
+      var pc3 = pc3raw * (1 - dPct / 100);
       /* Collect manual PVP override if any */
       var pvpEl3    = document.getElementById('proc-pvp-' + fid + '-' + i);
       var pvpManual = (pvpEl3 && pvpEl3._manualOverride) ? parseFloat((pvpEl3.querySelector('.proc-pvp-display') || {}).textContent) || null : null;
@@ -3837,6 +3921,8 @@
   window.procPVPToggleEdit       = procPVPToggleEdit;
   window.procPVPEditInput        = procPVPEditInput;
   window.procPVPEditBlur         = procPVPEditBlur;
+  window.procToggleCollapse      = procToggleCollapse;
+  window.procGuiaErpChange       = procGuiaErpChange;
 
   function procLimitDigits(input, max) {
     var v = input.value.replace(/[^0-9.]/g,'');

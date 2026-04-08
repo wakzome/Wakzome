@@ -3380,7 +3380,9 @@
         '<button class="tam-guia-addr-btn" data-addr="EDIFICIO Ilha Dourada Loja-1">\u29c9\u00a0PXO</button>' +
       '</div>';
 
-    var sentSection = sentRows.length
+    /* FIX: mostrar enviadas apenas quando nao ha pendentes — evita confusao
+       entre pendentes e enviadas. Se ha pendentes, o historico de enviadas e omitido. */
+    var sentSection = (sentRows.length && pendRows.length === 0)
       ? '<tr class="tam-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado (' + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>' +
         buildTableRows(sentRows)
       : '';
@@ -3462,7 +3464,7 @@
       var newPendRows = pendRows.concat(sessionRows);
       var newTotals   = recalcTotals(newPendRows, sentRows);
       var tbody = modal.querySelector('#tam-guia-tbody');
-      var newSentSection = sentRows.length
+      var newSentSection = (sentRows.length && newPendRows.length === 0)
         ? '<tr class="tam-guia-sent-hdr"><td colspan="5">\u2713 J\u00e1 enviado (' + sentRows.length + ' refs \u00b7 ' + newTotals.fSent + ' F \u00b7 ' + newTotals.pSent + ' PS)</td></tr>' +
           buildTableRows(sentRows)
         : '';

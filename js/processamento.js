@@ -3420,7 +3420,8 @@
       + '<button class="proc-guia-addr-btn" data-addr="EDIFICIO Ilha Dourada Loja-1">\u29c9\u00a0PXO</button>'
       + '</div>';
 
-    var sentSection = sentRows.length
+    /* FIX: mostrar enviadas apenas quando nao ha pendentes */
+    var sentSection = (sentRows.length && pendRows.length === 0)
       ? '<tr class="proc-guia-sent-hdr"><td colspan="7">\u2713 J\u00e1 enviado ('
         + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>'
         + buildTableRows(sentRows)

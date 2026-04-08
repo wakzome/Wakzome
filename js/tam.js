@@ -3068,8 +3068,17 @@
   /* Extrae pendientes de un mapa de sesiones ya cargado (local o remoto) */
   function tamExtractPendingFromSessionsMap(allSessions) {
     var results = [];
+    /* FIX: só incluir sessões criadas ANTES da sessão activa.
+       Compara createdAt (timestamp numérico). Se a sessão activa não tiver
+       createdAt, usa savedAt como fallback. Sessões futuras ou sem data são ignoradas. */
+    var activeCreatedAt = tamSession ? (tamSession.createdAt || tamSession.savedAt || 0) : 0;
     var keys = Object.keys(allSessions)
-      .filter(function(k){ return !tamSession || allSessions[k].name !== tamSession.name; })
+      .filter(function(k){
+        var s = allSessions[k];
+        if (!tamSession || s.name === tamSession.name) return false;
+        var sTime = s.createdAt || s.savedAt || 0;
+        return sTime < activeCreatedAt;
+      })
       .sort(function(a,b){ return (allSessions[b].savedAt||0) - (allSessions[a].savedAt||0); });
     keys.forEach(function(key){
       var s = allSessions[key];
@@ -3238,7 +3247,36 @@
   }
 
   /* ── Modal principal de guia ── */
-  function tamShowGuiaModal(invIdx) {
+  async function tamShowGuiaModal(invIdx) {
+    /* FIX: refrescar sentRefs da sessao activa a partir do Supabase antes de
+       construir as linhas — garante que confirmacoes feitas noutro modulo
+       (ex: Processamento) sao reflectidas imediatamente. */
+    if (tamSession) {
+      var sb = tamSB();
+      if (sb) {
+        try {
+          var _sfRes = await sb.from(TAM_SESSIONS_TABLE)
+            .select('data')
+            .eq('session_name', tamSession.name)
+            .limit(1);
+          if (!_sfRes.error && _sfRes.data && _sfRes.data.length) {
+            var _sfParsed = JSON.parse(_sfRes.data[0].data);
+            if (_sfParsed.sentRefs) {
+              tamSession.sentRefs = _sfParsed.sentRefs;
+              /* Actualizar localStorage com dados frescos */
+              try {
+                var _sfAll = tamLoadAllSessionsLocal();
+                if (_sfAll[tamSession.name]) {
+                  _sfAll[tamSession.name].sentRefs = _sfParsed.sentRefs;
+                  localStorage.setItem('tam_sessions', JSON.stringify(_sfAll));
+                }
+              } catch(e) {}
+            }
+          }
+        } catch(e) { console.warn('TAM guia: erro ao refrescar sentRefs', e); }
+      }
+    }
+
     var isAll  = (invIdx === null);
     var rows   = isAll ? tamBuildGuiaRowsAll() : tamBuildGuiaRows(invIdx);
     var title  = isAll

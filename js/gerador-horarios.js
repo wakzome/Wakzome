@@ -2263,9 +2263,7 @@
           const c2 = sched[day] || { type: 'na' };
           const open = S.openDays[st.id]?.includes(day);
           if (!open) {
-            // Día cerrado para esta tienda — pero puede que la persona esté trabajando en otra
             if (c2.type === 'work' && c2.store && c2.store !== st.id) {
-              // Está trabajando en otra tienda — mostrar dónde
               const content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-elsewhere">${content}</div></td>`;
             }
@@ -2308,10 +2306,17 @@
           </div></td>${cells}</tr>`;
       }).join('');
 
-      bodyHTML += `<div class="gh-store-block"><table class="gh-sched-tbl">
+      // Store name as button with +/- controls
+      bodyHTML += `<div class="gh-store-block" id="gh-sb-${st.id}"><table class="gh-sched-tbl">
         <thead>
           <tr class="gh-tbl-store-hdr">
-            <td>PORTO SANTO<br>${st.short.split(' ').join('<br>')}</td>
+            <td>
+              <button class="gh-store-name-btn" data-store="${st.id}">PORTO SANTO<br>${st.short.split(' ').join('<br>')}</button>
+              <div class="gh-store-actions" id="gh-sa-${st.id}" style="display:none">
+                <button class="gh-store-act-btn gh-store-add" data-store="${st.id}" title="Adicionar pessoa">＋</button>
+                <button class="gh-store-act-btn gh-store-rem" data-store="${st.id}" title="Remover pessoa">－</button>
+              </div>
+            </td>
             ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
           </tr>
         </thead>
@@ -2340,9 +2345,58 @@
       confirmSchedule(active);
     });
 
-    // Edit on click
+    // Store name button — toggle +/- actions
+    c.querySelectorAll('.gh-store-name-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sid = btn.dataset.store;
+        const panel = document.getElementById(`gh-sa-${sid}`);
+        // Close all others
+        c.querySelectorAll('.gh-store-actions').forEach(p => { if (p.id !== `gh-sa-${sid}`) p.style.display = 'none'; });
+        panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+      });
+    });
+
+    // + Add person to store
+    c.querySelectorAll('.gh-store-add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sid = btn.dataset.store;
+        openAddPersonToStore(sid);
+      });
+    });
+
+    // - Remove person from store
+    c.querySelectorAll('.gh-store-rem').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sid = btn.dataset.store;
+        openRemovePersonFromStore(sid);
+      });
+    });
+
+    // Edit on click — intercept if add mode is active
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
-      td.addEventListener('click', () => openEdit(td.dataset.pid, td.dataset.day, td.dataset.store));
+      td.addEventListener('click', () => {
+        if (_addCtx) {
+          // Add mode: assign selected person to this day in the target store
+          const { pid, sid } = _addCtx;
+          const day = td.dataset.day;
+          if (!S.openDays[sid]?.includes(day)) {
+            alert(`${sname(sid)} não está aberta ao ${DAY_PT[day]}.`);
+            return;
+          }
+          const p = P(pid);
+          if (!p?.knows?.includes(sid)) {
+            alert(`${shortName(p?.name)} não conhece ${sname(sid)}.`);
+            return;
+          }
+          S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
+          _addCtx = null;
+          closeModal();
+          const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+          showSchedule(active);
+          return;
+        }
+        openEdit(td.dataset.pid, td.dataset.day, td.dataset.store);
+      });
     });
   }
 
@@ -2388,6 +2442,7 @@
     const { pid, day } = editCtx;
     const type = document.getElementById('gh-me-type').value;
     if (type !== 'work') {
+      // Solo modifica este día concreto
       S.schedule[pid][day] = { type: type === 'ferias' ? 'ferias' : 'folga', shift: null, store: null };
     } else {
       const shift = document.getElementById('gh-me-shift').value;
@@ -2398,6 +2453,7 @@
       const soft = PEOPLE.find(o => o.id !== pid && p?.softAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);
       if (soft) { ce.textContent = `Atenção: ${p?.name} e ${soft.name} — preferido evitar.`; ce.className = 'gh-conf-note soft'; ce.style.display = ''; }
       else ce.style.display = 'none';
+      // Solo modifica este día concreto — no afecta al resto de la semana
       S.schedule[pid][day] = { type: 'work', shift, store: sid };
     }
     closeModal();
@@ -2405,7 +2461,186 @@
     showSchedule(active);
   }
 
+  // ── AÑADIR PERSONA A TIENDA ──
+  // Muestra lista de todas las personas activas, el usuario elige,
+  // luego clica en el día donde quiere asignarla
+  let _addCtx = null;
+
+  function openAddPersonToStore(sid) {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    const modal = document.getElementById('gh-modal');
+    if (!modal) return;
+
+    // Reuse modal with custom content
+    document.getElementById('gh-me-ttl').textContent = `Adicionar pessoa — ${sname(sid)}`;
+    document.getElementById('gh-me-work').style.display = 'none';
+    document.getElementById('gh-me-conf').style.display = 'none';
+
+    const typeEl = document.getElementById('gh-me-type');
+    typeEl.style.display = 'none';
+
+    // Inject person list into modal body
+    const bdy = modal.querySelector('.gh-modal-bdy');
+    let injected = bdy.querySelector('#gh-add-person-list');
+    if (!injected) {
+      injected = document.createElement('div');
+      injected.id = 'gh-add-person-list';
+      bdy.appendChild(injected);
+    }
+    injected.innerHTML = `
+      <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Escolha a pessoa a adicionar:</div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;">
+        ${active.map(p => `
+          <button class="gh-add-person-pick" data-pid="${p.id}" data-store="${sid}"
+            style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
+            ${shortName(p.name)}
+          </button>`).join('')}
+      </div>
+      <div id="gh-add-day-prompt" style="display:none;margin-top:12px;font-size:.7rem;color:#1a3a6c;font-weight:600;">
+        ✓ Pessoa seleccionada. Feche e clique no dia que quer atribuir.
+      </div>`;
+
+    injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _addCtx = { pid: btn.dataset.pid, sid: btn.dataset.store };
+        injected.querySelectorAll('.gh-add-person-pick').forEach(b => b.style.background = '#fff');
+        btn.style.background = '#e8f0fe';
+        injected.querySelector('#gh-add-day-prompt').style.display = 'block';
+      });
+    });
+
+    modal.classList.add('open');
+    modal.dataset.mode = 'add';
+  }
+
+  // ── REMOVER PERSONA DE TIENDA ──
+  function openRemovePersonFromStore(sid) {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    // Personas que trabajan en esta tienda algún día
+    const inStore = active.filter(p =>
+      DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id][d].store === sid)
+    );
+    if (!inStore.length) { alert(`Nenhuma pessoa atribuída a ${sname(sid)}.`); return; }
+
+    const modal = document.getElementById('gh-modal');
+    if (!modal) return;
+
+    document.getElementById('gh-me-ttl').textContent = `Remover pessoa — ${sname(sid)}`;
+    document.getElementById('gh-me-work').style.display = 'none';
+    document.getElementById('gh-me-conf').style.display = 'none';
+    document.getElementById('gh-me-type').style.display = 'none';
+
+    const bdy = modal.querySelector('.gh-modal-bdy');
+    let injected = bdy.querySelector('#gh-add-person-list');
+    if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
+
+    injected.innerHTML = `
+      <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Quem quer remover de ${sname(sid)}?</div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;">
+        ${inStore.map(p => `
+          <button class="gh-rem-person-pick" data-pid="${p.id}" data-store="${sid}"
+            style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
+            ${shortName(p.name)}
+          </button>`).join('')}
+      </div>
+      <div id="gh-sub-prompt" style="display:none;margin-top:12px;">
+        <div style="font-size:.7rem;color:#888;margin-bottom:6px;">Escolha o substituto:</div>
+        <div id="gh-sub-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;"></div>
+        <div id="gh-sub-alert" style="display:none;font-size:.7rem;color:#c0392b;margin-top:8px;"></div>
+      </div>`;
+
+    injected.querySelectorAll('.gh-rem-person-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.pid;
+        const sid2 = btn.dataset.store;
+        injected.querySelectorAll('.gh-rem-person-pick').forEach(b => b.style.background = '#fff');
+        btn.style.background = '#fee';
+
+        // Find candidates: active people who know this store and aren't already in it all week
+        const candidates = active.filter(p =>
+          p.id !== pid &&
+          p.knows?.includes(sid2) &&
+          !DAYS.every(d => S.schedule[p.id]?.[d]?.store === sid2)
+        );
+
+        const subList = injected.querySelector('#gh-sub-list');
+        const subPrompt = injected.querySelector('#gh-sub-prompt');
+        const subAlert = injected.querySelector('#gh-sub-alert');
+        subPrompt.style.display = 'block';
+        subAlert.style.display = 'none';
+
+        if (!candidates.length) {
+          subList.innerHTML = '';
+          subAlert.textContent = `Sem substitutos disponíveis para ${sname(sid2)}.`;
+          subAlert.style.display = 'block';
+          return;
+        }
+
+        subList.innerHTML = candidates.map(p => `
+          <button class="gh-sub-pick" data-remove="${pid}" data-replace="${p.id}" data-store="${sid2}"
+            style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
+            ${shortName(p.name)}
+          </button>`).join('');
+
+        subList.querySelectorAll('.gh-sub-pick').forEach(sb => {
+          sb.addEventListener('click', () => {
+            const removeId  = sb.dataset.remove;
+            const replaceId = sb.dataset.replace;
+            const storeSid  = sb.dataset.store;
+            applyRemoveReplace(removeId, replaceId, storeSid);
+            cleanupModalExtras();
+            closeModal();
+          });
+        });
+      });
+    });
+
+    modal.classList.add('open');
+    modal.dataset.mode = 'remove';
+  }
+
+  function applyRemoveReplace(removeId, replaceId, sid) {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    // Remove person from this store all week — set to folga on days they were here
+    DAYS.forEach(day => {
+      if (S.schedule[removeId]?.[day]?.type === 'work' && S.schedule[removeId][day].store === sid) {
+        S.schedule[removeId][day] = { type: 'folga', shift: null, store: null };
+      }
+    });
+    // Move replacement person to this store on their working days
+    DAYS.forEach(day => {
+      const cell = S.schedule[replaceId]?.[day];
+      if (!cell || cell.type !== 'work') return;
+      if (!S.openDays[sid]?.includes(day)) return;
+      // Only move if replacement knows the store
+      const p = P(replaceId);
+      if (!p?.knows?.includes(sid)) return;
+      S.schedule[replaceId][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
+    });
+    // Check coverage and alert if needed
+    DAYS.forEach(day => {
+      if (!S.openDays[sid]?.includes(day)) return;
+      const cover = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid).length;
+      if (cover < storeMin(sid)) {
+        S.alerts.push({ type: 'amber', text: `${day}: ${sname(sid)} abaixo do mínimo após substituição.` });
+      }
+    });
+    showSchedule(active);
+  }
+
+  function cleanupModalExtras() {
+    const injected = document.querySelector('#gh-add-person-list');
+    if (injected) injected.remove();
+    const typeEl = document.getElementById('gh-me-type');
+    if (typeEl) typeEl.style.display = '';
+    const workEl = document.getElementById('gh-me-work');
+    if (workEl) workEl.style.display = '';
+    if (document.getElementById('gh-modal')) document.getElementById('gh-modal').dataset.mode = '';
+    _addCtx = null;
+  }
+
   function closeModal() {
+    cleanupModalExtras();
     document.getElementById('gh-modal')?.classList.remove('open');
     editCtx = null;
   }
@@ -2556,6 +2791,12 @@
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
+        #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
+        #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
+        #tab-gerador .gh-store-act-btn { width:26px; height:26px; border-radius:50%; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:1rem; font-weight:700; display:flex; align-items:center; justify-content:center; transition:all .15s; line-height:1; }
+        #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
+        #tab-gerador .gh-store-rem:hover { background:#ffebee; border-color:#ef5350; color:#c62828; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
         #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }

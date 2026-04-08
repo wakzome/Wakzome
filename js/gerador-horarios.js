@@ -193,7 +193,7 @@
       storeMode: {},
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
-      schedule: {}, alerts: [], decisions: [], _storeOverride: {}
+      schedule: {}, alerts: [], decisions: []
     };
   }
   let S = blank();
@@ -1571,14 +1571,6 @@
       if (!sid) return { type: 'folga', shift: null, store: null };
       return { type: 'work', shift: storeBaseShift(sid), store: sid };
     }
-    // Store override — person was manually moved to another store this week
-    const overrideSid = S._storeOverride?.[p.id];
-    if (overrideSid) {
-      if (!S.openDays[overrideSid]) S.openDays[overrideSid] = [];
-      if (!S.openDays[overrideSid].includes(day)) S.openDays[overrideSid].push(day);
-      if (!S.openStores.includes(overrideSid)) S.openStores.push(overrideSid);
-      return { type: 'work', shift: storeBaseShift(overrideSid), store: overrideSid };
-    }
     // REGLA ABSOLUTA: tienda fija abierta → su tienda. NUNCA otra.
     if (p.store && storeOpen(p.store, day)) {
       return { type: 'work', shift: storeBaseShift(p.store), store: p.store };
@@ -2103,9 +2095,18 @@
     const violations = validateMinCoverage(active);
     if (violations.length > 0) { showCoverageBlocker(violations, active); return; }
 
-    // Snapshot what the system generated — deep copy of raw schedule
-    S._snapshotSistema = JSON.parse(JSON.stringify(S.schedule));
-    S._snapshotSistemaStores = JSON.parse(JSON.stringify(S.openDays));
+    // Guardar snapshot do sistema em sessionStorage antes de mostrar
+    try {
+      const snap = {};
+      active.forEach(p => {
+        snap[p.id] = {};
+        DAYS.forEach(d => {
+          const c = S.schedule[p.id]?.[d];
+          if (c) snap[p.id][d] = { type: c.type, shift: c.shift || null, store: c.store || null };
+        });
+      });
+      sessionStorage.setItem('gh_snap_sistema', JSON.stringify(snap));
+    } catch(e) {}
 
     showSchedule(active);
   }
@@ -2248,7 +2249,7 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Gerar Novamente</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-learn" style="color:#1a6c1a;border-color:#1a6c1a;">⬆ Aprender</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-learn" style="color:#1a6c1a;border-color:#86efac;">⬆ Aprender</button>
           <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
         </div>
       </div>
@@ -2329,7 +2330,6 @@
               <button class="gh-store-name-btn" data-store="${st.id}">PORTO SANTO<br>${st.short.split(' ').join('<br>')}</button>
               <div class="gh-store-actions" id="gh-sa-${st.id}" style="display:none">
                 <button class="gh-store-act-btn gh-store-add" data-store="${st.id}" title="Adicionar pessoa">＋</button>
-                <button class="gh-store-act-btn gh-store-rem" data-store="${st.id}" title="Remover pessoa">－</button>
               </div>
             </td>
             ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
@@ -2377,14 +2377,6 @@
       btn.addEventListener('click', () => {
         const sid = btn.dataset.store;
         openAddPersonToStore(sid);
-      });
-    });
-
-    // - Remove person from store
-    c.querySelectorAll('.gh-store-rem').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const sid = btn.dataset.store;
-        openRemovePersonFromStore(sid);
       });
     });
 
@@ -2506,7 +2498,6 @@
   // Muestra lista de todas las personas activas, el usuario elige,
   // luego clica en el día donde quiere asignarla
   let _addCtx = null;
-  let _removeCtx = null;
 
   function openAddPersonToStore(sid) {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -2563,241 +2554,6 @@
   }
 
   // ── REMOVER PERSONA DE TIENDA — panel independiente ──
-  function openRemovePersonFromStore(sid) {
-    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-    const inStore = active.filter(p =>
-      DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id][d].store === sid)
-    );
-    if (!inStore.length) { alert(`Nenhuma pessoa atribuída a ${sname(sid)}.`); return; }
-
-    // Remove any existing panel
-    document.getElementById('gh-rem-panel')?.remove();
-
-    const panel = document.createElement('div');
-    panel.id = 'gh-rem-panel';
-    panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#fff;border:1px solid #ddd;border-radius:10px;padding:20px;width:320px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);';
-
-    let removeId = null;
-    let replaceId = null;
-
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font-size:.85rem;font-weight:700;">Substituir em ${sname(sid)}</div>
-        <button id="gh-rem-close" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#aaa;">✕</button>
-      </div>
-      <div style="font-size:.7rem;color:#888;margin-bottom:6px;">1. Quem quer remover?</div>
-      <div id="gh-rem-remove-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;">
-        ${inStore.map(p => `<button class="gh-rem-pick" data-pid="${p.id}" style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">${shortName(p.name)}</button>`).join('')}
-      </div>
-      <div style="font-size:.7rem;color:#888;margin-bottom:6px;">2. Quem vai substituir?</div>
-      <div id="gh-rem-replace-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:16px;min-height:32px;">
-        <div style="font-size:.72rem;color:#ccc;padding:6px;">Seleccione primeiro quem remover</div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button id="gh-rem-cancel" style="padding:7px 16px;border:1px solid #ddd;border-radius:6px;background:#ffffff !important;color:#111111 !important;cursor:pointer;font-size:.78rem;">Cancelar</button>
-        <button id="gh-rem-confirm" style="padding:7px 16px;border:1px solid #111;border-radius:6px;background:#111111 !important;color:#ffffff !important;cursor:pointer;font-size:.78rem;font-weight:600;opacity:0.4;">Confirmar</button>
-      </div>`;
-
-    const container = document.getElementById('gh-container') || document.body;
-    container.style.position = 'relative';
-    container.appendChild(panel);
-
-    const confirmBtn = panel.querySelector('#gh-rem-confirm');
-    const replaceList = panel.querySelector('#gh-rem-replace-list');
-
-    panel.querySelector('#gh-rem-close').addEventListener('click', () => panel.remove());
-    panel.querySelector('#gh-rem-cancel').addEventListener('click', () => panel.remove());
-
-    panel.querySelectorAll('.gh-rem-pick').forEach(btn => {
-      btn.addEventListener('click', () => {
-        removeId = btn.dataset.pid;
-        replaceId = null;
-        confirmBtn.style.opacity = '0.4';
-        panel.querySelectorAll('.gh-rem-pick').forEach(b => { b.style.background = '#fff'; b.style.borderColor = '#e0e0e0'; });
-        btn.style.background = '#fff0f0';
-        btn.style.borderColor = '#ef5350';
-
-        const candidates = active.filter(p => p.id !== removeId);
-        replaceList.innerHTML = candidates.map(p =>
-          `<button class="gh-sub-pick" data-pid="${p.id}" style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">${shortName(p.name)}</button>`
-        ).join('');
-
-        replaceList.querySelectorAll('.gh-sub-pick').forEach(sb => {
-          sb.addEventListener('click', () => {
-            replaceId = sb.dataset.pid;
-            replaceList.querySelectorAll('.gh-sub-pick').forEach(b => { b.style.background = '#fff'; b.style.borderColor = '#e0e0e0'; });
-            sb.style.background = '#e8f0fe';
-            sb.style.borderColor = '#3b82f6';
-            confirmBtn.style.opacity = '1';
-          });
-        });
-      });
-    });
-
-    confirmBtn.addEventListener('click', async () => {
-      if (!removeId || !replaceId) { 
-        alert('Seleccione primeiro quem remover e depois o substituto.'); 
-        return; 
-      }
-      const r1 = removeId, r2 = replaceId;
-      panel.remove();
-      await applyRemoveReplace(r1, r2, sid);
-    });
-  }
-
-  async function applyRemoveReplace(removeId, replaceId, sid) {
-    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-
-    // 1. Identify which store the replacement person currently works in
-    const replaceSid = DAYS.reduce((store, d) => {
-      if (store) return store;
-      const cell = S.schedule[replaceId]?.[d];
-      if (cell?.type === 'work' && cell.store && cell.store !== sid) return cell.store;
-      return null;
-    }, null);
-
-    // 2. Record the store overrides BEFORE wiping schedule:
-    //    - removeId → goes to replaceSid (replacement's old store)
-    //    - replaceId → goes to sid (the store we're managing)
-    S._storeOverride = S._storeOverride || {};
-    if (replaceSid) S._storeOverride[removeId] = replaceSid;
-    S._storeOverride[replaceId] = sid;
-
-    // 3. Fully wipe schedule for BOTH people so assignFolgas starts clean
-    DAYS.forEach(day => {
-      S.schedule[removeId][day]  = { type: 'na', shift: null, store: null };
-      S.schedule[replaceId][day] = { type: 'na', shift: null, store: null };
-    });
-
-    // 4. Reset folga state completely
-    S.folgaDay = {};
-    S.extraDayOff = {};
-    S.alerts = [];
-    S.decisions = [];
-    S._storeBaseShift = {};
-
-    // 5. Recalculate all folgas from scratch respecting historical debt
-    const seed = S._regenSeed || 0;
-    computeCoordinatorPosition(active);
-    await assignFolgas(active, seed);
-
-    // 6. Rebuild full schedule — buildCell uses _storeOverride to route swapped people
-    buildSchedule(active);
-    fixSunday(active);
-    intelPass(active);
-    applyNightShiftRule(active);
-
-    // 7. Check coverage and alert
-    DAYS.forEach(day => {
-      S.openStores.forEach(storeSid => {
-        if (!S.openDays[storeSid]?.includes(day)) return;
-        const cover = active.filter(p =>
-          S.schedule[p.id]?.[day]?.type === 'work' &&
-          S.schedule[p.id][day].store === storeSid
-        ).length;
-        if (cover < storeMin(storeSid)) {
-          S.alerts.push({ type: 'amber', text: `${day}: ${sname(storeSid)} abaixo do mínimo após substituição.` });
-        }
-      });
-    });
-
-    // 8. Clear overrides and render
-    S._storeOverride = {};
-    showSchedule(active);
-  }
-
-  // ── APRENDIZAGEM ──
-
-  // Captura o estado actual do horário por tienda+dia
-  function snapshotSchedule(active) {
-    const snap = {};
-    S.openStores.forEach(sid => {
-      snap[sid] = {};
-      DAYS.forEach(day => {
-        if (!S.openDays[sid]?.includes(day)) return;
-        const workers = active.filter(p =>
-          S.schedule[p.id]?.[day]?.type === 'work' &&
-          S.schedule[p.id][day].store === sid
-        );
-        snap[sid][day] = {
-          n: workers.length,
-          // Deep copy each shift value so later edits don't affect this snapshot
-          combinacion: workers.map(p => String(S.schedule[p.id][day].shift || '')).join('|'),
-          workers: workers.map(p => ({ id: p.id, shift: String(S.schedule[p.id][day].shift || ''), store: sid }))
-        };
-      });
-    });
-    return JSON.parse(JSON.stringify(snap)); // deep copy
-  }
-
-  async function learnFromSchedule(active) {
-    const sb = getSupabase();
-    if (!sb) { alert('Supabase não disponível.'); return; }
-    const weekKey = S.weekStart?.toISOString().split('T')[0];
-    if (!weekKey) { alert('Semana não definida.'); return; }
-
-    const btn = document.getElementById('gh-btn-learn');
-    if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
-
-    try {
-      const schedSistema = S._snapshotSistema || {};
-      const schedUsuario = S.schedule;
-      const openDaysSistema = S._snapshotSistemaStores || S.openDays;
-
-      const registos = [];
-
-      S.openStores.forEach(sid => {
-        DAYS.forEach(day => {
-          if (!S.openDays[sid]?.includes(day)) return;
-
-          // What the system had
-          const workersSistema = PEOPLE.filter(p =>
-            schedSistema[p.id]?.[day]?.type === 'work' &&
-            schedSistema[p.id][day].store === sid
-          );
-          const combSistema = workersSistema.map(p => schedSistema[p.id][day].shift || '').join('|');
-
-          // What user has now
-          const workersUsuario = PEOPLE.filter(p =>
-            schedUsuario[p.id]?.[day]?.type === 'work' &&
-            schedUsuario[p.id][day].store === sid
-          );
-          const combUsuario = workersUsuario.map(p => schedUsuario[p.id][day].shift || '').join('|');
-
-          registos.push({
-            semana:               weekKey,
-            tienda_id:            sid,
-            dia:                  day,
-            n_pessoas:            workersUsuario.length,
-            combinacion_sistema:  combSistema || null,
-            combinacion_usuario:  combUsuario || null,
-            igual:                combSistema === combUsuario
-          });
-        });
-      });
-
-      // Upsert all records
-      for (const reg of registos) {
-        await sb.from('gh_aprendizaje').upsert(reg, {
-          onConflict: 'semana,tienda_id,dia'
-        });
-      }
-
-      const diferentes = registos.filter(r => !r.igual).length;
-      const msg = diferentes > 0
-        ? `✓ Aprendido — ${registos.length} registos guardados (${diferentes} diferenças do sistema).`
-        : `✓ Aprendido — ${registos.length} registos guardados (sem diferenças).`;
-
-      if (btn) { btn.textContent = '✓ Aprendido'; btn.style.background = '#e8f5e9'; btn.style.color = '#1a6c1a'; }
-      S.alerts.push({ type: 'info', text: msg });
-      showSchedule(active);
-
-    } catch(e) {
-      console.error('Erro ao aprender:', e);
-      alert('Erro ao guardar aprendizagem. Verifique a consola.');
-      if (btn) { btn.disabled = false; btn.textContent = '⬆ Aprender'; }
-    }
-  }
 
   function cleanupModalExtras() {
     const injected = document.querySelector('#gh-add-person-list');
@@ -2808,13 +2564,89 @@
     if (workEl) workEl.style.display = '';
     if (document.getElementById('gh-modal')) document.getElementById('gh-modal').dataset.mode = '';
     _addCtx = null;
-    _removeCtx = null;
   }
 
   function closeModal() {
     cleanupModalExtras();
     document.getElementById('gh-modal')?.classList.remove('open');
     editCtx = null;
+  }
+
+  async function learnFromSchedule(active) {
+    const sb = getSupabase();
+    if (!sb) { alert('Supabase não disponível.'); return; }
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    if (!weekKey) { alert('Semana não definida.'); return; }
+
+    // Load system snapshot from sessionStorage
+    let snapSistema = null;
+    try { snapSistema = JSON.parse(sessionStorage.getItem('gh_snap_sistema') || 'null'); } catch(e) {}
+    if (!snapSistema) { alert('Sem snapshot do sistema. Gere o horário primeiro.'); return; }
+
+    const btn = document.getElementById('gh-btn-learn');
+    if (btn) { btn.textContent = 'A guardar…'; btn.style.opacity = '0.6'; }
+
+    try {
+      const registos = [];
+
+      // Compare per store per day
+      S.openStores.forEach(sid => {
+        DAYS.forEach(day => {
+          if (!S.openDays[sid]?.includes(day)) return;
+
+          // System: who worked here this day and what shift
+          const workersSist = active.filter(p =>
+            snapSistema[p.id]?.[day]?.type === 'work' &&
+            snapSistema[p.id][day].store === sid
+          );
+          const combSist = workersSist
+            .sort((a,b) => a.id.localeCompare(b.id))
+            .map(p => `${p.id.slice(0,8)}:${snapSistema[p.id][day].shift||''}`)
+            .join('|');
+
+          // User: who works here now and what shift
+          const workersUser = active.filter(p =>
+            S.schedule[p.id]?.[day]?.type === 'work' &&
+            S.schedule[p.id][day].store === sid
+          );
+          const combUser = workersUser
+            .sort((a,b) => a.id.localeCompare(b.id))
+            .map(p => `${p.id.slice(0,8)}:${S.schedule[p.id][day].shift||''}`)
+            .join('|');
+
+          registos.push({
+            semana:              weekKey,
+            tienda_id:           sid,
+            dia:                 day,
+            n_pessoas:           workersUser.length,
+            combinacion_sistema: combSist || null,
+            combinacion_usuario: combUser || null,
+            igual:               combSist === combUser
+          });
+        });
+      });
+
+      // Upsert to Supabase
+      for (const reg of registos) {
+        await sb.from('gh_aprendizaje').upsert(reg, { onConflict: 'semana,tienda_id,dia' });
+      }
+
+      const diferentes = registos.filter(r => !r.igual).length;
+      const total = registos.length;
+      const msg = diferentes > 0
+        ? `✓ Aprendido — ${total} registos (${diferentes} diferença${diferentes>1?'s':''} detectada${diferentes>1?'s':''}).`
+        : `✓ Aprendido — ${total} registos (sem diferenças face ao sistema).`;
+
+      if (btn) { btn.textContent = '✓ Aprendido'; btn.style.opacity = '1'; btn.style.background = '#e8f5e9'; }
+      S.alerts = S.alerts.filter(a => !a.text.startsWith('✓ Aprendido'));
+      S.alerts.push({ type: 'info', text: msg });
+      showSchedule(active);
+
+    } catch(e) {
+      console.error('Erro ao aprender:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+      if (btn) { btn.textContent = '⬆ Aprender'; btn.style.opacity = '1'; }
+    }
   }
 
   function startNew() {
@@ -2968,7 +2800,6 @@
         #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
         #tab-gerador .gh-store-act-btn { width:26px; height:26px; border-radius:50%; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:1rem; font-weight:700; display:flex; align-items:center; justify-content:center; transition:all .15s; line-height:1; }
         #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
-        #tab-gerador .gh-store-rem:hover { background:#ffebee; border-color:#ef5350; color:#c62828; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
         #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }

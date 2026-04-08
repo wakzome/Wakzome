@@ -2103,8 +2103,9 @@
     const violations = validateMinCoverage(active);
     if (violations.length > 0) { showCoverageBlocker(violations, active); return; }
 
-    // Snapshot what the system generated — used later for learning
-    S._snapshotSistema = snapshotSchedule(active);
+    // Snapshot what the system generated — deep copy of raw schedule
+    S._snapshotSistema = JSON.parse(JSON.stringify(S.schedule));
+    S._snapshotSistemaStores = JSON.parse(JSON.stringify(S.openDays));
 
     showSchedule(active);
   }
@@ -2739,27 +2740,38 @@
     if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
 
     try {
-      // Snapshot current (user-refined) state
-      const snapUsuario = snapshotSchedule(active);
-      const snapSistema = S._snapshotSistema || {};
+      const schedSistema = S._snapshotSistema || {};
+      const schedUsuario = S.schedule;
+      const openDaysSistema = S._snapshotSistemaStores || S.openDays;
 
       const registos = [];
 
       S.openStores.forEach(sid => {
         DAYS.forEach(day => {
           if (!S.openDays[sid]?.includes(day)) return;
-          const usuario = snapUsuario[sid]?.[day];
-          const sistema = snapSistema[sid]?.[day];
-          if (!usuario) return;
+
+          // What the system had
+          const workersSistema = PEOPLE.filter(p =>
+            schedSistema[p.id]?.[day]?.type === 'work' &&
+            schedSistema[p.id][day].store === sid
+          );
+          const combSistema = workersSistema.map(p => schedSistema[p.id][day].shift || '').join('|');
+
+          // What user has now
+          const workersUsuario = PEOPLE.filter(p =>
+            schedUsuario[p.id]?.[day]?.type === 'work' &&
+            schedUsuario[p.id][day].store === sid
+          );
+          const combUsuario = workersUsuario.map(p => schedUsuario[p.id][day].shift || '').join('|');
 
           registos.push({
             semana:               weekKey,
             tienda_id:            sid,
             dia:                  day,
-            n_pessoas:            usuario.n,
-            combinacion_sistema:  sistema?.combinacion || null,
-            combinacion_usuario:  usuario.combinacion,
-            igual:                sistema?.combinacion === usuario.combinacion
+            n_pessoas:            workersUsuario.length,
+            combinacion_sistema:  combSistema || null,
+            combinacion_usuario:  combUsuario || null,
+            igual:                combSistema === combUsuario
           });
         });
       });

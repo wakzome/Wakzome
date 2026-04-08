@@ -2448,22 +2448,29 @@
     document.getElementById('gh-me-work').style.display = v === 'work' ? '' : 'none';
   }
 
-  function applyEdit() {
+  async function applyEdit() {
     const modal = document.getElementById('gh-modal');
+    const mode = modal?.dataset.mode;
 
     // Handle remove mode
-    if (modal?.dataset.mode === 'remove') {
+    if (mode === 'remove') {
       if (!_removeCtx) { alert('Seleccione um substituto primeiro.'); return; }
-      const { removeId, replaceId, storeSid } = _removeCtx;
+      const removeId  = _removeCtx.removeId;
+      const replaceId = _removeCtx.replaceId;
+      const storeSid  = _removeCtx.storeSid;
+      // Clear and close AFTER extracting values
       _removeCtx = null;
-      cleanupModalExtras();
-      closeModal();
-      applyRemoveReplace(removeId, replaceId, storeSid);
+      modal.classList.remove('open');
+      const injected = document.querySelector('#gh-add-person-list');
+      if (injected) injected.remove();
+      modal.dataset.mode = '';
+      // Now execute the swap
+      await applyRemoveReplace(removeId, replaceId, storeSid);
       return;
     }
 
     // Handle add person mode
-    if (modal?.dataset.mode === 'add') {
+    if (mode === 'add') {
       if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
       const { pid, sid } = _addCtx;
       const days = [...document.querySelectorAll('.gh-add-day-chk:checked')].map(cb => cb.value);

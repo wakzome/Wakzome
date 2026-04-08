@@ -10,9 +10,12 @@
   const SUPA_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
   const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
 
+  let _supabaseClient = null;
   function getSupabase() {
+    if (_supabaseClient) return _supabaseClient;
     if (window.supabase && window.supabase.createClient) {
-      return window.supabase.createClient(SUPA_URL, SUPA_KEY);
+      _supabaseClient = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+      return _supabaseClient;
     }
     return null;
   }
@@ -2589,7 +2592,9 @@
         <button id="gh-rem-confirm" style="padding:7px 16px;border:1px solid #111;border-radius:6px;background:#111111 !important;color:#ffffff !important;cursor:pointer;font-size:.78rem;font-weight:600;opacity:0.4;">Confirmar</button>
       </div>`;
 
-    document.body.appendChild(panel);
+    const container = document.getElementById('gh-container') || document.body;
+    container.style.position = 'relative';
+    container.appendChild(panel);
 
     const confirmBtn = panel.querySelector('#gh-rem-confirm');
     const replaceList = panel.querySelector('#gh-rem-replace-list');

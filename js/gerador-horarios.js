@@ -2452,23 +2452,6 @@
     const modal = document.getElementById('gh-modal');
     const mode = modal?.dataset.mode;
 
-    // Handle remove mode
-    if (mode === 'remove') {
-      if (!_removeCtx) { alert('Seleccione um substituto primeiro.'); return; }
-      const removeId  = _removeCtx.removeId;
-      const replaceId = _removeCtx.replaceId;
-      const storeSid  = _removeCtx.storeSid;
-      // Clear and close AFTER extracting values
-      _removeCtx = null;
-      modal.classList.remove('open');
-      const injected = document.querySelector('#gh-add-person-list');
-      if (injected) injected.remove();
-      modal.dataset.mode = '';
-      // Now execute the swap
-      await applyRemoveReplace(removeId, replaceId, storeSid);
-      return;
-    }
-
     // Handle add person mode
     if (mode === 'add') {
       if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
@@ -2570,91 +2553,81 @@
     modal.classList.add('open');
   }
 
-  // ── REMOVER PERSONA DE TIENDA ──
+  // ── REMOVER PERSONA DE TIENDA — panel independiente ──
   function openRemovePersonFromStore(sid) {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-    // Personas que trabajan en esta tienda algún día
     const inStore = active.filter(p =>
       DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id][d].store === sid)
     );
     if (!inStore.length) { alert(`Nenhuma pessoa atribuída a ${sname(sid)}.`); return; }
 
-    const modal = document.getElementById('gh-modal');
-    if (!modal) return;
+    // Remove any existing panel
+    document.getElementById('gh-rem-panel')?.remove();
 
-    document.getElementById('gh-me-ttl').textContent = `Remover pessoa — ${sname(sid)}`;
-    document.getElementById('gh-me-work').style.display = 'none';
-    document.getElementById('gh-me-conf').style.display = 'none';
-    document.getElementById('gh-me-type').style.display = 'none';
+    const panel = document.createElement('div');
+    panel.id = 'gh-rem-panel';
+    panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#fff;border:1px solid #ddd;border-radius:10px;padding:20px;width:320px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);';
 
-    const bdy = modal.querySelector('.gh-modal-bdy');
-    let injected = bdy.querySelector('#gh-add-person-list');
-    if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
+    let removeId = null;
+    let replaceId = null;
 
-    injected.innerHTML = `
-      <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Quem quer remover de ${sname(sid)}?</div>
-      <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;">
-        ${inStore.map(p => `
-          <button class="gh-rem-person-pick" data-pid="${p.id}" data-store="${sid}"
-            style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
-            ${shortName(p.name)}
-          </button>`).join('')}
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-size:.85rem;font-weight:700;">Substituir em ${sname(sid)}</div>
+        <button id="gh-rem-close" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#aaa;">✕</button>
       </div>
-      <div id="gh-sub-prompt" style="display:none;margin-top:12px;">
-        <div style="font-size:.7rem;color:#888;margin-bottom:6px;">Escolha o substituto:</div>
-        <div id="gh-sub-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;"></div>
-        <div id="gh-sub-alert" style="display:none;font-size:.7rem;color:#c0392b;margin-top:8px;"></div>
+      <div style="font-size:.7rem;color:#888;margin-bottom:6px;">1. Quem quer remover?</div>
+      <div id="gh-rem-remove-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;">
+        ${inStore.map(p => `<button class="gh-rem-pick" data-pid="${p.id}" style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">${shortName(p.name)}</button>`).join('')}
+      </div>
+      <div style="font-size:.7rem;color:#888;margin-bottom:6px;">2. Quem vai substituir?</div>
+      <div id="gh-rem-replace-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:16px;min-height:32px;">
+        <div style="font-size:.72rem;color:#ccc;padding:6px;">Seleccione primeiro quem remover</div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="gh-rem-cancel" style="padding:7px 16px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:.78rem;">Cancelar</button>
+        <button id="gh-rem-confirm" style="padding:7px 16px;border:1px solid #111;border-radius:6px;background:#111;color:#fff;cursor:pointer;font-size:.78rem;font-weight:600;" disabled>Confirmar</button>
       </div>`;
 
-    injected.querySelectorAll('.gh-rem-person-pick').forEach(btn => {
+    document.body.appendChild(panel);
+
+    const confirmBtn = panel.querySelector('#gh-rem-confirm');
+    const replaceList = panel.querySelector('#gh-rem-replace-list');
+
+    panel.querySelector('#gh-rem-close').addEventListener('click', () => panel.remove());
+    panel.querySelector('#gh-rem-cancel').addEventListener('click', () => panel.remove());
+
+    panel.querySelectorAll('.gh-rem-pick').forEach(btn => {
       btn.addEventListener('click', () => {
-        const pid = btn.dataset.pid;
-        const sid2 = btn.dataset.store;
-        injected.querySelectorAll('.gh-rem-person-pick').forEach(b => b.style.background = '#fff');
-        btn.style.background = '#fee';
+        removeId = btn.dataset.pid;
+        replaceId = null;
+        confirmBtn.disabled = true;
+        panel.querySelectorAll('.gh-rem-pick').forEach(b => { b.style.background = '#fff'; b.style.borderColor = '#e0e0e0'; });
+        btn.style.background = '#fff0f0';
+        btn.style.borderColor = '#ef5350';
 
-        // Find candidates: active people who know this store and aren't already in it all week
-        const candidates = active.filter(p =>
-          p.id !== pid &&
-          !DAYS.every(d => S.schedule[p.id]?.[d]?.store === sid2)
-        );
+        const candidates = active.filter(p => p.id !== removeId);
+        replaceList.innerHTML = candidates.map(p =>
+          `<button class="gh-sub-pick" data-pid="${p.id}" style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">${shortName(p.name)}</button>`
+        ).join('');
 
-        const subList = injected.querySelector('#gh-sub-list');
-        const subPrompt = injected.querySelector('#gh-sub-prompt');
-        const subAlert = injected.querySelector('#gh-sub-alert');
-        subPrompt.style.display = 'block';
-        subAlert.style.display = 'none';
-
-        if (!candidates.length) {
-          subList.innerHTML = '';
-          subAlert.textContent = `Sem substitutos disponíveis para ${sname(sid2)}.`;
-          subAlert.style.display = 'block';
-          return;
-        }
-
-        subList.innerHTML = candidates.map(p => `
-          <button class="gh-sub-pick" data-remove="${pid}" data-replace="${p.id}" data-store="${sid2}"
-            style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
-            ${shortName(p.name)}
-          </button>`).join('');
-
-        subList.querySelectorAll('.gh-sub-pick').forEach(sb => {
+        replaceList.querySelectorAll('.gh-sub-pick').forEach(sb => {
           sb.addEventListener('click', () => {
-            // Just highlight — Guardar button will execute
-            subList.querySelectorAll('.gh-sub-pick').forEach(b => b.style.background = '#fff');
+            replaceId = sb.dataset.pid;
+            replaceList.querySelectorAll('.gh-sub-pick').forEach(b => { b.style.background = '#fff'; b.style.borderColor = '#e0e0e0'; });
             sb.style.background = '#e8f0fe';
-            _removeCtx = {
-              removeId: sb.dataset.remove,
-              replaceId: sb.dataset.replace,
-              storeSid: sb.dataset.store
-            };
+            sb.style.borderColor = '#3b82f6';
+            confirmBtn.disabled = false;
           });
         });
       });
     });
 
-    modal.classList.add('open');
-    modal.dataset.mode = 'remove';
+    confirmBtn.addEventListener('click', async () => {
+      if (!removeId || !replaceId) return;
+      panel.remove();
+      await applyRemoveReplace(removeId, replaceId, sid);
+    });
   }
 
   async function applyRemoveReplace(removeId, replaceId, sid) {

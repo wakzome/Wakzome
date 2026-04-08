@@ -3091,6 +3091,41 @@
     return rows;
   }
 
+  /* Constrói linhas de historial para refs externas (TAM ou sessões proc anteriores)
+     que foram confirmadas nesta sessão. Guardadas em _procSentRefs com chave
+     ref___EXT___sessionKey. */
+  function procBuildGuiaSentExternal() {
+    var results = [];
+    if (!_procSentRefs) return results;
+    var colorMap = {};
+    var colorIdx = 0;
+    var EXT_COLORS = ['#F59E0B','#8B5CF6','#3B82F6','#10B981','#6B7280'];
+    Object.keys(_procSentRefs).forEach(function(key) {
+      if (key.indexOf('___EXT___') === -1) return;
+      var parts      = key.split('___EXT___');
+      var ref        = parts[0];
+      var sessionKey = parts[1];
+      if (!colorMap[sessionKey]) colorMap[sessionKey] = EXT_COLORS[colorIdx++ % EXT_COLORS.length];
+      var lots = _procSentRefs[key] || [];
+      var f = 0, p = 0;
+      lots.forEach(function(l){ f += l.f||0; p += l.p||0; });
+      if (f === 0 && p === 0) return;
+      results.push({
+        ref:        ref,
+        sessionKey: sessionKey,
+        sessionName: sessionKey,
+        totalF:     f,
+        totalP:     p,
+        pendF:      0,
+        pendP:      0,
+        done:       true,
+        _dotColor:  colorMap[sessionKey],
+        _fromOtherSession: true
+      });
+    });
+    return results;
+  }
+
   function procConfirmGuiaEnvio(pendRows) {
     var today = new Date().toISOString().slice(0,10);
     pendRows.forEach(function(row) {
@@ -3342,6 +3377,9 @@
     var allRows  = procBuildGuiaRows();
     var pendRows = allRows.filter(function(r){ return !r.done; });
     var sentRows = allRows.filter(function(r){ return  r.done; });
+    /* Incluir refs externas (TAM / sessões proc) confirmadas nesta sessão */
+    var extSentRows = procBuildGuiaSentExternal();
+    sentRows = sentRows.concat(extSentRows);
 
     if (!allRows.length) {
       procFloatModal({
@@ -3711,6 +3749,13 @@
         var ownRows   = pendRows.filter(function(r){ return !r._fromOtherSession; });
         var otherRows = pendRows.filter(function(r){ return  r._fromOtherSession; });
         procConfirmGuiaEnvio(ownRows);
+        /* Guardar refs externas confirmadas em _procSentRefs para historial */
+        var today = new Date().toISOString().slice(0,10);
+        otherRows.forEach(function(row) {
+          var extKey = row.ref + '___EXT___' + (row.sessionName || row.sessionKey || 'ext');
+          if (!_procSentRefs[extKey]) _procSentRefs[extKey] = [];
+          _procSentRefs[extKey].push({ data: today, f: row.pendF, p: row.pendP });
+        });
         confirmDiv.parentNode.removeChild(confirmDiv);
         closeModal();
         /* Aguardar que o Supabase das outras sessões seja actualizado antes

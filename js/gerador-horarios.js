@@ -2426,8 +2426,11 @@
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
-    // Mostrar TODAS las tiendas que la persona conoce, no solo las abiertas esta semana
-    stEl.innerHTML = STORES.filter(st => p?.knows?.includes(st.id)).map(st => `<option value="${st.id}" ${c2.store===st.id?'selected':''}>${sname(st.id)}</option>`).join('');
+    // Mostrar TODAS las tiendas — el usuario decide, advertencia si no conoce
+    stEl.innerHTML = STORES.map(st => {
+      const knows = P(pid)?.knows?.includes(st.id);
+      return `<option value="${st.id}" ${c2.store===st.id?'selected':''}>${sname(st.id)}${!knows?' ⚠':''}</option>`;
+    }).join('');
     document.getElementById('gh-me-conf').style.display = 'none';
     meTypeChange();
     modal.classList.add('open');
@@ -2446,8 +2449,11 @@
       const { pid, sid } = _addCtx;
       const days = [...document.querySelectorAll('.gh-add-day-chk:checked')].map(cb => cb.value);
       if (!days.length) { alert('Seleccione pelo menos um dia.'); return; }
-      // Warning already shown in modal — allow save regardless of knows
+      // Ensure store is in openStores and days are registered so renderer shows work correctly
+      if (!S.openStores.includes(sid)) S.openStores.push(sid);
+      if (!S.openDays[sid]) S.openDays[sid] = [];
       days.forEach(day => {
+        if (!S.openDays[sid].includes(day)) S.openDays[sid].push(day);
         S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
       });
       cleanupModalExtras();

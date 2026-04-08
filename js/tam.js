@@ -3050,10 +3050,16 @@
   /* ── Quantidade já enviada de uma ref+fatura ── */
   function tamSentQty(ref, invIdx) {
     if (!tamSession || !tamSession.sentRefs) return { f:0, p:0 };
-    var key = tamSentKey(ref, invIdx);
-    var lotes = tamSession.sentRefs[key] || [];
     var f = 0, p = 0;
-    lotes.forEach(function(l){ f += (l.f||0); p += (l.p||0); });
+    /* FIX: somar todos os lotes cujo key comeca por ref___ — compativel com
+       chaves escritas pelo proprio TAM (ref___invIdx) e por Processamento
+       (ref___sessionName). */
+    var prefix = ref + '___';
+    Object.keys(tamSession.sentRefs).forEach(function(k) {
+      if (k === ref || k.indexOf(prefix) === 0) {
+        (tamSession.sentRefs[k] || []).forEach(function(l){ f += (l.f||0); p += (l.p||0); });
+      }
+    });
     return { f:f, p:p };
   }
 
@@ -3093,10 +3099,15 @@
             }
           });
           if (distF === 0 && distP === 0) return;
-          var sentKey = g.ref + '___' + invIdx;
-          var lotes = (s.sentRefs || {})[sentKey] || [];
+          /* FIX: somar todos os lotes cujo key comeca por ref___ — compativel
+             com chaves de TAM (ref___invIdx) e de Processamento (ref___sessionName). */
           var sentF = 0, sentP = 0;
-          lotes.forEach(function(l){ sentF += l.f||0; sentP += l.p||0; });
+          var _prefix = g.ref + '___';
+          Object.keys(s.sentRefs || {}).forEach(function(k) {
+            if (k === g.ref || k.indexOf(_prefix) === 0) {
+              ((s.sentRefs || {})[k] || []).forEach(function(l){ sentF += l.f||0; sentP += l.p||0; });
+            }
+          });
           var pendF = Math.max(0, distF - sentF);
           var pendP = Math.max(0, distP - sentP);
           if (pendF > 0 || pendP > 0) {

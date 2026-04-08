@@ -967,6 +967,10 @@
     if (!activeFaturas.length) return null;
     return {
       savedAt: new Date().toISOString(),
+      /* sentRefs incluído aqui para que chegue ao Supabase e sobreviva
+         a um reload desde remoto. _procSentRefs pode estar vazio ({})
+         no início da sessão — isso é correcto. */
+      sentRefs: _procSentRefs || {},
       faturas: activeFaturas.map(function(fid) {
         var rows = procCollectRows(fid).map(function(r) {
           return { ref:r.ref, desc:r.desc, qtdFt:r.qtdFt, a4:r.a4, a5:r.a5,
@@ -3115,9 +3119,35 @@
       var res = await procSbFetch('proc_sessoes?select=session_key,dados&order=updated_at.desc', { method: 'GET' });
       if (!res.ok) return results;
       var rows = await res.json();
+
+      /* FIX 1: extrair a data da sessão activa para só incluir sessões anteriores.
+         O session_key tem o formato proc_fatura_YYYY-MM-DD[_N], por isso basta
+         comparar a parte da data lexicograficamente. */
+      var activeKey    = _activeSessionKey || '';
+      /* Extrai "YYYY-MM-DD" do active key, ou '' se não for possível */
+      var activeDateStr = (function() {
+        var stripped = activeKey.replace('proc_fatura_', '');
+        var m = stripped.match(/^(\d{4}-\d{2}-\d{2})/);
+        return m ? m[1] : '';
+      })();
+
       rows.forEach(function(row) {
         /* Ignorar a sessão activa */
-        if (row.session_key === _activeSessionKey) return;
+        if (row.session_key === activeKey) return;
+
+        /* FIX 1: ignorar sessões iguais ou posteriores à activa.
+           Compara apenas a parte da data (YYYY-MM-DD) — lexicográfico é correcto
+           porque o formato é ISO. Se não conseguirmos extrair a data, ignorar
+           também por segurança. */
+        if (activeDateStr) {
+          var rowDateStr = (function() {
+            var s = row.session_key.replace('proc_fatura_', '');
+            var m2 = s.match(/^(\d{4}-\d{2}-\d{2})/);
+            return m2 ? m2[1] : '';
+          })();
+          if (!rowDateStr || rowDateStr >= activeDateStr) return;
+        }
+
         var data;
         try { data = JSON.parse(row.dados); } catch(e) { return; }
         if (!data.faturas || !data.faturas.length) return;
@@ -3125,7 +3155,7 @@
 
         /* Agrupar por ref para evitar entradas duplicadas (mesma ref em
            várias faturas ou várias linhas da mesma sessão) */
-        var refMap = {}; /* ref → { a4, a5, sentKey } */
+        var refMap = {}; /* ref → { a4, a5, sentKeys } */
         data.faturas.forEach(function(fat, fidIdx) {
           var fid  = fidIdx + 1; /* 1-based, igual a faturaCount */
           (fat.rows || []).forEach(function(r) {
@@ -3139,8 +3169,9 @@
           });
         });
 
-        var sessionLabel = (data.faturas[0] && data.faturas[0].proveedor) || row.session_key;
-        var sessionName  = sessionLabel + ' (' + (data.savedAt ? new Date(data.savedAt).toLocaleDateString('pt-PT') : row.session_key) + ')';
+        /* FIX 2: usar o session_key formatado como nome de sessão, não o proveedor.
+           labelFromKey converte "proc_fatura_2026-03-24" → "Semana 24/03/2026". */
+        var sessionName = labelFromKey(row.session_key);
 
         Object.keys(refMap).forEach(function(ref) {
           var entry = refMap[ref];
@@ -3151,12 +3182,13 @@
           });
           var pendF = Math.max(0, entry.a4 - sF);
           var pendP = Math.max(0, entry.a5 - sP);
+          /* FIX 3: só incluir se há realmente algo por enviar */
           if (pendF === 0 && pendP === 0) return;
           /* Usar a primeira chave como referência para gravação */
           var primaryKey = entry.sentKeys[0];
           results.push({
             ref:               ref,
-            forn:              sessionLabel,
+            forn:              sessionName,
             sourceModule:      'proc',
             sessionKey:        row.session_key,
             sessionName:       sessionName,
@@ -3678,10 +3710,15 @@
         var ownRows   = pendRows.filter(function(r){ return !r._fromOtherSession; });
         var otherRows = pendRows.filter(function(r){ return  r._fromOtherSession; });
         procConfirmGuiaEnvio(ownRows);
-        procConfirmOtherSessionsEnvio(otherRows);
         confirmDiv.parentNode.removeChild(confirmDiv);
         closeModal();
-        setTimeout(function(){ procShowGuiaModal(); }, 280);
+        /* Aguardar que o Supabase das outras sessões seja actualizado antes
+           de reabrir a guia — evita que as refs reapareçam como pendentes */
+        procConfirmOtherSessionsEnvio(otherRows).then(function() {
+          setTimeout(function(){ procShowGuiaModal(); }, 150);
+        }).catch(function() {
+          setTimeout(function(){ procShowGuiaModal(); }, 150);
+        });
       });
     });
 
@@ -3724,20 +3761,7 @@
     _origApplySessionData(key, raw, callback);
   };
 
-  /* Override procSaveSession payload to include sentRefs */
-  var _origSaveSession = procSaveSession;
-  procSaveSession = function(manual) {
-    /* Inject sentRefs into payload by patching the save temporarily */
-    _origSaveSession(manual);
-    /* Re-save with sentRefs included */
-    var key = _activeSessionKey;
-    if (!key) return;
-    try {
-      var stored = JSON.parse(localStorage.getItem(key) || '{}');
-      stored.sentRefs = _procSentRefs;
-      localStorage.setItem(key, JSON.stringify(stored));
-    } catch(e) {}
-  };
+  /* sentRefs já está incluído em procBuildSavePayload — override removido. */
   window.openProcessamentoOverlay  = openProcessamentoOverlay;
   window.closeProcessamentoOverlay = closeProcessamentoOverlay;
 

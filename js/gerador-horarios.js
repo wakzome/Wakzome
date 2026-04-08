@@ -2449,8 +2449,20 @@
   }
 
   function applyEdit() {
-    // Handle add person mode
     const modal = document.getElementById('gh-modal');
+
+    // Handle remove mode
+    if (modal?.dataset.mode === 'remove') {
+      if (!_removeCtx) { alert('Seleccione um substituto primeiro.'); return; }
+      const { removeId, replaceId, storeSid } = _removeCtx;
+      _removeCtx = null;
+      cleanupModalExtras();
+      closeModal();
+      applyRemoveReplace(removeId, replaceId, storeSid);
+      return;
+    }
+
+    // Handle add person mode
     if (modal?.dataset.mode === 'add') {
       if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
       const { pid, sid } = _addCtx;
@@ -2495,6 +2507,7 @@
   // Muestra lista de todas las personas activas, el usuario elige,
   // luego clica en el día donde quiere asignarla
   let _addCtx = null;
+  let _removeCtx = null;
 
   function openAddPersonToStore(sid) {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -2619,13 +2632,15 @@
           </button>`).join('');
 
         subList.querySelectorAll('.gh-sub-pick').forEach(sb => {
-          sb.addEventListener('click', async () => {
-            const removeId  = sb.dataset.remove;
-            const replaceId = sb.dataset.replace;
-            const storeSid  = sb.dataset.store;
-            cleanupModalExtras();
-            closeModal();
-            await applyRemoveReplace(removeId, replaceId, storeSid);
+          sb.addEventListener('click', () => {
+            // Just highlight — Guardar button will execute
+            subList.querySelectorAll('.gh-sub-pick').forEach(b => b.style.background = '#fff');
+            sb.style.background = '#e8f0fe';
+            _removeCtx = {
+              removeId: sb.dataset.remove,
+              replaceId: sb.dataset.replace,
+              storeSid: sb.dataset.store
+            };
           });
         });
       });
@@ -2705,6 +2720,7 @@
     if (workEl) workEl.style.display = '';
     if (document.getElementById('gh-modal')) document.getElementById('gh-modal').dataset.mode = '';
     _addCtx = null;
+    _removeCtx = null;
   }
 
   function closeModal() {

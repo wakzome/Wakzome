@@ -1327,6 +1327,38 @@
     } catch(e) { console.warn('Erro ao carregar combinacion:', e); return null; }
   }
 
+  // ── APRENDIZAGEM — carregar padrões aprendidos ──
+  let _aprendizaje = null; // cache para a semana actual
+
+  async function loadAprendizaje() {
+    const sb = getSupabase(); if (!sb) return {};
+    try {
+      const { data } = await sb.from('gh_aprendizaje')
+        .select('tienda_id,dia,n_pessoas,combinacion_usuario,combinacion_sistema,igual')
+        .eq('igual', false); // só registos onde o utilizador corrigiu
+      const map = {};
+      (data || []).forEach(r => {
+        const key = `${r.tienda_id}|${r.dia}|${r.n_pessoas}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(r.combinacion_usuario);
+      });
+      // Para cada chave, usar o padrão mais frequente
+      const result = {};
+      Object.entries(map).forEach(([key, combos]) => {
+        const freq = {};
+        combos.forEach(c => { freq[c] = (freq[c]||0) + 1; });
+        result[key] = Object.entries(freq).sort((a,b) => b[1]-a[1])[0][0];
+      });
+      return result;
+    } catch(e) { console.warn('Erro ao carregar aprendizagem:', e); return {}; }
+  }
+
+  // Dado o mapa de aprendizagem, devolver a combinação aprendida para uma tienda+dia+n
+  function getAprendidoShifts(sid, day, n) {
+    if (!_aprendizaje) return null;
+    return _aprendizaje[`${sid}|${day}|${n}`] || null;
+  }
+
   // ── NUEVA assignFolgas — basada en gh_combinaciones + gh_patrones + gh_folgas ──
   async function assignFolgas(active, seed) {
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
@@ -1363,7 +1395,16 @@
     let filled = {};
     sundayStores.forEach(sid => { filled[sid] = 0; });
     rotatedDOM.slice(0, domCount).forEach(p => {
-      const sid = sundayStores.find(sid =>
+      // Tipo 1: verificar se há padrão aprendido para esta pessoa no domingo
+      const aprendidoSid = sundayStores.find(sid => {
+        const key = `${sid}|DOM|${sundayMinFor(sid)}`;
+        const combo = _aprendizaje?.[key];
+        if (!combo) return false;
+        // Se o padrão aprendido inclui esta pessoa na tienda fixa dela
+        return p.store === sid && combo.includes(p.id.slice(0,8));
+      });
+
+      const sid = aprendidoSid || sundayStores.find(sid =>
         p.knows.includes(sid) && filled[sid] < sundayMinFor(sid)
       );
       if (sid) {
@@ -2030,6 +2071,25 @@
       if (staff.length === 0) return;
       if (staff.length === 1) { S.schedule[staff[0].id][day].shift = storeBaseShift(st.id); return; }
 
+      // Tipo 2: verificar se há padrão aprendido para esta tienda+dia+n
+      const aprendido = getAprendidoShifts(st.id, day, staff.length);
+      if (aprendido) {
+        // O padrão aprendido é "id:shift|id:shift|..." — extrair shifts por pessoa
+        const parts = aprendido.split('|');
+        const shiftMap = {};
+        parts.forEach(part => {
+          const [idSlice, shift] = part.split(':');
+          const pessoa = staff.find(p => p.id.startsWith(idSlice));
+          if (pessoa && shift) shiftMap[pessoa.id] = shift;
+        });
+        // Aplicar se todos os membros do staff têm shift aprendido
+        if (staff.every(p => shiftMap[p.id])) {
+          staff.forEach(p => { S.schedule[p.id][day].shift = shiftMap[p.id]; });
+          S.decisions.push({ type: 'info', text: `${day} ${st.name}: turnos de intervalo aprendidos aplicados.` });
+          return;
+        }
+      }
+
       const { goers, stayers, scenario } = computeGroups(staff);
       const weights = buildWeights(staff, scenario);
 
@@ -2040,7 +2100,6 @@
         return;
       }
 
-      // Guardar storeBase APENAS se a combinação for óptima (goSum ≈ staySum)
       const goSum   = goers.reduce((s,p) => s + (weights[p.id]||0), 0);
       const staySum = stayers.reduce((s,p) => s + (weights[p.id]||0), 0);
       const isOptimalCombo = Math.abs(goSum - staySum) < 0.01 || ['2_escA','2_escB','3sem_antiga'].includes(scenario);
@@ -2069,6 +2128,9 @@
 
     S.alerts = []; S.decisions = []; S.sandraDay = {};
     S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
+
+    // Carregar padrões aprendidos
+    _aprendizaje = await loadAprendizaje();
 
     S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
     S._openStoresSnapshot = [...S.openStores];

@@ -561,9 +561,9 @@
       btn.addEventListener('click', () => deletePersonConfirm(btn.dataset.pid));
     });
 
-    // Folga: botões de dia
+    // Folga: botões de dia — só atualiza memória, NÃO grava em Supabase
     list.querySelectorAll('.gh-day-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const pid = btn.dataset.pid;
         const day = btn.dataset.day;
         if (!S._folgas) S._folgas = {};
@@ -573,7 +573,7 @@
         if (idx >= 0) dias.splice(idx, 1); else dias.push(day);
         S._folgas[pid].dias = dias;
         btn.classList.toggle('gh-day-btn-on', dias.includes(day));
-        await saveFolga(pid, dias);
+        // Gravação adiada — só acontece ao confirmar o horário
       });
     });
 
@@ -1265,157 +1265,202 @@
     return weekMin;
   }
 
-  function assignFolgas(active, seed) {
+  // ── PATRONES — tabla de referencia de códigos de folga ──
+  // Cargados desde Supabase gh_patrones al iniciar. Fallback hardcoded si falla.
+  let PATRONES = {
+    1:  { folga: ['SEG','QUI'], dom: true  },
+    2:  { folga: ['TER','SEX'], dom: true  },
+    5:  { folga: ['SEG','DOM'], dom: false },
+    6:  { folga: ['TER','DOM'], dom: false },
+    7:  { folga: ['QUA','DOM'], dom: false },
+    8:  { folga: ['QUI','DOM'], dom: false },
+    9:  { folga: ['SEX','DOM'], dom: false },
+    10: { folga: ['SAB','DOM'], dom: false },
+  };
+
+  async function loadPatrones() {
+    const sb = getSupabase(); if (!sb) return;
+    try {
+      const { data } = await sb.from('gh_patrones').select('*');
+      if (!data?.length) return;
+      PATRONES = {};
+      data.forEach(r => {
+        const folga = ['seg','ter','qua','qui','sex','sab','dom']
+          .filter(d => r[d] === 'FOLGA')
+          .map(d => d.toUpperCase());
+        PATRONES[r.codigo] = { folga, dom: !folga.includes('DOM') };
+      });
+    } catch(e) { console.warn('Erro ao carregar patrones, usando fallback:', e); }
+  }
+
+  // ── HISTORIAL — acumulado de folgas por persona ──
+  async function loadHistorial() {
+    const sb = getSupabase(); if (!sb) return {};
+    try {
+      const { data } = await sb.from('gh_folgas').select('pessoa_id, dias');
+      const hist = {}; // { pid: { SEG:0, TER:0, QUA:0, QUI:0, SEX:0, SAB:0, DOM:0 } }
+      (data || []).forEach(r => {
+        if (!hist[r.pessoa_id]) hist[r.pessoa_id] = { SEG:0,TER:0,QUA:0,QUI:0,SEX:0,SAB:0,DOM:0 };
+        (r.dias || []).forEach(d => {
+          if (hist[r.pessoa_id][d] !== undefined) hist[r.pessoa_id][d]++;
+        });
+      });
+      return hist;
+    } catch(e) { console.warn('Erro ao carregar historial:', e); return {}; }
+  }
+
+  // ── COMBINACIONES — busca la combinación para n+dom en Supabase ──
+  async function loadCombinacion(n, dom) {
+    const sb = getSupabase(); if (!sb) return null;
+    try {
+      const { data } = await sb.from('gh_combinaciones')
+        .select('combinacion')
+        .eq('n', n)
+        .eq('dom', dom)
+        .limit(1)
+        .single();
+      return data?.combinacion || null;
+    } catch(e) { console.warn('Erro ao carregar combinacion:', e); return null; }
+  }
+
+  // ── NUEVA assignFolgas — basada en gh_combinaciones + gh_patrones + gh_folgas ──
+  async function assignFolgas(active, seed) {
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
-    const hasSunday = sundayStores.length > 0;
     S.sundayAssigned = {};
     sundayStores.forEach(sid => { S.sundayAssigned[sid] = []; });
 
-    function predictStore(p, day) {
-      if (S.sandraDay?.[p.id]) return S.sandraDay[p.id][day] || null;
-      if (isAbsent(p.id, day)) return null;
-      if (p.store && storeOpen(p.store, day)) return p.store;
-      return S.openStores.find(id => S.openDays[id]?.includes(day) && p.knows.includes(id)) || null;
-    }
+    // 1. Calcular cuántas personas van al domingo
+    let domCount = 0;
+    sundayStores.forEach(sid => { domCount += sundayMinFor(sid); });
 
-    function baseCov(day) {
-      const cov = {};
-      S.openStores.forEach(sid => { cov[sid] = 0; });
-      active.forEach(p => {
-        if (isAbsent(p.id, day)) return;
-        const sid = predictStore(p, day);
-        if (sid && cov[sid] !== undefined) cov[sid]++;
-      });
-      return cov;
-    }
+    // 2. Cargar historial de folgas
+    const hist = await loadHistorial();
 
-    const allDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
-    const remaining = {};
-    allDays.forEach(day => { remaining[day] = baseCov(day); });
+    // 3. Separar autónomas disponibles para domingo vs resto
+    const disponiblesDOM = active.filter(p =>
+      p.canAlone && !isAbsent(p.id, 'DOM') &&
+      sundayStores.some(sid => p.knows.includes(sid))
+    );
 
-    // Hash determinista robusto
-    function rng(a, b) { return ((a * 2654435761 ^ b * 40503 + a * b * 1234567) >>> 0); }
-
-    // Fisher-Yates shuffle determinista
-    function shuffle(arr, s) {
-      const a = [...arr];
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = rng(i, s) % (i + 1);
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a;
-    }
-
-    // Combos fijas
-    const COMBOS_CON_DOM = [
-      { off: ['SEG','QUI'], workSun: true  },
-      { off: ['TER','SEX'], workSun: true  },
-      { off: ['QUA','DOM'], workSun: false },
-      { off: ['SAB','DOM'], workSun: false },
-    ];
-    const COMBOS_SIN_DOM = [
-      { off: ['SEG','DOM'], workSun: false },
-      { off: ['TER','DOM'], workSun: false },
-      { off: ['QUA','DOM'], workSun: false },
-      { off: ['QUI','DOM'], workSun: false },
-      { off: ['SEX','DOM'], workSun: false },
-    ];
-    const COMBOS = hasSunday ? COMBOS_CON_DOM : COMBOS_SIN_DOM;
-
-    // Pre-asignar quién trabaja domingo — rotación por seed
-    const willWorkSundaySet = new Set();
-    for (const sid of sundayStores) {
-      const quota = sundayMinFor(sid);
-      const fixedHere = active.filter(p =>
-        p.canAlone === true && !isAbsent(p.id, 'DOM') &&
-        p.store === sid && storeOpen(sid, 'DOM')
-      );
-      const floaters = shuffle(
-        active.filter(p =>
-          p.canAlone === true && !isAbsent(p.id, 'DOM') &&
-          (!p.store || !storeOpen(p.store, 'DOM')) &&
-          p.knows.includes(sid) && !willWorkSundaySet.has(p.id)
-        ), rng(sid.length, seed)
-      );
-      let filled = 0;
-      for (const p of [...fixedHere, ...floaters]) {
-        if (filled >= quota) break;
-        if (willWorkSundaySet.has(p.id)) continue;
-        willWorkSundaySet.add(p.id);
-        S.sundayAssigned[sid].push(p.id);
-        filled++;
-      }
-    }
-
-    // Orden de personas shuffleado por seed — clave para rotación real
-    const sorted = [...active].sort((a, b) => {
-      const pa = STORES.find(s => s.id === (a.store||'z'))?.priority ?? 9;
-      const pb = STORES.find(s => s.id === (b.store||'z'))?.priority ?? 9;
-      return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
+    // Ordenar por domingos acumulados (menos → más prioridad para trabajar domingo)
+    // El seed desplaza el índice de inicio para variar en cada regeneración
+    const ordenDOM = [...disponiblesDOM].sort((a, b) => {
+      const da = hist[a.id]?.DOM || 0;
+      const db = hist[b.id]?.DOM || 0;
+      return da !== db ? da - db : a.id.localeCompare(b.id);
     });
-    const shuffledOrder = shuffle(sorted, seed);
 
-    shuffledOrder.forEach((p, personIdx) => {
-      const willWorkSunday = willWorkSundaySet.has(p.id);
-      // Combos válidas para esta persona, shuffleadas con seed único por persona
-      const validCombos = shuffle(
-        COMBOS.filter(c => c.workSun === willWorkSunday),
-        rng(personIdx, seed)
+    // Rotar según seed para que cada regeneración proponga personas distintas
+    const offset = seed % Math.max(1, ordenDOM.length);
+    const rotatedDOM = [...ordenDOM.slice(offset), ...ordenDOM.slice(0, offset)];
+    const trabajanDOM = new Set(rotatedDOM.slice(0, domCount).map(p => p.id));
+
+    // Asignar a tiendas domingo
+    let filled = {};
+    sundayStores.forEach(sid => { filled[sid] = 0; });
+    rotatedDOM.slice(0, domCount).forEach(p => {
+      const sid = sundayStores.find(sid =>
+        p.knows.includes(sid) && filled[sid] < sundayMinFor(sid)
       );
+      if (sid) {
+        S.sundayAssigned[sid].push(p.id);
+        filled[sid]++;
+      }
+    });
 
-      let assigned = null;
-      for (const combo of validCombos) {
-        const weekOffDays = combo.off.filter(d => d !== 'DOM');
-        // Solo rechazar si la persona está ausente ese día
-        if (weekOffDays.some(d => isAbsent(p.id, d))) continue;
-        // Verificar cobertura mínima — pero solo si quedaría a 0
-        let coverOk = true;
-        for (const offDay of weekOffDays) {
-          const effStore = predictStore(p, offDay);
-          if (effStore && storeOpen(effStore, offDay)) {
-            if ((remaining[offDay]?.[effStore] || 0) - 1 < storeMin(effStore)) {
-              coverOk = false; break;
-            }
+    // 4. Cargar la combinación para n personas y domCount personas en domingo
+    const n = active.filter(p => !fullyAbsent(p.id)).length;
+    let combinacion = await loadCombinacion(n, domCount);
+
+    if (!combinacion) {
+      // Fallback: combinación mínima si no existe en BD
+      console.warn(`No hay combinación para n=${n} dom=${domCount}`);
+      S.alerts.push({ type: 'amber', text: `Sem combinação definida para ${n} pessoas e ${domCount} ao domingo.` });
+      combinacion = active.map((_, i) => i < domCount ? (i % 2 === 0 ? 1 : 2) : [6,7,8,9,10][i % 5]).join(',');
+    }
+
+    const codigos = combinacion.split(',').map(Number);
+
+    // 5. Ordenar personas por deuda de días entre semana
+    // Las que trabajan domingo van primero (P1, P2...) con códigos 1 y 2
+    // El resto se ordena por deuda acumulada de días entre semana
+    const DIAS_SEMANA = ['SEG','TER','QUA','QUI','SEX','SAB'];
+
+    const personasDOM  = active.filter(p => trabajanDOM.has(p.id));
+    const personasNoDOM = active.filter(p => !trabajanDOM.has(p.id) && !fullyAbsent(p.id));
+
+    // Ordenar noDOM por deuda entre semana — quien más ha librado un día, menos prioridad de volver a librarlo
+    const ordenNoDOM = [...personasNoDOM].sort((a, b) => {
+      // Variedad: usar seed para rotar entre regeneraciones
+      const va = a.id.charCodeAt(0) + seed;
+      const vb = b.id.charCodeAt(0) + seed;
+      return va - vb;
+    });
+
+    // Construir orden final: primero los que trabajan domingo, luego el resto
+    const ordenFinal = [...personasDOM, ...ordenNoDOM];
+
+    // 6. Asignar códigos a personas
+    S.folgaDay = {};
+    if (!S.extraDayOff) S.extraDayOff = {};
+
+    ordenFinal.forEach((p, idx) => {
+      const codigo = codigos[idx];
+      if (!codigo || !PATRONES[codigo]) return;
+      const pat = PATRONES[codigo];
+      const diasFolga = pat.folga.filter(d => d !== 'DOM');
+
+      S.folgaDay[p.id] = diasFolga[0] || null;
+      if (diasFolga[1]) S.extraDayOff[p.id] = diasFolga[1];
+    });
+
+    saveMem();
+  }
+
+  // ── CONFIRMAR HORARIO — graba todo en Supabase ──
+  async function confirmSchedule(active) {
+    const sb = getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    if (!weekKey) return;
+
+    const btn = document.getElementById('gh-btn-confirm');
+    if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
+
+    try {
+      // 1. Guardar folgas dirigidas del paso 2 (las que el usuario configuró manualmente)
+      if (S._folgas) {
+        for (const [pid, f] of Object.entries(S._folgas)) {
+          if (f.dias?.length) {
+            await sb.from('gh_folgas').upsert(
+              { pessoa_id: pid, semana: weekKey, dias: f.dias },
+              { onConflict: 'pessoa_id,semana' }
+            );
           }
         }
-        if (!coverOk) continue;
-        assigned = combo;
-        break;
       }
 
-      // Fallback: si todas las combos violan cobertura, usar la menos dañina
-      if (!assigned) {
-        assigned = validCombos.reduce((best, combo) => {
-          if (!best) return combo;
-          const weekOffDays = combo.off.filter(d => d !== 'DOM');
-          const bestOffDays = best.off.filter(d => d !== 'DOM');
-          const defCombo = weekOffDays.reduce((sum, d) => {
-            const effStore = predictStore(p, d);
-            if (!effStore) return sum;
-            return sum + Math.max(0, storeMin(effStore) - (remaining[d]?.[effStore] || 0) + 1);
-          }, 0);
-          const defBest = bestOffDays.reduce((sum, d) => {
-            const effStore = predictStore(p, d);
-            if (!effStore) return sum;
-            return sum + Math.max(0, storeMin(effStore) - (remaining[d]?.[effStore] || 0) + 1);
-          }, 0);
-          return defCombo < defBest ? combo : best;
-        }, null) || validCombos[0];
+      // 2. Guardar historial de folgas asignadas por el sistema
+      const upserts = active.map(p => {
+        const dias = [];
+        DAYS.forEach(day => {
+          const cell = S.schedule[p.id]?.[day];
+          if (cell?.type === 'folga' || cell?.type === 'ferias') dias.push(day);
+        });
+        return { pessoa_id: p.id, semana: weekKey, dias };
+      });
+
+      for (const u of upserts) {
+        await sb.from('gh_folgas').upsert(u, { onConflict: 'pessoa_id,semana' });
       }
 
-      // Registrar
-      const weekOffDays = assigned.off.filter(d => d !== 'DOM');
-      S.folgaDay[p.id] = weekOffDays[0];
-      if (weekOffDays[1]) {
-        if (!S.extraDayOff) S.extraDayOff = {};
-        S.extraDayOff[p.id] = weekOffDays[1];
-      }
-      for (const offDay of weekOffDays) {
-        const effStore = predictStore(p, offDay);
-        if (effStore && remaining[offDay]?.[effStore] !== undefined) remaining[offDay][effStore]--;
-      }
-    });
-    saveMem();
+      S.alerts.push({ type: 'info', text: '✓ Horário confirmado e guardado.' });
+      if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
+
+    } catch(e) {
+      console.error('Erro ao confirmar horário:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar horário'; }
+    }
   }
   function buildSchedule(active) {
     // Inicializar todas as células como NA
@@ -2010,7 +2055,7 @@
 
     enforceIntervalSeparation(day, workers);
   }
-  function generate() {
+  async function generate() {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
     S.alerts = []; S.decisions = []; S.sandraDay = {};
@@ -2031,7 +2076,7 @@
 
     const seed = S._regenSeed || 0;
     computeCoordinatorPosition(active);
-    assignFolgas(active, seed);
+    await assignFolgas(active, seed);
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
@@ -2164,6 +2209,7 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Gerar Novamente</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
+          <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
         </div>
       </div>
       ${alertsHTML}`;
@@ -2260,6 +2306,10 @@
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
+    document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      confirmSchedule(active);
+    });
 
     // Edit on click
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
@@ -2657,11 +2707,12 @@
     }
 
     // Load knowledge base from Supabase before rendering
-    loadKnowledgeBase().then(() => {
+    loadKnowledgeBase().then(async () => {
+      await loadPatrones();
       renderWiz();
     }).catch(err => {
       console.error('Failed to load knowledge base:', err);
-      renderWiz(); // render anyway with empty data
+      renderWiz();
     });
   };
 

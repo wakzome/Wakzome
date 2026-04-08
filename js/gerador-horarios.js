@@ -1381,6 +1381,10 @@
 
     const codigos = combinacion.split(',').map(Number);
 
+    // Guardar en estado para mostrar en pantalla
+    S._combinacionActual = combinacion;
+    S._asignacionCodigos = {}; // pid → codigo
+
     // 5. Ordenar personas por deuda de días entre semana
     // Las que trabajan domingo van primero (P1, P2...) con códigos 1 y 2
     // El resto se ordena por deuda acumulada de días entre semana
@@ -1389,13 +1393,17 @@
     const personasDOM  = active.filter(p => trabajanDOM.has(p.id));
     const personasNoDOM = active.filter(p => !trabajanDOM.has(p.id) && !fullyAbsent(p.id));
 
-    // Ordenar noDOM por deuda entre semana — quien más ha librado un día, menos prioridad de volver a librarlo
-    const ordenNoDOM = [...personasNoDOM].sort((a, b) => {
-      // Variedad: usar seed para rotar entre regeneraciones
-      const va = a.id.charCodeAt(0) + seed;
-      const vb = b.id.charCodeAt(0) + seed;
-      return va - vb;
+    // Ordenar noDOM por deuda entre semana, luego rotar con seed para variar
+    const ordenNoDOM_base = [...personasNoDOM].sort((a, b) => {
+      // Ordenar primero por deuda total acumulada entre semana
+      const DIAS_SEM = ['SEG','TER','QUA','QUI','SEX','SAB'];
+      const deudaA = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d] || 0), 0);
+      const deudaB = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d] || 0), 0);
+      return deudaA !== deudaB ? deudaA - deudaB : a.id.localeCompare(b.id);
     });
+    // Rotar según seed para que cada regeneración proponga orden distinto
+    const offsetNoDOM = seed % Math.max(1, ordenNoDOM_base.length);
+    const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
 
     // Construir orden final: primero los que trabajan domingo, luego el resto
     const ordenFinal = [...personasDOM, ...ordenNoDOM];
@@ -1410,6 +1418,7 @@
       const pat = PATRONES[codigo];
       const diasFolga = pat.folga.filter(d => d !== 'DOM');
 
+      S._asignacionCodigos[p.id] = codigo;
       S.folgaDay[p.id] = diasFolga[0] || null;
       if (diasFolga[1]) S.extraDayOff[p.id] = diasFolga[1];
     });
@@ -2191,6 +2200,13 @@
   }
 
   // ── RENDER HORÁRIO ──
+  function shortNameInitial(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    // Primer nombre + inicial del último apellido
+    return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
+  }
+
   function showSchedule(active) {
     const c = getContainer(); if (!c) return;
     fixPanelLayout();
@@ -2200,6 +2216,19 @@
     const alertsHTML = S.alerts.length
       ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
       : '';
+
+    // Panel discreto de combinación y asignación de códigos
+    const combDisplay = S._combinacionActual
+      ? `<div class="gh-comb-bar">
+          <span class="gh-comb-label">Combinação</span>
+          <span class="gh-comb-codes">${S._combinacionActual}</span>
+          <span class="gh-comb-sep">·</span>
+          ${active.filter(p => S._asignacionCodigos?.[p.id]).map(p =>
+            `<span class="gh-comb-person">${shortNameInitial(p.name)}<span class="gh-comb-num">${S._asignacionCodigos[p.id]}</span></span>`
+          ).join('')}
+        </div>`
+      : '';
+
     const topBar = `
       <div class="gh-sched-bar">
         <div>
@@ -2212,6 +2241,7 @@
           <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
         </div>
       </div>
+      ${combDisplay}
       ${alertsHTML}`;
 
     let bodyHTML = '';
@@ -2307,6 +2337,9 @@
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
+      const weekKey = S.weekStart?.toISOString().split('T')[0];
+      const confirmed = confirm(`Confirmar e guardar o horário da semana de ${weekKey}?\n\nEsta acção gravará as folgas em Supabase e não poderá ser regenerada.`);
+      if (!confirmed) return;
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       confirmSchedule(active);
     });
@@ -2464,6 +2497,14 @@
         #tab-gerador .gh-season-icon { font-size:1.1rem; flex-shrink:0; margin-top:1px; }
         #tab-gerador .gh-season-name { font-size:.78rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
         #tab-gerador .gh-season-hint { font-size:.7rem; color:#4a6a9c; line-height:1.4; }
+
+        /* ── COMBINAÇÃO BAR ── */
+        #tab-gerador .gh-comb-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:6px 20px; background:#f9f9f7; border-bottom:1px solid #efefeb; font-size:.62rem; }
+        #tab-gerador .gh-comb-label { font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#bbb; margin-right:2px; }
+        #tab-gerador .gh-comb-codes { font-family:monospace; color:#888; font-size:.68rem; }
+        #tab-gerador .gh-comb-sep { color:#ddd; }
+        #tab-gerador .gh-comb-person { display:inline-flex; align-items:center; gap:3px; background:#f0f0eb; border-radius:4px; padding:1px 6px; color:#555; }
+        #tab-gerador .gh-comb-num { font-weight:700; color:#1a3a6c; background:#e8f0fe; border-radius:3px; padding:0 4px; font-size:.65rem; margin-left:2px; }
 
         /* ── SCHEDULE BAR ── */
         #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }

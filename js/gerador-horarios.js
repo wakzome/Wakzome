@@ -1328,38 +1328,36 @@
   }
 
   // ── APRENDIZAGEM — carregar padrões aprendidos ──
-  let _aprendizaje = null; // cache para a semana actual
+  // ── APRENDIZAGEM — sistema simples de correções por pessoa+dia ──
+  // Estrutura: gh_aprendizaje_v2 { pessoa_id, tienda_id, dia, shift, semana }
+  // Ao aprender: guarda cada pessoa+dia+tienda+shift que difere do sistema
+  // Ao gerar: aplica as correções conhecidas
 
-  async function loadAprendizaje() {
-    const sb = getSupabase(); if (!sb) return {};
+  let _aprCorreccoes = {}; // { pessoa_id: { dia: { tienda_id, shift } } }
+
+  async function loadCorreccoes() {
+    const sb = getSupabase(); if (!sb) return;
     try {
-      const { data } = await sb.from('gh_aprendizaje')
-        .select('tienda_id,dia,n_pessoas,combinacion_usuario,combinacion_sistema,igual')
-        .eq('igual', false);
-      const map = {};
+      const { data } = await sb.from('gh_aprendizaje_v2').select('*');
+      _aprCorreccoes = {};
       (data || []).forEach(r => {
-        const combo = r.combinacion_usuario;
-        // Ignorar registos com formato antigo (sem ;;;) ou sem turnos válidos
-        if (!combo || !combo.includes(':::') && !combo.includes(';;; ') && !combo.includes('::')) return;
-        // Validar que contém shifts reais (HH:MM)
-        if (!combo.includes(':00')) return;
-        const key = `${r.tienda_id}|||${r.dia}|||${r.n_pessoas}`;
-        if (!map[key]) map[key] = [];
-        map[key].push(combo);
+        if (!_aprCorreccoes[r.pessoa_id]) _aprCorreccoes[r.pessoa_id] = {};
+        // Usar a correção mais recente (por semana)
+        const existing = _aprCorreccoes[r.pessoa_id][r.dia];
+        if (!existing || r.semana > existing.semana) {
+          _aprCorreccoes[r.pessoa_id][r.dia] = {
+            tienda_id: r.tienda_id,
+            shift:     r.shift,
+            semana:    r.semana,
+            count:     (existing?.count || 0) + 1
+          };
+        }
       });
-      const result = {};
-      Object.entries(map).forEach(([key, combos]) => {
-        const freq = {};
-        combos.forEach(c => { freq[c] = (freq[c]||0) + 1; });
-        result[key] = Object.entries(freq).sort((a,b) => b[1]-a[1])[0][0];
-      });
-      return result;
-    } catch(e) { console.warn('Erro ao carregar aprendizagem:', e); return {}; }
+    } catch(e) { console.warn('Erro ao carregar correções:', e); }
   }
 
-  function getAprendidoShifts(sid, day, n) {
-    if (!_aprendizaje) return null;
-    return _aprendizaje[`${sid}|||${day}|||${n}`] || null;
+  function getCorreccao(pessoaId, dia) {
+    return _aprCorreccoes[pessoaId]?.[dia] || null;
   }
 
   // ── NUEVA assignFolgas — basada en gh_combinaciones + gh_patrones + gh_folgas ──
@@ -1394,25 +1392,22 @@
     const rotatedDOM = [...ordenDOM.slice(offset), ...ordenDOM.slice(0, offset)];
     const trabajanDOM = new Set(rotatedDOM.slice(0, domCount).map(p => p.id));
 
-    // Asignar a tiendas domingo
+    // Asignar a tiendas domingo — respeitando correções aprendidas
     let filled = {};
     sundayStores.forEach(sid => { filled[sid] = 0; });
     rotatedDOM.slice(0, domCount).forEach(p => {
-      // Tipo 1: verificar se há padrão aprendido para esta pessoa no domingo
-      const aprendidoSid = sundayStores.find(sid => {
-        const key = `${sid}|DOM|${sundayMinFor(sid)}`;
-        const combo = _aprendizaje?.[key];
-        if (!combo) return false;
-        // Se o padrão aprendido inclui esta pessoa na tienda fixa dela
-        return p.store === sid && combo.includes(p.id.slice(0,8));
-      });
+      // Verificar se há correção aprendida para esta pessoa no domingo
+      const corr = getCorreccao(p.id, 'DOM');
+      const preferredSid = corr?.tienda_id && sundayStores.includes(corr.tienda_id) &&
+        filled[corr.tienda_id] < sundayMinFor(corr.tienda_id) ? corr.tienda_id : null;
 
-      const sid = aprendidoSid || sundayStores.find(sid =>
+      const sid = preferredSid || sundayStores.find(sid =>
         p.knows.includes(sid) && filled[sid] < sundayMinFor(sid)
       );
       if (sid) {
         S.sundayAssigned[sid].push(p.id);
         filled[sid]++;
+        if (preferredSid) S.decisions.push({ type: 'info', text: `DOM: ${p.name.split(' ')[0]} → ${sname(sid)} (correção aprendida).` });
       }
     });
 
@@ -2074,22 +2069,29 @@
       if (staff.length === 0) return;
       if (staff.length === 1) { S.schedule[staff[0].id][day].shift = storeBaseShift(st.id); return; }
 
-      // Tipo 2: verificar se há padrão aprendido para esta tienda+dia+n
-      const aprendido = getAprendidoShifts(st.id, day, staff.length);
-      if (aprendido) {
-        const parts = aprendido.split(';;;');
-        const shiftMap = {};
-        parts.forEach(part => {
-          const sepIdx = part.indexOf('::');
-          if (sepIdx < 0) return;
-          const idSlice = part.slice(0, sepIdx);
-          const shift = part.slice(sepIdx + 2);
-          const pessoa = staff.find(p => p.id.startsWith(idSlice));
-          if (pessoa && shift) shiftMap[pessoa.id] = shift;
+      // Tipo 2: verificar se há correções aprendidas para pessoas nesta tienda+dia
+      const corrsAplicadas = staff.filter(p => {
+        const corr = getCorreccao(p.id, day);
+        return corr && corr.tienda_id === st.id && corr.shift;
+      });
+      if (corrsAplicadas.length > 0) {
+        let algumAplicado = false;
+        staff.forEach(p => {
+          const corr = getCorreccao(p.id, day);
+          if (corr && corr.tienda_id === st.id && corr.shift) {
+            S.schedule[p.id][day].shift = corr.shift;
+            algumAplicado = true;
+          }
         });
-        if (staff.every(p => shiftMap[p.id])) {
-          staff.forEach(p => { S.schedule[p.id][day].shift = shiftMap[p.id]; });
-          S.decisions.push({ type: 'info', text: `${day} ${st.name}: turnos de intervalo aprendidos aplicados.` });
+        // Para quem não tem correção, aplicar shift base
+        staff.forEach(p => {
+          if (!S.schedule[p.id][day].shift || !S.schedule[p.id][day].shift.includes(':')) {
+            S.schedule[p.id][day].shift = storeBaseShift(st.id);
+          }
+        });
+        if (algumAplicado) {
+          S.decisions.push({ type: 'info', text: `${day} ${st.name}: turnos corrigidos por aprendizagem.` });
+          enforceIntervalSeparation(day, workers);
           return;
         }
       }
@@ -2133,8 +2135,8 @@
     S.alerts = []; S.decisions = []; S.sandraDay = {};
     S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
 
-    // Carregar padrões aprendidos
-    _aprendizaje = await loadAprendizaje();
+    // Carregar correções aprendidas
+    await loadCorreccoes();
 
     S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
     S._openStoresSnapshot = [...S.openStores];
@@ -2650,7 +2652,7 @@
     const weekKey = S.weekStart?.toISOString().split('T')[0];
     if (!weekKey) { alert('Semana não definida.'); return; }
 
-    // Load system snapshot from sessionStorage
+    // Load system snapshot
     let snapSistema = null;
     try { snapSistema = JSON.parse(sessionStorage.getItem('gh_snap_sistema') || 'null'); } catch(e) {}
     if (!snapSistema) { alert('Sem snapshot do sistema. Gere o horário primeiro.'); return; }
@@ -2659,55 +2661,39 @@
     if (btn) { btn.textContent = 'A guardar…'; btn.style.opacity = '0.6'; }
 
     try {
-      const registos = [];
+      let corrections = 0;
+      let total = 0;
 
-      // Compare per store per day
-      S.openStores.forEach(sid => {
-        DAYS.forEach(day => {
-          if (!S.openDays[sid]?.includes(day)) return;
+      for (const p of active) {
+        for (const day of DAYS) {
+          const sistema = snapSistema[p.id]?.[day];
+          const usuario = S.schedule[p.id]?.[day];
+          if (!sistema || !usuario) continue;
+          if (usuario.type !== 'work') continue;
+          total++;
 
-          // System: who worked here this day and what shift
-          const workersSist = active.filter(p =>
-            snapSistema[p.id]?.[day]?.type === 'work' &&
-            snapSistema[p.id][day].store === sid
-          );
-          const combSist = workersSist
-            .sort((a,b) => a.id.localeCompare(b.id))
-            .map(p => `${p.id.slice(0,8)}::${snapSistema[p.id][day].shift||''}`)
-            .join(';;;');
+          const mudouTienda = sistema.store !== usuario.store;
+          const mudouShift  = sistema.shift !== usuario.shift;
 
-          // User: who works here now and what shift
-          const workersUser = active.filter(p =>
-            S.schedule[p.id]?.[day]?.type === 'work' &&
-            S.schedule[p.id][day].store === sid
-          );
-          const combUser = workersUser
-            .sort((a,b) => a.id.localeCompare(b.id))
-            .map(p => `${p.id.slice(0,8)}::${S.schedule[p.id][day].shift||''}`)
-            .join(';;;');
-
-          registos.push({
-            semana:              weekKey,
-            tienda_id:           sid,
-            dia:                 day,
-            n_pessoas:           workersUser.length,
-            combinacion_sistema: combSist || null,
-            combinacion_usuario: combUser || null,
-            igual:               combSist === combUser
-          });
-        });
-      });
-
-      // Upsert to Supabase
-      for (const reg of registos) {
-        await sb.from('gh_aprendizaje').upsert(reg, { onConflict: 'semana,tienda_id,dia' });
+          if (mudouTienda || mudouShift) {
+            corrections++;
+            // Upsert correction for this person+day
+            await sb.from('gh_aprendizaje_v2').upsert({
+              pessoa_id:  p.id,
+              tienda_id:  usuario.store,
+              dia:        day,
+              shift:      usuario.shift || null,
+              semana:     weekKey,
+              mudou_tienda: mudouTienda,
+              mudou_shift:  mudouShift
+            }, { onConflict: 'pessoa_id,dia,semana' });
+          }
+        }
       }
 
-      const diferentes = registos.filter(r => !r.igual).length;
-      const total = registos.length;
-      const msg = diferentes > 0
-        ? `✓ Aprendido — ${total} registos (${diferentes} diferença${diferentes>1?'s':''} detectada${diferentes>1?'s':''}).`
-        : `✓ Aprendido — ${total} registos (sem diferenças face ao sistema).`;
+      const msg = corrections > 0
+        ? `✓ Aprendido — ${corrections} correção(ões) guardada(s) em ${total} células.`
+        : `✓ Aprendido — sem diferenças face ao sistema (${total} células verificadas).`;
 
       if (btn) { btn.textContent = '✓ Aprendido'; btn.style.opacity = '1'; btn.style.background = '#e8f5e9'; }
       S.alerts = S.alerts.filter(a => !a.text.startsWith('✓ Aprendido'));

@@ -836,8 +836,22 @@
     const sb = getSupabase();
     if (!sb) { alert('Supabase não disponível.'); return; }
     try {
+      // Eliminar registos dependentes antes de apagar a pessoa
+      // (evita erro de chave estrangeira — FK 23503)
+      await sb.from('gh_licencas').delete().eq('pessoa_id', pid);
+      await sb.from('gh_baixas').delete().eq('pessoa_id', pid);
+      await sb.from('gh_folgas').delete().eq('pessoa_id', pid);
+      await sb.from('gh_banco_horas').delete().eq('pessoa_id', pid);
+
       const { error } = await sb.from('gh_people').delete().eq('id', pid);
       if (error) throw error;
+
+      // Limpar estado local
+      if (S._licencas) delete S._licencas[pid];
+      if (S._baixas)   delete S._baixas[pid];
+      if (S._folgas)   delete S._folgas[pid];
+      if (S._banco)    delete S._banco[pid];
+
       await loadKnowledgeBase();
       const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
         ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
@@ -1002,12 +1016,12 @@
       });
     }
 
-    // Adicionar licenças não recuperáveis como ausência
+    // Adicionar licenças activas como ausência (independentemente do tipo)
     if (S._licencas) {
       Object.entries(S._licencas).forEach(([pid, l]) => {
-        if (!l.active || l.tipo !== 'nao_recuperavel') return;
+        if (!l.active) return;
         if (S.absences.find(a => a.pid === pid)) return;
-        S.absences.push({ pid, type: 'na', from: 'SEG' });
+        S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: 'SEG' });
       });
     }
 

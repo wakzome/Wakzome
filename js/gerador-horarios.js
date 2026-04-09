@@ -1445,21 +1445,43 @@
     const trabajanDOM = new Set(rotatedDOM.slice(0, domCount).map(p => p.id));
 
     // Asignar a tiendas domingo — respeitando correções aprendidas
+    // Capacidade por tienda: com override manual distribuir proporcionalmente
+    const capDOM = {};
+    if (S.domPessoas && S.domPessoas > 0 && sundayStores.length > 0) {
+      const minTotal = sundayStores.reduce((s, sid) => s + sundayMinFor(sid), 0);
+      let restante = S.domPessoas;
+      sundayStores.forEach((sid, i) => {
+        if (i === sundayStores.length - 1) {
+          capDOM[sid] = Math.max(sundayMinFor(sid), restante);
+        } else {
+          const prop = Math.max(sundayMinFor(sid), Math.round(S.domPessoas * sundayMinFor(sid) / Math.max(minTotal, 1)));
+          capDOM[sid] = prop;
+          restante -= prop;
+        }
+      });
+    } else {
+      sundayStores.forEach(sid => { capDOM[sid] = sundayMinFor(sid); });
+    }
+
     let filled = {};
     sundayStores.forEach(sid => { filled[sid] = 0; });
     rotatedDOM.slice(0, domCount).forEach(p => {
-      // Verificar se há correção aprendida para esta pessoa no domingo
       const corr = getCorreccao(p.id, 'DOM');
       const preferredSid = corr?.tienda_id && sundayStores.includes(corr.tienda_id) &&
-        filled[corr.tienda_id] < sundayMinFor(corr.tienda_id) ? corr.tienda_id : null;
+        filled[corr.tienda_id] < capDOM[corr.tienda_id] ? corr.tienda_id : null;
 
-      const sid = preferredSid || sundayStores.find(sid =>
-        p.knows.includes(sid) && filled[sid] < sundayMinFor(sid)
+      // Priorizar tienda fixa da pessoa se aberta ao domingo
+      const fixaSid = !preferredSid && p.store && sundayStores.includes(p.store) &&
+        filled[p.store] < capDOM[p.store] ? p.store : null;
+
+      const sid = preferredSid || fixaSid || sundayStores.find(sid =>
+        p.knows.includes(sid) && filled[sid] < capDOM[sid]
       );
       if (sid) {
         S.sundayAssigned[sid].push(p.id);
         filled[sid]++;
         if (preferredSid) S.decisions.push({ type: 'info', text: `DOM: ${p.name.split(' ')[0]} → ${sname(sid)} (correção aprendida).` });
+        else if (fixaSid) S.decisions.push({ type: 'info', text: `DOM: ${p.name.split(' ')[0]} → ${sname(sid)} (tienda fixa).` });
       }
     });
 
@@ -1505,9 +1527,24 @@
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 
+    // Códigos de folga disponibles para quem NÃO trabalha domingo
+    const CODIGOS_NODOM = [5, 6, 7, 8, 9, 10];
+
     ordenFinal.forEach((p, idx) => {
-      const codigo = codigos[idx];
-      if (!codigo || !PATRONES[codigo]) return;
+      let codigo = codigos[idx];
+      if (!codigo) return;
+
+      // GUARDIA: se o código implica trabalhar domingo (1 ou 2) mas a pessoa
+      // NÃO está em trabajanDOM — substituir por um código sem domingo
+      if ((codigo === 1 || codigo === 2) && !trabajanDOM.has(p.id)) {
+        // Escolher o código menos usado entre os disponíveis
+        const usado = Object.values(S._asignacionCodigos || {});
+        const contar = (c) => usado.filter(x => x === c).length;
+        codigo = CODIGOS_NODOM.slice().sort((a, b) => contar(a) - contar(b))[0] || 6;
+        S.alerts.push({ type: 'amber', text: `${p.name.split(' ')[0]}: código ajustado (não trabalha domingo).` });
+      }
+
+      if (!PATRONES[codigo]) return;
       const pat = PATRONES[codigo];
       const diasFolga = pat.folga.filter(d => d !== 'DOM');
       S._asignacionCodigos[p.id] = codigo;

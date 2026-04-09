@@ -1502,15 +1502,12 @@
     S._combinacionActual = combinacion;
     S._asignacionCodigos = {};
 
-    // 5. Ordenar personas por deuda de días entre semana
-    // Las que trabajan domingo van primero (P1, P2...) con códigos 1 y 2
-    // El resto se ordena por deuda acumulada de días entre semana
-    const DIAS_SEMANA = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    // 5. Ordenar personas — las que trabajan domingo primero, luego el resto por deuda
+    const realmenteDOMids = new Set(Object.values(S.sundayAssigned).flat());
 
-    const personasDOM  = active.filter(p => trabajanDOM.has(p.id));
-    const personasNoDOM = active.filter(p => !trabajanDOM.has(p.id) && !fullyAbsent(p.id));
+    const personasDOM   = active.filter(p => realmenteDOMids.has(p.id));
+    const personasNoDOM = active.filter(p => !realmenteDOMids.has(p.id) && !fullyAbsent(p.id));
 
-    // Ordenar noDOM por deuda entre semana, luego rotar con seed para variar
     const ordenNoDOM_base = [...personasNoDOM].sort((a, b) => {
       const DIAS_SEM = ['SEG','TER','QUA','QUI','SEX','SAB'];
       const deudaA = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d] || 0), 0);
@@ -1520,56 +1517,20 @@
     const offsetNoDOM = seed % Math.max(1, ordenNoDOM_base.length);
     const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
 
-    // Construir orden final: primero los que trabajan domingo, luego el resto
     const ordenFinal = [...personasDOM, ...ordenNoDOM];
 
-    // 6. Asignar códigos a personas
+    // 6. Asignar códigos en orden estricto — la combinación manda
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 
-    // Quem realmente ficou atribuído ao domingo
-    const realmenteDOM = new Set(
-      Object.values(S.sundayAssigned).flat()
-    );
-
-    const CODIGOS_NODOM = [5, 6, 7, 8, 9, 10];
-    const contarCodigo = (c) => Object.values(S._asignacionCodigos || {}).filter(x => x === c).length;
-
     ordenFinal.forEach((p, idx) => {
-      let codigo = codigos[idx];
-      if (!codigo) return;
-
-      // GUARDIA: código 1/2 implica trabalhar domingo.
-      // Se a pessoa NÃO está realmente no sundayAssigned → trocar por código sem domingo
-      if ((codigo === 1 || codigo === 2) && !realmenteDOM.has(p.id)) {
-        codigo = CODIGOS_NODOM.slice().sort((a, b) => contarCodigo(a) - contarCodigo(b))[0] || 6;
-      }
-
-      if (!PATRONES[codigo]) return;
+      const codigo = codigos[idx];
+      if (!codigo || !PATRONES[codigo]) return;
       const pat = PATRONES[codigo];
       const diasFolga = pat.folga.filter(d => d !== 'DOM');
       S._asignacionCodigos[p.id] = codigo;
       S.folgaDay[p.id] = diasFolga[0] || null;
       if (diasFolga[1]) S.extraDayOff[p.id] = diasFolga[1];
-    });
-
-    // VALIDADOR FINAL: garantir que ninguém fica com horas erradas
-    // Quem tem 2 folgas entre semana SEM trabalhar domingo → corrigir
-    ordenFinal.forEach(p => {
-      const temExtraOff = !!S.extraDayOff?.[p.id];
-      const temFolgaDay = !!S.folgaDay?.[p.id];
-      if (temExtraOff && temFolgaDay && !realmenteDOM.has(p.id)) {
-        // Pessoa com 2 folgas entre semana e sem domingo → tirar o extraDayOff
-        S.alerts.push({ type: 'amber', text: `${p.name.split(' ')[0]}: folga extra removida (sem domingo atribuído).` });
-        delete S.extraDayOff[p.id];
-        // Reatribuir código correto
-        const codigo = CODIGOS_NODOM.slice().sort((a, b) => contarCodigo(a) - contarCodigo(b))[0] || 6;
-        if (PATRONES[codigo]) {
-          const diasFolga = PATRONES[codigo].folga.filter(d => d !== 'DOM');
-          S._asignacionCodigos[p.id] = codigo;
-          S.folgaDay[p.id] = diasFolga[0] || null;
-        }
-      }
     });
 
     saveMem();

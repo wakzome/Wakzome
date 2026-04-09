@@ -1517,7 +1517,12 @@
     // Este orden es el que se alinea con los códigos de la combinación
     const ordenFinal = [...personasDOM, ...ordenNoDOM];
 
-    // 8. Asignar códigos en orden estricto — la combinación manda
+    // DEBUG — eliminar después
+    console.log('[DOM] domCount:', domCount, 'candidatas:', candidatasDOM.length, candidatasDOM.map(p => p.name));
+    console.log('[DOM] capDOM:', capDOM);
+    console.log('[DOM] personasDOM resultado:', personasDOM.map(p => p.name));
+    console.log('[DOM] codigos:', codigos);
+    console.log('[DOM] ordenFinal:', ordenFinal.map((p,i) => `${p.name}→${codigos[i]}`));
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 

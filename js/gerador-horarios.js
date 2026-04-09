@@ -219,8 +219,35 @@
   function isoWeek(date) { const d = new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()+3-(d.getDay()+6)%7); const w1 = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
   function weeksSince(s, ref) { return Math.floor((ref - new Date(s)) / (7*864e5)); }
   function absOf(pid)       { return S.absences.find(a => a.pid === pid) || null; }
-  function isAbsent(pid, day) { const a = absOf(pid); if (!a) return false; return DAYS.indexOf(day) >= DAYS.indexOf(a.from); }
-  function fullyAbsent(pid)   { const a = absOf(pid); if (!a) return false; return DAYS.indexOf(a.from) === 0; }
+
+  // Converte uma data ISO (YYYY-MM-DD) no dia-da-semana correspondente (ex: 'QUA').
+  // Devolve null se a data cair fora da semana actual.
+  function dayOfWeekKey(dateStr) {
+    if (!dateStr || !S.weekStart) return null;
+    const d    = new Date(dateStr + 'T00:00:00');
+    const diff = Math.round((d - new Date(S.weekStart)) / 86400000);
+    if (diff < 0 || diff > 6) return null; // fora desta semana
+    return DAYS[diff];
+  }
+
+  // Pessoa está ausente num dia concreto?
+  // Respeita 'from' (1.º dia de ausência) e 'to' (último dia de ausência).
+  // Se 'to' não existir assume até ao final da semana (DOM).
+  function isAbsent(pid, day) {
+    const a = absOf(pid); if (!a) return false;
+    const di    = DAYS.indexOf(day);
+    const fromI = DAYS.indexOf(a.from);
+    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
+    return di >= fromI && di <= toI;
+  }
+
+  // Pessoa ausente a semana toda?
+  function fullyAbsent(pid) {
+    const a = absOf(pid); if (!a) return false;
+    const fromI = DAYS.indexOf(a.from);
+    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
+    return fromI === 0 && toI === 6;
+  }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
   function storeMin(sid) { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
   function storeMax(sid) {
@@ -836,22 +863,17 @@
     const sb = getSupabase();
     if (!sb) { alert('Supabase não disponível.'); return; }
     try {
-      // Eliminar registos dependentes antes de apagar a pessoa
-      // (evita erro de chave estrangeira — FK 23503)
+      // Eliminar registos dependentes antes de apagar a pessoa (evita FK 23503)
       await sb.from('gh_licencas').delete().eq('pessoa_id', pid);
       await sb.from('gh_baixas').delete().eq('pessoa_id', pid);
       await sb.from('gh_folgas').delete().eq('pessoa_id', pid);
       await sb.from('gh_banco_horas').delete().eq('pessoa_id', pid);
-
       const { error } = await sb.from('gh_people').delete().eq('id', pid);
       if (error) throw error;
-
-      // Limpar estado local
       if (S._licencas) delete S._licencas[pid];
       if (S._baixas)   delete S._baixas[pid];
       if (S._folgas)   delete S._folgas[pid];
       if (S._banco)    delete S._banco[pid];
-
       await loadKnowledgeBase();
       const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
         ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
@@ -1004,7 +1026,11 @@
         x.name === f.nome ||
         nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
       );
-      return { pid: p ? p.id : f.pid, type: 'ferias', from: f.from || 'SEG' };
+      // 'to': último dia de férias nesta semana.
+      // Se f.to existir usa-o directamente; se f.data_fim existir converte para dia da semana;
+      // sem info assume ausente até ao fim da semana (DOM).
+      const toDay = f.to || (f.data_fim ? dayOfWeekKey(f.data_fim) : null) || 'DOM';
+      return { pid: p ? p.id : f.pid, type: 'ferias', from: f.from || 'SEG', to: toDay };
     }).filter(a => a.pid);
 
     // Adicionar baixas activas à lista de ausências
@@ -1012,7 +1038,8 @@
       Object.entries(S._baixas).forEach(([pid, b]) => {
         if (!b.active) return;
         if (S.absences.find(a => a.pid === pid)) return;
-        S.absences.push({ pid, type: 'baixa', from: 'SEG' });
+        const toDay = b.data_fim ? dayOfWeekKey(b.data_fim) : null;
+        S.absences.push({ pid, type: 'baixa', from: 'SEG', to: toDay || 'DOM' });
       });
     }
 
@@ -1021,7 +1048,8 @@
       Object.entries(S._licencas).forEach(([pid, l]) => {
         if (!l.active) return;
         if (S.absences.find(a => a.pid === pid)) return;
-        S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: 'SEG' });
+        const toDay = l.data_fim ? dayOfWeekKey(l.data_fim) : null;
+        S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: 'SEG', to: toDay || 'DOM' });
       });
     }
 

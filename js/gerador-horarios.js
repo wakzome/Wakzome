@@ -1527,21 +1527,22 @@
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 
-    // Códigos de folga disponibles para quem NÃO trabalha domingo
+    // Quem realmente ficou atribuído ao domingo
+    const realmenteDOM = new Set(
+      Object.values(S.sundayAssigned).flat()
+    );
+
     const CODIGOS_NODOM = [5, 6, 7, 8, 9, 10];
+    const contarCodigo = (c) => Object.values(S._asignacionCodigos || {}).filter(x => x === c).length;
 
     ordenFinal.forEach((p, idx) => {
       let codigo = codigos[idx];
       if (!codigo) return;
 
-      // GUARDIA: se o código implica trabalhar domingo (1 ou 2) mas a pessoa
-      // NÃO está em trabajanDOM — substituir por um código sem domingo
-      if ((codigo === 1 || codigo === 2) && !trabajanDOM.has(p.id)) {
-        // Escolher o código menos usado entre os disponíveis
-        const usado = Object.values(S._asignacionCodigos || {});
-        const contar = (c) => usado.filter(x => x === c).length;
-        codigo = CODIGOS_NODOM.slice().sort((a, b) => contar(a) - contar(b))[0] || 6;
-        S.alerts.push({ type: 'amber', text: `${p.name.split(' ')[0]}: código ajustado (não trabalha domingo).` });
+      // GUARDIA: código 1/2 implica trabalhar domingo.
+      // Se a pessoa NÃO está realmente no sundayAssigned → trocar por código sem domingo
+      if ((codigo === 1 || codigo === 2) && !realmenteDOM.has(p.id)) {
+        codigo = CODIGOS_NODOM.slice().sort((a, b) => contarCodigo(a) - contarCodigo(b))[0] || 6;
       }
 
       if (!PATRONES[codigo]) return;
@@ -1550,6 +1551,25 @@
       S._asignacionCodigos[p.id] = codigo;
       S.folgaDay[p.id] = diasFolga[0] || null;
       if (diasFolga[1]) S.extraDayOff[p.id] = diasFolga[1];
+    });
+
+    // VALIDADOR FINAL: garantir que ninguém fica com horas erradas
+    // Quem tem 2 folgas entre semana SEM trabalhar domingo → corrigir
+    ordenFinal.forEach(p => {
+      const temExtraOff = !!S.extraDayOff?.[p.id];
+      const temFolgaDay = !!S.folgaDay?.[p.id];
+      if (temExtraOff && temFolgaDay && !realmenteDOM.has(p.id)) {
+        // Pessoa com 2 folgas entre semana e sem domingo → tirar o extraDayOff
+        S.alerts.push({ type: 'amber', text: `${p.name.split(' ')[0]}: folga extra removida (sem domingo atribuído).` });
+        delete S.extraDayOff[p.id];
+        // Reatribuir código correto
+        const codigo = CODIGOS_NODOM.slice().sort((a, b) => contarCodigo(a) - contarCodigo(b))[0] || 6;
+        if (PATRONES[codigo]) {
+          const diasFolga = PATRONES[codigo].folga.filter(d => d !== 'DOM');
+          S._asignacionCodigos[p.id] = codigo;
+          S.folgaDay[p.id] = diasFolga[0] || null;
+        }
+      }
     });
 
     saveMem();

@@ -1360,7 +1360,26 @@
     return _aprCorreccoes[pessoaId]?.[dia] || null;
   }
 
-  // ── NUEVA assignFolgas — basada en gh_combinaciones + gh_patrones + gh_folgas ──
+  // ── APRENDIZAGEM POR ESQUEMA — independente de pessoas ──
+  let _aprEsquemas = {}; // { tienda_id|||dia|||n: shiftCombo }
+
+  async function loadEsquemas() {
+    const sb = getSupabase(); if (!sb) return;
+    try {
+      const { data } = await sb.from('gh_esquemas').select('*');
+      _aprEsquemas = {};
+      (data || []).forEach(r => {
+        _aprEsquemas[`${r.tienda_id}|||${r.dia}|||${r.n_pessoas}`] = {
+          shift_combo: r.shift_combo,
+          votos: r.votos
+        };
+      });
+    } catch(e) { console.warn('Erro ao carregar esquemas:', e); }
+  }
+
+  function getEsquema(sid, day, n) {
+    return _aprEsquemas[`${sid}|||${day}|||${n}`] || null;
+  }
   async function assignFolgas(active, seed) {
     const sundayStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
     S.sundayAssigned = {};
@@ -2069,7 +2088,7 @@
       if (staff.length === 0) return;
       if (staff.length === 1) { S.schedule[staff[0].id][day].shift = storeBaseShift(st.id); return; }
 
-      // Tipo 2: verificar se há correções aprendidas para pessoas nesta tienda+dia
+      // Tipo 2a: correções por pessoa
       const corrsAplicadas = staff.filter(p => {
         const corr = getCorreccao(p.id, day);
         return corr && corr.tienda_id === st.id && corr.shift;
@@ -2083,14 +2102,39 @@
             algumAplicado = true;
           }
         });
-        // Para quem não tem correção, aplicar shift base
         staff.forEach(p => {
           if (!S.schedule[p.id][day].shift || !S.schedule[p.id][day].shift.includes(':')) {
             S.schedule[p.id][day].shift = storeBaseShift(st.id);
           }
         });
         if (algumAplicado) {
-          S.decisions.push({ type: 'info', text: `${day} ${st.name}: turnos corrigidos por aprendizagem.` });
+          S.decisions.push({ type: 'info', text: `${day} ${st.name}: turnos corrigidos por aprendizagem (pessoa).` });
+          enforceIntervalSeparation(day, workers);
+          return;
+        }
+      }
+
+      // Tipo 2b: esquema aprendido por configuração (independente de pessoas)
+      const esquema = getEsquema(st.id, day, staff.length);
+      if (esquema?.shift_combo) {
+        const shifts = esquema.shift_combo.split(',');
+        // Ordenar staff por peso (maior primeiro) igual ao computeGroups
+        const byWeight = [...staff].sort((a,b) => {
+          const wa = a.pesoBase ?? 1.5;
+          const wb = b.pesoBase ?? 1.5;
+          return wb - wa || new Date(a.start||0) - new Date(b.start||0);
+        });
+        if (shifts.length === staff.length) {
+          byWeight.forEach((p, i) => {
+            const sh = shifts[i];
+            // Converter código de letra para shift real se necessário
+            const shiftReal = sh === 'A' ? storeAltShift(st.id) :
+                              sh === 'B' ? storeBaseShift(st.id) : sh;
+            if (shiftReal && shiftReal.includes(':')) {
+              S.schedule[p.id][day].shift = shiftReal;
+            }
+          });
+          S.decisions.push({ type: 'info', text: `${day} ${st.name}: esquema aprendido aplicado (${esquema.votos} semana${esquema.votos>1?'s':''}).` });
           enforceIntervalSeparation(day, workers);
           return;
         }
@@ -2135,8 +2179,9 @@
     S.alerts = []; S.decisions = []; S.sandraDay = {};
     S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
 
-    // Carregar correções aprendidas
+    // Carregar correções aprendidas (por pessoa) e esquemas (por configuração)
     await loadCorreccoes();
+    await loadEsquemas();
 
     S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
     S._openStoresSnapshot = [...S.openStores];
@@ -2662,8 +2707,10 @@
 
     try {
       let corrections = 0;
+      let esquemas = 0;
       let total = 0;
 
+      // 1. Correções por pessoa
       for (const p of active) {
         for (const day of DAYS) {
           const sistema = snapSistema[p.id]?.[day];
@@ -2677,13 +2724,12 @@
 
           if (mudouTienda || mudouShift) {
             corrections++;
-            // Upsert correction for this person+day
             await sb.from('gh_aprendizaje_v2').upsert({
-              pessoa_id:  p.id,
-              tienda_id:  usuario.store,
-              dia:        day,
-              shift:      usuario.shift || null,
-              semana:     weekKey,
+              pessoa_id:    p.id,
+              tienda_id:    usuario.store,
+              dia:          day,
+              shift:        usuario.shift || null,
+              semana:       weekKey,
               mudou_tienda: mudouTienda,
               mudou_shift:  mudouShift
             }, { onConflict: 'pessoa_id,dia,semana' });
@@ -2691,8 +2737,66 @@
         }
       }
 
-      const msg = corrections > 0
-        ? `✓ Aprendido — ${corrections} correção(ões) guardada(s) em ${total} células.`
+      // 2. Esquemas por configuração tienda+dia+n (independente de pessoas)
+      for (const sid of S.openStores) {
+        for (const day of DAYS) {
+          if (!S.openDays[sid]?.includes(day)) continue;
+          const staff = active.filter(p =>
+            S.schedule[p.id]?.[day]?.type === 'work' &&
+            S.schedule[p.id][day].store === sid
+          );
+          if (staff.length < 2) continue;
+
+          // Ordenar por peso — mesma ordem que computeGroups
+          const byWeight = [...staff].sort((a,b) => {
+            const wa = a.pesoBase ?? 1.5;
+            const wb = b.pesoBase ?? 1.5;
+            return wb - wa || new Date(a.start||0) - new Date(b.start||0);
+          });
+
+          // Verificar se algum shift foi modificado face ao sistema
+          const algumMudou = byWeight.some(p => {
+            const sis = snapSistema[p.id]?.[day];
+            const usr = S.schedule[p.id][day];
+            return sis?.shift !== usr?.shift;
+          });
+
+          if (algumMudou) {
+            // Guardar combo como A/B baseado no shift actual
+            const combo = byWeight.map(p => {
+              const sh = S.schedule[p.id][day].shift;
+              const base = storeBaseShift(sid);
+              const alt  = storeAltShift(sid);
+              if (sh === base) return 'B';
+              if (sh === alt)  return 'A';
+              return sh; // shift custom
+            }).join(',');
+
+            // Upsert esquema — incrementar votos se já existe
+            const existing = await sb.from('gh_esquemas')
+              .select('id,votos')
+              .eq('tienda_id', sid)
+              .eq('dia', day)
+              .eq('n_pessoas', staff.length)
+              .single();
+
+            if (existing?.data) {
+              await sb.from('gh_esquemas')
+                .update({ shift_combo: combo, votos: (existing.data.votos||1)+1, semana: weekKey, updated_at: new Date().toISOString() })
+                .eq('id', existing.data.id);
+            } else {
+              await sb.from('gh_esquemas').insert({
+                tienda_id: sid, dia: day, n_pessoas: staff.length,
+                shift_combo: combo, votos: 1, semana: weekKey
+              });
+            }
+            esquemas++;
+          }
+        }
+      }
+
+      const msg = (corrections + esquemas) > 0
+        ? `✓ Aprendido — ${corrections} correção(ões) por pessoa, ${esquemas} esquema(s) guardado(s).`
         : `✓ Aprendido — sem diferenças face ao sistema (${total} células verificadas).`;
 
       if (btn) { btn.textContent = '✓ Aprendido'; btn.style.opacity = '1'; btn.style.background = '#e8f5e9'; }

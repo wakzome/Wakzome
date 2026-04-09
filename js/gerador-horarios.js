@@ -1520,6 +1520,9 @@
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 
+    console.log('[DOM] domCount='+domCount+' S.domPessoas='+S.domPessoas+' personasDOM='+personasDOM.length+' ['+personasDOM.map(p=>p.name.split(' ')[0]).join(',')+'] codigos=['+codigos.join(',')+']');
+    console.log('[DOM] ordenFinal:', ordenFinal.map((p,i)=>p.name.split(' ')[0]+'→'+codigos[i]).join(', '));
+
     ordenFinal.forEach((p, idx) => {
       const codigo = codigos[idx];
       if (!codigo || !PATRONES[codigo]) return;

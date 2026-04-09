@@ -745,6 +745,14 @@
       }
       if (!fromDay) fromDay = 'SEG';
 
+      // Encontrar o último dia da semana em que está de férias
+      // (pode ser antes de DOM se as férias terminam a meio da semana)
+      let toDay = null;
+      for (var j = DAYS.length - 1; j >= 0; j--) {
+        if (weekDates[j] <= ate) { toDay = DAYS[j]; break; }
+      }
+      if (!toDay) toDay = 'DOM';
+
       // Cruzar nome com PEOPLE do gerador (por nome, case-insensitive)
       const nomeNorm = (f.nome || '').trim().toUpperCase();
       let pid = null;
@@ -752,7 +760,7 @@
         if (p.name.toUpperCase() === nomeNorm) pid = p.id;
       });
 
-      result.push({ pid: pid, nome: f.nome, loja: f.loja, from: fromDay });
+      result.push({ pid: pid, nome: f.nome, loja: f.loja, from: fromDay, to: toDay });
     });
 
     return result;

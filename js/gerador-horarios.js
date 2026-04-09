@@ -1444,19 +1444,26 @@
 
     // 4. Seleccionar exactamente domCount personas para el domingo
     // y asignarlas a tiendas — capacidad total = domCount
+    // Ordenar tiendas domingo por prioridad — Avenida primero
+    const sundayStoresSorted = [...sundayStores].sort((a, b) => {
+      const pa = STORES.find(s => s.id === a)?.priority ?? 9;
+      const pb = STORES.find(s => s.id === b)?.priority ?? 9;
+      return pa - pb;
+    });
+
+    // Capacidad por tienda: mínimo 1 por tienda, exceso va a Avenida (mayor prioridad)
     const capDOM = {};
-    sundayStores.forEach(sid => { capDOM[sid] = sundayMinFor(sid); });
-    // Distribuir plazas extra para llegar a domCount
-    let totalCap = sundayStores.reduce((s, sid) => s + capDOM[sid], 0);
+    sundayStoresSorted.forEach(sid => { capDOM[sid] = 1; });
+    let totalCap = sundayStoresSorted.length;
     let si = 0;
-    while (totalCap < domCount && sundayStores.length > 0) {
-      capDOM[sundayStores[si % sundayStores.length]]++;
+    while (totalCap < domCount && sundayStoresSorted.length > 0) {
+      capDOM[sundayStoresSorted[si % sundayStoresSorted.length]]++;
       totalCap++;
       si++;
     }
 
     const filled = {};
-    sundayStores.forEach(sid => { filled[sid] = 0; });
+    sundayStoresSorted.forEach(sid => { filled[sid] = 0; });
 
     // personasDOM = exactamente las que consiguieron plaza el domingo
     const personasDOM = [];
@@ -1471,7 +1478,7 @@
         filled[p.store] < capDOM[p.store] ? p.store : null;
       // Cualquier tienda disponible
       const sid = preferredSid || fixaSid ||
-        sundayStores.find(sid => p.knows.includes(sid) && filled[sid] < capDOM[sid]);
+        sundayStoresSorted.find(sid => p.knows.includes(sid) && filled[sid] < capDOM[sid]);
 
       if (sid) {
         S.sundayAssigned[sid].push(p.id);

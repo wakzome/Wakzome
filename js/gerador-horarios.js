@@ -1462,6 +1462,8 @@
       si++;
     }
 
+    S._capDOM = capDOM; // para que fixSunday use el techo correcto
+
     const filled = {};
     sundayStoresSorted.forEach(sid => { filled[sid] = 0; });
 
@@ -1727,9 +1729,9 @@
         }
       });
     });
-    // Asegurar que el mínimo de domingo no se supere como techo
+    // Asegurar que no haya más personas de lo planificado en cada tienda el domingo
     domStores.forEach(sid => {
-      const domMax = sundayMinFor(sid);
+      const domMax = S._capDOM?.[sid] ?? sundayMinFor(sid);
       const domWorkers = active.filter(p => S.schedule[p.id]?.['DOM']?.type === 'work' && S.schedule[p.id]['DOM'].store === sid);
       if (domWorkers.length > domMax) {
         [...domWorkers]

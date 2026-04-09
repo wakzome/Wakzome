@@ -1416,110 +1416,101 @@
     S.sundayAssigned = {};
     sundayStores.forEach(sid => { S.sundayAssigned[sid] = []; });
 
-    // 1. Calcular cuántas personas van al domingo
+    // 1. domCount — lo define el usuario o el mínimo de las tiendas
     let domCount = 0;
     sundayStores.forEach(sid => { domCount += sundayMinFor(sid); });
-    // Override manual — campo "Pessoas no domingo" do passo 3
     if (S.domPessoas && S.domPessoas > 0) domCount = S.domPessoas;
 
-    // 2. Cargar historial de folgas
+    // 2. Historial
     const hist = await loadHistorial();
 
-    // 3. Separar autónomas disponibles para domingo vs resto
-    const disponiblesDOM = active.filter(p =>
-      p.canAlone && !isAbsent(p.id, 'DOM') &&
+    // 3. Candidatos para domingo — autónomas disponibles ese día
+    const candidatasDOM = active.filter(p =>
+      p.canAlone &&
+      !isAbsent(p.id, 'DOM') &&
       sundayStores.some(sid => p.knows.includes(sid))
     );
 
-    // Ordenar por domingos acumulados (menos → más prioridad para trabajar domingo)
-    // El seed desplaza el índice de inicio para variar en cada regeneración
-    const ordenDOM = [...disponiblesDOM].sort((a, b) => {
+    // Ordenar por deuda de domingos (menos → más prioridad)
+    candidatasDOM.sort((a, b) => {
       const da = hist[a.id]?.DOM || 0;
       const db = hist[b.id]?.DOM || 0;
       return da !== db ? da - db : a.id.localeCompare(b.id);
     });
 
-    // Rotar según seed para que cada regeneración proponga personas distintas
-    const offset = seed % Math.max(1, ordenDOM.length);
-    const rotatedDOM = [...ordenDOM.slice(offset), ...ordenDOM.slice(0, offset)];
-    const trabajanDOM = new Set(rotatedDOM.slice(0, domCount).map(p => p.id));
+    // Rotar con seed para variar entre regeneraciones
+    const offset = seed % Math.max(1, candidatasDOM.length);
+    const rotadas = [...candidatasDOM.slice(offset), ...candidatasDOM.slice(0, offset)];
 
-    // Asignar a tiendas domingo — respeitando correções aprendidas
-    // Capacidade por tienda: com override manual distribuir proporcionalmente
+    // 4. Seleccionar exactamente domCount personas para el domingo
+    // y asignarlas a tiendas — capacidad total = domCount
     const capDOM = {};
-    if (S.domPessoas && S.domPessoas > 0 && sundayStores.length > 0) {
-      const minTotal = sundayStores.reduce((s, sid) => s + sundayMinFor(sid), 0);
-      let restante = S.domPessoas;
-      sundayStores.forEach((sid, i) => {
-        if (i === sundayStores.length - 1) {
-          capDOM[sid] = Math.max(sundayMinFor(sid), restante);
-        } else {
-          const prop = Math.max(sundayMinFor(sid), Math.round(S.domPessoas * sundayMinFor(sid) / Math.max(minTotal, 1)));
-          capDOM[sid] = prop;
-          restante -= prop;
-        }
-      });
-    } else {
-      sundayStores.forEach(sid => { capDOM[sid] = sundayMinFor(sid); });
+    sundayStores.forEach(sid => { capDOM[sid] = sundayMinFor(sid); });
+    // Distribuir plazas extra para llegar a domCount
+    let totalCap = sundayStores.reduce((s, sid) => s + capDOM[sid], 0);
+    let si = 0;
+    while (totalCap < domCount && sundayStores.length > 0) {
+      capDOM[sundayStores[si % sundayStores.length]]++;
+      totalCap++;
+      si++;
     }
 
-    let filled = {};
+    const filled = {};
     sundayStores.forEach(sid => { filled[sid] = 0; });
-    rotatedDOM.slice(0, domCount).forEach(p => {
+
+    // personasDOM = exactamente las que consiguieron plaza el domingo
+    const personasDOM = [];
+    for (const p of rotadas) {
+      if (personasDOM.length >= domCount) break;
+      // Corrección aprendida
       const corr = getCorreccao(p.id, 'DOM');
       const preferredSid = corr?.tienda_id && sundayStores.includes(corr.tienda_id) &&
         filled[corr.tienda_id] < capDOM[corr.tienda_id] ? corr.tienda_id : null;
-
-      // Priorizar tienda fixa da pessoa se aberta ao domingo
+      // Tienda fija
       const fixaSid = !preferredSid && p.store && sundayStores.includes(p.store) &&
         filled[p.store] < capDOM[p.store] ? p.store : null;
+      // Cualquier tienda disponible
+      const sid = preferredSid || fixaSid ||
+        sundayStores.find(sid => p.knows.includes(sid) && filled[sid] < capDOM[sid]);
 
-      const sid = preferredSid || fixaSid || sundayStores.find(sid =>
-        p.knows.includes(sid) && filled[sid] < capDOM[sid]
-      );
       if (sid) {
         S.sundayAssigned[sid].push(p.id);
         filled[sid]++;
-        if (preferredSid) S.decisions.push({ type: 'info', text: `DOM: ${p.name.split(' ')[0]} → ${sname(sid)} (correção aprendida).` });
-        else if (fixaSid) S.decisions.push({ type: 'info', text: `DOM: ${p.name.split(' ')[0]} → ${sname(sid)} (tienda fixa).` });
+        personasDOM.push(p);
       }
-    });
+    }
 
-    // 4. Cargar la combinación para n personas y domCount personas en domingo
+    // 5. Combinación para n personas y domCount en domingo
     const n = active.filter(p => !fullyAbsent(p.id)).length;
     let combinacion = await loadCombinacion(n, domCount);
-
     if (!combinacion) {
-      // Fallback: combinación mínima si no existe en BD
       console.warn(`No hay combinación para n=${n} dom=${domCount}`);
       S.alerts.push({ type: 'amber', text: `Sem combinação definida para ${n} pessoas e ${domCount} ao domingo.` });
-      combinacion = active.map((_, i) => i < domCount ? (i % 2 === 0 ? 1 : 2) : [6,7,8,9,10][i % 5]).join(',');
+      combinacion = [...Array(n)].map((_, i) => i < domCount ? (i % 2 === 0 ? 1 : 2) : [6,7,8,9,10][i % 5]).join(',');
     }
 
     const codigos = combinacion.split(',').map(Number);
-
-    // Guardar en estado para mostrar en pantalla
     S._combinacionActual = combinacion;
     S._asignacionCodigos = {};
 
-    // 5. Ordenar personas — las que trabajan domingo primero, luego el resto por deuda
-    const realmenteDOMids = new Set(Object.values(S.sundayAssigned).flat());
-
-    const personasDOM   = active.filter(p => realmenteDOMids.has(p.id));
-    const personasNoDOM = active.filter(p => !realmenteDOMids.has(p.id) && !fullyAbsent(p.id));
-
+    // 6. Resto de personas — ordenadas por deuda entre semana
+    const personasNoDOM = active.filter(p =>
+      !personasDOM.includes(p) && !fullyAbsent(p.id)
+    );
     const ordenNoDOM_base = [...personasNoDOM].sort((a, b) => {
       const DIAS_SEM = ['SEG','TER','QUA','QUI','SEX','SAB'];
-      const deudaA = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d] || 0), 0);
-      const deudaB = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d] || 0), 0);
-      return deudaA !== deudaB ? deudaA - deudaB : a.id.localeCompare(b.id);
+      const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d] || 0), 0);
+      const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d] || 0), 0);
+      return da !== db ? da - db : a.id.localeCompare(b.id);
     });
     const offsetNoDOM = seed % Math.max(1, ordenNoDOM_base.length);
     const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
 
+    // 7. ordenFinal: DOM primero (los que realmente trabajan domingo), luego el resto
+    // Este orden es el que se alinea con los códigos de la combinación
     const ordenFinal = [...personasDOM, ...ordenNoDOM];
 
-    // 6. Asignar códigos en orden estricto — la combinación manda
+    // 8. Asignar códigos en orden estricto — la combinación manda
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 

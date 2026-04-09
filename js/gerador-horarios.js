@@ -190,7 +190,7 @@
   function blank() {
     return {
       weekStart: null, openStores: [], openDays: {}, storeMin: {}, storeMax: {},
-      storeMode: {},
+      storeMode: {}, domPessoas: null,
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: []
@@ -1107,6 +1107,18 @@
         </div>
 
         <div class="gh-store-cfg">${rows}</div>
+
+        <!-- CAMPO: Pessoas no domingo -->
+        <div id="gh-dom-pessoas-row" style="display:none;margin-bottom:20px;padding:12px 0;border-top:1px solid #f0f0f0;">
+          <div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:8px;">Pessoas a trabalhar no domingo</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="number" id="gh-dom-pessoas" min="1" max="12" placeholder="Auto"
+              style="width:70px;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:.9rem;font-family:inherit;color:#111;background:#fff;"
+              value="${S.domPessoas || ''}">
+            <span style="font-size:.75rem;color:#888;">Se vazio, o sistema calcula automaticamente pelo mínimo das lojas.</span>
+          </div>
+        </div>
+
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
           <button class="gh-btn gh-btn-solid" id="gh-sub-stores">Gerar horário →</button>
@@ -1150,13 +1162,26 @@
         } else {
           row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
         }
+        updateDomPessoasVisibility();
       });
     });
 
     // Eventos: toggle dias
     c.querySelectorAll('.gh-dtog').forEach(el => {
-      el.addEventListener('click', () => el.classList.toggle('on'));
+      el.addEventListener('click', () => {
+        el.classList.toggle('on');
+        updateDomPessoasVisibility();
+      });
     });
+
+    function updateDomPessoasVisibility() {
+      const hasDom = [...c.querySelectorAll('.gh-dtog.on')].some(el => el.dataset.day === 'DOM');
+      const row = document.getElementById('gh-dom-pessoas-row');
+      if (row) row.style.display = hasDom ? 'block' : 'none';
+    }
+
+    // Mostrar campo DOM se já há domingos activos
+    updateDomPessoasVisibility();
 
     document.getElementById('gh-back-2').addEventListener('click', () => { wStep = 1; renderWiz(); });
     document.getElementById('gh-sub-stores').addEventListener('click', sub_stores);
@@ -1180,6 +1205,12 @@
       if (modeEl?.value) S.storeMode[st.id] = modeEl.value;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
+
+    // Ler número de pessoas no domingo (override manual)
+    const domInp = document.getElementById('gh-dom-pessoas');
+    const domVal = domInp ? parseInt(domInp.value) || 0 : 0;
+    S.domPessoas = domVal > 0 ? domVal : null; // null = calcular automaticamente
+
     generate();
   }
 
@@ -1388,6 +1419,8 @@
     // 1. Calcular cuántas personas van al domingo
     let domCount = 0;
     sundayStores.forEach(sid => { domCount += sundayMinFor(sid); });
+    // Override manual — campo "Pessoas no domingo" do passo 3
+    if (S.domPessoas && S.domPessoas > 0) domCount = S.domPessoas;
 
     // 2. Cargar historial de folgas
     const hist = await loadHistorial();

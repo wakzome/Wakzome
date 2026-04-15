@@ -334,15 +334,7 @@
     return fromI === 0 && toI === 6;
   }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
-  function storeMin(sid) {
-    // 1. Tentar CAPACITY_TABLE com cenário actual
-    if (S._nActive !== undefined && S._nDom !== undefined && S._nLojas !== undefined) {
-      const cap = getStoreCap(sid, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
-      if (cap) return cap.semMin;
-    }
-    // 2. Fallback: valor manual do wizard (legado) ou 1
-    return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1;
-  }
+  function storeMin(sid) { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
   function storeMax(sid) {
     // Shana y Maxx (priority >= 3): máximo estructural de 1 persona — inamovible.
     const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
@@ -1532,12 +1524,6 @@
   }
 
   function sundayMinFor(sid) {
-    // 1. Tentar CAPACITY_TABLE
-    if (S._nActive !== undefined && S._nDom !== undefined && S._nLojas !== undefined) {
-      const cap = getStoreCap(sid, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
-      if (cap) return cap.domMin;
-    }
-    // 2. Fallback legado
     const weekMin = storeMin(sid) || 1;
     const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
     if (storePriority <= 2) return Math.max(1, weekMin - 1);
@@ -1923,58 +1909,6 @@
         });
       });
     });
-
-    // ── Redistribuição soft por CAPACITY_TABLE semMax ──
-    // Segunda passagem independente: redistribui excedentes de Avenida/Mercado
-    // segundo os limites do CAPACITY_TABLE. NUNCA cria folgas — só muda de loja.
-    if (S._nActive !== undefined && S._nDom !== undefined && S._nLojas !== undefined) {
-      workDays.forEach(day => {
-        S.openStores.forEach(sid => {
-          const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
-          if (storePriority >= 3) return; // já tratado pelo redirect original
-          const cap = getStoreCap(sid, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
-          if (!cap) return;
-          const softMax = cap.semMax;
-          const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid);
-          if (workers.length <= softMax) return;
-
-          const toRedirect = [...workers]
-            .sort((a, b) => {
-              const aFixed = (a.store === sid) ? 1 : 0;
-              const bFixed = (b.store === sid) ? 1 : 0;
-              if (aFixed !== bFixed) return aFixed - bFixed;
-              return (b.coverPri||9) - (a.coverPri||9);
-            })
-            .filter((p, i) => {
-              if (p.store === sid && storeOpen(sid, day)) return false;
-              return i < workers.length - softMax;
-            });
-
-          toRedirect.forEach(p => {
-            const allDest = [...S.openStores]
-              .filter(id => {
-                if (id === sid || !storeOpen(id, day) || !p.knows.includes(id)) return false;
-                const cnt = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === id).length;
-                // Destino não pode exceder o seu próprio semMax se estiver na tabela
-                const destCap = getStoreCap(id, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
-                const destMax = destCap ? destCap.semMax : storeMax(id);
-                return cnt < destMax;
-              })
-              .sort((a, b) => {
-                const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
-                const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
-                return ca - cb;
-              });
-            const dest = allDest[0];
-            if (dest) {
-              S.schedule[p.id][day].store = dest;
-              S.decisions.push({ type: 'info', text: `${day}: ${p.name} → ${sname(dest)} (redistribuição CAPACITY_TABLE).` });
-            }
-            // Se não há destino: mantém na loja atual — NUNCA cria folga
-          });
-        });
-      });
-    }
   }
 
   function buildCell(p, day, active) {
@@ -2628,57 +2562,22 @@
   // Checks that every open store has the minimum required staff on every open day (Mon-Sat).
   // Returns an array of violations. Empty array = all good.
   function validateMinCoverage(active) {
-    const hardViolations = [];  // bloqueia — impossível fisicamente
-    const softViolations = []; // alerta amber — abaixo do ideal mas viável
     const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
-    const hasSundayOpen = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
-    const inCapTable = !!(S._nActive !== undefined && lookupCapacity(S._nActive, S._nDom || 0, S._nLojas, S._selectedOpc || 1));
-
     workDays.forEach(day => {
       S.openStores.forEach(sid => {
         if (!storeOpen(sid, day)) return;
         const min = storeMin(sid);
         if (!min || min <= 0) return;
-
         const have = active.filter(p => {
           const c = S.schedule[p.id]?.[day];
           return c?.type === 'work' && c?.store === sid;
         }).length;
-
-        if (have >= min) return; // OK — cumpre o mínimo
-
-        // Quantas pessoas disponíveis neste dia conhecem esta loja?
-        const available = active.filter(p => {
-          const c = S.schedule[p.id]?.[day];
-          if (!c || c.type !== 'work') return false;
-          return p.knows.includes(sid);
-        }).length;
-
-        // Umbral de bloqueio real:
-        // — Se cenário existe na tabela E há domingo aberto → aceitar semMin-1 (sacrifício consciente)
-        // — Se cenário existe na tabela sem domingo → aceitar semMin-1 com alerta
-        // — Se cenário não existe → bloquear apenas se fisicamente impossível
-        const threshold = (inCapTable) ? Math.max(0, min - 1) : 0;
-
-        if (have <= threshold && available > have) {
-          // Fisicamente possível mas muito abaixo — bloqueio duro
-          hardViolations.push({ day, sid, have, min });
-        } else if (have < min) {
-          // Abaixo do ideal mas viável — alerta amber
-          softViolations.push({ day, sid, have, min });
+        if (have < min) {
+          S.alerts.push({ type: 'amber', text: `${day} ${sname(sid)}: ${have}/${min} pessoas.` });
         }
       });
     });
-
-    // Registar soft violations como alertas amber (não bloqueiam)
-    softViolations.forEach(v => {
-      S.alerts.push({
-        type: 'amber',
-        text: `${v.day} ${sname(v.sid)}: ${v.have}/${v.min} pessoas (mínimo ideal).`
-      });
-    });
-
-    return hardViolations;
+    return []; // nunca bloqueia — só alerta amber
   }
 
   // ── BLOCKING COVERAGE ALERT ──

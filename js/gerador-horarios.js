@@ -1284,10 +1284,10 @@
       }).length;
       const nActive = active.length;
 
-      // Candidatas possíveis para domingo (canAlone + canAloneInterval)
+      // Candidatas para domingo — TODAS as que conhecem alguma loja de domingo e não estão ausentes.
+      // Autonomia limita quem pode ficar SOZINHA, não quem pode participar.
       const candsDom = active.filter(p =>
         !isAbsent(p.id, 'DOM') &&
-        p.canAloneInterval &&
         sundayStores.some(sid => p.knows.includes(sid))
       );
       const maxPossible = candsDom.length;
@@ -1338,14 +1338,12 @@
             const sc = cap[k];
             if (!sc || sc.domMax === 0) return null;
             const short = sshort(sid);
-            return `<span style="font-size:.72rem;color:#555">${short}: ${sc.domMin === sc.domMax ? sc.domMin : sc.domMin+'–'+sc.domMax}</span>`;
+            return `${short}: ${sc.domMin === sc.domMax ? sc.domMin : sc.domMin+'–'+sc.domMax}`;
           }).filter(Boolean).join(' · ') : '';
           const sel = opc === selectedOpc;
-          return `<div class="gh-opc-btn ${sel ? 'selected' : ''}" data-opc="${opc}"
-            style="border:1px solid ${sel ? '#1a6c1a' : '#e0e0e0'};background:${sel ? '#f0fff0' : '#fff'};
-            border-radius:7px;padding:8px 12px;cursor:pointer;margin-bottom:6px;">
-            <div style="font-size:.75rem;font-weight:700;color:${sel ? '#1a6c1a' : '#333'};margin-bottom:3px;">Opção ${opc}</div>
-            <div>${distrib}</div>
+          return `<div class="gh-opc-btn ${sel ? 'selected' : ''}" data-opc="${opc}">
+            <div class="gh-opc-label">Opção ${opc}</div>
+            <div class="gh-opc-distrib">${distrib}</div>
           </div>`;
         }).join('');
         opcHTML = `
@@ -2569,33 +2567,57 @@
   // Checks that every open store has the minimum required staff on every open day (Mon-Sat).
   // Returns an array of violations. Empty array = all good.
   function validateMinCoverage(active) {
-    const violations = [];
+    const hardViolations = [];  // bloqueia — impossível fisicamente
+    const softViolations = []; // alerta amber — abaixo do ideal mas viável
     const workDays = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    const hasSundayOpen = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
+    const inCapTable = !!(S._nActive !== undefined && lookupCapacity(S._nActive, S._nDom || 0, S._nLojas, S._selectedOpc || 1));
+
     workDays.forEach(day => {
       S.openStores.forEach(sid => {
         if (!storeOpen(sid, day)) return;
         const min = storeMin(sid);
-        if (!min || min <= 0) return; // sin mínimo configurado, no validar
+        if (!min || min <= 0) return;
+
         const have = active.filter(p => {
           const c = S.schedule[p.id]?.[day];
           return c?.type === 'work' && c?.store === sid;
         }).length;
-        if (have < min) {
-          // Verificar si es físicamente posible cubrir este mínimo
-          // (hay trabajadoras disponibles ese día que conocen esta tienda)
-          const available = active.filter(p => {
-            const c = S.schedule[p.id]?.[day];
-            if (!c || c.type !== 'work') return false;
-            return p.knows.includes(sid);
-          }).length;
-          // Solo bloquear si ni siquiera hay personas disponibles que conozcan la tienda
-          if (available >= min) {
-            violations.push({ day, sid, have, min });
-          }
+
+        if (have >= min) return; // OK — cumpre o mínimo
+
+        // Quantas pessoas disponíveis neste dia conhecem esta loja?
+        const available = active.filter(p => {
+          const c = S.schedule[p.id]?.[day];
+          if (!c || c.type !== 'work') return false;
+          return p.knows.includes(sid);
+        }).length;
+
+        // Umbral de bloqueio real:
+        // — Se cenário existe na tabela E há domingo aberto → aceitar semMin-1 (sacrifício consciente)
+        // — Se cenário existe na tabela sem domingo → aceitar semMin-1 com alerta
+        // — Se cenário não existe → bloquear apenas se fisicamente impossível
+        const threshold = (inCapTable) ? Math.max(0, min - 1) : 0;
+
+        if (have <= threshold && available > have) {
+          // Fisicamente possível mas muito abaixo — bloqueio duro
+          hardViolations.push({ day, sid, have, min });
+        } else if (have < min) {
+          // Abaixo do ideal mas viável — alerta amber
+          softViolations.push({ day, sid, have, min });
         }
       });
     });
-    return violations;
+
+    // Registar soft violations como alertas amber (não bloqueiam)
+    softViolations.forEach(v => {
+      S.alerts.push({
+        type: 'amber',
+        text: `${v.day} ${sname(v.sid)}: ${v.have}/${v.min} pessoas (mínimo ideal).`
+      });
+    });
+
+    return hardViolations;
   }
 
   // ── BLOCKING COVERAGE ALERT ──
@@ -3211,6 +3233,17 @@
         #tab-gerador .gh-comb-sep { color:#ddd; }
         #tab-gerador .gh-comb-person { display:inline-flex; align-items:center; gap:3px; background:#f0f0eb; border-radius:4px; padding:1px 6px; color:#555; }
         #tab-gerador .gh-comb-num { font-weight:700; color:#1a3a6c; background:#e8f0fe; border-radius:3px; padding:0 4px; font-size:.65rem; margin-left:2px; }
+
+        /* ── PAINEL DOMINGO ── */
+        #tab-gerador .gh-dom-opt-btn { border:1px solid #ddd !important; background:#fff !important; color:#555 !important; border-radius:6px; padding:6px 14px; font-size:.78rem; font-weight:600; cursor:pointer; margin:2px; font-family:inherit; transition:all .12s; }
+        #tab-gerador .gh-dom-opt-btn:hover { border-color:#555 !important; color:#111 !important; }
+        #tab-gerador .gh-dom-opt-btn.selected { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
+        #tab-gerador .gh-opc-btn { border:1px solid #e0e0e0 !important; background:#fff !important; border-radius:7px; padding:8px 12px; cursor:pointer; margin-bottom:6px; transition:all .12s; }
+        #tab-gerador .gh-opc-btn:hover { border-color:#555 !important; }
+        #tab-gerador .gh-opc-btn.selected { border-color:#1a6c1a !important; background:#f0fff0 !important; }
+        #tab-gerador .gh-opc-label { font-size:.75rem; font-weight:700; color:#333; margin-bottom:3px; }
+        #tab-gerador .gh-opc-btn.selected .gh-opc-label { color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
+        #tab-gerador .gh-opc-distrib { font-size:.7rem; color:#666; }
 
         /* ── SCHEDULE BAR ── */
         #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }

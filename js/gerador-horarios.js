@@ -344,15 +344,11 @@
     return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1;
   }
   function storeMax(sid) {
-    // Shana y Maxx (priority >= 3) tienen máximo estructural de 1 persona — inamovible.
+    // Shana y Maxx (priority >= 3): máximo estructural de 1 persona — inamovible.
     const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
     if (storePriority >= 3) return 1;
-    // 1. Tentar CAPACITY_TABLE com cenário actual
-    if (S._nActive !== undefined && S._nDom !== undefined && S._nLojas !== undefined) {
-      const cap = getStoreCap(sid, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
-      if (cap) return cap.semMax;
-    }
-    // 2. Fallback: valor manual do wizard (legado) ou Infinity
+    // Para Avenida e Mercado: sem máximo — o CAPACITY_TABLE semMax usa-se
+    // apenas na redistribuição post-processo (buildSchedule), nunca em buildCell.
     const m = S.storeMax?.[sid];
     return (m && m > 0) ? m : Infinity;
   }
@@ -1914,6 +1910,58 @@
         });
       });
     });
+
+    // ── Redistribuição soft por CAPACITY_TABLE semMax ──
+    // Segunda passagem independente: redistribui excedentes de Avenida/Mercado
+    // segundo os limites do CAPACITY_TABLE. NUNCA cria folgas — só muda de loja.
+    if (S._nActive !== undefined && S._nDom !== undefined && S._nLojas !== undefined) {
+      workDays.forEach(day => {
+        S.openStores.forEach(sid => {
+          const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
+          if (storePriority >= 3) return; // já tratado pelo redirect original
+          const cap = getStoreCap(sid, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
+          if (!cap) return;
+          const softMax = cap.semMax;
+          const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work' && S.schedule[p.id][day].store === sid);
+          if (workers.length <= softMax) return;
+
+          const toRedirect = [...workers]
+            .sort((a, b) => {
+              const aFixed = (a.store === sid) ? 1 : 0;
+              const bFixed = (b.store === sid) ? 1 : 0;
+              if (aFixed !== bFixed) return aFixed - bFixed;
+              return (b.coverPri||9) - (a.coverPri||9);
+            })
+            .filter((p, i) => {
+              if (p.store === sid && storeOpen(sid, day)) return false;
+              return i < workers.length - softMax;
+            });
+
+          toRedirect.forEach(p => {
+            const allDest = [...S.openStores]
+              .filter(id => {
+                if (id === sid || !storeOpen(id, day) || !p.knows.includes(id)) return false;
+                const cnt = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === id).length;
+                // Destino não pode exceder o seu próprio semMax se estiver na tabela
+                const destCap = getStoreCap(id, S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1);
+                const destMax = destCap ? destCap.semMax : storeMax(id);
+                return cnt < destMax;
+              })
+              .sort((a, b) => {
+                const ca = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === a).length;
+                const cb = active.filter(x => S.schedule[x.id]?.[day]?.type === 'work' && S.schedule[x.id][day].store === b).length;
+                return ca - cb;
+              });
+            const dest = allDest[0];
+            if (dest) {
+              S.schedule[p.id][day].store = dest;
+              S.decisions.push({ type: 'info', text: `${day}: ${p.name} → ${sname(dest)} (redistribuição CAPACITY_TABLE).` });
+            }
+            // Se não há destino: mantém na loja atual — NUNCA cria folga
+          });
+        });
+      });
+    }
   }
 
   function buildCell(p, day, active) {

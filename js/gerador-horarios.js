@@ -154,79 +154,6 @@
     { id: 'night',    label: '09:00-23:00 (noite)', desc: 'Turno noite até 23h',       shifts: [SH_D, SH_F] },
   ];
 
-  // ── CAPACITY TABLE — hardcoded desde Excel ──
-  // Clave: "nActivas_nDom_nLojas_opc"
-  const CAPACITY_TABLE = {
-    '4_0_3_1': { AVENIDA:{semMin:1,semMax:2,domMin:0,domMax:0}, MERCADO:{semMin:1,semMax:1,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '5_0_3_1': { AVENIDA:{semMin:2,semMax:2,domMin:0,domMax:0}, MERCADO:{semMin:1,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '6_0_3_1': { AVENIDA:{semMin:2,semMax:2,domMin:0,domMax:0}, MERCADO:{semMin:2,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '6_1_3_1': { AVENIDA:{semMin:2,semMax:2,domMin:1,domMax:1}, MERCADO:{semMin:1,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_0_3_1': { AVENIDA:{semMin:2,semMax:3,domMin:0,domMax:0}, MERCADO:{semMin:2,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_0_4_1': { AVENIDA:{semMin:2,semMax:2,domMin:0,domMax:0}, MERCADO:{semMin:1,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_1_3_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_1_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:1,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_2_3_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_2_4_1': { AVENIDA:{semMin:2,semMax:2,domMin:1,domMax:1}, MERCADO:{semMin:1,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '7_3_3_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:1,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '7_3_4_1': { AVENIDA:{semMin:2,semMax:2,domMin:1,domMax:1}, MERCADO:{semMin:1,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_0_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:0,domMax:0}, MERCADO:{semMin:2,semMax:3,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_0_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:0,domMax:0}, MERCADO:{semMin:2,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_1_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:3,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_1_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:0,domMax:0}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_2_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_2_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_3_3_1': { AVENIDA:{semMin:3,semMax:4,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:2,domMin:1,domMax:1} },
-    '8_3_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:2,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_4_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '8_4_4_1': { AVENIDA:{semMin:2,semMax:2,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '8_4_4_2': { AVENIDA:{semMin:2,semMax:2,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '8_5_3_1': { AVENIDA:{semMin:2,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:3,domMin:2,domMax:2}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '8_5_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:1,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '9_2_3_1': { AVENIDA:{semMin:3,semMax:4,domMin:1,domMax:1}, MERCADO:{semMin:3,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '9_2_4_1': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:0,domMax:0}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '9_3_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:3,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '9_3_4_1': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '9_4_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '9_4_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '9_4_4_2': { AVENIDA:{semMin:2,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '9_5_3_1': { AVENIDA:{semMin:3,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:3,domMin:2,domMax:2}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '9_5_4_1': { AVENIDA:{semMin:2,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:2,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '10_3_4_1': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '10_4_4_1': { AVENIDA:{semMin:3,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '10_4_4_2': { AVENIDA:{semMin:3,semMax:3,domMin:1,domMax:1}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '10_5_3_1': { AVENIDA:{semMin:3,semMax:4,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:3,domMin:2,domMax:2}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '10_5_4_1': { AVENIDA:{semMin:3,semMax:3,domMin:2,domMax:2}, MERCADO:{semMin:2,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '11_4_4_1': { AVENIDA:{semMin:3,semMax:4,domMin:2,domMax:2}, MERCADO:{semMin:3,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:0,domMax:0} },
-    '11_4_4_2': { AVENIDA:{semMin:3,semMax:4,domMin:1,domMax:1}, MERCADO:{semMin:3,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '11_5_4_1': { AVENIDA:{semMin:3,semMax:4,domMin:2,domMax:2}, MERCADO:{semMin:3,semMax:3,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-    '12_4_4_1': { AVENIDA:{semMin:4,semMax:4,domMin:2,domMax:2}, MERCADO:{semMin:3,semMax:4,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:2,domMin:0,domMax:0} },
-    '12_4_4_2': { AVENIDA:{semMin:4,semMax:4,domMin:1,domMax:1}, MERCADO:{semMin:3,semMax:4,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:2,domMin:1,domMax:1} },
-    '12_5_4_1': { AVENIDA:{semMin:4,semMax:4,domMin:2,domMax:2}, MERCADO:{semMin:3,semMax:4,domMin:1,domMax:1}, SHANA:{semMin:1,semMax:1,domMin:1,domMax:1}, MAXX:{semMin:1,semMax:1,domMin:1,domMax:1} },
-  };
-
-  // Normaliza nome curto da loja para chave do CAPACITY_TABLE
-  function storeCapKey(sid) {
-    const sh = (sshort(sid) || '').toUpperCase();
-    if (sh.includes('AVENIDA')) return 'AVENIDA';
-    if (sh.includes('MERCADO')) return 'MERCADO';
-    if (sh.includes('SHANA'))   return 'SHANA';
-    if (sh.includes('MAXX'))    return 'MAXX';
-    return sh;
-  }
-
-  function lookupCapacity(nActive, nDom, nLojas, opc) {
-    return CAPACITY_TABLE[`${nActive}_${nDom}_${nLojas}_${opc || 1}`] || null;
-  }
-
-  function getAvailableOpcs(nActive, nDom, nLojas) {
-    const opcs = [];
-    for (let opc = 1; opc <= 5; opc++) {
-      if (CAPACITY_TABLE[`${nActive}_${nDom}_${nLojas}_${opc}`]) opcs.push(opc);
-      else break;
-    }
-    return opcs;
-  }
-
   // Devolve o par [shiftPrincipal, shiftAlternativo] para uma loja num dado modo
   function modeShifts(sid) {
     const mode = S.storeMode?.[sid] || 'standard';
@@ -1142,189 +1069,6 @@
     const c = getContainer(); if (!c) return;
     const defD = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
-    const month = S.weekStart ? S.weekStart.getMonth() + 1 : new Date().getMonth() + 1;
-    function detectSeason(m) {
-      if (m >= 1 && m <= 3)  return { label: 'Baja 1 (Jan–Mar)', hint: 'Horário de guerra · 3 lojas · Seg–Sáb · 10-19h' };
-      if (m >= 4 && m <= 5)  return { label: 'Intermedia 1 (Abr–Mai)', hint: 'Aumento progressivo · Domingos se houver pessoal' };
-      if (m >= 6 && m <= 8)  return { label: 'Alta (Jun–Ago)', hint: 'Máxima optimização · L-S 9-23 em Avda/Mcdo · Domingos 10-19' };
-      if (m >= 9 && m <= 10) return { label: 'Intermedia 2 (Set–Out)', hint: 'Redução gradual · Domingos opcionais' };
-      return { label: 'Baja 2 (Nov–Dez)', hint: 'Só pessoal efectivo · Horário de guerra' };
-    }
-    const season = detectSeason(month);
-    const modeOptionsHTML = STORE_MODES.map(m => `<option value="${m.id}">${m.label} — ${m.desc}</option>`).join('');
-
-    const rows = STORES.map(st => {
-      const open = S.openStores.length ? S.openStores.includes(st.id) : (STORES.find(s=>s.id===st.id)?.priority ?? 9) < 4;
-      const days = S.openDays[st.id] || (open ? [...defD] : []);
-      const isSmallStore = (STORES.find(s => s.id === st.id)?.priority ?? 9) >= 3;
-      const togs = DAYS.map(d => {
-        const isOn = days.includes(d);
-        const isDom = d === 'DOM';
-        return `<span class="gh-dtog ${isOn?'on':''} ${isDom?'gh-dtog-dom':''}" data-store="${st.id}" data-day="${d}">${d}</span>`;
-      }).join('');
-      return `
-      <div class="gh-sc-row ${!open?'closed':''}" id="gh-scr-${st.id}">
-        <div class="gh-sc-top">
-          <input type="checkbox" id="gh-chk-${st.id}" ${open?'checked':''} data-store="${st.id}">
-          <label for="gh-chk-${st.id}" class="gh-sc-name">${st.name}</label>
-          ${isSmallStore ? `<span class="gh-sc-fixed-cap">máx 1 pessoa</span>` : ''}
-        </div>
-        <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div>
-        <div class="gh-sc-mode-row" id="gh-scm-${st.id}">
-          <span class="gh-sc-mode-label">Horário</span>
-          <select class="gh-sc-mode-sel" id="gh-mode-${st.id}" data-store="${st.id}">${modeOptionsHTML}</select>
-          <span class="gh-sc-mode-hint" id="gh-mode-hint-${st.id}"></span>
-        </div>
-      </div>`;
-    }).join('');
-
-    c.innerHTML = `
-      <div class="gh-wiz-box gh-wiz-box--wide">
-        <div class="gh-wiz-label">Passo 3 de 3</div>
-        <div class="gh-wiz-title">Lojas, dias e horários</div>
-        <div class="gh-season-banner">
-          <span class="gh-season-icon">📅</span>
-          <div><div class="gh-season-name">${season.label}</div><div class="gh-season-hint">${season.hint}</div></div>
-        </div>
-        <div class="gh-store-cfg">${rows}</div>
-        <div id="gh-dom-panel" style="display:none;margin-bottom:20px;padding:14px;border-top:1px solid #f0f0f0;border-radius:8px;background:#fafafa;">
-          <div id="gh-dom-panel-content"></div>
-        </div>
-        <div class="gh-wiz-nav">
-          <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
-          <button class="gh-btn gh-btn-solid" id="gh-sub-stores">Gerar horário →</button>
-        </div>
-      </div>`;
-
-    STORES.forEach(st => {
-      const modeEl = document.getElementById(`gh-mode-${st.id}`);
-      if (modeEl) {
-        modeEl.value = S.storeMode?.[st.id] || 'standard';
-        updateModeHint(st.id, modeEl.value);
-        modeEl.addEventListener('change', () => updateModeHint(st.id, modeEl.value));
-      }
-    });
-
-    function updateModeHint(sid, modeId) {
-      const hint = document.getElementById(`gh-mode-hint-${sid}`);
-      if (!hint) return;
-      const m = STORE_MODES.find(x => x.id === modeId); if (!m) return;
-      const [sh1, sh2] = m.shifts;
-      hint.textContent = `Principal: ${sh1.replace('|',' / ')}  ·  Alt: ${sh2.replace('|',' / ')}`;
-      hint.style.color = modeId === 'night' ? '#b05000' : '#888';
-    }
-
-    function getOpenSundayStores() {
-      return STORES.filter(st => {
-        const chk = document.getElementById(`gh-chk-${st.id}`);
-        if (!chk?.checked) return false;
-        return [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].some(e => e.dataset.day === 'DOM');
-      }).map(st => st.id);
-    }
-
-    function renderDomPanel() {
-      const sundayStores = getOpenSundayStores();
-      const panel = document.getElementById('gh-dom-panel');
-      const content = document.getElementById('gh-dom-panel-content');
-      if (!panel || !content) return;
-      if (!sundayStores.length) { panel.style.display = 'none'; return; }
-      panel.style.display = 'block';
-
-      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-      const nLojas = STORES.filter(st => document.getElementById(`gh-chk-${st.id}`)?.checked).length;
-      const nActive = active.length;
-
-      // Candidatas para domingo = todas as não ausentes que conhecem alguma loja de domingo
-      const candsDom = active.filter(p => !isAbsent(p.id, 'DOM') && sundayStores.some(sid => p.knows.includes(sid)));
-      const maxPossible = candsDom.length;
-
-      const selectedNDom = S._wizDomCount !== undefined ? S._wizDomCount : 0;
-      const options = [...Array(maxPossible + 1).keys()];
-
-      const btnsDom = options.map(n => {
-        const label = n === 0 ? 'Nenhuma' : `${n} pessoa${n > 1 ? 's' : ''}`;
-        const sel = n === selectedNDom;
-        return `<button class="gh-dom-opt-btn${sel?' selected':''}" data-ndom="${n}">${label}</button>`;
-      }).join('');
-
-      // OPCs disponíveis para este cenário
-      let opcHTML = '';
-      const opcs = getAvailableOpcs(nActive, selectedNDom, nLojas);
-      if (opcs.length > 1 && selectedNDom > 0) {
-        const selectedOpc = S._selectedOpc || 1;
-        const opcBtns = opcs.map(opc => {
-          const cap = lookupCapacity(nActive, selectedNDom, nLojas, opc);
-          const distrib = cap ? sundayStores.map(sid => {
-            const sc = cap[storeCapKey(sid)]; if (!sc || sc.domMax === 0) return null;
-            return `${sshort(sid)}: ${sc.domMin === sc.domMax ? sc.domMin : sc.domMin+'–'+sc.domMax}`;
-          }).filter(Boolean).join(' · ') : '';
-          const sel = opc === selectedOpc;
-          return `<div class="gh-opc-btn${sel?' selected':''}" data-opc="${opc}">
-            <div class="gh-opc-label">Opção ${opc}</div>
-            <div class="gh-opc-distrib">${distrib}</div>
-          </div>`;
-        }).join('');
-        opcHTML = `<div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:10px;">
-          <div style="font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:8px;">
-            Detectadas ${opcs.length} distribuições possíveis — escolha uma:
-          </div>
-          <div id="gh-opc-btns">${opcBtns}</div>
-        </div>`;
-      } else if (opcs.length === 1 && selectedNDom > 0) {
-        S._selectedOpc = 1;
-        const cap = lookupCapacity(nActive, selectedNDom, nLojas, 1);
-        if (cap) {
-          const distrib = sundayStores.map(sid => {
-            const sc = cap[storeCapKey(sid)]; if (!sc || sc.domMax === 0) return null;
-            return `${sshort(sid)}: ${sc.domMin === sc.domMax ? sc.domMin : sc.domMin+'–'+sc.domMax}`;
-          }).filter(Boolean).join(' · ');
-          opcHTML = `<div style="margin-top:8px;font-size:.72rem;color:#555;">Distribuição: ${distrib}</div>`;
-        }
-      }
-
-      content.innerHTML = `
-        <div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:8px;">
-          Domingo — ${candsDom.length} pessoa${candsDom.length!==1?'s':''} disponível${candsDom.length!==1?'eis':''}
-        </div>
-        <div style="font-size:.8rem;color:#555;margin-bottom:10px;">Quantas trabalham este domingo?</div>
-        <div>${btnsDom}</div>
-        ${opcHTML}`;
-
-      content.querySelectorAll('.gh-dom-opt-btn').forEach(btn => {
-        btn.addEventListener('click', () => { S._wizDomCount = parseInt(btn.dataset.ndom); S._selectedOpc = 1; renderDomPanel(); });
-      });
-      content.querySelectorAll('.gh-opc-btn').forEach(btn => {
-        btn.addEventListener('click', () => { S._selectedOpc = parseInt(btn.dataset.opc); renderDomPanel(); });
-      });
-    }
-
-    c.querySelectorAll('input[type=checkbox][data-store]').forEach(el => {
-      el.addEventListener('change', () => {
-        const row = document.getElementById(`gh-scr-${el.dataset.store}`);
-        row.classList.toggle('closed', !el.checked);
-        if (el.checked) {
-          row.querySelectorAll('.gh-dtog').forEach(tog => {
-            if (['SEG','TER','QUA','QUI','SEX','SAB'].includes(tog.dataset.day)) tog.classList.add('on');
-            else tog.classList.remove('on');
-          });
-        } else {
-          row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
-        }
-        renderDomPanel();
-      });
-    });
-
-    c.querySelectorAll('.gh-dtog').forEach(el => {
-      el.addEventListener('click', () => { el.classList.toggle('on'); renderDomPanel(); });
-    });
-
-    renderDomPanel();
-    document.getElementById('gh-back-2').addEventListener('click', () => { wStep = 1; renderWiz(); });
-    document.getElementById('gh-sub-stores').addEventListener('click', sub_stores);
-  }
-    const c = getContainer(); if (!c) return;
-    const defD = ['SEG','TER','QUA','QUI','SEX','SAB'];
-
     // Detectar temporada para mostrar sugestão
     const month = S.weekStart ? S.weekStart.getMonth() + 1 : new Date().getMonth() + 1;
     function detectSeason(m) {
@@ -1340,6 +1084,151 @@
       `<option value="${m.id}">${m.label} — ${m.desc}</option>`
     ).join('');
 
+    const rows = STORES.map(st => {
+      // Default: lojas com priority < 4 abrem por defeito; Maxx (priority=4) fechada por defeito
+      const open    = S.openStores.length ? S.openStores.includes(st.id) : (STORES.find(s=>s.id===st.id)?.priority ?? 9) < 4;
+      const days    = S.openDays[st.id]   || (open ? [...defD] : []);
+      const savedMin  = S.storeMin?.[st.id]  || 1;
+      const savedMax  = S.storeMax?.[st.id]  || '';
+      const savedMode = S.storeMode?.[st.id] || 'standard';
+
+      const togs = DAYS.map(d => {
+        const isOn = days.includes(d);
+        const isDom = d === 'DOM';
+        return `<span class="gh-dtog ${isOn ? 'on' : ''} ${isDom ? 'gh-dtog-dom' : ''}" data-store="${st.id}" data-day="${d}">${d}</span>`;
+      }).join('');
+
+      // Shana y Maxx (priority >= 3): máximo estructural de 1, no configurable
+      const isSmallStore = (STORES.find(s => s.id === st.id)?.priority ?? 9) >= 3;
+
+      return `
+      <div class="gh-sc-row ${!open ? 'closed' : ''}" id="gh-scr-${st.id}">
+        <!-- LINHA 1: checkbox + nome + mín/máx -->
+        <div class="gh-sc-top">
+          <input type="checkbox" id="gh-chk-${st.id}" ${open ? 'checked' : ''} data-store="${st.id}">
+          <label for="gh-chk-${st.id}" class="gh-sc-name">${st.name}</label>
+          ${isSmallStore
+            ? `<span class="gh-sc-fixed-cap">máx 1 pessoa</span>`
+            : `<div class="gh-sc-minmax">
+            <div class="gh-sc-mm-field">
+              <span class="gh-sc-mm-label">mín</span>
+              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" placeholder="—" value="${savedMin > 1 ? savedMin : ''}">
+            </div>
+            <div class="gh-sc-mm-sep">·</div>
+            <div class="gh-sc-mm-field">
+              <span class="gh-sc-mm-label">máx</span>
+              <input type="number" class="gh-sc-mm-inp" id="gh-max-${st.id}" data-store="${st.id}" min="1" max="20" placeholder="—" value="${savedMax}">
+            </div>
+          </div>`}
+        </div>
+        <!-- LINHA 2: dias da semana -->
+        <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div>
+        <!-- LINHA 3: modo de horário -->
+        <div class="gh-sc-mode-row" id="gh-scm-${st.id}">
+          <span class="gh-sc-mode-label">Horário</span>
+          <select class="gh-sc-mode-sel" id="gh-mode-${st.id}" data-store="${st.id}">
+            ${modeOptionsHTML}
+          </select>
+          <span class="gh-sc-mode-hint" id="gh-mode-hint-${st.id}"></span>
+        </div>
+      </div>`;
+    }).join('');
+
+    c.innerHTML = `
+      <div class="gh-wiz-box gh-wiz-box--wide">
+        <div class="gh-wiz-label">Passo 3 de 3</div>
+        <div class="gh-wiz-title">Lojas, dias e horários</div>
+
+        <!-- BANNER TEMPORADA -->
+        <div class="gh-season-banner">
+          <span class="gh-season-icon">📅</span>
+          <div>
+            <div class="gh-season-name">${season.label}</div>
+            <div class="gh-season-hint">${season.hint}</div>
+          </div>
+        </div>
+
+        <div class="gh-store-cfg">${rows}</div>
+
+        <!-- CAMPO: Pessoas no domingo -->
+        <div id="gh-dom-pessoas-row" style="display:none;margin-bottom:20px;padding:12px 0;border-top:1px solid #f0f0f0;">
+          <div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:8px;">Pessoas a trabalhar no domingo</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="number" id="gh-dom-pessoas" min="1" max="12" placeholder="Auto"
+              style="width:70px;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:.9rem;font-family:inherit;color:#111;background:#fff;"
+              value="${S.domPessoas || ''}">
+            <span style="font-size:.75rem;color:#888;">Se vazio, o sistema calcula automaticamente pelo mínimo das lojas.</span>
+          </div>
+        </div>
+
+        <div class="gh-wiz-nav">
+          <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
+          <button class="gh-btn gh-btn-solid" id="gh-sub-stores">Gerar horário →</button>
+        </div>
+      </div>`;
+
+    // Inicializar valores dos selects de modo e hints
+    STORES.forEach(st => {
+      const modeEl = document.getElementById(`gh-mode-${st.id}`);
+      if (modeEl) {
+        const savedMode = S.storeMode?.[st.id] || 'standard';
+        modeEl.value = savedMode;
+        updateModeHint(st.id, savedMode);
+        modeEl.addEventListener('change', () => updateModeHint(st.id, modeEl.value));
+      }
+    });
+
+    function updateModeHint(sid, modeId) {
+      const hint = document.getElementById(`gh-mode-hint-${sid}`);
+      if (!hint) return;
+      const m = STORE_MODES.find(x => x.id === modeId);
+      if (!m) return;
+      const [sh1, sh2] = m.shifts;
+      const label1 = sh1.replace('|', ' / ');
+      const label2 = sh2.replace('|', ' / ');
+      hint.textContent = `Principal: ${label1}  ·  Alt: ${label2}`;
+      // Highlight noite
+      hint.style.color = modeId === 'night' ? '#b05000' : '#888';
+    }
+
+    // Eventos: checkbox loja
+    c.querySelectorAll('input[type=checkbox][data-store]').forEach(el => {
+      el.addEventListener('change', () => {
+        const row = document.getElementById(`gh-scr-${el.dataset.store}`);
+        row.classList.toggle('closed', !el.checked);
+        if (el.checked) {
+          row.querySelectorAll('.gh-dtog').forEach(tog => {
+            if (['SEG','TER','QUA','QUI','SEX','SAB'].includes(tog.dataset.day)) tog.classList.add('on');
+            else tog.classList.remove('on');
+          });
+        } else {
+          row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
+        }
+        updateDomPessoasVisibility();
+      });
+    });
+
+    // Eventos: toggle dias
+    c.querySelectorAll('.gh-dtog').forEach(el => {
+      el.addEventListener('click', () => {
+        el.classList.toggle('on');
+        updateDomPessoasVisibility();
+      });
+    });
+
+    function updateDomPessoasVisibility() {
+      const hasDom = [...c.querySelectorAll('.gh-dtog.on')].some(el => el.dataset.day === 'DOM');
+      const row = document.getElementById('gh-dom-pessoas-row');
+      if (row) row.style.display = hasDom ? 'block' : 'none';
+    }
+
+    // Mostrar campo DOM se já há domingos activos
+    updateDomPessoasVisibility();
+
+    document.getElementById('gh-back-2').addEventListener('click', () => { wStep = 1; renderWiz(); });
+    document.getElementById('gh-sub-stores').addEventListener('click', sub_stores);
+  }
+
   function sub_stores() {
     S.openStores = []; S.openDays = {}; S.storeMin = {}; S.storeMax = {}; S.storeMode = {};
     STORES.forEach(st => {
@@ -1347,12 +1236,23 @@
       const days = [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].map(e => e.dataset.day);
       if (!days.length) return;
       S.openStores.push(st.id); S.openDays[st.id] = days;
+      const minInp = document.getElementById(`gh-min-${st.id}`);
+      const maxInp = document.getElementById(`gh-max-${st.id}`);
+      const minVal = parseInt(minInp?.value) || 0;
+      if (minVal > 0) S.storeMin[st.id] = minVal;
+      const maxVal = parseInt(maxInp?.value) || 0;
+      if (maxVal > 0) S.storeMax[st.id] = maxVal;
+      // Ler modo de horário
       const modeEl = document.getElementById(`gh-mode-${st.id}`);
       if (modeEl?.value) S.storeMode[st.id] = modeEl.value;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
-    S.domPessoas = (S._wizDomCount !== undefined && S._wizDomCount > 0) ? S._wizDomCount : null;
-    S._selectedOpc = S._selectedOpc || 1;
+
+    // Ler número de pessoas no domingo (override manual)
+    const domInp = document.getElementById('gh-dom-pessoas');
+    const domVal = domInp ? parseInt(domInp.value) || 0 : 0;
+    S.domPessoas = domVal > 0 ? domVal : null; // null = calcular automaticamente
+
     generate();
   }
 
@@ -1593,27 +1493,15 @@
       return pa - pb;
     });
 
-    // Capacidad por tienda en domingo: usar CAPACITY_TABLE si existe, sino fallback original
+    // Capacidad por tienda: mínimo 1 por tienda, exceso va a Avenida (mayor prioridad)
     const capDOM = {};
-    const _cap = (S._nActive !== undefined)
-      ? lookupCapacity(S._nActive, S._nDom || 0, S._nLojas, S._selectedOpc || 1)
-      : null;
-
-    if (_cap) {
-      sundayStoresSorted.forEach(sid => {
-        const sc = _cap[storeCapKey(sid)];
-        capDOM[sid] = sc ? sc.domMax : 1;
-      });
-    } else {
-      // Fallback original: 1 por tienda + exceso round-robin
-      sundayStoresSorted.forEach(sid => { capDOM[sid] = 1; });
-      let totalCap = sundayStoresSorted.length;
-      let si = 0;
-      while (totalCap < domCount && sundayStoresSorted.length > 0) {
-        capDOM[sundayStoresSorted[si % sundayStoresSorted.length]]++;
-        totalCap++;
-        si++;
-      }
+    sundayStoresSorted.forEach(sid => { capDOM[sid] = 1; });
+    let totalCap = sundayStoresSorted.length;
+    let si = 0;
+    while (totalCap < domCount && sundayStoresSorted.length > 0) {
+      capDOM[sundayStoresSorted[si % sundayStoresSorted.length]]++;
+      totalCap++;
+      si++;
     }
 
     S._capDOM = capDOM; // para que fixSunday use el techo correcto
@@ -2383,11 +2271,6 @@
   async function generate() {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
-    // Guardar cenário para assignFolgas usar CAPACITY_TABLE no capDOM
-    S._nActive = active.length;
-    S._nDom    = S.domPessoas || 0;
-    S._nLojas  = S.openStores.length;
-
     S.alerts = []; S.decisions = []; S.sandraDay = {};
     S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
 
@@ -3106,17 +2989,6 @@
         #tab-gerador .gh-season-icon { font-size:1.1rem; flex-shrink:0; margin-top:1px; }
         #tab-gerador .gh-season-name { font-size:.78rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
         #tab-gerador .gh-season-hint { font-size:.7rem; color:#4a6a9c; line-height:1.4; }
-
-        /* ── PAINEL DOMINGO ── */
-        #tab-gerador .gh-dom-opt-btn { border:1px solid #ddd !important; background:#fff !important; color:#555 !important; -webkit-text-fill-color:#555 !important; border-radius:6px; padding:6px 14px; font-size:.78rem; font-weight:600; cursor:pointer; margin:2px; font-family:inherit; transition:all .12s; }
-        #tab-gerador .gh-dom-opt-btn:hover { border-color:#555 !important; }
-        #tab-gerador .gh-dom-opt-btn.selected { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
-        #tab-gerador .gh-opc-btn { border:1px solid #e0e0e0 !important; background:#fff !important; border-radius:7px; padding:8px 12px; cursor:pointer; margin-bottom:6px; transition:all .12s; }
-        #tab-gerador .gh-opc-btn:hover { border-color:#555 !important; }
-        #tab-gerador .gh-opc-btn.selected { border-color:#1a6c1a !important; background:#f0fff0 !important; }
-        #tab-gerador .gh-opc-label { font-size:.75rem; font-weight:700; color:#333 !important; -webkit-text-fill-color:#333 !important; margin-bottom:3px; }
-        #tab-gerador .gh-opc-btn.selected .gh-opc-label { color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
-        #tab-gerador .gh-opc-distrib { font-size:.7rem; color:#666 !important; -webkit-text-fill-color:#666 !important; }
 
         /* ── COMBINAÇÃO BAR ── */
         #tab-gerador .gh-comb-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:6px 20px; background:#f9f9f7; border-bottom:1px solid #efefeb; font-size:.62rem; }

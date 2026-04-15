@@ -1660,7 +1660,7 @@
     S.sundayAssigned = {};
     sundayStores.forEach(sid => { S.sundayAssigned[sid] = []; });
 
-    // 1. domCount — lo define el usuario o el mínimo de las tiendas
+    // 1. domCount — definido pelo utilizador no painel domingo
     let domCount = 0;
     sundayStores.forEach(sid => { domCount += sundayMinFor(sid); });
     if (S.domPessoas && S.domPessoas > 0) domCount = S.domPessoas;
@@ -1668,9 +1668,10 @@
     // 2. Historial
     const hist = await loadHistorial();
 
-    // 3. Candidatos para domingo — autónomas disponibles ese día
+    // 3. Candidatos para domingo — TODAS as pessoas não ausentes que conhecem
+    // alguma loja de domingo. A autonomia determina se podem ficar sozinhas,
+    // não se podem participar.
     const candidatasDOM = active.filter(p =>
-      p.canAlone &&
       !isAbsent(p.id, 'DOM') &&
       sundayStores.some(sid => p.knows.includes(sid))
     );
@@ -1686,24 +1687,36 @@
     const offset = seed % Math.max(1, candidatasDOM.length);
     const rotadas = [...candidatasDOM.slice(offset), ...candidatasDOM.slice(0, offset)];
 
-    // 4. Seleccionar exactamente domCount personas para el domingo
-    // y asignarlas a tiendas — capacidad total = domCount
-    // Ordenar tiendas domingo por prioridad — Avenida primero
+    // 4. Capacidade por tienda no domingo:
+    //    Primeiro: tentar CAPACITY_TABLE (domMax por loja)
+    //    Fallback: 1 por loja + excesso a Avenida
     const sundayStoresSorted = [...sundayStores].sort((a, b) => {
       const pa = STORES.find(s => s.id === a)?.priority ?? 9;
       const pb = STORES.find(s => s.id === b)?.priority ?? 9;
       return pa - pb;
     });
 
-    // Capacidad por tienda: mínimo 1 por tienda, exceso va a Avenida (mayor prioridad)
     const capDOM = {};
-    sundayStoresSorted.forEach(sid => { capDOM[sid] = 1; });
-    let totalCap = sundayStoresSorted.length;
-    let si = 0;
-    while (totalCap < domCount && sundayStoresSorted.length > 0) {
-      capDOM[sundayStoresSorted[si % sundayStoresSorted.length]]++;
-      totalCap++;
-      si++;
+    const cap = (S._nActive !== undefined && S._nDom !== undefined && S._nLojas !== undefined)
+      ? lookupCapacity(S._nActive, S._nDom, S._nLojas, S._selectedOpc || 1)
+      : null;
+
+    if (cap) {
+      // Usar directamente os domMax do CAPACITY_TABLE
+      sundayStoresSorted.forEach(sid => {
+        const sc = cap[storeCapKey(sid)];
+        capDOM[sid] = sc ? sc.domMax : 1;
+      });
+    } else {
+      // Fallback original: 1 por loja + excesso distribuído
+      sundayStoresSorted.forEach(sid => { capDOM[sid] = 1; });
+      let totalCap = sundayStoresSorted.length;
+      let si = 0;
+      while (totalCap < domCount && sundayStoresSorted.length > 0) {
+        capDOM[sundayStoresSorted[si % sundayStoresSorted.length]]++;
+        totalCap++;
+        si++;
+      }
     }
 
     S._capDOM = capDOM; // para que fixSunday use el techo correcto
@@ -1711,7 +1724,7 @@
     const filled = {};
     sundayStoresSorted.forEach(sid => { filled[sid] = 0; });
 
-    // personasDOM = exactamente las que consiguieron plaza el domingo
+    // 5. Seleccionar exactamente domCount personas para el domingo
     const personasDOM = [];
     for (const p of rotadas) {
       if (personasDOM.length >= domCount) break;
@@ -1722,7 +1735,7 @@
       // Tienda fija
       const fixaSid = !preferredSid && p.store && sundayStores.includes(p.store) &&
         filled[p.store] < capDOM[p.store] ? p.store : null;
-      // Cualquier tienda disponible
+      // Cualquier tienda disponible — respeitando capDOM
       const sid = preferredSid || fixaSid ||
         sundayStoresSorted.find(sid => p.knows.includes(sid) && filled[sid] < capDOM[sid]);
 
@@ -1733,7 +1746,7 @@
       }
     }
 
-    // 5. Combinación para n personas y domCount en domingo
+    // 6. Combinación para n personas y domCount en domingo
     const n = active.filter(p => !fullyAbsent(p.id)).length;
     let combinacion = await loadCombinacion(n, domCount);
     if (!combinacion) {
@@ -1746,7 +1759,7 @@
     S._combinacionActual = combinacion;
     S._asignacionCodigos = {};
 
-    // 6. Resto de personas — ordenadas por deuda entre semana
+    // 7. Resto de personas — ordenadas por deuda entre semana
     const personasNoDOM = active.filter(p =>
       !personasDOM.includes(p) && !fullyAbsent(p.id)
     );
@@ -1759,14 +1772,14 @@
     const offsetNoDOM = seed % Math.max(1, ordenNoDOM_base.length);
     const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
 
-    // 7. ordenFinal: DOM primero (los que realmente trabajan domingo), luego el resto
-    // Este orden es el que se alinea con los códigos de la combinación
+    // 8. ordenFinal: DOM primero (los que realmente trabajan domingo), luego el resto
     const ordenFinal = [...personasDOM, ...ordenNoDOM];
 
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 
     console.log('[DOM] domCount='+domCount+' S.domPessoas='+S.domPessoas+' personasDOM='+personasDOM.length+' ['+personasDOM.map(p=>p.name.split(' ')[0]).join(',')+'] codigos=['+codigos.join(',')+']');
+    console.log('[DOM] capDOM:', JSON.stringify(capDOM), '| cap_key:', S._nActive+'_'+S._nDom+'_'+S._nLojas+'_'+(S._selectedOpc||1));
     console.log('[DOM] ordenFinal:', ordenFinal.map((p,i)=>p.name.split(' ')[0]+'→'+codigos[i]).join(', '));
 
     ordenFinal.forEach((p, idx) => {

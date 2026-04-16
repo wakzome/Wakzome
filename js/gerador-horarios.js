@@ -1589,12 +1589,10 @@
         const existing = _aprCorreccoes[r.pessoa_id][r.dia];
         if (!existing || r.semana > existing.semana) {
           _aprCorreccoes[r.pessoa_id][r.dia] = {
-            tienda_id:    r.tienda_id,
-            shift:        r.shift,
-            semana:       r.semana,
-            mudou_tienda: r.mudou_tienda,
-            mudou_shift:  r.mudou_shift,
-            count:        (existing?.count || 0) + 1
+            tienda_id: r.tienda_id,
+            shift:     r.shift,
+            semana:    r.semana,
+            count:     (existing?.count || 0) + 1
           };
         }
       });
@@ -2632,47 +2630,6 @@
 
     enforceIntervalSeparation(day, workers);
   }
-  // ── APLICAR CORRECCIONES APRENDIDAS ──
-  // Llamado después de intelPass() para sobreescribir tienda, turno y tipo
-  // con lo que el usuario guardó mediante el botón "Aprender".
-  // Solo aplica la corrección más reciente de cada (pessoa, dia).
-  function applyCorreccoes(active) {
-    if (!_aprCorreccoes || !Object.keys(_aprCorreccoes).length) return;
-    let aplicadas = 0;
-    active.forEach(p => {
-      DAYS.forEach(day => {
-        const corr = _aprCorreccoes[p.id]?.[day];
-        if (!corr) return;
-        const cell = S.schedule[p.id]?.[day];
-        if (!cell) return;
-
-        // Se a correção guardou uma tienda → forçar trabalho nessa tienda
-        if (corr.tienda_id && corr.mudou_tienda !== false) {
-          // Só sobrescrever se a tienda está aberta e a pessoa conhece-a
-          if (
-            storeOpen(corr.tienda_id, day) &&
-            p.knows.includes(corr.tienda_id)
-          ) {
-            S.schedule[p.id][day] = {
-              type:  'work',
-              store: corr.tienda_id,
-              shift: corr.shift || storeBaseShift(corr.tienda_id)
-            };
-            aplicadas++;
-            S.decisions.push({ type: 'info', text: `${day}: ${p.name.split(' ')[0]} → ${sname(corr.tienda_id)} (aprendizagem).` });
-          }
-        } else if (corr.shift && corr.mudou_shift && cell.type === 'work') {
-          // Só o turno mudou — aplicar shift sem tocar na tienda
-          S.schedule[p.id][day].shift = corr.shift;
-          aplicadas++;
-        }
-      });
-    });
-    if (aplicadas > 0) {
-      S.alerts.push({ type: 'info', text: `ℹ ${aplicadas} override(s) de aprendizagem aplicado(s).` });
-    }
-  }
-
   async function generate() {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
@@ -2703,7 +2660,6 @@
     buildSchedule(active);
     fixSunday(active);
     intelPass(active);
-    applyCorreccoes(active);  // ← aplicar overrides aprendidos (tienda + turno + tipo)
     applyNightShiftRule(active);
     saveMem();
 

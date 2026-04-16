@@ -1722,139 +1722,76 @@
     const codigos = combinacion.split(',').map(Number);
     S._combinacionActual = combinacion;
     S._asignacionCodigos = {};
-
-    // ── FOLGAS DIRIGIDAS ──
-    // Leer de S._folgasDirigidas — objeto estable que nunca se resetea.
-    const dirigidas = {}; // { pid: dia }
-    if (S._folgasDirigidas) {
-      Object.entries(S._folgasDirigidas).forEach(([pid, dias]) => {
-        const diasValidos = (dias || []).filter(d => d !== 'DOM');
-        if (diasValidos.length > 0 && active.find(p => p.id === pid)) {
-          dirigidas[pid] = diasValidos[0];
-        }
-      });
-    }
-
-    // ── ASIGNACIÓN DETERMINISTA ──
-    // El pool de códigos se ordena siempre igual antes de asignar.
-    // Las dirigidas sacan su código por posición fija en el pool ordenado,
-    // no por búsqueda en el pool mutable — esto garantiza estabilidad entre regeneraciones.
+    S.folgaDay = {};
+    S.extraDayOff = {};
 
     const DIAS_ORD = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
     const DIAS_SEM = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
-    // Clasificar códigos por sus días de folga (índice en DIAS_ORD del primer día entre semana)
-    // Esto permite encontrar el código más compatible con un día dirigido de forma determinista
-    function codigoFolgaDia(cod) {
-      if (!PATRONES[cod]) return -1;
-      const dias = PATRONES[cod].folga.filter(d => d !== 'DOM');
-      return dias.length > 0 ? DIAS_ORD.indexOf(dias[0]) : -1;
+    // ── FOLGAS DIRIGIDAS: { pid → dia } ──
+    const dirigidas = {};
+    if (S._folgasDirigidas) {
+      Object.entries(S._folgasDirigidas).forEach(([pid, dias]) => {
+        const v = (dias || []).filter(d => d !== 'DOM');
+        if (v.length > 0 && active.find(p => p.id === pid)) dirigidas[pid] = v[0];
+      });
     }
 
-    // Pool ordenado por día de folga (determinista, mismo orden siempre)
-    const codigosOrdenados = [...codigos].sort((a, b) => codigoFolgaDia(a) - codigoFolgaDia(b));
+    // Pool mutable — uma cópia dos códigos da combinação
+    const pool = [...codigos];
+    const asignados = {};
 
-    // Para cada persona dirigida: encontrar en codigosOrdenados el índice del código
-    // compatible con su día dirigido. Si hay varios iguales, tomar el primero disponible.
-    // Resultado: mapa { pid: indiceEnCodigosOrdenados } — siempre el mismo independiente del seed
-    const indiceDirigidos = {}; // { pid: idx en codigosOrdenados }
-    const indicesUsados = new Set();
-
+    // PASSO 1 — Pessoas com folga dirigida
+    // Cada uma extrai do pool o primeiro código que tenha o seu dia como folga.
+    // Se não houver exacto, extrai o de folga mais próxima.
+    // O código extraído sai do pool e não fica disponível para ninguém mais.
     Object.entries(dirigidas).forEach(([pid, diaDir]) => {
-      // Buscar código exacto (tiene diaDir como folga)
-      let foundIdx = -1;
-      for (let i = 0; i < codigosOrdenados.length; i++) {
-        if (indicesUsados.has(i)) continue;
-        const cod = codigosOrdenados[i];
-        if (!PATRONES[cod]) continue;
-        if (PATRONES[cod].folga.includes(diaDir)) { foundIdx = i; break; }
-      }
-      // Si no hay exacto, buscar el más cercano
-      if (foundIdx === -1) {
-        const dirIdx = DIAS_ORD.indexOf(diaDir);
+      if (!active.find(p => p.id === pid)) return;
+      let idx = pool.findIndex(cod => PATRONES[cod]?.folga.includes(diaDir));
+      if (idx === -1) {
+        const dirI = DIAS_ORD.indexOf(diaDir);
         let bestDist = Infinity;
-        for (let i = 0; i < codigosOrdenados.length; i++) {
-          if (indicesUsados.has(i)) continue;
-          const cod = codigosOrdenados[i];
-          if (!PATRONES[cod]) continue;
-          const dias = PATRONES[cod].folga.filter(d => d !== 'DOM');
-          const dist = dias.reduce((mn, d) => Math.min(mn, Math.abs(DIAS_ORD.indexOf(d) - dirIdx)), Infinity);
-          if (dist < bestDist) { bestDist = dist; foundIdx = i; }
-        }
-        if (foundIdx >= 0) S.decisions.push({ type: 'warn', text: `Folga dirigida ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} (${diaDir}): sem código exacto — aproximado atribuído.` });
+        pool.forEach((cod, i) => {
+          if (!PATRONES[cod]) return;
+          const dist = PATRONES[cod].folga
+            .filter(d => d !== 'DOM')
+            .reduce((mn, d) => Math.min(mn, Math.abs(DIAS_ORD.indexOf(d) - dirI)), Infinity);
+          if (dist < bestDist) { bestDist = dist; idx = i; }
+        });
+        if (idx >= 0) S.decisions.push({ type: 'warn', text: `Folga dirigida ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} (${diaDir}): aproximado.` });
       } else {
-        S.decisions.push({ type: 'info', text: `Folga dirigida: ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} → ${diaDir} (código ${codigosOrdenados[foundIdx]}).` });
+        S.decisions.push({ type: 'info', text: `Folga dirigida: ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} → ${diaDir} (cód.${pool[idx]}).` });
       }
-      if (foundIdx >= 0) {
-        indiceDirigidos[pid] = foundIdx;
-        indicesUsados.add(foundIdx);
-      }
+      if (idx >= 0) { asignados[pid] = pool[idx]; pool.splice(idx, 1); }
     });
 
-    // Índices libres (no usados por dirigidas), en orden
-    const indicesLibres = codigosOrdenados.map((_, i) => i).filter(i => !indicesUsados.has(i));
-
-    // Orden de personas libres: DOM primero (sin dirigida), luego resto (sin dirigida), por deuda histórica + seed
-    const personasNoDOM = active.filter(p => !personasDOM.includes(p) && !fullyAbsent(p.id) && !dirigidas[p.id]);
-    const ordenNoDOM_base = [...personasNoDOM].sort((a, b) => {
-      const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d] || 0), 0);
-      const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d] || 0), 0);
+    // PASSO 2 — Restantes pessoas (sem folga dirigida)
+    // Ordenar: DOM primeiro, depois por dívida histórica + seed
+    const livres = active.filter(p => !fullyAbsent(p.id) && !asignados[p.id]);
+    const comDOM  = livres.filter(p =>  personasDOM.includes(p));
+    const semDOM  = livres.filter(p => !personasDOM.includes(p));
+    const semDOM_sorted = [...semDOM].sort((a, b) => {
+      const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
+      const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
       return da !== db ? da - db : a.id.localeCompare(b.id);
     });
-    const offsetNoDOM = seed % Math.max(1, ordenNoDOM_base.length);
-    const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
-    // ordenFinal: todas las personas sin dirigida (DOM primero, luego resto)
-    const ordenFinal = [
-      ...personasDOM.filter(p => !dirigidas[p.id] && !fullyAbsent(p.id)),
-      ...ordenNoDOM
-    ];
-
-    // Asignar: dirigidas por índice fijo en codigosOrdenados
-    const asignados = {};
-    Object.entries(indiceDirigidos).forEach(([pid, idx]) => {
-      asignados[pid] = codigosOrdenados[idx];
+    const off = seed % Math.max(1, semDOM_sorted.length);
+    const semDOM_rot = [...semDOM_sorted.slice(off), ...semDOM_sorted.slice(0, off)];
+    [...comDOM, ...semDOM_rot].forEach(p => {
+      if (pool.length > 0) { asignados[p.id] = pool.shift(); }
     });
 
-    // Libres: reciben los índices restantes en orden
-    let iLibre = 0;
-    ordenFinal.forEach(p => {
-      if (asignados[p.id]) return; // ya tiene código (dirigida)
-      if (iLibre < indicesLibres.length) {
-        asignados[p.id] = codigosOrdenados[indicesLibres[iLibre++]];
-      }
-    });
-
-    // Salvaguarda: cualquier persona activa sin código recibe el siguiente disponible
-    // Esto evita que nadie quede con 0 folgas (48h) o demasiadas folgas (32h)
-    const todosIndices = codigosOrdenados.map((_, i) => i);
-    const indicesAsignados = new Set([...Object.values(indiceDirigidos), ...indicesLibres.slice(0, iLibre)]);
-    const indicesSobrantes = todosIndices.filter(i => !indicesAsignados.has(i));
-    let iSob = 0;
-    active.filter(p => !fullyAbsent(p.id) && !asignados[p.id]).forEach(p => {
-      if (iSob < indicesSobrantes.length) {
-        asignados[p.id] = codigosOrdenados[indicesSobrantes[iSob++]];
-      } else if (codigosOrdenados.length > 0) {
-        // Último recurso: código 7 (QUA folga) que es neutro
-        asignados[p.id] = 7;
-        S.alerts.push({ type: 'amber', text: `${shortName(p.name)}: sem código disponível — atribuído código neutro.` });
-      }
-    });
-
-    S.folgaDay = {};
-    if (!S.extraDayOff) S.extraDayOff = {};
-
-    // Aplicar asignaciones → S.folgaDay y S.extraDayOff
-    console.log('[DOM] domCount='+domCount+' personasDOM=['+personasDOM.map(p=>p.name.split(' ')[0]).join(',')+'] codigos=['+codigos.join(',')+']');
+    // PASSO 3 — Aplicar códigos → folgaDay e extraDayOff
+    console.log('[FOLGAS] codigos=['+codigos+'] dirigidas=['+JSON.stringify(dirigidas)+']');
     active.forEach(p => {
-      const codigo = asignados[p.id];
-      if (!codigo || !PATRONES[codigo]) return;
-      const pat = PATRONES[codigo];
-      const diasFolga = pat.folga.filter(d => d !== 'DOM');
-      S._asignacionCodigos[p.id] = codigo;
-      S.folgaDay[p.id] = diasFolga[0] || null;
-      if (diasFolga[1]) S.extraDayOff[p.id] = diasFolga[1];
+      const cod = asignados[p.id];
+      if (!cod || !PATRONES[cod]) return;
+      const diasF = PATRONES[cod].folga.filter(d => d !== 'DOM');
+      S._asignacionCodigos[p.id] = cod;
+      S.folgaDay[p.id]  = diasF[0] || null;
+      if (diasF[1]) S.extraDayOff[p.id] = diasF[1];
     });
-    console.log('[DOM] asignados:', active.map(p => p.name.split(' ')[0]+'→'+(asignados[p.id]||'?')).join(', '));
+    console.log('[FOLGAS] asignados:', active.map(p=>p.name.split(' ')[0]+'→'+(asignados[p.id]||'?')).join(', '));
 
     saveMem();
   }

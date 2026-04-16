@@ -1805,12 +1805,14 @@
     const off = seed % Math.max(1, semDOM_sorted.length);
     const semDOM_rot = [...semDOM_sorted.slice(off), ...semDOM_sorted.slice(0, off)];
 
-    // Asignar: comDOM recibe dom:true primero, semDOM recibe dom:false primero
+    // Asignar: comDOM recibe dom:true primero, luego dom:false
+    // Si sobran dom:true tras asignar comDOM → van a siguiente persona de candidatasDOM
+    // semDOM recibe SOLO dom:false — nunca dom:true
     const poolMut = [...pool];
 
     comDOM_sorted.forEach(p => {
-      // Primero buscar dom:true, luego dom:false
       let cod = poolMut.find(c => PATRONES[c]?.dom === true);
+      if (cod === undefined) cod = poolMut.find(c => PATRONES[c]?.dom !== true);
       if (cod === undefined) cod = poolMut[0];
       if (cod !== undefined) {
         poolMut.splice(poolMut.indexOf(cod), 1);
@@ -1818,10 +1820,32 @@
       }
     });
 
-    semDOM_rot.forEach(p => {
-      // Primero buscar dom:false, nunca dom:true
+    // Si quedan códigos dom:true en poolMut, asignarlos a la siguiente persona
+    // de candidatasDOM que no tenga código — añadiéndola a personasDOM
+    while (poolMut.some(c => PATRONES[c]?.dom === true)) {
+      const cod = poolMut.find(c => PATRONES[c]?.dom === true);
+      const siguiente = candidatasDOM.find(p =>
+        !personasDOM.includes(p) && !asignados[p.id] && !isAbsent(p.id, 'DOM')
+      );
+      if (siguiente) {
+        const sid = sundayStoresSorted.find(sid =>
+          siguiente.knows.includes(sid) && (filled[sid] || 0) < capDOM[sid]
+        );
+        if (sid) {
+          S.sundayAssigned[sid].push(siguiente.id);
+          filled[sid] = (filled[sid] || 0) + 1;
+          personasDOM.push(siguiente);
+          poolMut.splice(poolMut.indexOf(cod), 1);
+          asignados[siguiente.id] = cod;
+        } else break;
+      } else break;
+    }
+
+    // semDOM recibe SOLO dom:false — si no hay, lo que quede (nunca bloquear)
+    const semDOM_rot2 = [...semDOM_sorted.slice(off), ...semDOM_sorted.slice(0, off)];
+    semDOM_rot2.forEach(p => {
       let cod = poolMut.find(c => PATRONES[c]?.dom !== true);
-      if (cod === undefined) cod = poolMut[0]; // nunca bloquear
+      if (cod === undefined) cod = poolMut[0];
       if (cod !== undefined) {
         poolMut.splice(poolMut.indexOf(cod), 1);
         asignados[p.id] = cod;

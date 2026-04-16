@@ -1741,9 +1741,47 @@
     const asignados = {};
 
     // PASSO 1 — Pessoas com folga dirigida extraem o seu código do pool
+    // ── FILTRO CRÍTICO: o estado do domingo é uma pré-condição, não um detalhe ──
+    // A busca de código para a folga dirigida acontece DENTRO da fatia compatível
+    // com o estado de domingo da pessoa. Isto elimina a condição de corrida lógica
+    // entre a selecção de domingo (personasDOM) e a atribuição de códigos.
     Object.entries(dirigidas).forEach(([pid, diaDir]) => {
       if (!active.find(p => p.id === pid)) return;
-      let idx = pool.findIndex(cod => PATRONES[cod]?.folga.includes(diaDir));
+      const pName = shortName(PEOPLE.find(p => p.id === pid)?.name || pid);
+      const debeTrabajarDOM = personasDOM.some(p => p.id === pid);
+      let idx = -1;
+
+      // Tentativa 1 (ideal): código com o dia dirigido E compatível com estado do domingo
+      idx = pool.findIndex(cod =>
+        PATRONES[cod]?.folga.includes(diaDir) &&
+        (debeTrabajarDOM ? PATRONES[cod]?.dom === true : PATRONES[cod]?.dom !== true)
+      );
+      if (idx >= 0) {
+        S.decisions.push({ type: 'info', text: `Folga dirigida: ${pName} → ${diaDir} (cód.${pool[idx]}, dom=${debeTrabajarDOM}).` });
+      }
+
+      // Tentativa 2: código com o dia dirigido, ignorando estado do domingo (fallback de compatibilidade)
+      if (idx === -1) {
+        idx = pool.findIndex(cod => PATRONES[cod]?.folga.includes(diaDir));
+        if (idx >= 0) S.decisions.push({ type: 'warn', text: `Folga dirigida ${pName} (${diaDir}): sem código compatível com dom=${debeTrabajarDOM} — fallback sem filtro domingo.` });
+      }
+
+      // Tentativa 3: aproximação por distância ao dia dirigido, dentro dos compatíveis com o domingo
+      if (idx === -1) {
+        const dirI = DIAS_ORD.indexOf(diaDir);
+        let bestDist = Infinity;
+        pool.forEach((cod, i) => {
+          if (!PATRONES[cod]) return;
+          if (debeTrabajarDOM ? PATRONES[cod]?.dom !== true : PATRONES[cod]?.dom === true) return;
+          const dist = PATRONES[cod].folga
+            .filter(d => d !== 'DOM')
+            .reduce((mn, d) => Math.min(mn, Math.abs(DIAS_ORD.indexOf(d) - dirI)), Infinity);
+          if (dist < bestDist) { bestDist = dist; idx = i; }
+        });
+        if (idx >= 0) S.decisions.push({ type: 'warn', text: `Folga dirigida ${pName} (${diaDir}): aproximado compatível (dom=${debeTrabajarDOM}).` });
+      }
+
+      // Tentativa 4 (último recurso): código mais próximo sem qualquer filtro
       if (idx === -1) {
         const dirI = DIAS_ORD.indexOf(diaDir);
         let bestDist = Infinity;
@@ -1754,10 +1792,9 @@
             .reduce((mn, d) => Math.min(mn, Math.abs(DIAS_ORD.indexOf(d) - dirI)), Infinity);
           if (dist < bestDist) { bestDist = dist; idx = i; }
         });
-        if (idx >= 0) S.decisions.push({ type: 'warn', text: `Folga dirigida ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} (${diaDir}): aproximado.` });
-      } else {
-        S.decisions.push({ type: 'info', text: `Folga dirigida: ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} → ${diaDir} (cód.${pool[idx]}).` });
+        if (idx >= 0) S.decisions.push({ type: 'warn', text: `Folga dirigida ${pName} (${diaDir}): último recurso sem filtro (dom=${debeTrabajarDOM}).` });
       }
+
       if (idx >= 0) { asignados[pid] = pool[idx]; pool.splice(idx, 1); }
     });
 

@@ -1766,10 +1766,24 @@
     });
 
     // PASSO 2 — Restantes pessoas (sem folga dirigida)
-    // Ordenar: DOM primeiro, depois por dívida histórica + seed
+    // REGRA CRÍTICA: códigos com 2 folgas entre semana (1 e 2) só podem ir
+    // a pessoas que trabalham o domingo — caso contrário teriam 32h em vez de 40h.
     const livres = active.filter(p => !fullyAbsent(p.id) && !asignados[p.id]);
     const comDOM  = livres.filter(p =>  personasDOM.includes(p));
     const semDOM  = livres.filter(p => !personasDOM.includes(p));
+
+    // Separar pool em códigos "duplos" (1,2 — precisam de DOM) e "simples" (resto)
+    const poolDuplos  = pool.filter(cod => PATRONES[cod]?.folga.filter(d=>d!=='DOM').length > 1);
+    const poolSimples = pool.filter(cod => !PATRONES[cod] || PATRONES[cod].folga.filter(d=>d!=='DOM').length <= 1);
+
+    // Ordenar pessoas DOM por deuda histórica (sem seed — estável)
+    const comDOM_sorted = [...comDOM].sort((a, b) => {
+      const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
+      const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
+      return da !== db ? da - db : a.id.localeCompare(b.id);
+    });
+
+    // Ordenar pessoas não-DOM por deuda histórica + seed
     const semDOM_sorted = [...semDOM].sort((a, b) => {
       const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
       const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
@@ -1777,26 +1791,88 @@
     });
     const off = seed % Math.max(1, semDOM_sorted.length);
     const semDOM_rot = [...semDOM_sorted.slice(off), ...semDOM_sorted.slice(0, off)];
-    [...comDOM, ...semDOM_rot].forEach(p => {
-      if (pool.length > 0) { asignados[p.id] = pool.shift(); }
+
+    // Construir pool ordenado para asignación:
+    // — Pessoas DOM reciben primero los códigos duplos, luego simples
+    // — Pessoas não-DOM reciben SOLO códigos simples
+    // — Si sobran duplos sin pessoas DOM, se convierten a simples para no dejar a nadie con 32h
+    const poolParaDOM  = [...poolDuplos,  ...poolSimples];
+    const poolParaSEM  = [...poolSimples, ...poolDuplos]; // duplos al final como último recurso
+
+    let iDOM = 0, iSEM = 0;
+    comDOM_sorted.forEach(p => {
+      if (iDOM < poolParaDOM.length) {
+        const cod = poolParaDOM[iDOM++];
+        // Marcar como usado en el pool original
+        const idx = pool.indexOf(cod);
+        if (idx >= 0) pool.splice(idx, 1);
+        asignados[p.id] = cod;
+      }
+    });
+    semDOM_rot.forEach(p => {
+      // Encontrar próximo código simple disponible en el pool
+      let found = -1;
+      for (let i = 0; i < pool.length; i++) {
+        const cod = pool[i];
+        const nFolgas = PATRONES[cod]?.folga.filter(d=>d!=='DOM').length || 1;
+        if (nFolgas <= 1) { found = i; break; }
+      }
+      if (found === -1 && pool.length > 0) found = 0; // último recurso: lo que quede
+      if (found >= 0) {
+        asignados[p.id] = pool[found];
+        pool.splice(found, 1);
+      }
     });
 
     // PASSO 3 — Aplicar códigos → folgaDay e extraDayOff
-    console.log('[FOLGAS] n_active='+active.length+' n_codigos='+codigos.length+' pool_restante='+pool.length+' codigos=['+codigos+'] dirigidas=['+JSON.stringify(dirigidas)+']');
-    console.log('[FOLGAS] asignados ANTES de aplicar:', active.map(p=>p.name.split(' ')[0]+'→'+(asignados[p.id]||'NULL')).join(', '));
     active.forEach(p => {
       const cod = asignados[p.id];
-      if (!cod || !PATRONES[cod]) {
-        console.warn('[FOLGAS] PESSOA SEM CÓDIGO:', p.name, '— folgaDay ficará null — 48h!');
-        return;
-      }
+      if (!cod || !PATRONES[cod]) return;
       const diasF = PATRONES[cod].folga.filter(d => d !== 'DOM');
       S._asignacionCodigos[p.id] = cod;
       S.folgaDay[p.id]  = diasF[0] || null;
       if (diasF[1]) S.extraDayOff[p.id] = diasF[1];
     });
-    console.log('[FOLGAS] folgaDay:', JSON.stringify(S.folgaDay));
-    console.log('[FOLGAS] extraDayOff:', JSON.stringify(S.extraDayOff));
+
+    // PASSO 4 — Recalcular sundayAssigned a partir dos códigos atribuídos.
+    // Os códigos 1 e 2 têm dom:true — quem os recebe trabalha ao domingo.
+    // Isto substitui a selecção prévia por historial que foi feita antes de saber os códigos.
+    // Respeita os limites minDom/maxDom do escenário activo e a capacidade capDOM por loja.
+    const sundayStoresSorted2 = [...sundayStores].sort((a, b) => {
+      const pa = STORES.find(s => s.id === a)?.priority ?? 9;
+      const pb = STORES.find(s => s.id === b)?.priority ?? 9;
+      return pa - pb;
+    });
+
+    // Reset sundayAssigned
+    S.sundayAssigned = {};
+    sundayStoresSorted2.forEach(sid => { S.sundayAssigned[sid] = []; });
+
+    // Pessoas que receberam código com dom:true
+    const comCodigoDom = active.filter(p => {
+      const cod = asignados[p.id];
+      return cod && PATRONES[cod]?.dom === true && !isAbsent(p.id, 'DOM');
+    });
+
+    // Distribuir pelas lojas respeitando capDOM
+    const filledDOM2 = {};
+    sundayStoresSorted2.forEach(sid => { filledDOM2[sid] = 0; });
+
+    comCodigoDom.forEach(p => {
+      // Preferir tienda fija se aberta ao domingo
+      const preferred = sundayStoresSorted2.find(sid => {
+        const cap = S._capDOM?.[sid] ?? sundayMinFor(sid);
+        return p.store === sid && filledDOM2[sid] < cap && p.knows.includes(sid);
+      });
+      const any = preferred || sundayStoresSorted2.find(sid => {
+        const cap = S._capDOM?.[sid] ?? sundayMinFor(sid);
+        return filledDOM2[sid] < cap && p.knows.includes(sid);
+      });
+      if (any) {
+        S.sundayAssigned[any].push(p.id);
+        filledDOM2[any]++;
+      }
+    });
 
     saveMem();
   }

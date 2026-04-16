@@ -1794,7 +1794,7 @@
     // Índices libres (no usados por dirigidas), en orden
     const indicesLibres = codigosOrdenados.map((_, i) => i).filter(i => !indicesUsados.has(i));
 
-    // Orden de personas libres (DOM primero, luego resto por deuda histórica + seed)
+    // Orden de personas libres: DOM primero (sin dirigida), luego resto (sin dirigida), por deuda histórica + seed
     const personasNoDOM = active.filter(p => !personasDOM.includes(p) && !fullyAbsent(p.id) && !dirigidas[p.id]);
     const ordenNoDOM_base = [...personasNoDOM].sort((a, b) => {
       const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d] || 0), 0);
@@ -1803,18 +1803,40 @@
     });
     const offsetNoDOM = seed % Math.max(1, ordenNoDOM_base.length);
     const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
-    const ordenFinal = [...personasDOM.filter(p => !dirigidas[p.id]), ...ordenNoDOM];
+    // ordenFinal: todas las personas sin dirigida (DOM primero, luego resto)
+    const ordenFinal = [
+      ...personasDOM.filter(p => !dirigidas[p.id] && !fullyAbsent(p.id)),
+      ...ordenNoDOM
+    ];
 
-    // Asignar: dirigidas por índice fijo, libres por índice libre en orden
+    // Asignar: dirigidas por índice fijo en codigosOrdenados
     const asignados = {};
     Object.entries(indiceDirigidos).forEach(([pid, idx]) => {
       asignados[pid] = codigosOrdenados[idx];
     });
+
+    // Libres: reciben los índices restantes en orden
     let iLibre = 0;
     ordenFinal.forEach(p => {
-      if (asignados[p.id]) return;
+      if (asignados[p.id]) return; // ya tiene código (dirigida)
       if (iLibre < indicesLibres.length) {
         asignados[p.id] = codigosOrdenados[indicesLibres[iLibre++]];
+      }
+    });
+
+    // Salvaguarda: cualquier persona activa sin código recibe el siguiente disponible
+    // Esto evita que nadie quede con 0 folgas (48h) o demasiadas folgas (32h)
+    const todosIndices = codigosOrdenados.map((_, i) => i);
+    const indicesAsignados = new Set([...Object.values(indiceDirigidos), ...indicesLibres.slice(0, iLibre)]);
+    const indicesSobrantes = todosIndices.filter(i => !indicesAsignados.has(i));
+    let iSob = 0;
+    active.filter(p => !fullyAbsent(p.id) && !asignados[p.id]).forEach(p => {
+      if (iSob < indicesSobrantes.length) {
+        asignados[p.id] = codigosOrdenados[indicesSobrantes[iSob++]];
+      } else if (codigosOrdenados.length > 0) {
+        // Último recurso: código 7 (QUA folga) que es neutro
+        asignados[p.id] = 7;
+        S.alerts.push({ type: 'amber', text: `${shortName(p.name)}: sem código disponível — atribuído código neutro.` });
       }
     });
 

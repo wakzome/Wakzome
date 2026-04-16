@@ -669,7 +669,7 @@
                 <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio?baixa.data_inicio.slice(5).split('-').reverse().join('/')+'/'+baixa.data_inicio.slice(2,4):''}" placeholder="dd/mm/aa">
                 <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim?baixa.data_fim.slice(5).split('-').reverse().join('/')+'/'+baixa.data_fim.slice(2,4):''}" placeholder="dd/mm/aa">
               </div>
-              <div class="gh-sr-col-title" style="margin-top:8px">⏱ Banco</div>
+              <div class="gh-sr-col-title" style="margin-top:8px">⏱ Banco <button class="gh-btn-guardar-inc gh-icon-btn" data-pid="${p.id}" title="Guardar baixa, licença e banco" style="margin-left:auto;font-size:.6rem;padding:1px 6px;width:auto;color:#1a5c1a;border-color:#b7ddb7;background:#f0fdf0;">💾</button></div>
               <div class="gh-inc-saldo ${saldo>0?'gh-inc-saldo-neg':saldo<0?'gh-inc-saldo-pos':''}" id="gh-saldo-${p.id}">${saldo>0?'+':''}${saldo}h</div>
               <div class="gh-banco-add-row">
                 <input type="number" class="gh-field-sm gh-banco-h gh-num-mini" data-pid="${p.id}" placeholder="±h" step="0.5">
@@ -718,55 +718,95 @@
       });
     });
 
-    // Baixa: toggle e datas
+    // Baixa: toggle e datas — SÓ actualizam memória local, NÃO gravam automaticamente
     list.querySelectorAll('.gh-inc-usar[data-col="baixa_active"]').forEach(el => {
-      el.addEventListener('change', async () => {
+      el.addEventListener('change', () => {
         const pid = el.dataset.pid;
-        const from = parseDateInput(document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value);
-        const to   = parseDateInput(document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value);
-        await saveBaixa(pid, { active: el.checked, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, observacao: '' });
+        if (!S._baixas) S._baixas = {};
+        if (!S._baixas[pid]) S._baixas[pid] = {};
+        S._baixas[pid]._pendente = true;
+        // Marcar botão guardar
+        const btn = list.querySelector(`.gh-btn-guardar-inc[data-pid="${pid}"]`);
+        if (btn) { btn.style.background = '#fff8e8'; btn.style.borderColor = '#f0d080'; btn.style.color = '#9a6f00'; }
       });
     });
     list.querySelectorAll('.gh-inc-inp[data-col^="baixa"]').forEach(el => {
-      el.addEventListener('change', async () => {
+      el.addEventListener('change', () => {
         const pid = el.dataset.pid;
-        if (!S._baixas?.[pid]) return;
-        const from = parseDateInput(document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value);
-        const to   = parseDateInput(document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value);
-        const active = document.querySelector(`[data-col="baixa_active"][data-pid="${pid}"]`)?.checked || false;
-        await saveBaixa(pid, { active, data_inicio: from, data_fim: to || null, observacao: '' });
+        if (!S._baixas) S._baixas = {};
+        if (!S._baixas[pid]) S._baixas[pid] = {};
+        S._baixas[pid]._pendente = true;
+        const btn = list.querySelector(`.gh-btn-guardar-inc[data-pid="${pid}"]`);
+        if (btn) { btn.style.background = '#fff8e8'; btn.style.borderColor = '#f0d080'; btn.style.color = '#9a6f00'; }
       });
     });
 
-    // Licença: toggle, datas e tipo
+    // Licença: toggle, datas e tipo — SÓ actualizam memória local
     list.querySelectorAll('.gh-inc-usar[data-col="lic_active"], .gh-inc-inp[data-col^="lic"]').forEach(el => {
-      el.addEventListener('change', async () => {
+      el.addEventListener('change', () => {
         const pid = el.dataset.pid;
-        const active  = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`)?.checked || false;
-        const from    = parseDateInput(document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value);
-        const to      = parseDateInput(document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value);
-        const tipo    = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
-        const horas   = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
-        const obs     = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
-        // Mostrar/ocultar campo observação
+        // Mostrar/ocultar campo observação (lógica visual mantida)
         if (el.dataset.col === 'lic_tipo') {
+          const tipo = el.value;
           const obsEl = document.getElementById('gh-lic-obs-' + pid);
           if (obsEl) obsEl.style.display = tipo === 'nao_recuperavel' ? '' : 'none';
         }
-        const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas, observacao: obs };
-        await saveLicenca(pid, licData);
-        // Se recuperável e activa → lançar horas no banco automaticamente
-        if (active && tipo === 'recuperavel' && horas > 0) {
-          if (!S._licencas?.[pid]?._addedToBanco) {
+        if (!S._licencas) S._licencas = {};
+        if (!S._licencas[pid]) S._licencas[pid] = {};
+        S._licencas[pid]._pendente = true;
+        const btn = list.querySelector(`.gh-btn-guardar-inc[data-pid="${pid}"]`);
+        if (btn) { btn.style.background = '#fff8e8'; btn.style.borderColor = '#f0d080'; btn.style.color = '#9a6f00'; }
+      });
+    });
+
+    // Botão guardar incidências por pessoa (baixa + licença + banco pendente)
+    list.querySelectorAll('.gh-btn-guardar-inc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        btn.textContent = '⏳'; btn.style.opacity = '0.6';
+        let saved = false;
+
+        // Guardar baixa se pendente
+        if (S._baixas?.[pid]?._pendente) {
+          const active = document.querySelector(`[data-col="baixa_active"][data-pid="${pid}"]`)?.checked || false;
+          const from   = parseDateInput(document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value);
+          const to     = parseDateInput(document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value);
+          await saveBaixa(pid, { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, observacao: '' });
+          if (S._baixas[pid]) delete S._baixas[pid]._pendente;
+          saved = true;
+        }
+
+        // Guardar licença se pendente
+        if (S._licencas?.[pid]?._pendente) {
+          const active = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`)?.checked || false;
+          const from   = parseDateInput(document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value);
+          const to     = parseDateInput(document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value);
+          const tipo   = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
+          const horas  = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
+          const obs    = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
+          const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas, observacao: obs };
+          await saveLicenca(pid, licData);
+          // Se recuperável e activa → lançar horas no banco automaticamente
+          if (active && tipo === 'recuperavel' && horas > 0 && !S._licencas[pid]?._addedToBanco) {
             const novoSaldo = await lancarBanco(pid, horas);
             if (S._licencas) S._licencas[pid] = { ...(S._licencas[pid]||{}), _addedToBanco: true };
             const saldoEl = document.getElementById('gh-saldo-' + pid);
             if (saldoEl && novoSaldo !== undefined) {
-              saldoEl.textContent = `Saldo: ${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
+              saldoEl.textContent = `${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
               saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
             }
           }
+          if (S._licencas[pid]) delete S._licencas[pid]._pendente;
+          saved = true;
         }
+
+        // Restaurar botão
+        btn.textContent = saved ? '✓' : '💾';
+        btn.style.opacity = '1';
+        btn.style.background = saved ? '#f0fdf0' : '#f0fdf0';
+        btn.style.borderColor = '#b7ddb7';
+        btn.style.color = '#1a5c1a';
+        if (saved) setTimeout(() => { btn.textContent = '💾'; }, 1500);
       });
     });
 
@@ -1677,6 +1717,23 @@
     S._combinacionActual = combinacion;
     S._asignacionCodigos = {};
 
+    // ── FOLGAS DIRIGIDAS ──
+    // S._folgas[pid].dias contiene los días marcados manualmente en el Paso 2.
+    // Para cada persona con folga dirigida, buscar en la combinación un código
+    // que tenga ese día como folga. Si hay varios compatibles, elegir el que
+    // mejor equilibre la justicia histórica. Si no hay código compatible,
+    // sacrificar la justicia (no la cobertura) y asignar el código más próximo.
+    const dirigidas = {}; // { pid: dayKey } — folga dirigida por persona
+    if (S._folgas) {
+      Object.entries(S._folgas).forEach(([pid, f]) => {
+        const dias = f?.dias || [];
+        if (dias.length > 0 && active.find(p => p.id === pid)) {
+          // Tomar el primer día dirigido (puede haber más de uno)
+          dirigidas[pid] = dias[0];
+        }
+      });
+    }
+
     // 6. Resto de personas — ordenadas por deuda entre semana
     const personasNoDOM = active.filter(p =>
       !personasDOM.includes(p) && !fullyAbsent(p.id)
@@ -1691,17 +1748,67 @@
     const ordenNoDOM = [...ordenNoDOM_base.slice(offsetNoDOM), ...ordenNoDOM_base.slice(0, offsetNoDOM)];
 
     // 7. ordenFinal: DOM primero (los que realmente trabajan domingo), luego el resto
-    // Este orden es el que se alinea con los códigos de la combinación
     const ordenFinal = [...personasDOM, ...ordenNoDOM];
 
     S.folgaDay = {};
     if (!S.extraDayOff) S.extraDayOff = {};
 
-    console.log('[DOM] domCount='+domCount+' S.domPessoas='+S.domPessoas+' personasDOM='+personasDOM.length+' ['+personasDOM.map(p=>p.name.split(' ')[0]).join(',')+'] codigos=['+codigos.join(',')+']');
-    console.log('[DOM] ordenFinal:', ordenFinal.map((p,i)=>p.name.split(' ')[0]+'→'+codigos[i]).join(', '));
+    // Pool de códigos disponibles para asignar (se consume al asignar)
+    const codigosPool = [...codigos];
+    const asignados = {}; // { pid: codigo }
 
-    ordenFinal.forEach((p, idx) => {
-      const codigo = codigos[idx];
+    // PASO A: Asignar primero las personas con folga dirigida
+    // Buscar en el pool el código compatible; si no hay, usar el más cercano
+    Object.entries(dirigidas).forEach(([pid, diaDir]) => {
+      if (!active.find(p => p.id === pid)) return;
+      // Encontrar índice del mejor código compatible en el pool
+      let bestIdx = -1;
+      let bestScore = Infinity;
+      codigosPool.forEach((cod, idx) => {
+        if (!PATRONES[cod]) return;
+        const diasFolga = PATRONES[cod].folga;
+        if (diasFolga.includes(diaDir)) {
+          // Compatible — score = deuda histórica del día para equilibrar justicia
+          const score = hist[pid]?.[diaDir] || 0;
+          if (bestIdx === -1 || score < bestScore) { bestIdx = idx; bestScore = score; }
+        }
+      });
+      // Si no hay compatible, buscar el código cuyo día de folga esté más cerca
+      if (bestIdx === -1) {
+        const DIAS_ORD = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+        const dirIdx = DIAS_ORD.indexOf(diaDir);
+        codigosPool.forEach((cod, idx) => {
+          if (!PATRONES[cod]) return;
+          const diasFolga = PATRONES[cod].folga.filter(d => d !== 'DOM');
+          const minDist = diasFolga.reduce((min, d) => {
+            const dist = Math.abs(DIAS_ORD.indexOf(d) - dirIdx);
+            return Math.min(min, dist);
+          }, Infinity);
+          if (minDist < bestScore) { bestIdx = idx; bestScore = minDist; }
+        });
+        if (bestIdx >= 0) {
+          S.decisions.push({ type: 'warn', text: `Folga dirigida de ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} (${diaDir}): sem código exacto, código aproximado atribuído.` });
+        }
+      } else {
+        S.decisions.push({ type: 'info', text: `Folga dirigida: ${shortName(PEOPLE.find(p=>p.id===pid)?.name||pid)} → ${diaDir} (código ${codigosPool[bestIdx]}).` });
+      }
+      if (bestIdx >= 0) {
+        asignados[pid] = codigosPool[bestIdx];
+        codigosPool.splice(bestIdx, 1);
+      }
+    });
+
+    // PASO B: Asignar el resto de personas según ordenFinal, usando los códigos restantes
+    ordenFinal.forEach((p) => {
+      if (asignados[p.id]) return; // ya asignado en paso A
+      const cod = codigosPool.shift();
+      if (cod) asignados[p.id] = cod;
+    });
+
+    // PASO C: Aplicar asignaciones a S.folgaDay y S.extraDayOff
+    console.log('[DOM] domCount='+domCount+' S.domPessoas='+S.domPessoas+' personasDOM='+personasDOM.length+' ['+personasDOM.map(p=>p.name.split(' ')[0]).join(',')+'] codigos=['+codigos.join(',')+']');
+    active.forEach(p => {
+      const codigo = asignados[p.id];
       if (!codigo || !PATRONES[codigo]) return;
       const pat = PATRONES[codigo];
       const diasFolga = pat.folga.filter(d => d !== 'DOM');
@@ -1709,6 +1816,7 @@
       S.folgaDay[p.id] = diasFolga[0] || null;
       if (diasFolga[1]) S.extraDayOff[p.id] = diasFolga[1];
     });
+    console.log('[DOM] asignados:', active.map(p=>p.name.split(' ')[0]+'→'+asignados[p.id]).join(', '));
 
     saveMem();
   }

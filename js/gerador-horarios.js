@@ -1766,24 +1766,27 @@
     });
 
     // PASSO 2 — Restantes pessoas (sem folga dirigida)
-    // REGRA CRÍTICA: códigos com 2 folgas entre semana (1 e 2) só podem ir
-    // a pessoas que trabalham o domingo — caso contrário teriam 32h em vez de 40h.
+    // Códigos com dom:true (1,2) → só para pessoas em personasDOM
+    // Códigos restantes → para pessoas fora de personasDOM
     const livres = active.filter(p => !fullyAbsent(p.id) && !asignados[p.id]);
     const comDOM  = livres.filter(p =>  personasDOM.includes(p));
     const semDOM  = livres.filter(p => !personasDOM.includes(p));
 
-    // Separar pool em códigos "duplos" (1,2 — precisam de DOM) e "simples" (resto)
-    const poolDuplos  = pool.filter(cod => PATRONES[cod]?.folga.filter(d=>d!=='DOM').length > 1);
-    const poolSimples = pool.filter(cod => !PATRONES[cod] || PATRONES[cod].folga.filter(d=>d!=='DOM').length <= 1);
+    // Separar pool: códigos dom:true primeiro para comDOM, resto para semDOM
+    const poolDomTrue  = [];
+    const poolDomFalse = [];
+    pool.forEach(cod => {
+      if (PATRONES[cod]?.dom === true) poolDomTrue.push(cod);
+      else poolDomFalse.push(cod);
+    });
 
-    // Ordenar pessoas DOM por deuda histórica (sem seed — estável)
+    // comDOM recebe primeiro os dom:true, depois dom:false se precisar
     const comDOM_sorted = [...comDOM].sort((a, b) => {
       const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
       const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
       return da !== db ? da - db : a.id.localeCompare(b.id);
     });
 
-    // Ordenar pessoas não-DOM por deuda histórica + seed
     const semDOM_sorted = [...semDOM].sort((a, b) => {
       const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
       const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
@@ -1792,35 +1795,29 @@
     const off = seed % Math.max(1, semDOM_sorted.length);
     const semDOM_rot = [...semDOM_sorted.slice(off), ...semDOM_sorted.slice(0, off)];
 
-    // Construir pool ordenado para asignación:
-    // — Pessoas DOM reciben primero los códigos duplos, luego simples
-    // — Pessoas não-DOM reciben SOLO códigos simples
-    // — Si sobran duplos sin pessoas DOM, se convierten a simples para no dejar a nadie con 32h
-    const poolParaDOM  = [...poolDuplos,  ...poolSimples];
-    const poolParaSEM  = [...poolSimples, ...poolDuplos]; // duplos al final como último recurso
+    // Construir pool ordenado para comDOM: dom:true primeiro, depois dom:false
+    const poolParaDOM = [...poolDomTrue, ...poolDomFalse];
+    // Pool para semDOM: só dom:false; se esgotar, dom:true (nunca bloqueia)
+    const poolParaSEM = [...poolDomFalse, ...poolDomTrue];
 
-    let iDOM = 0, iSEM = 0;
+    // Retirar do pool original conforme se vai consumindo
+    const poolMut = [...pool];
+
     comDOM_sorted.forEach(p => {
-      if (iDOM < poolParaDOM.length) {
-        const cod = poolParaDOM[iDOM++];
-        // Marcar como usado en el pool original
-        const idx = pool.indexOf(cod);
-        if (idx >= 0) pool.splice(idx, 1);
+      const cod = poolParaDOM.find(c => poolMut.includes(c));
+      if (cod !== undefined) {
+        poolMut.splice(poolMut.indexOf(cod), 1);
         asignados[p.id] = cod;
       }
     });
+
     semDOM_rot.forEach(p => {
-      // Encontrar próximo código simple disponible en el pool
-      let found = -1;
-      for (let i = 0; i < pool.length; i++) {
-        const cod = pool[i];
-        const nFolgas = PATRONES[cod]?.folga.filter(d=>d!=='DOM').length || 1;
-        if (nFolgas <= 1) { found = i; break; }
-      }
-      if (found === -1 && pool.length > 0) found = 0; // último recurso: lo que quede
-      if (found >= 0) {
-        asignados[p.id] = pool[found];
-        pool.splice(found, 1);
+      // Preferir dom:false; só usa dom:true se não houver alternativa
+      let cod = poolParaSEM.find(c => poolMut.includes(c) && PATRONES[c]?.dom !== true);
+      if (cod === undefined) cod = poolMut[0]; // último recurso: o que restar
+      if (cod !== undefined) {
+        poolMut.splice(poolMut.indexOf(cod), 1);
+        asignados[p.id] = cod;
       }
     });
 

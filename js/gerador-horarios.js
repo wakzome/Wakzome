@@ -1782,16 +1782,21 @@
     });
 
     // PASSO 3 — Aplicar códigos → folgaDay e extraDayOff
-    console.log('[FOLGAS] codigos=['+codigos+'] dirigidas=['+JSON.stringify(dirigidas)+']');
+    console.log('[FOLGAS] n_active='+active.length+' n_codigos='+codigos.length+' pool_restante='+pool.length+' codigos=['+codigos+'] dirigidas=['+JSON.stringify(dirigidas)+']');
+    console.log('[FOLGAS] asignados ANTES de aplicar:', active.map(p=>p.name.split(' ')[0]+'→'+(asignados[p.id]||'NULL')).join(', '));
     active.forEach(p => {
       const cod = asignados[p.id];
-      if (!cod || !PATRONES[cod]) return;
+      if (!cod || !PATRONES[cod]) {
+        console.warn('[FOLGAS] PESSOA SEM CÓDIGO:', p.name, '— folgaDay ficará null — 48h!');
+        return;
+      }
       const diasF = PATRONES[cod].folga.filter(d => d !== 'DOM');
       S._asignacionCodigos[p.id] = cod;
       S.folgaDay[p.id]  = diasF[0] || null;
       if (diasF[1]) S.extraDayOff[p.id] = diasF[1];
     });
-    console.log('[FOLGAS] asignados:', active.map(p=>p.name.split(' ')[0]+'→'+(asignados[p.id]||'?')).join(', '));
+    console.log('[FOLGAS] folgaDay:', JSON.stringify(S.folgaDay));
+    console.log('[FOLGAS] extraDayOff:', JSON.stringify(S.extraDayOff));
 
     saveMem();
   }

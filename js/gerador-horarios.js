@@ -1727,29 +1727,6 @@
     const DIAS_ORD = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
     const DIAS_SEM = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
-    // Contar cuántos códigos dom:true tiene la combinación
-    const nCodigosDomTrue = codigos.filter(c => PATRONES[c]?.dom === true).length;
-
-    // Ampliar personasDOM si es necesario para cubrir todos los códigos dom:true
-    // Se añaden candidatas autónomas por orden de deuda de domingos
-    if (personasDOM.length < nCodigosDomTrue) {
-      const extras = candidatasDOM.filter(p =>
-        !personasDOM.includes(p) && !isAbsent(p.id, 'DOM')
-      );
-      for (const p of extras) {
-        if (personasDOM.length >= nCodigosDomTrue) break;
-        // Asignar a la primera tienda con capacidad
-        const sid = sundayStoresSorted.find(sid =>
-          p.knows.includes(sid) && (filled[sid] || 0) < capDOM[sid]
-        );
-        if (sid) {
-          S.sundayAssigned[sid].push(p.id);
-          filled[sid] = (filled[sid] || 0) + 1;
-          personasDOM.push(p);
-        }
-      }
-    }
-
     // ── FOLGAS DIRIGIDAS: { pid → dia } ──
     const dirigidas = {};
     if (S._folgasDirigidas) {
@@ -1784,19 +1761,19 @@
       if (idx >= 0) { asignados[pid] = pool[idx]; pool.splice(idx, 1); }
     });
 
-    // Após o Passo 1: reequilibrar personasDOM
-    // Se uma pessoa de personasDOM recebeu um código dom:false (folga dirigida),
-    // há mais códigos dom:true no pool do que pessoas em comDOM.
-    // Adicionar a próxima candidata autónoma disponível a personasDOM até equilibrar.
+    // Após o Passo 1: se uma pessoa de personasDOM recebeu código dom:false (folga dirigida),
+    // o pool tem mais códigos dom:true do que pessoas em comDOM.
+    // Repor com a próxima pessoa de candidatasDOM (já filtrada: canAlone, disponível domingo).
     const nDomTrueNoPool = pool.filter(c => PATRONES[c]?.dom === true).length;
     const nComDOM = personasDOM.filter(p => !asignados[p.id]).length;
     if (nDomTrueNoPool > nComDOM) {
       const faltam = nDomTrueNoPool - nComDOM;
-      const candidatasExtras = candidatasDOM.filter(p =>
+      // candidatasDOM já tem a ordem correcta por historial de domingos
+      const extras = candidatasDOM.filter(p =>
         !personasDOM.includes(p) && !asignados[p.id] && !isAbsent(p.id, 'DOM')
       );
       let adicionadas = 0;
-      for (const p of candidatasExtras) {
+      for (const p of extras) {
         if (adicionadas >= faltam) break;
         const sid = sundayStoresSorted.find(sid =>
           p.knows.includes(sid) && (filled[sid] || 0) < capDOM[sid]

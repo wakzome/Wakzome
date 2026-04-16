@@ -4033,12 +4033,28 @@ td                   { font-size: .96rem !important; }
     var total = semana.length;
     var montante = semana.reduce(function (acc, f) { return acc + (f.valor || 0); }, 0);
     var vencidas = semana.filter(function (f) { return diasPara(f.vencimento) < 0; }).length;
+    var aVencer  = total - vencidas;
 
     /* Contador */
     countEl.textContent = total > 0 ? total : '0';
     countEl.className = '';
     if (vencidas > 0)   countEl.classList.add('danger');
     else if (total > 0) countEl.classList.add('warn');
+
+    /* Label dinâmico: vencidas / a vencer / ambas */
+    var labelEl = document.getElementById('saft-faturas-count-label');
+    if (labelEl) {
+      if (vencidas > 0 && aVencer > 0) {
+        labelEl.textContent = vencidas + ' vencida' + (vencidas > 1 ? 's' : '') +
+                              ' / ' + aVencer + ' a vencer';
+      } else if (vencidas > 0) {
+        labelEl.textContent = vencidas === 1 ? 'fatura vencida' : 'faturas vencidas';
+      } else if (aVencer > 0) {
+        labelEl.textContent = aVencer === 1 ? 'fatura a vencer esta semana' : 'faturas a vencer esta semana';
+      } else {
+        labelEl.textContent = 'a vencer esta semana';
+      }
+    }
 
     /* Monto total */
     listEl.innerHTML = '';

@@ -616,9 +616,12 @@
       const baixa   = S._baixas?.[p.id]   || {};
       const licenca = S._licencas?.[p.id] || {};
       const saldo   = S._banco?.[p.id]    || 0;
+      // Dias dirigidos: fonte primária é _folgasDirigidas (estável entre regenerações)
+      // Fallback para _folgas (carregado de Supabase) se não há dirigidas em memória
+      const diasDirigidos = S._folgasDirigidas?.[p.id] || folga.dias || [];
 
       const dayBtns = DIAS.map(d => {
-        const active = (folga.dias || []).includes(d);
+        const active = diasDirigidos.includes(d);
         return `<button class="gh-day-btn${active?' gh-day-btn-on':''}" data-pid="${p.id}" data-day="${d}" title="${DIAS_FULL[d]}">${d.charAt(0)}</button>`;
       }).join('');
 
@@ -702,19 +705,22 @@
       btn.addEventListener('click', () => deletePersonConfirm(btn.dataset.pid));
     });
 
-    // Folga: botões de dia — só atualiza memória, NÃO grava em Supabase
+    // Folga: botões de dia — guardam em S._folgasDirigidas (separado de S._folgas)
+    // S._folgasDirigidas persiste durante toda a sessão e nunca é resetado por loadIncidencias
     list.querySelectorAll('.gh-day-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const pid = btn.dataset.pid;
         const day = btn.dataset.day;
-        if (!S._folgas) S._folgas = {};
-        if (!S._folgas[pid]) S._folgas[pid] = { dias: [] };
-        const dias = S._folgas[pid].dias || [];
+        if (!S._folgasDirigidas) S._folgasDirigidas = {};
+        if (!S._folgasDirigidas[pid]) S._folgasDirigidas[pid] = [];
+        const dias = S._folgasDirigidas[pid];
         const idx = dias.indexOf(day);
         if (idx >= 0) dias.splice(idx, 1); else dias.push(day);
-        S._folgas[pid].dias = dias;
         btn.classList.toggle('gh-day-btn-on', dias.includes(day));
-        // Gravação adiada — só acontece ao confirmar o horário
+        // Também actualizar S._folgas para compatibilidade com confirmSchedule
+        if (!S._folgas) S._folgas = {};
+        if (!S._folgas[pid]) S._folgas[pid] = { dias: [] };
+        S._folgas[pid].dias = [...dias];
       });
     });
 
@@ -1718,14 +1724,14 @@
     S._asignacionCodigos = {};
 
     // ── FOLGAS DIRIGIDAS ──
-    // Recoger días dirigidos por persona (marcados en el Paso 2).
-    // { pid: dia } — solo el primer día marcado cuenta como ancla.
+    // Leer de S._folgasDirigidas — objeto estable que nunca se resetea por loadIncidencias.
+    // { pid: [dia, ...] } — el primer día no-DOM es el ancla para buscar el código.
     const dirigidas = {};
-    if (S._folgas) {
-      Object.entries(S._folgas).forEach(([pid, f]) => {
-        const dias = (f?.dias || []).filter(d => d !== 'DOM');
-        if (dias.length > 0 && active.find(p => p.id === pid)) {
-          dirigidas[pid] = dias[0];
+    if (S._folgasDirigidas) {
+      Object.entries(S._folgasDirigidas).forEach(([pid, dias]) => {
+        const diasValidos = (dias || []).filter(d => d !== 'DOM');
+        if (diasValidos.length > 0 && active.find(p => p.id === pid)) {
+          dirigidas[pid] = diasValidos[0];
         }
       });
     }
@@ -2529,6 +2535,7 @@
 
     S.alerts = []; S.decisions = []; S.sandraDay = {};
     S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {}; S._escenarioActivo = null;
+    // S._folgasDirigidas se conserva entre regeneraciones — no resetear aquí
 
     // Carregar correções aprendidas (por pessoa) e esquemas (por configuração)
     await loadCorreccoes();

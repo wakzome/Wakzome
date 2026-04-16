@@ -4022,12 +4022,12 @@ td                   { font-size: .96rem !important; }
     var seg = new Date(hoje); seg.setDate(hoje.getDate() - diaSemana);
     var dom = new Date(seg);  dom.setDate(seg.getDate() + 6); dom.setHours(23,59,59,999);
 
-    /* Filtra: pendentes, vencimento dentro desta semana */
+    /* Filtra: pendentes, vencimento dentro desta semana OU já vencidas (arrastadas de semanas anteriores) */
     var semana = faturas.filter(function (f) {
       if (f.estado === 'pago' || f.estado === 'nc') return false;
       if (!f.vencimento) return false;
       var d = new Date(f.vencimento); d.setHours(0,0,0,0);
-      return d >= seg && d <= dom;
+      return d <= dom;
     });
 
     var total = semana.length;

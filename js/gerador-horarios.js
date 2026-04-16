@@ -1705,7 +1705,6 @@
     const n = active.filter(p => !fullyAbsent(p.id)).length;
     const l = S.openStores.length;
     const opc = (seed % 2 === 0) ? 1 : 2;
-    // Resolver escenario activo y guardarlo en S para que storeMin/Max/sundayMinFor lo usen
     S._escenarioActivo = getEscenario(n, domCount, l, opc);
     if (S._escenarioActivo) {
       S.decisions.push({ type: 'info', text: `Escenario: n=${n} dom=${domCount} l=${l} opc=${S._escenarioActivo.opc || opc} → combinación: ${S._escenarioActivo.combinacion}` });
@@ -1728,6 +1727,29 @@
     const DIAS_ORD = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
     const DIAS_SEM = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
+    // Contar cuántos códigos dom:true tiene la combinación
+    const nCodigosDomTrue = codigos.filter(c => PATRONES[c]?.dom === true).length;
+
+    // Ampliar personasDOM si es necesario para cubrir todos los códigos dom:true
+    // Se añaden candidatas autónomas por orden de deuda de domingos
+    if (personasDOM.length < nCodigosDomTrue) {
+      const extras = candidatasDOM.filter(p =>
+        !personasDOM.includes(p) && !isAbsent(p.id, 'DOM')
+      );
+      for (const p of extras) {
+        if (personasDOM.length >= nCodigosDomTrue) break;
+        // Asignar a la primera tienda con capacidad
+        const sid = sundayStoresSorted.find(sid =>
+          p.knows.includes(sid) && (filled[sid] || 0) < capDOM[sid]
+        );
+        if (sid) {
+          S.sundayAssigned[sid].push(p.id);
+          filled[sid] = (filled[sid] || 0) + 1;
+          personasDOM.push(p);
+        }
+      }
+    }
+
     // ── FOLGAS DIRIGIDAS: { pid → dia } ──
     const dirigidas = {};
     if (S._folgasDirigidas) {
@@ -1737,14 +1759,11 @@
       });
     }
 
-    // Pool mutable — uma cópia dos códigos da combinação
+    // Pool mutable
     const pool = [...codigos];
     const asignados = {};
 
-    // PASSO 1 — Pessoas com folga dirigida
-    // Cada uma extrai do pool o primeiro código que tenha o seu dia como folga.
-    // Se não houver exacto, extrai o de folga mais próxima.
-    // O código extraído sai do pool e não fica disponível para ninguém mais.
+    // PASSO 1 — Pessoas com folga dirigida extraem o seu código do pool
     Object.entries(dirigidas).forEach(([pid, diaDir]) => {
       if (!active.find(p => p.id === pid)) return;
       let idx = pool.findIndex(cod => PATRONES[cod]?.folga.includes(diaDir));
@@ -1765,28 +1784,42 @@
       if (idx >= 0) { asignados[pid] = pool[idx]; pool.splice(idx, 1); }
     });
 
-    // PASSO 2 — Restantes pessoas (sem folga dirigida)
-    // Códigos com dom:true (1,2) → só para pessoas em personasDOM
-    // Códigos restantes → para pessoas fora de personasDOM
+    // Após o Passo 1: reequilibrar personasDOM
+    // Se uma pessoa de personasDOM recebeu um código dom:false (folga dirigida),
+    // há mais códigos dom:true no pool do que pessoas em comDOM.
+    // Adicionar a próxima candidata autónoma disponível a personasDOM até equilibrar.
+    const nDomTrueNoPool = pool.filter(c => PATRONES[c]?.dom === true).length;
+    const nComDOM = personasDOM.filter(p => !asignados[p.id]).length;
+    if (nDomTrueNoPool > nComDOM) {
+      const faltam = nDomTrueNoPool - nComDOM;
+      const candidatasExtras = candidatasDOM.filter(p =>
+        !personasDOM.includes(p) && !asignados[p.id] && !isAbsent(p.id, 'DOM')
+      );
+      let adicionadas = 0;
+      for (const p of candidatasExtras) {
+        if (adicionadas >= faltam) break;
+        const sid = sundayStoresSorted.find(sid =>
+          p.knows.includes(sid) && (filled[sid] || 0) < capDOM[sid]
+        );
+        if (sid) {
+          S.sundayAssigned[sid].push(p.id);
+          filled[sid] = (filled[sid] || 0) + 1;
+          personasDOM.push(p);
+          adicionadas++;
+        }
+      }
+    }
+    // Códigos dom:true → só para personasDOM
+    // Códigos dom:false → para as restantes
     const livres = active.filter(p => !fullyAbsent(p.id) && !asignados[p.id]);
     const comDOM  = livres.filter(p =>  personasDOM.includes(p));
     const semDOM  = livres.filter(p => !personasDOM.includes(p));
 
-    // Separar pool: códigos dom:true primeiro para comDOM, resto para semDOM
-    const poolDomTrue  = [];
-    const poolDomFalse = [];
-    pool.forEach(cod => {
-      if (PATRONES[cod]?.dom === true) poolDomTrue.push(cod);
-      else poolDomFalse.push(cod);
-    });
-
-    // comDOM recebe primeiro os dom:true, depois dom:false se precisar
     const comDOM_sorted = [...comDOM].sort((a, b) => {
       const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
       const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
       return da !== db ? da - db : a.id.localeCompare(b.id);
     });
-
     const semDOM_sorted = [...semDOM].sort((a, b) => {
       const da = DIAS_SEM.reduce((s, d) => s + (hist[a.id]?.[d]||0), 0);
       const db = DIAS_SEM.reduce((s, d) => s + (hist[b.id]?.[d]||0), 0);
@@ -1795,16 +1828,13 @@
     const off = seed % Math.max(1, semDOM_sorted.length);
     const semDOM_rot = [...semDOM_sorted.slice(off), ...semDOM_sorted.slice(0, off)];
 
-    // Construir pool ordenado para comDOM: dom:true primeiro, depois dom:false
-    const poolParaDOM = [...poolDomTrue, ...poolDomFalse];
-    // Pool para semDOM: só dom:false; se esgotar, dom:true (nunca bloqueia)
-    const poolParaSEM = [...poolDomFalse, ...poolDomTrue];
-
-    // Retirar do pool original conforme se vai consumindo
+    // Asignar: comDOM recibe dom:true primero, semDOM recibe dom:false primero
     const poolMut = [...pool];
 
     comDOM_sorted.forEach(p => {
-      const cod = poolParaDOM.find(c => poolMut.includes(c));
+      // Primero buscar dom:true, luego dom:false
+      let cod = poolMut.find(c => PATRONES[c]?.dom === true);
+      if (cod === undefined) cod = poolMut[0];
       if (cod !== undefined) {
         poolMut.splice(poolMut.indexOf(cod), 1);
         asignados[p.id] = cod;
@@ -1812,9 +1842,9 @@
     });
 
     semDOM_rot.forEach(p => {
-      // Preferir dom:false; só usa dom:true se não houver alternativa
-      let cod = poolParaSEM.find(c => poolMut.includes(c) && PATRONES[c]?.dom !== true);
-      if (cod === undefined) cod = poolMut[0]; // último recurso: o que restar
+      // Primero buscar dom:false, nunca dom:true
+      let cod = poolMut.find(c => PATRONES[c]?.dom !== true);
+      if (cod === undefined) cod = poolMut[0]; // nunca bloquear
       if (cod !== undefined) {
         poolMut.splice(poolMut.indexOf(cod), 1);
         asignados[p.id] = cod;

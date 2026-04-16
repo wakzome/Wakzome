@@ -140,6 +140,109 @@
   const SH_DEFAULT = SH_B;
   const SH_ALT     = SH_A;
 
+  // ── ESCENARIOS — tabla estática generada desde LIBRO_5.xlsx ──
+  // Clave: 'n_dom_l_opc'
+  //   n   = total personas activas
+  //   dom = personas que trabajan el domingo
+  //   l   = número de tiendas abiertas
+  //   opc = variante del modelo (1 o 2)
+  //
+  // Cada escenario define:
+  //   combinacion → códigos de patrón a asignar (en orden, primero los que trabajan DOM)
+  //   tiendas     → MIN/MAX de personas por tienda, en semana y en domingo
+  //
+  // La clave de tienda usa el campo 'short' de STORES en minúsculas.
+  // Si no existe el escenario exacto → fallback al comportamiento anterior.
+  const ESCENARIOS = {
+    '4_0_3_1': { combinacion: '6,7,8,9', tiendas: { avenida: { min:1, max:2, minDom:0, maxDom:0 }, mercado: { min:1, max:1, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '5_0_3_1': { combinacion: '5,6,7,8,9', tiendas: { avenida: { min:2, max:2, minDom:0, maxDom:0 }, mercado: { min:1, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '6_0_3_1': { combinacion: '5,6,7,8,9,10', tiendas: { avenida: { min:2, max:2, minDom:0, maxDom:0 }, mercado: { min:2, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '6_1_3_1': { combinacion: '1,8,6,10,9,7', tiendas: { avenida: { min:2, max:2, minDom:1, maxDom:1 }, mercado: { min:1, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_0_3_1': { combinacion: '5,6,7,8,9,10,6', tiendas: { avenida: { min:2, max:3, minDom:0, maxDom:0 }, mercado: { min:2, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_0_4_1': { combinacion: '5,6,7,8,9,10,6', tiendas: { avenida: { min:2, max:2, minDom:0, maxDom:0 }, mercado: { min:1, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_1_3_1': { combinacion: '1,6,7,8,9,10,6', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_1_4_1': { combinacion: '1,6,7,8,9,10,6', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:1, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_2_3_1': { combinacion: '1,2,7,8,9,10,6', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_2_4_1': { combinacion: '1,2,7,8,9,10,6', tiendas: { avenida: { min:2, max:2, minDom:1, maxDom:1 }, mercado: { min:1, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '7_3_3_1': { combinacion: '1,1,2,6,7,9,10', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:1, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '7_3_4_1': { combinacion: '1,1,2,6,7,9,10', tiendas: { avenida: { min:2, max:2, minDom:1, maxDom:1 }, mercado: { min:1, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_0_3_1': { combinacion: '5,6,7,8,9,10,6,7', tiendas: { avenida: { min:3, max:3, minDom:0, maxDom:0 }, mercado: { min:2, max:3, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_0_4_1': { combinacion: '5,6,7,8,9,10,6,7', tiendas: { avenida: { min:2, max:3, minDom:0, maxDom:0 }, mercado: { min:2, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_1_3_1': { combinacion: '1,8,6,10,6,7,7,9', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:3, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_1_4_1': { combinacion: '1,8,6,10,6,7,7,9', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:0, maxDom:0 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_2_3_1': { combinacion: '1,2,6,7,8,9,10,7', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_2_4_1': { combinacion: '1,2,6,7,8,9,10,7', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_3_3_1': { combinacion: '1,2,2,7,8,10,10,7', tiendas: { avenida: { min:3, max:4, minDom:1, maxDom:1 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:2, minDom:1, maxDom:1 } } },
+    '8_3_4_1': { combinacion: '1,2,2,7,8,10,10,7', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:2, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_4_3_1': { combinacion: '1,1,2,2,7,7,10,10', tiendas: { avenida: { min:3, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '8_4_4_1': { combinacion: '1,1,2,2,7,7,10,10', tiendas: { avenida: { min:2, max:2, minDom:2, maxDom:2 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '8_4_4_2': { combinacion: '1,1,2,2,7,7,10,10', tiendas: { avenida: { min:2, max:2, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '8_5_3_1': { combinacion: '1,1,2,2,2,7,7,10', tiendas: { avenida: { min:2, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:3, minDom:2, maxDom:2 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '8_5_4_1': { combinacion: '1,1,2,2,2,7,7,10', tiendas: { avenida: { min:2, max:3, minDom:2, maxDom:2 }, mercado: { min:1, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '9_2_3_1': { combinacion: '1,8,2,10,6,7,7,9,10', tiendas: { avenida: { min:3, max:4, minDom:1, maxDom:1 }, mercado: { min:3, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '9_2_4_1': { combinacion: '1,8,2,10,6,7,7,9,10', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:0, maxDom:0 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '9_3_3_1': { combinacion: '1,1,2,10,6,7,7,9,10', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:3, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '9_3_4_1': { combinacion: '1,1,2,10,6,7,7,9,10', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '9_4_3_1': { combinacion: '1,1,2,2,6,7,7,10,10', tiendas: { avenida: { min:3, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '9_4_4_1': { combinacion: '1,1,2,2,6,7,7,10,10', tiendas: { avenida: { min:2, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '9_4_4_2': { combinacion: '1,1,2,2,6,7,7,10,10', tiendas: { avenida: { min:2, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '9_5_4_1': { combinacion: '1,1,2,2,7,7,10,10,2', tiendas: { avenida: { min:2, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:2, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '9_5_3_1': { combinacion: '1,1,2,2,7,7,10,10,2', tiendas: { avenida: { min:3, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:3, minDom:2, maxDom:2 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '10_3_4_1': { combinacion: '1,1,2,10,6,7,8,9,10,7', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '10_4_4_1': { combinacion: '1,1,2,2,7,7,10,10,6,7', tiendas: { avenida: { min:3, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '10_4_4_2': { combinacion: '1,1,2,2,7,7,10,10,6,7', tiendas: { avenida: { min:3, max:3, minDom:1, maxDom:1 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '10_5_3_1': { combinacion: '1,1,2,2,7,7,10,10,6,1', tiendas: { avenida: { min:3, max:4, minDom:2, maxDom:2 }, mercado: { min:2, max:3, minDom:2, maxDom:2 }, shana: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '10_5_4_1': { combinacion: '1,1,2,2,7,7,10,10,6,1', tiendas: { avenida: { min:3, max:3, minDom:2, maxDom:2 }, mercado: { min:2, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '11_4_4_1': { combinacion: '1,1,1,2,6,7,6,7,10,10,9', tiendas: { avenida: { min:3, max:4, minDom:2, maxDom:2 }, mercado: { min:3, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:0, maxDom:0 } } },
+    '11_4_4_2': { combinacion: '1,1,1,2,6,7,6,7,10,10,9', tiendas: { avenida: { min:3, max:4, minDom:1, maxDom:1 }, mercado: { min:3, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '11_5_4_1': { combinacion: '1,1,2,2,7,7,10,10,6,1,7', tiendas: { avenida: { min:3, max:4, minDom:2, maxDom:2 }, mercado: { min:3, max:3, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+    '12_4_4_1': { combinacion: '1,1,2,2,6,7,7,7,8,10,10,10', tiendas: { avenida: { min:4, max:4, minDom:2, maxDom:2 }, mercado: { min:3, max:4, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:2, minDom:0, maxDom:0 } } },
+    '12_4_4_2': { combinacion: '1,1,2,2,6,7,7,7,8,10,10,10', tiendas: { avenida: { min:4, max:4, minDom:1, maxDom:1 }, mercado: { min:3, max:4, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:2, minDom:1, maxDom:1 } } },
+    '12_5_4_1': { combinacion: '1,1,1,2,2,6,7,7,7,10,10,10', tiendas: { avenida: { min:4, max:4, minDom:2, maxDom:2 }, mercado: { min:3, max:4, minDom:1, maxDom:1 }, shana: { min:1, max:1, minDom:1, maxDom:1 }, maxx: { min:1, max:1, minDom:1, maxDom:1 } } },
+  };
+
+  // Busca el escenario por (n, dom, l, opc).
+  // — Primero intenta opc exacto
+  // — Si no existe opc=2, cae a opc=1
+  // — Si no existe l, intenta l-1 (tienda sin personal ese día)
+  // — Si nada coincide → null (fallback al comportamiento anterior)
+  // La clave de tienda se resuelve por el campo 'short' de STORES en minúsculas.
+  function getEscenario(n, dom, l, opc) {
+    opc = opc || 1;
+    const tryKey = (n, dom, l, o) => ESCENARIOS[`${n}_${dom}_${l}_${o}`] || null;
+    return tryKey(n,dom,l,opc)
+        || tryKey(n,dom,l,1)
+        || (l > 3 ? tryKey(n,dom,l-1,opc) || tryKey(n,dom,l-1,1) : null)
+        || null;
+  }
+
+  // Resuelve la clave de tienda en ESCENARIOS a partir del store id.
+  // Usa el campo 'short' de STORES en minúsculas como clave.
+  function _escStoreKey(sid) {
+    return (ST(sid)?.short || sid || '').toLowerCase().split(' ')[0];
+  }
+
+  // MIN semanal del escenario activo para una tienda. null → usar storeMin manual.
+  function escenarioMin(esc, sid) {
+    if (!esc) return null;
+    const v = esc.tiendas[_escStoreKey(sid)];
+    return v != null ? v.min : null;
+  }
+
+  // MAX semanal del escenario activo para una tienda. null → usar storeMax manual.
+  function escenarioMax(esc, sid) {
+    if (!esc) return null;
+    const v = esc.tiendas[_escStoreKey(sid)];
+    return v != null ? v.max : null;
+  }
+
+  // MIN dominical del escenario activo para una tienda. null → usar sundayMinFor manual.
+  function escenarioMinDom(esc, sid) {
+    if (!esc) return null;
+    const v = esc.tiendas[_escStoreKey(sid)];
+    return v != null ? v.minDom : null;
+  }
+
   // Modos de abertura por loja (configurados no Passo 3)
   // 'standard'  → 10-19 (B/A)
   // 'early'     → 09-18/19 (D/B)  +2h manhã
@@ -249,10 +352,17 @@
     return fromI === 0 && toI === 6;
   }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
-  function storeMin(sid) { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
+  function storeMin(sid) {
+    // Prioridad: escenario activo → manual → 1
+    const fromEsc = escenarioMin(S._escenarioActivo, sid);
+    if (fromEsc != null) return fromEsc;
+    return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1;
+  }
   function storeMax(sid) {
+    // Prioridad: escenario activo → manual → prioridad de tienda → Infinity
+    const fromEsc = escenarioMax(S._escenarioActivo, sid);
+    if (fromEsc != null) return fromEsc;
     // Shana y Maxx (priority >= 3) tienen máximo estructural de 1 persona — inamovible.
-    // El usuario no puede sobrescribir este límite desde el Paso 3.
     const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
     if (storePriority >= 3) return 1;
     // Para Avenida y Mercado: respetar el máximo configurado manualmente, o sin límite.
@@ -1100,6 +1210,8 @@
 
       // Shana y Maxx (priority >= 3): máximo estructural de 1, no configurable
       const isSmallStore = (STORES.find(s => s.id === st.id)?.priority ?? 9) >= 3;
+      // Si hay escenario activo para esta tienda, los min/max son automáticos
+      const nActivo = PEOPLE.filter(p => !fullyAbsent(p.id)).length;
 
       return `
       <div class="gh-sc-row ${!open ? 'closed' : ''}" id="gh-scr-${st.id}">
@@ -1112,12 +1224,12 @@
             : `<div class="gh-sc-minmax">
             <div class="gh-sc-mm-field">
               <span class="gh-sc-mm-label">mín</span>
-              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" placeholder="—" value="${savedMin > 1 ? savedMin : ''}">
+              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" placeholder="Auto" value="${savedMin > 1 ? savedMin : ''}">
             </div>
             <div class="gh-sc-mm-sep">·</div>
             <div class="gh-sc-mm-field">
               <span class="gh-sc-mm-label">máx</span>
-              <input type="number" class="gh-sc-mm-inp" id="gh-max-${st.id}" data-store="${st.id}" min="1" max="20" placeholder="—" value="${savedMax}">
+              <input type="number" class="gh-sc-mm-inp" id="gh-max-${st.id}" data-store="${st.id}" min="1" max="20" placeholder="Auto" value="${savedMax}">
             </div>
           </div>`}
         </div>
@@ -1303,15 +1415,19 @@
   // Avenida y Mercado: domingo puede operar con max(1, min_semanal - 1).
   // Resto: mínimo igual al semanal (o 1 si no configurado).
   // Returns workers who can realistically cover a store on Sunday.
-  // Priority: mobile/no-fixed-store first, fixed-store workers last.
+  // Con escenario activo: acepta también personas móviles (mobile=true) aunque no sean canAlone,
+  // ya que el escenario garantiza que irán acompañadas.
+  // Sin escenario: comportamiento original (solo canAlone).
   function sundayCandidatesFor(sid, active) {
     return active.filter(p => {
       if (isAbsent(p.id, 'DOM')) return false;
       if (!p.knows.includes(sid)) return false;
-      if (!p.canAlone) return false; // autonoma_h e nao_autonoma não ficam sozinhas o dia todo
+      // Con escenario: personas móviles también son candidatas (van acompañadas)
+      if (S._escenarioActivo) return p.canAlone || p.mobile;
+      // Sin escenario: comportamiento original
+      if (!p.canAlone) return false;
       return true;
     }).sort((a, b) => {
-      // Personas sin tienda fija o cuya tienda fija es sid: primero
       const aFixed = (a.store && a.store !== sid) ? 1 : 0;
       const bFixed = (b.store && b.store !== sid) ? 1 : 0;
       return aFixed - bFixed;
@@ -1336,6 +1452,9 @@
   // Lojas com priority <= 2 (as mais importantes: Avenida e Mercado) podem operar
   // ao domingo com 1 pessoa a menos do que o mínimo semanal — definido pelo campo priority da BD.
   function sundayMinFor(sid) {
+    // Prioridad: minDom del escenario activo → cálculo por prioridad → 1
+    const fromEsc = escenarioMinDom(S._escenarioActivo, sid);
+    if (fromEsc != null) return fromEsc;
     const weekMin = storeMin(sid) || 1;
     const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
     if (storePriority <= 2) return Math.max(1, weekMin - 1);
@@ -1386,8 +1505,13 @@
     } catch(e) { console.warn('Erro ao carregar historial:', e); return {}; }
   }
 
-  // ── COMBINACIONES — busca la combinación para n+dom en Supabase ──
-  async function loadCombinacion(n, dom) {
+  // ── COMBINACIONES — busca la combinación para n+dom+l ──
+  // Prioridad: ESCENARIOS (estático) → Supabase gh_combinaciones (fallback)
+  async function loadCombinacion(n, dom, l, opc) {
+    // 1. Buscar en ESCENARIOS estático (más completo: incluye l y opc)
+    const esc = getEscenario(n, dom, l, opc);
+    if (esc?.combinacion) return esc.combinacion;
+    // 2. Fallback: Supabase gh_combinaciones (solo n+dom, sin l)
     const sb = getSupabase(); if (!sb) return null;
     try {
       const { data } = await sb.from('gh_combinaciones')
@@ -1533,9 +1657,18 @@
 
     // 5. Combinación para n personas y domCount en domingo
     const n = active.filter(p => !fullyAbsent(p.id)).length;
-    let combinacion = await loadCombinacion(n, domCount);
+    const l = S.openStores.length;
+    const opc = (seed % 2 === 0) ? 1 : 2;
+    // Resolver escenario activo y guardarlo en S para que storeMin/Max/sundayMinFor lo usen
+    S._escenarioActivo = getEscenario(n, domCount, l, opc);
+    if (S._escenarioActivo) {
+      S.decisions.push({ type: 'info', text: `Escenario: n=${n} dom=${domCount} l=${l} opc=${S._escenarioActivo.opc || opc} → combinación: ${S._escenarioActivo.combinacion}` });
+    } else {
+      console.warn(`Sin escenario para n=${n} dom=${domCount} l=${l}`);
+    }
+    let combinacion = await loadCombinacion(n, domCount, l, opc);
     if (!combinacion) {
-      console.warn(`No hay combinación para n=${n} dom=${domCount}`);
+      console.warn(`No hay combinación para n=${n} dom=${domCount} l=${l}`);
       S.alerts.push({ type: 'amber', text: `Sem combinação definida para ${n} pessoas e ${domCount} ao domingo.` });
       combinacion = [...Array(n)].map((_, i) => i < domCount ? (i % 2 === 0 ? 1 : 2) : [6,7,8,9,10][i % 5]).join(',');
     }
@@ -2272,7 +2405,7 @@
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
 
     S.alerts = []; S.decisions = []; S.sandraDay = {};
-    S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
+    S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {}; S._escenarioActivo = null;
 
     // Carregar correções aprendidas (por pessoa) e esquemas (por configuração)
     await loadCorreccoes();

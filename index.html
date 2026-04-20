@@ -236,6 +236,22 @@ body {
   transition: color .2s, border-color .2s, background .2s;
 }
 #rotulos-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
+#etiquetas-link {
+  display: inline-block;
+  padding: 6px 16px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: uppercase;
+  color: #000;
+  text-decoration: none;
+  letter-spacing: .04em;
+  border: 1.5px solid #ccc;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+#etiquetas-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
 #processamento-link {
   display: inline-block;
   padding: 6px 16px;
@@ -339,6 +355,79 @@ body {
 .recibos-nota p:last-child { margin-bottom: 0; }
 .recibos-nota strong { color: #000; font-weight: bold; display: block; margin-bottom: 6px; font-size: .85rem; }
 @media (max-width: 1024px) { .recibos-nota { display: none; } }
+
+/* ─── ETIQUETAS OVERLAY ─── */
+#etiquetas-overlay {
+  display: none; position: fixed; inset: 0;
+  background: #fff; z-index: 200;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+#etiquetas-overlay.open { display: flex; }
+#etiquetas-overlay.visible { opacity: 1; }
+#etiquetas-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#etiquetas-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#etiquetas-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+#etiquetas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
+#etiquetas-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 36px 16px 60px;
+  font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+#etiquetas-form-wrap { width: 100%; max-width: 600px; }
+#etiquetas-form-wrap .et-section-title {
+  font-size: .72rem; font-weight: bold; text-transform: uppercase;
+  letter-spacing: .1em; margin-bottom: 14px; opacity: .5;
+}
+.et-price-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.et-price-row label { font-size: .82rem; font-weight: bold; min-width: 56px; }
+.et-price-input, .et-qty-input {
+  padding: 8px 12px; font-size: 1rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 10px;
+  outline: none; transition: border-color .2s; background: #fff;
+}
+.et-price-input { width: 120px; }
+.et-qty-input   { width: 80px; }
+.et-price-input:focus, .et-qty-input:focus { border-color: #555; }
+.et-sep { font-size: .78rem; font-weight: bold; opacity: .4; white-space: nowrap; }
+.et-total-badge { font-size: .72rem; font-weight: bold; opacity: .55; min-width: 60px; text-align: right; }
+#et-summary-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 18px 0 22px; padding: 12px 16px; border-radius: 12px;
+  background: #f7f7f7; border: 1.5px solid #e6e6e6;
+}
+#et-summary-row span { font-size: .88rem; font-weight: bold; }
+.et-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.et-btn {
+  padding: 10px 26px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
+  cursor: pointer; border-radius: 10px; border: 1.5px solid #ccc;
+  background: #fff; transition: background .15s, color .15s, border-color .15s;
+}
+.et-btn:hover { background: #f5f5f5; border-color: #555; }
+.et-btn.primary { background: #000 !important; color: #fff !important; border-color: #000 !important; }
+.et-btn.primary:hover { background: #333 !important; border-color: #333 !important; }
+.et-btn:disabled { opacity: .4; cursor: not-allowed; }
+#et-status { margin-top: 14px; font-size: .82rem; font-weight: bold; min-height: 20px; }
 
 /* ─── AGENDA OVERLAY ─── */
 #agenda-overlay {
@@ -2896,6 +2985,7 @@ td                   { font-size: .96rem !important; }
 <div id="main-header">
   <div id="main-nav">
     <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
+    <a id="etiquetas-link" href="#" onclick="openEtiquetasOverlay(); return false;">ETIQUETAS</a>
   </div>
   <div id="main-header-center" class="reveal-item">
     <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
@@ -3396,6 +3486,71 @@ td                   { font-size: .96rem !important; }
       </div>
     </div>
     <div id="recibos-overlay-error" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- ETIQUETAS OVERLAY -->
+<div id="etiquetas-overlay">
+  <div id="etiquetas-overlay-bar">
+    <button id="etiquetas-overlay-back" onclick="closeEtiquetasOverlay()">← voltar</button>
+    <div id="etiquetas-overlay-title">etiquetas de preços</div>
+  </div>
+  <div id="etiquetas-overlay-content">
+    <div id="etiquetas-form-wrap">
+      <div class="et-section-title">configurar preços e quantidades</div>
+
+      <div class="et-price-row" id="et-row-1">
+        <label>Preço 1</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-1">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-1">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-1">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-2">
+        <label>Preço 2</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-2">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-2">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-2">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-3">
+        <label>Preço 3</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-3">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-3">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-3">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-4">
+        <label>Preço 4</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-4">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-4">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-4">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-5">
+        <label>Preço 5</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-5">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-5">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-5">—</span>
+      </div>
+
+      <div id="et-summary-row">
+        <span id="et-summary-text">total: 0 etiquetas · 0 páginas</span>
+        <span id="et-pages-text"></span>
+      </div>
+
+      <div class="et-btn-row">
+        <button class="et-btn" id="et-preview-btn" onclick="etiquetasGerar(false)">pré-visualizar</button>
+        <button class="et-btn primary" id="et-download-btn" onclick="etiquetasGerar(true)">⬇ descarregar PDF</button>
+      </div>
+      <div id="et-status"></div>
+    </div>
   </div>
 </div>
 
@@ -4204,6 +4359,131 @@ td                   { font-size: .96rem !important; }
   };
   window.closeRecibosOverlay = function () {
     var overlay = document.getElementById('recibos-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    setTimeout(function () { overlay.classList.remove('open'); }, 460);
+  };
+})();
+</script>
+<script>
+/* ══ ETIQUETAS DE PREÇOS ══ */
+(function () {
+  var COLS = 5, ROWS = 13, PER_PAGE = 65;
+
+  function fmtPrice(v) {
+    return parseFloat(v).toFixed(2).replace('.', ',') + '€';
+  }
+
+  function getEntries() {
+    var entries = [];
+    for (var i = 1; i <= 5; i++) {
+      var priceEl = document.getElementById('et-price-' + i);
+      var qtyEl   = document.getElementById('et-qty-' + i);
+      var p = parseFloat(priceEl && priceEl.value);
+      var q = parseInt(qtyEl && qtyEl.value, 10);
+      if (isFinite(p) && p > 0 && isFinite(q) && q > 0) {
+        entries.push({ price: p, qty: q });
+      }
+    }
+    return entries;
+  }
+
+  function updateSummary() {
+    for (var i = 1; i <= 5; i++) {
+      var priceEl = document.getElementById('et-price-' + i);
+      var qtyEl   = document.getElementById('et-qty-' + i);
+      var totEl   = document.getElementById('et-tot-' + i);
+      var p = parseFloat(priceEl && priceEl.value);
+      var q = parseInt(qtyEl && qtyEl.value, 10);
+      if (totEl) totEl.textContent = (isFinite(p) && p > 0 && isFinite(q) && q > 0) ? q + ' und.' : '—';
+    }
+    var entries = getEntries();
+    var total = entries.reduce(function (a, e) { return a + e.qty; }, 0);
+    var pages = total > 0 ? Math.ceil(total / PER_PAGE) : 0;
+    var sumEl = document.getElementById('et-summary-text');
+    if (sumEl) sumEl.textContent = 'total: ' + total + ' etiqueta' + (total !== 1 ? 's' : '') + ' · ' + pages + ' página' + (pages !== 1 ? 's' : '');
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    for (var i = 1; i <= 5; i++) {
+      var pe = document.getElementById('et-price-' + i);
+      var qe = document.getElementById('et-qty-' + i);
+      if (pe) pe.addEventListener('input', updateSummary);
+      if (qe) qe.addEventListener('input', updateSummary);
+    }
+    updateSummary();
+  });
+
+  window.etiquetasGerar = async function (download) {
+    var entries = getEntries();
+    if (!entries.length) {
+      document.getElementById('et-status').textContent = '⚠️ Introduza pelo menos um preço e quantidade.';
+      return;
+    }
+    var statusEl = document.getElementById('et-status');
+    statusEl.textContent = 'a gerar PDF…';
+    try {
+      var PDFLib = window.PDFLib;
+      var PDFDocument = PDFLib.PDFDocument;
+      var rgb = PDFLib.rgb;
+      var StandardFonts = PDFLib.StandardFonts;
+      var pdfDoc = await PDFDocument.create();
+      var font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      var labels = [];
+      entries.forEach(function (e) {
+        for (var k = 0; k < e.qty; k++) labels.push(fmtPrice(e.price));
+      });
+      var totalPages = Math.ceil(labels.length / PER_PAGE);
+      var idx = 0;
+      var pageW = 595.28, pageH = 841.89;
+      var marginX = 20, marginY = 20;
+      var cellW = (pageW - marginX * 2) / COLS;
+      var cellH = (pageH - marginY * 2) / ROWS;
+      var fontSize = 28;
+      for (var p = 0; p < totalPages; p++) {
+        var page = pdfDoc.addPage([pageW, pageH]);
+        for (var row = 0; row < ROWS; row++) {
+          for (var col = 0; col < COLS; col++) {
+            if (idx >= labels.length) break;
+            var text = labels[idx++];
+            var tw = font.widthOfTextAtSize(text, fontSize);
+            var x = marginX + col * cellW + (cellW - tw) / 2;
+            var y = pageH - marginY - (row + 1) * cellH + (cellH - fontSize * 0.75) / 2;
+            page.drawText(text, { x: x, y: y, size: fontSize, font: font, color: rgb(0, 0, 0) });
+          }
+        }
+      }
+      var pdfBytes = await pdfDoc.save();
+      var blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob);
+      if (download) {
+        var a = document.createElement('a');
+        a.href = url; a.download = 'etiquetas_precos.pdf'; a.click();
+        statusEl.textContent = '✓ PDF descarregado.';
+      } else {
+        window.open(url, '_blank');
+        statusEl.textContent = '✓ PDF aberto em nova aba.';
+      }
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = '⚠️ Erro ao gerar PDF: ' + err.message;
+    }
+  };
+
+  window.openEtiquetasOverlay = function () {
+    var overlay = document.getElementById('etiquetas-overlay');
+    if (!overlay) return;
+    overlay.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    });
+    var s = document.getElementById('et-status');
+    if (s) s.textContent = '';
+    updateSummary();
+  };
+
+  window.closeEtiquetasOverlay = function () {
+    var overlay = document.getElementById('etiquetas-overlay');
     if (!overlay) return;
     overlay.classList.remove('visible');
     setTimeout(function () { overlay.classList.remove('open'); }, 460);

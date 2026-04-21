@@ -1623,7 +1623,6 @@
   function getEsquema(sid, day, n) {
     return _aprEsquemas[`${sid}|||${day}|||${n}`] || null;
   }
-  async function assignFolgas(active, seed) {
 
   // ══ MOTOR NOVO — gh_horarios_base (Libro5.xlsx) ══
   let HORARIOS_BASE = [];
@@ -1647,11 +1646,11 @@
 
   function findBestScenario(n, n_dom, lojas, opc) {
     const has = (n2,d2,l2,o2) => HORARIOS_BASE.some(r => r.n===n2 && r.n_dom===d2 && r.lojas===l2 && r.opc===o2);
-    if (has(n, n_dom, lojas, opc))        return { n, n_dom, lojas, opc };
+    if (has(n, n_dom, lojas, opc))            return { n, n_dom, lojas, opc };
     if (opc !== 1 && has(n, n_dom, lojas, 1)) return { n, n_dom, lojas, opc: 1 };
-    if (lojas > 3)  { const fb = findBestScenario(n, n_dom, lojas-1, opc); if (fb) return fb; }
-    if (n_dom > 0)  { const fb = findBestScenario(n, n_dom-1, lojas, opc); if (fb) return fb; }
-    if (n > 4)      { const fb = findBestScenario(n-1, Math.min(n_dom, n-2), lojas, opc); if (fb) return fb; }
+    if (lojas > 3) { const fb = findBestScenario(n, n_dom, lojas-1, opc); if (fb) return fb; }
+    if (n_dom > 0) { const fb = findBestScenario(n, n_dom-1, lojas, opc); if (fb) return fb; }
+    if (n > 4)     { const fb = findBestScenario(n-1, Math.min(n_dom, n-2), lojas, opc); if (fb) return fb; }
     return null;
   }
 
@@ -1673,9 +1672,6 @@
     return STORES.find(s => (s.short || '').toUpperCase() === short.toUpperCase())?.id || null;
   }
 
-  // Mapeia pessoas reais → slots da tabela
-  // Agrupa slots por home_loja. Para cada loja, seleciona candidatos que a conhecem,
-  // preferindo tienda fija > efectiva > quem conhece mais lojas do slot > mais antiga.
   function mapPeopleToSlots(active, rotacaoRows) {
     const slotNums = [...new Set(rotacaoRows.map(r => r.pessoa_slot))]
       .sort((a, b) => parseInt(a.replace('Pessoa ','')) - parseInt(b.replace('Pessoa ','')));
@@ -1698,7 +1694,6 @@
     });
 
     const mapping = {}, used = new Set();
-
     Object.keys(slotsByLoja)
       .sort((a, b) => (LOJA_ORDER.indexOf(a) < 0 ? 99 : LOJA_ORDER.indexOf(a)) - (LOJA_ORDER.indexOf(b) < 0 ? 99 : LOJA_ORDER.indexOf(b)))
       .forEach(lojaShort => {
@@ -1708,26 +1703,21 @@
           const cands = active
             .filter(p => !used.has(p.id) && (!homeSid || p.knows.includes(homeSid)))
             .sort((a, b) => {
-              // 1. Tienda fija = home_loja
               const af = (a.store === homeSid && homeSid) ? 0 : 1;
               const bf = (b.store === homeSid && homeSid) ? 0 : 1;
               if (af !== bf) return af - bf;
-              // 2. Efectiva
               const ae = a.autonomia === 'efectiva' ? 0 : 1;
               const be = b.autonomia === 'efectiva' ? 0 : 1;
               if (ae !== be) return ae - be;
-              // 3. Conhece mais lojas do slot (para slots móveis)
               const ak = visitSids.filter(sid => a.knows.includes(sid)).length;
               const bk = visitSids.filter(sid => b.knows.includes(sid)).length;
               if (ak !== bk) return bk - ak;
-              // 4. Mais antiga
               return new Date(a.start || '2099') - new Date(b.start || '2099');
             });
           if (cands[0]) { mapping[slot] = cands[0]; used.add(cands[0].id); }
         });
       });
 
-    // Fallback: slots sem candidato → qualquer pessoa livre
     slotNums.forEach(slot => {
       if (!mapping[slot]) {
         const free = active.find(p => !used.has(p.id));
@@ -1750,12 +1740,8 @@
     return score;
   }
 
-  // Aplica a rotação ao S.schedule.
-  // Ausências têm prioridade. A tabela define loja+folga por dia.
-  // Se a pessoa não conhece a loja atribuída → usa loja fixa se aberta, senão folga.
   function applyRotacao(rotacaoRows, mapping, active) {
     const COL = { SEG:'seg', TER:'ter', QUA:'qua', QUI:'qui', SEX:'sex', SAB:'sab', DOM:'dom' };
-
     active.forEach(p => {
       S.schedule[p.id] = {};
       DAYS.forEach(day => { S.schedule[p.id][day] = { type:'na', shift:null, store:null }; });
@@ -1770,16 +1756,12 @@
       if (!person) return;
       const row = bySlot[slot]; if (!row) return;
       const abs = absOf(person.id);
-
       DAYS.forEach(day => {
-        // Ausência tem prioridade absoluta
         if (abs && isAbsent(person.id, day)) {
           S.schedule[person.id][day] = { type: abs.type === 'ferias' ? 'ferias' : 'folga', shift:null, store:null };
           return;
         }
-
         const val = row[COL[day]];
-
         if (val === 'FOLGA') {
           S.schedule[person.id][day] = { type:'folga', shift:null, store:null };
           if (day !== 'DOM') {
@@ -1788,14 +1770,10 @@
           }
           return;
         }
-
-        // Resolver loja
         let store = resolveStoreByShort(val);
-        // Se não conhece ou loja fechada → loja fixa se aberta
         if (store && (!person.knows.includes(store) || !storeOpen(store, day))) {
           store = (person.store && storeOpen(person.store, day)) ? person.store : null;
         }
-
         if (store) {
           S.schedule[person.id][day] = { type:'work', shift: storeBaseShift(store), store };
           if (day === 'DOM') {
@@ -1808,7 +1786,6 @@
       });
     });
 
-    // Pessoas sem slot: ausentes → férias/folga; disponíveis → loja fixa se aberta
     active.forEach(p => {
       if (Object.values(mapping).some(m => m?.id === p.id)) return;
       const abs = absOf(p.id);
@@ -1834,7 +1811,6 @@
     if (S.domPessoas && S.domPessoas > 0) n_dom = S.domPessoas;
     n_dom = Math.min(n_dom, active.filter(p => p.canAlone && !isAbsent(p.id,'DOM')).length);
     const lojas = S.openStores.length;
-
     const scenario = findBestScenario(n, n_dom, lojas, opc || 1);
     if (!scenario) {
       S.alerts.push({ type:'red', text: `Sem cenário para ${n} pessoas, ${n_dom} ao domingo, ${lojas} lojas.` });
@@ -1843,11 +1819,9 @@
     if (scenario.n !== n || scenario.n_dom !== n_dom || scenario.lojas !== lojas)
       S.alerts.push({ type:'amber', text: `Cenário ajustado → n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}` });
     S.decisions.push({ type:'info', text: `Cenário: n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}` });
-
     const rotacoes = getRotacoes(scenario);
     const rotNums = Object.keys(rotacoes).map(Number).sort((a,b) => a-b);
     if (!rotNums.length) { S.alerts.push({ type:'red', text:'Sem rotações disponíveis.' }); return false; }
-
     const hist = await loadHistorial();
     const dirigidas = {};
     if (S._folgasDirigidas) {
@@ -1856,7 +1830,6 @@
         if (v.length > 0 && active.find(p => p.id === pid)) dirigidas[pid] = v[0];
       });
     }
-
     const regenOffset = S._regenSeed || 0;
     let bestScore = Infinity, bestRot = rotNums[0], bestMapping = null;
     rotNums.forEach((rotNum, idx) => {
@@ -1866,11 +1839,9 @@
       const score = scoreRotacao(rows, mapping, hist, dirigidas, idxOffset);
       if (score < bestScore) { bestScore = score; bestRot = rotNum; bestMapping = mapping; }
     });
-
     S.decisions.push({ type:'info', text: `Rotação ${bestRot} (score=${bestScore}, regen=${regenOffset}).` });
     S._rotacaoAtual = bestRot; S._scenarioAtual = scenario;
     applyRotacao(rotacoes[bestRot], bestMapping, active);
-
     DAYS.forEach(day => {
       const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work');
       if (workers.length) assignIntervalShiftsForDay(day, workers);
@@ -1900,24 +1871,20 @@
     overlay.querySelector('#gh-opc2').addEventListener('click', () => { document.body.removeChild(overlay); onSelect(2); });
   }
 
-  // ── GENERATE — novo motor ──
   async function generate() {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     S.alerts = []; S.decisions = []; S.sandraDay = {};
     S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
     S._scenarioAtual = null; S._rotacaoAtual = null;
-
     await loadCorreccoes();
     await loadEsquemas();
     S._openDaysSnapshot = JSON.parse(JSON.stringify(S.openDays));
     S._openStoresSnapshot = [...S.openStores];
-
     const n = active.length;
     let n_dom = S.openStores.filter(id => S.openDays[id]?.includes('DOM')).length;
     if (S.domPessoas && S.domPessoas > 0) n_dom = S.domPessoas;
     n_dom = Math.min(n_dom, active.filter(p => p.canAlone && !isAbsent(p.id,'DOM')).length);
     const lojas = S.openStores.length;
-
     const doGenerate = async (opc) => {
       const ok = await assignFromTable(active, opc);
       if (!ok) { showCoverageBlocker([], active); return; }
@@ -1933,7 +1900,6 @@
       } catch(e) {}
       showSchedule(active);
     };
-
     if (hasBothOpc(n, n_dom, lojas)) showOpcSelector(opc => doGenerate(opc));
     else await doGenerate(1);
   }

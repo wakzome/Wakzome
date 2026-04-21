@@ -167,7 +167,8 @@
       storeMode: {}, domPessoas: null,
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
-      schedule: {}, alerts: [], decisions: []
+      schedule: {}, alerts: [], decisions: [],
+      _personStore: {}
     };
   }
   let S = blank();
@@ -1254,8 +1255,9 @@
 
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
-      // Solo personas explícitamente asignadas a esta tienda (work con store === st.id)
+      // Personas asignadas explícitamente a esta tienda (work) O añadidas via +
       const inSection = active.filter(p =>
+        (S._personStore?.[p.id] === st.id) ||
         DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === st.id)
       );
       // Siempre mostrar la tienda aunque esté vacía
@@ -1433,19 +1435,10 @@
     if (mode === 'add') {
       if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
       const { pid, sid } = _addCtx;
-      const days = [...document.querySelectorAll('.gh-add-day-chk:checked')].map(cb => cb.value);
-      if (!days.length) { alert('Seleccione pelo menos um dia.'); return; }
-      // Ensure store is in openStores and days are registered so renderer shows work correctly
-      if (!S.openStores.includes(sid)) S.openStores.push(sid);
-      if (!S.openDays[sid]) S.openDays[sid] = [];
-      days.forEach(day => {
-        if (!S.openDays[sid].includes(day)) S.openDays[sid].push(day);
-        S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
-      });
+      // Add mode: person was already added via click in openAddPersonToStore
+      // Nothing to do here — just close
       cleanupModalExtras();
       closeModal();
-      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-      showSchedule(active);
       return;
     }
 
@@ -1485,48 +1478,75 @@
     document.getElementById('gh-me-conf').style.display = 'none';
     document.getElementById('gh-me-type').style.display = 'none';
 
+    // Only show people not already in this store
+    const alreadyIn = new Set(
+      active.filter(p => DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === sid)).map(p => p.id)
+    );
+    const candidates = active.filter(p => !alreadyIn.has(p.id));
+
     const bdy = modal.querySelector('.gh-modal-bdy');
     let injected = bdy.querySelector('#gh-add-person-list');
     if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
 
     injected.innerHTML = `
-      <div style="font-size:.7rem;color:#888;margin-bottom:8px;">Escolha a pessoa:</div>
-      <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;">
-        ${active.map(p => `
-          <button class="gh-add-person-pick" data-pid="${p.id}"
-            style="text-align:left;padding:7px 10px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-family:inherit;">
-            ${shortName(p.name)}
-          </button>`).join('')}
-      </div>
-      <div style="font-size:.7rem;color:#888;margin-bottom:6px;">Dia(s) a atribuir:</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
-        ${DAYS.map(d =>
-          `<label style="display:flex;align-items:center;gap:3px;font-size:.75rem;cursor:pointer;">
-            <input type="checkbox" class="gh-add-day-chk" value="${d}"> ${d}
-          </label>`
-        ).join('')}
-      </div>
-      <div id="gh-add-warn" style="display:none;margin-top:8px;font-size:.7rem;color:#b05000;background:#fff8e8;border:1px solid #f0d080;border-radius:5px;padding:6px 8px;"></div>`;
+      <div style="font-size:.7rem;color:#888;margin-bottom:10px;">Seleccione a pessoa para añadir a ${sname(sid)}. Sus ausencias del wizard se conservan. Edite los días individualmente haciendo clic en las celdas.</div>
+      <div style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;">
+        ${candidates.length ? candidates.map(p => {
+          const hasBadge = (() => {
+            const feriaDias = S._folgasDirigidas?.[p.id] || S._folgas?.[p.id]?.dias || [];
+            const hasAbs = !!absOf(p.id);
+            return hasAbs ? '🏖' : feriaDias.length ? '📅' : '';
+          })();
+          return `<button class="gh-add-person-pick" data-pid="${p.id}"
+            style="text-align:left;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.82rem;font-family:inherit;display:flex;justify-content:space-between;align-items:center;">
+            <span>${shortName(p.name)}</span>
+            <span style="font-size:.7rem;color:#888">${hasBadge}</span>
+          </button>`;
+        }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas las personas ya están añadidas.</div>'}
+      </div>`;
 
     injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
       btn.addEventListener('click', () => {
-        injected.querySelectorAll('.gh-add-person-pick').forEach(b => b.style.background = '#fff');
-        btn.style.background = '#e8f0fe';
-        _addCtx = { pid: btn.dataset.pid, sid };
-        // Show warning if person doesn't know this store
-        const p = P(btn.dataset.pid);
-        const warn = injected.querySelector('#gh-add-warn');
-        if (!p?.knows?.includes(sid)) {
-          warn.textContent = `⚠ ${shortName(p?.name)} não tem ${sname(sid)} no seu perfil. Pode continuar, mas verifique se tem experiência.`;
-          warn.style.display = 'block';
-        } else {
-          warn.style.display = 'none';
-        }
+        const pid = btn.dataset.pid;
+        addPersonToStore(pid, sid);
+        closeModal();
       });
     });
 
     modal.dataset.mode = 'add';
     modal.classList.add('open');
+  }
+
+  // Adds person to store: keeps their absences/folgas, leaves work days empty
+  function addPersonToStore(pid, sid) {
+    if (!S.schedule[pid]) {
+      S.schedule[pid] = {};
+      DAYS.forEach(day => { S.schedule[pid][day] = { type: 'empty', shift: null, store: null }; });
+    }
+    // Apply absences from wizard
+    DAYS.forEach(day => {
+      const cur = S.schedule[pid][day];
+      // Don't overwrite already-set absence markers
+      if (cur && (cur.type === 'ferias' || cur.type === 'baixa' || cur.type === 'folga' || cur.type === 'na')) return;
+      if (isAbsent(pid, day)) {
+        const a = absOf(pid);
+        const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+        S.schedule[pid][day] = { type: t, shift: null, store: null };
+        return;
+      }
+      const folgaDias = S._folgasDirigidas?.[pid] || S._folgas?.[pid]?.dias || [];
+      if (folgaDias.includes(day)) {
+        S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
+        return;
+      }
+      // Leave as empty (clickable blank)
+      S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+    });
+    // Mark person as belonging to this store so they appear in the section
+    if (!S._personStore) S._personStore = {};
+    S._personStore[pid] = sid;
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
   }
 
   // ── REMOVER PERSONA DE TIENDA — panel independiente ──

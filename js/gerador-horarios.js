@@ -2775,10 +2775,7 @@
           }
           return;
         }
-        let store=resolveStoreByShort(val);
-        if(store&&(!person.knows.includes(store)||!storeOpen(store,day))){
-          store=(person.store&&storeOpen(person.store,day))?person.store:null;
-        }
+        const store=resolveStoreByShort(val);
         if(store){
           S.schedule[person.id][day]={type:'work',shift:storeBaseShift(store),store};
           if(day==='DOM'){

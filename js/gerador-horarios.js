@@ -1324,15 +1324,51 @@
     generate();
   }
 
-  // ══ ENGINE ══
+  // ── CONFIRMAR HORARIO — graba todo en Supabase ──
+  async function confirmSchedule(active) {
+    const sb = getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    if (!weekKey) return;
 
-  // Coordenadora(s): pessoal com coverPri < 5 (campo na BD — sem nomes hardcoded).
-  // Atribuição por prioridade de loja: loja própria se aberta → loja mais prioritária com défice → fallback.
-  // Orden de execução: buildWeights → computeGroups → resolveCombo → enforceEdnaCarla
+    const btn = document.getElementById('gh-btn-confirm');
+    if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
 
-  // PASSO 1: Pesos base de cada pessoa (sem contexto de cenário)
-  // Efectiva=2, Autónoma/Autónoma-H=1.5, Não-autónoma=1
-  // Antigüidade < 3 semanas reduz o peso em 0.5 (menos experiente na loja)
+    try {
+      // 1. Guardar folgas dirigidas del paso 2 (las que el usuario configuró manualmente)
+      if (S._folgas) {
+        for (const [pid, f] of Object.entries(S._folgas)) {
+          if (f.dias?.length) {
+            await sb.from('gh_folgas').upsert(
+              { pessoa_id: pid, semana: weekKey, dias: f.dias },
+              { onConflict: 'pessoa_id,semana' }
+            );
+          }
+        }
+      }
+
+      // 2. Guardar historial de folgas asignadas por el sistema
+      const upserts = active.map(p => {
+        const dias = [];
+        DAYS.forEach(day => {
+          const cell = S.schedule[p.id]?.[day];
+          if (cell?.type === 'folga' || cell?.type === 'ferias') dias.push(day);
+        });
+        return { pessoa_id: p.id, semana: weekKey, dias };
+      });
+
+      for (const u of upserts) {
+        await sb.from('gh_folgas').upsert(u, { onConflict: 'pessoa_id,semana' });
+      }
+
+      S.alerts.push({ type: 'info', text: '✓ Horário confirmado e guardado.' });
+      if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
+
+    } catch(e) {
+      console.error('Erro ao confirmar horário:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar horário'; }
+    }
+  }
   function baseWeight(p) {
     // pesoBase é sempre derivado de autonomia em loadKnowledgeBase
     // Fallback para dados antigos sem campo autonomia
@@ -1678,15 +1714,8 @@
 
   function resolveStoreByShort(short) {
     if (!short||short==='FOLGA') return null;
-    const val = short.toUpperCase();
-    // Mapa Excel → short real en gh_stores
-    const ALIAS = {
-      'AVENIDA': 'mezka avenida',
-      'MERCADO': 'mezka mercado',
-      'SHANA':   'shana',
-      'MAXX':    'maxx'
-    };
-    const target = ALIAS[val] || short;
+    const ALIAS={'AVENIDA':'mezka avenida','MERCADO':'mezka mercado','SHANA':'shana','MAXX':'maxx'};
+    const target=ALIAS[short.toUpperCase()]||short;
     return STORES.find(s=>(s.short||'').toLowerCase()===target.toLowerCase())?.id||null;
   }
 

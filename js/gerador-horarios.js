@@ -2674,7 +2674,16 @@
 
   function resolveStoreByShort(short) {
     if (!short||short==='FOLGA') return null;
-    return STORES.find(s=>(s.short||'').toUpperCase()===short.toUpperCase())?.id||null;
+    const val = short.toUpperCase();
+    // Mapa Excel → short real en gh_stores
+    const ALIAS = {
+      'AVENIDA': 'mezka avenida',
+      'MERCADO': 'mezka mercado',
+      'SHANA':   'shana',
+      'MAXX':    'maxx'
+    };
+    const target = ALIAS[val] || short;
+    return STORES.find(s=>(s.short||'').toLowerCase()===target.toLowerCase())?.id||null;
   }
 
   function mapPeopleToSlots(active, rotacaoRows) {

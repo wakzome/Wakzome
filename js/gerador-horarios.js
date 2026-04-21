@@ -292,44 +292,93 @@
   }
 
   async function assignFromTable(active, opc) {
-    const n=active.length;
-    const domStores=S.openStores.filter(id=>S.openDays[id]?.includes('DOM'));
-    let n_dom=domStores.length;
-    if(S.domPessoas&&S.domPessoas>0) n_dom=S.domPessoas;
-    n_dom=Math.min(n_dom, active.filter(p=>p.canAlone&&!isAbsent(p.id,'DOM')).length);
-    const lojas=S.openStores.length;
-    const scenario=findBestScenario(n,n_dom,lojas,opc||1);
-    if(!scenario){ S.alerts.push({type:'red',text:`Sem cenário para ${n} pessoas, ${n_dom} ao domingo, ${lojas} lojas.`}); return false; }
-    if(scenario.n!==n||scenario.n_dom!==n_dom||scenario.lojas!==lojas)
-      S.alerts.push({type:'amber',text:`Cenário ajustado → n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
-    S.decisions.push({type:'info',text:`Cenário: n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
-    const rotacoes=getRotacoes(scenario);
-    const rotNums=Object.keys(rotacoes).map(Number).sort((a,b)=>a-b);
-    if(!rotNums.length){ S.alerts.push({type:'red',text:'Sem rotações disponíveis.'}); return false; }
-    const hist=await loadHistorial();
-    const dirigidas={};
-    if(S._folgasDirigidas){
-      Object.entries(S._folgasDirigidas).forEach(([pid,dias])=>{
-        const v=(dias||[]).filter(d=>d!=='DOM');
-        if(v.length>0&&active.find(p=>p.id===pid)) dirigidas[pid]=v[0];
+    const WORK_DAYS = ['SEG','TER','QUA','QUI','SEX','SAB'];
+
+    // Separar pessoas com presença completa (≥3 dias úteis) das parciais (1-2 dias)
+    // As parciais não contam para o cenário — são tratadas separadamente
+    const fullActive = active.filter(p =>
+      WORK_DAYS.filter(d => !isAbsent(p.id, d)).length >= 3
+    );
+    const partialActive = active.filter(p => {
+      const daysPresent = WORK_DAYS.filter(d => !isAbsent(p.id, d)).length;
+      return daysPresent > 0 && daysPresent < 3;
+    });
+
+    const n = fullActive.length;
+    const domStores = S.openStores.filter(id => S.openDays[id]?.includes('DOM'));
+    let n_dom = domStores.length;
+    if (S.domPessoas && S.domPessoas > 0) n_dom = S.domPessoas;
+    n_dom = Math.min(n_dom, fullActive.filter(p => p.canAlone && !isAbsent(p.id,'DOM')).length);
+    const lojas = S.openStores.length;
+
+    const scenario = findBestScenario(n, n_dom, lojas, opc || 1);
+    if (!scenario) {
+      S.alerts.push({type:'red', text:`Sem cenário para ${n} pessoas, ${n_dom} ao domingo, ${lojas} lojas.`});
+      return false;
+    }
+    if (scenario.n !== n || scenario.n_dom !== n_dom || scenario.lojas !== lojas)
+      S.alerts.push({type:'amber', text:`Cenário ajustado → n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
+    S.decisions.push({type:'info', text:`Cenário: n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
+
+    const rotacoes = getRotacoes(scenario);
+    const rotNums = Object.keys(rotacoes).map(Number).sort((a,b) => a - b);
+    if (!rotNums.length) { S.alerts.push({type:'red', text:'Sem rotações disponíveis.'}); return false; }
+
+    const hist = await loadHistorial();
+    const dirigidas = {};
+    if (S._folgasDirigidas) {
+      Object.entries(S._folgasDirigidas).forEach(([pid, dias]) => {
+        const v = (dias || []).filter(d => d !== 'DOM');
+        if (v.length > 0 && fullActive.find(p => p.id === pid)) dirigidas[pid] = v[0];
       });
     }
-    const regenOffset=S._regenSeed||0;
-    let bestScore=Infinity,bestRot=rotNums[0],bestMapping=null;
-    rotNums.forEach((rotNum,idx)=>{
-      const rows=rotacoes[rotNum];
-      const mapping=mapPeopleToSlots(active,rows);
-      const idxOffset=(idx-regenOffset%rotNums.length+rotNums.length)%rotNums.length;
-      const score=scoreRotacao(rows,mapping,hist,dirigidas,idxOffset);
-      if(score<bestScore){bestScore=score;bestRot=rotNum;bestMapping=mapping;}
+
+    const regenOffset = S._regenSeed || 0;
+    let bestScore = Infinity, bestRot = rotNums[0], bestMapping = null;
+    rotNums.forEach((rotNum, idx) => {
+      const rows = rotacoes[rotNum];
+      const mapping = mapPeopleToSlots(fullActive, rows);
+      const idxOffset = (idx - regenOffset % rotNums.length + rotNums.length) % rotNums.length;
+      const score = scoreRotacao(rows, mapping, hist, dirigidas, idxOffset);
+      if (score < bestScore) { bestScore = score; bestRot = rotNum; bestMapping = mapping; }
     });
-    S.decisions.push({type:'info',text:`Rotação ${bestRot} escolhida (score=${bestScore}, regen=${regenOffset}).`});
-    S._rotacaoAtual=bestRot; S._scenarioAtual=scenario;
-    applyRotacao(rotacoes[bestRot],bestMapping,active);
-    DAYS.forEach(day=>{
-      const workers=active.filter(p=>S.schedule[p.id]?.[day]?.type==='work');
-      if(workers.length) assignIntervalShiftsForDay(day,workers);
+
+    S.decisions.push({type:'info', text:`Rotação ${bestRot} escolhida (score=${bestScore}, regen=${regenOffset}).`});
+    S._rotacaoAtual = bestRot; S._scenarioAtual = scenario;
+
+    // Aplicar rotação para as pessoas com presença completa
+    // Passar 'active' completo para que os parciais sejam inicializados como 'na'
+    applyRotacao(rotacoes[bestRot], bestMapping, active);
+
+    // Tratar pessoas com presença parcial: trabalham nos dias que estão disponíveis
+    partialActive.forEach(p => {
+      const abs = absOf(p.id);
+      DAYS.forEach(day => {
+        if (abs && isAbsent(p.id, day)) {
+          // Dia de ausência: férias ou folga conforme o tipo
+          S.schedule[p.id][day] = {
+            type: abs.type === 'ferias' ? 'ferias' : 'folga',
+            shift: null, store: null
+          };
+        } else {
+          // Dia disponível: vai para a sua loja se estiver aberta, senão folga
+          const sid = (p.store && storeOpen(p.store, day)) ? p.store : null;
+          if (sid) {
+            S.schedule[p.id][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
+          } else {
+            S.schedule[p.id][day] = { type: 'folga', shift: null, store: null };
+          }
+        }
+      });
+      S.alerts.push({type:'amber', text:`${p.name.split(' ')[0]}: presença parcial esta semana — alocado nos dias disponíveis.`});
     });
+
+    // Atribuir intervalos de turno para todos
+    DAYS.forEach(day => {
+      const workers = active.filter(p => S.schedule[p.id]?.[day]?.type === 'work');
+      if (workers.length) assignIntervalShiftsForDay(day, workers);
+    });
+
     return true;
   }
 
@@ -356,31 +405,40 @@
   }
 
   async function generate() {
-    const active=PEOPLE.filter(p=>!fullyAbsent(p.id));
-    S.alerts=[];S.decisions=[];S.sandraDay={};S.folgaDay={};S.extraDayOff={};
-    S._storeBaseShift={};S._scenarioAtual=null;S._rotacaoAtual=null;
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    S.alerts = []; S.decisions = []; S.sandraDay = {}; S.folgaDay = {}; S.extraDayOff = {};
+    S._storeBaseShift = {}; S._scenarioAtual = null; S._rotacaoAtual = null;
     await loadCorreccoes();
     await loadEsquemas();
-    S._openDaysSnapshot=JSON.parse(JSON.stringify(S.openDays));
-    S._openStoresSnapshot=[...S.openStores];
-    const n=active.length;
-    let n_dom=S.openStores.filter(id=>S.openDays[id]?.includes('DOM')).length;
-    if(S.domPessoas&&S.domPessoas>0) n_dom=S.domPessoas;
-    n_dom=Math.min(n_dom,active.filter(p=>p.canAlone&&!isAbsent(p.id,'DOM')).length);
-    const lojas=S.openStores.length;
-    const doGenerate=async(opc)=>{
-      const ok=await assignFromTable(active,opc);
-      if(!ok){showCoverageBlocker([],active);return;}
+    S._openDaysSnapshot = JSON.parse(JSON.stringify(S.openDays));
+    S._openStoresSnapshot = [...S.openStores];
+
+    // Mesma lógica de fullActive que assignFromTable — para o OPC check
+    const WORK_DAYS = ['SEG','TER','QUA','QUI','SEX','SAB'];
+    const fullActive = active.filter(p => WORK_DAYS.filter(d => !isAbsent(p.id, d)).length >= 3);
+    const n = fullActive.length;
+    let n_dom = S.openStores.filter(id => S.openDays[id]?.includes('DOM')).length;
+    if (S.domPessoas && S.domPessoas > 0) n_dom = S.domPessoas;
+    n_dom = Math.min(n_dom, fullActive.filter(p => p.canAlone && !isAbsent(p.id,'DOM')).length);
+    const lojas = S.openStores.length;
+
+    const doGenerate = async (opc) => {
+      const ok = await assignFromTable(active, opc);
+      if (!ok) { showCoverageBlocker([], active); return; }
       applyNightShiftRule(active);
       saveMem();
-      try{
-        const snap={};
-        active.forEach(p=>{snap[p.id]={};DAYS.forEach(d=>{const c=S.schedule[p.id]?.[d];if(c)snap[p.id][d]={type:c.type,shift:c.shift||null,store:c.store||null};});});
-        sessionStorage.setItem('gh_snap_sistema',JSON.stringify(snap));
-      }catch(e){}
+      try {
+        const snap = {};
+        active.forEach(p => {
+          snap[p.id] = {};
+          DAYS.forEach(d => { const c = S.schedule[p.id]?.[d]; if (c) snap[p.id][d] = {type:c.type,shift:c.shift||null,store:c.store||null}; });
+        });
+        sessionStorage.setItem('gh_snap_sistema', JSON.stringify(snap));
+      } catch(e) {}
       showSchedule(active);
     };
-    if(hasBothOpc(n,n_dom,lojas)) showOpcSelector(opc=>doGenerate(opc));
+
+    if (hasBothOpc(n, n_dom, lojas)) showOpcSelector(opc => doGenerate(opc));
     else await doGenerate(1);
   }
 

@@ -2630,7 +2630,6 @@
 
     enforceIntervalSeparation(day, workers);
   }
-
   // ══ MOTOR NOVO — gh_horarios_base ══
   let HORARIOS_BASE = [];
 
@@ -2651,12 +2650,12 @@
   }
 
   function findBestScenario(n, n_dom, lojas, opc) {
-    const has = (n2,d2,l2,o2) => HORARIOS_BASE.some(r => r.n===n2 && r.n_dom===d2 && r.lojas===l2 && r.opc===o2);
+    const has = (n2,d2,l2,o2) => HORARIOS_BASE.some(r=>r.n===n2&&r.n_dom===d2&&r.lojas===l2&&r.opc===o2);
     if (has(n,n_dom,lojas,opc)) return {n,n_dom,lojas,opc};
-    if (opc!==1 && has(n,n_dom,lojas,1)) return {n,n_dom,lojas,opc:1};
-    if (lojas>3) { const fb=findBestScenario(n,n_dom,lojas-1,opc); if(fb) return fb; }
-    if (n_dom>0) { const fb=findBestScenario(n,n_dom-1,lojas,opc); if(fb) return fb; }
-    if (n>4)     { const fb=findBestScenario(n-1,Math.min(n_dom,n-2),lojas,opc); if(fb) return fb; }
+    if (opc!==1&&has(n,n_dom,lojas,1)) return {n,n_dom,lojas,opc:1};
+    if (lojas>3){const fb=findBestScenario(n,n_dom,lojas-1,opc);if(fb)return fb;}
+    if (n_dom>0){const fb=findBestScenario(n,n_dom-1,lojas,opc);if(fb)return fb;}
+    if (n>4){const fb=findBestScenario(n-1,Math.min(n_dom,n-2),lojas,opc);if(fb)return fb;}
     return null;
   }
 
@@ -2666,30 +2665,36 @@
   }
 
   function getRotacoes(scenario) {
-    const {n,n_dom,lojas,opc} = scenario;
-    const rows = HORARIOS_BASE.filter(r=>r.n===n&&r.n_dom===n_dom&&r.lojas===lojas&&r.opc===opc);
-    const byRot = {};
-    rows.forEach(r=>{ if(!byRot[r.rotacao]) byRot[r.rotacao]=[]; byRot[r.rotacao].push(r); });
+    const {n,n_dom,lojas,opc}=scenario;
+    const rows=HORARIOS_BASE.filter(r=>r.n===n&&r.n_dom===n_dom&&r.lojas===lojas&&r.opc===opc);
+    const byRot={};
+    rows.forEach(r=>{if(!byRot[r.rotacao])byRot[r.rotacao]=[];byRot[r.rotacao].push(r);});
     return byRot;
   }
 
   function resolveStoreByShort(short) {
-    if (!short || short==='FOLGA') return null;
+    if (!short||short==='FOLGA') return null;
     return STORES.find(s=>(s.short||'').toUpperCase()===short.toUpperCase())?.id||null;
   }
 
   function mapPeopleToSlots(active, rotacaoRows) {
-    const slotNums = [...new Set(rotacaoRows.map(r=>r.pessoa_slot))]
+    const slotNums=[...new Set(rotacaoRows.map(r=>r.pessoa_slot))]
       .sort((a,b)=>parseInt(a.replace('Pessoa ',''))-parseInt(b.replace('Pessoa ','')));
     const slotHome={}, slotVisits={};
     rotacaoRows.forEach(r=>{
       slotHome[r.pessoa_slot]=r.home_loja;
       if(!slotVisits[r.pessoa_slot]) slotVisits[r.pessoa_slot]=new Set();
-      ['seg','ter','qua','qui','sex','sab','dom'].forEach(d=>{ if(r[d]&&r[d]!=='FOLGA') slotVisits[r.pessoa_slot].add(r[d]); });
+      ['seg','ter','qua','qui','sex','sab','dom'].forEach(d=>{
+        if(r[d]&&r[d]!=='FOLGA') slotVisits[r.pessoa_slot].add(r[d]);
+      });
     });
     const LOJA_ORDER=['AVENIDA','MERCADO','SHANA','MAXX'];
     const slotsByLoja={};
-    slotNums.forEach(slot=>{ const loja=slotHome[slot]||''; if(!slotsByLoja[loja]) slotsByLoja[loja]=[]; slotsByLoja[loja].push(slot); });
+    slotNums.forEach(slot=>{
+      const loja=slotHome[slot]||'';
+      if(!slotsByLoja[loja]) slotsByLoja[loja]=[];
+      slotsByLoja[loja].push(slot);
+    });
     const mapping={}, used=new Set();
     Object.keys(slotsByLoja)
       .sort((a,b)=>(LOJA_ORDER.indexOf(a)<0?99:LOJA_ORDER.indexOf(a))-(LOJA_ORDER.indexOf(b)<0?99:LOJA_ORDER.indexOf(b)))
@@ -2703,14 +2708,20 @@
               if(af!==bf) return af-bf;
               const ae=a.autonomia==='efectiva'?0:1, be=b.autonomia==='efectiva'?0:1;
               if(ae!==be) return ae-be;
-              const ak=visitSids.filter(s=>a.knows.includes(s)).length, bk=visitSids.filter(s=>b.knows.includes(s)).length;
+              const ak=visitSids.filter(s=>a.knows.includes(s)).length;
+              const bk=visitSids.filter(s=>b.knows.includes(s)).length;
               if(ak!==bk) return bk-ak;
               return new Date(a.start||'2099')-new Date(b.start||'2099');
             });
           if(cands[0]){mapping[slot]=cands[0];used.add(cands[0].id);}
         });
       });
-    slotNums.forEach(slot=>{ if(!mapping[slot]){const free=active.find(p=>!used.has(p.id));if(free){mapping[slot]=free;used.add(free.id);}} });
+    slotNums.forEach(slot=>{
+      if(!mapping[slot]){
+        const free=active.find(p=>!used.has(p.id));
+        if(free){mapping[slot]=free;used.add(free.id);}
+      }
+    });
     return mapping;
   }
 
@@ -2721,15 +2732,18 @@
       const p=mapping[row.pessoa_slot]; if(!p) return;
       const folgaDays=DAYS.filter(d=>row[COL[d]]==='FOLGA'&&d!=='DOM');
       const dir=dirigidas[p.id];
-      if(dir){ score+=folgaDays.includes(dir)?-50:100; }
-      folgaDays.forEach(d=>{ score+=(hist[p.id]?.[d]||0)*10; });
+      if(dir){score+=folgaDays.includes(dir)?-50:100;}
+      folgaDays.forEach(d=>{score+=(hist[p.id]?.[d]||0)*10;});
     });
     return score;
   }
 
   function applyRotacao(rotacaoRows, mapping, active) {
     const COL={SEG:'seg',TER:'ter',QUA:'qua',QUI:'qui',SEX:'sex',SAB:'sab',DOM:'dom'};
-    active.forEach(p=>{ S.schedule[p.id]={}; DAYS.forEach(day=>{ S.schedule[p.id][day]={type:'na',shift:null,store:null}; }); });
+    active.forEach(p=>{
+      S.schedule[p.id]={};
+      DAYS.forEach(day=>{S.schedule[p.id][day]={type:'na',shift:null,store:null};});
+    });
     S.folgaDay={}; S.extraDayOff={}; S.sundayAssigned={};
     S.openStores.filter(id=>S.openDays[id]?.includes('DOM')).forEach(id=>{S.sundayAssigned[id]=[];});
     const bySlot={};
@@ -2758,7 +2772,10 @@
         }
         if(store){
           S.schedule[person.id][day]={type:'work',shift:storeBaseShift(store),store};
-          if(day==='DOM'){if(!S.sundayAssigned[store])S.sundayAssigned[store]=[];S.sundayAssigned[store].push(person.id);}
+          if(day==='DOM'){
+            if(!S.sundayAssigned[store]) S.sundayAssigned[store]=[];
+            S.sundayAssigned[store].push(person.id);
+          }
         } else {
           S.schedule[person.id][day]={type:'folga',shift:null,store:null};
         }
@@ -2773,7 +2790,9 @@
           S.schedule[p.id][day]={type:abs.type==='ferias'?'ferias':'folga',shift:null,store:null};
         } else {
           const sid=(p.store&&storeOpen(p.store,day))?p.store:null;
-          S.schedule[p.id][day]=sid?{type:'work',shift:storeBaseShift(sid),store:sid}:{type:'folga',shift:null,store:null};
+          S.schedule[p.id][day]=sid
+            ?{type:'work',shift:storeBaseShift(sid),store:sid}
+            :{type:'folga',shift:null,store:null};
         }
       });
       S.alerts.push({type:'amber',text:`${p.name.split(' ')[0]} sem slot — alocado na loja fixa.`});
@@ -2787,7 +2806,10 @@
     n_dom=Math.min(n_dom,active.filter(p=>p.canAlone&&!isAbsent(p.id,'DOM')).length);
     const lojas=S.openStores.length;
     const scenario=findBestScenario(n,n_dom,lojas,opc||1);
-    if(!scenario){S.alerts.push({type:'red',text:`Sem cenário para ${n} pessoas, ${n_dom} ao domingo, ${lojas} lojas.`});return false;}
+    if(!scenario){
+      S.alerts.push({type:'red',text:`Sem cenário para ${n} pessoas, ${n_dom} ao domingo, ${lojas} lojas.`});
+      return false;
+    }
     if(scenario.n!==n||scenario.n_dom!==n_dom||scenario.lojas!==lojas)
       S.alerts.push({type:'amber',text:`Cenário ajustado → n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
     S.decisions.push({type:'info',text:`Cenário: n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});

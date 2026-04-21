@@ -2630,261 +2630,56 @@
 
     enforceIntervalSeparation(day, workers);
   }
-  // ══ MOTOR NOVO — gh_horarios_base ══
-  let HORARIOS_BASE = [];
-
-  async function loadHorariosBase() {
-    const sb = getSupabase(); if (!sb) return;
-    try {
-      let all = [], from = 0, step = 1000;
-      while (true) {
-        const { data, error } = await sb.from('gh_horarios_base').select('*').range(from, from + step - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        all = all.concat(data);
-        if (data.length < step) break;
-        from += step;
-      }
-      HORARIOS_BASE = all;
-    } catch(e) { console.error('Erro loadHorariosBase:', e); }
-  }
-
-  function findBestScenario(n, n_dom, lojas, opc) {
-    const has = (n2,d2,l2,o2) => HORARIOS_BASE.some(r=>r.n===n2&&r.n_dom===d2&&r.lojas===l2&&r.opc===o2);
-    if (has(n,n_dom,lojas,opc)) return {n,n_dom,lojas,opc};
-    if (opc!==1&&has(n,n_dom,lojas,1)) return {n,n_dom,lojas,opc:1};
-    if (lojas>3){const fb=findBestScenario(n,n_dom,lojas-1,opc);if(fb)return fb;}
-    if (n_dom>0){const fb=findBestScenario(n,n_dom-1,lojas,opc);if(fb)return fb;}
-    if (n>4){const fb=findBestScenario(n-1,Math.min(n_dom,n-2),lojas,opc);if(fb)return fb;}
-    return null;
-  }
-
-  function hasBothOpc(n, n_dom, lojas) {
-    return HORARIOS_BASE.some(r=>r.n===n&&r.n_dom===n_dom&&r.lojas===lojas&&r.opc===1)
-        && HORARIOS_BASE.some(r=>r.n===n&&r.n_dom===n_dom&&r.lojas===lojas&&r.opc===2);
-  }
-
-  function getRotacoes(scenario) {
-    const {n,n_dom,lojas,opc}=scenario;
-    const rows=HORARIOS_BASE.filter(r=>r.n===n&&r.n_dom===n_dom&&r.lojas===lojas&&r.opc===opc);
-    const byRot={};
-    rows.forEach(r=>{if(!byRot[r.rotacao])byRot[r.rotacao]=[];byRot[r.rotacao].push(r);});
-    return byRot;
-  }
-
-  function resolveStoreByShort(short) {
-    if (!short||short==='FOLGA') return null;
-    return STORES.find(s=>(s.short||'').toUpperCase()===short.toUpperCase())?.id||null;
-  }
-
-  function mapPeopleToSlots(active, rotacaoRows) {
-    const slotNums=[...new Set(rotacaoRows.map(r=>r.pessoa_slot))]
-      .sort((a,b)=>parseInt(a.replace('Pessoa ',''))-parseInt(b.replace('Pessoa ','')));
-    const slotHome={}, slotVisits={};
-    rotacaoRows.forEach(r=>{
-      slotHome[r.pessoa_slot]=r.home_loja;
-      if(!slotVisits[r.pessoa_slot]) slotVisits[r.pessoa_slot]=new Set();
-      ['seg','ter','qua','qui','sex','sab','dom'].forEach(d=>{
-        if(r[d]&&r[d]!=='FOLGA') slotVisits[r.pessoa_slot].add(r[d]);
-      });
-    });
-    const LOJA_ORDER=['AVENIDA','MERCADO','SHANA','MAXX'];
-    const slotsByLoja={};
-    slotNums.forEach(slot=>{
-      const loja=slotHome[slot]||'';
-      if(!slotsByLoja[loja]) slotsByLoja[loja]=[];
-      slotsByLoja[loja].push(slot);
-    });
-    const mapping={}, used=new Set();
-    Object.keys(slotsByLoja)
-      .sort((a,b)=>(LOJA_ORDER.indexOf(a)<0?99:LOJA_ORDER.indexOf(a))-(LOJA_ORDER.indexOf(b)<0?99:LOJA_ORDER.indexOf(b)))
-      .forEach(lojaShort=>{
-        const homeSid=resolveStoreByShort(lojaShort);
-        slotsByLoja[lojaShort].forEach(slot=>{
-          const visitSids=[...slotVisits[slot]].map(s=>resolveStoreByShort(s)).filter(Boolean);
-          const cands=active.filter(p=>!used.has(p.id))
-            .sort((a,b)=>{
-              const af=(a.store===homeSid&&homeSid)?0:1, bf=(b.store===homeSid&&homeSid)?0:1;
-              if(af!==bf) return af-bf;
-              const ae=a.autonomia==='efectiva'?0:1, be=b.autonomia==='efectiva'?0:1;
-              if(ae!==be) return ae-be;
-              const ak=visitSids.filter(s=>a.knows.includes(s)).length;
-              const bk=visitSids.filter(s=>b.knows.includes(s)).length;
-              if(ak!==bk) return bk-ak;
-              return new Date(a.start||'2099')-new Date(b.start||'2099');
-            });
-          if(cands[0]){mapping[slot]=cands[0];used.add(cands[0].id);}
-        });
-      });
-    slotNums.forEach(slot=>{
-      if(!mapping[slot]){
-        const free=active.find(p=>!used.has(p.id));
-        if(free){mapping[slot]=free;used.add(free.id);}
-      }
-    });
-    return mapping;
-  }
-
-  function scoreRotacao(rotacaoRows, mapping, hist, dirigidas, offset) {
-    const COL={SEG:'seg',TER:'ter',QUA:'qua',QUI:'qui',SEX:'sex',SAB:'sab',DOM:'dom'};
-    let score=offset;
-    rotacaoRows.forEach(row=>{
-      const p=mapping[row.pessoa_slot]; if(!p) return;
-      const folgaDays=DAYS.filter(d=>row[COL[d]]==='FOLGA'&&d!=='DOM');
-      const dir=dirigidas[p.id];
-      if(dir){score+=folgaDays.includes(dir)?-50:100;}
-      folgaDays.forEach(d=>{score+=(hist[p.id]?.[d]||0)*10;});
-    });
-    return score;
-  }
-
-  function applyRotacao(rotacaoRows, mapping, active) {
-    const COL={SEG:'seg',TER:'ter',QUA:'qua',QUI:'qui',SEX:'sex',SAB:'sab',DOM:'dom'};
-    active.forEach(p=>{
-      S.schedule[p.id]={};
-      DAYS.forEach(day=>{S.schedule[p.id][day]={type:'na',shift:null,store:null};});
-    });
-    S.folgaDay={}; S.extraDayOff={}; S.sundayAssigned={};
-    S.openStores.filter(id=>S.openDays[id]?.includes('DOM')).forEach(id=>{S.sundayAssigned[id]=[];});
-    const bySlot={};
-    rotacaoRows.forEach(r=>{bySlot[r.pessoa_slot]=r;});
-    Object.entries(mapping).forEach(([slot,person])=>{
-      if(!person) return;
-      const row=bySlot[slot]; if(!row) return;
-      const abs=absOf(person.id);
-      DAYS.forEach(day=>{
-        if(abs&&isAbsent(person.id,day)){
-          S.schedule[person.id][day]={type:abs.type==='ferias'?'ferias':'folga',shift:null,store:null};
-          return;
-        }
-        const val=row[COL[day]];
-        if(val==='FOLGA'){
-          S.schedule[person.id][day]={type:'folga',shift:null,store:null};
-          if(day!=='DOM'){
-            if(S.folgaDay[person.id]===undefined) S.folgaDay[person.id]=day;
-            else if(S.extraDayOff[person.id]===undefined) S.extraDayOff[person.id]=day;
-          }
-          return;
-        }
-        let store=resolveStoreByShort(val);
-        if(store&&(!person.knows.includes(store)||!storeOpen(store,day))){
-          store=(person.store&&storeOpen(person.store,day))?person.store:null;
-        }
-        if(store){
-          S.schedule[person.id][day]={type:'work',shift:storeBaseShift(store),store};
-          if(day==='DOM'){
-            if(!S.sundayAssigned[store]) S.sundayAssigned[store]=[];
-            S.sundayAssigned[store].push(person.id);
-          }
-        } else {
-          S.schedule[person.id][day]={type:'folga',shift:null,store:null};
-        }
-      });
-    });
-    active.forEach(p=>{
-      if(Object.values(mapping).some(m=>m?.id===p.id)) return;
-      const abs=absOf(p.id);
-      DAYS.forEach(day=>{
-        if(S.schedule[p.id][day].type!=='na') return;
-        if(abs&&isAbsent(p.id,day)){
-          S.schedule[p.id][day]={type:abs.type==='ferias'?'ferias':'folga',shift:null,store:null};
-        } else {
-          const sid=(p.store&&storeOpen(p.store,day))?p.store:null;
-          S.schedule[p.id][day]=sid
-            ?{type:'work',shift:storeBaseShift(sid),store:sid}
-            :{type:'folga',shift:null,store:null};
-        }
-      });
-      S.alerts.push({type:'amber',text:`${p.name.split(' ')[0]} sem slot — alocado na loja fixa.`});
-    });
-  }
-
-  async function assignFromTable(active, opc) {
-    const n=active.length;
-    let n_dom=S.openStores.filter(id=>S.openDays[id]?.includes('DOM')).length;
-    if(S.domPessoas&&S.domPessoas>0) n_dom=S.domPessoas;
-    n_dom=Math.min(n_dom,active.filter(p=>p.canAlone&&!isAbsent(p.id,'DOM')).length);
-    const lojas=S.openStores.length;
-    const scenario=findBestScenario(n,n_dom,lojas,opc||1);
-    if(!scenario){
-      S.alerts.push({type:'red',text:`Sem cenário para ${n} pessoas, ${n_dom} ao domingo, ${lojas} lojas.`});
-      return false;
-    }
-    if(scenario.n!==n||scenario.n_dom!==n_dom||scenario.lojas!==lojas)
-      S.alerts.push({type:'amber',text:`Cenário ajustado → n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
-    S.decisions.push({type:'info',text:`Cenário: n=${scenario.n} dom=${scenario.n_dom} lojas=${scenario.lojas} opc=${scenario.opc}`});
-    const rotacoes=getRotacoes(scenario);
-    const rotNums=Object.keys(rotacoes).map(Number).sort((a,b)=>a-b);
-    if(!rotNums.length){S.alerts.push({type:'red',text:'Sem rotações.'});return false;}
-    const hist=await loadHistorial();
-    const dirigidas={};
-    if(S._folgasDirigidas){
-      Object.entries(S._folgasDirigidas).forEach(([pid,dias])=>{
-        const v=(dias||[]).filter(d=>d!=='DOM');
-        if(v.length>0&&active.find(p=>p.id===pid)) dirigidas[pid]=v[0];
-      });
-    }
-    const regenOffset=S._regenSeed||0;
-    let bestScore=Infinity,bestRot=rotNums[0],bestMapping=null;
-    rotNums.forEach((rotNum,idx)=>{
-      const rows=rotacoes[rotNum];
-      const mapping=mapPeopleToSlots(active,rows);
-      const idxOffset=(idx-regenOffset%rotNums.length+rotNums.length)%rotNums.length;
-      const score=scoreRotacao(rows,mapping,hist,dirigidas,idxOffset);
-      if(score<bestScore){bestScore=score;bestRot=rotNum;bestMapping=mapping;}
-    });
-    S.decisions.push({type:'info',text:`Rotação ${bestRot} (score=${bestScore}).`});
-    applyRotacao(rotacoes[bestRot],bestMapping,active);
-    DAYS.forEach(day=>{
-      const workers=active.filter(p=>S.schedule[p.id]?.[day]?.type==='work');
-      if(workers.length) assignIntervalShiftsForDay(day,workers);
-    });
-    return true;
-  }
-
-  function showOpcSelector(onSelect) {
-    const overlay=document.createElement('div');
-    overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    overlay.innerHTML=`<div style="background:#fff;border-radius:12px;padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18);"><div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:6px;">Opção de horário</div><div style="font-size:1rem;font-weight:700;color:#111;margin-bottom:8px;">Maxx abre ao domingo?</div><div style="display:flex;gap:10px;margin-top:16px;"><button id="gh-opc1" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;font-size:.85rem;font-weight:600;">Não</button><button id="gh-opc2" style="flex:1;padding:12px;border:2px solid #111;border-radius:8px;background:#111;cursor:pointer;font-size:.85rem;font-weight:600;color:#fff;">Sim</button></div></div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#gh-opc1').addEventListener('click',()=>{document.body.removeChild(overlay);onSelect(1);});
-    overlay.querySelector('#gh-opc2').addEventListener('click',()=>{document.body.removeChild(overlay);onSelect(2);});
-  }
-
   async function generate() {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-    S.alerts = []; S.decisions = []; S.sandraDay = {};
-    S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {};
 
+    S.alerts = []; S.decisions = []; S.sandraDay = {};
+    S.folgaDay = {}; S.extraDayOff = {}; S._storeBaseShift = {}; S._escenarioActivo = null;
+    // S._folgasDirigidas se conserva entre regeneraciones — no resetear aquí
+
+    // Carregar correções aprendidas (por pessoa) e esquemas (por configuração)
     await loadCorreccoes();
     await loadEsquemas();
+
     S._openDaysSnapshot  = JSON.parse(JSON.stringify(S.openDays));
     S._openStoresSnapshot = [...S.openStores];
 
-    const n = active.length;
-    let n_dom = S.openStores.filter(id => S.openDays[id]?.includes('DOM')).length;
-    if (S.domPessoas && S.domPessoas > 0) n_dom = S.domPessoas;
-    n_dom = Math.min(n_dom, active.filter(p => p.canAlone && !isAbsent(p.id,'DOM')).length);
-    const lojas = S.openStores.length;
+    // ── Sunday viability check ──
+    const { resolvedSundayStores, sacrificed } = resolveSundayStores(active);
+    sacrificed.forEach(({ sid, reason }) => {
+      if (S.openDays[sid]) {
+        S.openDays[sid] = S.openDays[sid].filter(d => d !== 'DOM');
+        if (!S.openDays[sid].length) S.openStores = S.openStores.filter(id => id !== sid);
+      }
+      S.alerts.push({ type: 'red', text: `DOM: ${sname(sid)} não pode abrir ao domingo — ${reason}` });
+    });
 
-    const doGenerate = async (opc) => {
-      const ok = await assignFromTable(active, opc);
-      if (!ok) { showCoverageBlocker([], active); return; }
-      applyNightShiftRule(active);
-      saveMem();
-      try {
-        const snap = {};
-        active.forEach(p => {
-          snap[p.id] = {};
-          DAYS.forEach(d => { const c = S.schedule[p.id]?.[d]; if(c) snap[p.id][d]={type:c.type,shift:c.shift||null,store:c.store||null}; });
+    const seed = S._regenSeed || 0;
+    computeCoordinatorPosition(active);
+    await assignFolgas(active, seed);
+    buildSchedule(active);
+    fixSunday(active);
+    intelPass(active);
+    applyNightShiftRule(active);
+    saveMem();
+
+    const violations = validateMinCoverage(active);
+    if (violations.length > 0) { showCoverageBlocker(violations, active); return; }
+
+    // Guardar snapshot do sistema em sessionStorage antes de mostrar
+    try {
+      const snap = {};
+      active.forEach(p => {
+        snap[p.id] = {};
+        DAYS.forEach(d => {
+          const c = S.schedule[p.id]?.[d];
+          if (c) snap[p.id][d] = { type: c.type, shift: c.shift || null, store: c.store || null };
         });
-        sessionStorage.setItem('gh_snap_sistema', JSON.stringify(snap));
-      } catch(e) {}
-      showSchedule(active);
-    };
+      });
+      sessionStorage.setItem('gh_snap_sistema', JSON.stringify(snap));
+    } catch(e) {}
 
-    if (hasBothOpc(n, n_dom, lojas)) showOpcSelector(opc => doGenerate(opc));
-    else await doGenerate(1);
+    showSchedule(active);
   }
 
   // ── REGRA §5: FECHO ÀS 23H ──
@@ -3816,7 +3611,7 @@
 
     // Load knowledge base from Supabase before rendering
     loadKnowledgeBase().then(async () => {
-      await loadHorariosBase();
+      await loadPatrones();
       renderWiz();
     }).catch(err => {
       console.error('Failed to load knowledge base:', err);

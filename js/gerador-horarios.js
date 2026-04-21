@@ -1149,12 +1149,28 @@
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
 
-    // Build empty schedule for all active people
+    // Build schedule: empty for work cells, but mark absences/folgas from wizard
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     S.schedule = {};
     active.forEach(p => {
       S.schedule[p.id] = {};
-      DAYS.forEach(day => { S.schedule[p.id][day] = { type: 'na', shift: null, store: null }; });
+      DAYS.forEach(day => {
+        // Check absence
+        if (isAbsent(p.id, day)) {
+          const a = absOf(p.id);
+          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+          S.schedule[p.id][day] = { type: t, shift: null, store: null };
+          return;
+        }
+        // Check folga direccionada
+        const folgaDias = S._folgasDirigidas?.[p.id] || S._folgas?.[p.id]?.dias || [];
+        if (folgaDias.includes(day)) {
+          S.schedule[p.id][day] = { type: 'folga', shift: null, store: null };
+          return;
+        }
+        // Everything else: empty (not assigned yet)
+        S.schedule[p.id][day] = { type: 'empty', shift: null, store: null };
+      });
     });
     S.alerts = []; S.decisions = [];
     showSchedule(active);
@@ -1238,12 +1254,10 @@
 
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
-      // Personas que tienen alguna celda asignada a esta tienda O con tienda fija aquí
-      const inSection = active.filter(p => {
-        const sched = S.schedule[p.id] || {};
-        if (p.store === st.id) return true;
-        return DAYS.some(d => sched[d]?.type === 'work' && sched[d]?.store === st.id);
-      });
+      // Solo personas explícitamente asignadas a esta tienda (work con store === st.id)
+      const inSection = active.filter(p =>
+        DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === st.id)
+      );
       // Siempre mostrar la tienda aunque esté vacía
 
       const rows = inSection.map(p => {
@@ -1256,6 +1270,9 @@
               const content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-elsewhere">${content}</div></td>`;
             }
+            if (c2.type === 'empty' || c2.type === 'na') {
+              return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-empty"></div></td>`;
+            }
             const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'BAIXA' : 'FOLGA';
             const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
@@ -1265,6 +1282,7 @@
           else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
           else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">BAIXA</span>`; }
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
+          else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
           else if (c2.type === 'work') {
             if (c2.store === st.id) {
               const soft = p.softAvoid?.some(oid => S.schedule[oid]?.[day]?.type === 'work' && S.schedule[oid]?.[day]?.store === st.id);
@@ -1293,11 +1311,10 @@
           }
         });
         aH = Math.round(aH * 10) / 10;
-        const hOk = Math.abs(aH - (p.hrs||40)) < 0.5;
         return `<tr>
           <td><div class="gh-p-cell">
             <div class="gh-p-name"><span class="gh-p-dot">●</span>${shortName(p.name)}</div>
-            <div class="gh-p-hrs ${hOk?'ok':'bad'}">${aH}h${hOk?' ✓':' (!)'}</div>
+            <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
           </div></td>${cells}</tr>`;
       }).join('');
 
@@ -1388,14 +1405,15 @@
     modal.style.display = ''; // restore in case cleanup had hidden it
     document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
     const typeEl = document.getElementById('gh-me-type');
-    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : 'folga';
+    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'empty' ? 'work' : 'folga';
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
     // Mostrar TODAS las tiendas — el usuario decide, advertencia si no conoce
+    const defaultStore = c2.store || ctxStore;
     stEl.innerHTML = STORES.map(st => {
       const knows = P(pid)?.knows?.includes(st.id);
-      return `<option value="${st.id}" ${c2.store===st.id?'selected':''}>${sname(st.id)}${!knows?' ⚠':''}</option>`;
+      return `<option value="${st.id}" ${defaultStore===st.id?'selected':''}>${sname(st.id)}${!knows?' ⚠':''}</option>`;
     }).join('');
     document.getElementById('gh-me-conf').style.display = 'none';
     meTypeChange();
@@ -1703,6 +1721,8 @@
         #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
         #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
         #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .c-empty  { background:#fff; min-height:48px; }
+        #tab-gerador .gh-sh-td.c-empty-td { cursor:default; }
         #tab-gerador .c-folga  { background:#f9f9f9; }
         #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         #tab-gerador .c-ferias { background:#f9f9f9; }

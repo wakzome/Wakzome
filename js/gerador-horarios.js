@@ -1223,8 +1223,6 @@
       ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
       : '';
 
-    const combDisplay = '';
-
     const topBar = `
       <div class="gh-sched-bar">
         <div>
@@ -1232,30 +1230,21 @@
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Gerar Novamente</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
           <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
         </div>
       </div>
-      ${combDisplay}
       ${alertsHTML}`;
 
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
-      const inSection = PEOPLE.filter(p => {
+      // Personas que tienen alguna celda asignada a esta tienda O con tienda fija aquí
+      const inSection = active.filter(p => {
         const sched = S.schedule[p.id] || {};
-        if (!DAYS.some(d => sched[d]?.type !== 'na')) return false;
         if (p.store === st.id) return true;
         return DAYS.some(d => sched[d]?.type === 'work' && sched[d]?.store === st.id);
       });
-      if (!inSection.length) return;
-
-      const hdrs = DAYS.map((d, i) => {
-        const date = dates[i];
-        const isToday = date.toDateString() === today.toDateString();
-        const open = S.openDays[st.id]?.includes(d);
-        return `<th class="gh-th${!open?' gh-th-closed':''}${isToday?' gh-th-today':''}">${d}<span class="gh-th-date">${fmt(date)}</span></th>`;
-      }).join('');
+      // Siempre mostrar la tienda aunque esté vacía
 
       const rows = inSection.map(p => {
         const sched = S.schedule[p.id] || {};
@@ -1318,14 +1307,14 @@
           <tr class="gh-tbl-store-hdr">
             <td>
               <button class="gh-store-name-btn" data-store="${st.id}">PORTO SANTO<br>${st.short.split(' ').join('<br>')}</button>
-              <div class="gh-store-actions" id="gh-sa-${st.id}" style="display:none">
+              <div class="gh-store-actions" id="gh-sa-${st.id}" style="display:flex">
                 <button class="gh-store-act-btn gh-store-add" data-store="${st.id}" title="Adicionar pessoa">＋</button>
               </div>
             </td>
             ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
           </tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Tienda vacía — use ＋ para añadir personal</td></tr>`}</tbody>
       </table></div>`;
     });
 
@@ -1350,16 +1339,7 @@
       confirmSchedule(active);
     });
 
-    // Store name button — toggle +/- actions
-    c.querySelectorAll('.gh-store-name-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const sid = btn.dataset.store;
-        const panel = document.getElementById(`gh-sa-${sid}`);
-        // Close all others
-        c.querySelectorAll('.gh-store-actions').forEach(p => { if (p.id !== `gh-sa-${sid}`) p.style.display = 'none'; });
-        panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-      });
-    });
+    // Store name button — no toggle, + always visible
 
     // + Add person to store
     c.querySelectorAll('.gh-store-add').forEach(btn => {
@@ -1378,11 +1358,6 @@
           const day = td.dataset.day;
           if (!S.openDays[sid]?.includes(day)) {
             alert(`${sname(sid)} não está aberta ao ${DAY_PT[day]}.`);
-            return;
-          }
-          const p = P(pid);
-          if (!p?.knows?.includes(sid)) {
-            alert(`${shortName(p?.name)} não conhece ${sname(sid)}.`);
             return;
           }
           S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };

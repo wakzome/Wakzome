@@ -2697,7 +2697,7 @@
         const homeSid=resolveStoreByShort(lojaShort);
         slotsByLoja[lojaShort].forEach(slot=>{
           const visitSids=[...slotVisits[slot]].map(s=>resolveStoreByShort(s)).filter(Boolean);
-          const cands=active.filter(p=>!used.has(p.id)&&(!homeSid||p.knows.includes(homeSid)))
+          const cands=active.filter(p=>!used.has(p.id))
             .sort((a,b)=>{
               const af=(a.store===homeSid&&homeSid)?0:1, bf=(b.store===homeSid&&homeSid)?0:1;
               if(af!==bf) return af-bf;

@@ -140,46 +140,18 @@
   const SH_DEFAULT = SH_B;
   const SH_ALT     = SH_A;
 
-  // ESCENARIOS y funciones de asignación automática eliminados
-
-  // Modos de abertura por loja (configurados no Passo 3)
-  // 'standard'  → 10-19 (B/A)
-  // 'early'     → 09-18/19 (D/B)  +2h manhã
-  // 'extended'  → 10-20 (B/E)     +2h tarde (até 20h)
-  // 'night'     → turno F ativo   (até 23h)
-  // 'sunday'    → 10-19 standard ao domingo (B/A)
-  const STORE_MODES = [
-    { id: 'standard', label: '10:00-19:00',        desc: 'Horário padrão',            shifts: [SH_B, SH_A] },
-    { id: 'early',    label: '09:00-19:00 (+1h)',   desc: 'Abertura às 9h',            shifts: [SH_D, SH_B] },
-    { id: 'extended', label: '10:00-20:00 (+1h)',   desc: 'Fecho às 20h',              shifts: [SH_B, SH_E] },
-    { id: 'full',     label: '09:00-20:00 (+2h)',   desc: 'Abertura 9h e fecho 20h',   shifts: [SH_D, SH_E] },
-    { id: 'night',    label: '09:00-23:00 (noite)', desc: 'Turno noite até 23h',       shifts: [SH_D, SH_F] },
-  ];
-
-  // Devolve o par [shiftPrincipal, shiftAlternativo] para uma loja num dado modo
-  function modeShifts(sid) {
-    const mode = S.storeMode?.[sid] || 'standard';
-    return STORE_MODES.find(m => m.id === mode)?.shifts || [SH_B, SH_A];
-  }
-  // Shift "base" da loja (o que fica quando apenas 1 pessoa)
-  function storeBaseShift(sid) { return modeShifts(sid)[0]; }
-  // Shift "alternativo" (quem sai ao intervalo mais cedo)
-  function storeAltShift(sid)  { return modeShifts(sid)[1]; }
-
-  // Calcula horas de um shift string ('HH:MM-HH:MM|HH:MM-HH:MM')
-  function shiftHours(sh) {
-    if (!sh) return 0;
-    return sh.split('|').reduce((tot, seg) => {
-      const [a, b] = seg.split('-').map(s => { const [h, m] = s.split(':').map(Number); return h + m/60; });
-      return tot + (b - a);
-    }, 0);
-  }
-
-  // Devolve true se o shift fecha às 23h
-  function closesAt23(sh) { return sh && sh.includes('23:00'); }
-
-  // Expor PEOPLE globalmente para que ferias.js possa cruzar nomes ↔ ids
-  window.GERADOR_PEOPLE = PEOPLE;
+  // ── ESCENARIOS — tabla estática generada desde LIBRO_5.xlsx ──
+  // Clave: 'n_dom_l_opc'
+  //   n   = total personas activas
+  //   dom = personas que trabajan el domingo
+  //   l   = número de tiendas abiertas
+  //   opc = variante del modelo (1 o 2)
+  //
+  // Cada escenario define:
+  //   combinacion → códigos de patrón a asignar (en orden, primero los que trabajan DOM)
+  //   tiendas     → MIN/MAX de personas por tienda, en semana y en domingo
+  //
+  // La clave de tienda usa el campo 'short' de STORES en minúsculas.
 
   // ── MEMORY (sessionStorage) ──
   let MEM = (function () {
@@ -194,6 +166,7 @@
       weekStart: null, openStores: [], openDays: {}, storeMin: {}, storeMax: {},
       storeMode: {}, domPessoas: null,
       absences: [],
+      sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: []
     };
   }
@@ -250,15 +223,12 @@
     return fromI === 0 && toI === 6;
   }
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
-  function storeMin(sid) {
-    return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1;
-  }
-  function storeMax(sid) {
-    const storePriority = STORES.find(s => s.id === sid)?.priority ?? 9;
-    if (storePriority >= 3) return 1;
-    const m = S.storeMax?.[sid];
-    return (m && m > 0) ? m : Infinity;
-  }
+  function storeMin(sid)  { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
+  function storeMax(sid)  { const m = S.storeMax?.[sid]; return (m && m > 0) ? m : Infinity; }
+
+
+  // ── SHIFT HELPERS (simplified — no engine) ──
+  function storeBaseShift(sid) { return (window._STORE_MODE_SHIFTS?.[sid] || '10:00-14:00|15:00-19:00'); }
 
   // ── WIZARD STATE ──
   let wStep = 0;
@@ -1110,33 +1080,14 @@
     wStep = 2; renderWiz();
   }
 
-  // ── WIZARD: PASSO 3 ──
+  // ── WIZARD: PASSO 3 — LOJAS E DIAS ──
   function wiz_stores() {
     const c = getContainer(); if (!c) return;
     const defD = ['SEG','TER','QUA','QUI','SEX','SAB'];
 
-    // Detectar temporada para mostrar sugestão
-    const month = S.weekStart ? S.weekStart.getMonth() + 1 : new Date().getMonth() + 1;
-    function detectSeason(m) {
-      if (m >= 1 && m <= 3)  return { id: 'baja1',  label: 'Baja 1 (Jan–Mar)', hint: 'Horário de guerra · 3 lojas · Seg–Sáb · 10-19h' };
-      if (m >= 4 && m <= 5)  return { id: 'int1',   label: 'Intermedia 1 (Abr–Mai)', hint: 'Aumento progressivo · Domingos se houver pessoal' };
-      if (m >= 6 && m <= 8)  return { id: 'alta',   label: 'Alta (Jun–Ago)', hint: 'Máxima optimização · L-S 9-23 em Avda/Mcdo · Domingos 10-19' };
-      if (m >= 9 && m <= 10) return { id: 'int2',   label: 'Intermedia 2 (Set–Out)', hint: 'Redução gradual · Domingos opcionais' };
-      return { id: 'baja2', label: 'Baja 2 (Nov–Dez)', hint: 'Só pessoal efectivo · Horário de guerra' };
-    }
-    const season = detectSeason(month);
-
-    const modeOptionsHTML = STORE_MODES.map(m =>
-      `<option value="${m.id}">${m.label} — ${m.desc}</option>`
-    ).join('');
-
     const rows = STORES.map(st => {
-      // Default: lojas com priority < 4 abrem por defeito; Maxx (priority=4) fechada por defeito
       const open    = S.openStores.length ? S.openStores.includes(st.id) : (STORES.find(s=>s.id===st.id)?.priority ?? 9) < 4;
       const days    = S.openDays[st.id]   || (open ? [...defD] : []);
-      const savedMin  = S.storeMin?.[st.id]  || 1;
-      const savedMax  = S.storeMax?.[st.id]  || '';
-      const savedMode = S.storeMode?.[st.id] || 'standard';
 
       const togs = DAYS.map(d => {
         const isOn = days.includes(d);
@@ -1144,102 +1095,27 @@
         return `<span class="gh-dtog ${isOn ? 'on' : ''} ${isDom ? 'gh-dtog-dom' : ''}" data-store="${st.id}" data-day="${d}">${d}</span>`;
       }).join('');
 
-      // Shana y Maxx (priority >= 3): máximo estructural de 1, no configurable
-      const isSmallStore = (STORES.find(s => s.id === st.id)?.priority ?? 9) >= 3;
-      // Si hay escenario activo para esta tienda, los min/max son automáticos
-      const nActivo = PEOPLE.filter(p => !fullyAbsent(p.id)).length;
-
       return `
       <div class="gh-sc-row ${!open ? 'closed' : ''}" id="gh-scr-${st.id}">
-        <!-- LINHA 1: checkbox + nome + mín/máx -->
         <div class="gh-sc-top">
           <input type="checkbox" id="gh-chk-${st.id}" ${open ? 'checked' : ''} data-store="${st.id}">
           <label for="gh-chk-${st.id}" class="gh-sc-name">${st.name}</label>
-          ${isSmallStore
-            ? `<span class="gh-sc-fixed-cap">máx 1 pessoa</span>`
-            : `<div class="gh-sc-minmax">
-            <div class="gh-sc-mm-field">
-              <span class="gh-sc-mm-label">mín</span>
-              <input type="number" class="gh-sc-mm-inp" id="gh-min-${st.id}" data-store="${st.id}" min="1" max="10" placeholder="Auto" value="${savedMin > 1 ? savedMin : ''}">
-            </div>
-            <div class="gh-sc-mm-sep">·</div>
-            <div class="gh-sc-mm-field">
-              <span class="gh-sc-mm-label">máx</span>
-              <input type="number" class="gh-sc-mm-inp" id="gh-max-${st.id}" data-store="${st.id}" min="1" max="20" placeholder="Auto" value="${savedMax}">
-            </div>
-          </div>`}
         </div>
-        <!-- LINHA 2: dias da semana -->
         <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div>
-        <!-- LINHA 3: modo de horário -->
-        <div class="gh-sc-mode-row" id="gh-scm-${st.id}">
-          <span class="gh-sc-mode-label">Horário</span>
-          <select class="gh-sc-mode-sel" id="gh-mode-${st.id}" data-store="${st.id}">
-            ${modeOptionsHTML}
-          </select>
-          <span class="gh-sc-mode-hint" id="gh-mode-hint-${st.id}"></span>
-        </div>
       </div>`;
     }).join('');
 
     c.innerHTML = `
       <div class="gh-wiz-box gh-wiz-box--wide">
         <div class="gh-wiz-label">Passo 3 de 3</div>
-        <div class="gh-wiz-title">Lojas, dias e horários</div>
-
-        <!-- BANNER TEMPORADA -->
-        <div class="gh-season-banner">
-          <span class="gh-season-icon">📅</span>
-          <div>
-            <div class="gh-season-name">${season.label}</div>
-            <div class="gh-season-hint">${season.hint}</div>
-          </div>
-        </div>
-
+        <div class="gh-wiz-title">Lojas e dias</div>
         <div class="gh-store-cfg">${rows}</div>
-
-        <!-- CAMPO: Pessoas no domingo -->
-        <div id="gh-dom-pessoas-row" style="display:none;margin-bottom:20px;padding:12px 0;border-top:1px solid #f0f0f0;">
-          <div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:8px;">Pessoas a trabalhar no domingo</div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <input type="number" id="gh-dom-pessoas" min="1" max="12" placeholder="Auto"
-              style="width:70px;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:.9rem;font-family:inherit;color:#111;background:#fff;"
-              value="${S.domPessoas || ''}">
-            <span style="font-size:.75rem;color:#888;">Se vazio, o sistema calcula automaticamente pelo mínimo das lojas.</span>
-          </div>
-        </div>
-
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
           <button class="gh-btn gh-btn-solid" id="gh-sub-stores">Gerar horário →</button>
         </div>
       </div>`;
 
-    // Inicializar valores dos selects de modo e hints
-    STORES.forEach(st => {
-      const modeEl = document.getElementById(`gh-mode-${st.id}`);
-      if (modeEl) {
-        const savedMode = S.storeMode?.[st.id] || 'standard';
-        modeEl.value = savedMode;
-        updateModeHint(st.id, savedMode);
-        modeEl.addEventListener('change', () => updateModeHint(st.id, modeEl.value));
-      }
-    });
-
-    function updateModeHint(sid, modeId) {
-      const hint = document.getElementById(`gh-mode-hint-${sid}`);
-      if (!hint) return;
-      const m = STORE_MODES.find(x => x.id === modeId);
-      if (!m) return;
-      const [sh1, sh2] = m.shifts;
-      const label1 = sh1.replace('|', ' / ');
-      const label2 = sh2.replace('|', ' / ');
-      hint.textContent = `Principal: ${label1}  ·  Alt: ${label2}`;
-      // Highlight noite
-      hint.style.color = modeId === 'night' ? '#b05000' : '#888';
-    }
-
-    // Eventos: checkbox loja
     c.querySelectorAll('input[type=checkbox][data-store]').forEach(el => {
       el.addEventListener('change', () => {
         const row = document.getElementById(`gh-scr-${el.dataset.store}`);
@@ -1252,26 +1128,12 @@
         } else {
           row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
         }
-        updateDomPessoasVisibility();
       });
     });
 
-    // Eventos: toggle dias
     c.querySelectorAll('.gh-dtog').forEach(el => {
-      el.addEventListener('click', () => {
-        el.classList.toggle('on');
-        updateDomPessoasVisibility();
-      });
+      el.addEventListener('click', () => { el.classList.toggle('on'); });
     });
-
-    function updateDomPessoasVisibility() {
-      const hasDom = [...c.querySelectorAll('.gh-dtog.on')].some(el => el.dataset.day === 'DOM');
-      const row = document.getElementById('gh-dom-pessoas-row');
-      if (row) row.style.display = hasDom ? 'block' : 'none';
-    }
-
-    // Mostrar campo DOM se já há domingos activos
-    updateDomPessoasVisibility();
 
     document.getElementById('gh-back-2').addEventListener('click', () => { wStep = 1; renderWiz(); });
     document.getElementById('gh-sub-stores').addEventListener('click', sub_stores);
@@ -1284,51 +1146,64 @@
       const days = [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].map(e => e.dataset.day);
       if (!days.length) return;
       S.openStores.push(st.id); S.openDays[st.id] = days;
-      const minInp = document.getElementById(`gh-min-${st.id}`);
-      const maxInp = document.getElementById(`gh-max-${st.id}`);
-      const minVal = parseInt(minInp?.value) || 0;
-      if (minVal > 0) S.storeMin[st.id] = minVal;
-      const maxVal = parseInt(maxInp?.value) || 0;
-      if (maxVal > 0) S.storeMax[st.id] = maxVal;
-      // Ler modo de horário
-      const modeEl = document.getElementById(`gh-mode-${st.id}`);
-      if (modeEl?.value) S.storeMode[st.id] = modeEl.value;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
 
-    // Ler número de pessoas no domingo (override manual)
-    const domInp = document.getElementById('gh-dom-pessoas');
-    const domVal = domInp ? parseInt(domInp.value) || 0 : 0;
-    S.domPessoas = domVal > 0 ? domVal : null; // null = calcular automaticamente
-
-    initEmptySchedule();
-  }
-
-  // ── HORÁRIO MANUAL ──
-  // Cria um horário vazio — todas as pessoas ficam sem turno.
-  // O utilizador atribui rmturno e folgas manualmente.
-  function initEmptySchedule() {
-    S.alerts = []; S.decisions = [];
+    // Build empty schedule for all active people
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     S.schedule = {};
     active.forEach(p => {
       S.schedule[p.id] = {};
-      DAYS.forEach(d => {
-        // Marcar ausências automáticas (férias, baixas, licenças)
-        const a = S.absences.find(x => x.pid === p.id);
-        if (a) {
-          const di = DAYS.indexOf(d);
-          const fromI = DAYS.indexOf(a.from);
-          const toI = a.to ? DAYS.indexOf(a.to) : 6;
-          if (di >= fromI && di <= toI) {
-            S.schedule[p.id][d] = { type: a.type === 'ferias' ? 'ferias' : a.type === 'na' ? 'na' : 'folga', shift: null, store: null };
-            return;
+      DAYS.forEach(day => { S.schedule[p.id][day] = { type: 'na', shift: null, store: null }; });
+    });
+    S.alerts = []; S.decisions = [];
+    showSchedule(active);
+  }
+
+  // ── CONFIRMAR HORARIO — graba todo en Supabase ──
+  async function confirmSchedule(active) {
+    const sb = getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    if (!weekKey) return;
+
+    const btn = document.getElementById('gh-btn-confirm');
+    if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
+
+    try {
+      // 1. Guardar folgas dirigidas del paso 2 (las que el usuario configuró manualmente)
+      if (S._folgas) {
+        for (const [pid, f] of Object.entries(S._folgas)) {
+          if (f.dias?.length) {
+            await sb.from('gh_folgas').upsert(
+              { pessoa_id: pid, semana: weekKey, dias: f.dias },
+              { onConflict: 'pessoa_id,semana' }
+            );
           }
         }
-        S.schedule[p.id][d] = { type: 'folga', shift: null, store: null };
+      }
+
+      // 2. Guardar historial de folgas asignadas por el sistema
+      const upserts = active.map(p => {
+        const dias = [];
+        DAYS.forEach(day => {
+          const cell = S.schedule[p.id]?.[day];
+          if (cell?.type === 'folga' || cell?.type === 'ferias') dias.push(day);
+        });
+        return { pessoa_id: p.id, semana: weekKey, dias };
       });
-    });
-    showSchedule(active);
+
+      for (const u of upserts) {
+        await sb.from('gh_folgas').upsert(u, { onConflict: 'pessoa_id,semana' });
+      }
+
+      S.alerts.push({ type: 'info', text: '✓ Horário confirmado e guardado.' });
+      if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
+
+    } catch(e) {
+      console.error('Erro ao confirmar horário:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar horário'; }
+    }
   }
 
   // ── RENDER HORÁRIO ──
@@ -1348,6 +1223,8 @@
       ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
       : '';
 
+    const combDisplay = '';
+
     const topBar = `
       <div class="gh-sched-bar">
         <div>
@@ -1355,10 +1232,12 @@
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-regen">↺ Gerar Novamente</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
           <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
         </div>
       </div>
+      ${combDisplay}
       ${alertsHTML}`;
 
     let bodyHTML = '';
@@ -1462,6 +1341,7 @@
     });
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
+    document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
       const weekKey = S.weekStart?.toISOString().split('T')[0];
       const confirmed = confirm(`Confirmar e guardar o horário da semana de ${weekKey}?\n\nEsta acção gravará as folgas em Supabase e não poderá ser regenerada.`);
@@ -1515,6 +1395,11 @@
         openEdit(td.dataset.pid, td.dataset.day, td.dataset.store);
       });
     });
+  }
+
+  function regenSchedule() {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
   }
 
   // ── MODAL DE EDIÇÃO ──
@@ -1756,6 +1641,158 @@
         #tab-gerador .gh-season-hint { font-size:.7rem; color:#4a6a9c; line-height:1.4; }
 
         /* ── COMBINAÇÃO BAR ── */
+        #tab-gerador .gh-comb-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:6px 20px; background:#f9f9f7; border-bottom:1px solid #efefeb; font-size:.62rem; }
+        #tab-gerador .gh-comb-label { font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#bbb; margin-right:2px; }
+        #tab-gerador .gh-comb-codes { font-family:monospace; color:#888; font-size:.68rem; }
+        #tab-gerador .gh-comb-sep { color:#ddd; }
+        #tab-gerador .gh-comb-person { display:inline-flex; align-items:center; gap:3px; background:#f0f0eb; border-radius:4px; padding:1px 6px; color:#555; }
+        #tab-gerador .gh-comb-num { font-weight:700; color:#1a3a6c; background:#e8f0fe; border-radius:3px; padding:0 4px; font-size:.65rem; margin-left:2px; }
+
+        /* ── SCHEDULE BAR ── */
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
+        #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
+        #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
+        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
+        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
+        #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
+        #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
+        #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
+        #tab-gerador .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
+
+        /* ── COVERAGE BLOCKER ── */
+        #tab-gerador .gh-cov-list { margin:24px 0; display:flex; flex-direction:column; gap:8px; }
+        #tab-gerador .gh-cov-row { display:grid; grid-template-columns:60px 1fr auto; gap:12px; align-items:center; padding:10px 14px; background:#fff5f5; border:1px solid rgba(169,50,38,.2); border-radius:7px; }
+        #tab-gerador .gh-cov-day { font-size:.72rem; font-weight:700; letter-spacing:.1em; color:#a93226; }
+        #tab-gerador .gh-cov-store { font-size:.82rem; font-weight:500; color:#111; }
+        #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
+
+        /* ── TABLE LAYOUT ── */
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
+
+        /* 1. CONTENEDOR: bloque desplazable */
+        #tab-gerador .gh-store-block {
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          width: 100% !important;
+          display: block !important;
+          margin-bottom: 48px;
+          padding-bottom: 15px !important;
+          box-sizing: border-box;
+        }
+
+        /* 2. TABLA: obligada a NO encogerse */
+        #tab-gerador .gh-sched-tbl {
+          width: auto !important;
+          min-width: unset !important;
+          border-collapse: collapse !important;
+          table-layout: auto !important;
+          margin: 0 auto !important;
+        }
+
+        /* 3. CELDAS: sin saltos de linea, fondo solido */
+        #tab-gerador .gh-sched-tbl th,
+        #tab-gerador .gh-sched-tbl td {
+          white-space: nowrap !important;
+          background-color: #ffffff !important;
+        }
+
+        #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
+        #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
+        #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
+        #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
+        #tab-gerador .gh-store-act-btn { width:26px; height:26px; border-radius:50%; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:1rem; font-weight:700; display:flex; align-items:center; justify-content:center; transition:all .15s; line-height:1; }
+        #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
+        #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
+        #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
+        #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
+        #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
+        #tab-gerador .gh-no-click { cursor:default; }
+        #tab-gerador .gh-no-click:hover { background:transparent !important; }
+
+        /* ── PERSON CELL ── */
+        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }
+        #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
+        #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
+        #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
+        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
+        #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
+        #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
+
+        /* ── SHIFT CELLS ── */
+        #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .c-folga  { background:#f9f9f9; }
+        #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
+        #tab-gerador .c-ferias { background:#f9f9f9; }
+        #tab-gerador .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
+        #tab-gerador .c-na .gh-sh-line     { color:#e0e0e0; }
+        #tab-gerador .c-elsewhere { background:#f5f5f5; }
+        #tab-gerador .c-soft { background:#fffbf0; }
+        #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
+
+        /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
+        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+        #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:8px; width:340px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.12); color:#111; }
+        #gh-modal.open .gh-modal { transform:translateY(0); }
+        #gh-modal .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        #gh-modal .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
+        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
+        #gh-modal .gh-modal-bdy { padding:18px; }
+        #gh-modal .gh-modal-ftr { padding:12px 18px; border-top:1px solid #f0f0f0; display:flex; gap:10px; justify-content:flex-end; }
+        #gh-modal .gh-form-grp  { margin-bottom:14px; }
+        #gh-modal .gh-form-lbl  { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
+        #gh-modal .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
+        #gh-modal .gh-field-sm:focus { border-color:#111; }
+        #gh-modal .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
+        #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
+        #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
+
+        /* ── FERIAS BANNER (injected separately, also scope it) ── */
+        #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
+        #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
+        #tab-gerador .gh-ab-row-ferias { display:flex; align-items:center; gap:8px; padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8; border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a; font-weight:600; }
+        #tab-gerador .gh-ab-row-ferias .gh-ferias-tag { background:#e0f5e0; color:#1a5c1a; border-radius:4px; font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em; flex-shrink:0; }
+        #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
+
+        /* ── STAFF MANAGEMENT PANEL ── */
+        /* ── STEP 2 LAYOUT ── */
+        #tab-gerador .gh-step2-wrap { width:100%; max-width:780px; margin:0 auto; padding:12px 8px 40px; box-sizing:border-box; }
+        #tab-gerador .gh-step2-header { margin-bottom:14px; }
+        #tab-gerador .gh-step2-header-top { margin-bottom:10px; }
+        #tab-gerador .gh-step2-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+        #tab-gerador .gh-step2-badge { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-radius:20px; padding:4px 14px; font-size:.75rem; font-weight:700; letter-spacing:.04em; white-space:nowrap; flex-shrink:0; }
+        #tab-gerador .gh-step2-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        #tab-gerador .gh-wiz-box--wide { max-width:680px; }
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+        #tab-gerador .gh-staff-row { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e8e8e8; border-radius:7px; background:#fafafa; }
+        #tab-gerador .gh-staff-row.gh-staff-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-staff-info { display:flex; flex-direction:column; gap:2px; }
+        #tab-gerador .gh-staff-name-row { display:flex; align-items:center; gap:8px; }
+        #tab-gerador .gh-staff-name { font-size:.85rem; font-weight:700; color:#111; }
+        #tab-gerador .gh-staff-meta { font-size:.72rem; color:#777; }
+        #tab-gerador .gh-staff-weight { font-size:.70rem; color:#555; font-weight:600; }
+        #tab-gerador .gh-staff-knows { font-size:.68rem; color:#999; }
+        #tab-gerador .gh-staff-actions { flex-shrink:0; margin-left:10px; }
+        #tab-gerador .gh-btn-xs { font-size:.62rem; padding:2px 6px; }
+
+        /* ── PERSON FORM ── */
+        #tab-gerador .gh-person-form { border:1px solid #e0e0e0; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; }
+        #tab-gerador .gh-pf-title { font-size:.78rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#555; margin-bottom:12px; }
+        #tab-gerador .gh-pf-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        #tab-gerador .gh-pf-field { display:flex; flex-direction:column; gap:4px; }
+        #tab-gerador .gh-pf-field label { font-size:.65rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999; }
+        #tab-gerador .gh-pf-stores { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+        #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
+        #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
         /* ── STAFF ROW colapsável ── */
         #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:5px; margin-top:12px; }
         #tab-gerador .gh-sr { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-sizing:border-box; width:100%; }

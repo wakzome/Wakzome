@@ -1709,117 +1709,107 @@
     if (!sb) { el.innerHTML = ''; return; }
 
     try {
-      // 1. Carregar todas as folgas históricas
       const { data: folgas } = await sb.from('gh_folgas').select('pessoa_id, semana, dias');
-      // 2. Carregar pessoas
-      const { data: people } = await sb.from('gh_people').select('id, name, start_date').eq('active', true);
+      const { data: people } = await sb.from('gh_people').select('id, name').eq('active', true);
       if (!folgas || !people) { el.innerHTML = ''; return; }
 
       const DIAS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
-      const DOM_START  = '2026-04-06'; // semana 14 — domingos empezaron a contar
+      const DOM_START  = '2026-04-06'; // semana 14
 
-      // Por persona: contar folgas por día y semanas trabajadas (con folgas, sin férias)
-      const stats = {}; // pid → { name, semanas, dias: {SEG:0,...} }
+      // Acumular stats por persona
+      const stats = {};
       people.forEach(p => {
         stats[p.id] = {
           name: (p.name || p.id).split(' ').filter((_,i,a) => i===0||i===a.length-1).join(' '),
           semanas: 0,
+          domSemanas: 0,
           dias: { SEG:0, TER:0, QUA:0, QUI:0, SEX:0, SAB:0, DOM:0 }
         };
       });
 
       folgas.forEach(f => {
         const s = stats[f.pessoa_id];
-        if (!s) return;
-        if (!f.dias || !f.dias.length) return; // skip nulls/empty
+        if (!s || !f.dias || !f.dias.length) return;
         s.semanas++;
-        f.dias.forEach(d => {
-          if (d in s.dias) s.dias[d]++;
-        });
+        if (f.semana >= DOM_START) s.domSemanas++;
+        f.dias.forEach(d => { if (d in s.dias) s.dias[d]++; });
       });
 
-      // Filtrar personas sin datos
-      const rows = Object.entries(stats).filter(([,s]) => s.semanas > 0);
+      const rows = Object.entries(stats)
+        .filter(([,s]) => s.semanas > 0)
+        .sort((a,b) => a[1].name.localeCompare(b[1].name));
+
       if (!rows.length) { el.innerHTML = ''; return; }
 
-      // Para cada día calcular el % de cobertura por persona (folgas_en_dia / semanas_aplicables)
-      // DOM: semanas aplicables = semanas donde semana >= DOM_START
-      const domSemanas = {}; // pid → semanas con domingo posible
-      people.forEach(p => { domSemanas[p.id] = 0; });
-      folgas.forEach(f => {
-        if (f.semana >= DOM_START) {
-          if (domSemanas[f.pessoa_id] !== undefined) domSemanas[f.pessoa_id]++;
-        }
-      });
-
-      // Calcular % por persona y día
-      // % = veces_folgado_ese_día / semanas_aplicables * 100
-      // Para DOM usar domSemanas, para el resto usar semanas totales
-      const pct = {}; // pid → { SEG: %, ... }
-      rows.forEach(([pid, s]) => {
-        pct[pid] = {};
-        DIAS_ORDER.forEach(d => {
-          const denom = d === 'DOM' ? (domSemanas[pid] || 0) : s.semanas;
-          pct[pid][d] = denom > 0 ? Math.round(s.dias[d] / denom * 100) : null;
-        });
-      });
-
-      // Color por % — más alto = más cubierto (verde), más bajo = deuda (rojo/naranja)
-      // Calcular min/max por columna para colorear relativamente
-      function cellColor(val, min, max) {
-        if (val === null) return '#f5f5f5';
-        if (max === min) return '#f0f7ff';
-        const t = (val - min) / (max - min); // 0=min(deuda), 1=max(cubierto)
-        // Rojo → amarillo → verde
-        if (t < 0.5) {
-          const r = 255, g = Math.round(t * 2 * 200), b = 0;
-          return `rgba(${r},${g},${b},0.15)`;
-        } else {
-          const r = Math.round((1 - t) * 2 * 255), g = 180, b = 0;
-          return `rgba(${r},${g},${b},0.15)`;
-        }
+      // Ratio por persona y día: veces / semanas_aplicables
+      // DOM usa domSemanas, resto usa semanas totales
+      function ratio(pid, d) {
+        const s = stats[pid];
+        const denom = d === 'DOM' ? s.domSemanas : s.semanas;
+        if (!denom) return null;
+        return s.dias[d] / denom; // 0.0 → 1.0
       }
 
-      // Build table
-      const sortedRows = rows.sort((a,b) => a[1].name.localeCompare(b[1].name));
-
-      let thead = `<tr><th style="text-align:left;padding:6px 10px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.08em;border-bottom:1px solid #ebebeb;">PESSOA</th>`;
+      // Per-column min/max ratio para determinar fondo
+      const colMin = {}, colMax = {};
       DIAS_ORDER.forEach(d => {
-        thead += `<th style="padding:6px 8px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:1px solid #ebebeb;">${d}</th>`;
-      });
-      thead += `<th style="padding:6px 8px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:1px solid #ebebeb;">SEM</th></tr>`;
-
-      // Per-column min/max
-      const colStats = {};
-      DIAS_ORDER.forEach(d => {
-        const vals = sortedRows.map(([pid]) => pct[pid][d]).filter(v => v !== null);
-        colStats[d] = { min: Math.min(...vals), max: Math.max(...vals) };
+        const vals = rows.map(([pid]) => ratio(pid, d)).filter(v => v !== null);
+        colMin[d] = Math.min(...vals);
+        colMax[d] = Math.max(...vals);
       });
 
+      // Escala de grises: ratio mínimo → fondo oscuro (#444, texto blanco)
+      //                   ratio máximo → fondo claro (#ddd, texto #555)
+      //                   intermedios  → blanco, texto #111
+      function cellStyle(pid, d) {
+        const r = ratio(pid, d);
+        if (r === null) return { bg: '#f9f9f9', color: '#ccc' };
+        const min = colMin[d], max = colMax[d];
+        if (min === max) return { bg: '#fff', color: '#111' }; // todos iguales
+        if (r === min) return { bg: '#333', color: '#fff' };   // más deuda → oscuro
+        if (r === max) return { bg: '#ddd', color: '#666' };   // más cubierto → claro
+        return { bg: '#fff', color: '#111' };                   // intermedio
+      }
+
+      // Formato celda: "veces/semanas"
+      function cellText(pid, d) {
+        const s = stats[pid];
+        const denom = d === 'DOM' ? s.domSemanas : s.semanas;
+        if (!denom) return '—';
+        return `${s.dias[d]}/${denom}`;
+      }
+
+      // Header
+      let thead = `<tr>
+        <th style="text-align:left;padding:8px 12px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.08em;border-bottom:2px solid #e8e8e8;background:#fafafa;">PESSOA</th>`;
+      DIAS_ORDER.forEach(d => {
+        thead += `<th style="padding:8px 6px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:2px solid #e8e8e8;background:#fafafa;">${d}</th>`;
+      });
+      thead += `</tr>`;
+
+      // Rows
       let tbody = '';
-      sortedRows.forEach(([pid, s]) => {
-        tbody += `<tr>`;
-        tbody += `<td style="padding:7px 10px;font-size:.75rem;font-weight:600;color:#111;white-space:nowrap;border-bottom:1px solid #f5f5f5;">${s.name}</td>`;
+      rows.forEach(([pid, s], ri) => {
+        const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
+        tbody += `<tr style="background:${rowBg}">`;
+        tbody += `<td style="padding:8px 12px;font-size:.75rem;font-weight:600;color:#111;white-space:nowrap;border-bottom:1px solid #f0f0f0;">${s.name}</td>`;
         DIAS_ORDER.forEach(d => {
-          const v = pct[pid][d];
-          const bg = cellColor(v, colStats[d].min, colStats[d].max);
-          const txt = v === null ? '—' : v + '%';
-          const bold = v !== null && v === colStats[d].min ? 'font-weight:800;' : '';
-          tbody += `<td style="padding:7px 8px;text-align:center;font-size:.72rem;${bold}background:${bg};border-bottom:1px solid #f5f5f5;border-left:1px solid #f5f5f5;">${txt}</td>`;
+          const { bg, color } = cellStyle(pid, d);
+          const txt = cellText(pid, d);
+          tbody += `<td style="padding:7px 6px;text-align:center;font-size:.72rem;font-weight:600;background:${bg};color:${color};border-bottom:1px solid #f0f0f0;border-left:1px solid #f0f0f0;">${txt}</td>`;
         });
-        tbody += `<td style="padding:7px 8px;text-align:center;font-size:.65rem;color:#aaa;border-bottom:1px solid #f5f5f5;border-left:1px solid #f0f0f0;">${s.semanas}</td>`;
         tbody += `</tr>`;
       });
 
       el.innerHTML = `
-        <div style="margin:24px auto 60px;max-width:680px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
+        <div style="margin:24px auto 60px;max-width:700px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
           <div style="padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;background:#fafafa;">
             <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;margin-bottom:4px;">Equidade de Folgas</div>
-            <div style="font-size:.68rem;color:#aaa;">% de semanas em que cada pessoa folgou cada dia · <strong style="color:#c0392b;">negrito</strong> = mais em débito · DOM conta a partir de semana 14</div>
+            <div style="font-size:.68rem;color:#aaa;">Formato veces/semanas · <span style="background:#333;color:#fff;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = debe trabajar · DOM desde semana 14</div>
           </div>
           <div style="overflow-x:auto;">
             <table style="border-collapse:collapse;width:100%;table-layout:auto;">
-              <thead style="background:#fafafa;">${thead}</thead>
+              <thead>${thead}</thead>
               <tbody>${tbody}</tbody>
             </table>
           </div>

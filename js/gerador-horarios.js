@@ -1436,7 +1436,7 @@
 
     const lines = [];
 
-    openStoreIds.forEach(sid => {
+    openStoreIds.forEach((sid, storeIdx) => {
       const storeShort = PS_STORE_SHORT[sid] || sid.toUpperCase();
 
       // Get people assigned to this store (with at least one work day here)
@@ -1447,7 +1447,8 @@
 
       if (!storePeople.length) return;
 
-      // Header rows
+      // NO blank line between stores — all stores in one block (same as datosfnc.csv format)
+      // Only add blank line before first store if not first
       lines.push(['PORTO SANTO', 'SEG','TER','QUA','QUI','SEX','SAB','DOM'].join(','));
       lines.push([storeShort, ...dates].join(','));
 
@@ -1488,8 +1489,7 @@
         lines.push(rowA.map(v => v.includes(',') ? '"' + v + '"' : v).join(','));
         lines.push(rowB.map(v => v.includes(',') ? '"' + v + '"' : v).join(','));
       });
-
-      lines.push(''); // blank line between store blocks
+      // NO blank line — stores stay in same block
     });
 
     return lines.join('\r\n');

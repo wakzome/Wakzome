@@ -54,60 +54,38 @@
       return;
     }
 
-    // ── PORTO SANTO: inject generated weeks from porto_horarios.csv ──
+    // ── PORTO SANTO: load week-specific files (porto_s17.csv, porto_s18.csv...) ──
     if (store === 'porto santo') {
-      try {
-        const portoUrl = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_horarios.csv?t=' + Date.now();
-        const portoRes = await fetch(portoUrl);
-        if (portoRes.ok) {
-          const portoText = await portoRes.text();
-          const portoRows = Papa.parse(portoText, {skipEmptyLines: false}).data.map(r => r.map(c => (c==null?'':String(c).trim())));
-
-          // Build map: firstDate → rows for that week (all stores combined, no blank lines)
-          const portoWeeks = {}; // date → [rows]
-          let curDate = null;
-          portoRows.forEach(r => {
-            if (r.every(c => c === '')) return; // skip blank lines
-            // Date row: col 0 is store name, col 1 is DD/MM/YYYY
-            if (r[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) {
-              curDate = r[1];
-              if (!portoWeeks[curDate]) portoWeeks[curDate] = [];
-            }
-            if (curDate) portoWeeks[curDate].push(r);
-          });
-
-          // Replace empty blocks — one replacement per date
-          const usedDates = new Set();
-          filtered = filtered.map(block => {
-            // Find this block's date
-            let blockDate = null;
-            for (let i = 0; i < block.length && !blockDate; i++)
-              for (let c = 1; c < block[i].length && !blockDate; c++)
-                if (block[i][c] && /^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c]))
-                  blockDate = block[i][c];
-
-            if (!blockDate) return block;
-            if (usedDates.has(blockDate)) return null; // remove duplicate empty blocks
-
-            const generated = portoWeeks[blockDate];
-            if (!generated || !generated.length) return block;
-
-            // Only replace if block has no real person data
-            const hasData = block.some(r => {
-              const f = (r[0]||'').trim().toUpperCase();
-              if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(f)) return false;
-              if (r[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) return false;
-              return f !== '' && r.slice(1).some(c => c && c !== '');
-            });
-            if (hasData) return block;
-
-            usedDates.add(blockDate);
-            return generated;
-          }).filter(b => b !== null);
-        }
-      } catch(e) {
-        console.warn('[admin-horarios] porto_horarios.csv:', e.message);
-      }
+      const BASE_DATE = new Date('2026-01-05T00:00:00');
+      const usedWeeks = new Set();
+      const blockPromises = filtered.map(async block => {
+        let blockDate = null;
+        for (let i=0;i<block.length&&!blockDate;i++)
+          for (let c=1;c<block[i].length&&!blockDate;c++)
+            if (block[i][c]&&/^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c])) blockDate=block[i][c];
+        if (!blockDate) return block;
+        const hasData = block.some(r=>{
+          const f=(r[0]||'').trim().toUpperCase();
+          if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(f)) return false;
+          if (r[1]&&/^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) return false;
+          return f!==''&&r.slice(1).some(c=>c&&c!=='');
+        });
+        if (hasData) return block;
+        const p=blockDate.split('/');
+        const weekNum=Math.round((new Date(+p[2],+p[1]-1,+p[0])-BASE_DATE)/(7*86400000))+1;
+        if (weekNum<17) return block;
+        if (usedWeeks.has(weekNum)) return null;
+        usedWeeks.add(weekNum);
+        try {
+          const url='https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s'+weekNum+'.csv?t='+Date.now();
+          const res=await fetch(url);
+          if (!res.ok) return block;
+          const text=await res.text();
+          const flat=Papa.parse(text,{skipEmptyLines:false}).data.map(r=>r.map(c=>(c==null?'':String(c).trim()))).filter(r=>!r.every(c=>c===''));
+          return flat.length?flat:block;
+        } catch(e){return block;}
+      });
+      filtered=(await Promise.all(blockPromises)).filter(b=>b!==null);
     }
 
     hBlocks = { filtered };

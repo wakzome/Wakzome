@@ -1662,61 +1662,24 @@
     console.log('[GH] CSV block length:', newBlock?.length, 'weekKey:', weekKey);
     if (!newBlock) { console.warn('[GH] buildPortoSantoCSV returned empty'); throw new Error('CSV gerado está vazio — verifique se há pessoas e turnos assignados'); }
 
+    // One file per week: porto_s17.csv, porto_s18.csv, etc.
     const BUCKET = 'horarios';
-    const FILE   = 'porto_horarios.csv';
+    const BASE_DATE = new Date('2026-01-05T00:00:00');
+    const weekMs = new Date(weekKey + 'T00:00:00') - BASE_DATE;
+    const weekNum = Math.round(weekMs / (7 * 86400000)) + 1;
+    const FILE = 'porto_s' + weekNum + '.csv';
 
     try {
-      // 1. Try to fetch existing file
-      let existingText = '';
-      try {
-        const { data: urlData } = sb.storage.from(BUCKET).getPublicUrl(FILE);
-        const res = await fetch(urlData.publicUrl + '?t=' + Date.now());
-        if (res.ok) existingText = await res.text();
-      } catch(e) { /* file doesn't exist yet — ok */ }
-
-      // 2. Parse existing blocks (separated by blank lines)
-      const existingBlocks = [];
-      if (existingText.trim()) {
-        let cur = [];
-        existingText.split(/\r?\n/).forEach(line => {
-          if (line.trim() === '') {
-            if (cur.length) { existingBlocks.push(cur.join('\r\n')); cur = []; }
-          } else cur.push(line);
-        });
-        if (cur.length) existingBlocks.push(cur.join('\r\n'));
-      }
-
-      // 3. Determine the week number (semana) for the selector label
-      // Week 1 starts 2026-01-05; each week is +7 days
-      const BASE_DATE = new Date('2026-01-05T00:00:00');
-      const weekMs = new Date(weekKey + 'T00:00:00') - BASE_DATE;
-      const weekNum = Math.round(weekMs / (7 * 86400000)) + 1;
-      const weekLabel = 'SEMANA ' + weekNum;
-
-      // 4. Replace block that has this week's dates, or append
-      // Each block starts with lines containing weekLabel dates
-      const weekDate = psDateFmt(new Date(weekKey + 'T00:00:00'));
-      let replaced = false;
-      const updatedBlocks = existingBlocks.map(block => {
-        if (block.includes(weekDate)) { replaced = true; return newBlock.trimEnd(); }
-        return block;
-      });
-      if (!replaced) updatedBlocks.push(newBlock.trimEnd());
-
-      const finalCSV = updatedBlocks.join('\r\n\r\n') + '\r\n';
-
-      // 5. Upload
-      const blob = new Blob([finalCSV], { type: 'text/csv' });
+      const blob = new Blob([newBlock], { type: 'text/csv' });
       const { error } = await sb.storage.from(BUCKET).upload(FILE, blob, {
         upsert: true,
         contentType: 'text/csv'
       });
       if (error) throw error;
-
-      console.log('[GH] porto_horarios.csv publicado — semana ' + weekNum);
+      console.log('[GH] ' + FILE + ' publicado');
     } catch(e) {
-      console.error('[GH] Erro ao publicar porto_horarios.csv:', e);
-      throw e; // propagate to confirmSchedule retry handler
+      console.error('[GH] Erro ao publicar ' + FILE + ':', e);
+      throw e;
     }
   }
 

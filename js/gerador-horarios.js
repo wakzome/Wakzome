@@ -1544,25 +1544,26 @@
         const pid = btn.dataset.pid;
         const sid = btn.dataset.store;
         const p = P(pid);
-        if (!confirm(`Eliminar ${shortName(p?.name || pid)} da tabela de ${sname(sid)}?`)) return;
-        // Clear only work cells assigned to THIS store for this person
-        DAYS.forEach(day => {
-          const cell = S.schedule[pid]?.[day];
-          if (cell?.type === 'work' && cell?.store === sid) {
-            S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+        showConfirmModal(
+          `Eliminar ${shortName(p?.name || pid)} da tabela de ${sname(sid)}?`,
+          () => {
+            DAYS.forEach(day => {
+              const cell = S.schedule[pid]?.[day];
+              if (cell?.type === 'work' && cell?.store === sid) {
+                S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+              }
+            });
+            if (S._personStores?.[pid]) {
+              S._personStores[pid] = S._personStores[pid].filter(s => s !== sid);
+              if (S._personStores[pid].length === 0) delete S._personStores[pid];
+            }
+            if (S._storeOrder?.[sid]) {
+              S._storeOrder[sid] = S._storeOrder[sid].filter(id => id !== pid);
+            }
+            const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+            showSchedule(active);
           }
-        });
-        // Remove from _personStores only for this specific store
-        if (S._personStores?.[pid]) {
-          S._personStores[pid] = S._personStores[pid].filter(s => s !== sid);
-          if (S._personStores[pid].length === 0) delete S._personStores[pid];
-        }
-        // Remove from _storeOrder only for this specific store
-        if (S._storeOrder?.[sid]) {
-          S._storeOrder[sid] = S._storeOrder[sid].filter(id => id !== pid);
-        }
-        const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-        showSchedule(active);
+        );
       });
     });
 
@@ -1793,7 +1794,21 @@
   function bindPatternPanel(active) {
     // Clear all button
     document.getElementById('gh-pt-clear-all')?.addEventListener('click', () => {
+      const prevAssigned = { ...(window._GH_ASSIGNED_PATTERNS || {}) };
       window._GH_ASSIGNED_PATTERNS = {};
+      active.forEach(p => {
+        const pNum = prevAssigned[p.id];
+        if (!pNum) return;
+        const folgas = patternFolgas(pNum);
+        DAYS.forEach(day => {
+          const cur = S.schedule[p.id]?.[day];
+          if (!cur) return;
+          if (['ferias','baixa','fim_contrato','na'].includes(cur.type)) return;
+          if (folgas.includes(day) && cur.type === 'folga') {
+            S.schedule[p.id][day] = { type: 'empty', shift: null, store: null };
+          }
+        });
+      });
       showSchedule(active);
     });
 
@@ -1802,6 +1817,18 @@
         e.stopPropagation();
         const pid = btn.dataset.pid;
         if (pid && window._GH_ASSIGNED_PATTERNS) {
+          const pNum = window._GH_ASSIGNED_PATTERNS[pid];
+          if (pNum) {
+            const folgas = patternFolgas(pNum);
+            DAYS.forEach(day => {
+              const cur = S.schedule[pid]?.[day];
+              if (!cur) return;
+              if (['ferias','baixa','fim_contrato','na'].includes(cur.type)) return;
+              if (folgas.includes(day) && cur.type === 'folga') {
+                S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+              }
+            });
+          }
           delete window._GH_ASSIGNED_PATTERNS[pid];
           showSchedule(active);
         }
@@ -1824,23 +1851,27 @@
       const btn = cell.querySelector('.gh-p-remove-btn');
       if (!btn) return;
       const pid = btn.dataset.pid;
-      // Add a "assign pattern" button next to the name
+      const hrsDiv = cell.querySelector('.gh-p-hrs');
       const assignBtn = document.createElement('button');
       assignBtn.className = 'gh-pt-assign-trigger';
       assignBtn.dataset.pid = pid;
       assignBtn.title = 'Atribuir padrão de folga';
-      assignBtn.textContent = '📋';
-      cell.appendChild(assignBtn);
+      assignBtn.innerHTML = '<span class="gh-pt-assign-trigger-dot"></span>';
+      if (hrsDiv) {
+        hrsDiv.style.display = 'flex';
+        hrsDiv.style.alignItems = 'center';
+        hrsDiv.appendChild(assignBtn);
+      } else {
+        cell.appendChild(assignBtn);
+      }
 
       assignBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         _patternAssignCtx = pid;
-        // Highlight all pattern rows as clickable
         document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.add('gh-pt-row-pick'));
         document.querySelectorAll('.gh-pt-assign-trigger').forEach(b => {
-          b.style.background = b.dataset.pid === pid ? '#fff3cd' : '';
+          b.classList.toggle('active', b.dataset.pid === pid);
         });
-        // Scroll to pattern panel
         document.getElementById('gh-pattern-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
@@ -1891,6 +1922,28 @@
   function regenSchedule() {
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);
+  }
+
+  function closeConfirmModal() {
+    const cm = document.getElementById('gh-confirm-modal');
+    if (cm) { cm.classList.remove('open'); cm._onOk = null; }
+  }
+
+  function showConfirmModal(msg, onOk) {
+    let cm = document.getElementById('gh-confirm-modal');
+    if (!cm) {
+      cm = document.createElement('div');
+      cm.id = 'gh-confirm-modal';
+      cm.innerHTML = `<div class="gh-cm-box"><div class="gh-cm-msg" id="gh-cm-msg"></div><div class="gh-cm-btns"><button class="gh-cm-cancel" id="gh-cm-cancel">Cancelar</button><button class="gh-cm-ok" id="gh-cm-ok">Eliminar</button></div></div>`;
+      document.body.appendChild(cm);
+      cm.addEventListener('click', e => { if (e.target === cm) closeConfirmModal(); });
+      document.getElementById('gh-cm-cancel').addEventListener('click', closeConfirmModal);
+    }
+    document.getElementById('gh-cm-msg').textContent = msg;
+    cm._onOk = onOk;
+    const okBtn = document.getElementById('gh-cm-ok');
+    okBtn.onclick = () => { closeConfirmModal(); onOk && onOk(); };
+    cm.classList.add('open');
   }
 
   // ── MODAL DE EDIÇÃO ──
@@ -2278,6 +2331,17 @@
         #gh-modal .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
         #gh-modal .gh-field-sm:focus { border-color:#111; }
         #gh-modal .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
+
+        /* ── CONFIRM MODAL ── */
+        #gh-confirm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9100; align-items:center; justify-content:center; }
+        #gh-confirm-modal.open { display:flex; }
+        #gh-confirm-modal .gh-cm-box { background:#fff; border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.18); padding:28px 28px 20px; max-width:340px; width:90vw; text-align:center; }
+        #gh-confirm-modal .gh-cm-msg { font-size:.88rem; font-weight:500; color:#222; margin-bottom:22px; line-height:1.5; }
+        #gh-confirm-modal .gh-cm-btns { display:flex; gap:10px; justify-content:center; }
+        #gh-confirm-modal .gh-cm-cancel { padding:8px 22px; border:1px solid #ddd; background:#fff; border-radius:6px; font-size:.78rem; font-weight:600; cursor:pointer; color:#666; font-family:inherit; }
+        #gh-confirm-modal .gh-cm-cancel:hover { background:#f5f5f5; }
+        #gh-confirm-modal .gh-cm-ok { padding:8px 22px; border:none; background:#c0392b; border-radius:6px; font-size:.78rem; font-weight:700; cursor:pointer; color:#fff; font-family:inherit; }
+        #gh-confirm-modal .gh-cm-ok:hover { background:#a93226; }
         #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
         #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
 
@@ -2402,9 +2466,11 @@
         /* Footer */
         #tab-gerador .gh-pt-footer { padding:10px 16px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
 
-        /* Trigger button on person name cells */
-        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; font-size:.7rem; padding:1px 4px; opacity:.35; transition:opacity .15s; line-height:1; margin-left:3px; vertical-align:middle; }
-        #tab-gerador .gh-pt-assign-trigger:hover { opacity:1; }
+        /* Trigger button on person name cells — next to hours */
+        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:0; line-height:1; margin-left:4px; vertical-align:middle; display:inline-flex; align-items:center; }
+        #tab-gerador .gh-pt-assign-trigger-dot { width:7px; height:7px; border-radius:50%; background:#c8b8f0; display:inline-block; transition:background .15s, transform .15s; }
+        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#7c3aed; transform:scale(1.3); }
+        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,.2); }
 
         /* Wizard 3 — domingo workers input */
         #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }
@@ -2420,6 +2486,15 @@
     // Inject HTML into panel (only once) — only gh-container goes inside the panel
     if (!document.getElementById('gh-container')) {
       panel.innerHTML = `<div id="gh-container"></div>`;
+    }
+
+    if (!document.getElementById('gh-confirm-modal')) {
+      const cm = document.createElement('div');
+      cm.id = 'gh-confirm-modal';
+      cm.innerHTML = `<div class="gh-cm-box"><div class="gh-cm-msg" id="gh-cm-msg"></div><div class="gh-cm-btns"><button class="gh-cm-cancel" id="gh-cm-cancel">Cancelar</button><button class="gh-cm-ok" id="gh-cm-ok">Eliminar</button></div></div>`;
+      document.body.appendChild(cm);
+      cm.addEventListener('click', e => { if (e.target === cm) closeConfirmModal(); });
+      document.getElementById('gh-cm-cancel').addEventListener('click', closeConfirmModal);
     }
 
     // Modal lives in document.body — completely outside any tab panel so it never

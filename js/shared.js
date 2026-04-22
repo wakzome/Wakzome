@@ -395,18 +395,21 @@
           });
           if (pcur.length) portoBlocks.push(pcur);
 
-          const portoByDate = {};
-          portoBlocks.forEach(pb => {
-            let date = null;
-            for (let i = 0; i < pb.length; i++) {
-              for (let c = 1; c < pb[i].length; c++) {
-                if (pb[i][c] && pb[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) { date = pb[i][c]; break; }
-              }
-              if (date) break;
+          const portoWeeks = {};
+          let currentDate = null;
+          portoRows.forEach(r => {
+            if (r.every(c => c === '')) return;
+            const hasDate = r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/);
+            if (hasDate && !r[0].match(/^\d{2}/)) {
+              currentDate = r[1];
             }
-            if (date) { if (!portoByDate[date]) portoByDate[date] = []; portoByDate[date].push(pb); }
+            if (currentDate) {
+              if (!portoWeeks[currentDate]) portoWeeks[currentDate] = [];
+              portoWeeks[currentDate].push(r);
+            }
           });
 
+          const usedDates = new Set();
           finalBlocks = filteredBlocks.map(block => {
             let blockDate = null;
             for (let i = 0; i < block.length; i++) {
@@ -416,20 +419,19 @@
               if (blockDate) break;
             }
             if (!blockDate) return block;
-            const generatedBlocks = portoByDate[blockDate];
-            if (!generatedBlocks || !generatedBlocks.length) return block;
-            const hasPersonRows = block.some(r => {
+            if (usedDates.has(blockDate)) return null;
+            const generatedRows = portoWeeks[blockDate];
+            if (!generatedRows || !generatedRows.length) return block;
+            const hasRealData = block.some(r => {
               const first = (r[0] || '').trim().toUpperCase();
-              if (first === 'PORTO SANTO') return false;
+              if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(first)) return false;
               if (r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/)) return false;
-              if (['SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(first)) return false;
               return first !== '' && r.slice(1).some(c => c && c !== '');
             });
-            if (hasPersonRows) return block;
-            const merged = [];
-            generatedBlocks.forEach(gb => gb.forEach(row => merged.push(row)));
-            return merged;
-          });
+            if (hasRealData) return block;
+            usedDates.add(blockDate);
+            return generatedRows;
+          }).filter(b => b !== null);
         }
       } catch(e) { console.warn('[shared] porto_horarios.csv not available:', e.message); }
     }

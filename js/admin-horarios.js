@@ -72,41 +72,51 @@
           });
           if (pcur.length) portoBlocks.push(pcur);
 
-          // Build a map: date string → porto block (using first date found in block)
-          const portoByDate = {};
+          // Build a map: "date|storename" → porto block
+          const portoByKey = {};
           portoBlocks.forEach(pb => {
+            let date = null, store = null;
             for (let i = 0; i < pb.length; i++) {
               const row = pb[i];
+              // Row with dates: first cell is store name, rest are dates
               for (let c = 1; c < row.length; c++) {
                 if (row[c] && row[c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  portoByDate[row[c]] = pb;
-                  return;
+                  date = row[c];
+                  store = (row[0] || '').trim().toLowerCase();
+                  break;
                 }
               }
+              if (date) break;
             }
+            if (date) portoByKey[date + '|' + store] = pb;
           });
 
           // Replace empty Porto Santo blocks with generated ones
           filtered = filtered.map(block => {
-            // Check if block has any person rows (rows beyond header+dates that have schedule data)
-            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
-            if (hasPeople) return block; // already has data — keep
-
-            // Find the date for this block
-            let blockDate = null;
+            // Find date and store name for this block
+            let blockDate = null, blockStore = null;
             for (let i = 0; i < block.length; i++) {
               for (let c = 1; c < block[i].length; c++) {
                 if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  blockDate = block[i][c]; break;
+                  blockDate = block[i][c];
+                  blockStore = (block[i][0] || '').trim().toLowerCase();
+                  break;
                 }
               }
               if (blockDate) break;
             }
 
-            if (blockDate && portoByDate[blockDate]) {
-              return portoByDate[blockDate]; // replace with generated block
-            }
-            return block;
+            if (!blockDate) return block;
+
+            const key = blockDate + '|' + blockStore;
+            const generated = portoByKey[key];
+            if (!generated) return block;
+
+            // Only replace if original block has no people
+            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
+            if (hasPeople) return block;
+
+            return generated;
           });
         }
       } catch(e) {

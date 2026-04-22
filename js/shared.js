@@ -395,28 +395,37 @@
           });
           if (pcur.length) portoBlocks.push(pcur);
 
-          const portoByDate = {};
+          const portoByKey = {};
           portoBlocks.forEach(pb => {
+            let date = null, store = null;
             for (let i = 0; i < pb.length; i++) {
               for (let c = 1; c < pb[i].length; c++) {
                 if (pb[i][c] && pb[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  portoByDate[pb[i][c]] = pb; return;
+                  date = pb[i][c]; store = (pb[i][0]||'').trim().toLowerCase(); break;
                 }
               }
+              if (date) break;
             }
+            if (date) portoByKey[date + '|' + store] = pb;
           });
 
           finalBlocks = filteredBlocks.map(block => {
-            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
-            if (hasPeople) return block;
-            let blockDate = null;
+            let blockDate = null, blockStore = null;
             for (let i = 0; i < block.length; i++) {
               for (let c = 1; c < block[i].length; c++) {
-                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) { blockDate = block[i][c]; break; }
+                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                  blockDate = block[i][c]; blockStore = (block[i][0]||'').trim().toLowerCase(); break;
+                }
               }
               if (blockDate) break;
             }
-            return (blockDate && portoByDate[blockDate]) ? portoByDate[blockDate] : block;
+            if (!blockDate) return block;
+            const key = blockDate + '|' + blockStore;
+            const generated = portoByKey[key];
+            if (!generated) return block;
+            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
+            if (hasPeople) return block;
+            return generated;
           });
         }
       } catch(e) { console.warn('[shared] porto_horarios.csv not available:', e.message); }

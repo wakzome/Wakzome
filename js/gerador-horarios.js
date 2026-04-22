@@ -2470,7 +2470,7 @@
         #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:0; line-height:1; margin-left:4px; vertical-align:middle; display:inline-flex; align-items:center; }
         #tab-gerador .gh-pt-assign-trigger-dot { width:7px; height:7px; border-radius:50%; background:#c8b8f0; display:inline-block; transition:background .15s, transform .15s; }
         #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#7c3aed; transform:scale(1.3); }
-        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,.2); }
+        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#7c3aed; box-shadow:0 0 0 4px rgba(63, 58, 71, 0.2); }
 
         /* Wizard 3 — domingo workers input */
         #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }

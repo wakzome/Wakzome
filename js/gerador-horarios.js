@@ -1433,14 +1433,6 @@
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
-    requestAnimationFrame(() => {
-      const firstCells = c.querySelectorAll('.gh-sched-tbl td:first-child, .gh-sched-tbl th:first-child');
-      firstCells.forEach(el => { el.style.width = ''; });
-      let maxW = 0;
-      firstCells.forEach(el => { maxW = Math.max(maxW, el.getBoundingClientRect().width); });
-      if (maxW > 0) firstCells.forEach(el => { el.style.width = maxW + 'px'; });
-    });
-
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
@@ -1844,6 +1836,7 @@
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
         #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-sched-tbl td:first-child { white-space:nowrap; }
         #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
         #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
         #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
@@ -1861,6 +1854,9 @@
         #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }
         #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
         #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
+        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:flex; align-items:center; gap:5px; padding:0; width:max-content; text-align:left; }
+        #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
+        #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
         #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
         #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
@@ -1870,6 +1866,8 @@
         #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
         #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
         #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .c-empty  { background:#fff; min-height:48px; }
+        #tab-gerador .gh-sh-td.c-empty-td { cursor:default; }
         #tab-gerador .c-folga  { background:#f9f9f9; }
         #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
         #tab-gerador .c-ferias { background:#f9f9f9; }
@@ -1878,6 +1876,8 @@
         #tab-gerador .c-elsewhere { background:#f5f5f5; }
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
+        #tab-gerador .c-fim-contrato { background:#fff5f5; cursor:default; }
+        #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
 
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
         #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }

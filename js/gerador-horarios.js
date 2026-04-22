@@ -1636,26 +1636,29 @@
   }
 
   // Compute the scenario key from current state + active people
+  // Compute the scenario key from current state + active people.
+  // The Libro6 middle number = pessoas com FOLGA ao domingo.
+  // (patterns 3-9,11,13-17 have DOM=FOLGA; patterns 1,2,10,12,16 work on sunday)
   function computeScenarioKey(active) {
     const nPessoas = active.length;
-    const nDom = active.filter(p => {
+    const assigned2 = window._GH_ASSIGNED_PATTERNS || {};
+    // Count people whose assigned pattern has DOM as FOLGA,
+    // or whose schedule already marks DOM as folga/ferias/baixa
+    const folgaDom = active.filter(p => {
+      const pNum = assigned2[p.id];
+      if (pNum && PATTERNS[pNum]) return PATTERNS[pNum][6] === false;
       const c = S.schedule[p.id]?.['DOM'];
-      return c && (c.type === 'work' || c.type === 'empty');
-    }).length;
-    // Count sunday workers: people who ARE NOT on folga/ferias/baixa on Sunday
-    const sundayWorkers = active.filter(p => {
-      const c = S.schedule[p.id]?.['DOM'];
-      return c && c.type !== 'folga' && c.type !== 'ferias' && c.type !== 'baixa' && c.type !== 'fim_contrato';
+      return c && (c.type === 'folga' || c.type === 'ferias' || c.type === 'baixa');
     }).length;
     const nLojas = S.openStores.length;
-    return { key: `${nPessoas}_${sundayWorkers}_${nLojas}`, nPessoas, sundayWorkers, nLojas };
+    return { key: `${nPessoas}_${folgaDom}_${nLojas}`, nPessoas, folgaDom, nLojas };
   }
 
   // State: which pattern numbers have been assigned to people
   if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {}; // pid → patternNum
 
   function buildPatternPanel(active) {
-    const { key, nPessoas, sundayWorkers, nLojas } = computeScenarioKey(active);
+    const { key, nPessoas, folgaDom, nLojas } = computeScenarioKey(active);
     const scenario = SCENARIOS[key];
     const assigned = window._GH_ASSIGNED_PATTERNS || {};
 
@@ -1707,7 +1710,7 @@
     }
 
     const noScenario = !scenario
-      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${sundayWorkers} ao domingo · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
+      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${folgaDom} folga ao dom · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
       : '';
 
     return `
@@ -1716,7 +1719,7 @@
         <div class="gh-pt-title">Padrão de Folgas</div>
         <div class="gh-pt-meta">
           <span class="gh-pt-badge">${nPessoas} pessoas</span>
-          <span class="gh-pt-badge gh-pt-badge-dom">${sundayWorkers} ao domingo</span>
+          <span class="gh-pt-badge gh-pt-badge-dom">${folgaDom} folga ao dom</span>
           <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
           ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
         </div>

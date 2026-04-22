@@ -719,7 +719,8 @@
         html += `<th class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(row[c] || '')}</th>`;
       }
       html += '</tr>'; i++;
-      while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
+      const storeNames = ['porto santo','shana','mezka mercado','mezka avenida','maxx'];
+      while (i + 1 < rows.length && !storeNames.includes((rows[i][0] || '').toLowerCase())) {
         const A = rows[i]; const B = rows[i + 1];
         let circleColor = 'red'; let isActiveNow = false;
         if (todayCol > 0) {

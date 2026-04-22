@@ -2024,6 +2024,25 @@
       if (soft) { ce.textContent = `Atenção: ${p?.name} e ${soft.name} — preferido evitar.`; ce.className = 'gh-conf-note soft'; ce.style.display = ''; }
       else ce.style.display = 'none';
       S.schedule[pid][day] = { type: 'work', shift, store: sid };
+
+      // ── AUTO-REPLICATE: if person has no work scheduled in any other store/day,
+      // propagate this shift+store to all empty days automatically ──
+      const personStores = S._personStores?.[pid] || [];
+      const hasOtherWork = DAYS.some(d => {
+        if (d === day) return false;
+        const cell = S.schedule[pid]?.[d];
+        return cell && cell.type === 'work';
+      });
+      // Replicate only when: person has no work on any other day yet
+      if (!hasOtherWork) {
+        DAYS.forEach(d => {
+          if (d === day) return;
+          const cell = S.schedule[pid]?.[d];
+          if (cell && cell.type === 'empty') {
+            S.schedule[pid][d] = { type: 'work', shift, store: sid };
+          }
+        });
+      }
     }
     closeModal();
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -2333,6 +2352,11 @@
         #tab-gerador .c-fim-contrato { background:#fff5f5; cursor:default; }
         #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
 
+        /* ── Hide legacy selects — always hidden, pills are used instead ── */
+        #gh-modal #gh-me-type,
+        #gh-modal #gh-me-shift,
+        #gh-modal #gh-me-store { display:none !important; }
+
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
         #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(4px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
         #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
@@ -2353,10 +2377,10 @@
         #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
         #gh-modal .gh-pill { background:#f7f7f7; border:1.5px solid #e5e5e5; border-radius:50px; padding:9px 20px; font-size:.82rem; font-weight:600; cursor:pointer; color:#444; transition:all .15s; white-space:nowrap; font-family:inherit; line-height:1.2; }
         #gh-modal .gh-pill:hover { background:#f0f0f0; border-color:#ccc; color:#111; transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
-        /* TIPO active — dark charcoal, white text */
-        #gh-modal .gh-pill-tipo.active { background:#222; border-color:#222; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
-        /* SHIFT active — dark slate, white text */
-        #gh-modal .gh-pill-shift.active { background:#2c2c2c; border-color:#2c2c2c; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.18); }
+        /* TIPO active — forest green, white text */
+        #gh-modal .gh-pill-tipo.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
+        /* SHIFT active — forest green, white text */
+        #gh-modal .gh-pill-shift.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
         /* STORE active — forest green, white text */
         #gh-modal .gh-pill-store.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
         /* shift pills — larger, 2-line, grid */

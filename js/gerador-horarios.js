@@ -1302,31 +1302,26 @@
     const btn = document.getElementById('gh-btn-confirm');
     if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
 
-    try {
-      // 1. Guardar folgas dirigidas del paso 2 (las que el usuario configuró manualmente)
-      if (S._folgas) {
-        for (const [pid, f] of Object.entries(S._folgas)) {
-          if (f.dias?.length) {
-            await sb.from('gh_folgas').upsert(
-              { pessoa_id: pid, semana: weekKey, dias: f.dias },
-              { onConflict: 'pessoa_id,semana' }
-            );
-          }
-        }
-      }
+    // DOM só conta se havia tiendas abertas ao domingo essa semana
+    const domingoAberto = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
 
-      // 2. Guardar historial de folgas asignadas por el sistema
-      const upserts = active.map(p => {
+    try {
+      for (const p of active) {
         const dias = [];
         DAYS.forEach(day => {
           const cell = S.schedule[p.id]?.[day];
-          if (cell?.type === 'folga' || cell?.type === 'ferias') dias.push(day);
+          if (cell?.type !== 'folga') return;
+          if (day === 'DOM' && !domingoAberto) return;
+          dias.push(day);
         });
-        return { pessoa_id: p.id, semana: weekKey, dias };
-      });
 
-      for (const u of upserts) {
-        await sb.from('gh_folgas').upsert(u, { onConflict: 'pessoa_id,semana' });
+        // Não guardar semanas sem folgas reais (férias completas, etc.)
+        if (!dias.length) continue;
+
+        await sb.from('gh_folgas').upsert(
+          { pessoa_id: p.id, semana: weekKey, dias },
+          { onConflict: 'pessoa_id,semana' }
+        );
       }
 
       S.alerts.push({ type: 'info', text: '✓ Horário confirmado e guardado.' });
@@ -1514,7 +1509,10 @@
     // ── PATTERN PANEL — compute scenario from current state ──
     const patternHTML = buildPatternPanel(active);
 
-    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>` + patternHTML;
+    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>` + patternHTML + `<div id="gh-equity-panel"></div>`;
+
+    // ── EQUITY PANEL — load async after render ──
+    renderEquityPanel();
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
@@ -1699,6 +1697,139 @@
 
   // State: which pattern numbers have been assigned to people
   if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {}; // pid → patternNum
+
+  // ── EQUITY PANEL — folga fairness tracker ──
+  async function renderEquityPanel() {
+    const el = document.getElementById('gh-equity-panel');
+    if (!el) return;
+
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:#bbb;font-size:.75rem;">A carregar equidade de folgas…</div>';
+
+    const sb = getSupabase();
+    if (!sb) { el.innerHTML = ''; return; }
+
+    try {
+      // 1. Carregar todas as folgas históricas
+      const { data: folgas } = await sb.from('gh_folgas').select('pessoa_id, semana, dias');
+      // 2. Carregar pessoas
+      const { data: people } = await sb.from('gh_people').select('id, name, start_date').eq('active', true);
+      if (!folgas || !people) { el.innerHTML = ''; return; }
+
+      const DIAS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+      const DOM_START  = '2026-04-06'; // semana 14 — domingos empezaron a contar
+
+      // Por persona: contar folgas por día y semanas trabajadas (con folgas, sin férias)
+      const stats = {}; // pid → { name, semanas, dias: {SEG:0,...} }
+      people.forEach(p => {
+        stats[p.id] = {
+          name: (p.name || p.id).split(' ').filter((_,i,a) => i===0||i===a.length-1).join(' '),
+          semanas: 0,
+          dias: { SEG:0, TER:0, QUA:0, QUI:0, SEX:0, SAB:0, DOM:0 }
+        };
+      });
+
+      folgas.forEach(f => {
+        const s = stats[f.pessoa_id];
+        if (!s) return;
+        if (!f.dias || !f.dias.length) return; // skip nulls/empty
+        s.semanas++;
+        f.dias.forEach(d => {
+          if (d in s.dias) s.dias[d]++;
+        });
+      });
+
+      // Filtrar personas sin datos
+      const rows = Object.entries(stats).filter(([,s]) => s.semanas > 0);
+      if (!rows.length) { el.innerHTML = ''; return; }
+
+      // Para cada día calcular el % de cobertura por persona (folgas_en_dia / semanas_aplicables)
+      // DOM: semanas aplicables = semanas donde semana >= DOM_START
+      const domSemanas = {}; // pid → semanas con domingo posible
+      people.forEach(p => { domSemanas[p.id] = 0; });
+      folgas.forEach(f => {
+        if (f.semana >= DOM_START) {
+          if (domSemanas[f.pessoa_id] !== undefined) domSemanas[f.pessoa_id]++;
+        }
+      });
+
+      // Calcular % por persona y día
+      // % = veces_folgado_ese_día / semanas_aplicables * 100
+      // Para DOM usar domSemanas, para el resto usar semanas totales
+      const pct = {}; // pid → { SEG: %, ... }
+      rows.forEach(([pid, s]) => {
+        pct[pid] = {};
+        DIAS_ORDER.forEach(d => {
+          const denom = d === 'DOM' ? (domSemanas[pid] || 0) : s.semanas;
+          pct[pid][d] = denom > 0 ? Math.round(s.dias[d] / denom * 100) : null;
+        });
+      });
+
+      // Color por % — más alto = más cubierto (verde), más bajo = deuda (rojo/naranja)
+      // Calcular min/max por columna para colorear relativamente
+      function cellColor(val, min, max) {
+        if (val === null) return '#f5f5f5';
+        if (max === min) return '#f0f7ff';
+        const t = (val - min) / (max - min); // 0=min(deuda), 1=max(cubierto)
+        // Rojo → amarillo → verde
+        if (t < 0.5) {
+          const r = 255, g = Math.round(t * 2 * 200), b = 0;
+          return `rgba(${r},${g},${b},0.15)`;
+        } else {
+          const r = Math.round((1 - t) * 2 * 255), g = 180, b = 0;
+          return `rgba(${r},${g},${b},0.15)`;
+        }
+      }
+
+      // Build table
+      const sortedRows = rows.sort((a,b) => a[1].name.localeCompare(b[1].name));
+
+      let thead = `<tr><th style="text-align:left;padding:6px 10px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.08em;border-bottom:1px solid #ebebeb;">PESSOA</th>`;
+      DIAS_ORDER.forEach(d => {
+        thead += `<th style="padding:6px 8px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:1px solid #ebebeb;">${d}</th>`;
+      });
+      thead += `<th style="padding:6px 8px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:1px solid #ebebeb;">SEM</th></tr>`;
+
+      // Per-column min/max
+      const colStats = {};
+      DIAS_ORDER.forEach(d => {
+        const vals = sortedRows.map(([pid]) => pct[pid][d]).filter(v => v !== null);
+        colStats[d] = { min: Math.min(...vals), max: Math.max(...vals) };
+      });
+
+      let tbody = '';
+      sortedRows.forEach(([pid, s]) => {
+        tbody += `<tr>`;
+        tbody += `<td style="padding:7px 10px;font-size:.75rem;font-weight:600;color:#111;white-space:nowrap;border-bottom:1px solid #f5f5f5;">${s.name}</td>`;
+        DIAS_ORDER.forEach(d => {
+          const v = pct[pid][d];
+          const bg = cellColor(v, colStats[d].min, colStats[d].max);
+          const txt = v === null ? '—' : v + '%';
+          const bold = v !== null && v === colStats[d].min ? 'font-weight:800;' : '';
+          tbody += `<td style="padding:7px 8px;text-align:center;font-size:.72rem;${bold}background:${bg};border-bottom:1px solid #f5f5f5;border-left:1px solid #f5f5f5;">${txt}</td>`;
+        });
+        tbody += `<td style="padding:7px 8px;text-align:center;font-size:.65rem;color:#aaa;border-bottom:1px solid #f5f5f5;border-left:1px solid #f0f0f0;">${s.semanas}</td>`;
+        tbody += `</tr>`;
+      });
+
+      el.innerHTML = `
+        <div style="margin:24px auto 60px;max-width:680px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
+          <div style="padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;background:#fafafa;">
+            <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;margin-bottom:4px;">Equidade de Folgas</div>
+            <div style="font-size:.68rem;color:#aaa;">% de semanas em que cada pessoa folgou cada dia · <strong style="color:#c0392b;">negrito</strong> = mais em débito · DOM conta a partir de semana 14</div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="border-collapse:collapse;width:100%;table-layout:auto;">
+              <thead style="background:#fafafa;">${thead}</thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </div>
+        </div>`;
+
+    } catch(e) {
+      console.error('Erro ao carregar equidade:', e);
+      el.innerHTML = '';
+    }
+  }
 
   function buildPatternPanel(active) {
     const { key, nPessoas, domTrab, nLojas } = computeScenarioKey(active);

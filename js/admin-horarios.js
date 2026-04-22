@@ -161,11 +161,7 @@
     const block = filtered[index];
     if (!block) return;
 
-    // Only show if block has actual person rows with schedule data
-    // Person rows contain shift times or FOLGA/FERIAS — not store name headers
-    const shiftPattern = /^\d{2}:\d{2}|FOLGA|FERIAS/i;
-    const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && shiftPattern.test(c)));
-    if (!hasPeople) return;
+    // Always show edit button for semana 17+ regardless of content
 
     // Find the week start date from block
     let weekDateStr = null;

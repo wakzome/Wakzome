@@ -1453,7 +1453,7 @@
 
       storePeople.forEach(p => {
         const hrs = p.hrs || 40;
-        const nameLabel = psShortName(p.name) + '.' + hrs + 'hrs';
+        const nameLabel = psShortName(p.name) + hrs + 'hrs';
         const rowA = [nameLabel];
         const rowB = [nameLabel];
 

@@ -1333,6 +1333,49 @@
       </div>
       ${alertsHTML}`;
 
+    // ── Pre-calculate the first-column width so all tables share the same value ──
+    // We measure every text that appears in a first-column cell (store header lines
+    // and person names) using an off-screen canvas, then add padding so the result
+    // is pixel-perfect before a single byte of HTML is written.
+    const _col0W = (function () {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Store-header cell: "PORTO SANTO\n<store.short lines>" in bold 0.75rem
+      // Person cell: shortName() in 600-weight 0.85rem
+      // We measure at 16px base (typical browser default).
+      const BASE = 16;
+      let max = 0;
+
+      function measure(text, fontStr) {
+        ctx.font = fontStr;
+        return ctx.measureText(text).width;
+      }
+
+      const openStores = STORES.filter(st => S.openStores.includes(st.id));
+
+      openStores.forEach(st => {
+        // Header: "PORTO SANTO" + store short lines (bold 0.75rem ≈ 12px)
+        const headerFont = `bold ${0.75 * BASE}px sans-serif`;
+        ['PORTO SANTO', ...st.short.split(' ')].forEach(line => {
+          max = Math.max(max, measure(line, headerFont));
+        });
+      });
+
+      // Person names (600-weight 0.85rem ≈ 13.6px)
+      const nameFont = `600 ${0.85 * BASE}px sans-serif`;
+      // dot "●" + space prefix + name text + remove-x invisible but takes space
+      active.forEach(p => {
+        // "● " prefix (approx 16px) + shortName
+        const w = measure('● ' + shortName(p.name), nameFont);
+        max = Math.max(max, w);
+      });
+
+      // Add padding: 8px left + 12px right (from .gh-p-cell) + 8px header padding each side
+      const PAD = 20 + 16; // generous fixed padding
+      return Math.ceil(max + PAD);
+    })();
+
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
       // Personas en orden de inserción (via +) o con work asignado
@@ -1405,7 +1448,7 @@
         });
         aH = Math.round(aH * 10) / 10;
         return `<tr>
-          <td><div class="gh-p-cell">
+          <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
             <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
               <span class="gh-p-dot">●</span>${shortName(p.name)}
               <span class="gh-p-remove-x">✕</span>
@@ -1418,7 +1461,7 @@
       bodyHTML += `<div class="gh-store-block" id="gh-sb-${st.id}"><table class="gh-sched-tbl">
         <thead>
           <tr class="gh-tbl-store-hdr">
-            <td>
+            <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box">
               <button class="gh-store-name-btn" data-store="${st.id}">PORTO SANTO<br>${st.short.split(' ').join('<br>')}</button>
               <div class="gh-store-actions" id="gh-sa-${st.id}" style="display:flex">
                 <button class="gh-store-act-btn gh-store-add" data-store="${st.id}" title="Adicionar pessoa">＋</button>
@@ -1432,53 +1475,6 @@
     });
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
-
-    // Synchronise the first-column width across all schedule tables.
-    // Each .gh-store-block has its own overflow-x:auto context, so CSS alone
-    // cannot align columns between tables.  We measure the natural width of
-    // every first-cell after layout and apply the maximum via an inline style
-    // directly on each cell so the result survives independent scroll containers.
-    function syncFirstColumnWidth() {
-      const body = c.querySelector('.gh-sched-body');
-      if (!body) return;
-      const tables = body.querySelectorAll('.gh-sched-tbl');
-      if (tables.length < 1) return;
-
-      // 1. Clear any previously forced width so the browser can measure freely
-      tables.forEach(tbl => {
-        tbl.querySelectorAll('tr > td:first-child').forEach(cell => {
-          cell.style.width = '';
-          cell.style.minWidth = '';
-          cell.style.maxWidth = '';
-        });
-      });
-
-      // 2. Force a reflow so getBoundingClientRect reflects the reset
-      void body.offsetWidth;
-
-      // 3. Find the widest natural first-cell across all tables
-      let maxW = 0;
-      tables.forEach(tbl => {
-        tbl.querySelectorAll('tr > td:first-child').forEach(cell => {
-          const w = cell.getBoundingClientRect().width;
-          if (w > maxW) maxW = w;
-        });
-      });
-
-      if (maxW <= 0) return;
-
-      // 4. Lock every first-cell to that maximum width
-      tables.forEach(tbl => {
-        tbl.querySelectorAll('tr > td:first-child').forEach(cell => {
-          cell.style.width    = maxW + 'px';
-          cell.style.minWidth = maxW + 'px';
-          cell.style.maxWidth = maxW + 'px';
-        });
-      });
-    }
-
-    // Two rAF frames: first lets the browser paint, second ensures layout is stable
-    requestAnimationFrame(() => requestAnimationFrame(syncFirstColumnWidth));
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);

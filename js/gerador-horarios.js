@@ -876,9 +876,59 @@
   async function deletePersonConfirm(pid) {
     const p = PEOPLE.find(x => x.id === pid);
     if (!p) return;
-    if (!confirm(`Eliminar "${p.name}"? Esta acção não pode ser desfeita.`)) return;
     const sb = getSupabase();
     if (!sb) { alert('Supabase não disponível.'); return; }
+
+    // Se a pessoa está associada a mais do que uma tienda (via knows),
+    // perguntar se quer apenas remover de uma tienda ou eliminar por completo.
+    const knows = p.knows || [];
+    if (knows.length > 1) {
+      // Construir lista de lojas conhecidas para o utilizador escolher
+      const storeNames = knows.map(sid => {
+        const st = STORES.find(s => s.id === sid);
+        return st ? `• ${st.name} (id: ${sid})` : `• ${sid}`;
+      }).join('\n');
+      const choice = window.prompt(
+        `"${p.name}" está associada a ${knows.length} tiendas:\n${storeNames}\n\n` +
+        `Escreva o NOME da tienda para a remover apenas dessa tienda,\n` +
+        `ou deixe em branco e prima OK para ELIMINAR a pessoa por completo.`
+      );
+      // User cancelled
+      if (choice === null) return;
+
+      if (choice.trim() !== '') {
+        // Remove from a specific store only
+        const matchedStore = STORES.find(s =>
+          s.name.toLowerCase().includes(choice.trim().toLowerCase()) ||
+          s.short?.toLowerCase().includes(choice.trim().toLowerCase()) ||
+          s.id === choice.trim()
+        );
+        if (!matchedStore) {
+          alert(`Tienda "${choice.trim()}" não encontrada. Operação cancelada.`);
+          return;
+        }
+        try {
+          const newKnows = knows.filter(sid => sid !== matchedStore.id);
+          const newStore = p.store === matchedStore.id ? (newKnows[0] || null) : p.store;
+          const { error } = await sb.from('gh_people')
+            .update({ knows: newKnows, store_id: newStore })
+            .eq('id', pid);
+          if (error) throw error;
+          await loadKnowledgeBase();
+          const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
+            ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
+          renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
+        } catch(e) {
+          console.error('Remove from store error:', e);
+          alert('Erro ao remover da tienda. Verifique a consola.');
+        }
+        return;
+      }
+      // Blank → fall through to full delete below, with confirmation
+    }
+
+    // Full delete
+    if (!confirm(`Eliminar "${p.name}" por completo? Esta acção não pode ser desfeita.`)) return;
     try {
       // Eliminar registos dependentes antes de apagar a pessoa (evita FK 23503)
       await sb.from('gh_licencas').delete().eq('pessoa_id', pid);

@@ -1947,6 +1947,15 @@
   }
 
   // ── MODAL DE EDIÇÃO ──
+  // ── PILL GROUP HELPER ──
+  function ghSyncPillGroup(groupId, val) {
+    const grp = document.getElementById(groupId);
+    if (!grp) return;
+    grp.querySelectorAll('.gh-pill[data-val]').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === val);
+    });
+  }
+
   let editCtx = null;
 
   function openEdit(pid, day, ctxStore) {
@@ -1954,18 +1963,26 @@
     const p = P(pid), c2 = S.schedule[pid]?.[day] || {};
     const modal = document.getElementById('gh-modal');
     if (!modal) return;
-    modal.style.display = ''; // restore in case cleanup had hidden it
+    modal.style.display = '';
     document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
     const typeEl = document.getElementById('gh-me-type');
     typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'empty' ? 'work' : 'folga';
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
-    // Mostrar TODAS las tiendas — el usuario decide, advertencia si no conoce
     const defaultStore = c2.store || ctxStore;
     stEl.innerHTML = STORES.map(st => {
       const knows = P(pid)?.knows?.includes(st.id);
       return `<option value="${st.id}" ${defaultStore===st.id?'selected':''}>${sname(st.id)}${!knows?' ⚠':''}</option>`;
+    }).join('');
+    // Sync pill buttons
+    ghSyncPillGroup('gh-me-type-btns', typeEl.value);
+    ghSyncPillGroup('gh-me-shift-btns', shEl.value);
+    // Build store pill buttons dynamically
+    const storeBtns = document.getElementById('gh-me-store-btns');
+    storeBtns.innerHTML = STORES.map(st => {
+      const knows = P(pid)?.knows?.includes(st.id);
+      return `<button class="gh-pill gh-pill-store${defaultStore===st.id?' active':''}" data-val="${st.id}">${sname(st.id)}${!knows?' ⚠':''}</button>`;
     }).join('');
     document.getElementById('gh-me-conf').style.display = 'none';
     meTypeChange();
@@ -2319,18 +2336,30 @@
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
         #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
         #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
-        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:8px; width:340px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 8px 32px rgba(0,0,0,.12); color:#111; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:14px; width:360px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 12px 40px rgba(0,0,0,.15); color:#111; }
         #gh-modal.open .gh-modal { transform:translateY(0); }
         #gh-modal .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
         #gh-modal .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
         #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
-        #gh-modal .gh-modal-bdy { padding:18px; }
-        #gh-modal .gh-modal-ftr { padding:12px 18px; border-top:1px solid #f0f0f0; display:flex; gap:10px; justify-content:flex-end; }
-        #gh-modal .gh-form-grp  { margin-bottom:14px; }
-        #gh-modal .gh-form-lbl  { display:block; font-size:.62rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#999; margin-bottom:5px; }
-        #gh-modal .gh-field-sm  { width:100%; border:1px solid #ddd; border-radius:5px; padding:7px 10px; font-size:.82rem; font-family:inherit; font-weight:300; outline:none; background:#fff; color:#111; box-sizing:border-box; }
-        #gh-modal .gh-field-sm:focus { border-color:#111; }
+        #gh-modal .gh-modal-bdy { padding:18px 18px 22px; }
+        #gh-modal .gh-form-grp  { margin-bottom:16px; }
+        #gh-modal .gh-form-lbl  { display:block; font-size:.58rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
         #gh-modal .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
+        #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
+        #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
+        /* pill group */
+        #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:7px; justify-content:center; }
+        #gh-modal .gh-pill { background:#f5f5f5; border:1.5px solid #e8e8e8; border-radius:50px; padding:7px 16px; font-size:.78rem; font-weight:600; cursor:pointer; color:#555; transition:all .15s; white-space:nowrap; font-family:inherit; }
+        #gh-modal .gh-pill:hover { background:#efefef; border-color:#ccc; color:#222; transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,.08); }
+        #gh-modal .gh-pill.active { background:#111; border-color:#111; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.18); }
+        /* shift pills */
+        #gh-modal .gh-pill-shift { display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 12px; min-width:70px; border-radius:10px; }
+        #gh-modal .gh-pill-shift.active { background:#111; border-color:#111; color:#fff; }
+        #gh-modal .gh-pill-code { font-size:.95rem; font-weight:800; line-height:1; }
+        #gh-modal .gh-pill-time { font-size:.58rem; font-weight:500; opacity:.75; }
+        /* store pills */
+        #gh-modal .gh-pill-store { padding:8px 18px; border-radius:50px; }
+        #gh-modal .gh-pill-store.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff; }
 
         /* ── CONFIRM MODAL ── */
         #gh-confirm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9100; align-items:center; justify-content:center; }
@@ -2342,9 +2371,6 @@
         #gh-confirm-modal .gh-cm-cancel:hover { background:#f5f5f5; }
         #gh-confirm-modal .gh-cm-ok { padding:8px 22px; border:none; background:#c0392b; border-radius:6px; font-size:.78rem; font-weight:700; cursor:pointer; color:#fff; font-family:inherit; }
         #gh-confirm-modal .gh-cm-ok:hover { background:#a93226; }
-        #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
-        #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
-
         /* ── FERIAS BANNER (injected separately, also scope it) ── */
         #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
         #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
@@ -2509,46 +2535,86 @@
             <button class="gh-modal-x" id="gh-modal-x">✕</button>
           </div>
           <div class="gh-modal-bdy">
+            <!-- hidden selects kept for compatibility with existing JS logic -->
+            <select id="gh-me-type" style="display:none">
+              <option value="work">Trabalho</option>
+              <option value="folga">FOLGA</option>
+              <option value="ferias">FÉRIAS</option>
+            </select>
+            <select id="gh-me-shift" style="display:none">
+              <option value="10:00-13:00|14:00-19:00">[A]</option>
+              <option value="10:00-14:00|15:00-19:00">[B]</option>
+              <option value="10:00-15:00|16:00-19:00">[C]</option>
+              <option value="09:00-12:00|13:00-18:00">[D]</option>
+              <option value="11:00-15:00|16:00-20:00">[E]</option>
+              <option value="09:00-13:00|19:00-23:00">[F]</option>
+            </select>
+            <select id="gh-me-store" style="display:none"></select>
+
+            <!-- TIPO buttons -->
             <div class="gh-form-grp">
               <label class="gh-form-lbl">Tipo</label>
-              <select class="gh-field-sm" id="gh-me-type" style="width:100%">
-                <option value="work">Trabalho</option>
-                <option value="folga">FOLGA</option>
-                <option value="ferias">FÉRIAS</option>
-              </select>
-            </div>
-            <div id="gh-me-work">
-              <div class="gh-form-grp" style="margin-top:10px">
-                <label class="gh-form-lbl">Horário</label>
-                <select class="gh-field-sm" id="gh-me-shift" style="width:100%">
-                  <option value="10:00-13:00|14:00-19:00">[A] 10:00-13:00 / 14:00-19:00 (intervalo 13h)</option>
-                  <option value="10:00-14:00|15:00-19:00">[B] 10:00-14:00 / 15:00-19:00 (intervalo 14h)</option>
-                  <option value="10:00-15:00|16:00-19:00">[C] 10:00-15:00 / 16:00-19:00 (intervalo 15h)</option>
-                  <option value="09:00-12:00|13:00-18:00">[D] 09:00-12:00 / 13:00-18:00 (abertura 9h)</option>
-                  <option value="11:00-15:00|16:00-20:00">[E] 11:00-15:00 / 16:00-20:00 (pós-noite)</option>
-                  <option value="09:00-13:00|19:00-23:00">[F] 09:00-13:00 / 19:00-23:00 (noite 23h)</option>
-                </select>
+              <div class="gh-btn-group" id="gh-me-type-btns">
+                <button class="gh-pill" data-val="work">💼 Trabalho</button>
+                <button class="gh-pill" data-val="folga">🏖 Folga</button>
+                <button class="gh-pill" data-val="ferias">🌴 Férias</button>
               </div>
-              <div class="gh-form-grp" style="margin-top:10px">
+            </div>
+
+            <div id="gh-me-work">
+              <!-- HORÁRIO buttons -->
+              <div class="gh-form-grp">
+                <label class="gh-form-lbl">Horário</label>
+                <div class="gh-btn-group gh-btn-group-shifts" id="gh-me-shift-btns">
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00"><span class="gh-pill-code">A</span><span class="gh-pill-time">10–13 / 14–19</span></button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00"><span class="gh-pill-code">B</span><span class="gh-pill-time">10–14 / 15–19</span></button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00"><span class="gh-pill-code">C</span><span class="gh-pill-time">10–15 / 16–19</span></button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00"><span class="gh-pill-code">D</span><span class="gh-pill-time">09–12 / 13–18</span></button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00"><span class="gh-pill-code">E</span><span class="gh-pill-time">11–15 / 16–20</span></button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00"><span class="gh-pill-code">F</span><span class="gh-pill-time">09–13 / 19–23</span></button>
+                </div>
+              </div>
+              <!-- LOJA buttons -->
+              <div class="gh-form-grp">
                 <label class="gh-form-lbl">Loja</label>
-                <select class="gh-field-sm" id="gh-me-store" style="width:100%"></select>
+                <div class="gh-btn-group gh-btn-group-stores" id="gh-me-store-btns"></div>
               </div>
             </div>
             <div class="gh-conf-note" id="gh-me-conf" style="display:none"></div>
-          </div>
-          <div class="gh-modal-ftr">
-            <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-modal-cancel">Cancelar</button>
-            <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-modal-save">Guardar</button>
           </div>
         </div></div></div>`;
       document.body.appendChild(modalEl);
 
       document.getElementById('gh-modal-x').addEventListener('click', closeModal);
-      document.getElementById('gh-modal-cancel').addEventListener('click', closeModal);
-      document.getElementById('gh-modal-save').addEventListener('click', () => applyEdit());
       document.getElementById('gh-me-type').addEventListener('change', meTypeChange);
+      // Backdrop click closes modal
       modalEl.addEventListener('click', e => {
         if (e.target === modalEl) closeModal();
+      });
+      // TIPO pill buttons
+      document.getElementById('gh-me-type-btns').addEventListener('click', e => {
+        const btn = e.target.closest('.gh-pill[data-val]');
+        if (!btn) return;
+        document.getElementById('gh-me-type').value = btn.dataset.val;
+        ghSyncPillGroup('gh-me-type-btns', btn.dataset.val);
+        meTypeChange();
+        if (btn.dataset.val !== 'work') applyEdit();
+      });
+      // HORARIO pill buttons
+      document.getElementById('gh-me-shift-btns').addEventListener('click', e => {
+        const btn = e.target.closest('.gh-pill[data-val]');
+        if (!btn) return;
+        document.getElementById('gh-me-shift').value = btn.dataset.val;
+        ghSyncPillGroup('gh-me-shift-btns', btn.dataset.val);
+        if (document.getElementById('gh-me-store').value) applyEdit();
+      });
+      // LOJA pill buttons (dynamic)
+      document.getElementById('gh-me-store-btns').addEventListener('click', e => {
+        const btn = e.target.closest('.gh-pill[data-val]');
+        if (!btn) return;
+        document.getElementById('gh-me-store').value = btn.dataset.val;
+        ghSyncPillGroup('gh-me-store-btns', btn.dataset.val);
+        applyEdit();
       });
     }
 

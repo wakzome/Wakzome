@@ -1804,33 +1804,50 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
+        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
-        /* 1. CONTENEDOR: bloque desplazable */
+        /* 1b. CONTENEDOR por loja: sem scroll próprio, largura igual à tabela */
         #tab-gerador .gh-store-block {
-          overflow-x: auto !important;
-          -webkit-overflow-scrolling: touch !important;
-          width: 100% !important;
+          overflow-x: visible !important;
+          width: max-content !important;
+          min-width: 100% !important;
           display: block !important;
           margin-bottom: 48px;
           padding-bottom: 15px !important;
           box-sizing: border-box;
         }
 
-        /* 2. TABLA: obligada a NO encogerse */
+        /* 2. TABLA: table-layout fixed com largura total forçada igual em todas */
         #tab-gerador .gh-sched-tbl {
-          width: auto !important;
-          min-width: unset !important;
+          width: max-content !important;
+          min-width: 100% !important;
           border-collapse: collapse !important;
-          table-layout: auto !important;
-          margin: 0 auto !important;
+          table-layout: fixed !important;
+          margin: 0 !important;
         }
 
-        /* 3. CELDAS: sin saltos de linea, fondo solido */
+        /* 3. Coluna de nome: largura fixa igual em todas as tabelas */
+        #tab-gerador .gh-sched-tbl td:first-child,
+        #tab-gerador .gh-sched-tbl th:first-child {
+          width: 160px !important;
+          min-width: 160px !important;
+          max-width: 160px !important;
+        }
+
+        /* 4. Colunas de dias: largura fixa igual em todas as tabelas */
+        #tab-gerador .gh-sched-tbl td:not(:first-child),
+        #tab-gerador .gh-sched-tbl th:not(:first-child) {
+          width: 110px !important;
+          min-width: 110px !important;
+          max-width: 110px !important;
+        }
+
+        /* 5. CELDAS: fondo solido */
         #tab-gerador .gh-sched-tbl th,
         #tab-gerador .gh-sched-tbl td {
           white-space: nowrap !important;
           background-color: #ffffff !important;
+          overflow: hidden !important;
         }
 
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }

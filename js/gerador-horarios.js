@@ -1619,7 +1619,10 @@
   };
 
   // Scenarios from Libro6 right-side table
-  // Key: "pessoas_dom_lojas"  →  ordered list of pattern numbers
+  // Key: "pessoas_domTrab_lojas"
+  //   pessoas   = total active people for pattern purposes
+  //   domTrab   = number of people that WORK on sunday (directly from Wizard 3)
+  //   lojas     = number of open stores
   const SCENARIOS = {
     '4_0_3':  [4,5,6,7],
     '5_0_3':  [3,4,5,6,7],
@@ -1675,42 +1678,28 @@
 
   // Compute the scenario key from current state + active people
   // Compute the scenario key from Wizard 3 data.
-  // nPessoas  = active people this week (excluding fully absent)
-  // folgaDom  = nPessoas - domTrabalhadores (people with folga on sunday)
-  //             if domTrabalhadores is null/0 and domingo not open → folgaDom = nPessoas
-  // nLojas    = open stores count from S.openStores
+  // Key format: "nPessoas_domTrab_nLojas"
+  //   nPessoas  = active people for pattern (excludes significantly absent)
+  //   domTrab   = people that WORK on sunday — exactly what user typed in Wizard 3
+  //               if sunday is closed → 0
+  //   nLojas    = open stores from S.openStores
   function computeScenarioKey(active) {
-    // Exclude people absent for most of the week (mid-week férias etc.)
     const patternActive = active.filter(p => !significantlyAbsent(p.id));
     const nPessoas = patternActive.length;
     const nLojas   = S.openStores.length;
-
-    let folgaDom;
-    if (!S.domingoAberto) {
-      // Sunday closed → everyone has folga on sunday
-      folgaDom = nPessoas;
-    } else if (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined) {
-      // User explicitly said X people work on sunday → rest have folga
-      folgaDom = Math.max(0, nPessoas - S.domTrabalhadores);
-    } else {
-      // Fallback: count from schedule/patterns
-      const assigned2 = window._GH_ASSIGNED_PATTERNS || {};
-      folgaDom = active.filter(p => {
-        const pNum = assigned2[p.id];
-        if (pNum && PATTERNS[pNum]) return PATTERNS[pNum][6] === false;
-        const c = S.schedule[p.id]?.['DOM'];
-        return c && (c.type === 'folga' || c.type === 'ferias' || c.type === 'baixa');
-      }).length;
-    }
-
-    return { key: `${nPessoas}_${folgaDom}_${nLojas}`, nPessoas, folgaDom, nLojas };
+    const domTrab  = (!S.domingoAberto) ? 0
+                   : (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined)
+                     ? S.domTrabalhadores
+                     : 0;
+    const key = `${nPessoas}_${domTrab}_${nLojas}`;
+    return { key, nPessoas, domTrab, nLojas };
   }
 
   // State: which pattern numbers have been assigned to people
   if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {}; // pid → patternNum
 
   function buildPatternPanel(active) {
-    const { key, nPessoas, folgaDom, nLojas } = computeScenarioKey(active);
+    const { key, nPessoas, domTrab, nLojas } = computeScenarioKey(active);
     const scenario = SCENARIOS[key];
     const assigned = window._GH_ASSIGNED_PATTERNS || {};
 
@@ -1762,7 +1751,7 @@
     }
 
     const noScenario = !scenario
-      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${folgaDom} folga ao dom · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
+      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${domTrab} trabalham ao dom · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
       : '';
 
     return `
@@ -1771,7 +1760,7 @@
         <div class="gh-pt-title">Padrão de Folgas</div>
         <div class="gh-pt-meta">
           <span class="gh-pt-badge">${nPessoas} pessoas p/ padrão</span>
-          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined ? S.domTrabalhadores : (nPessoas - folgaDom)) + ' trabalham dom' : 'dom fechado'}</span>
+          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? domTrab + ' trabalham dom' : 'dom fechado'}</span>
           <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
           ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
         </div>

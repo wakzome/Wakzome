@@ -395,37 +395,34 @@
           });
           if (pcur.length) portoBlocks.push(pcur);
 
-          const portoByKey = {};
+          const portoByDate = {};
           portoBlocks.forEach(pb => {
-            let date = null, store = null;
+            let date = null;
             for (let i = 0; i < pb.length; i++) {
               for (let c = 1; c < pb[i].length; c++) {
-                if (pb[i][c] && pb[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  date = pb[i][c]; store = (pb[i][0]||'').trim().toLowerCase(); break;
-                }
+                if (pb[i][c] && pb[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) { date = pb[i][c]; break; }
               }
               if (date) break;
             }
-            if (date) portoByKey[date + '|' + store] = pb;
+            if (date) { if (!portoByDate[date]) portoByDate[date] = []; portoByDate[date].push(pb); }
           });
 
           finalBlocks = filteredBlocks.map(block => {
-            let blockDate = null, blockStore = null;
+            let blockDate = null;
             for (let i = 0; i < block.length; i++) {
               for (let c = 1; c < block[i].length; c++) {
-                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  blockDate = block[i][c]; blockStore = (block[i][0]||'').trim().toLowerCase(); break;
-                }
+                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) { blockDate = block[i][c]; break; }
               }
               if (blockDate) break;
             }
             if (!blockDate) return block;
-            const key = blockDate + '|' + blockStore;
-            const generated = portoByKey[key];
-            if (!generated) return block;
+            const generatedBlocks = portoByDate[blockDate];
+            if (!generatedBlocks || !generatedBlocks.length) return block;
             const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
             if (hasPeople) return block;
-            return generated;
+            const merged = [];
+            generatedBlocks.forEach(gb => gb.forEach(row => merged.push(row)));
+            return merged;
           });
         }
       } catch(e) { console.warn('[shared] porto_horarios.csv not available:', e.message); }

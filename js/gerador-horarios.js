@@ -223,6 +223,18 @@
     const toI   = a.to ? DAYS.indexOf(a.to) : 6;
     return fromI === 0 && toI === 6;
   }
+  // Verifica se um dia da semana cai APÓS a data de fim de contrato da pessoa.
+  // p.end é uma string ISO (YYYY-MM-DD). Devolve true se o dia >= day após end_date.
+  function isContractEnded(p, day) {
+    if (!p.end || !S.weekStart) return false;
+    const endDate = new Date(p.end + 'T00:00:00');
+    const di = DAYS.indexOf(day);
+    const dayDate = new Date(S.weekStart);
+    dayDate.setDate(dayDate.getDate() + di);
+    dayDate.setHours(0, 0, 0, 0);
+    return dayDate > endDate;
+  }
+
   function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
   function storeMin(sid)  { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
   function storeMax(sid)  { const m = S.storeMax?.[sid]; return (m && m > 0) ? m : Infinity; }
@@ -371,7 +383,7 @@
               <input type="date" id="gh-pf-end" class="gh-field-sm">
             </div>
             <div class="gh-pf-field">
-              <label>Tienda fixa</label>
+              <label>Loja fixa</label>
               <select id="gh-pf-store" class="gh-field-sm">
                 <option value="">— Sem loja fixa —</option>
                 ${storeOptions}
@@ -395,7 +407,7 @@
             </div>
           </div>
           <div class="gh-pf-field" style="margin-top:10px">
-            <label>Tiendas onde pode trabalhar</label>
+            <label>Lojas onde pode trabalhar</label>
             <div class="gh-pf-stores" id="gh-pf-knows">
               ${STORES.map(s => `<label class="gh-pf-check"><input type="checkbox" value="${s.id}"> ${s.name}</label>`).join('')}
             </div>
@@ -491,6 +503,19 @@
       row.dataset.pid = p.id;
       const saldoTag = saldo !== 0 ? `<sup class="gh-saldo-sup ${saldo>0?'gh-saldo-sup-neg':'gh-saldo-sup-pos'}">${saldo>0?'+':''}${saldo}h</sup>` : '';
 
+      // Verificar se o contrato termina durante esta semana (ou já terminou)
+      const hasContractEnd = p.end && S.weekStart;
+      let contractEndTag = '';
+      if (hasContractEnd) {
+        const endDate = new Date(p.end + 'T00:00:00');
+        const weekEnd = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23,59,59,0);
+        const weekStart = new Date(S.weekStart); weekStart.setHours(0,0,0,0);
+        if (endDate <= weekEnd) {
+          const endFmt = `${String(endDate.getDate()).padStart(2,'0')}/${String(endDate.getMonth()+1).padStart(2,'0')}`;
+          contractEndTag = ` · <span style="font-size:.58rem;color:#e57373;font-weight:700;">fim contrato ${endFmt}</span>`;
+        }
+      }
+
       row.innerHTML = `
         <!-- HEADER sempre visível -->
         <div class="gh-sr-header">
@@ -498,7 +523,7 @@
             <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
             <div class="gh-sr-nameblock">
               <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
-              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}</span>
+              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndTag}</span>
             </div>
           </div>
           <div class="gh-sr-btns">
@@ -879,8 +904,8 @@
     const sb = getSupabase();
     if (!sb) { alert('Supabase não disponível.'); return; }
 
-    // Se a pessoa está associada a mais do que uma tienda (via knows),
-    // perguntar se quer apenas remover de uma tienda ou eliminar por completo.
+    // Se a pessoa está associada a mais do que uma loja (via knows),
+    // perguntar se quer apenas remover de uma loja ou eliminar por completo.
     const knows = p.knows || [];
     if (knows.length > 1) {
       // Construir lista de lojas conhecidas para o utilizador escolher
@@ -889,8 +914,8 @@
         return st ? `• ${st.name} (id: ${sid})` : `• ${sid}`;
       }).join('\n');
       const choice = window.prompt(
-        `"${p.name}" está associada a ${knows.length} tiendas:\n${storeNames}\n\n` +
-        `Escreva o NOME da tienda para a remover apenas dessa tienda,\n` +
+        `"${p.name}" está associada a ${knows.length} lojas:\n${storeNames}\n\n` +
+        `Escreva o NOME da loja para a remover apenas dessa loja,\n` +
         `ou deixe em branco e prima OK para ELIMINAR a pessoa por completo.`
       );
       // User cancelled
@@ -904,7 +929,7 @@
           s.id === choice.trim()
         );
         if (!matchedStore) {
-          alert(`Tienda "${choice.trim()}" não encontrada. Operação cancelada.`);
+          alert(`Loja "${choice.trim()}" não encontrada. Operação cancelada.`);
           return;
         }
         try {
@@ -920,7 +945,7 @@
           renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
         } catch(e) {
           console.error('Remove from store error:', e);
-          alert('Erro ao remover da tienda. Verifique a consola.');
+          alert('Erro ao remover da loja. Verifique a consola.');
         }
         return;
       }
@@ -1206,6 +1231,11 @@
     active.forEach(p => {
       S.schedule[p.id] = {};
       DAYS.forEach(day => {
+        // Check fim de contrato — tem prioridade sobre tudo
+        if (isContractEnded(p, day)) {
+          S.schedule[p.id][day] = { type: 'fim_contrato', shift: null, store: null };
+          return;
+        }
         // Check absence
         if (isAbsent(p.id, day)) {
           const a = absOf(p.id);
@@ -1331,12 +1361,16 @@
             if (c2.type === 'empty' || c2.type === 'na') {
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-empty"></div></td>`;
             }
+            if (c2.type === 'fim_contrato') {
+              return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-fim-contrato"><span class="gh-sh-line gh-fim-txt">fim de contrato</span></div></td>`;
+            }
             const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'BAIXA' : 'FOLGA';
             const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
           }
           let cls = '', content = '';
-          if (c2.type === 'folga') { cls = 'c-folga'; content = `<span class="gh-sh-line">FOLGA</span>`; }
+          if (c2.type === 'fim_contrato') { cls = 'c-fim-contrato'; content = `<span class="gh-sh-line gh-fim-txt">fim de contrato</span>`; }
+          else if (c2.type === 'folga') { cls = 'c-folga'; content = `<span class="gh-sh-line">FOLGA</span>`; }
           else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
           else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">BAIXA</span>`; }
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
@@ -1351,7 +1385,8 @@
               content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
             }
           }
-          return `<td class="gh-sh-td" data-pid="${p.id}" data-day="${day}" data-store="${st.id}"><div class="gh-sh-inner ${cls}">${content}</div></td>`;
+          const noClick = (c2.type === 'fim_contrato') ? ' gh-no-click' : '';
+          return `<td class="gh-sh-td${noClick}" data-pid="${p.id}" data-day="${day}" data-store="${st.id}"><div class="gh-sh-inner ${cls}">${content}</div></td>`;
         }).join('');
 
         let aH = 0;
@@ -1392,7 +1427,7 @@
             ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
           </tr>
         </thead>
-        <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Tienda vacía — use ＋ para añadir personal</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Loja vazia — use ＋ para adicionar pessoal</td></tr>`}</tbody>
       </table></div>`;
     });
 
@@ -1511,7 +1546,7 @@
 
     // Handle add person mode
     if (mode === 'add') {
-      if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
+      if (!_addCtx) { alert('Selecione uma pessoa primeiro.'); return; }
       const { pid, sid } = _addCtx;
       // Add mode: person was already added via click in openAddPersonToStore
       // Nothing to do here — just close
@@ -1570,7 +1605,7 @@
     if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
 
     injected.innerHTML = `
-      <div style="font-size:.7rem;color:#888;margin-bottom:10px;">Seleccione a pessoa para añadir a ${sname(sid)}. Sus ausencias del wizard se conservan. Edite los días individualmente haciendo clic en las celdas.</div>
+      <div style="font-size:.7rem;color:#888;margin-bottom:10px;">Selecione a pessoa para adicionar a ${sname(sid)}. As suas ausências do assistente são mantidas. Edite os dias individualmente clicando nas células.</div>
       <div style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;">
         ${candidates.length ? candidates.map(p => {
           const hasBadge = (() => {
@@ -1583,7 +1618,7 @@
             <span>${shortName(p.name)}</span>
             <span style="font-size:.7rem;color:#888">${hasBadge}</span>
           </button>`;
-        }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas las personas ya están añadidas.</div>'}
+        }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas as pessoas já foram adicionadas.</div>'}
       </div>`;
 
     injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
@@ -1606,6 +1641,11 @@
       DAYS.forEach(day => { S.schedule[pid][day] = { type: 'empty', shift: null, store: null }; });
       // Apply absences/folgas from wizard only on first add
       DAYS.forEach(day => {
+        // Fim de contrato tem prioridade
+        if (isContractEnded(PEOPLE.find(x => x.id === pid) || {}, day)) {
+          S.schedule[pid][day] = { type: 'fim_contrato', shift: null, store: null };
+          return;
+        }
         if (isAbsent(pid, day)) {
           const a = absOf(pid);
           const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
@@ -1836,6 +1876,8 @@
         #tab-gerador .c-elsewhere { background:#f5f5f5; }
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
+        #tab-gerador .c-fim-contrato { background:#fff5f5; cursor:default; }
+        #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
 
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
         #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }

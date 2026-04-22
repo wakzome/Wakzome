@@ -1475,8 +1475,7 @@
       const csvText = await res.text();
 
       // Parse CSV into blocks
-      const rows = csvText.split(/?
-/).map(line => line.split(',').map(c => c.replace(/^"|"$/g,'').trim()));
+      const rows = csvText.split(/\r?\n/).map(line => line.split(',').map(c => c.replace(/^"|"$/g,'').trim()));
       const blocks = [];
       let cur = [];
       rows.forEach(r => {

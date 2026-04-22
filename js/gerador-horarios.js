@@ -1324,15 +1324,50 @@
         );
       }
 
-      // Publicar CSV de Porto Santo
-      await publishPortoSantoCSV();
-
-      S.alerts.push({ type: 'info', text: '✓ Horário confirmado e guardado.' });
+      S.alerts.push({ type: 'info', text: '✓ Folgas guardadas.' });
       if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
+
+      // Publicar CSV de Porto Santo — separado para não bloquear em caso de erro
+      try {
+        await publishPortoSantoCSV();
+        S.alerts.push({ type: 'info', text: '✓ Horário publicado.' });
+        // Show retry publish button replaced by success
+        const retryBtn = document.getElementById('gh-btn-retry-csv');
+        if (retryBtn) retryBtn.remove();
+      } catch(csvErr) {
+        console.error('Erro ao publicar CSV:', csvErr);
+        // Show retry button instead of blocking alert
+        let retryBtn = document.getElementById('gh-btn-retry-csv');
+        if (!retryBtn) {
+          retryBtn = document.createElement('button');
+          retryBtn.id = 'gh-btn-retry-csv';
+          retryBtn.className = 'gh-btn gh-btn-ghost gh-btn-sm';
+          retryBtn.textContent = '↺ Republicar CSV';
+          retryBtn.style.cssText = 'margin-left:8px;color:#b8860b;border-color:#b8860b;';
+          retryBtn.addEventListener('click', async () => {
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'A publicar…';
+            try {
+              await publishPortoSantoCSV();
+              retryBtn.remove();
+              S.alerts.push({ type: 'info', text: '✓ CSV publicado.' });
+              const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+              showSchedule(active);
+            } catch(e2) {
+              retryBtn.disabled = false;
+              retryBtn.textContent = '↺ Republicar CSV';
+              alert('Erro ao publicar: ' + (e2.message || e2));
+            }
+          });
+          const confirmBtn = document.getElementById('gh-btn-confirm');
+          confirmBtn?.parentNode?.insertBefore(retryBtn, confirmBtn.nextSibling);
+        }
+        S.alerts.push({ type: 'warn', text: '⚠ Folgas guardadas mas CSV não publicado. Clique em "Republicar CSV".' });
+      }
 
     } catch(e) {
       console.error('Erro ao confirmar horário:', e);
-      alert('Erro ao guardar. Verifique a consola.');
+      alert('Erro ao guardar folgas. Verifique a consola.');
       if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar horário'; }
     }
   }

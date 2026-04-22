@@ -2377,17 +2377,24 @@
         #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
         #gh-modal .gh-pill { background:#f7f7f7; border:1.5px solid #e5e5e5; border-radius:50px; padding:9px 20px; font-size:.82rem; font-weight:600; cursor:pointer; color:#444; transition:all .15s; white-space:nowrap; font-family:inherit; line-height:1.2; }
         #gh-modal .gh-pill:hover { background:#f0f0f0; border-color:#ccc; color:#111; transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
-        #gh-modal .gh-pill.active:hover { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; transform:translateY(-1px); }
-        /* TIPO active — forest green, white text */
-        #gh-modal .gh-pill-tipo.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
-        /* SHIFT active — forest green, white text */
-        #gh-modal .gh-pill-shift.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
-        /* STORE active — forest green, white text */
-        #gh-modal .gh-pill-store.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
-        /* shift pills — larger, 2-line, grid */
+        #gh-modal .gh-pill.active:hover { background:#111; border-color:#111; color:#fff !important; transform:translateY(-1px); }
+        /* TIPO active — black, white text */
+        #gh-modal .gh-pill-tipo.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+        /* SHIFT active — black, white text */
+        #gh-modal .gh-pill-shift.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        /* STORE active — black, white text */
+        #gh-modal .gh-pill-store.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        /* ── Shift pills base ── */
         #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
         #gh-modal .gh-pill-shift { border-radius:10px; padding:12px 8px; font-size:.82rem; font-weight:600; text-align:center; line-height:1.55; white-space:normal; color:#333; }
         #gh-modal .gh-pill-shift:hover { color:#111; }
+        /* Subtle greyscale tones per shift — elegant, just enough to distinguish */
+        #gh-modal .gh-pill-shift[data-val="10:00-13:00|14:00-19:00"] { background:#f8f8f8; border-color:#e2e2e2; }
+        #gh-modal .gh-pill-shift[data-val="10:00-14:00|15:00-19:00"] { background:#f4f4f4; border-color:#dedede; }
+        #gh-modal .gh-pill-shift[data-val="10:00-15:00|16:00-19:00"] { background:#efefef; border-color:#d8d8d8; }
+        #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#eaeaea; border-color:#d2d2d2; }
+        #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#e5e5e5; border-color:#cccccc; }
+        #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e0e0e0; border-color:#c6c6c6; }
         /* store pills — wrap row */
         #gh-modal .gh-btn-group-stores { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
         #gh-modal .gh-pill-store { border-radius:50px; padding:9px 20px; font-size:.82rem; }

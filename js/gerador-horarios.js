@@ -1431,21 +1431,24 @@
     c.querySelectorAll('.gh-p-remove-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const pid = btn.dataset.pid;
+        const sid = btn.dataset.store;
         const p = P(pid);
-        if (!confirm(`Eliminar ${shortName(p?.name || pid)} da tabela?`)) return;
-        // Clear all work cells for this person in this schedule view
+        if (!confirm(`Eliminar ${shortName(p?.name || pid)} da tabela de ${sname(sid)}?`)) return;
+        // Clear only work cells assigned to THIS store for this person
         DAYS.forEach(day => {
-          if (S.schedule[pid]?.[day]?.type === 'work') {
+          const cell = S.schedule[pid]?.[day];
+          if (cell?.type === 'work' && cell?.store === sid) {
             S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
           }
         });
-        // Remove from _personStore tracking
-        // Remove from _personStores for all stores (since all work cells cleared)
-        if (S._personStores?.[pid]) delete S._personStores[pid];
-        if (S._storeOrder) {
-          Object.keys(S._storeOrder).forEach(s => {
-            S._storeOrder[s] = S._storeOrder[s].filter(id => id !== pid);
-          });
+        // Remove from _personStores only for this specific store
+        if (S._personStores?.[pid]) {
+          S._personStores[pid] = S._personStores[pid].filter(s => s !== sid);
+          if (S._personStores[pid].length === 0) delete S._personStores[pid];
+        }
+        // Remove from _storeOrder only for this specific store
+        if (S._storeOrder?.[sid]) {
+          S._storeOrder[sid] = S._storeOrder[sid].filter(id => id !== pid);
         }
         const active = PEOPLE.filter(p => !fullyAbsent(p.id));
         showSchedule(active);

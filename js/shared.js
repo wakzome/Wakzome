@@ -378,57 +378,38 @@
     updateSummaryWrapVisibility();
     window.addEventListener('resize', updateSummaryWrapVisibility);
 
-    // ── PORTO SANTO: inject generated weeks ──
+    // ── PORTO SANTO: load week-specific files ──
     let finalBlocks = filteredBlocks;
     if (store === 'porto santo') {
-      try {
-        // Load week-specific file (porto_s17.csv, porto_s18.csv, etc.)
-        const BASE_DATE = new Date('2026-01-05T00:00:00');
-
-        // For each empty block, try to load its week file
-        const usedWeeks = new Set();
-        const blockPromises = filteredBlocks.map(async block => {
-          // Find this block's monday date
-          let blockDate = null;
-          for (let i=0;i<block.length&&!blockDate;i++)
-            for (let c=1;c<block[i].length&&!blockDate;c++)
-              if (block[i][c]&&/^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c])) blockDate=block[i][c];
-          if (!blockDate) return block;
-
-          // Check if block has real person data
-          const hasData = block.some(r=>{
-            const f=(r[0]||'').trim().toUpperCase();
-            if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(f)) return false;
-            if (r[1]&&/^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) return false;
-            return f!==''&&r.slice(1).some(c=>c&&c!=='');
-          });
-          if (hasData) return block;
-
-          // Calculate week number
-          const p = blockDate.split('/');
-          const blockMs = new Date(+p[2],+p[1]-1,+p[0]) - BASE_DATE;
-          const weekNum = Math.round(blockMs / (7*86400000)) + 1;
-          if (weekNum < 17) return block; // only semana 17+
-          if (usedWeeks.has(weekNum)) return null; // remove duplicate empty blocks
-          usedWeeks.add(weekNum);
-
-          // Fetch the week file
-          try {
-            const url = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s' + weekNum + '.csv?t=' + Date.now();
-            const res = await fetch(url);
-            if (!res.ok) return block;
-            const text = await res.text();
-            const rows = Papa.parse(text, {skipEmptyLines:false}).data.map(r=>r.map(c=>(c==null?'':String(c).trim())));
-            // Flatten — ignore blank lines
-            const flat = rows.filter(r=>!r.every(c=>c===''));
-            return flat.length ? flat : block;
-          } catch(e) { return block; }
+      const BASE_DATE = new Date('2026-01-05T00:00:00');
+      const usedWeeks = new Set();
+      const blockPromises = filteredBlocks.map(async block => {
+        let blockDate = null;
+        for (let i=0;i<block.length&&!blockDate;i++)
+          for (let c=1;c<block[i].length&&!blockDate;c++)
+            if (block[i][c]&&/^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c])) blockDate=block[i][c];
+        if (!blockDate) return block;
+        const hasData = block.some(r=>{
+          const f=(r[0]||'').trim().toUpperCase();
+          if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(f)) return false;
+          if (r[1]&&/^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) return false;
+          return f!==''&&r.slice(1).some(c=>c&&c!=='');
         });
-
-        const resolved = await Promise.all(blockPromises);
-        finalBlocks = resolved.filter(b=>b!==null);
-        }
-      } catch(e) { console.warn('[shared] porto_horarios.csv:', e.message); }
+        if (hasData) return block;
+        const p=blockDate.split('/');
+        const weekNum=Math.round((new Date(+p[2],+p[1]-1,+p[0])-BASE_DATE)/(7*86400000))+1;
+        if (weekNum<17) return block;
+        if (usedWeeks.has(weekNum)) return null;
+        usedWeeks.add(weekNum);
+        try {
+          const url='https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s'+weekNum+'.csv?t='+Date.now();
+          const res=await fetch(url);
+          if (!res.ok) return block;
+          const flat=Papa.parse(await res.text(),{skipEmptyLines:false}).data.map(r=>r.map(c=>(c==null?'':String(c).trim()))).filter(r=>!r.every(c=>c===''));
+          return flat.length?flat:block;
+        } catch(e){return block;}
+      });
+      finalBlocks=(await Promise.all(blockPromises)).filter(b=>b!==null);
     }
 
     window._lastBlocks = finalBlocks;

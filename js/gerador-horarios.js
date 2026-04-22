@@ -223,6 +223,17 @@
     const toI   = a.to ? DAYS.indexOf(a.to) : 6;
     return fromI === 0 && toI === 6;
   }
+  // Pessoa com ausência que cobre a maior parte da semana (3+ dias desde SEG)?
+  // Usada para excluir do cálculo de padrões — não faz sentido atribuir padrão
+  // a alguém que só trabalha 1-2 dias.
+  function significantlyAbsent(pid) {
+    const a = absOf(pid); if (!a) return false;
+    const fromI = DAYS.indexOf(a.from);
+    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
+    // Absent for 4+ days → exclude from pattern count
+    return (toI - fromI + 1) >= 4;
+  }
+
   // Verifica se um dia da semana cai APÓS a data de fim de contrato da pessoa.
   // p.end é uma string ISO (YYYY-MM-DD). Devolve true se o dia >= day após end_date.
   function isContractEnded(p, day) {
@@ -1181,7 +1192,7 @@
       </div>`;
     }).join('');
 
-    const activePeopleCount = PEOPLE.filter(p => !fullyAbsent(p.id)).length;
+    const activePeopleCount = PEOPLE.filter(p => !fullyAbsent(p.id) && !significantlyAbsent(p.id)).length;
     const savedDomTrab = S.domTrabalhadores ?? '';
 
     c.innerHTML = `
@@ -1585,24 +1596,26 @@
   // 17 weekly patterns from Libro6 (index = pattern number 1-17)
   // Each entry: array of 7 booleans — true=work, false=FOLGA
   // Days: [SEG, TER, QUA, QUI, SEX, SAB, DOM]
+  // Patterns verified directly from Libro6.xlsx
+  // Index [SEG, TER, QUA, QUI, SEX, SAB, DOM] — false = FOLGA
   const PATTERNS = {
-     1: [false,true, true, false,true, true, true ],  // FOLGA SEG QUI
-     2: [true, false,true, true, false,true, true ],  // FOLGA TER SEX
-     3: [false,true, true, true, true, true, false],  // FOLGA SEG DOM
-     4: [true, false,true, true, true, true, false],  // FOLGA TER DOM
-     5: [true, true, false,true, true, true, false],  // FOLGA QUA DOM
-     6: [true, true, true, false,true, true, false],  // FOLGA QUI DOM
-     7: [true, true, true, true, false,true, false],  // FOLGA SEX DOM
-     8: [true, true, true, true, true, false,false],  // FOLGA SAB DOM
-     9: [true, false,true, true, true, true, false],  // FOLGA TER DOM (=4 alias)
-    10: [false,true, true, false,true, true, true ],  // FOLGA SEG QUI (=1 alias)
-    11: [true, true, false,true, true, true, false],  // FOLGA QUA DOM (=5 alias)
-    12: [true, false,true, true, false,true, true ],  // FOLGA TER SEX (=2 alias)
-    13: [true, true, true, true, true, false,false],  // FOLGA SAB DOM (=8 alias)
-    14: [true, false,true, true, true, true, false],  // FOLGA TER DOM
-    15: [true, true, true, false,true, true, false],  // FOLGA QUI DOM (=6 alias)
-    16: [false,true, true, false,true, true, true ],  // FOLGA SEG QUI (=1 alias)
-    17: [true, true, true, true, true, false,false],  // FOLGA SAB DOM (=8 alias)
+     1: [false,true, true, false,true, true, true ],  // FOLGA SEG+QUI
+     2: [true, false,true, true, false,true, true ],  // FOLGA TER+SEX
+     3: [false,true, true, true, true, true, false],  // FOLGA SEG+DOM
+     4: [true, false,true, true, true, true, false],  // FOLGA TER+DOM
+     5: [true, true, false,true, true, true, false],  // FOLGA QUA+DOM
+     6: [true, true, true, false,true, true, false],  // FOLGA QUI+DOM
+     7: [true, true, true, true, false,true, false],  // FOLGA SEX+DOM
+     8: [true, true, true, true, true, false,false],  // FOLGA SAB+DOM
+     9: [true, false,true, true, true, true, false],  // FOLGA TER+DOM
+    10: [false,true, true, false,true, true, true ],  // FOLGA SEG+QUI
+    11: [true, true, false,true, true, true, false],  // FOLGA QUA+DOM
+    12: [true, false,true, true, false,true, true ],  // FOLGA TER+SEX
+    13: [true, true, true, true, true, false,false],  // FOLGA SAB+DOM
+    14: [true, false,true, true, false,true, true ],  // FOLGA TER+SEX ← verified from Libro6
+    15: [true, true, false,true, true, true, false],  // FOLGA QUA+DOM
+    16: [false,true, true, false,true, true, true ],  // FOLGA SEG+QUI
+    17: [true, true, true, true, true, false,false],  // FOLGA SAB+DOM
   };
 
   // Scenarios from Libro6 right-side table
@@ -1667,7 +1680,9 @@
   //             if domTrabalhadores is null/0 and domingo not open → folgaDom = nPessoas
   // nLojas    = open stores count from S.openStores
   function computeScenarioKey(active) {
-    const nPessoas = active.length;
+    // Exclude people absent for most of the week (mid-week férias etc.)
+    const patternActive = active.filter(p => !significantlyAbsent(p.id));
+    const nPessoas = patternActive.length;
     const nLojas   = S.openStores.length;
 
     let folgaDom;
@@ -1755,8 +1770,8 @@
       <div class="gh-pt-header">
         <div class="gh-pt-title">Padrão de Folgas</div>
         <div class="gh-pt-meta">
-          <span class="gh-pt-badge">${nPessoas} pessoas activas</span>
-          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? (S.domTrabalhadores ?? (nPessoas - folgaDom)) + ' trabalham dom' : 'dom fechado'}</span>
+          <span class="gh-pt-badge">${nPessoas} pessoas p/ padrão</span>
+          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined ? S.domTrabalhadores : (nPessoas - folgaDom)) + ' trabalham dom' : 'dom fechado'}</span>
           <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
           ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
         </div>
@@ -2173,7 +2188,7 @@
         #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
 
         /* ── TABLE LAYOUT ── */
-        #tab-gerador .gh-sched-body { padding:20px 0 60px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; }
+        #tab-gerador .gh-sched-body { padding:20px 20px 0; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; overflow:visible; }
 
         /* 1. CONTENEDOR: bloque desplazable */
         #tab-gerador .gh-store-block {
@@ -2345,7 +2360,7 @@
         #tab-gerador .gh-inc-tag { font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
 
         /* ── PATTERN PANEL ── */
-        #tab-gerador .gh-pattern-panel { margin:40px auto 60px; max-width:860px; border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:hidden; }
+        #tab-gerador .gh-pattern-panel { margin:40px auto 80px; max-width:860px; width:calc(100% - 40px); border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:visible; box-sizing:border-box; }
         #tab-gerador .gh-pt-header { padding:20px 24px 14px; border-bottom:1px solid #f0f0f0; background:#fafafa; }
         #tab-gerador .gh-pt-title { font-size:.62rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
         #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center; }

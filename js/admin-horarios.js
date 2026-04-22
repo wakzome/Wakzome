@@ -161,8 +161,10 @@
     const block = filtered[index];
     if (!block) return;
 
-    // Only show if block has person rows (generated data)
-    const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
+    // Only show if block has actual person rows with schedule data
+    // Person rows contain shift times or FOLGA/FERIAS — not store name headers
+    const shiftPattern = /^\d{2}:\d{2}|FOLGA|FERIAS/i;
+    const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && shiftPattern.test(c)));
     if (!hasPeople) return;
 
     // Find the week start date from block
@@ -186,24 +188,9 @@
     const btn = document.createElement('button');
     btn.id = 'h-edit-btn';
     btn.textContent = '✏ Editar horário';
-    btn.style.cssText = [
-      'margin:10px auto 0',
-      'display:block',
-      'padding:8px 20px',
-      'font-size:.72rem',
-      'font-weight:700',
-      'letter-spacing:.08em',
-      'text-transform:uppercase',
-      'cursor:pointer',
-      'border-radius:6px',
-      'font-family:inherit',
-      'background:#111',
-      'color:#fff',
-      'border:1px solid #111',
-      'transition:background .15s'
-    ].join(';');
-    btn.onmouseover = () => { btn.style.background = '#333'; };
-    btn.onmouseout  = () => { btn.style.background = '#111'; };
+    btn.style.cssText = 'margin:10px auto 0 !important;display:block !important;padding:8px 20px !important;font-size:.72rem !important;font-weight:700 !important;letter-spacing:.08em !important;text-transform:uppercase !important;cursor:pointer !important;border-radius:6px !important;font-family:inherit !important;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border:1px solid #111 !important;transition:background .15s !important;';
+    btn.onmouseover = () => { btn.style.setProperty('background','#333','important'); };
+    btn.onmouseout  = () => { btn.style.setProperty('background','#111','important'); };
 
     btn.addEventListener('click', () => hLoadWeekIntoGerador(weekDateStr, filtered, index));
 
@@ -217,20 +204,26 @@
     const parts = weekDateStr.split('/');
     const weekISO = parts[2] + '-' + parts[1] + '-' + parts[0];
 
-    // Switch to gerador tab
-    const gTab = document.querySelector('.tab-btn[data-tab="gerador"], .drawer-tab-btn[data-tab="gerador"]');
-    if (gTab) gTab.click();
-
-    // Wait for gerador to init
-    await new Promise(r => setTimeout(r, 400));
-
-    if (!window.initGeradorHorarios) { alert('Gerador não disponível.'); return; }
-
     // Signal gerador to load this week from porto_horarios.csv
     window._ghLoadPortoWeek = weekISO;
 
-    // Trigger gerador init if not already done
-    window.initGeradorHorarios();
+    // Switch to gerador tab using the app's own tab system
+    // Try all known tab-switching mechanisms
+    const gTabBtns = document.querySelectorAll('.tab-btn[data-tab="gerador"], .drawer-tab-btn[data-tab="gerador"]');
+    if (gTabBtns.length) {
+      gTabBtns[0].click();
+    } else if (window.openModule) {
+      window.openModule('gerador');
+    }
+
+    // Wait for tab to show, then trigger gerador
+    await new Promise(r => setTimeout(r, 600));
+
+    if (window.initGeradorHorarios) {
+      window.initGeradorHorarios();
+    } else {
+      alert('Gerador não disponível.');
+    }
   }
 
   function hRenderWeek(filtered, index) {

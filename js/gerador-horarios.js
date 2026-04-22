@@ -168,7 +168,7 @@
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: [],
-      _personStore: {}
+      _personStores: {}, _storeOrder: {}
     };
   }
   let S = blank();
@@ -1255,11 +1255,17 @@
 
     let bodyHTML = '';
     STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
-      // Personas asignadas explícitamente a esta tienda (work) O añadidas via +
-      const inSection = active.filter(p =>
-        (S._personStore?.[p.id] === st.id) ||
+      // Personas en orden de inserción (via +) o con work asignado
+      const inSectionSet = active.filter(p =>
+        (S._personStores?.[p.id]?.includes(st.id)) ||
         DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === st.id)
       );
+      const order = S._storeOrder?.[st.id] || [];
+      // Sort: insertion order first, then any others
+      const inSection = [
+        ...order.map(pid => inSectionSet.find(p => p.id === pid)).filter(Boolean),
+        ...inSectionSet.filter(p => !order.includes(p.id))
+      ];
       // Siempre mostrar la tienda aunque esté vacía
 
       const rows = inSection.map(p => {
@@ -1384,7 +1390,13 @@
           }
         });
         // Remove from _personStore tracking
-        if (S._personStore?.[pid]) delete S._personStore[pid];
+        // Remove from _personStores for all stores (since all work cells cleared)
+        if (S._personStores?.[pid]) delete S._personStores[pid];
+        if (S._storeOrder) {
+          Object.keys(S._storeOrder).forEach(s => {
+            S._storeOrder[s] = S._storeOrder[s].filter(id => id !== pid);
+          });
+        }
         const active = PEOPLE.filter(p => !fullyAbsent(p.id));
         showSchedule(active);
       });
@@ -1502,7 +1514,10 @@
 
     // Only show people not already in this store
     const alreadyIn = new Set(
-      active.filter(p => DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === sid)).map(p => p.id)
+      active.filter(p =>
+        (S._personStores?.[p.id]?.includes(sid)) ||
+        DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === sid)
+      ).map(p => p.id)
     );
     const candidates = active.filter(p => !alreadyIn.has(p.id));
 
@@ -1541,32 +1556,32 @@
 
   // Adds person to store: keeps their absences/folgas, leaves work days empty
   function addPersonToStore(pid, sid) {
+    // Init schedule if first time adding this person
     if (!S.schedule[pid]) {
       S.schedule[pid] = {};
       DAYS.forEach(day => { S.schedule[pid][day] = { type: 'empty', shift: null, store: null }; });
+      // Apply absences/folgas from wizard only on first add
+      DAYS.forEach(day => {
+        if (isAbsent(pid, day)) {
+          const a = absOf(pid);
+          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+          S.schedule[pid][day] = { type: t, shift: null, store: null };
+          return;
+        }
+        const folgaDias = S._folgasDirigidas?.[pid] || S._folgas?.[pid]?.dias || [];
+        if (folgaDias.includes(day)) {
+          S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
+        }
+      });
     }
-    // Apply absences from wizard
-    DAYS.forEach(day => {
-      const cur = S.schedule[pid][day];
-      // Don't overwrite already-set absence markers
-      if (cur && (cur.type === 'ferias' || cur.type === 'baixa' || cur.type === 'folga' || cur.type === 'na')) return;
-      if (isAbsent(pid, day)) {
-        const a = absOf(pid);
-        const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
-        S.schedule[pid][day] = { type: t, shift: null, store: null };
-        return;
-      }
-      const folgaDias = S._folgasDirigidas?.[pid] || S._folgas?.[pid]?.dias || [];
-      if (folgaDias.includes(day)) {
-        S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
-        return;
-      }
-      // Leave as empty (clickable blank)
-      S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
-    });
+    // If already exists (added to another store), keep existing cells as-is
     // Mark person as belonging to this store so they appear in the section
-    if (!S._personStore) S._personStore = {};
-    S._personStore[pid] = sid;
+    if (!S._personStores) S._personStores = {};
+    if (!S._personStores[pid]) S._personStores[pid] = [];
+    if (!S._personStores[pid].includes(sid)) S._personStores[pid].push(sid);
+    if (!S._storeOrder) S._storeOrder = {};
+    if (!S._storeOrder[sid]) S._storeOrder[sid] = [];
+    if (!S._storeOrder[sid].includes(pid)) S._storeOrder[sid].push(pid);
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);
   }

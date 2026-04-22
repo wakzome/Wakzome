@@ -1181,11 +1181,28 @@
       </div>`;
     }).join('');
 
+    const activePeopleCount = PEOPLE.filter(p => !fullyAbsent(p.id)).length;
+    const savedDomTrab = S.domTrabalhadores ?? '';
+
     c.innerHTML = `
       <div class="gh-wiz-box gh-wiz-box--wide">
         <div class="gh-wiz-label">Passo 3 de 3</div>
         <div class="gh-wiz-title">Lojas e dias</div>
         <div class="gh-store-cfg">${rows}</div>
+
+        <div class="gh-dom-trab-row">
+          <div class="gh-dom-trab-label">
+            <span class="gh-dom-trab-icon">☀️</span>
+            <div>
+              <div class="gh-dom-trab-title">Pessoas a trabalhar ao domingo</div>
+              <div class="gh-dom-trab-hint">${activePeopleCount} pessoas activas esta semana. Quantas trabalham ao domingo?</div>
+            </div>
+          </div>
+          <input type="number" id="gh-inp-dom-trab" class="gh-field-sm gh-dom-trab-inp"
+            min="0" max="${activePeopleCount}" value="${savedDomTrab}"
+            placeholder="0">
+        </div>
+
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
           <button class="gh-btn gh-btn-solid" id="gh-sub-stores">Gerar horário →</button>
@@ -1224,6 +1241,14 @@
       S.openStores.push(st.id); S.openDays[st.id] = days;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
+
+    // Read domingo workers from Wizard 3 input
+    const domInp = document.getElementById('gh-inp-dom-trab');
+    const domVal = domInp ? parseInt(domInp.value) : NaN;
+    S.domTrabalhadores = (!isNaN(domVal) && domVal >= 0) ? domVal : null;
+
+    // domingo open = any store has DOM in its days
+    S.domingoAberto = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
 
     // Build schedule: empty for work cells, but mark absences/folgas from wizard
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -1636,21 +1661,33 @@
   }
 
   // Compute the scenario key from current state + active people
-  // Compute the scenario key from current state + active people.
-  // The Libro6 middle number = pessoas com FOLGA ao domingo.
-  // (patterns 3-9,11,13-17 have DOM=FOLGA; patterns 1,2,10,12,16 work on sunday)
+  // Compute the scenario key from Wizard 3 data.
+  // nPessoas  = active people this week (excluding fully absent)
+  // folgaDom  = nPessoas - domTrabalhadores (people with folga on sunday)
+  //             if domTrabalhadores is null/0 and domingo not open → folgaDom = nPessoas
+  // nLojas    = open stores count from S.openStores
   function computeScenarioKey(active) {
     const nPessoas = active.length;
-    const assigned2 = window._GH_ASSIGNED_PATTERNS || {};
-    // Count people whose assigned pattern has DOM as FOLGA,
-    // or whose schedule already marks DOM as folga/ferias/baixa
-    const folgaDom = active.filter(p => {
-      const pNum = assigned2[p.id];
-      if (pNum && PATTERNS[pNum]) return PATTERNS[pNum][6] === false;
-      const c = S.schedule[p.id]?.['DOM'];
-      return c && (c.type === 'folga' || c.type === 'ferias' || c.type === 'baixa');
-    }).length;
-    const nLojas = S.openStores.length;
+    const nLojas   = S.openStores.length;
+
+    let folgaDom;
+    if (!S.domingoAberto) {
+      // Sunday closed → everyone has folga on sunday
+      folgaDom = nPessoas;
+    } else if (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined) {
+      // User explicitly said X people work on sunday → rest have folga
+      folgaDom = Math.max(0, nPessoas - S.domTrabalhadores);
+    } else {
+      // Fallback: count from schedule/patterns
+      const assigned2 = window._GH_ASSIGNED_PATTERNS || {};
+      folgaDom = active.filter(p => {
+        const pNum = assigned2[p.id];
+        if (pNum && PATTERNS[pNum]) return PATTERNS[pNum][6] === false;
+        const c = S.schedule[p.id]?.['DOM'];
+        return c && (c.type === 'folga' || c.type === 'ferias' || c.type === 'baixa');
+      }).length;
+    }
+
     return { key: `${nPessoas}_${folgaDom}_${nLojas}`, nPessoas, folgaDom, nLojas };
   }
 
@@ -1718,8 +1755,8 @@
       <div class="gh-pt-header">
         <div class="gh-pt-title">Padrão de Folgas</div>
         <div class="gh-pt-meta">
-          <span class="gh-pt-badge">${nPessoas} pessoas</span>
-          <span class="gh-pt-badge gh-pt-badge-dom">${folgaDom} folga ao dom</span>
+          <span class="gh-pt-badge">${nPessoas} pessoas activas</span>
+          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? (S.domTrabalhadores ?? (nPessoas - folgaDom)) + ' trabalham dom' : 'dom fechado'}</span>
           <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
           ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
         </div>
@@ -2308,45 +2345,57 @@
         #tab-gerador .gh-inc-tag { font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
 
         /* ── PATTERN PANEL ── */
-        #tab-gerador .gh-pattern-panel { margin:0 0 60px; border-top:2px solid #e8e8e8; padding-top:28px; }
-        #tab-gerador .gh-pt-header { padding:0 20px 16px; }
-        #tab-gerador .gh-pt-title { font-size:.68rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#888; margin-bottom:10px; }
+        #tab-gerador .gh-pattern-panel { margin:40px auto 60px; max-width:860px; border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:hidden; }
+        #tab-gerador .gh-pt-header { padding:20px 24px 14px; border-bottom:1px solid #f0f0f0; background:#fafafa; }
+        #tab-gerador .gh-pt-title { font-size:.62rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
         #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center; }
-        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:3px 12px; font-size:.7rem; font-weight:700; color:#555; }
+        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:4px 13px; font-size:.7rem; font-weight:700; color:#555; }
         #tab-gerador .gh-pt-badge-dom { background:#e8f0fe; border-color:#c5d8fa; color:#1a4a9a; }
         #tab-gerador .gh-pt-badge-key { background:#fff8e0; border-color:#f0d080; color:#8a6000; font-family:monospace; }
-        #tab-gerador .gh-pt-hint { font-size:.72rem; color:#aaa; font-style:italic; }
-        #tab-gerador .gh-pt-no-scenario { margin:0 20px 20px; padding:14px 18px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.8rem; color:#a04000; }
+        #tab-gerador .gh-pt-hint { font-size:.72rem; color:#bbb; font-style:italic; }
+        #tab-gerador .gh-pt-no-scenario { margin:20px 24px; padding:14px 18px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.8rem; color:#a04000; }
 
         /* Table */
-        #tab-gerador .gh-pt-table-wrap { overflow-x:auto; padding:0 20px; }
-        #tab-gerador .gh-pt-table { border-collapse:collapse; width:auto; min-width:500px; }
-        #tab-gerador .gh-pt-table th { padding:7px 12px; font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#999; border-bottom:2px solid #e8e8e8; text-align:center; background:#fafafa; white-space:nowrap; }
-        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:8px !important; }
-        #tab-gerador .gh-pt-th-assigned { min-width:120px; }
-        #tab-gerador .gh-pt-num { font-size:.78rem; font-weight:700; color:#bbb; padding:0 8px; text-align:left; font-family:monospace; }
-        #tab-gerador .gh-pt-cell { padding:8px 10px; text-align:center; border:1px solid #f0f0f0; font-size:.72rem; font-weight:600; white-space:nowrap; }
-        #tab-gerador .gh-pt-work  { background:#fff; color:#ddd; }
-        #tab-gerador .gh-pt-folga { background:#fff3f3; color:#c0392b; font-style:italic; }
+        #tab-gerador .gh-pt-table-wrap { overflow-x:auto; padding:0; }
+        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; min-width:480px; }
+        #tab-gerador .gh-pt-table thead tr { background:#f7f7f7; }
+        #tab-gerador .gh-pt-table th { padding:9px 14px; font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:24px !important; width:40px; }
+        #tab-gerador .gh-pt-th-assigned { min-width:140px; }
+        #tab-gerador .gh-pt-num { font-size:.72rem; font-weight:700; color:#ccc; padding:0 24px; text-align:left; font-family:monospace; }
+        #tab-gerador .gh-pt-cell { padding:10px 14px; text-align:center; border-right:1px solid #f5f5f5; font-size:.72rem; font-weight:600; white-space:nowrap; }
+        #tab-gerador .gh-pt-work  { color:#d5d5d5; }
+        #tab-gerador .gh-pt-folga { color:#c0392b; font-style:italic; background:#fff9f9; }
+        #tab-gerador .gh-pt-table tbody tr { border-bottom:1px solid #f5f5f5; transition:background .12s; }
+        #tab-gerador .gh-pt-table tbody tr:last-child { border-bottom:none; }
 
         /* Rows */
-        #tab-gerador .gh-pt-row { cursor:default; transition:background .15s; }
-        #tab-gerador .gh-pt-row-used { opacity:.45; }
-        #tab-gerador .gh-pt-row-used .gh-pt-cell { background:#f5f5f5 !important; }
+        #tab-gerador .gh-pt-row { cursor:default; }
+        #tab-gerador .gh-pt-row-used { background:#f9f9f9 !important; }
+        #tab-gerador .gh-pt-row-used .gh-pt-cell { color:#d0d0d0 !important; background:#f9f9f9 !important; }
+        #tab-gerador .gh-pt-row-used .gh-pt-num { color:#ddd !important; }
         #tab-gerador .gh-pt-row-pick { cursor:pointer !important; outline:2px dashed #f0a030; outline-offset:-2px; }
-        #tab-gerador .gh-pt-row-pick:hover { background:#fffbf0 !important; }
-        #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff0d0 !important; }
+        #tab-gerador .gh-pt-row-pick:hover { background:#fffbf2 !important; }
+        #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff3d0 !important; color:#b07000 !important; }
 
         /* Assigned cell */
-        #tab-gerador .gh-pt-assigned-cell { padding:6px 10px; min-width:120px; }
-        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:12px; padding:2px 10px; white-space:nowrap; }
+        #tab-gerador .gh-pt-assigned-cell { padding:8px 16px; min-width:140px; text-align:left; }
+        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:4px; font-size:.68rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:12px; padding:3px 10px; white-space:nowrap; }
 
         /* Footer */
-        #tab-gerador .gh-pt-footer { padding:12px 20px 0; display:flex; gap:10px; }
+        #tab-gerador .gh-pt-footer { padding:14px 24px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
 
         /* Trigger button on person name cells */
-        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; font-size:.75rem; padding:1px 3px; opacity:.4; transition:opacity .15s; line-height:1; margin-left:4px; }
+        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; font-size:.7rem; padding:1px 4px; opacity:.35; transition:opacity .15s; line-height:1; margin-left:3px; vertical-align:middle; }
         #tab-gerador .gh-pt-assign-trigger:hover { opacity:1; }
+
+        /* Wizard 3 — domingo workers input */
+        #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }
+        #tab-gerador .gh-dom-trab-label { display:flex; align-items:center; gap:10px; flex:1; }
+        #tab-gerador .gh-dom-trab-icon { font-size:1.2rem; flex-shrink:0; }
+        #tab-gerador .gh-dom-trab-title { font-size:.82rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
+        #tab-gerador .gh-dom-trab-hint { font-size:.7rem; color:#4a6a9c; }
+        #tab-gerador .gh-dom-trab-inp { width:70px !important; text-align:center; font-size:1.1rem !important; font-weight:700 !important; padding:8px 10px !important; border-radius:7px !important; flex-shrink:0; }
       `;
       document.head.appendChild(style);
     }

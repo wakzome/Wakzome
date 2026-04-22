@@ -150,6 +150,89 @@
   // active counter interval handle
   var hActiveInterval = null;
 
+  // ── EDIT BUTTON: shows only for Porto Santo weeks with generated data ──
+  function hShowEditButton(filtered, index) {
+    // Remove existing edit button
+    const existing = document.getElementById('h-edit-btn');
+    if (existing) existing.remove();
+
+    if (hCurrentStore !== 'porto santo') return;
+
+    const block = filtered[index];
+    if (!block) return;
+
+    // Only show if block has person rows (generated data)
+    const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
+    if (!hasPeople) return;
+
+    // Find the week start date from block
+    let weekDateStr = null;
+    for (let i = 0; i < block.length; i++) {
+      for (let c = 1; c < block[i].length; c++) {
+        if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+          weekDateStr = block[i][c]; break;
+        }
+      }
+      if (weekDateStr) break;
+    }
+    if (!weekDateStr) return;
+
+    // Only show edit button for weeks from semana 17 onwards (27/04/2026)
+    const parts = weekDateStr.split('/');
+    const weekDate = new Date(+parts[2], +parts[1]-1, +parts[0]);
+    const sem17 = new Date(2026, 3, 27); // 27 Apr 2026
+    if (weekDate < sem17) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'h-edit-btn';
+    btn.textContent = '✏ Editar horário';
+    btn.style.cssText = [
+      'margin:10px auto 0',
+      'display:block',
+      'padding:8px 20px',
+      'font-size:.72rem',
+      'font-weight:700',
+      'letter-spacing:.08em',
+      'text-transform:uppercase',
+      'cursor:pointer',
+      'border-radius:6px',
+      'font-family:inherit',
+      'background:#111',
+      'color:#fff',
+      'border:1px solid #111',
+      'transition:background .15s'
+    ].join(';');
+    btn.onmouseover = () => { btn.style.background = '#333'; };
+    btn.onmouseout  = () => { btn.style.background = '#111'; };
+
+    btn.addEventListener('click', () => hLoadWeekIntoGerador(weekDateStr, filtered, index));
+
+    const area = document.getElementById('h-table-area');
+    area.appendChild(btn);
+  }
+
+  // Load a published Porto Santo week back into the gerador for editing
+  async function hLoadWeekIntoGerador(weekDateStr, filtered, index) {
+    // Convert DD/MM/YYYY to ISO
+    const parts = weekDateStr.split('/');
+    const weekISO = parts[2] + '-' + parts[1] + '-' + parts[0];
+
+    // Switch to gerador tab
+    const gTab = document.querySelector('.tab-btn[data-tab="gerador"], .drawer-tab-btn[data-tab="gerador"]');
+    if (gTab) gTab.click();
+
+    // Wait for gerador to init
+    await new Promise(r => setTimeout(r, 400));
+
+    if (!window.initGeradorHorarios) { alert('Gerador não disponível.'); return; }
+
+    // Signal gerador to load this week from porto_horarios.csv
+    window._ghLoadPortoWeek = weekISO;
+
+    // Trigger gerador init if not already done
+    window.initGeradorHorarios();
+  }
+
   function hRenderWeek(filtered, index) {
     if (!window._hRender) return;
     const area = document.getElementById('h-table-area');
@@ -178,6 +261,7 @@
     // Start active counter + dashboard
     hUpdateActive(filtered, index);
     if (window._hDashboard) window._hDashboard(filtered, index);
+    hShowEditButton(filtered, index);
     if (hActiveInterval) clearInterval(hActiveInterval);
     hActiveInterval = setInterval(function() {
       hUpdateActive(filtered, index);

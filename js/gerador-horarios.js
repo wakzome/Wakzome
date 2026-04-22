@@ -1459,6 +1459,162 @@
     return lines.join('\r\n');
   }
 
+  // ── LOAD A PUBLISHED PORTO WEEK BACK INTO THE GERADOR FOR EDITING ──
+  async function loadPortoWeekForEdit(weekISO) {
+    const sb = getSupabase();
+    if (!sb) { renderWiz(); return; }
+
+    const c = getContainer(); if (!c) return;
+    c.innerHTML = '<div style="padding:40px;text-align:center;color:#aaa;font-size:.85rem;">A carregar horário publicado…</div>';
+    fixPanelLayout();
+
+    try {
+      const { data: urlData } = sb.storage.from('horarios').getPublicUrl('porto_horarios.csv');
+      const res = await fetch(urlData.publicUrl + '?t=' + Date.now());
+      if (!res.ok) throw new Error('porto_horarios.csv não encontrado');
+      const csvText = await res.text();
+
+      // Parse CSV into blocks
+      const rows = csvText.split(/?
+/).map(line => line.split(',').map(c => c.replace(/^"|"$/g,'').trim()));
+      const blocks = [];
+      let cur = [];
+      rows.forEach(r => {
+        if (r.every(c => c === '')) { if (cur.length) { blocks.push(cur); cur = []; } }
+        else cur.push(r);
+      });
+      if (cur.length) blocks.push(cur);
+
+      // Find block matching weekISO date (convert to DD/MM/YYYY)
+      const d = new Date(weekISO + 'T00:00:00');
+      const targetDate = String(d.getDate()).padStart(2,'0') + '/' +
+                         String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+
+      let targetBlock = null;
+      for (const block of blocks) {
+        for (const row of block) {
+          if (row.slice(1).some(c => c === targetDate)) { targetBlock = block; break; }
+        }
+        if (targetBlock) break;
+      }
+
+      if (!targetBlock) throw new Error('Semana não encontrada no CSV publicado');
+
+      // Restore S state from the block
+      S = blank();
+      S.weekStart = new Date(weekISO + 'T00:00:00');
+      S.openStores = STORES.map(st => st.id); // assume all stores open; refine below
+      S.openDays   = {};
+      S.storeMin   = {};
+      S.storeMax   = {};
+      S._personStores = {};
+      S._storeOrder   = {};
+
+      // Build schedule from CSV block
+      // Block structure: repeating groups of:
+      //   [PORTO SANTO, SEG, TER, ...]
+      //   [STORE_SHORT, d1, d2, ...]
+      //   [NAME.Xhrs, cells...]  (row A - morning)
+      //   [NAME.Xhrs, cells...]  (row B - afternoon)
+      //   ...repeat for each person
+
+      const DAYS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+      const SHORT_TO_ID = {};
+      STORES.forEach(st => { SHORT_TO_ID[(PS_STORE_SHORT[st.id] || st.id).toLowerCase()] = st.id; });
+
+      // Initialize schedule for all people
+      PEOPLE.forEach(p => {
+        S.schedule[p.id] = {};
+        DAYS_ORDER.forEach(day => { S.schedule[p.id][day] = { type: 'empty', shift: null, store: null }; });
+      });
+
+      let i = 0;
+      while (i < targetBlock.length) {
+        const row = targetBlock[i];
+        const firstCell = (row[0] || '').trim().toLowerCase();
+
+        if (firstCell === 'porto santo') { i++; continue; }
+
+        // This is a store header row: [STORE_SHORT, d1, d2, ...]
+        const storeShortRaw = (row[0] || '').trim().toLowerCase();
+        const storeId = SHORT_TO_ID[storeShortRaw];
+        if (!storeId) { i++; continue; }
+
+        // Mark store as open
+        if (!S.openStores.includes(storeId)) S.openStores.push(storeId);
+        S.openDays[storeId] = DAYS_ORDER.slice(); // open all days for simplicity
+        if (!S._storeOrder[storeId]) S._storeOrder[storeId] = [];
+
+        i++; // skip store header
+        // Read person pairs
+        while (i + 1 < targetBlock.length) {
+          const rowA = targetBlock[i];
+          const rowB = targetBlock[i+1];
+          const nameRawA = (rowA[0] || '').trim();
+          const nameRawB = (rowB[0] || '').trim();
+
+          // Stop if next row is another store header or porto santo
+          if ((rowA[0]||'').toLowerCase() === 'porto santo') break;
+          const nextShort = (rowA[0]||'').trim().toLowerCase();
+          if (SHORT_TO_ID[nextShort] !== undefined && nextShort !== storeShortRaw) break;
+          // If nameRawA doesn't look like a person (no dot), stop
+          if (!nameRawA.includes('.')) break;
+
+          // Find person by matching name
+          const namePart = nameRawA.replace(/\.\d+hrs?/i, '').trim().toLowerCase();
+          const person = PEOPLE.find(p => {
+            const sn = psShortName(p.name).toLowerCase().replace('.','');
+            const nm = namePart.replace('.','');
+            return sn === nm || p.name.toLowerCase().startsWith(namePart.split(' ')[0]);
+          });
+
+          if (person) {
+            if (!S._personStores[person.id]) S._personStores[person.id] = [];
+            if (!S._personStores[person.id].includes(storeId)) S._personStores[person.id].push(storeId);
+            if (!S._storeOrder[storeId].includes(person.id)) S._storeOrder[storeId].push(person.id);
+
+            DAYS_ORDER.forEach((day, di) => {
+              const cellA = (rowA[di+1] || '').trim();
+              const cellB = (rowB[di+1] || '').trim();
+              const upper = cellA.toUpperCase();
+
+              if (upper === 'FOLGA') {
+                S.schedule[person.id][day] = { type: 'folga', shift: null, store: null };
+              } else if (upper === 'FERIAS') {
+                S.schedule[person.id][day] = { type: 'ferias', shift: null, store: null };
+              } else if (cellA === '' && cellB === '') {
+                // leave as empty
+              } else {
+                // Check if it's an alias (another store name)
+                const aliasId = SHORT_TO_ID[upper.toLowerCase()];
+                if (aliasId && aliasId !== storeId) {
+                  // Person working in another store — only set if not already set
+                  const cur = S.schedule[person.id][day];
+                  if (cur.type === 'empty') {
+                    S.schedule[person.id][day] = { type: 'work', shift: null, store: aliasId };
+                  }
+                } else {
+                  // Actual shift — join morning + afternoon with |
+                  const shift = cellB ? (cellA + '|' + cellB) : cellA;
+                  S.schedule[person.id][day] = { type: 'work', shift, store: storeId };
+                }
+              }
+            });
+          }
+          i += 2;
+        }
+      }
+
+      wStep = 3; // jump straight to schedule view
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      showSchedule(active);
+
+    } catch(e) {
+      console.error('[GH] loadPortoWeekForEdit error:', e);
+      c.innerHTML = '<div style="padding:40px;text-align:center;color:#c0392b;font-size:.85rem;">Erro ao carregar: ' + e.message + '</div>';
+    }
+  }
+
   // Upload the CSV to Supabase Storage as porto_horarios.csv
   // Strategy: fetch existing file, append/replace the block for this week, re-upload
   async function publishPortoSantoCSV() {
@@ -2989,7 +3145,14 @@
 
     // Load knowledge base from Supabase before rendering
     loadKnowledgeBase().then(async () => {
-      renderWiz();
+      // Check if admin triggered an edit of a published week
+      if (window._ghLoadPortoWeek) {
+        const weekISO = window._ghLoadPortoWeek;
+        window._ghLoadPortoWeek = null;
+        await loadPortoWeekForEdit(weekISO);
+      } else {
+        renderWiz();
+      }
     }).catch(err => {
       console.error('Failed to load knowledge base:', err);
       renderWiz();

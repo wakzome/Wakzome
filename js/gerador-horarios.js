@@ -1738,7 +1738,7 @@
 
         const dimClass = assignedPerson ? ' gh-pt-row-used' : '';
         const assignedTag = assignedPerson
-          ? `<span class="gh-pt-assigned-tag">✓ ${shortName(assignedPerson.name)}</span>`
+          ? `<span class="gh-pt-assigned-tag">✓ ${shortName(assignedPerson.name)}<button class="gh-pt-clear-row" data-pid="${assignedPerson.id}" title="Limpar">✕</button></span>`
           : '';
 
         patternRows += `
@@ -1781,7 +1781,7 @@
         </table>
       </div>
       <div class="gh-pt-footer">
-        <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pt-clear-all">↺ Limpar atribuições</button>
+        <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pt-clear-all">↺ Limpar tudo</button>
       </div>
       ` : ''}
     </div>`;
@@ -1795,6 +1795,17 @@
     document.getElementById('gh-pt-clear-all')?.addEventListener('click', () => {
       window._GH_ASSIGNED_PATTERNS = {};
       showSchedule(active);
+    });
+
+    document.querySelectorAll('.gh-pt-clear-row').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pid = btn.dataset.pid;
+        if (pid && window._GH_ASSIGNED_PATTERNS) {
+          delete window._GH_ASSIGNED_PATTERNS[pid];
+          showSchedule(active);
+        }
+      });
     });
 
     // Click on person name in schedule tables → enter assign mode
@@ -2349,25 +2360,25 @@
         #tab-gerador .gh-inc-tag { font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
 
         /* ── PATTERN PANEL ── */
-        #tab-gerador .gh-pattern-panel { margin:40px auto 80px; max-width:860px; width:calc(100% - 40px); border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:visible; box-sizing:border-box; }
-        #tab-gerador .gh-pt-header { padding:20px 24px 14px; border-bottom:1px solid #f0f0f0; background:#fafafa; }
-        #tab-gerador .gh-pt-title { font-size:.62rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
-        #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center; }
-        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:4px 13px; font-size:.7rem; font-weight:700; color:#555; }
+        #tab-gerador .gh-pattern-panel { margin:40px auto 80px; max-width:680px; width:calc(100% - 40px); border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:visible; box-sizing:border-box; }
+        #tab-gerador .gh-pt-header { padding:12px 16px 10px; border-bottom:1px solid #f0f0f0; background:#fafafa; }
+        #tab-gerador .gh-pt-title { font-size:.58rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
+        #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; align-items:center; }
+        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:3px 10px; font-size:.62rem; font-weight:700; color:#555; }
         #tab-gerador .gh-pt-badge-dom { background:#e8f0fe; border-color:#c5d8fa; color:#1a4a9a; }
         #tab-gerador .gh-pt-badge-key { background:#fff8e0; border-color:#f0d080; color:#8a6000; font-family:monospace; }
-        #tab-gerador .gh-pt-hint { font-size:.72rem; color:#bbb; font-style:italic; }
-        #tab-gerador .gh-pt-no-scenario { margin:20px 24px; padding:14px 18px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.8rem; color:#a04000; }
+        #tab-gerador .gh-pt-hint { font-size:.65rem; color:#bbb; font-style:italic; }
+        #tab-gerador .gh-pt-no-scenario { margin:14px 16px; padding:10px 14px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.75rem; color:#a04000; }
 
         /* Table */
         #tab-gerador .gh-pt-table-wrap { overflow-x:auto; padding:0; }
-        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; min-width:480px; }
+        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; min-width:360px; }
         #tab-gerador .gh-pt-table thead tr { background:#f7f7f7; }
-        #tab-gerador .gh-pt-table th { padding:9px 14px; font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
-        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:24px !important; width:40px; }
-        #tab-gerador .gh-pt-th-assigned { min-width:140px; }
-        #tab-gerador .gh-pt-num { font-size:.72rem; font-weight:700; color:#ccc; padding:0 24px; text-align:left; font-family:monospace; }
-        #tab-gerador .gh-pt-cell { padding:10px 14px; text-align:center; border-right:1px solid #f5f5f5; font-size:.72rem; font-weight:600; white-space:nowrap; }
+        #tab-gerador .gh-pt-table th { padding:5px 8px; font-size:.55rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:12px !important; width:28px; }
+        #tab-gerador .gh-pt-th-assigned { min-width:110px; }
+        #tab-gerador .gh-pt-num { font-size:.62rem; font-weight:700; color:#ccc; padding:0 12px; text-align:left; font-family:monospace; }
+        #tab-gerador .gh-pt-cell { padding:6px 8px; text-align:center; border-right:1px solid #f5f5f5; font-size:.62rem; font-weight:600; white-space:nowrap; }
         #tab-gerador .gh-pt-work  { color:#d5d5d5; }
         #tab-gerador .gh-pt-folga { color:#c0392b; font-style:italic; background:#fff9f9; }
         #tab-gerador .gh-pt-table tbody tr { border-bottom:1px solid #f5f5f5; transition:background .12s; }
@@ -2383,11 +2394,13 @@
         #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff3d0 !important; color:#b07000 !important; }
 
         /* Assigned cell */
-        #tab-gerador .gh-pt-assigned-cell { padding:8px 16px; min-width:140px; text-align:left; }
-        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:4px; font-size:.68rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:12px; padding:3px 10px; white-space:nowrap; }
+        #tab-gerador .gh-pt-assigned-cell { padding:5px 10px; min-width:110px; text-align:left; }
+        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:4px; font-size:.62rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:12px; padding:2px 8px; white-space:nowrap; }
+        #tab-gerador .gh-pt-clear-row { background:none; border:none; cursor:pointer; font-size:.6rem; color:#bbb; padding:0 2px; line-height:1; margin-left:3px; opacity:.6; transition:opacity .15s; vertical-align:middle; }
+        #tab-gerador .gh-pt-clear-row:hover { opacity:1; color:#c0392b; }
 
         /* Footer */
-        #tab-gerador .gh-pt-footer { padding:14px 24px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
+        #tab-gerador .gh-pt-footer { padding:10px 16px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
 
         /* Trigger button on person name cells */
         #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; font-size:.7rem; padding:1px 4px; opacity:.35; transition:opacity .15s; line-height:1; margin-left:3px; vertical-align:middle; }

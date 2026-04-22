@@ -1324,6 +1324,9 @@
         );
       }
 
+      // Publicar CSV de Porto Santo
+      await publishPortoSantoCSV();
+
       S.alerts.push({ type: 'info', text: '✓ Horário confirmado e guardado.' });
       if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
 
@@ -1331,6 +1334,197 @@
       console.error('Erro ao confirmar horário:', e);
       alert('Erro ao guardar. Verifique a consola.');
       if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar horário'; }
+    }
+  }
+
+  // ── PORTO SANTO CSV BUILDER + PUBLISHER ──
+
+  // Map store id → short name used in CSV
+  const PS_STORE_SHORT = {
+    'shana':   'SHANA',
+    'mercado': 'MEZKA MERCADO',
+    'avenida': 'MEZKA AVENIDA',
+    'maxx':    'MAXX',
+  };
+
+  // Map store id → alias shown when person works there from another store's block
+  const PS_STORE_ALIAS = {
+    'shana':   'SHANA',
+    'mercado': 'MEZKA MERCADO',
+    'avenida': 'MEZKA AVENIDA',
+    'maxx':    'MAXX',
+  };
+
+  // Build first+last initial name like "MARILIA S." from full name
+  function psShortName(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].toUpperCase();
+    const first = parts[0];
+    const last  = parts[parts.length - 1];
+    return (first + ' ' + last[0] + '.').toUpperCase();
+  }
+
+  // Format a date as DD/MM/YYYY
+  function psDateFmt(d) {
+    return String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' +
+           d.getFullYear();
+  }
+
+  // Build the Porto Santo CSV block from current S.schedule
+  function buildPortoSantoCSV() {
+    if (!S.weekStart) return '';
+    const DAYS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+    const dates = DAYS_ORDER.map((_,i) => {
+      const d = new Date(S.weekStart);
+      d.setDate(d.getDate() + i);
+      return psDateFmt(d);
+    });
+
+    // Determine which stores have at least one person with work shifts
+    const openStoreIds = STORES
+      .filter(st => S.openStores.includes(st.id))
+      .sort((a,b) => a.priority - b.priority)
+      .map(st => st.id)
+      .filter(sid => {
+        // Has at least one person working in this store
+        return PEOPLE.some(p => {
+          return DAYS_ORDER.some(day => {
+            const cell = S.schedule[p.id]?.[day];
+            return cell && cell.type === 'work' && cell.store === sid;
+          });
+        });
+      });
+
+    if (!openStoreIds.length) return '';
+
+    const lines = [];
+
+    openStoreIds.forEach(sid => {
+      const storeShort = PS_STORE_SHORT[sid] || sid.toUpperCase();
+
+      // Get people assigned to this store (with at least one work day here)
+      const storePeople = PEOPLE.filter(p =>
+        S._personStores?.[p.id]?.includes(sid) ||
+        DAYS_ORDER.some(day => S.schedule[p.id]?.[day]?.store === sid && S.schedule[p.id]?.[day]?.type === 'work')
+      );
+
+      if (!storePeople.length) return;
+
+      // Header rows
+      lines.push(['PORTO SANTO', 'SEG','TER','QUA','QUI','SEX','SAB','DOM'].join(','));
+      lines.push([storeShort, ...dates].join(','));
+
+      storePeople.forEach(p => {
+        const hrs = p.hrs || 40;
+        const nameLabel = psShortName(p.name) + '.' + hrs + 'hrs';
+        const rowA = [nameLabel];
+        const rowB = [nameLabel];
+
+        DAYS_ORDER.forEach(day => {
+          const cell = S.schedule[p.id]?.[day] || { type: 'na' };
+
+          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa') {
+            const lbl = cell.type === 'ferias' ? 'FERIAS' : 'FOLGA';
+            rowA.push(lbl);
+            rowB.push(lbl);
+          } else if (cell.type === 'work') {
+            if (cell.store === sid) {
+              // Working here — show shift split into morning/afternoon
+              const parts = (cell.shift || '').split('|');
+              rowA.push(parts[0] || '');
+              rowB.push(parts[1] || '');
+            } else {
+              // Working in another store — show alias
+              const alias = PS_STORE_ALIAS[cell.store] || (cell.store || '').toUpperCase();
+              rowA.push(alias);
+              rowB.push(alias);
+            }
+          } else if (cell.type === 'fim_contrato') {
+            rowA.push('');
+            rowB.push('');
+          } else {
+            rowA.push('');
+            rowB.push('');
+          }
+        });
+
+        lines.push(rowA.map(v => v.includes(',') ? '"' + v + '"' : v).join(','));
+        lines.push(rowB.map(v => v.includes(',') ? '"' + v + '"' : v).join(','));
+      });
+
+      lines.push(''); // blank line between store blocks
+    });
+
+    return lines.join('\r\n');
+  }
+
+  // Upload the CSV to Supabase Storage as porto_horarios.csv
+  // Strategy: fetch existing file, append/replace the block for this week, re-upload
+  async function publishPortoSantoCSV() {
+    const sb = getSupabase();
+    if (!sb) return;
+    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    if (!weekKey) return;
+
+    const newBlock = buildPortoSantoCSV();
+    if (!newBlock) return;
+
+    const BUCKET = 'horarios';
+    const FILE   = 'porto_horarios.csv';
+
+    try {
+      // 1. Try to fetch existing file
+      let existingText = '';
+      try {
+        const { data: urlData } = sb.storage.from(BUCKET).getPublicUrl(FILE);
+        const res = await fetch(urlData.publicUrl + '?t=' + Date.now());
+        if (res.ok) existingText = await res.text();
+      } catch(e) { /* file doesn't exist yet — ok */ }
+
+      // 2. Parse existing blocks (separated by blank lines)
+      const existingBlocks = [];
+      if (existingText.trim()) {
+        let cur = [];
+        existingText.split(/\r?\n/).forEach(line => {
+          if (line.trim() === '') {
+            if (cur.length) { existingBlocks.push(cur.join('\r\n')); cur = []; }
+          } else cur.push(line);
+        });
+        if (cur.length) existingBlocks.push(cur.join('\r\n'));
+      }
+
+      // 3. Determine the week number (semana) for the selector label
+      // Week 1 starts 2026-01-05; each week is +7 days
+      const BASE_DATE = new Date('2026-01-05T00:00:00');
+      const weekMs = new Date(weekKey + 'T00:00:00') - BASE_DATE;
+      const weekNum = Math.round(weekMs / (7 * 86400000)) + 1;
+      const weekLabel = 'SEMANA ' + weekNum;
+
+      // 4. Replace block that has this week's dates, or append
+      // Each block starts with lines containing weekLabel dates
+      const weekDate = psDateFmt(new Date(weekKey + 'T00:00:00'));
+      let replaced = false;
+      const updatedBlocks = existingBlocks.map(block => {
+        if (block.includes(weekDate)) { replaced = true; return newBlock.trimEnd(); }
+        return block;
+      });
+      if (!replaced) updatedBlocks.push(newBlock.trimEnd());
+
+      const finalCSV = updatedBlocks.join('\r\n\r\n') + '\r\n';
+
+      // 5. Upload
+      const blob = new Blob([finalCSV], { type: 'text/csv' });
+      const { error } = await sb.storage.from(BUCKET).upload(FILE, blob, {
+        upsert: true,
+        contentType: 'text/csv'
+      });
+      if (error) throw error;
+
+      console.log('[GH] porto_horarios.csv publicado — semana ' + weekNum);
+    } catch(e) {
+      console.error('[GH] Erro ao publicar porto_horarios.csv:', e);
+      alert('Horário guardado mas erro ao publicar CSV: ' + (e.message || e));
     }
   }
 

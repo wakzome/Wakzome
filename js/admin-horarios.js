@@ -48,10 +48,70 @@
       'porto santo':                      'porto santo'
     };
     const key = nameMapping[store];
-    const filtered = allBlocks.filter(b => (b[0][0] || '').toLowerCase() === key);
+    let filtered = allBlocks.filter(b => (b[0][0] || '').toLowerCase() === key);
     if (!filtered.length) {
       document.getElementById('h-table-area').innerHTML = '<div id="h-status-msg">sem dados para esta loja</div>';
       return;
+    }
+
+    // ── PORTO SANTO: merge generated weeks from porto_horarios.csv ──
+    // Blocks where all data rows are empty (only header + dates, no people)
+    // are replaced by blocks from porto_horarios.csv if available.
+    if (store === 'porto santo') {
+      try {
+        const portoUrl = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_horarios.csv?t=' + Date.now();
+        const portoRes = await fetch(portoUrl);
+        if (portoRes.ok) {
+          const portoText = await portoRes.text();
+          const portoRows = Papa.parse(portoText, {skipEmptyLines: false}).data.map(r => r.map(c => (c==null?'':String(c).trim())));
+          const portoBlocks = [];
+          let pcur = [];
+          portoRows.forEach(r => {
+            if (r.every(c => c === '')) { if (pcur.length) { portoBlocks.push(pcur); pcur = []; } }
+            else pcur.push(r);
+          });
+          if (pcur.length) portoBlocks.push(pcur);
+
+          // Build a map: date string → porto block (using first date found in block)
+          const portoByDate = {};
+          portoBlocks.forEach(pb => {
+            for (let i = 0; i < pb.length; i++) {
+              const row = pb[i];
+              for (let c = 1; c < row.length; c++) {
+                if (row[c] && row[c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                  portoByDate[row[c]] = pb;
+                  return;
+                }
+              }
+            }
+          });
+
+          // Replace empty Porto Santo blocks with generated ones
+          filtered = filtered.map(block => {
+            // Check if block has any person rows (rows beyond header+dates that have schedule data)
+            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
+            if (hasPeople) return block; // already has data — keep
+
+            // Find the date for this block
+            let blockDate = null;
+            for (let i = 0; i < block.length; i++) {
+              for (let c = 1; c < block[i].length; c++) {
+                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                  blockDate = block[i][c]; break;
+                }
+              }
+              if (blockDate) break;
+            }
+
+            if (blockDate && portoByDate[blockDate]) {
+              return portoByDate[blockDate]; // replace with generated block
+            }
+            return block;
+          });
+        }
+      } catch(e) {
+        console.warn('[admin-horarios] porto_horarios.csv not available:', e.message);
+      }
     }
 
     hBlocks = { filtered };

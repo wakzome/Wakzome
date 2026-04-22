@@ -378,7 +378,51 @@
     updateSummaryWrapVisibility();
     window.addEventListener('resize', updateSummaryWrapVisibility);
 
-    window._lastBlocks = filteredBlocks;
+    // ── PORTO SANTO: merge generated weeks from porto_horarios.csv ──
+    let finalBlocks = filteredBlocks;
+    if (store === 'porto santo') {
+      try {
+        const portoUrl = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_horarios.csv?t=' + Date.now();
+        const portoRes = await fetch(portoUrl);
+        if (portoRes.ok) {
+          const portoText = await portoRes.text();
+          const portoRows = Papa.parse(portoText, {skipEmptyLines: false}).data.map(r => r.map(c => (c==null?'':String(c).trim())));
+          const portoBlocks = [];
+          let pcur = [];
+          portoRows.forEach(r => {
+            if (r.every(c => c === '')) { if (pcur.length) { portoBlocks.push(pcur); pcur = []; } }
+            else pcur.push(r);
+          });
+          if (pcur.length) portoBlocks.push(pcur);
+
+          const portoByDate = {};
+          portoBlocks.forEach(pb => {
+            for (let i = 0; i < pb.length; i++) {
+              for (let c = 1; c < pb[i].length; c++) {
+                if (pb[i][c] && pb[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                  portoByDate[pb[i][c]] = pb; return;
+                }
+              }
+            }
+          });
+
+          finalBlocks = filteredBlocks.map(block => {
+            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
+            if (hasPeople) return block;
+            let blockDate = null;
+            for (let i = 0; i < block.length; i++) {
+              for (let c = 1; c < block[i].length; c++) {
+                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) { blockDate = block[i][c]; break; }
+              }
+              if (blockDate) break;
+            }
+            return (blockDate && portoByDate[blockDate]) ? portoByDate[blockDate] : block;
+          });
+        }
+      } catch(e) { console.warn('[shared] porto_horarios.csv not available:', e.message); }
+    }
+
+    window._lastBlocks = finalBlocks;
     startShiftCountdown(currentStore);
     document.getElementById('table-container').style.display='flex';
 
@@ -386,23 +430,23 @@
     if(!document.getElementById(weekSelectId)){
       const weekSelect = document.createElement('select');
       weekSelect.id = weekSelectId;
-      filteredBlocks.forEach((_,i)=>{
+      finalBlocks.forEach((_,i)=>{
         const op=document.createElement('option');
         op.value=i; op.textContent='SEMANA '+(i+1);
         weekSelect.appendChild(op);
       });
       document.getElementById('main-header-center').appendChild(weekSelect);
-      weekSelect.addEventListener('change',()=>{ fadeRenderTable(filteredBlocks,parseInt(weekSelect.value)); });
+      weekSelect.addEventListener('change',()=>{ fadeRenderTable(finalBlocks,parseInt(weekSelect.value)); });
     }
 
-    const startWeek = findCurrentWeek(filteredBlocks);
+    const startWeek = findCurrentWeek(finalBlocks);
     document.getElementById(weekSelectId).value=startWeek;
-    fadeRenderTable(filteredBlocks,startWeek);
+    fadeRenderTable(finalBlocks,startWeek);
 
     setInterval(() => {
       const currentWeek = parseInt(document.getElementById(weekSelectId).value);
-      renderSummary(filteredBlocks,currentWeek);
-      highlightCurrentCell(filteredBlocks,currentWeek);
+      renderSummary(finalBlocks,currentWeek);
+      highlightCurrentCell(finalBlocks,currentWeek);
     }, 30000);
   }
 

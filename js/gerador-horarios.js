@@ -1321,7 +1321,7 @@
         aH = Math.round(aH * 10) / 10;
         return `<tr>
           <td><div class="gh-p-cell">
-            <button class="gh-p-remove-btn" data-pid="${p.id}" title="Eliminar desta tabela">
+            <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
               <span class="gh-p-dot">●</span>${shortName(p.name)}
               <span class="gh-p-remove-x">✕</span>
             </button>

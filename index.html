@@ -2,6 +2,7 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="light">
 <!-- ===== INTRO ===== -->
 <style>
 @font-face {
@@ -79,7 +80,6 @@ select, select option {
 }
 </style>
 <!-- ===== INTRO ===== -->
-<meta name="color-scheme" content="light">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wakzome</title>
 <link rel="icon" type="image/png" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/ICON.png">
@@ -95,11 +95,15 @@ select, select option {
   src: url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');
   font-weight: 300; font-style: normal; font-display: block;
 }
+/* Forçar modo claro em todos os elementos, incluindo inputs e iframes */
+*, *::before, *::after {
+  color-scheme: light;
+}
 html, body {
   margin:0; padding:0; height:100%;
   font-family:'MontserratLight', sans-serif;
   background:#fff; color:#000; overflow:hidden;
-  color-scheme: only light;
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

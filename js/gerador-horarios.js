@@ -2324,14 +2324,14 @@
         #tab-gerador .gh-no-click:hover { background:transparent !important; }
 
         /* ── PERSON CELL ── */
-        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }
-        #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
+        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; text-align:center; }
+        #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; justify-content:center; gap:5px; color:#111; }
         #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
-        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:flex; align-items:center; gap:5px; padding:0; width:max-content; text-align:left; }
+        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:5px; padding:0; width:100%; text-align:center; }
         #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
         #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
         #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
-        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:16px; margin-top:2px; font-weight:600; }
+        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:2px; font-weight:600; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
         #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
 
@@ -2377,6 +2377,7 @@
         #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
         #gh-modal .gh-pill { background:#f7f7f7; border:1.5px solid #e5e5e5; border-radius:50px; padding:9px 20px; font-size:.82rem; font-weight:600; cursor:pointer; color:#444; transition:all .15s; white-space:nowrap; font-family:inherit; line-height:1.2; }
         #gh-modal .gh-pill:hover { background:#f0f0f0; border-color:#ccc; color:#111; transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
+        #gh-modal .gh-pill.active:hover { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; transform:translateY(-1px); }
         /* TIPO active — forest green, white text */
         #gh-modal .gh-pill-tipo.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
         /* SHIFT active — forest green, white text */
@@ -2524,9 +2525,9 @@
 
         /* Trigger button on person name cells — next to hours */
         #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:0; line-height:1; margin-left:4px; vertical-align:middle; display:inline-flex; align-items:center; }
-        #tab-gerador .gh-pt-assign-trigger-dot { width:7px; height:7px; border-radius:50%; background:#c8b8f0; display:inline-block; transition:background .15s, transform .15s; }
-        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#7c3aed; transform:scale(1.3); }
-        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,.2); }
+        #tab-gerador .gh-pt-assign-trigger-dot { width:6px; height:6px; border-radius:50%; background:#999; display:inline-block; transition:background .15s, transform .15s; box-shadow:0 0 0 3px rgba(150,150,150,.22); }
+        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#555; box-shadow:0 0 0 4px rgba(100,100,100,.28); transform:scale(1.15); }
+        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#444; box-shadow:0 0 0 4px rgba(80,80,80,.3); }
 
         /* Wizard 3 — domingo workers input */
         #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }

@@ -1457,7 +1457,8 @@
           else if (c2.type === 'work') {
             if (c2.store === st.id) {
               const soft = p.softAvoid?.some(oid => S.schedule[oid]?.[day]?.type === 'work' && S.schedule[oid]?.[day]?.store === st.id);
-              cls = soft ? 'c-soft' : 'c-work';
+              const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f' };
+              cls = soft ? 'c-soft' : (shiftColorMap[c2.shift] || 'c-shift-b');
               content = c2.shift ? c2.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('') : `<span class="gh-sh-line">—</span>`;
             } else {
               cls = 'c-elsewhere';
@@ -2349,6 +2350,19 @@
         #tab-gerador .c-elsewhere { background:#f5f5f5; }
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
+        /* Shift-specific cell colors — A B C D E F */
+        #tab-gerador .c-shift-a { background:#fdf6e3; }
+        #tab-gerador .c-shift-a .gh-sh-line { color:#8a6000; }
+        #tab-gerador .c-shift-b { background:#e8f5e9; }
+        #tab-gerador .c-shift-b .gh-sh-line { color:#1b5e20; }
+        #tab-gerador .c-shift-c { background:#e3f2fd; }
+        #tab-gerador .c-shift-c .gh-sh-line { color:#0d47a1; }
+        #tab-gerador .c-shift-d { background:#fce4ec; }
+        #tab-gerador .c-shift-d .gh-sh-line { color:#880e4f; }
+        #tab-gerador .c-shift-e { background:#f3e5f5; }
+        #tab-gerador .c-shift-e .gh-sh-line { color:#4a148c; }
+        #tab-gerador .c-shift-f { background:#e8eaf6; }
+        #tab-gerador .c-shift-f .gh-sh-line { color:#1a237e; }
         #tab-gerador .c-fim-contrato { background:#fff5f5; cursor:default; }
         #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
 
@@ -2388,13 +2402,18 @@
         #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
         #gh-modal .gh-pill-shift { border-radius:10px; padding:12px 8px; font-size:.82rem; font-weight:600; text-align:center; line-height:1.55; white-space:normal; color:#333; }
         #gh-modal .gh-pill-shift:hover { color:#111; }
-        /* Subtle greyscale tones per shift — elegant, just enough to distinguish */
-        #gh-modal .gh-pill-shift[data-val="10:00-13:00|14:00-19:00"] { background:#f8f8f8; border-color:#e2e2e2; }
-        #gh-modal .gh-pill-shift[data-val="10:00-14:00|15:00-19:00"] { background:#f4f4f4; border-color:#dedede; }
-        #gh-modal .gh-pill-shift[data-val="10:00-15:00|16:00-19:00"] { background:#efefef; border-color:#d8d8d8; }
-        #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#eaeaea; border-color:#d2d2d2; }
-        #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#e5e5e5; border-color:#cccccc; }
-        #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e0e0e0; border-color:#c6c6c6; }
+        /* Subtle color tones per shift — matches table cell colors */
+        #gh-modal .gh-pill-shift[data-val="10:00-13:00|14:00-19:00"] { background:#fdf6e3; border-color:#f0d080; }
+        #gh-modal .gh-pill-shift[data-val="10:00-14:00|15:00-19:00"] { background:#e8f5e9; border-color:#a5d6a7; }
+        #gh-modal .gh-pill-shift[data-val="10:00-15:00|16:00-19:00"] { background:#e3f2fd; border-color:#90caf9; }
+        #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#fce4ec; border-color:#f48fb1; }
+        #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#f3e5f5; border-color:#ce93d8; }
+        #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e8eaf6; border-color:#9fa8da; }
+        /* Active state must override per-shift backgrounds */
+        #gh-modal .gh-pill-shift.active,
+        #gh-modal .gh-pill-shift[data-val].active { background:#111 !important; border-color:#111 !important; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        #gh-modal .gh-pill-shift.active:hover,
+        #gh-modal .gh-pill-shift[data-val].active:hover { background:#111 !important; border-color:#111 !important; color:#fff !important; }
         /* store pills — wrap row */
         #gh-modal .gh-btn-group-stores { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
         #gh-modal .gh-pill-store { border-radius:50px; padding:9px 20px; font-size:.82rem; }

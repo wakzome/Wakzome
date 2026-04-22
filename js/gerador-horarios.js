@@ -1796,7 +1796,7 @@
         DIAS_ORDER.forEach(d => {
           const { bg, color } = cellStyle(pid, d);
           const txt = cellText(pid, d);
-          tbody += `<td style="padding:7px 6px;text-align:center;font-size:.72rem;font-weight:600;background:${bg};color:${color};border-bottom:1px solid #f0f0f0;border-left:1px solid #f0f0f0;">${txt}</td>`;
+          tbody += `<td style="padding:7px 6px;text-align:center;font-size:.72rem;font-weight:600;background:${bg} !important;color:${color} !important;-webkit-text-fill-color:${color} !important;border-bottom:1px solid #f0f0f0;border-left:1px solid #f0f0f0;">${txt}</td>`;
         });
         tbody += `</tr>`;
       });

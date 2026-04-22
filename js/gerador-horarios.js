@@ -2371,14 +2371,14 @@
         #tab-gerador .gh-pt-no-scenario { margin:14px 16px; padding:10px 14px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.75rem; color:#a04000; }
 
         /* Table */
-        #tab-gerador .gh-pt-table-wrap { overflow-x:auto; padding:0; }
-        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; min-width:360px; }
+        #tab-gerador .gh-pt-table-wrap { overflow-x:hidden; padding:0; }
+        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; table-layout:fixed; }
         #tab-gerador .gh-pt-table thead tr { background:#f7f7f7; }
-        #tab-gerador .gh-pt-table th { padding:5px 8px; font-size:.55rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
-        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:12px !important; width:28px; }
-        #tab-gerador .gh-pt-th-assigned { min-width:110px; }
-        #tab-gerador .gh-pt-num { font-size:.62rem; font-weight:700; color:#ccc; padding:0 12px; text-align:left; font-family:monospace; }
-        #tab-gerador .gh-pt-cell { padding:6px 8px; text-align:center; border-right:1px solid #f5f5f5; font-size:.62rem; font-weight:600; white-space:nowrap; }
+        #tab-gerador .gh-pt-table th { padding:5px 4px; font-size:.55rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; overflow:hidden; }
+        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:8px !important; width:26px; }
+        #tab-gerador .gh-pt-th-assigned { width:120px; }
+        #tab-gerador .gh-pt-num { font-size:.62rem; font-weight:700; color:#ccc; padding:0 8px; text-align:left; font-family:monospace; }
+        #tab-gerador .gh-pt-cell { padding:6px 4px; text-align:center; border-right:1px solid #f5f5f5; font-size:.62rem; font-weight:600; white-space:nowrap; overflow:hidden; }
         #tab-gerador .gh-pt-work  { color:#d5d5d5; }
         #tab-gerador .gh-pt-folga { color:#c0392b; font-style:italic; background:#fff9f9; }
         #tab-gerador .gh-pt-table tbody tr { border-bottom:1px solid #f5f5f5; transition:background .12s; }

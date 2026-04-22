@@ -1417,6 +1417,7 @@
     });
 
     // Determine which stores have at least one person with work shifts
+    console.log('[GH] S.openStores:', S.openStores, 'STORES:', STORES.map(s=>s.id), 'S.schedule keys:', Object.keys(S.schedule).length);
     const openStoreIds = STORES
       .filter(st => S.openStores.includes(st.id))
       .sort((a,b) => a.priority - b.priority)
@@ -1658,7 +1659,8 @@
     if (!weekKey) return;
 
     const newBlock = buildPortoSantoCSV();
-    if (!newBlock) return;
+    console.log('[GH] CSV block length:', newBlock?.length, 'weekKey:', weekKey);
+    if (!newBlock) { console.warn('[GH] buildPortoSantoCSV returned empty'); throw new Error('CSV gerado está vazio — verifique se há pessoas e turnos assignados'); }
 
     const BUCKET = 'horarios';
     const FILE   = 'porto_horarios.csv';
@@ -1714,7 +1716,7 @@
       console.log('[GH] porto_horarios.csv publicado — semana ' + weekNum);
     } catch(e) {
       console.error('[GH] Erro ao publicar porto_horarios.csv:', e);
-      alert('Horário guardado mas erro ao publicar CSV: ' + (e.message || e));
+      throw e; // propagate to confirmSchedule retry handler
     }
   }
 

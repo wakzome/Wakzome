@@ -785,7 +785,7 @@
     if (!S.weekStart) return;
     const sb = getSupabase();
     if (!sb) return;
-    const weekKey  = S.weekStart.toISOString().split('T')[0];
+    const weekKey  = S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0');
     const weekEnd  = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
     const weekEndKey = weekEnd.toISOString().split('T')[0];
 
@@ -827,7 +827,7 @@
   // Guardar folga da semana
   async function saveFolga(pid, dias) {
     const sb = getSupabase(); if (!sb) return;
-    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     if (!weekKey) return;
     if (!S._folgas) S._folgas = {};
     S._folgas[pid] = { ...(S._folgas[pid] || {}), pessoa_id: pid, semana: weekKey, dias };
@@ -887,7 +887,7 @@
   // Limpar incidências da semana para uma pessoa (folga + baixa + licença)
   async function limparIncidencias(pid) {
     const sb = getSupabase(); if (!sb) return;
-    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     try {
       // Folga desta semana
       if (S._folgas?.[pid]?.id) {
@@ -1296,7 +1296,7 @@
   // ── CONFIRMAR HORARIO — graba todo en Supabase ──
   async function confirmSchedule(active) {
     const sb = getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
-    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     if (!weekKey) return;
 
     const btn = document.getElementById('gh-btn-confirm');
@@ -1619,7 +1619,7 @@
   async function publishPortoSantoCSV() {
     const sb = getSupabase();
     if (!sb) return;
-    const weekKey = S.weekStart?.toISOString().split('T')[0];
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     if (!weekKey) return;
 
     const newBlock = buildPortoSantoCSV();
@@ -1866,7 +1866,7 @@
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
-      const weekKey = S.weekStart?.toISOString().split('T')[0];
+      const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
       const confirmed = confirm(`Confirmar e guardar o horário da semana de ${weekKey}?\n\nEsta acção gravará as folgas em Supabase e não poderá ser regenerada.`);
       if (!confirmed) return;
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));

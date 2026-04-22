@@ -1474,7 +1474,10 @@
       </table></div>`;
     });
 
-    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
+    // ── PATTERN PANEL — compute scenario from current state ──
+    const patternHTML = buildPatternPanel(active);
+
+    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>` + patternHTML;
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
@@ -1485,6 +1488,9 @@
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       confirmSchedule(active);
     });
+
+    // ── Pattern panel bindings ──
+    bindPatternPanel(active);
 
     // Store name button — no toggle, + always visible
 
@@ -1544,6 +1550,286 @@
         }
         openEdit(td.dataset.pid, td.dataset.day, td.dataset.store);
       });
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── PATTERN ENGINE — Libro6 data embedded ──
+  // ══════════════════════════════════════════════════════════════════
+
+  // 17 weekly patterns from Libro6 (index = pattern number 1-17)
+  // Each entry: array of 7 booleans — true=work, false=FOLGA
+  // Days: [SEG, TER, QUA, QUI, SEX, SAB, DOM]
+  const PATTERNS = {
+     1: [false,true, true, false,true, true, true ],  // FOLGA SEG QUI
+     2: [true, false,true, true, false,true, true ],  // FOLGA TER SEX
+     3: [false,true, true, true, true, true, false],  // FOLGA SEG DOM
+     4: [true, false,true, true, true, true, false],  // FOLGA TER DOM
+     5: [true, true, false,true, true, true, false],  // FOLGA QUA DOM
+     6: [true, true, true, false,true, true, false],  // FOLGA QUI DOM
+     7: [true, true, true, true, false,true, false],  // FOLGA SEX DOM
+     8: [true, true, true, true, true, false,false],  // FOLGA SAB DOM
+     9: [true, false,true, true, true, true, false],  // FOLGA TER DOM (=4 alias)
+    10: [false,true, true, false,true, true, true ],  // FOLGA SEG QUI (=1 alias)
+    11: [true, true, false,true, true, true, false],  // FOLGA QUA DOM (=5 alias)
+    12: [true, false,true, true, false,true, true ],  // FOLGA TER SEX (=2 alias)
+    13: [true, true, true, true, true, false,false],  // FOLGA SAB DOM (=8 alias)
+    14: [true, false,true, true, true, true, false],  // FOLGA TER DOM
+    15: [true, true, true, false,true, true, false],  // FOLGA QUI DOM (=6 alias)
+    16: [false,true, true, false,true, true, true ],  // FOLGA SEG QUI (=1 alias)
+    17: [true, true, true, true, true, false,false],  // FOLGA SAB DOM (=8 alias)
+  };
+
+  // Scenarios from Libro6 right-side table
+  // Key: "pessoas_dom_lojas"  →  ordered list of pattern numbers
+  const SCENARIOS = {
+    '4_0_3':  [4,5,6,7],
+    '5_0_3':  [3,4,5,6,7],
+    '6_0_3':  [3,4,5,6,7,8],
+    '6_1_3':  [1,6,4,8,7,5],
+    '7_0_3':  [3,4,5,6,7,8,9],
+    '7_0_4':  [3,4,5,6,7,8,9],
+    '7_1_3':  [1,4,5,6,7,8,9],
+    '7_1_4':  [1,4,5,6,7,8,9],
+    '7_2_3':  [1,2,5,6,7,8,4],
+    '7_2_4':  [1,2,5,6,7,8,4],
+    '7_3_3':  [1,10,2,4,5,7,8],
+    '7_3_4':  [1,10,2,4,5,7,8],
+    '8_0_3':  [3,4,5,6,7,8,9,11],
+    '8_0_4':  [3,4,5,6,7,8,9,11],
+    '8_1_3':  [1,6,4,8,9,5,11,7],
+    '8_1_4':  [1,6,4,8,9,5,11,7],
+    '8_2_3':  [1,2,4,5,6,7,8,11],
+    '8_2_4':  [1,2,4,5,6,7,8,11],
+    '8_3_3':  [1,2,12,5,6,8,13,11],
+    '8_3_4':  [1,2,12,5,6,8,13,11],
+    '8_4_3':  [1,10,2,12,5,11,8,13],
+    '8_4_4':  [1,10,2,12,5,11,8,13],
+    '8_5_3':  [1,10,2,12,14,5,11,8],
+    '8_5_4':  [1,10,2,12,14,5,11,8],
+    '9_2_3':  [1,6,2,8,4,5,11,7,13],
+    '9_2_4':  [1,6,2,8,4,5,11,7,13],
+    '9_3_3':  [1,10,2,8,4,5,11,7,13],
+    '9_3_4':  [1,10,2,8,4,5,11,7,13],
+    '9_4_3':  [1,10,2,12,4,5,11,8,13],
+    '9_4_4':  [1,10,2,12,4,5,11,8,13],
+    '9_5_3':  [1,10,2,12,5,11,8,13,14],
+    '9_5_4':  [1,10,2,12,5,11,8,13,14],
+    '10_3_4': [1,10,2,8,4,5,6,7,13,11],
+    '10_4_4': [1,10,2,12,5,11,8,13,4,15],
+    '10_5_3': [1,10,2,12,5,11,8,13,4,16],
+    '10_5_4': [1,10,2,12,5,11,8,13,4,16],
+    '11_4_3': [1,10,16,2,4,5,9,11,8,13,7],
+    '11_4_4': [1,10,16,2,4,5,9,11,8,13,7],
+    '11_5_4': [1,10,2,12,5,11,8,13,4,16,15],
+    '12_4_3': [1,10,2,12,4,5,11,15,6,8,13,17],
+    '12_4_4': [1,10,2,12,4,5,11,15,6,8,13,17],
+    '12_5_3': [1,10,16,2,12,4,5,11,15,8,13,17],
+    '12_5_4': [1,10,16,2,12,4,5,11,15,8,13,17],
+  };
+
+  // Pattern number → folga days list (day keys)
+  function patternFolgas(pNum) {
+    const p = PATTERNS[pNum];
+    if (!p) return [];
+    return DAYS.filter((d, i) => p[i] === false);
+  }
+
+  // Compute the scenario key from current state + active people
+  function computeScenarioKey(active) {
+    const nPessoas = active.length;
+    const nDom = active.filter(p => {
+      const c = S.schedule[p.id]?.['DOM'];
+      return c && (c.type === 'work' || c.type === 'empty');
+    }).length;
+    // Count sunday workers: people who ARE NOT on folga/ferias/baixa on Sunday
+    const sundayWorkers = active.filter(p => {
+      const c = S.schedule[p.id]?.['DOM'];
+      return c && c.type !== 'folga' && c.type !== 'ferias' && c.type !== 'baixa' && c.type !== 'fim_contrato';
+    }).length;
+    const nLojas = S.openStores.length;
+    return { key: `${nPessoas}_${sundayWorkers}_${nLojas}`, nPessoas, sundayWorkers, nLojas };
+  }
+
+  // State: which pattern numbers have been assigned to people
+  if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {}; // pid → patternNum
+
+  function buildPatternPanel(active) {
+    const { key, nPessoas, sundayWorkers, nLojas } = computeScenarioKey(active);
+    const scenario = SCENARIOS[key];
+    const assigned = window._GH_ASSIGNED_PATTERNS || {};
+
+    // Count how many times each pattern slot is used
+    const slotUsed = {}; // patternNum → count used
+    Object.values(assigned).forEach(pn => { slotUsed[pn] = (slotUsed[pn] || 0) + 1; });
+
+    // Build pattern table rows (only the patterns in the scenario)
+    let patternRows = '';
+    if (scenario) {
+      scenario.forEach((pNum, slotIdx) => {
+        const folgas = patternFolgas(pNum);
+        const usedCount = slotUsed[pNum] || 0;
+        // Find who is using this pattern
+        const usedBy = active.filter(p => assigned[p.id] === pNum && slotIdx === scenario.indexOf(pNum));
+        const isUsed = usedBy.length > 0 || (slotUsed[pNum] > 0 && slotIdx < Object.values(assigned).filter(v => v === pNum).length);
+
+        // Build 7-day cells
+        const cells = DAYS.map(d => {
+          const isFolga = folgas.includes(d);
+          return `<td class="gh-pt-cell ${isFolga ? 'gh-pt-folga' : 'gh-pt-work'}">${isFolga ? 'FOLGA' : '1'}</td>`;
+        }).join('');
+
+        // Who is assigned this slot
+        const assignedPid = Object.entries(assigned).find(([pid, pn], idx) => {
+          // Match slot position
+          const personSlots = Object.entries(assigned).filter(([,pn2]) => pn2 === pNum);
+          return pn === pNum && personSlots[slotIdx - scenario.slice(0,slotIdx).filter(x=>x===pNum).length] && personSlots[slotIdx - scenario.slice(0,slotIdx).filter(x=>x===pNum).length][0] === pid;
+        });
+
+        // Simpler: track assigned slots in order
+        const slotsForPattern = scenario.map((p,i) => [p,i]).filter(([p]) => p === pNum);
+        const mySlotRank = slotsForPattern.findIndex(([,i]) => i === slotIdx);
+        const assignedPeople = active.filter(p => assigned[p.id] === pNum);
+        const assignedPerson = assignedPeople[mySlotRank] || null;
+
+        const dimClass = assignedPerson ? ' gh-pt-row-used' : '';
+        const assignedTag = assignedPerson
+          ? `<span class="gh-pt-assigned-tag">✓ ${shortName(assignedPerson.name)}</span>`
+          : '';
+
+        patternRows += `
+          <tr class="gh-pt-row${dimClass}" data-slot="${slotIdx}" data-pattern="${pNum}">
+            <td class="gh-pt-num">${pNum}</td>
+            ${cells}
+            <td class="gh-pt-assigned-cell">${assignedTag}</td>
+          </tr>`;
+      });
+    }
+
+    const noScenario = !scenario
+      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${sundayWorkers} ao domingo · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
+      : '';
+
+    return `
+    <div class="gh-pattern-panel" id="gh-pattern-panel">
+      <div class="gh-pt-header">
+        <div class="gh-pt-title">Padrão de Folgas</div>
+        <div class="gh-pt-meta">
+          <span class="gh-pt-badge">${nPessoas} pessoas</span>
+          <span class="gh-pt-badge gh-pt-badge-dom">${sundayWorkers} ao domingo</span>
+          <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
+          ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
+        </div>
+        <div class="gh-pt-hint">Clique no nome de uma pessoa nas tabelas acima para lhe atribuir um padrão.</div>
+      </div>
+      ${noScenario}
+      ${scenario ? `
+      <div class="gh-pt-table-wrap">
+        <table class="gh-pt-table">
+          <thead>
+            <tr>
+              <th class="gh-pt-th-num">#</th>
+              <th>SEG</th><th>TER</th><th>QUA</th><th>QUI</th><th>SEX</th><th>SAB</th><th>DOM</th>
+              <th class="gh-pt-th-assigned">Atribuído a</th>
+            </tr>
+          </thead>
+          <tbody>${patternRows}</tbody>
+        </table>
+      </div>
+      <div class="gh-pt-footer">
+        <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pt-clear-all">↺ Limpar atribuições</button>
+      </div>
+      ` : ''}
+    </div>`;
+  }
+
+  // State: who is being assigned a pattern (pid awaiting click on a pattern row)
+  let _patternAssignCtx = null; // pid waiting for pattern selection
+
+  function bindPatternPanel(active) {
+    // Clear all button
+    document.getElementById('gh-pt-clear-all')?.addEventListener('click', () => {
+      window._GH_ASSIGNED_PATTERNS = {};
+      showSchedule(active);
+    });
+
+    // Click on person name in schedule tables → enter assign mode
+    // We intercept clicks on .gh-p-remove-btn (the name button in each row)
+    // but only if pattern panel exists
+    document.querySelectorAll('.gh-p-remove-btn').forEach(btn => {
+      // Wrap: add a name-click area that won't trigger the remove
+      const pid = btn.dataset.pid;
+      const nameSpan = btn.querySelector('.gh-p-dot')?.nextSibling || btn;
+      // Instead, add a separate clickable name tag over the button
+      // We'll use a data attribute approach: double-click = assign pattern
+    });
+
+    // Better: add click listeners to .gh-p-cell elements
+    document.querySelectorAll('.gh-p-cell').forEach(cell => {
+      const btn = cell.querySelector('.gh-p-remove-btn');
+      if (!btn) return;
+      const pid = btn.dataset.pid;
+      // Add a "assign pattern" button next to the name
+      const assignBtn = document.createElement('button');
+      assignBtn.className = 'gh-pt-assign-trigger';
+      assignBtn.dataset.pid = pid;
+      assignBtn.title = 'Atribuir padrão de folga';
+      assignBtn.textContent = '📋';
+      cell.appendChild(assignBtn);
+
+      assignBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _patternAssignCtx = pid;
+        // Highlight all pattern rows as clickable
+        document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.add('gh-pt-row-pick'));
+        document.querySelectorAll('.gh-pt-assign-trigger').forEach(b => {
+          b.style.background = b.dataset.pid === pid ? '#fff3cd' : '';
+        });
+        // Scroll to pattern panel
+        document.getElementById('gh-pattern-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Click on a pattern row → assign it to the waiting person
+    document.querySelectorAll('.gh-pt-row').forEach(row => {
+      row.addEventListener('click', () => {
+        if (!_patternAssignCtx) return;
+        const pid = _patternAssignCtx;
+        const pNum = parseInt(row.dataset.pattern);
+        const slotIdx = parseInt(row.dataset.slot);
+
+        // Apply folgas to schedule
+        if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {};
+        window._GH_ASSIGNED_PATTERNS[pid] = pNum;
+
+        // Write folgas into S.schedule
+        const folgas = patternFolgas(pNum);
+        DAYS.forEach(day => {
+          const current = S.schedule[pid]?.[day];
+          if (!current) return;
+          // Don't overwrite férias/baixa/fim_contrato
+          if (['ferias','baixa','fim_contrato','na'].includes(current.type)) return;
+          if (folgas.includes(day)) {
+            S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
+          } else {
+            // If it was a folga before (set by this panel), reset to empty
+            if (current.type === 'folga') {
+              S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+            }
+          }
+        });
+
+        _patternAssignCtx = null;
+        showSchedule(active);
+      });
+    });
+
+    // Cancel assign mode if clicking outside pattern rows
+    document.getElementById('gh-pattern-panel')?.addEventListener('click', (e) => {
+      if (!e.target.closest('.gh-pt-row') && !e.target.closest('.gh-pt-assign-trigger') && _patternAssignCtx) {
+        _patternAssignCtx = null;
+        document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.remove('gh-pt-row-pick'));
+      }
     });
   }
 
@@ -2017,6 +2303,47 @@
         #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
         #tab-gerador .gh-banco-add-row { display:flex; flex-direction:row; gap:3px; align-items:center; }
         #tab-gerador .gh-inc-tag { font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
+
+        /* ── PATTERN PANEL ── */
+        #tab-gerador .gh-pattern-panel { margin:0 0 60px; border-top:2px solid #e8e8e8; padding-top:28px; }
+        #tab-gerador .gh-pt-header { padding:0 20px 16px; }
+        #tab-gerador .gh-pt-title { font-size:.68rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#888; margin-bottom:10px; }
+        #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center; }
+        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:3px 12px; font-size:.7rem; font-weight:700; color:#555; }
+        #tab-gerador .gh-pt-badge-dom { background:#e8f0fe; border-color:#c5d8fa; color:#1a4a9a; }
+        #tab-gerador .gh-pt-badge-key { background:#fff8e0; border-color:#f0d080; color:#8a6000; font-family:monospace; }
+        #tab-gerador .gh-pt-hint { font-size:.72rem; color:#aaa; font-style:italic; }
+        #tab-gerador .gh-pt-no-scenario { margin:0 20px 20px; padding:14px 18px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.8rem; color:#a04000; }
+
+        /* Table */
+        #tab-gerador .gh-pt-table-wrap { overflow-x:auto; padding:0 20px; }
+        #tab-gerador .gh-pt-table { border-collapse:collapse; width:auto; min-width:500px; }
+        #tab-gerador .gh-pt-table th { padding:7px 12px; font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#999; border-bottom:2px solid #e8e8e8; text-align:center; background:#fafafa; white-space:nowrap; }
+        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:8px !important; }
+        #tab-gerador .gh-pt-th-assigned { min-width:120px; }
+        #tab-gerador .gh-pt-num { font-size:.78rem; font-weight:700; color:#bbb; padding:0 8px; text-align:left; font-family:monospace; }
+        #tab-gerador .gh-pt-cell { padding:8px 10px; text-align:center; border:1px solid #f0f0f0; font-size:.72rem; font-weight:600; white-space:nowrap; }
+        #tab-gerador .gh-pt-work  { background:#fff; color:#ddd; }
+        #tab-gerador .gh-pt-folga { background:#fff3f3; color:#c0392b; font-style:italic; }
+
+        /* Rows */
+        #tab-gerador .gh-pt-row { cursor:default; transition:background .15s; }
+        #tab-gerador .gh-pt-row-used { opacity:.45; }
+        #tab-gerador .gh-pt-row-used .gh-pt-cell { background:#f5f5f5 !important; }
+        #tab-gerador .gh-pt-row-pick { cursor:pointer !important; outline:2px dashed #f0a030; outline-offset:-2px; }
+        #tab-gerador .gh-pt-row-pick:hover { background:#fffbf0 !important; }
+        #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff0d0 !important; }
+
+        /* Assigned cell */
+        #tab-gerador .gh-pt-assigned-cell { padding:6px 10px; min-width:120px; }
+        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:12px; padding:2px 10px; white-space:nowrap; }
+
+        /* Footer */
+        #tab-gerador .gh-pt-footer { padding:12px 20px 0; display:flex; gap:10px; }
+
+        /* Trigger button on person name cells */
+        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; font-size:.75rem; padding:1px 3px; opacity:.4; transition:opacity .15s; line-height:1; margin-left:4px; }
+        #tab-gerador .gh-pt-assign-trigger:hover { opacity:1; }
       `;
       document.head.appendChild(style);
     }

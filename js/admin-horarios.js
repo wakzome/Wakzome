@@ -204,26 +204,19 @@
     const parts = weekDateStr.split('/');
     const weekISO = parts[2] + '-' + parts[1] + '-' + parts[0];
 
-    // Signal gerador to load this week from porto_horarios.csv
+    // 1. Set the flag BEFORE switching tab so initGeradorHorarios picks it up
     window._ghLoadPortoWeek = weekISO;
 
-    // Switch to gerador tab using the app's own tab system
-    // Try all known tab-switching mechanisms
-    const gTabBtns = document.querySelectorAll('.tab-btn[data-tab="gerador"], .drawer-tab-btn[data-tab="gerador"]');
-    if (gTabBtns.length) {
-      gTabBtns[0].click();
-    } else if (window.openModule) {
-      window.openModule('gerador');
+    // 2. Click the tab button — this triggers the tab system AND
+    //    the gerador's own click listener which calls initGeradorHorarios
+    const gTabBtn = document.querySelector('.tab-btn[data-tab="gerador"]')
+                 || document.querySelector('.drawer-tab-btn[data-tab="gerador"]');
+    if (!gTabBtn) {
+      alert('Separador do gerador não encontrado.');
+      window._ghLoadPortoWeek = null;
+      return;
     }
-
-    // Wait for tab to show, then trigger gerador
-    await new Promise(r => setTimeout(r, 600));
-
-    if (window.initGeradorHorarios) {
-      window.initGeradorHorarios();
-    } else {
-      alert('Gerador não disponível.');
-    }
+    gTabBtn.click();
   }
 
   function hRenderWeek(filtered, index) {

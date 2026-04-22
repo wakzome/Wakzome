@@ -1433,6 +1433,43 @@
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
+    // Synchronise the width of the first column across all schedule tables
+    // so that the widest name drives the width of every table's first column.
+    function syncFirstColumnWidth() {
+      const tables = c.querySelectorAll('.gh-sched-tbl');
+      if (tables.length < 2) return; // nothing to sync with a single table
+
+      // Reset any previously forced width so natural layout can be measured
+      tables.forEach(tbl => {
+        tbl.querySelectorAll('tr > td:first-child, tr > th:first-child').forEach(cell => {
+          cell.style.width = '';
+          cell.style.minWidth = '';
+        });
+      });
+
+      // Measure the natural width of each table's first column
+      let maxW = 0;
+      tables.forEach(tbl => {
+        tbl.querySelectorAll('tr > td:first-child, tr > th:first-child').forEach(cell => {
+          const w = cell.getBoundingClientRect().width;
+          if (w > maxW) maxW = w;
+        });
+      });
+
+      if (maxW <= 0) return;
+
+      // Apply the maximum width to all first cells of all tables
+      tables.forEach(tbl => {
+        tbl.querySelectorAll('tr > td:first-child, tr > th:first-child').forEach(cell => {
+          cell.style.width = maxW + 'px';
+          cell.style.minWidth = maxW + 'px';
+        });
+      });
+    }
+
+    // Run after paint so the browser has laid out the cells
+    requestAnimationFrame(() => requestAnimationFrame(syncFirstColumnWidth));
+
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {

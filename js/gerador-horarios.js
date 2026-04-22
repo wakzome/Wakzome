@@ -2334,32 +2334,38 @@
         #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
 
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
-        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:blur(3px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(4px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
         #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
-        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:14px; width:360px; max-width:94vw; overflow:hidden; transform:translateY(8px); transition:transform .2s; box-shadow:0 12px 40px rgba(0,0,0,.15); color:#111; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:16px; width:400px; max-width:96vw; overflow:hidden; transform:translateY(10px); transition:transform .22s cubic-bezier(.25,.8,.25,1); box-shadow:0 20px 60px rgba(0,0,0,.18); color:#111; }
         #gh-modal.open .gh-modal { transform:translateY(0); }
-        #gh-modal .gh-modal-hdr { padding:14px 18px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
-        #gh-modal .gh-modal-ttl { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#111; }
-        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#bbb; font-size:1rem; line-height:1; }
-        #gh-modal .gh-modal-bdy { padding:18px 18px 22px; }
-        #gh-modal .gh-form-grp  { margin-bottom:16px; }
-        #gh-modal .gh-form-lbl  { display:block; font-size:.58rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
-        #gh-modal .gh-conf-note { padding:8px 10px; border-radius:5px; font-size:.72rem; margin-top:8px; line-height:1.5; }
+        #gh-modal .gh-modal-hdr { padding:16px 20px 14px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        #gh-modal .gh-modal-ttl { font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#333; }
+        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#aaa; font-size:1.1rem; line-height:1; padding:2px 4px; border-radius:4px; transition:color .15s; }
+        #gh-modal .gh-modal-x:hover { color:#555; }
+        #gh-modal .gh-modal-bdy { padding:18px 18px 20px; }
+        #gh-modal .gh-form-grp  { margin-bottom:14px; }
+        #gh-modal .gh-form-grp-last { margin-bottom:2px; }
+        #gh-modal .gh-form-lbl  { display:block; font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#ccc; margin-bottom:8px; }
+        #gh-modal .gh-conf-note { padding:9px 12px; border-radius:7px; font-size:.74rem; margin-top:10px; line-height:1.5; }
         #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
         #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
-        /* pill group */
-        #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:7px; justify-content:center; }
-        #gh-modal .gh-pill { background:#f5f5f5; border:1.5px solid #e8e8e8; border-radius:50px; padding:7px 16px; font-size:.78rem; font-weight:600; cursor:pointer; color:#555; transition:all .15s; white-space:nowrap; font-family:inherit; }
-        #gh-modal .gh-pill:hover { background:#efefef; border-color:#ccc; color:#222; transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,.08); }
-        #gh-modal .gh-pill.active { background:#111; border-color:#111; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.18); }
-        /* shift pills */
-        #gh-modal .gh-pill-shift { display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 12px; min-width:70px; border-radius:10px; }
-        #gh-modal .gh-pill-shift.active { background:#111; border-color:#111; color:#fff; }
-        #gh-modal .gh-pill-code { font-size:.95rem; font-weight:800; line-height:1; }
-        #gh-modal .gh-pill-time { font-size:.58rem; font-weight:500; opacity:.75; }
-        /* store pills */
-        #gh-modal .gh-pill-store { padding:8px 18px; border-radius:50px; }
-        #gh-modal .gh-pill-store.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff; }
+        /* ── pill base ── */
+        #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+        #gh-modal .gh-pill { background:#f7f7f7; border:1.5px solid #e5e5e5; border-radius:50px; padding:9px 20px; font-size:.82rem; font-weight:600; cursor:pointer; color:#444; transition:all .15s; white-space:nowrap; font-family:inherit; line-height:1.2; }
+        #gh-modal .gh-pill:hover { background:#f0f0f0; border-color:#ccc; color:#111; transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
+        /* TIPO active — dark charcoal, white text */
+        #gh-modal .gh-pill-tipo.active { background:#222; border-color:#222; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        /* SHIFT active — dark slate, white text */
+        #gh-modal .gh-pill-shift.active { background:#2c2c2c; border-color:#2c2c2c; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.18); }
+        /* STORE active — forest green, white text */
+        #gh-modal .gh-pill-store.active { background:#1a6c1a; border-color:#1a6c1a; color:#fff !important; box-shadow:0 4px 14px rgba(26,108,26,.25); }
+        /* shift pills — larger, 2-line, grid */
+        #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        #gh-modal .gh-pill-shift { border-radius:10px; padding:12px 8px; font-size:.82rem; font-weight:600; text-align:center; line-height:1.55; white-space:normal; color:#333; }
+        #gh-modal .gh-pill-shift:hover { color:#111; }
+        /* store pills — wrap row */
+        #gh-modal .gh-btn-group-stores { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+        #gh-modal .gh-pill-store { border-radius:50px; padding:9px 20px; font-size:.82rem; }
 
         /* ── CONFIRM MODAL ── */
         #gh-confirm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9100; align-items:center; justify-content:center; }
@@ -2553,30 +2559,27 @@
 
             <!-- TIPO buttons -->
             <div class="gh-form-grp">
-              <label class="gh-form-lbl">Tipo</label>
               <div class="gh-btn-group" id="gh-me-type-btns">
-                <button class="gh-pill" data-val="work">💼 Trabalho</button>
-                <button class="gh-pill" data-val="folga">🏖 Folga</button>
-                <button class="gh-pill" data-val="ferias">🌴 Férias</button>
+                <button class="gh-pill gh-pill-tipo" data-val="work">Trabalho</button>
+                <button class="gh-pill gh-pill-tipo" data-val="folga">Folga</button>
+                <button class="gh-pill gh-pill-tipo" data-val="ferias">Férias</button>
               </div>
             </div>
 
             <div id="gh-me-work">
-              <!-- HORÁRIO buttons -->
+              <!-- HORÁRIO buttons — only times, no letter -->
               <div class="gh-form-grp">
-                <label class="gh-form-lbl">Horário</label>
                 <div class="gh-btn-group gh-btn-group-shifts" id="gh-me-shift-btns">
-                  <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00"><span class="gh-pill-code">A</span><span class="gh-pill-time">10–13 / 14–19</span></button>
-                  <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00"><span class="gh-pill-code">B</span><span class="gh-pill-time">10–14 / 15–19</span></button>
-                  <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00"><span class="gh-pill-code">C</span><span class="gh-pill-time">10–15 / 16–19</span></button>
-                  <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00"><span class="gh-pill-code">D</span><span class="gh-pill-time">09–12 / 13–18</span></button>
-                  <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00"><span class="gh-pill-code">E</span><span class="gh-pill-time">11–15 / 16–20</span></button>
-                  <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00"><span class="gh-pill-code">F</span><span class="gh-pill-time">09–13 / 19–23</span></button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00">10:00 – 13:00<br>14:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00">10:00 – 14:00<br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00">10:00 – 15:00<br>16:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
                 </div>
               </div>
               <!-- LOJA buttons -->
-              <div class="gh-form-grp">
-                <label class="gh-form-lbl">Loja</label>
+              <div class="gh-form-grp gh-form-grp-last">
                 <div class="gh-btn-group gh-btn-group-stores" id="gh-me-store-btns"></div>
               </div>
             </div>

@@ -2371,14 +2371,14 @@
         #tab-gerador .gh-pt-no-scenario { margin:14px 16px; padding:10px 14px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.75rem; color:#a04000; }
 
         /* Table */
-        #tab-gerador .gh-pt-table-wrap { overflow-x:hidden; padding:0; }
-        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; table-layout:fixed; }
+        #tab-gerador .gh-pt-table-wrap { overflow:hidden; padding:0; }
+        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; table-layout:auto; }
         #tab-gerador .gh-pt-table thead tr { background:#f7f7f7; }
-        #tab-gerador .gh-pt-table th { padding:5px 4px; font-size:.55rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; overflow:hidden; }
-        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:8px !important; width:26px; }
-        #tab-gerador .gh-pt-th-assigned { width:120px; }
-        #tab-gerador .gh-pt-num { font-size:.62rem; font-weight:700; color:#ccc; padding:0 8px; text-align:left; font-family:monospace; }
-        #tab-gerador .gh-pt-cell { padding:6px 4px; text-align:center; border-right:1px solid #f5f5f5; font-size:.62rem; font-weight:600; white-space:nowrap; overflow:hidden; }
+        #tab-gerador .gh-pt-table th { padding:4px 3px; font-size:.48rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:6px !important; }
+        #tab-gerador .gh-pt-th-assigned { }
+        #tab-gerador .gh-pt-num { font-size:.55rem; font-weight:700; color:#ccc; padding:0 6px; text-align:left; font-family:monospace; }
+        #tab-gerador .gh-pt-cell { padding:5px 3px; text-align:center; border-right:1px solid #f5f5f5; font-size:.55rem; font-weight:600; white-space:nowrap; }
         #tab-gerador .gh-pt-work  { color:#d5d5d5; }
         #tab-gerador .gh-pt-folga { color:#c0392b; font-style:italic; background:#fff9f9; }
         #tab-gerador .gh-pt-table tbody tr { border-bottom:1px solid #f5f5f5; transition:background .12s; }
@@ -2394,8 +2394,8 @@
         #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff3d0 !important; color:#b07000 !important; }
 
         /* Assigned cell */
-        #tab-gerador .gh-pt-assigned-cell { padding:5px 10px; min-width:110px; text-align:left; }
-        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:4px; font-size:.62rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:12px; padding:2px 8px; white-space:nowrap; }
+        #tab-gerador .gh-pt-assigned-cell { padding:4px 6px; text-align:left; }
+        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:3px; font-size:.55rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:10px; padding:2px 6px; white-space:nowrap; }
         #tab-gerador .gh-pt-clear-row { background:none; border:none; cursor:pointer; font-size:.6rem; color:#bbb; padding:0 2px; line-height:1; margin-left:3px; opacity:.6; transition:opacity .15s; vertical-align:middle; }
         #tab-gerador .gh-pt-clear-row:hover { opacity:1; color:#c0392b; }
 

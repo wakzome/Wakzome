@@ -1433,24 +1433,33 @@
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
-    // Synchronise the width of the first column across all schedule tables
-    // so that the widest name drives the width of every table's first column.
+    // Synchronise the first-column width across all schedule tables.
+    // Each .gh-store-block has its own overflow-x:auto context, so CSS alone
+    // cannot align columns between tables.  We measure the natural width of
+    // every first-cell after layout and apply the maximum via an inline style
+    // directly on each cell so the result survives independent scroll containers.
     function syncFirstColumnWidth() {
-      const tables = c.querySelectorAll('.gh-sched-tbl');
-      if (tables.length < 2) return; // nothing to sync with a single table
+      const body = c.querySelector('.gh-sched-body');
+      if (!body) return;
+      const tables = body.querySelectorAll('.gh-sched-tbl');
+      if (tables.length < 1) return;
 
-      // Reset any previously forced width so natural layout can be measured
+      // 1. Clear any previously forced width so the browser can measure freely
       tables.forEach(tbl => {
-        tbl.querySelectorAll('tr > td:first-child, tr > th:first-child').forEach(cell => {
+        tbl.querySelectorAll('tr > td:first-child').forEach(cell => {
           cell.style.width = '';
           cell.style.minWidth = '';
+          cell.style.maxWidth = '';
         });
       });
 
-      // Measure the natural width of each table's first column
+      // 2. Force a reflow so getBoundingClientRect reflects the reset
+      void body.offsetWidth;
+
+      // 3. Find the widest natural first-cell across all tables
       let maxW = 0;
       tables.forEach(tbl => {
-        tbl.querySelectorAll('tr > td:first-child, tr > th:first-child').forEach(cell => {
+        tbl.querySelectorAll('tr > td:first-child').forEach(cell => {
           const w = cell.getBoundingClientRect().width;
           if (w > maxW) maxW = w;
         });
@@ -1458,16 +1467,17 @@
 
       if (maxW <= 0) return;
 
-      // Apply the maximum width to all first cells of all tables
+      // 4. Lock every first-cell to that maximum width
       tables.forEach(tbl => {
-        tbl.querySelectorAll('tr > td:first-child, tr > th:first-child').forEach(cell => {
-          cell.style.width = maxW + 'px';
+        tbl.querySelectorAll('tr > td:first-child').forEach(cell => {
+          cell.style.width    = maxW + 'px';
           cell.style.minWidth = maxW + 'px';
+          cell.style.maxWidth = maxW + 'px';
         });
       });
     }
 
-    // Run after paint so the browser has laid out the cells
+    // Two rAF frames: first lets the browser paint, second ensures layout is stable
     requestAnimationFrame(() => requestAnimationFrame(syncFirstColumnWidth));
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
@@ -1881,7 +1891,7 @@
         #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
-        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; box-sizing:border-box; }
         #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
         #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
         #tab-gerador .gh-no-click { cursor:default; }

@@ -418,8 +418,14 @@
             if (!blockDate) return block;
             const generatedBlocks = portoByDate[blockDate];
             if (!generatedBlocks || !generatedBlocks.length) return block;
-            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
-            if (hasPeople) return block;
+            const hasPersonRows = block.some(r => {
+              const first = (r[0] || '').trim().toUpperCase();
+              if (first === 'PORTO SANTO') return false;
+              if (r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/)) return false;
+              if (['SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(first)) return false;
+              return first !== '' && r.slice(1).some(c => c && c !== '');
+            });
+            if (hasPersonRows) return block;
             const merged = [];
             generatedBlocks.forEach(gb => gb.forEach(row => merged.push(row)));
             return merged;

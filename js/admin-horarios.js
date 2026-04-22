@@ -107,9 +107,19 @@
             const generatedBlocks = portoByDate[blockDate];
             if (!generatedBlocks || !generatedBlocks.length) return block;
 
-            // Only replace if original has no people
-            const hasPeople = block.slice(2).some(r => r.slice(1).some(c => c && c !== ''));
-            if (hasPeople) return block;
+            // Only replace if original has no person rows
+            // Skip header rows (PORTO SANTO) and date rows — only count rows with shift/folga data
+            const hasPersonRows = block.some(r => {
+              const first = (r[0] || '').trim().toUpperCase();
+              if (first === 'PORTO SANTO') return false;
+              // Date rows: second cell matches DD/MM/YYYY
+              if (r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/)) return false;
+              // Store name rows (SHANA, MEZKA MERCADO, MEZKA AVENIDA)
+              if (['SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(first)) return false;
+              // Person row: has a name in col 0 and some data
+              return first !== '' && r.slice(1).some(c => c && c !== '');
+            });
+            if (hasPersonRows) return block;
 
             // Merge all generated blocks into one (same format as original)
             const merged = [];

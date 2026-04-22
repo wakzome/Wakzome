@@ -195,20 +195,6 @@
   function weeksSince(s, ref) { return Math.floor((ref - new Date(s)) / (7*864e5)); }
   function absOf(pid)       { return S.absences.find(a => a.pid === pid) || null; }
 
-  // Verifica se o contrato da pessoa já terminou num dado dia da semana.
-  // Compara end_date (ISO) com a data real do dia na semana actual.
-  function isContractEnded(pid, day) {
-    const p = P(pid);
-    if (!p?.end || !S.weekStart) return false;
-    const dayIndex = DAYS.indexOf(day);
-    if (dayIndex < 0) return false;
-    const dayDate = new Date(S.weekStart);
-    dayDate.setDate(dayDate.getDate() + dayIndex);
-    // Comparar apenas datas (sem horas)
-    const endDate = new Date(p.end + 'T00:00:00');
-    return dayDate > endDate;
-  }
-
   // Converte uma data ISO (YYYY-MM-DD) no dia-da-semana correspondente (ex: 'QUA').
   // Devolve null se a data cair fora da semana actual.
   function dayOfWeekKey(dateStr) {
@@ -322,14 +308,6 @@
     // Recolher apenas férias para S.absences — sem ausências manuais
     const feriasAutoPids = new Set(feriasAuto.map(f => f.pid));
 
-    // Contar pessoas com contrato terminado antes desta semana
-    const weekStartISO = S.weekStart?.toISOString().split('T')[0] || '';
-    const contratoTerminadoPids = new Set(
-      PEOPLE.filter(p => p.end && p.end < weekStartISO).map(p => p.id)
-    );
-    const nActivas = PEOPLE.length - feriasAuto.length - contratoTerminadoPids.size;
-    const nContTerminado = contratoTerminadoPids.size;
-
     const storeOptions = STORES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
     c.innerHTML = `
@@ -343,7 +321,7 @@
               <div class="gh-step2-title-row">
                 <div class="gh-wiz-title" style="margin-bottom:0">Pessoal Activo</div>
                 <div class="gh-step2-badge">
-                  ${nActivas} activa${nActivas !== 1 ? 's' : ''} · ${feriasAuto.length} férias${nContTerminado ? ` · ${nContTerminado} contrato terminado` : ''}
+                  ${(PEOPLE.length - feriasAuto.length)} activa${(PEOPLE.length - feriasAuto.length) !== 1 ? 's' : ''} · ${feriasAuto.length} férias
                 </div>
               </div>
               <div class="gh-wiz-sub">Gere o pessoal de Porto Santo.</div>
@@ -393,7 +371,7 @@
               <input type="date" id="gh-pf-end" class="gh-field-sm">
             </div>
             <div class="gh-pf-field">
-              <label>Loja fixa</label>
+              <label>Tienda fixa</label>
               <select id="gh-pf-store" class="gh-field-sm">
                 <option value="">— Sem loja fixa —</option>
                 ${storeOptions}
@@ -417,7 +395,7 @@
             </div>
           </div>
           <div class="gh-pf-field" style="margin-top:10px">
-            <label>Lojas onde pode trabalhar</label>
+            <label>Tiendas onde pode trabalhar</label>
             <div class="gh-pf-stores" id="gh-pf-knows">
               ${STORES.map(s => `<label class="gh-pf-check"><input type="checkbox" value="${s.id}"> ${s.name}</label>`).join('')}
             </div>
@@ -499,24 +477,6 @@
       const baixa   = S._baixas?.[p.id]   || {};
       const licenca = S._licencas?.[p.id] || {};
       const saldo   = S._banco?.[p.id]    || 0;
-
-      // Verificar se o contrato termina durante (ou antes de) esta semana
-      const weekStartDate = S.weekStart ? new Date(S.weekStart) : null;
-      const weekEndDate   = weekStartDate ? new Date(weekStartDate.getTime() + 6 * 86400000) : null;
-      let contractEndLabel = '';
-      if (p.end && weekStartDate) {
-        const endDate = new Date(p.end + 'T00:00:00');
-        if (endDate < weekStartDate) {
-          // Contrato já terminou antes desta semana
-          contractEndLabel = ` · <span style="color:#c0392b;font-weight:700;font-size:.6rem">⛔ contrato terminado ${p.end}</span>`;
-        } else if (endDate <= weekEndDate) {
-          // Contrato termina durante esta semana
-          const endDayKey = DAYS[Math.round((endDate - weekStartDate) / 86400000)];
-          const endDayName = DAY_PT[endDayKey] || endDayKey;
-          contractEndLabel = ` · <span style="color:#e67e22;font-weight:700;font-size:.6rem">⚠ último dia: ${endDayName} (${p.end})</span>`;
-        }
-      }
-
       // Dias dirigidos: fonte primária é _folgasDirigidas (estável entre regenerações)
       // Fallback para _folgas (carregado de Supabase) se não há dirigidas em memória
       const diasDirigidos = S._folgasDirigidas?.[p.id] || folga.dias || [];
@@ -527,8 +487,7 @@
       }).join('');
 
       const row = document.createElement('div');
-      const contTerminado = p.end && weekStartDate && new Date(p.end + 'T00:00:00') < weekStartDate;
-      row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}${contTerminado ? ' gh-sr-contrato-terminado' : ''}`;
+      row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}`;
       row.dataset.pid = p.id;
       const saldoTag = saldo !== 0 ? `<sup class="gh-saldo-sup ${saldo>0?'gh-saldo-sup-neg':'gh-saldo-sup-pos'}">${saldo>0?'+':''}${saldo}h</sup>` : '';
 
@@ -539,7 +498,7 @@
             <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
             <div class="gh-sr-nameblock">
               <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
-              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndLabel}</span>
+              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}</span>
             </div>
           </div>
           <div class="gh-sr-btns">
@@ -920,8 +879,8 @@
     const sb = getSupabase();
     if (!sb) { alert('Supabase não disponível.'); return; }
 
-    // Se a pessoa está associada a mais do que uma loja (via knows),
-    // perguntar se quer apenas remover de uma loja ou eliminar por completo.
+    // Se a pessoa está associada a mais do que uma tienda (via knows),
+    // perguntar se quer apenas remover de uma tienda ou eliminar por completo.
     const knows = p.knows || [];
     if (knows.length > 1) {
       // Construir lista de lojas conhecidas para o utilizador escolher
@@ -930,8 +889,8 @@
         return st ? `• ${st.name} (id: ${sid})` : `• ${sid}`;
       }).join('\n');
       const choice = window.prompt(
-        `"${p.name}" está associada a ${knows.length} lojas:\n${storeNames}\n\n` +
-        `Escreva o NOME da loja para a remover apenas dessa loja,\n` +
+        `"${p.name}" está associada a ${knows.length} tiendas:\n${storeNames}\n\n` +
+        `Escreva o NOME da tienda para a remover apenas dessa tienda,\n` +
         `ou deixe em branco e prima OK para ELIMINAR a pessoa por completo.`
       );
       // User cancelled
@@ -945,7 +904,7 @@
           s.id === choice.trim()
         );
         if (!matchedStore) {
-          alert(`Loja "${choice.trim()}" não encontrada. Operação cancelada.`);
+          alert(`Tienda "${choice.trim()}" não encontrada. Operação cancelada.`);
           return;
         }
         try {
@@ -961,7 +920,7 @@
           renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
         } catch(e) {
           console.error('Remove from store error:', e);
-          alert('Erro ao remover da loja. Verifique a consola.');
+          alert('Erro ao remover da tienda. Verifique a consola.');
         }
         return;
       }
@@ -1247,11 +1206,6 @@
     active.forEach(p => {
       S.schedule[p.id] = {};
       DAYS.forEach(day => {
-        // Check contract ended — dias após end_date marcados como N/A
-        if (isContractEnded(p.id, day)) {
-          S.schedule[p.id][day] = { type: 'na', shift: null, store: null };
-          return;
-        }
         // Check absence
         if (isAbsent(p.id, day)) {
           const a = absOf(p.id);
@@ -1362,7 +1316,7 @@
         ...order.map(pid => inSectionSet.find(p => p.id === pid)).filter(Boolean),
         ...inSectionSet.filter(p => !order.includes(p.id))
       ];
-      // Mostrar sempre a loja mesmo que esteja vazia
+      // Siempre mostrar la tienda aunque esté vacía
 
       const rows = inSection.map(p => {
         const sched = S.schedule[p.id] || {};
@@ -1438,20 +1392,11 @@
             ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
           </tr>
         </thead>
-        <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Loja vazia — utilize ＋ para adicionar colaboradores</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Tienda vacía — use ＋ para añadir personal</td></tr>`}</tbody>
       </table></div>`;
     });
 
     c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
-
-    // Sincronizar ancho primera columna entre todas las tablas
-    requestAnimationFrame(() => {
-      const firstCells = c.querySelectorAll('.gh-sched-tbl td:first-child, .gh-sched-tbl th:first-child');
-      firstCells.forEach(el => { el.style.width = ''; });
-      let maxW = 0;
-      firstCells.forEach(el => { maxW = Math.max(maxW, el.getBoundingClientRect().width); });
-      if (maxW > 0) firstCells.forEach(el => { el.style.width = maxW + 'px'; });
-    });
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
@@ -1544,7 +1489,7 @@
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
-    // Mostrar TODAS as lojas — o utilizador decide, aviso se não conhece
+    // Mostrar TODAS las tiendas — el usuario decide, advertencia si no conoce
     const defaultStore = c2.store || ctxStore;
     stEl.innerHTML = STORES.map(st => {
       const knows = P(pid)?.knows?.includes(st.id);
@@ -1566,7 +1511,7 @@
 
     // Handle add person mode
     if (mode === 'add') {
-      if (!_addCtx) { alert('Selecione uma pessoa.'); return; }
+      if (!_addCtx) { alert('Seleccione uma pessoa primeiro.'); return; }
       const { pid, sid } = _addCtx;
       // Add mode: person was already added via click in openAddPersonToStore
       // Nothing to do here — just close
@@ -1625,7 +1570,7 @@
     if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
 
     injected.innerHTML = `
-      <div style="font-size:.7rem;color:#888;margin-bottom:10px;">Selecione a pessoa para adicionar a ${sname(sid)}. As ausências do assistente são preservadas. Edite os dias individualmente clicando nas células.</div>
+      <div style="font-size:.7rem;color:#888;margin-bottom:10px;">Seleccione a pessoa para añadir a ${sname(sid)}. Sus ausencias del wizard se conservan. Edite los días individualmente haciendo clic en las celdas.</div>
       <div style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;">
         ${candidates.length ? candidates.map(p => {
           const hasBadge = (() => {
@@ -1638,7 +1583,7 @@
             <span>${shortName(p.name)}</span>
             <span style="font-size:.7rem;color:#888">${hasBadge}</span>
           </button>`;
-        }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas as pessoas já foram adicionadas.</div>'}
+        }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas las personas ya están añadidas.</div>'}
       </div>`;
 
     injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
@@ -1661,11 +1606,6 @@
       DAYS.forEach(day => { S.schedule[pid][day] = { type: 'empty', shift: null, store: null }; });
       // Apply absences/folgas from wizard only on first add
       DAYS.forEach(day => {
-        // Contrato terminado — marcar como N/A
-        if (isContractEnded(pid, day)) {
-          S.schedule[pid][day] = { type: 'na', shift: null, store: null };
-          return;
-        }
         if (isAbsent(pid, day)) {
           const a = absOf(pid);
           const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
@@ -1855,7 +1795,8 @@
 
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
-        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; width:130px; min-width:130px; max-width:130px; }
+        #tab-gerador .gh-sched-tbl td:first-child { width:130px; min-width:130px; max-width:130px; }
         #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
         #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
         #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
@@ -1863,7 +1804,7 @@
         #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
-        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; width:130px; min-width:130px; max-width:130px; }
         #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
         #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
         #tab-gerador .gh-no-click { cursor:default; }
@@ -1956,7 +1897,6 @@
         #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:5px; margin-top:12px; }
         #tab-gerador .gh-sr { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-sizing:border-box; width:100%; }
         #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
-        #tab-gerador .gh-sr-contrato-terminado { background:#fff5f5; border-color:#f5c6c6; opacity:0.85; }
         #tab-gerador .gh-sr-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:8px; }
         #tab-gerador .gh-sr-header-left { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
         #tab-gerador .gh-toggle-btn { background:none; border:none; cursor:pointer; font-size:.65rem; color:#bbb; padding:0; width:14px; flex-shrink:0; }

@@ -1795,8 +1795,8 @@
 
         #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
         #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
-        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; width:130px; min-width:130px; max-width:130px; }
-        #tab-gerador .gh-sched-tbl td:first-child { width:130px; min-width:130px; max-width:130px; }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-sched-tbl td:first-child { white-space:nowrap; }
         #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
         #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
         #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
@@ -1804,7 +1804,7 @@
         #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
         #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
         #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
-        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; width:130px; min-width:130px; max-width:130px; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; }
         #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
         #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
         #tab-gerador .gh-no-click { cursor:default; }
@@ -1814,7 +1814,7 @@
         #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; }
         #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:5px; color:#111; }
         #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
-        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:flex; align-items:center; gap:5px; padding:0; width:100%; text-align:left; }
+        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:flex; align-items:center; gap:5px; padding:0; width:max-content; text-align:left; }
         #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
         #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
         #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }

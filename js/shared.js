@@ -378,7 +378,7 @@
     updateSummaryWrapVisibility();
     window.addEventListener('resize', updateSummaryWrapVisibility);
 
-    // ── PORTO SANTO: merge generated weeks from porto_horarios.csv ──
+    // ── PORTO SANTO: inject generated weeks ──
     let finalBlocks = filteredBlocks;
     if (store === 'porto santo') {
       try {
@@ -386,54 +386,36 @@
         const portoRes = await fetch(portoUrl);
         if (portoRes.ok) {
           const portoText = await portoRes.text();
-          const portoRows = Papa.parse(portoText, {skipEmptyLines: false}).data.map(r => r.map(c => (c==null?'':String(c).trim())));
-          const portoBlocks = [];
-          let pcur = [];
-          portoRows.forEach(r => {
-            if (r.every(c => c === '')) { if (pcur.length) { portoBlocks.push(pcur); pcur = []; } }
-            else pcur.push(r);
-          });
-          if (pcur.length) portoBlocks.push(pcur);
-
+          const portoRows = Papa.parse(portoText, {skipEmptyLines:false}).data.map(r=>r.map(c=>(c==null?'':String(c).trim())));
           const portoWeeks = {};
-          let currentDate = null;
+          let curDate = null;
           portoRows.forEach(r => {
-            if (r.every(c => c === '')) return;
-            const hasDate = r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/);
-            if (hasDate && !r[0].match(/^\d{2}/)) {
-              currentDate = r[1];
-            }
-            if (currentDate) {
-              if (!portoWeeks[currentDate]) portoWeeks[currentDate] = [];
-              portoWeeks[currentDate].push(r);
-            }
+            if (r.every(c=>c==='')) return;
+            if (r[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) { curDate = r[1]; if (!portoWeeks[curDate]) portoWeeks[curDate]=[]; }
+            if (curDate) portoWeeks[curDate].push(r);
           });
-
           const usedDates = new Set();
           finalBlocks = filteredBlocks.map(block => {
             let blockDate = null;
-            for (let i = 0; i < block.length; i++) {
-              for (let c = 1; c < block[i].length; c++) {
-                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) { blockDate = block[i][c]; break; }
-              }
-              if (blockDate) break;
-            }
+            for (let i=0;i<block.length&&!blockDate;i++)
+              for (let c=1;c<block[i].length&&!blockDate;c++)
+                if (block[i][c]&&/^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c])) blockDate=block[i][c];
             if (!blockDate) return block;
             if (usedDates.has(blockDate)) return null;
-            const generatedRows = portoWeeks[blockDate];
-            if (!generatedRows || !generatedRows.length) return block;
-            const hasRealData = block.some(r => {
-              const first = (r[0] || '').trim().toUpperCase();
-              if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(first)) return false;
-              if (r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/)) return false;
-              return first !== '' && r.slice(1).some(c => c && c !== '');
+            const generated = portoWeeks[blockDate];
+            if (!generated||!generated.length) return block;
+            const hasData = block.some(r=>{
+              const f=(r[0]||'').trim().toUpperCase();
+              if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(f)) return false;
+              if (r[1]&&/^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) return false;
+              return f!==''&&r.slice(1).some(c=>c&&c!=='');
             });
-            if (hasRealData) return block;
+            if (hasData) return block;
             usedDates.add(blockDate);
-            return generatedRows;
-          }).filter(b => b !== null);
+            return generated;
+          }).filter(b=>b!==null);
         }
-      } catch(e) { console.warn('[shared] porto_horarios.csv not available:', e.message); }
+      } catch(e) { console.warn('[shared] porto_horarios.csv:', e.message); }
     }
 
     window._lastBlocks = finalBlocks;
@@ -453,7 +435,7 @@
       weekSelect.addEventListener('change',()=>{ fadeRenderTable(finalBlocks,parseInt(weekSelect.value)); });
     }
 
-    const startWeek = findCurrentWeek(finalBlocks);
+    const startWeek = findCurrentWeek(filteredBlocks);
     document.getElementById(weekSelectId).value=startWeek;
     fadeRenderTable(finalBlocks,startWeek);
 
@@ -721,8 +703,7 @@
         html += `<th class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(row[c] || '')}</th>`;
       }
       html += '</tr>'; i++;
-      const storeNames = ['porto santo','shana','mezka mercado','mezka avenida','maxx'];
-      while (i + 1 < rows.length && !storeNames.includes((rows[i][0] || '').toLowerCase())) {
+      while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
         const A = rows[i]; const B = rows[i + 1];
         let circleColor = 'red'; let isActiveNow = false;
         if (todayCol > 0) {

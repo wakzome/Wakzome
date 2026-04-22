@@ -54,80 +54,211 @@
       return;
     }
 
-    // ── PORTO SANTO: load generated weeks directly from porto_horarios.csv ──
-    // For weeks with no data in datosfnc.csv, we directly substitute blocks
-    // from porto_horarios.csv — no merging, no multiplication.
+    // ── PORTO SANTO: inject generated weeks from porto_horarios.csv ──
     if (store === 'porto santo') {
       try {
         const portoUrl = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_horarios.csv?t=' + Date.now();
         const portoRes = await fetch(portoUrl);
         if (portoRes.ok) {
           const portoText = await portoRes.text();
+          const portoRows = Papa.parse(portoText, {skipEmptyLines: false}).data.map(r => r.map(c => (c==null?'':String(c).trim())));
 
-          // Parse porto_horarios.csv — treat ALL lines as one block (no blank line splitting)
-          // because we want one entry per week regardless of how many stores
-          const portoLines = portoText.replace(/\r/g, '').split('\n');
-          
-          // Group by week: each week starts with PORTO SANTO and has a date row
-          // Build map: firstDate → all rows for that week
-          const portoWeeks = {}; // date → array of rows
-          let currentDate = null;
-          
-          portoLines.forEach(line => {
-            const cells = line.split(',').map(c => (c || '').trim());
-            if (cells.every(c => c === '')) return; // skip blank lines
-            // Check if this row contains a date in position 1
-            const hasDate = cells[1] && cells[1].match(/^\d{2}\/\d{2}\/\d{4}$/);
-            if (hasDate && !cells[0].match(/^\d{2}/)) {
-              // This is a store header row — extract date
-              if (!currentDate || cells[1] !== currentDate) {
-                currentDate = cells[1];
-              }
+          // Build map: firstDate → rows for that week (all stores combined, no blank lines)
+          const portoWeeks = {}; // date → [rows]
+          let curDate = null;
+          portoRows.forEach(r => {
+            if (r.every(c => c === '')) return; // skip blank lines
+            // Date row: col 0 is store name, col 1 is DD/MM/YYYY
+            if (r[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) {
+              curDate = r[1];
+              if (!portoWeeks[curDate]) portoWeeks[curDate] = [];
             }
-            if (currentDate) {
-              if (!portoWeeks[currentDate]) portoWeeks[currentDate] = [];
-              portoWeeks[currentDate].push(cells);
-            }
+            if (curDate) portoWeeks[curDate].push(r);
           });
 
-          // Replace empty blocks in filtered with rows from porto_horarios
+          // Replace empty blocks — one replacement per date
           const usedDates = new Set();
           filtered = filtered.map(block => {
-            // Get date of this block
+            // Find this block's date
             let blockDate = null;
-            for (let i = 0; i < block.length; i++) {
-              for (let c = 1; c < block[i].length; c++) {
-                if (block[i][c] && block[i][c].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  blockDate = block[i][c]; break;
-                }
-              }
-              if (blockDate) break;
-            }
+            for (let i = 0; i < block.length && !blockDate; i++)
+              for (let c = 1; c < block[i].length && !blockDate; c++)
+                if (block[i][c] && /^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c]))
+                  blockDate = block[i][c];
+
             if (!blockDate) return block;
-            
-            // Already used this date (duplicate empty block) — remove it
-            if (usedDates.has(blockDate)) return null;
-            
-            // Check if generated data exists for this date
-            const generatedRows = portoWeeks[blockDate];
-            if (!generatedRows || !generatedRows.length) return block;
-            
-            // Check if original block has real person data
-            const hasRealData = block.some(r => {
-              const first = (r[0] || '').trim().toUpperCase();
-              if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(first)) return false;
-              if (r[1] && r[1].match(/^\d{2}\/\d{2}\/\d{4}$/)) return false;
-              return first !== '' && r.slice(1).some(c => c && c !== '');
+            if (usedDates.has(blockDate)) return null; // remove duplicate empty blocks
+
+            const generated = portoWeeks[blockDate];
+            if (!generated || !generated.length) return block;
+
+            // Only replace if block has no real person data
+            const hasData = block.some(r => {
+              const f = (r[0]||'').trim().toUpperCase();
+              if (['PORTO SANTO','SHANA','MEZKA MERCADO','MEZKA AVENIDA','MAXX'].includes(f)) return false;
+              if (r[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[1])) return false;
+              return f !== '' && r.slice(1).some(c => c && c !== '');
             });
-            if (hasRealData) return block;
-            
+            if (hasData) return block;
+
             usedDates.add(blockDate);
-            return generatedRows;
+            return generated;
           }).filter(b => b !== null);
         }
       } catch(e) {
-        console.warn('[admin-horarios] porto_horarios.csv not available:', e.message);
+        console.warn('[admin-horarios] porto_horarios.csv:', e.message);
       }
     }
 
-        hBlocks = { filtered };
+    hBlocks = { filtered };
+
+    // Build week selector
+    const weekSel = document.getElementById('h-week-select');
+    weekSel.innerHTML = '';
+    filtered.forEach((_, i) => {
+      const op = document.createElement('option');
+      op.value = i; op.textContent = 'SEMANA ' + (i + 1);
+      weekSel.appendChild(op);
+    });
+    weekSel.style.display = filtered.length > 1 ? 'inline-block' : 'none';
+
+    // Auto-select current week
+    const startWeek = hFindCurrentWeek(filtered);
+    weekSel.value = startWeek;
+    hRenderWeek(filtered, startWeek);
+  }
+
+  function hFindCurrentWeek(blocks) {
+    const hoy = new Date();
+    for (let i = 0; i < blocks.length; i++) {
+      const h2 = blocks[i][1]; if (!h2) continue;
+      for (let col = 1; col < h2.length; col++) {
+        const d = h2[col]; if (!d) continue;
+        const parts = d.split('/');
+        if (parts.length !== 3) continue;
+        const dateObj = new Date(+parts[2], +parts[1]-1, +parts[0]);
+        if (dateObj.toDateString() === hoy.toDateString()) return i;
+      }
+    }
+    return 0;
+  }
+
+  // active counter interval handle
+  var hActiveInterval = null;
+
+  // ── EDIT BUTTON ──
+  function hShowEditButton(filtered, index) {
+    const existing = document.getElementById('h-edit-btn');
+    if (existing) existing.remove();
+    if (hCurrentStore !== 'porto santo') return;
+    const block = filtered[index];
+    if (!block) return;
+
+    // Only show for weeks >= 27/04/2026
+    let blockDate = null;
+    for (let i = 0; i < block.length && !blockDate; i++)
+      for (let c = 1; c < block[i].length && !blockDate; c++)
+        if (block[i][c] && /^\d{2}\/\d{2}\/\d{4}$/.test(block[i][c]))
+          blockDate = block[i][c];
+    if (!blockDate) return;
+    const parts = blockDate.split('/');
+    const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+    if (d < new Date(2026, 3, 27)) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'h-edit-btn';
+    btn.textContent = '✏ Editar horário';
+    btn.style.cssText = 'margin:10px auto 0 !important;display:block !important;padding:8px 20px !important;font-size:.72rem !important;font-weight:700 !important;letter-spacing:.08em !important;text-transform:uppercase !important;cursor:pointer !important;border-radius:6px !important;font-family:inherit !important;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border:1px solid #111 !important;';
+    btn.onmouseover = () => btn.style.setProperty('background','#333','important');
+    btn.onmouseout  = () => btn.style.setProperty('background','#111','important');
+    btn.addEventListener('click', () => {
+      window._ghLoadPortoWeek = parts[2] + '-' + parts[1] + '-' + parts[0];
+      const gBtn = document.querySelector('.tab-btn[data-tab="gerador"]') || document.querySelector('.drawer-tab-btn[data-tab="gerador"]');
+      if (gBtn) gBtn.click();
+    });
+    document.getElementById('h-table-area').appendChild(btn);
+  }
+
+  function hRenderWeek(filtered, index) {
+    if (!window._hRender) return;
+    const area = document.getElementById('h-table-area');
+    area.innerHTML = '';
+
+    const real = document.getElementById('table-container');
+    if (real) real.setAttribute('id', 'table-container-bak');
+
+    const temp = document.createElement('div');
+    temp.id = 'table-container';
+    temp.style.cssText = 'display:flex;justify-content:flex-start;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    area.appendChild(temp);
+
+    const firstCell = (filtered[index][0][0] || '').trim().toLowerCase();
+    if (firstCell === 'porto santo') {
+      window._hRender.porto(filtered, index);
+    } else {
+      window._hRender.table(filtered, index);
+    }
+
+    temp.removeAttribute('id');
+    if (real) real.setAttribute('id', 'table-container');
+
+    hUpdateActive(filtered, index);
+    if (window._hDashboard) window._hDashboard(filtered, index);
+    hShowEditButton(filtered, index);
+    if (hActiveInterval) clearInterval(hActiveInterval);
+    hActiveInterval = setInterval(function() {
+      hUpdateActive(filtered, index);
+    }, 60000);
+  }
+
+  function hUpdateActive(filtered, index) {
+    const rows = filtered[index];
+    if (!rows) return;
+    const header = rows[1] || [];
+    const today = new Date();
+    let todayCol = -1;
+    for (let col = 1; col < header.length; col++) {
+      const d = header[col]; if (!d) continue;
+      const parts = d.split('/');
+      if (parts.length !== 3) continue;
+      const dt = new Date(+parts[2], +parts[1]-1, +parts[0]);
+      if (dt.toDateString() === today.toDateString()) { todayCol = col; break; }
+    }
+    let count = 0;
+    if (todayCol > 0) {
+      const dataRows = rows.slice(2);
+      const schedules = [];
+      dataRows.forEach(function(row) {
+        const val = (row[todayCol] || '').trim();
+        if (val) schedules.push(val);
+      });
+      schedules.forEach(function(sched) {
+        if (window._hRender && hIsNowInSchedule(sched)) count++;
+      });
+    }
+    const bar   = document.getElementById('h-active-bar');
+    const badge = document.getElementById('h-active-badge');
+    const text  = document.getElementById('h-active-text');
+    if (!bar) return;
+    bar.style.display = 'flex';
+    text.textContent = count === 1 ? '1 pessoa ativa agora' : count + ' pessoas ativas agora';
+    if (count === 0) { badge.classList.add('zero'); text.textContent = 'nenhuma pessoa ativa agora'; }
+    else { badge.classList.remove('zero'); }
+  }
+
+  function hIsNowInSchedule(schedule) {
+    const now = new Date();
+    const segments = schedule.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    for (var i = 0; i < segments.length; i++) {
+      const parts = segments[i].split('-');
+      if (parts.length < 2) continue;
+      const start = parts[0].trim(); const end = parts[1].trim();
+      const sh = parseInt(start.split(':')[0]); const sm = parseInt(start.split(':')[1] || 0);
+      const eh = parseInt(end.split(':')[0]);   const em = parseInt(end.split(':')[1] || 0);
+      const s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
+      const e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em);
+      if (now >= s && now <= e) return true;
+    }
+    return false;
+  }
+})();

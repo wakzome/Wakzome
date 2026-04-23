@@ -1936,12 +1936,19 @@
     });
   }
 
-  function commitInlineEdit(pid, row) {
-    row.classList.remove('gh-editing');
-    row.querySelector('.gh-inline-ok')?.remove();
-    // Read all inputs and update S.schedule
+  function normTime(t) {
+    t = (t || '').trim();
+    if (!t) return t;
+    if (/^\d{1,2}$/.test(t)) return t.padStart(2,'0') + ':00';
+    if (/^\d{1,2}:\d{2}$/.test(t)) return t.padStart(5,'0');
+    return t;
+  }
+
+  function commitInlineEdit(pid) {
+    // Read inputs directly from DOM by pid+day attributes
+    const inputs = document.querySelectorAll(`.gh-sh-time-inp[data-pid="${pid}"]`);
     const dayShifts = {};
-    row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
+    inputs.forEach(inp => {
       const day = inp.dataset.day;
       const seg = parseInt(inp.dataset.seg);
       const part = parseInt(inp.dataset.part);
@@ -1949,24 +1956,21 @@
       if (!dayShifts[day][seg]) dayShifts[day][seg] = ['',''];
       dayShifts[day][seg][part] = inp.value.trim();
     });
-    function normTime(t) {
-      t = (t || '').trim();
-      if (!t) return t;
-      if (/^\d{1,2}$/.test(t)) return t.padStart(2,'0') + ':00';
-      if (/^\d{1,2}:\d{2}$/.test(t)) return t.padStart(5,'0');
-      return t;
-    }
     Object.entries(dayShifts).forEach(([day, segs]) => {
       const cell = S.schedule[pid]?.[day];
       if (!cell || cell.type !== 'work') return;
-      const newShift = Object.values(segs).map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
+      const parts = Object.values(segs);
+      const newShift = parts.map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
       S.schedule[pid][day] = { ...cell, shift: newShift };
     });
-    // Update banco badge in real time (without touching Supabase)
+    // Update banco
     if (!S._bancoBase) S._bancoBase = {};
     if (S._bancoBase[pid] === undefined) S._bancoBase[pid] = S._banco?.[pid] ?? 0;
-    updateBancoBadge(pid);
-    // Full re-render to restore normal cell view
+    const realHrs = calcPersonHrs(pid);
+    const diff = Math.round((realHrs - 40) * 10) / 10;
+    const saldoVivo = Math.round(((S._bancoBase[pid] ?? 0) + diff) * 10) / 10;
+    S._banco[pid] = saldoVivo;
+    // Re-render
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);
   }
@@ -2203,7 +2207,7 @@
           const nameBtn = row.querySelector('.gh-p-remove-btn');
           if (!nameBtn || nameBtn.dataset.pid !== pid) return;
           if (row.classList.contains('gh-editing')) {
-            commitInlineEdit(pid, row);
+            commitInlineEdit(pid);
             return;
           }
           row.classList.add('gh-editing');
@@ -2216,7 +2220,7 @@
             okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border:none !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;';
             okBtn.addEventListener('click', (e) => {
               e.stopPropagation();
-              commitInlineEdit(pid, row);
+              commitInlineEdit(pid);
             });
             nameCell.appendChild(okBtn);
           }
@@ -2241,7 +2245,7 @@
               inp.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === 'Tab') {
                   e.preventDefault();
-                  commitInlineEdit(pid, row);
+                  commitInlineEdit(pid);
                 }
               });
             });
@@ -2288,7 +2292,7 @@
         if (!row.contains(e.target)) {
           const pid = row.querySelector('.gh-banco-badge')?.dataset?.pid ||
                       row.querySelector('[data-pid]')?.dataset?.pid;
-          if (pid) commitInlineEdit(pid, row);
+          if (pid) commitInlineEdit(pid);
         }
       });
     });

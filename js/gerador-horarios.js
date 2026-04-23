@@ -1967,6 +1967,16 @@
               aH += (h2 + m2/60) - (h1 + m1/60);
             });
           }
+          // Add apoio hours if person does apoio on this day
+          const apoio = S._apoioShifts?.[p.id]?.[d];
+          if (apoio?.shift) {
+            const parts = apoio.shift.split('-');
+            if (parts.length >= 2) {
+              const [h1, m1] = parts[0].split(':').map(Number);
+              const [h2, m2] = parts[1].split(':').map(Number);
+              if (!isNaN(h1) && !isNaN(h2)) aH += (h2 + m2/60) - (h1 + m1/60);
+            }
+          }
         });
         aH = Math.round(aH * 10) / 10;
         return `<tr>

@@ -1923,11 +1923,14 @@
     const diff = Math.round((realHrs - 40) * 10) / 10;
     const saldoBase = S._bancoBase?.[pid] ?? S._banco?.[pid] ?? 0;
     const saldoVivo = Math.round((saldoBase + diff) * 10) / 10;
-    // Update all badges for this person
+    // Store updated value
+    if (!S._banco) S._banco = {};
+    S._banco[pid] = saldoVivo;
+    // Update all badges for this person in DOM
     document.querySelectorAll(`.gh-banco-badge[data-pid="${pid}"]`).forEach(badge => {
       if (saldoVivo === 0) { badge.style.display = 'none'; return; }
       const pos = saldoVivo > 0;
-      badge.className = `gh-banco-badge ${pos ? 'gh-banco-pos' : 'gh-banco-neg'}`;
+      badge.className = `gh-banco-badge${pos ? ' gh-banco-pos' : ' gh-banco-neg'}`;
       badge.textContent = (pos ? '+' : '') + saldoVivo + 'h';
       badge.style.display = '';
     });
@@ -1935,6 +1938,7 @@
 
   function commitInlineEdit(pid, row) {
     row.classList.remove('gh-editing');
+    row.querySelector('.gh-inline-ok')?.remove();
     // Read all inputs and update S.schedule
     const dayShifts = {};
     row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
@@ -2217,6 +2221,19 @@
             return;
           }
           row.classList.add('gh-editing');
+          // Add confirm button to name cell
+          const nameCell = row.querySelector('.gh-p-cell');
+          if (nameCell && !nameCell.querySelector('.gh-inline-ok')) {
+            const okBtn = document.createElement('button');
+            okBtn.className = 'gh-inline-ok';
+            okBtn.textContent = '✓ OK';
+            okBtn.style.cssText = 'margin-top:6px;background:#111;color:#fff;border:none;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;';
+            okBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              commitInlineEdit(pid, row);
+            });
+            nameCell.appendChild(okBtn);
+          }
           row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
             const day = td.dataset.day;
             const cell = S.schedule[pid]?.[day];

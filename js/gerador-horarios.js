@@ -1936,6 +1936,8 @@
     });
   }
 
+  window._ghCommit = function(pid) { commitInlineEdit(pid); };
+
   function normTime(t) {
     t = (t || '').trim();
     if (!t) return t;
@@ -2218,10 +2220,7 @@
             okBtn.className = 'gh-inline-ok';
             okBtn.textContent = '✓ OK';
             okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border:none !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;';
-            okBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              commitInlineEdit(pid);
-            });
+            okBtn.setAttribute('onclick', `event.stopPropagation();event.preventDefault();window._ghCommit('${pid}');return false;`);
             nameCell.appendChild(okBtn);
           }
           row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
@@ -2242,12 +2241,7 @@
             }).join('');
             // Enter key or Tab to commit
             row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
-              inp.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault();
-                  commitInlineEdit(pid);
-                }
-              });
+              inp.setAttribute('onkeydown', `if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();window._ghCommit('${pid}');}`);
             });
           });
         });

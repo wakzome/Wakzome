@@ -1341,7 +1341,7 @@
           PEOPLE.forEach(p => {
             if (!S.schedule[p.id]) return;
             let realHrs = 0;
-            DAYS_ORDER.forEach(d => {
+            DAYS.forEach(d => {
               const cl = S.schedule[p.id]?.[d];
               if (cl?.type === 'work' && cl.shift) {
                 cl.shift.split('|').forEach(sg => {
@@ -1894,7 +1894,7 @@
   // ── INLINE SHIFT EDIT (banco de horas) ──
   function calcPersonHrs(pid) {
     let h = 0;
-    DAYS_ORDER.forEach(d => {
+    DAYS.forEach(d => {
       const cl = S.schedule[pid]?.[d];
       if (cl?.type === 'work' && cl.shift) {
         cl.shift.split('|').forEach(sg => {
@@ -2279,26 +2279,29 @@
 
     // Edit on click — intercept if add mode is active
     // Container click — commit any editing rows when clicking outside them
-    c.addEventListener('click', (e) => {
-      // 1. Intercept OK div click
-      const okDiv = e.target.closest('.gh-inline-ok');
-      if (okDiv) {
-        e.preventDefault();
-        e.stopPropagation();
-        commitInlineEdit(okDiv.dataset.pid);
-        return;
-      }
-      // 2. Click outside editing row — commit
-      if (e.target.closest('.gh-sh-time-inp')) return;
-      const editingRows = c.querySelectorAll('tr.gh-editing');
-      editingRows.forEach(row => {
-        if (!row.contains(e.target)) {
-          const pid = row.querySelector('.gh-banco-badge')?.dataset?.pid ||
-                      row.querySelector('[data-pid]')?.dataset?.pid;
-          if (pid) commitInlineEdit(pid);
+    if (!c.dataset.hasClickDelegation) {
+      c.addEventListener('click', (e) => {
+        // 1. Intercept OK div click
+        const okDiv = e.target.closest('.gh-inline-ok');
+        if (okDiv) {
+          e.preventDefault();
+          e.stopPropagation();
+          commitInlineEdit(okDiv.dataset.pid);
+          return;
         }
+        // 2. Click outside editing row — commit
+        if (e.target.closest('.gh-sh-time-inp')) return;
+        const editingRows = c.querySelectorAll('tr.gh-editing');
+        editingRows.forEach(row => {
+          if (!row.contains(e.target)) {
+            const pid = row.querySelector('.gh-banco-badge')?.dataset?.pid ||
+                        row.querySelector('[data-pid]')?.dataset?.pid;
+            if (pid) commitInlineEdit(pid);
+          }
+        });
       });
-    });
+      c.dataset.hasClickDelegation = 'true';
+    }
 
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
       td.addEventListener('click', (e) => {

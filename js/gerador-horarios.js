@@ -1966,23 +1966,9 @@
     if (!S._bancoBase) S._bancoBase = {};
     if (S._bancoBase[pid] === undefined) S._bancoBase[pid] = S._banco?.[pid] ?? 0;
     updateBancoBadge(pid);
-    // Update hours display directly without full re-render
-    const realHrs = calcPersonHrs(pid);
-    row.querySelectorAll('.gh-p-hrs').forEach(el => {
-      el.textContent = realHrs > 0 ? realHrs + 'h' : '';
-    });
-    // Update shift display in each cell
-    DAYS_ORDER.forEach(day => {
-      const cell = S.schedule[pid]?.[day];
-      if (!cell || cell.type !== 'work') return;
-      const td = row.querySelector(`.gh-sh-td[data-day="${day}"]`);
-      if (!td) return;
-      const inner = td.querySelector('.gh-sh-inner');
-      if (!inner) return;
-      inner.innerHTML = cell.shift
-        ? cell.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('')
-        : `<span class="gh-sh-line">—</span>`;
-    });
+    // Full re-render to restore normal cell view
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
   }
 
   // ── RENDER HORÁRIO ──

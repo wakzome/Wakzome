@@ -2676,21 +2676,24 @@
 
       // ── AUTO-REPLICATE: if person has no work scheduled in any other store/day,
       // propagate this shift+store to all empty days automatically ──
-      const personStores = S._personStores?.[pid] || [];
-      const hasOtherWork = DAYS.some(d => {
-        if (d === day) return false;
-        const cell = S.schedule[pid]?.[d];
-        return cell && cell.type === 'work';
-      });
-      // Replicate only when: person has no work on any other day yet
-      if (!hasOtherWork) {
-        DAYS.forEach(d => {
-          if (d === day) return;
+      // Do NOT replicate apoio shifts — they are day-specific
+      const isApoioShift = shiftRaw.includes('APOIO');
+      if (!isApoioShift) {
+        const hasOtherWork = DAYS.some(d => {
+          if (d === day) return false;
           const cell = S.schedule[pid]?.[d];
-          if (cell && cell.type === 'empty') {
-            S.schedule[pid][d] = { type: 'work', shift, store: sid };
-          }
+          return cell && cell.type === 'work';
         });
+        // Replicate only when: person has no work on any other day yet
+        if (!hasOtherWork) {
+          DAYS.forEach(d => {
+            if (d === day) return;
+            const cell = S.schedule[pid]?.[d];
+            if (cell && cell.type === 'empty') {
+              S.schedule[pid][d] = { type: 'work', shift, store: sid };
+            }
+          });
+        }
       }
     }
     closeModal();

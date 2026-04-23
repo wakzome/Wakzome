@@ -2227,7 +2227,7 @@
             const okBtn = document.createElement('button');
             okBtn.className = 'gh-inline-ok';
             okBtn.textContent = '✓ OK';
-            okBtn.style.cssText = 'margin-top:6px;background:#111;color:#fff;border:none;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;';
+            okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border:none !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;';
             okBtn.addEventListener('click', (e) => {
               e.stopPropagation();
               commitInlineEdit(pid, row);

@@ -2130,11 +2130,13 @@
         aH = Math.round(aH * 10) / 10;
         return `<tr>
           <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
-            <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
-              <span class="gh-p-dot">●</span>${shortName(p.name)}
+            <div style="display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">
+              <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
+                <span class="gh-p-dot">●</span>${shortName(p.name)}
+                <span class="gh-p-remove-x">✕</span>
+              </button>
               ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<button class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}" title="Banco de horas — clique para editar turnos">${pos?'+':''}${s}h</button>`;})()}
-              <span class="gh-p-remove-x">✕</span>
-            </button>
+            </div>
             <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
           </div></td>${cells}</tr>`;
       }).join('');
@@ -2221,29 +2223,10 @@
             }).join('');
           });
         });
-        // Commit on click outside (capture phase) or Enter key
+        // Attach global commit handler
+        document.removeEventListener('click', window._ghInlineCommitHandler, true);
         setTimeout(() => {
-          function outsideHandler(ev) {
-            if (ev.target.closest('.gh-sh-time-inp') || ev.target.closest('.gh-banco-badge')) return;
-            c.querySelectorAll('tr.gh-editing').forEach(row => {
-              const nb = row.querySelector('.gh-p-remove-btn');
-              if (nb) commitInlineEdit(nb.dataset.pid, row);
-            });
-            document.removeEventListener('click', outsideHandler, true);
-            document.removeEventListener('keydown', keyHandler);
-          }
-          function keyHandler(ev) {
-            if (ev.key === 'Enter' || ev.key === 'Escape') {
-              c.querySelectorAll('tr.gh-editing').forEach(row => {
-                const nb = row.querySelector('.gh-p-remove-btn');
-                if (nb) commitInlineEdit(nb.dataset.pid, row);
-              });
-              document.removeEventListener('click', outsideHandler, true);
-              document.removeEventListener('keydown', keyHandler);
-            }
-          }
-          document.addEventListener('click', outsideHandler, true);
-          document.addEventListener('keydown', keyHandler);
+          document.addEventListener('click', window._ghInlineCommitHandler, true);
         }, 150);
       });
     });
@@ -2277,6 +2260,27 @@
     });
 
     // Edit on click — intercept if add mode is active
+    // Global delegated handler for committing inline edits
+    // Attached once per showSchedule — clicks on time inputs are ignored
+    const schedContainer = c;
+    function ghInlineCommitHandler(ev) {
+      if (ev.target.closest('.gh-sh-time-inp') || ev.target.closest('.gh-banco-badge')) return;
+      const editingRows = schedContainer.querySelectorAll('tr.gh-editing');
+      if (!editingRows.length) {
+        document.removeEventListener('click', ghInlineCommitHandler, true);
+        return;
+      }
+      editingRows.forEach(row => {
+        const nb = row.querySelector('[data-pid]');
+        const pid = nb?.dataset?.pid || row.querySelector('.gh-banco-badge')?.dataset?.pid;
+        if (pid) commitInlineEdit(pid, row);
+      });
+      document.removeEventListener('click', ghInlineCommitHandler, true);
+    }
+    // Remove any previous handler and re-attach
+    document.removeEventListener('click', window._ghInlineCommitHandler, true);
+    window._ghInlineCommitHandler = ghInlineCommitHandler;
+
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
       td.addEventListener('click', (e) => {
         // If row is in inline edit mode, don't open modal

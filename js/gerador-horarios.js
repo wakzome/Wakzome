@@ -2601,6 +2601,11 @@
       if (wrap) wrap.style.display = shiftVal.includes('APOIO') ? 'block' : 'none';
     }
     updateApoioWrap();
+
+    // Auto-confirm when apoio store is selected
+    document.getElementById('gh-apoio-store')?.addEventListener('change', () => {
+      applyEdit();
+    });
     ghSyncPillGroup('gh-me-shift-btns', shEl.value);
     // Build store pill buttons dynamically
     const storeBtns = document.getElementById('gh-me-store-btns');

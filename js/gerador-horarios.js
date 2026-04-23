@@ -1445,10 +1445,11 @@
     openStoreIds.forEach((sid, storeIdx) => {
       const storeShort = PS_STORE_SHORT[sid] || sid.toUpperCase();
 
-      // Get people assigned to this store (with at least one work day here)
+      // Get people assigned to this store (with at least one work day here, or apoio)
       const storePeople = PEOPLE.filter(p =>
         S._personStores?.[p.id]?.includes(sid) ||
-        DAYS_ORDER.some(day => S.schedule[p.id]?.[day]?.store === sid && S.schedule[p.id]?.[day]?.type === 'work')
+        DAYS_ORDER.some(day => S.schedule[p.id]?.[day]?.store === sid && S.schedule[p.id]?.[day]?.type === 'work') ||
+        DAYS_ORDER.some(day => S._apoioShifts?.[p.id]?.[day]?.store === sid)
       );
 
       if (!storePeople.length) return;
@@ -1472,7 +1473,12 @@
             rowA.push(lbl);
             rowB.push(lbl);
           } else if (cell.type === 'work') {
-            if (cell.store === sid) {
+            // Check if person does apoio in this store on this day
+            const apoioHere = S._apoioShifts?.[p.id]?.[day]?.store === sid;
+            if (apoioHere) {
+              rowA.push(S._apoioShifts[p.id][day].shift || '14:00-15:00');
+              rowB.push('');
+            } else if (cell.store === sid) {
               // Working here — show shift split into morning/afternoon
               const parts = (cell.shift || '').split('|');
               rowA.push(parts[0] || '');
@@ -2575,6 +2581,26 @@
     }).join('');
     // Sync pill buttons
     ghSyncPillGroup('gh-me-type-btns', typeEl.value);
+
+    // Populate apoio store selector
+    const apoioSel = document.getElementById('gh-apoio-store');
+    if (apoioSel) {
+      apoioSel.innerHTML = '';
+      STORES.filter(st => S.openStores.includes(st.id)).sort((a,b)=>a.priority-b.priority).forEach(st => {
+        const op = document.createElement('option');
+        op.value = st.id;
+        op.textContent = st.short || st.name;
+        apoioSel.appendChild(op);
+      });
+    }
+
+    // Show/hide apoio selector based on shift selection
+    function updateApoioWrap() {
+      const shiftVal = document.getElementById('gh-me-shift')?.value || '';
+      const wrap = document.getElementById('gh-apoio-store-wrap');
+      if (wrap) wrap.style.display = shiftVal.includes('APOIO') ? 'block' : 'none';
+    }
+    updateApoioWrap();
     ghSyncPillGroup('gh-me-shift-btns', shEl.value);
     // Build store pill buttons dynamically
     const storeBtns = document.getElementById('gh-me-store-btns');
@@ -2614,8 +2640,27 @@
       const cellType = type === 'ferias' ? 'ferias' : type === 'baixa' ? 'baixa' : 'folga';
       S.schedule[pid][day] = { type: cellType, shift: null, store: null };
     } else {
-      const shift = document.getElementById('gh-me-shift').value;
+      const shiftRaw = document.getElementById('gh-me-shift').value;
       const sid   = document.getElementById('gh-me-store').value;
+      let shift = shiftRaw;
+
+      // Handle APOIO shift: assign 14:00-15:00 in support store, remove APOIO marker
+      if (shiftRaw.includes('APOIO')) {
+        const apoioSid = document.getElementById('gh-apoio-store')?.value;
+        if (!apoioSid) { alert('Selecione a tienda de apoio.'); return; }
+        if (!S._personStores) S._personStores = {};
+        if (!S._personStores[pid]) S._personStores[pid] = [];
+        if (!S._personStores[pid].includes(apoioSid)) S._personStores[pid].push(apoioSid);
+        if (!S._storeOrder) S._storeOrder = {};
+        if (!S._storeOrder[apoioSid]) S._storeOrder[apoioSid] = [];
+        if (!S._storeOrder[apoioSid].includes(pid)) S._storeOrder[apoioSid].push(pid);
+        // Save apoio shift for that day in the support store
+        if (!S._apoioShifts) S._apoioShifts = {};
+        if (!S._apoioShifts[pid]) S._apoioShifts[pid] = {};
+        S._apoioShifts[pid][day] = { store: apoioSid, shift: '14:00-15:00' };
+        // Replace APOIO marker with actual shift parts
+        shift = shiftRaw.replace('|APOIO', '');
+      }
       const p = P(pid), ce = document.getElementById('gh-me-conf');
       const hard = PEOPLE.find(o => o.id !== pid && p?.hardAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);
       if (hard) { ce.textContent = `⚠ ${p?.name} e ${hard.name} não podem estar juntas.`; ce.className = 'gh-conf-note hard'; ce.style.display = ''; return; }
@@ -3004,6 +3049,8 @@
         #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#fce4ec; border-color:#f48fb1; }
         #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#f3e5f5; border-color:#ce93d8; }
         #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e8eaf6; border-color:#9fa8da; }
+        #gh-modal .gh-pill-shift.gh-pill-apoio { background:#fff3e0; border-color:#e67e22; }
+        #gh-modal .gh-pill-shift.gh-pill-apoio.active { background:#e67e22 !important; border-color:#e67e22 !important; color:#fff !important; }
         /* Active state must override per-shift backgrounds */
         #gh-modal .gh-pill-shift.active,
         #gh-modal .gh-pill-shift[data-val].active { background:#111 !important; border-color:#111 !important; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
@@ -3224,6 +3271,12 @@
                   <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio</span><br>15:00 – 19:00</button>
+                </div>
+                <!-- APOIO store selector -->
+                <div id="gh-apoio-store-wrap" style="display:none;margin-top:12px;">
+                  <div style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#e67e22;margin-bottom:8px;">Tienda de apoio (14:00–15:00)</div>
+                  <select id="gh-apoio-store" class="gh-ab-sel"></select>
                 </div>
               </div>
               <!-- LOJA buttons -->
@@ -3257,7 +3310,10 @@
         if (!btn) return;
         document.getElementById('gh-me-shift').value = btn.dataset.val;
         ghSyncPillGroup('gh-me-shift-btns', btn.dataset.val);
-        if (document.getElementById('gh-me-store').value) applyEdit();
+        // Show/hide apoio store selector
+        const wrap = document.getElementById('gh-apoio-store-wrap');
+        if (wrap) wrap.style.display = btn.dataset.val.includes('APOIO') ? 'block' : 'none';
+        if (!btn.dataset.val.includes('APOIO') && document.getElementById('gh-me-store').value) applyEdit();
       });
       // LOJA pill buttons (dynamic)
       document.getElementById('gh-me-store-btns').addEventListener('click', e => {

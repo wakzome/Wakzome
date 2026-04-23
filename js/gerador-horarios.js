@@ -293,6 +293,8 @@
   // ── WIZARD: PASSO 1 ──
   function wiz_week() {
     const c = getContainer(); if (!c) return;
+    // Show saved borradores async (non-blocking)
+    setTimeout(() => renderBorradores(c), 100);
     c.innerHTML = `
       <div class="gh-wiz-box">
         <div class="gh-wiz-label">Passo 1 de 3</div>
@@ -1327,6 +1329,9 @@
       S.alerts.push({ type: 'info', text: '✓ Folgas guardadas.' });
       if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
 
+      // Apagar borrador desta semana (já foi publicado)
+      await deleteBorrador(weekKey);
+
       // Publicar CSV de Porto Santo — separado para não bloquear em caso de erro
       try {
         await publishPortoSantoCSV();
@@ -1687,6 +1692,113 @@
     }
   }
 
+  // ── BORRADORES ──
+
+  function buildBorradorData() {
+    return {
+      weekKey: S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null,
+      openStores: S.openStores,
+      openDays: S.openDays,
+      storeMin: S.storeMin,
+      storeMax: S.storeMax,
+      storeMode: S.storeMode,
+      schedule: S.schedule,
+      _personStores: S._personStores,
+      _storeOrder: S._storeOrder,
+      _folgasDirigidas: S._folgasDirigidas,
+    };
+  }
+
+  async function saveBorrador() {
+    const sb = getSupabase(); if (!sb) return;
+    const data = buildBorradorData();
+    if (!data.weekKey) { alert('Sem semana definida.'); return; }
+    try {
+      const { error } = await sb.from('gh_borradores').upsert(
+        { semana: data.weekKey, dados: data, updated_at: new Date().toISOString() },
+        { onConflict: 'semana' }
+      );
+      if (error) throw error;
+      alert('✓ Borrador guardado para semana ' + data.weekKey);
+    } catch(e) {
+      alert('Erro ao guardar borrador: ' + (e.message || e));
+    }
+  }
+
+  async function deleteBorrador(weekKey) {
+    const sb = getSupabase(); if (!sb) return;
+    await sb.from('gh_borradores').delete().eq('semana', weekKey);
+  }
+
+  async function loadBorrador(borrador) {
+    const d = borrador.dados;
+    S = blank();
+    S.weekStart = new Date(d.weekKey + 'T00:00:00');
+    S.openStores = d.openStores || [];
+    S.openDays = d.openDays || {};
+    S.storeMin = d.storeMin || {};
+    S.storeMax = d.storeMax || {};
+    S.storeMode = d.storeMode || {};
+    S.schedule = d.schedule || {};
+    S._personStores = d._personStores || {};
+    S._storeOrder = d._storeOrder || {};
+    S._folgasDirigidas = d._folgasDirigidas || {};
+    await loadKnowledgeBase();
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
+  async function renderBorradores(container) {
+    const sb = getSupabase(); if (!sb) return;
+    try {
+      const { data } = await sb.from('gh_borradores').select('semana, updated_at').order('semana', { ascending: false });
+      if (!data || !data.length) return;
+
+      const box = document.createElement('div');
+      box.style.cssText = 'margin-bottom:24px;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;';
+      box.innerHTML = `
+        <div style="padding:10px 16px;background:#fafafa;border-bottom:1px solid #f0f0f0;">
+          <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;">Borradores guardados</div>
+        </div>`;
+
+      data.forEach(b => {
+        const d = new Date(b.semana + 'T00:00:00');
+        const label = 'Semana ' + d.toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const updated = new Date(b.updated_at).toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #f5f5f5;gap:12px;';
+        row.innerHTML = `
+          <div>
+            <div style="font-size:.82rem;font-weight:600;color:#111;">${label}</div>
+            <div style="font-size:.65rem;color:#aaa;">Guardado: ${updated}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="gh-btn gh-btn-solid gh-btn-sm" data-week="${b.semana}" data-action="load">Carregar</button>
+            <button class="gh-btn gh-btn-ghost gh-btn-sm" data-week="${b.semana}" data-action="delete" style="color:#c0392b;border-color:#c0392b;">Eliminar</button>
+          </div>`;
+        row.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const week = btn.dataset.week;
+            if (btn.dataset.action === 'delete') {
+              if (!confirm('Eliminar borrador de ' + label + '?')) return;
+              await deleteBorrador(week);
+              row.remove();
+              if (!box.querySelectorAll('[data-action="load"]').length) box.remove();
+            } else {
+              const { data: bd } = await sb.from('gh_borradores').select('*').eq('semana', week).single();
+              if (bd) await loadBorrador(bd);
+            }
+          });
+        });
+        box.appendChild(row);
+      });
+
+      container.insertBefore(box, container.firstChild);
+    } catch(e) {
+      console.warn('Erro ao carregar borradores:', e.message);
+    }
+  }
+
   // ── RENDER HORÁRIO ──
   function shortNameInitial(fullName) {
     const parts = (fullName || '').trim().split(/\s+/);
@@ -1713,6 +1825,7 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
           <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-borrador" style="margin-left:8px;">💾 Guardar borrador</button>
         </div>
       </div>
       ${alertsHTML}`;
@@ -1869,6 +1982,7 @@
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
+    document.getElementById('gh-btn-borrador')?.addEventListener('click', () => saveBorrador());
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
       const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
       const confirmed = confirm(`Confirmar e guardar o horário da semana de ${weekKey}?\n\nEsta acção gravará as folgas em Supabase e não poderá ser regenerada.`);

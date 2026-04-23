@@ -1935,7 +1935,12 @@
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
           else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
           else if (c2.type === 'work') {
-            if (c2.store === st.id) {
+            // Check if person does apoio in THIS store on this day
+            const apoioHereRender = S._apoioShifts?.[p.id]?.[day]?.store === st.id;
+            if (apoioHereRender) {
+              cls = 'c-shift-b';
+              content = `<span class="gh-sh-line" style="color:#e67e22;font-weight:700;">⚡ ${S._apoioShifts[p.id][day].shift}</span>`;
+            } else if (c2.store === st.id) {
               const soft = p.softAvoid?.some(oid => S.schedule[oid]?.[day]?.type === 'work' && S.schedule[oid]?.[day]?.store === st.id);
               const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f' };
               cls = soft ? 'c-soft' : (shiftColorMap[c2.shift] || 'c-shift-b');

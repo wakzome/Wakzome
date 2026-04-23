@@ -2142,7 +2142,7 @@
           <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
             <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
               <span class="gh-p-dot">●</span>${shortName(p.name)}
-              ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<span class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}">${pos?'+':''}${s}h</span>`;})()}
+              ${(()=>{const s=S._banco?.[p.id]??0;const pos=s>0;const zero=s===0;return `<span class="gh-banco-badge${zero?' gh-banco-zero':pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}">${pos?'+':''}${s}h</span>`;})()}
               <span class="gh-p-remove-x">✕</span>
             </button>
             <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
@@ -3239,6 +3239,7 @@
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
         #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
         #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; font-family:inherit; line-height:1.4; display:inline-block; }
+        #tab-gerador .gh-banco-zero { background:#f5f5f5; color:#aaa; }
         #tab-gerador .gh-banco-pos { background:#e8f5e9; color:#2e7d32; }
         #tab-gerador .gh-banco-neg { background:#ffebee; color:#c62828; }
         #tab-gerador .gh-banco-badge:hover { opacity:.8; }

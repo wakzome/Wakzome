@@ -1945,10 +1945,17 @@
       if (!dayShifts[day][seg]) dayShifts[day][seg] = ['',''];
       dayShifts[day][seg][part] = inp.value.trim();
     });
+    function normTime(t) {
+      t = (t || '').trim();
+      if (!t) return t;
+      if (/^\d{1,2}$/.test(t)) return t.padStart(2,'0') + ':00';
+      if (/^\d{1,2}:\d{2}$/.test(t)) return t.padStart(5,'0');
+      return t;
+    }
     Object.entries(dayShifts).forEach(([day, segs]) => {
       const cell = S.schedule[pid]?.[day];
       if (!cell || cell.type !== 'work') return;
-      const newShift = Object.values(segs).map(([t1,t2]) => t1+'-'+t2).join('|');
+      const newShift = Object.values(segs).map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
       S.schedule[pid][day] = { ...cell, shift: newShift };
     });
     // Update banco badge in real time (without touching Supabase)
@@ -2214,18 +2221,30 @@
             }).join('');
           });
         });
-        // Click outside to commit
+        // Commit on click outside (capture phase) or Enter key
         setTimeout(() => {
-          document.addEventListener('click', function handler(ev) {
-            if (!ev.target.closest('.gh-sh-time-inp') && !ev.target.closest('.gh-banco-badge')) {
+          function outsideHandler(ev) {
+            if (ev.target.closest('.gh-sh-time-inp') || ev.target.closest('.gh-banco-badge')) return;
+            c.querySelectorAll('tr.gh-editing').forEach(row => {
+              const nb = row.querySelector('.gh-p-remove-btn');
+              if (nb) commitInlineEdit(nb.dataset.pid, row);
+            });
+            document.removeEventListener('click', outsideHandler, true);
+            document.removeEventListener('keydown', keyHandler);
+          }
+          function keyHandler(ev) {
+            if (ev.key === 'Enter' || ev.key === 'Escape') {
               c.querySelectorAll('tr.gh-editing').forEach(row => {
                 const nb = row.querySelector('.gh-p-remove-btn');
                 if (nb) commitInlineEdit(nb.dataset.pid, row);
               });
-              document.removeEventListener('click', handler);
+              document.removeEventListener('click', outsideHandler, true);
+              document.removeEventListener('keydown', keyHandler);
             }
-          });
-        }, 100);
+          }
+          document.addEventListener('click', outsideHandler, true);
+          document.addEventListener('keydown', keyHandler);
+        }, 150);
       });
     });
 

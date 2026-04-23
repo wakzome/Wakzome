@@ -1962,9 +1962,23 @@
     if (!S._bancoBase) S._bancoBase = {};
     if (S._bancoBase[pid] === undefined) S._bancoBase[pid] = S._banco?.[pid] ?? 0;
     updateBancoBadge(pid);
-    // Re-render to update hours display
-    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-    showSchedule(active);
+    // Update hours display directly without full re-render
+    const realHrs = calcPersonHrs(pid);
+    row.querySelectorAll('.gh-p-hrs').forEach(el => {
+      el.textContent = realHrs > 0 ? realHrs + 'h' : '';
+    });
+    // Update shift display in each cell
+    DAYS_ORDER.forEach(day => {
+      const cell = S.schedule[pid]?.[day];
+      if (!cell || cell.type !== 'work') return;
+      const td = row.querySelector(`.gh-sh-td[data-day="${day}"]`);
+      if (!td) return;
+      const inner = td.querySelector('.gh-sh-inner');
+      if (!inner) return;
+      inner.innerHTML = cell.shift
+        ? cell.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('')
+        : `<span class="gh-sh-line">—</span>`;
+    });
   }
 
   // ── RENDER HORÁRIO ──
@@ -2219,15 +2233,16 @@
                 <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
               </div>`;
             }).join('');
-            // Commit when focus leaves the row entirely
-            row.addEventListener('focusout', function onFocusOut(e) {
-              setTimeout(() => {
-                if (!row.contains(document.activeElement) && row.classList.contains('gh-editing')) {
+            // Use mousedown (fires before blur) to detect click outside
+            function ghMouseDownHandler(e) {
+              if (!row.contains(e.target)) {
+                document.removeEventListener('mousedown', ghMouseDownHandler);
+                if (row.classList.contains('gh-editing')) {
                   commitInlineEdit(pid, row);
-                  row.removeEventListener('focusout', onFocusOut);
                 }
-              }, 100);
-            });
+              }
+            }
+            setTimeout(() => document.addEventListener('mousedown', ghMouseDownHandler), 100);
           });
         });
         // Attach global commit handler

@@ -2130,13 +2130,11 @@
         aH = Math.round(aH * 10) / 10;
         return `<tr>
           <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
-            <div style="display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">
-              <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
-                <span class="gh-p-dot">●</span>${shortName(p.name)}
-                <span class="gh-p-remove-x">✕</span>
-              </button>
-              ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<button class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}" title="Banco de horas — clique para editar turnos">${pos?'+':''}${s}h</button>`;})()}
-            </div>
+            <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
+              <span class="gh-p-dot">●</span>${shortName(p.name)}
+              ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<span class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}">${pos?'+':''}${s}h</span>`;})()}
+              <span class="gh-p-remove-x">✕</span>
+            </button>
             <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
           </div></td>${cells}</tr>`;
       }).join('');
@@ -2194,7 +2192,7 @@
     // Banco badge click → make person's shifts editable inline
     c.querySelectorAll('.gh-banco-badge').forEach(badge => {
       badge.addEventListener('click', (e) => {
-        e.stopPropagation();
+        e.stopPropagation(); e.preventDefault();
         const pid = badge.dataset.pid;
         // Find all rows for this person and make shifts editable
         c.querySelectorAll('tr').forEach(row => {
@@ -2221,20 +2219,15 @@
                 <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
               </div>`;
             }).join('');
-            // Attach blur on each input — commit when focus leaves all inputs in this row
-            setTimeout(() => {
-              row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
-                inp.addEventListener('blur', () => {
-                  setTimeout(() => {
-                    // Only commit if focus moved outside all inputs in this row
-                    const focused = row.querySelector('.gh-sh-time-inp:focus');
-                    if (!focused && row.classList.contains('gh-editing')) {
-                      commitInlineEdit(pid, row);
-                    }
-                  }, 150);
-                });
-              });
-            }, 50);
+            // Commit when focus leaves the row entirely
+            row.addEventListener('focusout', function onFocusOut(e) {
+              setTimeout(() => {
+                if (!row.contains(document.activeElement) && row.classList.contains('gh-editing')) {
+                  commitInlineEdit(pid, row);
+                  row.removeEventListener('focusout', onFocusOut);
+                }
+              }, 100);
+            });
           });
         });
         // Attach global commit handler
@@ -3230,7 +3223,7 @@
         #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:2px; font-weight:600; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
         #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
-        #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; cursor:pointer; font-family:inherit; line-height:1.4; }
+        #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; font-family:inherit; line-height:1.4; display:inline-block; }
         #tab-gerador .gh-banco-pos { background:#e8f5e9; color:#2e7d32; }
         #tab-gerador .gh-banco-neg { background:#ffebee; color:#c62828; }
         #tab-gerador .gh-banco-badge:hover { opacity:.8; }

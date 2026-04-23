@@ -1469,7 +1469,7 @@
           const cell = S.schedule[p.id]?.[day] || { type: 'na' };
 
           if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa') {
-            const lbl = cell.type === 'ferias' ? 'FERIAS' : 'FOLGA';
+            const lbl = cell.type === 'ferias' ? 'FERIAS' : cell.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
             rowA.push(lbl);
             rowB.push(lbl);
           } else if (cell.type === 'work') {

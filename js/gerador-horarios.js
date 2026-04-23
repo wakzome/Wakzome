@@ -1505,9 +1505,13 @@
     fixPanelLayout();
 
     try {
-      const { data: urlData } = sb.storage.from('horarios').getPublicUrl('porto_horarios.csv');
+      const BASE_DATE_EDIT = new Date('2026-01-05T00:00:00');
+      const weekMsEdit = new Date(weekISO + 'T00:00:00') - BASE_DATE_EDIT;
+      const weekNumEdit = Math.round(weekMsEdit / (7 * 86400000)) + 1;
+      const portoFile = 'porto_s' + weekNumEdit + '.csv';
+      const { data: urlData } = sb.storage.from('horarios').getPublicUrl(portoFile);
       const res = await fetch(urlData.publicUrl + '?t=' + Date.now());
-      if (!res.ok) throw new Error('porto_horarios.csv não encontrado');
+      if (!res.ok) throw new Error(portoFile + ' não encontrado');
       const csvText = await res.text();
 
       // Parse CSV into blocks

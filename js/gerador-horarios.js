@@ -796,6 +796,7 @@
     S._baixas   = {};  // pid → {id, data_inicio, data_fim, observacao, active}
     S._licencas = {};  // pid → {id, data_inicio, data_fim, tipo, horas, observacao, active}
     S._folgas   = {};  // pid → {id, dias[]}
+    S._banco    = {};  // pid → saldo numérico
     S._banco    = {};  // pid → saldo
 
     try {
@@ -1330,6 +1331,52 @@
       S.alerts.push({ type: 'info', text: '✓ Folgas guardadas.' });
       if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
 
+      // Actualizar banco de horas — diferença horas reais vs 40h contratadas
+      try {
+        const sb = getSupabase();
+        if (sb) {
+          const bancoUpdates = [];
+          PEOPLE.forEach(p => {
+            if (!S.schedule[p.id]) return;
+            let realHrs = 0;
+            DAYS_ORDER.forEach(d => {
+              const cl = S.schedule[p.id]?.[d];
+              if (cl?.type === 'work' && cl.shift) {
+                cl.shift.split('|').forEach(sg => {
+                  const pts = sg.split('-');
+                  if (pts.length < 2) return;
+                  const [h1,m1] = pts[0].split(':').map(Number);
+                  const [h2,m2] = pts[1].split(':').map(Number);
+                  if (!isNaN(h1)&&!isNaN(h2)) realHrs += (h2+m2/60)-(h1+m1/60);
+                });
+              }
+              const apoio = S._apoioShifts?.[p.id]?.[d];
+              if (apoio?.shift) {
+                const pts = apoio.shift.split('-');
+                if (pts.length>=2) {
+                  const [h1,m1]=pts[0].split(':').map(Number);
+                  const [h2,m2]=pts[1].split(':').map(Number);
+                  if (!isNaN(h1)&&!isNaN(h2)) realHrs+=(h2+m2/60)-(h1+m1/60);
+                }
+              }
+            });
+            realHrs = Math.round(realHrs * 10) / 10;
+            const diff = Math.round((realHrs - 40) * 10) / 10;
+            if (diff === 0) return;
+            const saldoAtual = S._banco?.[p.id] || 0;
+            const novoSaldo = Math.round((saldoAtual + diff) * 10) / 10;
+            S._banco[p.id] = novoSaldo;
+            bancoUpdates.push(
+              sb.from('gh_banco_horas').upsert(
+                { pessoa_id: p.id, saldo: novoSaldo, updated_at: new Date().toISOString() },
+                { onConflict: 'pessoa_id' }
+              )
+            );
+          });
+          await Promise.all(bancoUpdates);
+        }
+      } catch(e) { console.warn('Erro ao actualizar banco de horas:', e); }
+
       // Apagar borrador desta semana (já foi publicado)
       await deleteBorrador(weekKey);
 
@@ -1841,6 +1888,30 @@
     }
   }
 
+  // ── INLINE SHIFT EDIT (banco de horas) ──
+  function commitInlineEdit(pid, row) {
+    row.classList.remove('gh-editing');
+    // Read all inputs and update S.schedule
+    const dayShifts = {};
+    row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
+      const day = inp.dataset.day;
+      const seg = parseInt(inp.dataset.seg);
+      const part = parseInt(inp.dataset.part);
+      if (!dayShifts[day]) dayShifts[day] = {};
+      if (!dayShifts[day][seg]) dayShifts[day][seg] = ['',''];
+      dayShifts[day][seg][part] = inp.value.trim();
+    });
+    Object.entries(dayShifts).forEach(([day, segs]) => {
+      const cell = S.schedule[pid]?.[day];
+      if (!cell || cell.type !== 'work') return;
+      const newShift = Object.values(segs).map(([t1,t2]) => t1+'-'+t2).join('|');
+      S.schedule[pid][day] = { ...cell, shift: newShift };
+    });
+    // Re-render to update hours display
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
   // ── RENDER HORÁRIO ──
   function shortNameInitial(fullName) {
     const parts = (fullName || '').trim().split(/\s+/);
@@ -2008,7 +2079,10 @@
               <span class="gh-p-dot">●</span>${shortName(p.name)}
               <span class="gh-p-remove-x">✕</span>
             </button>
-            <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
+              <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
+              ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<button class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}" title="Banco de horas — clique para editar turnos">${pos?'+':''}${s}h</button>`;})()}
+            </div>
           </div></td>${cells}</tr>`;
       }).join('');
 
@@ -2062,6 +2136,53 @@
     });
 
     // Remove person from store table
+    // Banco badge click → make person's shifts editable inline
+    c.querySelectorAll('.gh-banco-badge').forEach(badge => {
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pid = badge.dataset.pid;
+        // Find all rows for this person and make shifts editable
+        c.querySelectorAll('tr').forEach(row => {
+          const nameBtn = row.querySelector('.gh-p-remove-btn');
+          if (!nameBtn || nameBtn.dataset.pid !== pid) return;
+          if (row.classList.contains('gh-editing')) {
+            commitInlineEdit(pid, row);
+            return;
+          }
+          row.classList.add('gh-editing');
+          row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
+            const day = td.dataset.day;
+            const cell = S.schedule[pid]?.[day];
+            if (!cell || cell.type !== 'work' || !cell.shift) return;
+            const parts = cell.shift.split('|');
+            // Replace content with editable inputs
+            const inner = td.querySelector('.gh-sh-inner');
+            if (!inner) return;
+            inner.innerHTML = parts.map((seg, i) => {
+              const [t1, t2] = seg.split('-');
+              return `<div style="display:flex;align-items:center;gap:1px;justify-content:center;">
+                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="0" value="${t1}">
+                <span style="font-size:.65rem;color:#999">-</span>
+                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
+              </div>`;
+            }).join('');
+          });
+        });
+        // Click outside to commit
+        setTimeout(() => {
+          document.addEventListener('click', function handler(ev) {
+            if (!ev.target.closest('.gh-sh-time-inp') && !ev.target.closest('.gh-banco-badge')) {
+              c.querySelectorAll('tr.gh-editing').forEach(row => {
+                const nb = row.querySelector('.gh-p-remove-btn');
+                if (nb) commitInlineEdit(nb.dataset.pid, row);
+              });
+              document.removeEventListener('click', handler);
+            }
+          });
+        }, 100);
+      });
+    });
+
     c.querySelectorAll('.gh-p-remove-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const pid = btn.dataset.pid;
@@ -3021,6 +3142,13 @@
         #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:2px; font-weight:600; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
         #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
+        #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; cursor:pointer; font-family:inherit; line-height:1.4; }
+        #tab-gerador .gh-banco-pos { background:#e8f5e9; color:#2e7d32; }
+        #tab-gerador .gh-banco-neg { background:#ffebee; color:#c62828; }
+        #tab-gerador .gh-banco-badge:hover { opacity:.8; }
+        #tab-gerador .gh-sh-time-inp { width:44px; font-size:.72rem; font-weight:700; text-align:center; border:1px solid #bbb; border-radius:3px; padding:2px; color:#111; background:#fff; font-family:inherit; outline:none; }
+        #tab-gerador .gh-sh-time-inp:focus { border-color:#111; }
+        #tab-gerador tr.gh-editing td.gh-sh-td { background:#fffde7 !important; }
 
         /* ── SHIFT CELLS ── */
         #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }

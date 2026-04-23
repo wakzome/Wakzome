@@ -2085,7 +2085,11 @@
         if (!s || !f.dias || !f.dias.length) return;
         s.semanas++;
         if (f.semana >= DOM_START) s.domSemanas++;
-        f.dias.forEach(d => { if (d in s.dias) s.dias[d]++; });
+        f.dias.forEach(d => {
+          if (!(d in s.dias)) return;
+          if (d === 'DOM' && f.semana < DOM_START) return; // DOM solo desde semana 14
+          s.dias[d]++;
+        });
       });
 
       const rows = Object.entries(stats)

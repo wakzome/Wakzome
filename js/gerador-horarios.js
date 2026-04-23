@@ -2216,11 +2216,11 @@
           // Add confirm button to name cell
           const nameCell = row.querySelector('.gh-p-cell');
           if (nameCell && !nameCell.querySelector('.gh-inline-ok')) {
-            const okBtn = document.createElement('button');
+            const okBtn = document.createElement('div');
             okBtn.className = 'gh-inline-ok';
             okBtn.textContent = '✓ OK';
-            okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border:none !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;';
-            okBtn.setAttribute('onclick', `event.stopPropagation();event.preventDefault();window._ghCommit('${pid}');return false;`);
+            okBtn.dataset.pid = pid;
+            okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;text-align:center;box-sizing:border-box;';
             nameCell.appendChild(okBtn);
           }
           row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
@@ -2280,6 +2280,15 @@
     // Edit on click — intercept if add mode is active
     // Container click — commit any editing rows when clicking outside them
     c.addEventListener('click', (e) => {
+      // 1. Intercept OK div click
+      const okDiv = e.target.closest('.gh-inline-ok');
+      if (okDiv) {
+        e.preventDefault();
+        e.stopPropagation();
+        commitInlineEdit(okDiv.dataset.pid);
+        return;
+      }
+      // 2. Click outside editing row — commit
       if (e.target.closest('.gh-sh-time-inp')) return;
       const editingRows = c.querySelectorAll('tr.gh-editing');
       editingRows.forEach(row => {

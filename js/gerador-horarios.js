@@ -1472,10 +1472,10 @@
               rowA.push(parts[0] || '');
               rowB.push(parts[1] || '');
             } else {
-              // Working in another store — show alias
+              // Working in another store — alias only in row A, row B empty
               const alias = PS_STORE_ALIAS[cell.store] || (cell.store || '').toUpperCase();
               rowA.push(alias);
-              rowB.push(alias);
+              rowB.push('');
             }
           } else if (cell.type === 'fim_contrato') {
             rowA.push('');

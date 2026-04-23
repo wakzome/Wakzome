@@ -1716,16 +1716,16 @@
     if (!t) {
       t = document.createElement('div');
       t.id = 'gh-toast';
-      t.style.cssText = 'position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(20px);background:#111;color:#fff;padding:12px 24px;border-radius:10px;font-size:.82rem;font-weight:600;font-family:inherit;letter-spacing:.02em;opacity:0;transition:all .3s ease;z-index:99999;pointer-events:none;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.25);';
+      t.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.95);background:#111;color:#fff !important;-webkit-text-fill-color:#fff !important;padding:20px 36px;border-radius:14px;font-size:.95rem;font-weight:600;font-family:inherit;letter-spacing:.02em;opacity:0;transition:all .25s ease;z-index:99999;pointer-events:none;white-space:nowrap;box-shadow:0 16px 48px rgba(0,0,0,.35);';
       document.body.appendChild(t);
     }
     t.textContent = msg;
     t.style.opacity = '1';
-    t.style.transform = 'translateX(-50%) translateY(0)';
+    t.style.transform = 'translate(-50%,-50%) scale(1)';
     clearTimeout(t._timeout);
     t._timeout = setTimeout(() => {
       t.style.opacity = '0';
-      t.style.transform = 'translateX(-50%) translateY(20px)';
+      t.style.transform = 'translate(-50%,-50%) scale(0.95)';
     }, duration);
   }
 
@@ -2564,7 +2564,7 @@
     modal.style.display = '';
     document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
     const typeEl = document.getElementById('gh-me-type');
-    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'empty' ? 'work' : 'folga';
+    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'baixa' ? 'baixa' : c2.type === 'empty' ? 'work' : 'folga';
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
@@ -2611,7 +2611,8 @@
     const { pid, day } = editCtx;
     const type = document.getElementById('gh-me-type').value;
     if (type !== 'work') {
-      S.schedule[pid][day] = { type: type === 'ferias' ? 'ferias' : 'folga', shift: null, store: null };
+      const cellType = type === 'ferias' ? 'ferias' : type === 'baixa' ? 'baixa' : 'folga';
+      S.schedule[pid][day] = { type: cellType, shift: null, store: null };
     } else {
       const shift = document.getElementById('gh-me-shift').value;
       const sid   = document.getElementById('gh-me-store').value;
@@ -3191,6 +3192,7 @@
               <option value="work">Trabalho</option>
               <option value="folga">FOLGA</option>
               <option value="ferias">FÉRIAS</option>
+              <option value="baixa">Licença</option>
             </select>
             <select id="gh-me-shift" style="display:none">
               <option value="10:00-13:00|14:00-19:00">[A]</option>

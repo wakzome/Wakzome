@@ -1460,8 +1460,31 @@
       lines.push([storeShort, ...dates].join(','));
 
       storePeople.forEach(p => {
-        const hrs = p.hrs || 40;
-        const nameLabel = psShortName(p.name) + hrs + 'hrs';
+        // Calculate actual hours worked this week
+        let actualHrs = 0;
+        DAYS_ORDER.forEach(d => {
+          const cl = S.schedule[p.id]?.[d];
+          if (cl?.type === 'work' && cl.shift) {
+            cl.shift.split('|').forEach(sg => {
+              const pts = sg.split('-');
+              if (pts.length < 2) return;
+              const [h1,m1] = pts[0].split(':').map(Number);
+              const [h2,m2] = pts[1].split(':').map(Number);
+              if (!isNaN(h1) && !isNaN(h2)) actualHrs += (h2+m2/60)-(h1+m1/60);
+            });
+          }
+          const apoio = S._apoioShifts?.[p.id]?.[d];
+          if (apoio?.shift) {
+            const pts = apoio.shift.split('-');
+            if (pts.length >= 2) {
+              const [h1,m1] = pts[0].split(':').map(Number);
+              const [h2,m2] = pts[1].split(':').map(Number);
+              if (!isNaN(h1) && !isNaN(h2)) actualHrs += (h2+m2/60)-(h1+m1/60);
+            }
+          }
+        });
+        actualHrs = Math.round(actualHrs * 10) / 10;
+        const nameLabel = psShortName(p.name) + actualHrs + 'hrs';
         const rowA = [nameLabel];
         const rowB = [nameLabel];
 

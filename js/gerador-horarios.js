@@ -3253,6 +3253,7 @@
               <option value="09:00-12:00|13:00-18:00">[D]</option>
               <option value="11:00-15:00|16:00-20:00">[E]</option>
               <option value="09:00-13:00|19:00-23:00">[F]</option>
+              <option value="10:00-13:00|APOIO|15:00-19:00">[APOIO]</option>
             </select>
             <select id="gh-me-store" style="display:none"></select>
 

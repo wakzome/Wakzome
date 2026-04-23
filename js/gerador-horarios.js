@@ -1471,7 +1471,7 @@
           if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa') {
             const lbl = cell.type === 'ferias' ? 'FERIAS' : cell.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
             rowA.push(lbl);
-            rowB.push(lbl);
+            rowB.push(cell.type === 'baixa' ? '' : lbl);
           } else if (cell.type === 'work') {
             // Check if person does apoio in this store on this day
             const apoioHere = S._apoioShifts?.[p.id]?.[day]?.store === sid;

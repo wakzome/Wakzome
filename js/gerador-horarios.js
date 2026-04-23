@@ -797,6 +797,7 @@
     S._licencas = {};  // pid → {id, data_inicio, data_fim, tipo, horas, observacao, active}
     S._folgas   = {};  // pid → {id, dias[]}
     S._banco    = {};  // pid → saldo numérico
+    S._bancoBase = {};  // pid → saldo base antes de edición inline
 
     try {
       // Baixas activas que se sobrepõem à semana
@@ -1891,6 +1892,47 @@
   }
 
   // ── INLINE SHIFT EDIT (banco de horas) ──
+  function calcPersonHrs(pid) {
+    let h = 0;
+    DAYS_ORDER.forEach(d => {
+      const cl = S.schedule[pid]?.[d];
+      if (cl?.type === 'work' && cl.shift) {
+        cl.shift.split('|').forEach(sg => {
+          const pts = sg.split('-');
+          if (pts.length < 2) return;
+          const [h1,m1] = pts[0].split(':').map(Number);
+          const [h2,m2] = pts[1].split(':').map(Number);
+          if (!isNaN(h1)&&!isNaN(h2)) h += (h2+m2/60)-(h1+m1/60);
+        });
+      }
+      const apoio = S._apoioShifts?.[pid]?.[d];
+      if (apoio?.shift) {
+        const pts = apoio.shift.split('-');
+        if (pts.length>=2) {
+          const [h1,m1]=pts[0].split(':').map(Number);
+          const [h2,m2]=pts[1].split(':').map(Number);
+          if (!isNaN(h1)&&!isNaN(h2)) h+=(h2+m2/60)-(h1+m1/60);
+        }
+      }
+    });
+    return Math.round(h * 10) / 10;
+  }
+
+  function updateBancoBadge(pid) {
+    const realHrs = calcPersonHrs(pid);
+    const diff = Math.round((realHrs - 40) * 10) / 10;
+    const saldoBase = S._bancoBase?.[pid] ?? S._banco?.[pid] ?? 0;
+    const saldoVivo = Math.round((saldoBase + diff) * 10) / 10;
+    // Update all badges for this person
+    document.querySelectorAll(`.gh-banco-badge[data-pid="${pid}"]`).forEach(badge => {
+      if (saldoVivo === 0) { badge.style.display = 'none'; return; }
+      const pos = saldoVivo > 0;
+      badge.className = `gh-banco-badge ${pos ? 'gh-banco-pos' : 'gh-banco-neg'}`;
+      badge.textContent = (pos ? '+' : '') + saldoVivo + 'h';
+      badge.style.display = '';
+    });
+  }
+
   function commitInlineEdit(pid, row) {
     row.classList.remove('gh-editing');
     // Read all inputs and update S.schedule
@@ -1909,6 +1951,10 @@
       const newShift = Object.values(segs).map(([t1,t2]) => t1+'-'+t2).join('|');
       S.schedule[pid][day] = { ...cell, shift: newShift };
     });
+    // Update banco badge in real time (without touching Supabase)
+    if (!S._bancoBase) S._bancoBase = {};
+    if (S._bancoBase[pid] === undefined) S._bancoBase[pid] = S._banco?.[pid] ?? 0;
+    updateBancoBadge(pid);
     // Re-render to update hours display
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);

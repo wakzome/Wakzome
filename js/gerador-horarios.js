@@ -1715,7 +1715,7 @@
     if (!data.weekKey) { alert('Sem semana definida.'); return; }
     try {
       const { error } = await sb.from('gh_borradores').upsert(
-        { semana: data.weekKey, dados: data, updated_at: new Date().toISOString() },
+        { semana: data.weekKey, datos: data, updated_at: new Date().toISOString() },
         { onConflict: 'semana' }
       );
       if (error) throw error;
@@ -1731,7 +1731,7 @@
   }
 
   async function loadBorrador(borrador) {
-    const d = borrador.dados;
+    const d = borrador.datos;
     S = blank();
     S.weekStart = new Date(d.weekKey + 'T00:00:00');
     S.openStores = d.openStores || [];
@@ -1751,7 +1751,7 @@
   async function renderBorradores(container) {
     const sb = getSupabase(); if (!sb) return;
     try {
-      const { data } = await sb.from('gh_borradores').select('semana, updated_at').order('semana', { ascending: false });
+      const { data } = await sb.from('gh_borradores').select('semana, datos, updated_at').order('semana', { ascending: false });
       if (!data || !data.length) return;
 
       const box = document.createElement('div');
@@ -1785,7 +1785,7 @@
               row.remove();
               if (!box.querySelectorAll('[data-action="load"]').length) box.remove();
             } else {
-              const { data: bd } = await sb.from('gh_borradores').select('*').eq('semana', week).single();
+              const { data: bd } = await sb.from('gh_borradores').select('semana, datos, updated_at').eq('semana', week).single();
               if (bd) await loadBorrador(bd);
             }
           });

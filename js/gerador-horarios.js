@@ -797,7 +797,6 @@
     S._licencas = {};  // pid → {id, data_inicio, data_fim, tipo, horas, observacao, active}
     S._folgas   = {};  // pid → {id, dias[]}
     S._banco    = {};  // pid → saldo numérico
-    S._banco    = {};  // pid → saldo
 
     try {
       // Baixas activas que se sobrepõem à semana
@@ -955,6 +954,7 @@
             .eq('id', pid);
           if (error) throw error;
           await loadKnowledgeBase();
+          await loadIncidencias();
           const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
             ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
           renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
@@ -982,6 +982,7 @@
       if (S._folgas)   delete S._folgas[pid];
       if (S._banco)    delete S._banco[pid];
       await loadKnowledgeBase();
+      await loadIncidencias();
       const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
         ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
       renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
@@ -1840,6 +1841,7 @@
     S._storeOrder = d._storeOrder || {};
     S._folgasDirigidas = d._folgasDirigidas || {};
     await loadKnowledgeBase();
+    await loadIncidencias();
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);
   }

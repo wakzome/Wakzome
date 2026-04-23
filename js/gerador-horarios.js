@@ -2079,12 +2079,10 @@
           <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
             <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
               <span class="gh-p-dot">●</span>${shortName(p.name)}
+              ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<button class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}" title="Banco de horas — clique para editar turnos">${pos?'+':''}${s}h</button>`;})()}
               <span class="gh-p-remove-x">✕</span>
             </button>
-            <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
-              <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
-              ${(()=>{const s=S._banco?.[p.id];if(s===undefined||s===null||s===0)return '';const pos=s>0;return `<button class="gh-banco-badge${pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}" title="Banco de horas — clique para editar turnos">${pos?'+':''}${s}h</button>`;})()}
-            </div>
+            <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
           </div></td>${cells}</tr>`;
       }).join('');
 
@@ -2215,7 +2213,12 @@
 
     // Edit on click — intercept if add mode is active
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
-      td.addEventListener('click', () => {
+      td.addEventListener('click', (e) => {
+        // If row is in inline edit mode, don't open modal
+        if (td.closest('tr')?.classList.contains('gh-editing')) return;
+        // If click was on a time input, don't open modal
+        if (e.target.closest('.gh-sh-time-inp')) return;
+
         if (_addCtx) {
           // Add mode: assign selected person to this day in the target store
           const { pid, sid } = _addCtx;

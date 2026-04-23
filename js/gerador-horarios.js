@@ -2221,6 +2221,20 @@
                 <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
               </div>`;
             }).join('');
+            // Attach blur on each input — commit when focus leaves all inputs in this row
+            setTimeout(() => {
+              row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
+                inp.addEventListener('blur', () => {
+                  setTimeout(() => {
+                    // Only commit if focus moved outside all inputs in this row
+                    const focused = row.querySelector('.gh-sh-time-inp:focus');
+                    if (!focused && row.classList.contains('gh-editing')) {
+                      commitInlineEdit(pid, row);
+                    }
+                  }, 150);
+                });
+              });
+            }, 50);
           });
         });
         // Attach global commit handler
@@ -3209,7 +3223,7 @@
         #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; text-align:center; }
         #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; justify-content:center; gap:5px; color:#111; }
         #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
-        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:5px; padding:0; width:100%; text-align:center; }
+        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0; text-align:center; }
         #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
         #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
         #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }

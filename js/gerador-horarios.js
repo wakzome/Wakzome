@@ -2233,23 +2233,18 @@
                 <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
               </div>`;
             }).join('');
-            // Use mousedown (fires before blur) to detect click outside
-            function ghMouseDownHandler(e) {
-              if (!row.contains(e.target)) {
-                document.removeEventListener('mousedown', ghMouseDownHandler);
-                if (row.classList.contains('gh-editing')) {
+            // Enter key or Tab to commit
+            row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
+              inp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault();
                   commitInlineEdit(pid, row);
                 }
-              }
-            }
-            setTimeout(() => document.addEventListener('mousedown', ghMouseDownHandler), 100);
+              });
+            });
           });
         });
-        // Attach global commit handler
-        document.removeEventListener('click', window._ghInlineCommitHandler, true);
-        setTimeout(() => {
-          document.addEventListener('click', window._ghInlineCommitHandler, true);
-        }, 150);
+
       });
     });
 
@@ -2282,26 +2277,18 @@
     });
 
     // Edit on click — intercept if add mode is active
-    // Global delegated handler for committing inline edits
-    // Attached once per showSchedule — clicks on time inputs are ignored
-    const schedContainer = c;
-    function ghInlineCommitHandler(ev) {
-      if (ev.target.closest('.gh-sh-time-inp') || ev.target.closest('.gh-banco-badge')) return;
-      const editingRows = schedContainer.querySelectorAll('tr.gh-editing');
-      if (!editingRows.length) {
-        document.removeEventListener('click', ghInlineCommitHandler, true);
-        return;
-      }
+    // Container click — commit any editing rows when clicking outside them
+    c.addEventListener('click', (e) => {
+      if (e.target.closest('.gh-sh-time-inp')) return;
+      const editingRows = c.querySelectorAll('tr.gh-editing');
       editingRows.forEach(row => {
-        const nb = row.querySelector('[data-pid]');
-        const pid = nb?.dataset?.pid || row.querySelector('.gh-banco-badge')?.dataset?.pid;
-        if (pid) commitInlineEdit(pid, row);
+        if (!row.contains(e.target)) {
+          const pid = row.querySelector('.gh-banco-badge')?.dataset?.pid ||
+                      row.querySelector('[data-pid]')?.dataset?.pid;
+          if (pid) commitInlineEdit(pid, row);
+        }
       });
-      document.removeEventListener('click', ghInlineCommitHandler, true);
-    }
-    // Remove any previous handler and re-attach
-    document.removeEventListener('click', window._ghInlineCommitHandler, true);
-    window._ghInlineCommitHandler = ghInlineCommitHandler;
+    });
 
     c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
       td.addEventListener('click', (e) => {

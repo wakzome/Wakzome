@@ -2094,42 +2094,34 @@
 
       if (!rows.length) { el.innerHTML = ''; return; }
 
-      // Ratio por persona y día: veces / semanas_aplicables
-      // DOM usa domSemanas, resto usa semanas totales
-      function ratio(pid, d) {
-        const s = stats[pid];
-        const denom = d === 'DOM' ? s.domSemanas : s.semanas;
-        if (!denom) return null;
-        return s.dias[d] / denom; // 0.0 → 1.0
-      }
-
-      // Per-column min/max ratio para determinar fondo
+      // Normalización: diferencia respecto al mínimo por día
+      // El mínimo de cada día se resta a todos → quien tiene 0 le toca folgar
       const colMin = {}, colMax = {};
       DIAS_ORDER.forEach(d => {
-        const vals = rows.map(([pid]) => ratio(pid, d)).filter(v => v !== null);
+        const vals = rows.map(([pid]) => stats[pid].dias[d]);
         colMin[d] = Math.min(...vals);
         colMax[d] = Math.max(...vals);
       });
 
-      // Escala de grises: ratio mínimo → fondo oscuro (#444, texto blanco)
-      //                   ratio máximo → fondo claro (#ddd, texto #555)
-      //                   intermedios  → blanco, texto #111
-      function cellStyle(pid, d) {
-        const r = ratio(pid, d);
-        if (r === null) return { bg: '#f9f9f9', color: '#ccc' };
-        const min = colMin[d], max = colMax[d];
-        if (min === max) return { bg: '#fff', color: '#111' }; // todos iguales
-        if (r === min) return { bg: '#333', color: '#fff' };   // más deuda → oscuro
-        if (r === max) return { bg: '#ddd', color: '#666' };   // más cubierto → claro
-        return { bg: '#fff', color: '#111' };                   // intermedio
+      // Diferencia respecto al mínimo (normalizado)
+      function diff(pid, d) {
+        return stats[pid].dias[d] - colMin[d];
       }
 
-      // Formato celda: "veces/semanas"
+      // Color basado en diferencia: 0 (mínimo) → claro, le toca folgar
+      //                             máximo → oscuro, le toca trabajar
+      function cellStyle(pid, d) {
+        const dif = diff(pid, d);
+        const maxDif = colMax[d] - colMin[d];
+        if (maxDif === 0) return { bg: '#fff', color: '#111' }; // todos iguales
+        if (dif === 0)      return { bg: '#333', color: '#fff' }; // mínimo → le toca folgar
+        if (dif === maxDif) return { bg: '#ddd', color: '#666' }; // máximo → le toca trabajar
+        return { bg: '#fff', color: '#111' };
+      }
+
+      // Texto: número acumulado de folgas ese día
       function cellText(pid, d) {
-        const s = stats[pid];
-        const denom = d === 'DOM' ? s.domSemanas : s.semanas;
-        if (!denom) return '—';
-        return `${s.dias[d]}/${denom}`;
+        return String(stats[pid].dias[d]);
       }
 
       // Header
@@ -2158,7 +2150,7 @@
         <div style="margin:24px auto 60px;max-width:700px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
           <div style="padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;background:#fafafa;">
             <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;margin-bottom:4px;">Equidade de Folgas</div>
-            <div style="font-size:.68rem;color:#aaa;">Formato veces/semanas · <span style="background:#333;color:#fff;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = debe trabajar · DOM desde semana 14</div>
+            <div style="font-size:.68rem;color:#aaa;">Folgas acumuladas · <span style="background:#333;color:#fff;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = menos descansado · debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = más descansado · debe trabajar · DOM desde semana 14</div>
           </div>
           <div style="overflow-x:auto;">
             <table style="border-collapse:collapse;width:100%;table-layout:auto;">

@@ -1837,8 +1837,8 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
-          <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">✓ Confirmar horário</button>
-          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-borrador" style="margin-left:8px;">💾 Guardar borrador</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-borrador">💾 Guardar rascunho</button>
+          <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">↑ Publicar horário</button>
         </div>
       </div>
       ${alertsHTML}`;

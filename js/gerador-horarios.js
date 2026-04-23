@@ -1917,7 +1917,7 @@
             if (c2.type === 'fim_contrato') {
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-fim-contrato"><span class="gh-sh-line gh-fim-txt">fim de contrato</span></div></td>`;
             }
-            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'BAIXA' : 'FOLGA';
+            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
             const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
           }
@@ -1925,7 +1925,7 @@
           if (c2.type === 'fim_contrato') { cls = 'c-fim-contrato'; content = `<span class="gh-sh-line gh-fim-txt">fim de contrato</span>`; }
           else if (c2.type === 'folga') { cls = 'c-folga'; content = `<span class="gh-sh-line">FOLGA</span>`; }
           else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
-          else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">BAIXA</span>`; }
+          else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">LICENÇA</span>`; }
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
           else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
           else if (c2.type === 'work') {

@@ -293,8 +293,6 @@
   // ── WIZARD: PASSO 1 ──
   function wiz_week() {
     const c = getContainer(); if (!c) return;
-    // Show saved borradores async (non-blocking)
-    setTimeout(() => renderBorradores(c), 100);
     c.innerHTML = `
       <div class="gh-wiz-box">
         <div class="gh-wiz-label">Passo 1 de 3</div>
@@ -304,8 +302,11 @@
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-solid" id="gh-sub-week">Continuar →</button>
         </div>
+        <div id="gh-borradores-list" style="margin-top:48px;"></div>
       </div>`;
     document.getElementById('gh-sub-week').addEventListener('click', sub_week);
+    // Load borradores async into placeholder
+    renderBorradores(document.getElementById('gh-borradores-list'));
   }
 
   function sub_week() {
@@ -1749,51 +1750,44 @@
   }
 
   async function renderBorradores(container) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = getSupabase(); if (!sb || !container) return;
     try {
-      const { data } = await sb.from('gh_borradores').select('semana, datos, updated_at').order('semana', { ascending: false });
+      const { data } = await sb.from('gh_borradores').select('semana, updated_at').order('semana', { ascending: false });
       if (!data || !data.length) return;
 
-      const box = document.createElement('div');
-      box.style.cssText = 'margin-bottom:24px;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;';
-      box.innerHTML = `
-        <div style="padding:10px 16px;background:#fafafa;border-bottom:1px solid #f0f0f0;">
-          <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;">Borradores guardados</div>
-        </div>`;
+      container.innerHTML = '<div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#ccc;margin-bottom:16px;text-align:center;">Borradores guardados</div>';
 
       data.forEach(b => {
         const d = new Date(b.semana + 'T00:00:00');
-        const label = 'Semana ' + d.toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric' });
-        const updated = new Date(b.updated_at).toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        const label = d.toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const updated = new Date(b.updated_at).toLocaleString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #f5f5f5;gap:12px;';
-        row.innerHTML = `
-          <div>
-            <div style="font-size:.82rem;font-weight:600;color:#111;">${label}</div>
-            <div style="font-size:.65rem;color:#aaa;">Guardado: ${updated}</div>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button class="gh-btn gh-btn-solid gh-btn-sm" data-week="${b.semana}" data-action="load">Carregar</button>
-            <button class="gh-btn gh-btn-ghost gh-btn-sm" data-week="${b.semana}" data-action="delete" style="color:#c0392b;border-color:#c0392b;">Eliminar</button>
-          </div>`;
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #efefef;border-radius:8px;margin-bottom:8px;background:#fafafa;gap:12px;';
+        row.innerHTML =
+          '<div>' +
+            '<div style="font-size:.85rem;font-weight:600;color:#111;">Semana ' + label + '</div>' +
+            '<div style="font-size:.63rem;color:#bbb;margin-top:2px;">Guardado: ' + updated + '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+            '<button class="gh-btn gh-btn-solid gh-btn-sm" data-week="' + b.semana + '" data-action="load">Carregar</button>' +
+            '<button class="gh-btn gh-btn-ghost gh-btn-sm" data-week="' + b.semana + '" data-action="delete" style="color:#c0392b !important;-webkit-text-fill-color:#c0392b !important;border-color:#e0b0b0 !important;">✕</button>' +
+          '</div>';
         row.querySelectorAll('button').forEach(btn => {
           btn.addEventListener('click', async () => {
             const week = btn.dataset.week;
             if (btn.dataset.action === 'delete') {
-              if (!confirm('Eliminar borrador de ' + label + '?')) return;
+              if (!confirm('Eliminar borrador semana ' + label + '?')) return;
               await deleteBorrador(week);
               row.remove();
-              if (!box.querySelectorAll('[data-action="load"]').length) box.remove();
+              if (!container.querySelector('[data-action="load"]')) container.innerHTML = '';
             } else {
               const { data: bd } = await sb.from('gh_borradores').select('semana, datos, updated_at').eq('semana', week).single();
               if (bd) await loadBorrador(bd);
             }
           });
         });
-        box.appendChild(row);
+        container.appendChild(row);
       });
-
-      container.insertBefore(box, container.firstChild);
     } catch(e) {
       console.warn('Erro ao carregar borradores:', e.message);
     }

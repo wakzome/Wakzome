@@ -2118,7 +2118,7 @@
         const dif = diff(pid, d);
         const maxDif = colMax[d] - colMin[d];
         if (maxDif === 0) return { bg: '#fff', color: '#111' }; // todos iguales
-        if (dif === 0)      return { bg: '#333', color: '#fff' }; // mínimo → le toca folgar
+        if (dif === 0)      return { bg: '#111', color: '#fff' }; // mínimo → le toca folgar
         if (dif === maxDif) return { bg: '#ddd', color: '#666' }; // máximo → le toca trabajar
         return { bg: '#fff', color: '#111' };
       }
@@ -2596,10 +2596,7 @@
           S.schedule[pid][day] = { type: t, shift: null, store: null };
           return;
         }
-        const folgaDias = S._folgasDirigidas?.[pid] || S._folgas?.[pid]?.dias || [];
-        if (folgaDias.includes(day)) {
-          S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
-        }
+        // No default folgas — start empty, user assigns manually
       });
     }
     // If already exists (added to another store), keep existing cells as-is
@@ -3020,10 +3017,10 @@
         #tab-gerador .gh-pt-footer { padding:10px 16px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
 
         /* Trigger button on person name cells — next to hours */
-        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:0; line-height:1; margin-left:4px; vertical-align:middle; display:inline-flex; align-items:center; }
-        #tab-gerador .gh-pt-assign-trigger-dot { width:6px; height:6px; border-radius:50%; background:#999; display:inline-block; transition:background .15s, transform .15s; box-shadow:0 0 0 3px rgba(150,150,150,.22); }
-        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#555; box-shadow:0 0 0 4px rgba(100,100,100,.28); transform:scale(1.15); }
-        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#444; box-shadow:0 0 0 4px rgba(80,80,80,.3); }
+        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:4px 0 0 0; line-height:1; margin-top:6px; display:flex; align-items:center; justify-content:center; width:100%; }
+        #tab-gerador .gh-pt-assign-trigger-dot { width:10px; height:10px; border-radius:50%; background:#999; display:inline-block; transition:background .15s, transform .15s; box-shadow:0 0 0 4px rgba(150,150,150,.22); }
+        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#555; box-shadow:0 0 0 6px rgba(100,100,100,.28); transform:scale(1.2); }
+        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#444; box-shadow:0 0 0 6px rgba(80,80,80,.3); }
 
         /* Wizard 3 — domingo workers input */
         #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }

@@ -502,7 +502,7 @@
       const saldo   = S._banco?.[p.id]    || 0;
       // Dias dirigidos: fonte primária é _folgasDirigidas (estável entre regenerações)
       // Fallback para _folgas (carregado de Supabase) se não há dirigidas em memória
-      const diasDirigidos = S._folgasDirigidas?.[p.id] || folga.dias || [];
+      const diasDirigidos = S._folgasDirigidas?.[p.id] || [];
 
       const dayBtns = DIAS.map(d => {
         const active = diasDirigidos.includes(d);
@@ -1280,7 +1280,7 @@
           return;
         }
         // Check folga direccionada
-        const folgaDias = S._folgasDirigidas?.[p.id] || S._folgas?.[p.id]?.dias || [];
+        const folgaDias = S._folgasDirigidas?.[p.id] || [];
         if (folgaDias.includes(day)) {
           S.schedule[p.id][day] = { type: 'folga', shift: null, store: null };
           return;
@@ -2154,7 +2154,7 @@
         <div style="margin:24px auto 60px;max-width:700px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
           <div style="padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;background:#fafafa;">
             <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;margin-bottom:4px;">Equidade de Folgas</div>
-            <div style="font-size:.68rem;color:#aaa;">Folgas acumuladas · <span style="background:#333;color:#fff;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = menos descansado · debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = más descansado · debe trabajar · DOM desde semana 14</div>
+            <div style="font-size:.68rem;color:#aaa;">Folgas acumuladas · <span style="background:#111;color:#fff !important;-webkit-text-fill-color:#fff !important;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = menos descansado · debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = más descansado · debe trabajar · DOM desde semana 14</div>
           </div>
           <div style="overflow-x:auto;">
             <table style="border-collapse:collapse;width:100%;table-layout:auto;">

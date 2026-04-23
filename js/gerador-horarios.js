@@ -1710,6 +1710,25 @@
     };
   }
 
+
+  function showToast(msg, duration = 3000) {
+    let t = document.getElementById('gh-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'gh-toast';
+      t.style.cssText = 'position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(20px);background:#111;color:#fff;padding:12px 24px;border-radius:10px;font-size:.82rem;font-weight:600;font-family:inherit;letter-spacing:.02em;opacity:0;transition:all .3s ease;z-index:99999;pointer-events:none;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.25);';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(t._timeout);
+    t._timeout = setTimeout(() => {
+      t.style.opacity = '0';
+      t.style.transform = 'translateX(-50%) translateY(20px)';
+    }, duration);
+  }
+
   async function saveBorrador() {
     const sb = getSupabase(); if (!sb) return;
     const data = buildBorradorData();
@@ -1720,7 +1739,7 @@
         { onConflict: 'semana' }
       );
       if (error) throw error;
-      alert('✓ Borrador guardado para semana ' + data.weekKey);
+      showToast('✓ Borrador guardado para semana ' + data.weekKey);
     } catch(e) {
       alert('Erro ao guardar borrador: ' + (e.message || e));
     }
@@ -3189,6 +3208,7 @@
                 <button class="gh-pill gh-pill-tipo" data-val="work">Trabalho</button>
                 <button class="gh-pill gh-pill-tipo" data-val="folga">Folga</button>
                 <button class="gh-pill gh-pill-tipo" data-val="ferias">Férias</button>
+                <button class="gh-pill gh-pill-tipo" data-val="baixa">Licença</button>
               </div>
             </div>
 

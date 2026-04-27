@@ -825,10 +825,9 @@
       const { data: banco } = await sb.from('gh_banco_horas').select('*');
       (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
 
-      // Add licenca hours to banco (recuperavel only — empresa owes employee)
+      // Add licenca hours to banco (recuperavel — employee owes company → negative)
       Object.entries(S._licencas || {}).forEach(([pid, lic]) => {
         if (!lic.active || lic.tipo !== 'recuperavel') return;
-        // Calculate hours: if horas field exists use it, else count days × 8
         let licHrs = 0;
         if (lic.horas) {
           licHrs = parseFloat(lic.horas) || 0;
@@ -838,7 +837,8 @@
           licHrs = days * 8;
         }
         if (licHrs > 0) {
-          S._banco[pid] = Math.round(((S._banco[pid] || 0) + licHrs) * 10) / 10;
+          // Negative: employee owes the company these hours
+          S._banco[pid] = Math.round(((S._banco[pid] || 0) - licHrs) * 10) / 10;
         }
       });
 

@@ -888,30 +888,12 @@
           .insert({ pessoa_id: pid, ...data }).select().single();
         if (res) S._licencas[pid] = res;
       }
-      // Update banco de horas if recuperavel
+      // Update banco de horas if recuperavel — employee owes company (negative)
       const lic = S._licencas[pid];
       if (lic?.active && lic?.tipo === 'recuperavel') {
-        let licHrs = parseFloat(lic.horas) || 0;
-        if (!licHrs && lic.data_inicio && lic.data_fim) {
-          const days = Math.round((new Date(lic.data_fim) - new Date(lic.data_inicio)) / 86400000) + 1;
-          licHrs = days * 8;
-        }
+        const licHrs = parseFloat(lic.horas) || 0;
         if (licHrs > 0) {
-          // Recalculate banco: base saldo (from Supabase) minus licenca hours
-          const { data: bancoData } = await sb.from('gh_banco_horas').select('saldo').eq('pessoa_id', pid).single().catch(() => ({ data: null }));
-          const baseSaldo = bancoData?.saldo || 0;
-          // Remove previous licenca contribution if editing
-          const prevHrs = prevLic?.active && prevLic?.tipo === 'recuperavel'
-            ? (parseFloat(prevLic.horas) || ((prevLic.data_inicio && prevLic.data_fim)
-                ? (Math.round((new Date(prevLic.data_fim) - new Date(prevLic.data_inicio)) / 86400000) + 1) * 8
-                : 0))
-            : 0;
-          const novoSaldo = Math.round((baseSaldo + prevHrs - licHrs) * 10) / 10;
-          S._banco[pid] = novoSaldo;
-          await sb.from('gh_banco_horas').upsert(
-            { pessoa_id: pid, saldo: novoSaldo, updated_at: new Date().toISOString() },
-            { onConflict: 'pessoa_id' }
-          );
+          await lancarBanco(pid, -licHrs);
         }
       }
     } catch(e) { console.error('Erro ao guardar licença:', e); }

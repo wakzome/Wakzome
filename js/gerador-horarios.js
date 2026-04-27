@@ -690,18 +690,45 @@
           const tipo   = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
           const horas  = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
           const obs    = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
-          const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas, observacao: obs };
+
+          // Calcular horas automaticamente se não fornecidas mas temos datas
+          let horasEfetivas = horas;
+          if (!horasEfetivas && from && to) {
+            const d1 = new Date(from + 'T00:00:00'), d2 = new Date(to + 'T00:00:00');
+            const diasLic = Math.round((d2 - d1) / 86400000) + 1;
+            horasEfetivas = diasLic * 8;
+          }
+
+          // Guardar horas anteriores da licença (para reverter se necessário)
+          const licAnterior = S._licencas[pid];
+          const horasAnteriores = (licAnterior?.active && licAnterior?.tipo === 'recuperavel')
+            ? (parseFloat(licAnterior.horas) || 0) : 0;
+
+          const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas: horasEfetivas, observacao: obs };
           await saveLicenca(pid, licData);
+
           // Se recuperável e activa → lançar horas no banco automaticamente
-          if (active && tipo === 'recuperavel' && horas > 0 && !S._licencas[pid]?._addedToBanco) {
-            const novoSaldo = await lancarBanco(pid, -horas);
-            if (S._licencas) S._licencas[pid] = { ...(S._licencas[pid]||{}), _addedToBanco: true };
-            const saldoEl = document.getElementById('gh-saldo-' + pid);
-            if (saldoEl && novoSaldo !== undefined) {
-              saldoEl.textContent = `${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
-              saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
+          // Reverte as horas antigas e aplica as novas para evitar double-counting
+          if (tipo === 'recuperavel') {
+            let delta = 0;
+            if (active && horasEfetivas > 0) {
+              // Novas horas a descontar (negativo = deve à empresa)
+              delta = -horasEfetivas;
+            }
+            // Reverter horas anteriores se havia licença recuperável activa antes
+            if (horasAnteriores > 0 && licAnterior?.active) {
+              delta += horasAnteriores; // devolve as horas que já tinham sido descontadas
+            }
+            if (delta !== 0) {
+              const novoSaldo = await lancarBanco(pid, delta);
+              const saldoEl = document.getElementById('gh-saldo-' + pid);
+              if (saldoEl && novoSaldo !== undefined) {
+                saldoEl.textContent = `${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
+                saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
+              }
             }
           }
+
           if (S._licencas[pid]) delete S._licencas[pid]._pendente;
           saved = true;
         }
@@ -821,26 +848,9 @@
         .select('*').eq('semana', weekKey);
       (folgas || []).forEach(f => { S._folgas[f.pessoa_id] = f; });
 
-      // Banco de horas
+      // Banco de horas — load directly from Supabase (source of truth, never recalculate here)
       const { data: banco } = await sb.from('gh_banco_horas').select('*');
       (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
-
-      // Add licenca hours to banco (recuperavel — employee owes company → negative)
-      Object.entries(S._licencas || {}).forEach(([pid, lic]) => {
-        if (!lic.active || lic.tipo !== 'recuperavel') return;
-        let licHrs = 0;
-        if (lic.horas) {
-          licHrs = parseFloat(lic.horas) || 0;
-        } else if (lic.data_inicio && lic.data_fim) {
-          const d1 = new Date(lic.data_inicio), d2 = new Date(lic.data_fim);
-          const days = Math.round((d2 - d1) / 86400000) + 1;
-          licHrs = days * 8;
-        }
-        if (licHrs > 0) {
-          // Negative: employee owes the company these hours
-          S._banco[pid] = Math.round(((S._banco[pid] || 0) - licHrs) * 10) / 10;
-        }
-      });
 
     } catch(e) { console.error('Erro ao carregar incidências:', e); }
   }
@@ -1176,8 +1186,34 @@
       Object.entries(S._licencas).forEach(([pid, l]) => {
         if (!l.active) return;
         if (S.absences.find(a => a.pid === pid)) return;
-        const fromDay = l.data_inicio ? (dayOfWeekKey(l.data_inicio) || 'SEG') : 'SEG';
-        const toDay   = l.data_fim   ? (dayOfWeekKey(l.data_fim)   || 'DOM') : 'DOM';
+
+        // Calcular fromDay e toDay usando datas ISO para suportar licenças que cruzam semanas
+        // Se a licença começa antes da semana → ausente desde SEG
+        // Se a licença termina depois da semana → ausente até DOM
+        let fromDay, toDay;
+        if (l.data_inicio && S.weekStart) {
+          const licStart = new Date(l.data_inicio + 'T00:00:00');
+          const weekStart = new Date(S.weekStart); weekStart.setHours(0,0,0,0);
+          if (licStart <= weekStart) {
+            fromDay = 'SEG';
+          } else {
+            fromDay = dayOfWeekKey(l.data_inicio) || 'SEG';
+          }
+        } else {
+          fromDay = 'SEG';
+        }
+        if (l.data_fim && S.weekStart) {
+          const licEnd = new Date(l.data_fim + 'T00:00:00');
+          const weekEnd = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23,59,59,0);
+          if (licEnd >= weekEnd) {
+            toDay = 'DOM';
+          } else {
+            toDay = dayOfWeekKey(l.data_fim) || 'DOM';
+          }
+        } else {
+          toDay = 'DOM';
+        }
+
         S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: fromDay, to: toDay });
       });
     }
@@ -1560,10 +1596,10 @@
         DAYS_ORDER.forEach(day => {
           const cell = S.schedule[p.id]?.[day] || { type: 'na' };
 
-          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa') {
-            const lbl = cell.type === 'ferias' ? 'FERIAS' : cell.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa' || cell.type === 'licenca') {
+            const lbl = cell.type === 'ferias' ? 'FERIAS' : (cell.type === 'baixa' || cell.type === 'licenca') ? 'LICENÇA' : 'FOLGA';
             rowA.push(lbl);
-            rowB.push(cell.type === 'baixa' ? '' : lbl);
+            rowB.push((cell.type === 'baixa' || cell.type === 'licenca') ? '' : lbl);
           } else if (cell.type === 'work') {
             // Check if person does apoio in this store on this day
             const apoioHere = S._apoioShifts?.[p.id]?.[day]?.store === sid;
@@ -2121,15 +2157,15 @@
             if (c2.type === 'fim_contrato') {
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-fim-contrato"><span class="gh-sh-line gh-fim-txt">fim de contrato</span></div></td>`;
             }
-            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
-            const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
+            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : (c2.type === 'baixa' || c2.type === 'licenca') ? 'LICENÇA' : 'FOLGA';
+            const cls = (c2.type === 'ferias' || c2.type === 'baixa' || c2.type === 'licenca') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
           }
           let cls = '', content = '';
           if (c2.type === 'fim_contrato') { cls = 'c-fim-contrato'; content = `<span class="gh-sh-line gh-fim-txt">fim de contrato</span>`; }
           else if (c2.type === 'folga') { cls = 'c-folga'; content = `<span class="gh-sh-line">FOLGA</span>`; }
           else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
-          else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">LICENÇA</span>`; }
+          else if (c2.type === 'baixa' || c2.type === 'licenca')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">LICENÇA</span>`; }
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
           else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
           else if (c2.type === 'work') {

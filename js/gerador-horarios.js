@@ -553,7 +553,8 @@
             <div class="gh-sr-col">
               <div class="gh-sr-col-title">📅 Folga</div>
               <div class="gh-day-btns">${dayBtns}</div>
-              <div class="gh-sr-col-title" style="margin-top:8px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
+              <div class="gh-sr-col-title" style="margin-top:8px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" title="Desmarcar para desactivar" ${licenca.active?'checked':''}>
+              </div>
               <div class="gh-date-row">
                 <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio?licenca.data_inicio.slice(5).split('-').reverse().join('/')+'/'+licenca.data_inicio.slice(2,4):''}" placeholder="dd/mm/aa">
                 <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim?licenca.data_fim.slice(5).split('-').reverse().join('/')+'/'+licenca.data_fim.slice(2,4):''}" placeholder="dd/mm/aa">
@@ -682,21 +683,41 @@
           saved = true;
         }
 
-        // Guardar licença se pendente
-        if (S._licencas?.[pid]?._pendente) {
-          const active = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`)?.checked || false;
+        // Guardar licença se pendente OU se existe licença inactiva com datas (permitir activar)
+        const licExistente = S._licencas?.[pid];
+        const licencaTemDadosParaSalvar = S._licencas?.[pid]?._pendente ||
+          (licExistente && !licExistente.active && licExistente.data_inicio);
+        if (licencaTemDadosParaSalvar) {
+          const checkboxEl = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`);
           const from   = parseDateInput(document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value);
           const to     = parseDateInput(document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value);
           const tipo   = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
           const horas  = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
           const obs    = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
 
-          // Calcular horas automaticamente se não fornecidas mas temos datas
+          // Auto-activar: se há datas válidas, a licença fica activa automaticamente
+          // O checkbox serve para desactivar manualmente (opt-out), não para activar
+          const temDatas = !!(from && to);
+          const active = temDatas ? (checkboxEl?.checked !== false || true) : (checkboxEl?.checked || false);
+          // Mais simples: se tem datas → active=true; se não tem datas → respeita checkbox
+          const activeEfetivo = temDatas || (checkboxEl?.checked || false);
+
+          // Calcular horas automaticamente a partir das datas se não fornecidas
           let horasEfetivas = horas;
           if (!horasEfetivas && from && to) {
             const d1 = new Date(from + 'T00:00:00'), d2 = new Date(to + 'T00:00:00');
-            const diasLic = Math.round((d2 - d1) / 86400000) + 1;
-            horasEfetivas = diasLic * 8;
+            // Contar apenas dias úteis (Seg-Sex) para horas de trabalho
+            let diasUteis = 0;
+            const cur = new Date(d1);
+            while (cur <= d2) {
+              const dow = cur.getDay();
+              if (dow !== 0 && dow !== 6) diasUteis++; // excluir sab+dom
+              cur.setDate(cur.getDate() + 1);
+            }
+            horasEfetivas = diasUteis * 8;
+            // Actualizar campo no DOM para que o utilizador veja
+            const horasEl = document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`);
+            if (horasEl) horasEl.value = horasEfetivas;
           }
 
           // Guardar horas anteriores da licença (para reverter se necessário)
@@ -704,14 +725,17 @@
           const horasAnteriores = (licAnterior?.active && licAnterior?.tipo === 'recuperavel')
             ? (parseFloat(licAnterior.horas) || 0) : 0;
 
-          const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas: horasEfetivas, observacao: obs };
+          const licData = { active: activeEfetivo, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas: horasEfetivas, observacao: obs };
           await saveLicenca(pid, licData);
 
-          // Se recuperável e activa → lançar horas no banco automaticamente
+          // Actualizar checkbox no DOM para reflectir estado real
+          if (checkboxEl) checkboxEl.checked = activeEfetivo;
+
+          // Se recuperável → lançar horas no banco automaticamente
           // Reverte as horas antigas e aplica as novas para evitar double-counting
           if (tipo === 'recuperavel') {
             let delta = 0;
-            if (active && horasEfetivas > 0) {
+            if (activeEfetivo && horasEfetivas > 0) {
               // Novas horas a descontar (negativo = deve à empresa)
               delta = -horasEfetivas;
             }
@@ -835,9 +859,11 @@
         if (!b.data_fim || b.data_fim >= weekKey) S._baixas[b.pessoa_id] = b;
       });
 
-      // Licenças activas que se sobrepõem à semana
+      // Licenças (todas — activas e inactivas) que se sobrepõem à semana
+      // Carregamos todas para mostrar os dados no formulário mesmo que inactive.
+      // Apenas as activas serão usadas como ausência.
       const { data: licencas } = await sb.from('gh_licencas')
-        .select('*').eq('active', true)
+        .select('*')
         .lte('data_inicio', weekEndKey);
       (licencas || []).forEach(l => {
         if (!l.data_fim || l.data_fim >= weekKey) S._licencas[l.pessoa_id] = l;

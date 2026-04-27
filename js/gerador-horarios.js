@@ -706,15 +706,8 @@
           let horasEfetivas = horas;
           if (!horasEfetivas && from && to) {
             const d1 = new Date(from + 'T00:00:00'), d2 = new Date(to + 'T00:00:00');
-            // Contar apenas dias úteis (Seg-Sex) para horas de trabalho
-            let diasUteis = 0;
-            const cur = new Date(d1);
-            while (cur <= d2) {
-              const dow = cur.getDay();
-              if (dow !== 0 && dow !== 6) diasUteis++; // excluir sab+dom
-              cur.setDate(cur.getDate() + 1);
-            }
-            horasEfetivas = diasUteis * 8;
+            const diasCalendario = Math.round((d2 - d1) / 86400000) + 1;
+            horasEfetivas = diasCalendario * 8;
             // Actualizar campo no DOM para que o utilizador veja
             const horasEl = document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`);
             if (horasEl) horasEl.value = horasEfetivas;

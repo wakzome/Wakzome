@@ -825,6 +825,23 @@
       const { data: banco } = await sb.from('gh_banco_horas').select('*');
       (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
 
+      // Add licenca hours to banco (recuperavel only — empresa owes employee)
+      Object.entries(S._licencas || {}).forEach(([pid, lic]) => {
+        if (!lic.active || lic.tipo !== 'recuperavel') return;
+        // Calculate hours: if horas field exists use it, else count days × 8
+        let licHrs = 0;
+        if (lic.horas) {
+          licHrs = parseFloat(lic.horas) || 0;
+        } else if (lic.data_inicio && lic.data_fim) {
+          const d1 = new Date(lic.data_inicio), d2 = new Date(lic.data_fim);
+          const days = Math.round((d2 - d1) / 86400000) + 1;
+          licHrs = days * 8;
+        }
+        if (licHrs > 0) {
+          S._banco[pid] = Math.round(((S._banco[pid] || 0) + licHrs) * 10) / 10;
+        }
+      });
+
     } catch(e) { console.error('Erro ao carregar incidências:', e); }
   }
 
@@ -1157,8 +1174,9 @@
       Object.entries(S._licencas).forEach(([pid, l]) => {
         if (!l.active) return;
         if (S.absences.find(a => a.pid === pid)) return;
-        const toDay = l.data_fim ? dayOfWeekKey(l.data_fim) : null;
-        S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: 'SEG', to: toDay || 'DOM' });
+        const fromDay = l.data_inicio ? (dayOfWeekKey(l.data_inicio) || 'SEG') : 'SEG';
+        const toDay   = l.data_fim   ? (dayOfWeekKey(l.data_fim)   || 'DOM') : 'DOM';
+        S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: fromDay, to: toDay });
       });
     }
 
@@ -1281,7 +1299,7 @@
         // Check absence
         if (isAbsent(p.id, day)) {
           const a = absOf(p.id);
-          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : a?.type === 'licenca' ? 'baixa' : 'folga';
           S.schedule[p.id][day] = { type: t, shift: null, store: null };
           return;
         }
@@ -3048,7 +3066,7 @@
         }
         if (isAbsent(pid, day)) {
           const a = absOf(pid);
-          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : a?.type === 'licenca' ? 'baixa' : 'folga';
           S.schedule[pid][day] = { type: t, shift: null, store: null };
           return;
         }

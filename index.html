@@ -433,257 +433,6 @@ body {
 .et-btn:disabled { opacity: .4; cursor: not-allowed; }
 #et-status { margin-top: 14px; font-size: .82rem; font-weight: bold; min-height: 20px; }
 
-/* ─── VENTAS LINK (empleada) ─── */
-#ventas-link {
-  display: inline-block;
-  padding: 6px 16px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: uppercase;
-  color: #000;
-  text-decoration: none;
-  letter-spacing: .04em;
-  border: 1.5px solid #ccc;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s, background .2s;
-}
-#ventas-link:hover { border-color: #555; background: #f5f5f5; }
-
-/* ─── VENTAS OVERLAY (empleada) ─── */
-#ventas-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: #fff; z-index: 200;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
-}
-#ventas-overlay.open    { display: flex; }
-#ventas-overlay.visible { opacity: 1; }
-#ventas-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#ventas-overlay-title {
-  font-size: .82rem; font-weight: bold;
-  text-transform: lowercase; letter-spacing: .06em; color: #000;
-}
-#ventas-overlay-back {
-  font-size: .9rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important;
-  background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-}
-#ventas-overlay-back:hover {
-  background: #333; border-color: #333;
-  transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22);
-}
-#ventas-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  padding: 32px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#ventas-overlay-body { width: 100%; max-width: 560px; }
-
-/* Sub-tiendas selector */
-.v-subtienda-selector { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.v-selector-title {
-  font-size: .78rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .1em; opacity: .5; margin-bottom: 6px;
-}
-.v-subtienda-btn {
-  width: 100%; max-width: 320px;
-  padding: 14px 24px; font-size: 1rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  border: 1.5px solid #ddd; border-radius: 12px;
-  background: #fff; cursor: pointer;
-  transition: border-color .2s, background .2s;
-}
-.v-subtienda-btn:hover { border-color: #555; background: #f5f5f5; }
-
-/* Historial */
-.v-section-label {
-  font-size: .72rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .1em;
-  opacity: .45; margin: 22px 0 10px;
-}
-.v-hist-section { margin-bottom: 8px; }
-.v-hist-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; border-radius: 10px;
-  border: 1.5px solid #efefef; margin-bottom: 7px;
-  transition: border-color .2s, background .2s;
-}
-.v-hist-row:hover { border-color: #ccc; }
-.v-hist-today { border-color: #000 !important; }
-.v-hist-row-active { background: #f9f9f9; border-color: #555 !important; }
-.v-hist-date  { flex: 1; font-size: .9rem; font-weight: bold; }
-.v-hist-total { font-size: .9rem; font-weight: bold; opacity: .7; white-space: nowrap; }
-.v-hist-missing {
-  font-size: .78rem; font-weight: bold; color: #c03000 !important;
-  background: #fff0ec; padding: 3px 9px; border-radius: 6px;
-}
-.v-hist-pending { font-size: .78rem; font-weight: bold; opacity: .45; }
-.v-hist-edit-btn {
-  padding: 4px 10px; font-size: .85rem; cursor: pointer;
-  border: 1px solid #ccc; border-radius: 7px; background: #fff;
-  font-family: 'MontserratLight', sans-serif;
-  transition: background .15s, color .15s; flex-shrink: 0;
-}
-.v-hist-edit-btn:hover { background: #333; color: #fff; border-color: #333; }
-
-/* Formulario */
-.v-form-section { margin-top: 8px; padding-top: 4px; border-top: 1px solid #e8e8e8; }
-.v-num-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-.v-field-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
-.v-field-group label {
-  font-size: .72rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .08em; opacity: .5;
-}
-.v-num-input {
-  padding: 10px 12px; font-size: 1rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  border: 1.5px solid #ddd; border-radius: 10px;
-  outline: none; transition: border-color .2s; background: #fff;
-  width: 100%; box-sizing: border-box;
-}
-.v-num-input:focus { border-color: #555; }
-.v-total-group { margin-bottom: 16px; }
-.v-total-input {
-  background: #f5f5f5 !important; color: #000 !important;
-  font-weight: bold !important; cursor: default !important;
-  font-size: 1.1rem !important;
-}
-.v-obs-input {
-  padding: 10px 12px; font-size: .92rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  border: 1.5px solid #ddd; border-radius: 10px;
-  outline: none; transition: border-color .2s; background: #fff;
-  resize: vertical; width: 100%; box-sizing: border-box;
-}
-.v-obs-input:focus { border-color: #555; }
-.v-text-input {
-  padding: 10px 12px; font-size: .92rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  border: 1.5px solid #ddd; border-radius: 10px;
-  outline: none; transition: border-color .2s; background: #fff;
-  width: 100%; box-sizing: border-box;
-}
-.v-text-input:focus { border-color: #555; }
-.v-action-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin-top: 18px; padding-top: 14px;
-  border-top: 1px solid #efefef;
-}
-.v-save-btn {
-  display: flex; align-items: center; gap: 7px;
-  padding: 10px 22px; font-size: .88rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  background: #000; color: #fff !important; border: none;
-  border-radius: 10px; cursor: pointer; transition: background .2s, transform .15s;
-}
-.v-save-btn:hover { background: #333; transform: translateY(-1px); }
-.v-save-status { font-size: .8rem; font-weight: bold; min-height: 16px; transition: color .2s; }
-.v-status-ok    { color: #2a8a2a !important; }
-.v-status-error { color: #c03000 !important; }
-.v-status-saving{ color: #888 !important; }
-.v-loading, .v-error { padding: 40px 0; text-align: center; font-size: .9rem; font-weight: bold; }
-.v-error { color: #c03000 !important; }
-@media (max-width: 480px) { .v-num-grid { grid-template-columns: 1fr; } }
-
-/* ─── ADMIN VENTAS PANEL ─── */
-#adm-ventas-panel {
-  display: none; width: 100%; max-width: 1100px;
-  margin: 0 auto; padding: 24px 16px 60px; box-sizing: border-box;
-  animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
-}
-.vadm-filter-bar {
-  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
-  margin-bottom: 28px; padding: 16px 20px;
-  border-radius: 14px; background: #f7f7f7; border: 1.5px solid #e6e6e6;
-}
-.vadm-filter-group { display: flex; flex-direction: column; gap: 4px; }
-.vadm-filter-group label {
-  font-size: .68rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .1em; opacity: .5;
-}
-.vadm-filter-group input[type="date"],
-.vadm-filter-group select {
-  padding: 8px 12px; font-size: .88rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  border: 1.5px solid #ddd; border-radius: 9px;
-  background: #fff; outline: none; cursor: pointer;
-}
-.vadm-buscar-btn {
-  padding: 9px 22px; font-size: .88rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  background: #000; color: #fff !important; border: none;
-  border-radius: 9px; cursor: pointer; transition: background .2s;
-  align-self: flex-end;
-}
-.vadm-buscar-btn:hover { background: #333; }
-.v-adm-store-section { margin-bottom: 36px; overflow-x: auto; }
-.v-adm-store-title {
-  font-size: .75rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .12em; opacity: .5; margin-bottom: 10px;
-}
-.v-adm-table {
-  width: 100%; border-collapse: separate; border-spacing: 0;
-  border-radius: 12px; overflow: hidden; border: 1px solid #e6e6e6;
-}
-.v-adm-table th {
-  background: #f0f0f0; padding: 8px 12px;
-  font-size: .72rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .06em;
-  border-bottom: 1.5px solid #e0e0e0; text-align: left; white-space: nowrap;
-}
-.v-adm-table td {
-  padding: 9px 12px; font-size: .88rem; font-weight: bold;
-  border-bottom: 1px solid #f0f0f0; vertical-align: middle;
-}
-.v-adm-table tbody tr:hover td { background: #fafafa; }
-.v-adm-num { text-align: right; font-variant-numeric: tabular-nums; }
-.v-adm-total-cell { font-weight: bold !important; }
-.v-adm-obs { color: #555 !important; font-weight: 400 !important; max-width: 200px; }
-.v-adm-table tfoot .v-adm-subtotal-row td {
-  background: #f5f5f5; font-weight: bold; border-top: 2px solid #ddd; font-size: .85rem;
-}
-.v-adm-subtotal-row td:first-child { letter-spacing: .06em; font-size: .72rem; opacity: .7; }
-.v-adm-grand-section {
-  margin-top: 28px; padding: 20px 24px;
-  background: #111; border-radius: 16px;
-}
-.v-adm-grand-label {
-  font-size: .72rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .14em;
-  color: rgba(255,255,255,0.5) !important; margin-bottom: 14px;
-}
-.v-adm-grand-grid { display: flex; flex-wrap: wrap; gap: 18px; }
-.v-adm-grand-item { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
-.v-adm-grand-item span {
-  font-size: 1.15rem; font-weight: bold;
-  color: rgba(255,255,255,0.9) !important; font-variant-numeric: tabular-nums;
-}
-.v-adm-grand-item em {
-  font-style: normal; font-size: .65rem; font-weight: bold;
-  text-transform: uppercase; letter-spacing: .08em;
-  color: rgba(255,255,255,0.4) !important;
-}
-.v-adm-grand-total span { color: #fff !important; font-size: 1.35rem !important; }
-.v-adm-loading, .v-adm-error, .v-adm-empty {
-  padding: 50px 0; text-align: center; font-size: .9rem; font-weight: bold;
-}
-.v-adm-error { color: #c03000 !important; }
-.v-adm-empty { opacity: .5; }
-
 /* ─── AGENDA OVERLAY ─── */
 #agenda-overlay {
   display: none; position: fixed; inset: 0;
@@ -1102,7 +851,6 @@ td, th { border-radius:10px; margin:2px; }
 .adm-mod-card[data-module="tam"]::before       { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
 .adm-mod-card[data-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
 .adm-mod-card[data-module="faturas"]::before   { background: linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 60%, #383838 100%); }
-.adm-mod-card[data-module="ventas"]::before    { background: linear-gradient(145deg, #0a1f0a 0%, #143214 60%, #1a4a1a 100%); }
 /* Sub-cards dentro del overlay de faturas */
 #faturas-sub-grid .adm-mod-card[data-faturas-module="tam"]::before          { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
 #faturas-sub-grid .adm-mod-card[data-faturas-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
@@ -3243,7 +2991,6 @@ td                   { font-size: .96rem !important; }
   <div id="main-nav">
     <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
     <a id="etiquetas-link" href="#" onclick="openEtiquetasOverlay(); return false;">ETIQUETAS</a>
-    <a id="ventas-link" href="#" onclick="openVentasOverlay(window._currentStoreGlobal); return false;">VENTAS</a>
   </div>
   <div id="main-header-center" class="reveal-item">
     <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
@@ -3422,21 +3169,6 @@ td                   { font-size: .96rem !important; }
         <div>
           <div class="adm-mod-name">FATURAS</div>
           <div class="adm-mod-desc">tam · faturas lisboa</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      <div class="adm-mod-card" data-module="ventas" style="animation-delay:0.45s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
-            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
-            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
-            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">VENDAS</div>
-          <div class="adm-mod-desc">vendas declaradas por loja</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
@@ -3655,36 +3387,6 @@ td                   { font-size: .96rem !important; }
   </div>
   <!-- /TAB TAM ───────────────────────────────────────────── -->
 
-  <!-- ─── VENTAS ADMIN PANEL ─── -->
-  <div id="adm-ventas-panel">
-    <div class="vadm-filter-bar">
-      <div class="vadm-filter-group">
-        <label>De</label>
-        <input type="date" id="vadm-from">
-      </div>
-      <div class="vadm-filter-group">
-        <label>Até</label>
-        <input type="date" id="vadm-to">
-      </div>
-      <div class="vadm-filter-group">
-        <label>Loja</label>
-        <select id="vadm-tienda">
-          <option value="">todas as lojas</option>
-          <option value="mezka funchal">Mezka Funchal</option>
-          <option value="parfois madeira shopping">Madeira Shopping</option>
-          <option value="parfois arcadas são francisco">Parfois Arcadas</option>
-          <option value="Porto Santo">Porto Santo</option>
-          <option value="Shana">Shana</option>
-          <option value="Mezka Avenida">Mezka Avenida</option>
-          <option value="Mezka Mercado">Mezka Mercado</option>
-        </select>
-      </div>
-      <button class="vadm-buscar-btn" id="vadm-buscar-btn">pesquisar</button>
-    </div>
-    <div id="adm-ventas-content"></div>
-  </div>
-  <!-- /VENTAS ADMIN PANEL -->
-
 </div><!-- /#admin-app -->
 
 <!-- EDITOR: Export modal -->
@@ -3854,17 +3556,6 @@ td                   { font-size: .96rem !important; }
       </div>
       <div id="et-status"></div>
     </div>
-  </div>
-</div>
-
-<!-- VENTAS OVERLAY (empleada) -->
-<div id="ventas-overlay">
-  <div id="ventas-overlay-bar">
-    <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
-    <span id="ventas-overlay-title">ventas</span>
-  </div>
-  <div id="ventas-overlay-content">
-    <div id="ventas-overlay-body"></div>
   </div>
 </div>
 
@@ -4263,22 +3954,6 @@ td                   { font-size: .96rem !important; }
     // Intercept faturas → open sub-overlay instead
     if (tab === 'faturas') { openFaturasOverlay(); return; }
 
-    // Intercept ventas → open admin ventas panel
-    if (tab === 'ventas') {
-      var adminApp = document.getElementById('admin-app');
-      var dashboard = document.getElementById('adm-dashboard');
-      var moduleBar = document.getElementById('adm-module-bar');
-      var barTitle  = document.getElementById('adm-module-bar-title');
-      var panel     = document.getElementById('adm-ventas-panel');
-      if (dashboard) dashboard.style.display = 'none';
-      if (moduleBar) moduleBar.style.display  = 'flex';
-      if (barTitle)  barTitle.textContent     = 'vendas declaradas';
-      if (adminApp)  adminApp.classList.add('module-open');
-      if (panel)     panel.style.display      = 'block';
-      if (typeof _vAdmLoadData === 'function') _vAdmLoadData();
-      return;
-    }
-
     // If navigating away from gerador, clean up its layout first
     if (tab !== 'gerador' && typeof cleanupGeradorLayout === 'function') {
       cleanupGeradorLayout();
@@ -4340,10 +4015,6 @@ td                   { font-size: .96rem !important; }
     document.body.classList.remove('no-glow');
     // Reset tab panels
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
-
-    // Hide ventas admin panel
-    var vPanel = document.getElementById('adm-ventas-panel');
-    if (vPanel) vPanel.style.display = 'none';
 
     // Re-trigger card entrance animations
     document.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
@@ -4825,7 +4496,5 @@ td                   { font-size: .96rem !important; }
 })();
 </script>
 <script src="js/gerador-horarios.js"></script>
-<script src="js/ventas-empleada.js"></script>
-<script src="js/ventas-admin.js"></script>
 </body>
 </html>

@@ -694,7 +694,7 @@
           await saveLicenca(pid, licData);
           // Se recuperável e activa → lançar horas no banco automaticamente
           if (active && tipo === 'recuperavel' && horas > 0 && !S._licencas[pid]?._addedToBanco) {
-            const novoSaldo = await lancarBanco(pid, horas);
+            const novoSaldo = await lancarBanco(pid, -horas);
             if (S._licencas) S._licencas[pid] = { ...(S._licencas[pid]||{}), _addedToBanco: true };
             const saldoEl = document.getElementById('gh-saldo-' + pid);
             if (saldoEl && novoSaldo !== undefined) {
@@ -888,14 +888,7 @@
           .insert({ pessoa_id: pid, ...data }).select().single();
         if (res) S._licencas[pid] = res;
       }
-      // Update banco de horas if recuperavel — employee owes company (negative)
-      const lic = S._licencas[pid];
-      if (lic?.active && lic?.tipo === 'recuperavel') {
-        const licHrs = parseFloat(lic.horas) || 0;
-        if (licHrs > 0) {
-          await lancarBanco(pid, -licHrs);
-        }
-      }
+
     } catch(e) { console.error('Erro ao guardar licença:', e); }
   }
 

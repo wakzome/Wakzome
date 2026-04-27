@@ -1984,6 +1984,25 @@
     return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
   }
 
+  function refreshAllBancoBadges() {
+    if (!PEOPLE) return;
+    PEOPLE.forEach(p => {
+      if (!S.schedule[p.id]) return;
+      if (!S._bancoBase) S._bancoBase = {};
+      if (S._bancoBase[p.id] === undefined) S._bancoBase[p.id] = S._banco?.[p.id] ?? 0;
+      const realHrs = calcPersonHrs(p.id);
+      const diff = Math.round((realHrs - 40) * 10) / 10;
+      const saldoVivo = Math.round(((S._bancoBase[p.id] ?? 0) + diff) * 10) / 10;
+      if (!S._banco) S._banco = {};
+      S._banco[p.id] = saldoVivo;
+      document.querySelectorAll(`.gh-banco-badge[data-pid="${p.id}"]`).forEach(badge => {
+        const pos = saldoVivo > 0, zero = saldoVivo === 0;
+        badge.className = `gh-banco-badge${zero?' gh-banco-zero':pos?' gh-banco-pos':' gh-banco-neg'}`;
+        badge.textContent = (pos?'+':'') + saldoVivo + 'h';
+      });
+    });
+  }
+
   function showSchedule(active) {
     const c = getContainer(); if (!c) return;
     fixPanelLayout();
@@ -2954,6 +2973,7 @@
     closeModal();
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);
+    refreshAllBancoBadges();
   }
 
   // ── AÑADIR PERSONA A TIENDA ──

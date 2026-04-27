@@ -785,7 +785,7 @@ function rtBindLogic() {
     el.innerHTML='';
     list.forEach(function(sh){
       var del=sh.boxes.filter(function(b){ return b.delivered; }).length, tot=sh.boxes.length, allDone=del===tot;
-      var div=document.createElement('div'); div.className='rt-sg'; div.id='rtsg_'+sh.id;
+      var div=document.createElement('div'); div.className='rt-sg'+(allDone?' col':''); div.id='rtsg_'+sh.id;
       var rows=sh.boxes.map(function(b,i){
         return '<div class="rt-bx'+(b.delivered?' done':'')+'" id="rtbr_'+sh.id+'_'+i+'">'+
           '<input type="checkbox" class="rt-bx-chk"'+(b.delivered?' checked':'')+' onchange="rtTogDel('+sh.id+','+i+',this)" />'+
@@ -820,6 +820,9 @@ function rtBindLogic() {
     var row=document.getElementById('rtbr_'+shId+'_'+idx); if(row) row.classList.toggle('done',cb.checked);
     var del=sh.boxes.filter(function(b){ return b.delivered; }).length;
     var sp=document.getElementById('rtsp_'+shId); if(sp) sp.textContent=del+'/'+sh.boxes.length+' entregues';
+    if(cb.checked && del===sh.boxes.length){
+      var grp=document.getElementById('rtsg_'+shId); if(grp) grp.classList.add('col');
+    }
     rtRSum(); rtToast(cb.checked?'caixa entregue ✓':'caixa desmarcada',cb.checked?'ok':'');
   };
 

@@ -185,93 +185,42 @@ body {
 #main-nav {
   position: absolute;
   left: 16px;
-  top: 60%;
+  top: 72%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
   align-items: flex-start;
 }
-#recibos-link {
-  display: inline-block;
-  padding: 6px 16px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: uppercase;
-  color: #000;
-  text-decoration: none;
-  letter-spacing: .04em;
-  border: 1.5px solid #ccc;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s, background .2s;
-}
-#recibos-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
-#agenda-link {
-  display: inline-block;
-  padding: 6px 16px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: uppercase;
-  color: #000;
-  text-decoration: none;
-  letter-spacing: .04em;
-  border: 1.5px solid #ccc;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s, background .2s;
-}
-#agenda-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
-#rotulos-link {
-  display: inline-block;
-  padding: 6px 16px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: uppercase;
-  color: #000;
-  text-decoration: none;
-  letter-spacing: .04em;
-  border: 1.5px solid #ccc;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s, background .2s;
-}
-#rotulos-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
-#etiquetas-link {
-  display: inline-block;
-  padding: 6px 16px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: uppercase;
-  color: #000;
-  text-decoration: none;
-  letter-spacing: .04em;
-  border: 1.5px solid #ccc;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s, background .2s;
-}
-#etiquetas-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
+#recibos-link,
+#agenda-link,
+#rotulos-link,
+#etiquetas-link,
 #processamento-link {
   display: inline-block;
-  padding: 6px 16px;
-  font-size: 1.2rem;
-  font-weight: bold;
+  padding: 4px 13px;
+  font-size: 0.7rem;
+  font-weight: 600;
   font-family: 'MontserratLight', sans-serif;
   text-transform: uppercase;
   color: #000;
   text-decoration: none;
-  letter-spacing: .04em;
-  border: 1.5px solid #ccc;
-  border-radius: 10px;
+  letter-spacing: .1em;
+  border: 1px solid #ccc;
+  border-radius: 20px;
   cursor: pointer;
   transition: color .2s, border-color .2s, background .2s;
+  min-width: 82px;
+  text-align: center;
 }
-#processamento-link:hover { color: #000; border-color: #555; background: #f5f5f5; }
+#recibos-link:hover,
+#agenda-link:hover,
+#rotulos-link:hover,
+#etiquetas-link:hover,
+#processamento-link:hover {
+  border-color: #555;
+  background: #f5f5f5;
+}
 @media (max-width: 768px) { #main-nav { display: none; } }
 
 /* ─── RECIBOS OVERLAY ─── */
@@ -432,6 +381,278 @@ body {
 .et-btn.primary:hover { background: #333 !important; border-color: #333 !important; }
 .et-btn:disabled { opacity: .4; cursor: not-allowed; }
 #et-status { margin-top: 14px; font-size: .82rem; font-weight: bold; min-height: 20px; }
+
+/* ─── VENTAS LINK (empleada) ─── */
+#ventas-link {
+  display: inline-block;
+  padding: 4px 13px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: uppercase;
+  color: #000;
+  text-decoration: none;
+  letter-spacing: .1em;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+  min-width: 82px;
+  text-align: center;
+}
+#ventas-link:hover { border-color: #555; background: #f5f5f5; }
+
+/* ─── VENTAS OVERLAY (empleada) ─── */
+#ventas-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: #fff; z-index: 200;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+#ventas-overlay.open    { display: flex; }
+#ventas-overlay.visible { opacity: 1; }
+#ventas-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#ventas-overlay-title {
+  font-size: .82rem; font-weight: bold;
+  text-transform: lowercase; letter-spacing: .06em; color: #000;
+}
+#ventas-overlay-back {
+  font-size: .9rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #fff !important;
+  background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+#ventas-overlay-back:hover {
+  background: #333; border-color: #333;
+  transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+}
+#ventas-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 32px 16px 60px;
+  font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+#ventas-overlay-body { width: 100%; max-width: 560px; }
+
+/* Sub-tiendas selector */
+.v-subtienda-selector { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.v-selector-title {
+  font-size: .78rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .1em; opacity: .5; margin-bottom: 6px;
+}
+.v-subtienda-btn {
+  width: 100%; max-width: 320px;
+  padding: 14px 24px; font-size: 1rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 12px;
+  background: #fff; cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.v-subtienda-btn:hover { border-color: #555; background: #f5f5f5; }
+
+/* Historial */
+.v-section-label {
+  font-size: .72rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .1em;
+  opacity: .45; margin: 22px 0 10px;
+}
+.v-hist-section { margin-bottom: 8px; }
+.v-hist-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px;
+  border: 1.5px solid #efefef; margin-bottom: 7px;
+  transition: border-color .2s, background .2s;
+}
+.v-hist-row:hover { border-color: #ccc; }
+.v-hist-today { border-color: #000 !important; }
+.v-hist-row-active { background: #f9f9f9; border-color: #555 !important; }
+.v-hist-date  { flex: 1; font-size: .9rem; font-weight: bold; }
+.v-hist-total { font-size: .9rem; font-weight: bold; opacity: .7; white-space: nowrap; }
+.v-hist-missing {
+  font-size: .78rem; font-weight: bold; color: #c03000 !important;
+  background: #fff0ec; padding: 3px 9px; border-radius: 6px;
+}
+.v-hist-pending { font-size: .78rem; font-weight: bold; opacity: .45; }
+.v-hist-edit-btn {
+  padding: 4px 10px; font-size: .85rem; cursor: pointer;
+  border: 1px solid #ccc; border-radius: 7px; background: #fff;
+  font-family: 'MontserratLight', sans-serif;
+  transition: background .15s, color .15s; flex-shrink: 0;
+}
+.v-hist-edit-btn:hover { background: #333; color: #fff; border-color: #333; }
+
+/* Formulario */
+.v-form-section { margin-top: 8px; padding-top: 4px; border-top: 1px solid #e8e8e8; }
+.v-num-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.v-field-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.v-field-group label {
+  font-size: .72rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .08em; opacity: .5;
+}
+.v-num-input {
+  padding: 10px 12px; font-size: 1rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 10px;
+  outline: none; transition: border-color .2s; background: #fff;
+  width: 100%; box-sizing: border-box;
+}
+.v-num-input:focus { border-color: #555; }
+.v-total-group { margin-bottom: 16px; }
+.v-total-input {
+  background: #f5f5f5 !important; color: #000 !important;
+  font-weight: bold !important; cursor: default !important;
+  font-size: 1.1rem !important;
+}
+.v-obs-input {
+  padding: 10px 12px; font-size: .92rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 10px;
+  outline: none; transition: border-color .2s; background: #fff;
+  resize: vertical; width: 100%; box-sizing: border-box;
+}
+.v-obs-input:focus { border-color: #555; }
+.v-text-input {
+  padding: 10px 12px; font-size: .92rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 10px;
+  outline: none; transition: border-color .2s; background: #fff;
+  width: 100%; box-sizing: border-box;
+}
+.v-text-input:focus { border-color: #555; }
+.v-action-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-top: 18px; padding-top: 14px;
+  border-top: 1px solid #efefef;
+}
+.v-save-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 22px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  background: #000; color: #fff !important; border: none;
+  border-radius: 10px; cursor: pointer; transition: background .2s, transform .15s;
+}
+.v-save-btn:hover { background: #333; transform: translateY(-1px); }
+.v-save-status { font-size: .8rem; font-weight: bold; min-height: 16px; transition: color .2s; }
+.v-status-ok    { color: #2a8a2a !important; }
+.v-status-error { color: #c03000 !important; }
+.v-status-saving{ color: #888 !important; }
+.v-loading, .v-error { padding: 40px 0; text-align: center; font-size: .9rem; font-weight: bold; }
+.v-error { color: #c03000 !important; }
+@media (max-width: 480px) { .v-num-grid { grid-template-columns: 1fr; } }
+
+/* ─── ADMIN VENTAS PANEL ─── */
+#adm-ventas-panel {
+  display: none; width: 100%; max-width: 1100px;
+  margin: 0 auto; padding: 24px 16px 60px; box-sizing: border-box;
+  animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+.vadm-filter-bar {
+  display: flex; flex-wrap: wrap; flex-direction: column; align-items: flex-start; gap: 10px;
+  margin-bottom: 28px; padding: 16px 20px;
+  border-radius: 14px; background: #f7f7f7; border: 1.5px solid #e6e6e6;
+}
+.vadm-filter-group { display: flex; flex-direction: column; gap: 4px; }
+.vadm-filter-group label {
+  font-size: .68rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .1em; opacity: .5;
+}
+.vadm-filter-group input[type="date"],
+.vadm-filter-group select {
+  padding: 8px 12px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 9px;
+  background: #fff; outline: none; cursor: pointer;
+}
+.vadm-buscar-btn {
+  padding: 9px 22px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  background: #000; color: #fff !important; border: none;
+  border-radius: 9px; cursor: pointer; transition: background .2s;
+  align-self: flex-end;
+}
+.vadm-buscar-btn:hover { background: #333; }
+.vadm-period-btns {
+  display: flex; gap: 8px; width: 100%;
+  margin-bottom: 4px;
+}
+.vadm-period-btn {
+  padding: 7px 18px; font-size: .82rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  background: #3d3d3d; color: #f0f0f0;
+  border: 1.5px solid #666; border-radius: 20px;
+  cursor: pointer; transition: background .18s, border-color .18s, color .18s;
+  white-space: nowrap;
+}
+.vadm-period-btn:hover { border-color: #aaa; background: #555; color: #fff; }
+.vadm-period-btn.vadm-period-active {
+  background: #4a7c59; color: #fff !important; border-color: #4a7c59;
+}
+.vadm-filter-dates {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; width: 100%;
+}
+.v-adm-store-section { margin-bottom: 36px; overflow-x: auto; }
+.v-adm-store-title {
+  font-size: 1.1rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .08em; opacity: 1; margin-bottom: 10px;
+}
+.v-adm-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  border-radius: 12px; overflow: hidden; border: 1px solid #e6e6e6;
+}
+.v-adm-table th {
+  background: #f0f0f0; padding: 8px 12px;
+  font-size: .72rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .06em;
+  border-bottom: 1.5px solid #e0e0e0; text-align: left; white-space: nowrap;
+}
+.v-adm-table td {
+  padding: 9px 12px; font-size: .88rem; font-weight: bold;
+  border-bottom: 1px solid #f0f0f0; vertical-align: middle;
+}
+.v-adm-table tbody tr:hover td { background: #fafafa; }
+.v-adm-num { text-align: right; font-variant-numeric: tabular-nums; }
+.v-adm-total-cell { font-weight: bold !important; }
+.v-adm-obs { color: #555 !important; font-weight: 400 !important; max-width: 200px; }
+.v-adm-table tfoot .v-adm-subtotal-row td {
+  background: #f5f5f5; font-weight: bold; border-top: 2px solid #ddd; font-size: .85rem;
+}
+.v-adm-subtotal-row td:first-child { letter-spacing: .06em; font-size: .72rem; opacity: .7; }
+.v-adm-grand-section {
+  margin-top: 28px; padding: 20px 24px;
+  background: #111; border-radius: 16px;
+}
+.v-adm-grand-label {
+  font-size: .72rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .14em;
+  color: #ffffff !important; margin-bottom: 14px;
+}
+.v-adm-grand-grid { display: flex; flex-wrap: wrap; gap: 18px; }
+.v-adm-grand-item { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
+.v-adm-grand-item span {
+  font-size: 1.15rem; font-weight: bold;
+  color: #ffffff !important; font-variant-numeric: tabular-nums;
+}
+.v-adm-grand-item em {
+  font-style: normal; font-size: .65rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: rgba(255,255,255,0.75) !important;
+}
+.v-adm-grand-total span { color: #fff !important; font-size: 1.35rem !important; }
+.v-adm-loading, .v-adm-error, .v-adm-empty {
+  padding: 50px 0; text-align: center; font-size: .9rem; font-weight: bold;
+}
+.v-adm-error { color: #c03000 !important; }
+.v-adm-empty { opacity: .5; }
 
 /* ─── AGENDA OVERLAY ─── */
 #agenda-overlay {
@@ -604,32 +825,108 @@ body {
   #faturas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
 }
 
+/* ─── HORARIOS GROUP OVERLAY ─── */
+#horarios-overlay {
+  display: none; position: fixed; inset: 0;
+  background: #fff; z-index: 210;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
+}
+#horarios-overlay.open { display: flex; }
+#horarios-overlay.visible { opacity: 1; }
+#horarios-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#horarios-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+#horarios-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
+#horarios-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#horarios-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center;
+  padding: 40px 16px 60px;
+  font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+#horarios-sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+}
+#horarios-sub-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+#horarios-sub-header .hsub-brand {
+  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
+  font-weight: 100;
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  color: #000;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+#horarios-sub-header .hsub-tagline {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #000;
+  opacity: .45;
+}
+@media (max-width: 600px) {
+  #horarios-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+/* Gradientes sub-cards horarios */
+#horarios-sub-grid .adm-mod-card[data-horarios-module="horarios"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
+#horarios-sub-grid .adm-mod-card[data-horarios-module="gerador"]::before  { background: linear-gradient(145deg, #0a1a10 0%, #0f2e1a 60%, #1a4a2a 100%); }
+#horarios-sub-grid .adm-mod-card[data-horarios-module="ferias"]::before   { background: linear-gradient(145deg, #0d1f18 0%, #143322 60%, #1a4a2e 100%); }
+/* Gradiente card grupo en el dashboard */
+.adm-mod-card[data-module="horarios-group"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
+
 /* ─── INDEX: tablas de horarios ─── */
 /* summary-wrap: kept in DOM for JS but NEVER shown */
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
 
 #container-tables {
   display: flex; flex-direction: column;
-  flex: 0 0 auto;  /* shrinks to content, does NOT expand */
-  width: 100%;
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: 900px;     /* evita el colapso mientras carga la tabla */
+  margin: 0 auto;
   overflow: visible;
   padding-bottom: 10px;
 }
 
-/* Legal notice — sits above the table, shrinks to its text */
+/* Legal notice — mismo ancho que la tabla */
 #legal-notice {
   flex-shrink: 0;
-  width: 100%;
-  max-width: 860px;
-  align-self: center;
+  width: 0;
+  min-width: 100%;
   box-sizing: border-box;
-  padding: 10px 32px 8px;
+  padding: 10px 2px 8px;
   font-size: 0.7rem;
   line-height: 1.7;
   color: #000;
   text-align: justify;
   font-weight: 600;
   letter-spacing: .01em;
+  overflow-wrap: break-word;
 }
 #legal-notice p { margin: 0 0 4px; }
 @media (max-width: 768px) {
@@ -851,6 +1148,7 @@ td, th { border-radius:10px; margin:2px; }
 .adm-mod-card[data-module="tam"]::before       { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
 .adm-mod-card[data-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
 .adm-mod-card[data-module="faturas"]::before   { background: linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 60%, #383838 100%); }
+.adm-mod-card[data-module="ventas"]::before    { background: linear-gradient(145deg, #0a1f0a 0%, #143214 60%, #1a4a1a 100%); }
 /* Sub-cards dentro del overlay de faturas */
 #faturas-sub-grid .adm-mod-card[data-faturas-module="tam"]::before          { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
 #faturas-sub-grid .adm-mod-card[data-faturas-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
@@ -1509,9 +1807,7 @@ input, textarea { cursor: text !important; }
 
 /* ══ COUNTDOWN ══ */
 #shift-countdown {
-  display: none; text-align: center;
-  font-size: .82rem; font-weight: 600; color: #000;
-  letter-spacing: .04em; margin-top: 8px; padding: 4px 0;
+  display: none !important;
 }
 
 /* ══ MINI DASHBOARD ══ */
@@ -1992,7 +2288,7 @@ input, textarea { cursor: text !important; }
   #main-header #current-time-main { font-size: 1rem; }
   #main-header #current-date-main { font-size: .82rem; }
   #recibos-link { font-size: .82rem; padding: 5px 12px; }
-  #container-tables { padding-bottom: 16px; overflow-x: hidden; overflow-y: auto; }
+  #container-tables { padding-bottom: 16px; overflow-x: hidden; overflow-y: auto; width: 100%; min-width: 0; margin: 0; }
   #table-container {
     overflow-x: auto; -webkit-overflow-scrolling: touch;
     justify-content: flex-start;
@@ -2991,6 +3287,7 @@ td                   { font-size: .96rem !important; }
   <div id="main-nav">
     <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
     <a id="etiquetas-link" href="#" onclick="openEtiquetasOverlay(); return false;">ETIQUETAS</a>
+    <a id="ventas-link" href="#" onclick="openVentasOverlay(window._currentStoreGlobal); return false;">VENTAS</a>
   </div>
   <div id="main-header-center" class="reveal-item">
     <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
@@ -3086,6 +3383,21 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
+      <div class="adm-mod-card" data-module="ventas" style="animation-delay:0.18s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">VENDAS</div>
+          <div class="adm-mod-desc">vendas declaradas por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
       <div class="adm-mod-card" data-module="rotulos" style="animation-delay:0.20s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3100,7 +3412,7 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-mod-card" data-module="horarios" style="animation-delay:0.25s">
+      <div class="adm-mod-card" data-module="horarios-group" style="animation-delay:0.25s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
@@ -3109,43 +3421,11 @@ td                   { font-size: .96rem !important; }
         </span>
         <div>
           <div class="adm-mod-name">HORÁRIOS</div>
-          <div class="adm-mod-desc">gestão de horários por loja</div>
+          <div class="adm-mod-desc">horários · gerador · férias</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-mod-card" data-module="gerador" style="animation-delay:0.28s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3" y="4" width="18" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M3 9h18" stroke="rgba(255,255,255,0.55)" stroke-width="1.1"/>
-            <path d="M8 4v5M16 4v5" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-linecap="round"/>
-            <path d="M7 14h4M7 17h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-            <circle cx="17" cy="15.5" r="2.5" stroke="rgba(255,255,255,0.7)" stroke-width="1.1"/>
-            <path d="M17 14.5v1l.7.7" stroke="rgba(255,255,255,0.85)" stroke-width="1" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">GERADOR DE HORÁRIOS</div>
-          <div class="adm-mod-desc">geração automática de horários</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      <div class="adm-mod-card" data-module="ferias" style="animation-delay:0.30s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 3C12 3 7 8 7 13a5 5 0 0 0 10 0c0-5-5-10-5-10Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M12 13v5M9 18h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-            <path d="M7 9c-2 1-4 3-4 3s2 0 3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
-            <path d="M17 9c2 1 4 3 4 3s-2 0-3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">FÉRIAS</div>
-          <div class="adm-mod-desc">controlo de férias e ausências</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      <div class="adm-mod-card" data-module="editor" style="animation-delay:0.35s">
+      <div class="adm-mod-card" data-module="editor" style="animation-delay:0.30s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M14.5 4.5l5 5L7 22H2v-5L14.5 4.5Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linejoin="round"/>
@@ -3158,7 +3438,7 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-mod-card" data-module="faturas" style="animation-delay:0.40s">
+      <div class="adm-mod-card" data-module="faturas" style="animation-delay:0.35s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
@@ -3387,6 +3667,43 @@ td                   { font-size: .96rem !important; }
   </div>
   <!-- /TAB TAM ───────────────────────────────────────────── -->
 
+  <!-- ─── VENTAS ADMIN PANEL ─── -->
+  <div id="adm-ventas-panel">
+    <div class="vadm-filter-bar">
+      <div class="vadm-period-btns">
+        <button class="vadm-period-btn" id="vadm-btn-hoy">Hoje</button>
+        <button class="vadm-period-btn" id="vadm-btn-semana">Esta semana</button>
+        <button class="vadm-period-btn" id="vadm-btn-mes">Este mês</button>
+      </div>
+      <div class="vadm-filter-dates">
+        <div class="vadm-filter-group">
+          <label>De</label>
+          <input type="date" id="vadm-from">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Até</label>
+          <input type="date" id="vadm-to">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Loja</label>
+          <select id="vadm-tienda">
+            <option value="">todas as lojas</option>
+            <option value="mezka funchal">Mezka Funchal</option>
+            <option value="parfois madeira shopping">Madeira Shopping</option>
+            <option value="parfois arcadas são francisco">Parfois Arcadas</option>
+            <option value="Shana">Shana</option>
+            <option value="Mezka Avenida">Mezka Avenida</option>
+            <option value="Mezka Mercado">Mezka Mercado</option>
+            <option value="Maxx">Maxx</option>
+          </select>
+        </div>
+        <button class="vadm-buscar-btn" id="vadm-buscar-btn">pesquisar</button>
+      </div>
+    </div>
+    <div id="adm-ventas-content"></div>
+  </div>
+  <!-- /VENTAS ADMIN PANEL -->
+
 </div><!-- /#admin-app -->
 
 <!-- EDITOR: Export modal -->
@@ -3559,7 +3876,81 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
+<!-- VENTAS OVERLAY (empleada) -->
+<div id="ventas-overlay">
+  <div id="ventas-overlay-bar">
+    <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
+    <span id="ventas-overlay-title">ventas</span>
+  </div>
+  <div id="ventas-overlay-content">
+    <div id="ventas-overlay-body"></div>
+  </div>
+</div>
+
 <!-- FATURAS SUB-OVERLAY -->
+<!-- HORARIOS GROUP OVERLAY -->
+<div id="horarios-overlay">
+  <div id="horarios-overlay-bar">
+    <button id="horarios-overlay-back">
+      ← início
+    </button>
+    <span id="horarios-overlay-title">horários</span>
+  </div>
+  <div id="horarios-overlay-content">
+    <div id="horarios-sub-header">
+      <div class="hsub-brand">HORÁRIOS</div>
+      <div class="hsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="horarios-sub-grid">
+      <div class="adm-mod-card" data-horarios-module="horarios" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 8v4l2.5 2.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HORÁRIOS</div>
+          <div class="adm-mod-desc">gestão de horários por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-horarios-module="gerador" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="4" width="18" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 9h18" stroke="rgba(255,255,255,0.55)" stroke-width="1.1"/>
+            <path d="M8 4v5M16 4v5" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M7 14h4M7 17h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="17" cy="15.5" r="2.5" stroke="rgba(255,255,255,0.7)" stroke-width="1.1"/>
+            <path d="M17 14.5v1l.7.7" stroke="rgba(255,255,255,0.85)" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">GERADOR DE HORÁRIOS</div>
+          <div class="adm-mod-desc">geração automática de horários</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-horarios-module="ferias" style="animation-delay:0.15s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3C12 3 7 8 7 13a5 5 0 0 0 10 0c0-5-5-10-5-10Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 13v5M9 18h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M7 9c-2 1-4 3-4 3s2 0 3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M17 9c2 1 4 3 4 3s-2 0-3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">FÉRIAS</div>
+          <div class="adm-mod-desc">controlo de férias e ausências</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="faturas-overlay">
   <div id="faturas-overlay-bar">
     <button id="faturas-overlay-back">
@@ -3954,6 +4345,27 @@ td                   { font-size: .96rem !important; }
     // Intercept faturas → open sub-overlay instead
     if (tab === 'faturas') { openFaturasOverlay(); return; }
 
+    // Intercept horarios-group → open horarios sub-overlay
+    if (tab === 'horarios-group') { openHorariosOverlay(); return; }
+
+    // Intercept ventas → open admin ventas panel
+    if (tab === 'ventas') {
+      var adminApp = document.getElementById('admin-app');
+      var dashboard = document.getElementById('adm-dashboard');
+      var moduleBar = document.getElementById('adm-module-bar');
+      var barTitle  = document.getElementById('adm-module-bar-title');
+      var panel     = document.getElementById('adm-ventas-panel');
+      // Desactivar cualquier tab-panel activo para que no se superponga
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+      if (dashboard) dashboard.style.display = 'none';
+      if (moduleBar) moduleBar.style.display  = 'flex';
+      if (barTitle)  barTitle.textContent     = 'vendas declaradas';
+      if (adminApp)  adminApp.classList.add('module-open');
+      if (panel)     panel.style.display      = 'block';
+      if (typeof _vAdmLoadData === 'function') _vAdmLoadData();
+      return;
+    }
+
     // If navigating away from gerador, clean up its layout first
     if (tab !== 'gerador' && typeof cleanupGeradorLayout === 'function') {
       cleanupGeradorLayout();
@@ -4016,6 +4428,14 @@ td                   { font-size: .96rem !important; }
     // Reset tab panels
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
 
+    // Hide ventas admin panel
+    var vPanel = document.getElementById('adm-ventas-panel');
+    if (vPanel) vPanel.style.display = 'none';
+
+    // Restaurar dashboard (puede haber sido ocultado con style.display='none')
+    var dashboard = document.getElementById('adm-dashboard');
+    if (dashboard) dashboard.style.display = '';
+
     // Re-trigger card entrance animations
     document.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
       c.style.animation = 'none';
@@ -4051,6 +4471,30 @@ td                   { font-size: .96rem !important; }
     setTimeout(function () { ov.classList.remove('open'); }, 460);
   }
 
+  function openHorariosOverlay() {
+    var ov = document.getElementById('horarios-overlay');
+    if (!ov) return;
+    ov.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        ov.classList.add('visible');
+        ov.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+          c.style.animation = 'none';
+          c.offsetWidth;
+          c.style.animation = '';
+          c.style.animationDelay = (0.05 + i * 0.07) + 's';
+        });
+      });
+    });
+  }
+
+  function closeHorariosOverlay() {
+    var ov = document.getElementById('horarios-overlay');
+    if (!ov) return;
+    ov.classList.remove('visible');
+    setTimeout(function () { ov.classList.remove('open'); }, 460);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // Main dashboard card clicks
     document.querySelectorAll('.adm-mod-card').forEach(function (card) {
@@ -4071,9 +4515,23 @@ td                   { font-size: .96rem !important; }
       });
     });
 
+    // Sub-cards inside horarios overlay
+    document.querySelectorAll('[data-horarios-module]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.horariosModule;
+        if (!mod) return;
+        closeHorariosOverlay();
+        setTimeout(function () { openModule(mod); }, 200);
+      });
+    });
+
     // Back button in faturas overlay → close overlay (back to dashboard)
     var fatBack = document.getElementById('faturas-overlay-back');
     if (fatBack) fatBack.addEventListener('click', closeFaturasOverlay);
+
+    // Back button in horarios overlay
+    var horBack = document.getElementById('horarios-overlay-back');
+    if (horBack) horBack.addEventListener('click', closeHorariosOverlay);
 
     // Back button
     var backBtn = document.getElementById('adm-back-btn');
@@ -4496,5 +4954,7 @@ td                   { font-size: .96rem !important; }
 })();
 </script>
 <script src="js/gerador-horarios.js"></script>
+<script src="js/ventas-empleada.js"></script>
+<script src="js/ventas-admin.js"></script>
 </body>
 </html>

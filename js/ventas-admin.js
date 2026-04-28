@@ -1,0 +1,700 @@
+// ══════════════════════════════════════════════════════════════
+//  VENTAS DIARIAS — VISTA ADMINISTRADOR
+// ══════════════════════════════════════════════════════════════
+(function () {
+
+  var TIENDAS = [
+    'mezka funchal',
+    'parfois madeira shopping',
+    'parfois arcadas são francisco',
+    'Shana',
+    'Mezka Avenida',
+    'Mezka Mercado',
+    'Maxx'
+  ];
+
+  var TIENDA_LABELS = {
+    'mezka funchal':                 'Mezka Funchal',
+    'parfois madeira shopping':      'Madeira Shopping',
+    'parfois arcadas são francisco': 'Parfois Arcadas',
+    'Shana':                         'Shana',
+    'Mezka Avenida':                 'Mezka Avenida',
+    'Mezka Mercado':                 'Mezka Mercado',
+    'Maxx':                          'Maxx'
+  };
+
+  // ── Estilos inline para botones ──
+  var S = {
+    btnNormal: 'background:#3d3d3d !important;color:#f0f0f0 !important;border:1.5px solid #666 !important;border-radius:20px !important;padding:7px 18px !important;font-size:.82rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;',
+    btnActive: 'background:#4a7c59 !important;color:#ffffff !important;border:1.5px solid #4a7c59 !important;border-radius:20px !important;padding:7px 18px !important;font-size:.82rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;'
+  };
+
+  function _applyBtnStyles(activeId) {
+    ['vadm-btn-hoy', 'vadm-btn-semana', 'vadm-btn-mes'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('style', id === activeId ? S.btnActive : S.btnNormal);
+    });
+  }
+
+  // ── Abrir módulo ──
+  window.openVentasAdmin = function () {
+    var adminApp  = document.getElementById('admin-app');
+    var dashboard = document.getElementById('adm-dashboard');
+    var moduleBar = document.getElementById('adm-module-bar');
+    var barTitle  = document.getElementById('adm-module-bar-title');
+    var panel     = document.getElementById('adm-ventas-panel');
+    var content   = document.getElementById('adm-ventas-content');
+
+    if (dashboard) dashboard.style.display = 'none';
+    if (barTitle)  barTitle.textContent = 'ventas declaradas';
+    if (adminApp)  adminApp.classList.add('module-open');
+
+    if (adminApp) {
+      adminApp.style.setProperty('display',        'flex',   'important');
+      adminApp.style.setProperty('flex-direction', 'column', 'important');
+      adminApp.style.setProperty('overflow',       'hidden', 'important');
+      adminApp.style.setProperty('height',         '100vh',  'important');
+      adminApp.style.setProperty('padding',        '0',      'important');
+    }
+    if (moduleBar) {
+      moduleBar.style.setProperty('display',     'flex', 'important');
+      moduleBar.style.setProperty('flex-shrink', '0',    'important');
+      moduleBar.style.setProperty('width',       '100%', 'important');
+      moduleBar.style.removeProperty('position');
+      moduleBar.style.removeProperty('top');
+      moduleBar.style.removeProperty('z-index');
+    }
+    if (panel) {
+      panel.style.setProperty('display',        'flex',   'important');
+      panel.style.setProperty('flex',           '1',      'important');
+      panel.style.setProperty('flex-direction', 'column', 'important');
+      panel.style.setProperty('overflow-y',     'auto',   'important');
+      panel.style.setProperty('overflow-x',     'hidden', 'important');
+      panel.style.setProperty('width',          '100%',   'important');
+      panel.style.setProperty('height',         '0',      'important');
+      panel.style.removeProperty('min-height');
+      _applyBtnStyles('vadm-btn-hoy');
+      _vAdmLoadData();
+    }
+    if (content) {
+      content.style.setProperty('overflow', 'visible', 'important');
+      content.style.setProperty('height',   'auto',    'important');
+      content.style.setProperty('flex',     'none',    'important');
+    }
+  };
+
+  window.closeVentasAdmin = function () {
+    var adminApp  = document.getElementById('admin-app');
+    var dashboard = document.getElementById('adm-dashboard');
+    var moduleBar = document.getElementById('adm-module-bar');
+    var panel     = document.getElementById('adm-ventas-panel');
+    var content   = document.getElementById('adm-ventas-content');
+
+    if (panel) {
+      panel.style.display = 'none';
+      ['flex','flex-direction','overflow-y','overflow-x','width','height','min-height'].forEach(function (p) {
+        panel.style.removeProperty(p);
+      });
+    }
+    if (content) {
+      ['overflow','height','flex'].forEach(function (p) { content.style.removeProperty(p); });
+    }
+    if (moduleBar) {
+      moduleBar.style.display = 'none';
+      ['flex-shrink','width','position','top','z-index'].forEach(function (p) {
+        moduleBar.style.removeProperty(p);
+      });
+    }
+    if (dashboard) dashboard.style.display = '';
+    if (adminApp) {
+      adminApp.classList.remove('module-open');
+      ['display','flex-direction','overflow','height','padding'].forEach(function (p) {
+        adminApp.style.removeProperty(p);
+      });
+    }
+  };
+
+  // ── Cargar datos — consulta principal + comparativa en paralelo ──
+  function _vAdmLoadData() {
+    var _adminApp  = document.getElementById('admin-app');
+    var _panel     = document.getElementById('adm-ventas-panel');
+    var _moduleBar = document.getElementById('adm-module-bar');
+    if (_adminApp) {
+      _adminApp.style.setProperty('overflow',   'hidden', 'important');
+      _adminApp.style.setProperty('overflow-y', 'hidden', 'important');
+    }
+    if (_panel) {
+      _panel.style.setProperty('display',        'flex',   'important');
+      _panel.style.setProperty('flex-direction', 'column', 'important');
+      _panel.style.setProperty('flex',           '1',      'important');
+      _panel.style.setProperty('min-height',     '0',      'important');
+      _panel.style.setProperty('overflow-y',     'auto',   'important');
+      _panel.style.setProperty('overflow-x',     'hidden', 'important');
+      _panel.style.setProperty('width',          '100%',   'important');
+      _panel.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
+    }
+    if (_moduleBar) {
+      _moduleBar.style.setProperty('flex-shrink', '0', 'important');
+    }
+
+    var container = document.getElementById('adm-ventas-content');
+    if (!container) return;
+    container.innerHTML = '<div style="padding:20px;opacity:.6;font-size:.85rem;">a carregar…</div>';
+
+    var fromDate    = document.getElementById('vadm-from').value   || _todayStr();
+    var toDate      = document.getElementById('vadm-to').value     || _todayStr();
+    var filterStore = document.getElementById('vadm-tienda').value || '';
+
+    // Período de comparación
+    var cmp = _calcCmpPeriod(fromDate, toDate);
+
+    // Resultado acumulador para las dos consultas paralelas
+    var results = { main: null, prev: null };
+
+    function _tryRender() {
+      if (results.main === null || results.prev === null) return;
+      _render(results.main, results.prev, container, {
+        from: fromDate, to: toDate,
+        cmpFrom: cmp.from, cmpTo: cmp.to,
+        filterStore: filterStore
+      });
+    }
+
+    // Consulta principal
+    var q = sbClient.from('ventas_diarias').select('*')
+      .gte('fecha', fromDate).lte('fecha', toDate)
+      .order('fecha', { ascending: false });
+    if (filterStore) q = q.eq('tienda', filterStore);
+    q.then(function (res) {
+      if (res.error) {
+        container.innerHTML = '<div style="padding:20px;color:#c03000;font-size:.85rem;">⚠ Erro: ' + res.error.message + '</div>';
+        return;
+      }
+      results.main = res.data || [];
+      _tryRender();
+    }).catch(function () {
+      container.innerHTML = '<div style="padding:20px;color:#c03000;font-size:.85rem;">⚠ Erro de ligação</div>';
+    });
+
+    // Consulta comparativa (mismo filtro de tienda)
+    var q2 = sbClient.from('ventas_diarias').select('*')
+      .gte('fecha', cmp.from).lte('fecha', cmp.to);
+    if (filterStore) q2 = q2.eq('tienda', filterStore);
+    q2.then(function (res) {
+      results.prev = res.error ? [] : (res.data || []);
+      _tryRender();
+    }).catch(function () {
+      results.prev = [];
+      _tryRender();
+    });
+  }
+
+  // ── Render ──
+  function _render(rows, prevRows, container, meta) {
+    container.innerHTML = '';
+    container.style.setProperty('overflow',   'visible',       'important');
+    container.style.setProperty('height',     'auto',          'important');
+    container.style.setProperty('flex',       'none',          'important');
+    container.style.setProperty('padding',    '12px 8px 80px', 'important');
+    container.style.setProperty('max-width',  'none',          'important');
+    container.style.setProperty('width',      '100%',          'important');
+    container.style.setProperty('box-sizing', 'border-box',    'important');
+
+    // CSS global para tooltip — inyectar una sola vez
+    if (!document.getElementById('vadm-tooltip-style')) {
+      var styleEl = document.createElement('style');
+      styleEl.id  = 'vadm-tooltip-style';
+      styleEl.textContent =
+        '#vadm-tip-global {' +
+        '  position:fixed !important; z-index:99999 !important;' +
+        '  background:#1a1a1a !important; color:#f0f0f0 !important;' +
+        '  padding:8px 12px !important; border-radius:8px !important;' +
+        '  font-size:.75rem !important; line-height:1.5 !important;' +
+        '  white-space:pre-wrap !important; max-width:260px !important;' +
+        '  box-shadow:0 4px 14px rgba(0,0,0,.55) !important;' +
+        '  pointer-events:none !important; display:none;' +
+        '}';
+      document.head.appendChild(styleEl);
+    }
+    if (!document.getElementById('vadm-tip-global')) {
+      var tipEl = document.createElement('div');
+      tipEl.id  = 'vadm-tip-global';
+      document.body.appendChild(tipEl);
+    }
+
+    var today = _todayStr();
+
+    // ── Agrupar datos principales ──
+    var byStore = {};
+    rows.forEach(function (r) {
+      if (!byStore[r.tienda]) byStore[r.tienda] = [];
+      byStore[r.tienda].push(r);
+    });
+    var storeOrder = TIENDAS.filter(function (t) { return byStore[t]; });
+    Object.keys(byStore).forEach(function (t) {
+      if (storeOrder.indexOf(t) < 0) storeOrder.push(t);
+    });
+
+    // Totales por tienda
+    var storeTotals = {};
+    storeOrder.forEach(function (t) {
+      storeTotals[t] = byStore[t].reduce(function (s, r) { return s + (parseFloat(r.total) || 0); }, 0);
+    });
+
+    // ── Agrupar datos comparativos ──
+    var prevByStore = {};
+    prevRows.forEach(function (r) {
+      if (!prevByStore[r.tienda]) prevByStore[r.tienda] = [];
+      prevByStore[r.tienda].push(r);
+    });
+    var prevStoreTotals = {};
+    Object.keys(prevByStore).forEach(function (t) {
+      prevStoreTotals[t] = prevByStore[t].reduce(function (s, r) { return s + (parseFloat(r.total) || 0); }, 0);
+    });
+
+    // ── Gran total ──
+    var gt      = { numerario: 0, mb: 0, visa: 0, voucher: 0, total: 0 };
+    var prevGt  = prevRows.reduce(function (s, r) { return s + (parseFloat(r.total) || 0); }, 0);
+    storeOrder.forEach(function (t) {
+      byStore[t].forEach(function (r) {
+        gt.numerario += parseFloat(r.numerario) || 0;
+        gt.mb        += parseFloat(r.mb)        || 0;
+        gt.visa      += parseFloat(r.visa)      || 0;
+        gt.voucher   += parseFloat(r.voucher)   || 0;
+        gt.total     += parseFloat(r.total)     || 0;
+      });
+    });
+
+    // ── Ranking: ordenar por total desc ──
+    storeOrder.sort(function (a, b) { return storeTotals[b] - storeTotals[a]; });
+    var maxTotal = storeTotals[storeOrder[0]] || 1;
+
+    // ─────────────────────────────────────────────
+    //  ALERTA — tiendas sin declarar hoy (≥ 23:10)
+    // ─────────────────────────────────────────────
+    var now    = new Date();
+    var isLate = (now.getHours() > 23) || (now.getHours() === 23 && now.getMinutes() >= 10);
+    if (isLate && !meta.filterStore) {
+      var declaredToday = {};
+      rows.forEach(function (r) { if (r.fecha === today) declaredToday[r.tienda] = true; });
+      var missing = TIENDAS.filter(function (t) { return !declaredToday[t]; });
+      if (missing.length) {
+        var alertDiv = document.createElement('div');
+        alertDiv.style.cssText = 'margin-bottom:14px;padding:10px 14px;border-radius:9px;border-left:4px solid #e05a5a;';
+        alertDiv.style.setProperty('background', '#2a1414', 'important');
+
+        var alertTitle = document.createElement('div');
+        alertTitle.style.cssText = 'font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;';
+        alertTitle.style.setProperty('color', '#ff8080', 'important');
+        alertTitle.textContent = '⚠ Sin declarar hoy';
+        alertDiv.appendChild(alertTitle);
+
+        missing.forEach(function (t) {
+          var item = document.createElement('div');
+          item.style.cssText = 'font-size:.78rem;font-weight:600;padding:1px 0;';
+          item.style.setProperty('color', '#ffb3b3', 'important');
+          item.textContent = '· ' + (TIENDA_LABELS[t] || t);
+          alertDiv.appendChild(item);
+        });
+
+        container.appendChild(alertDiv);
+      }
+    }
+
+    // Sin resultados
+    if (!rows.length) {
+      var empty = document.createElement('div');
+      empty.setAttribute('style', 'padding:50px 0;text-align:center;opacity:.5;font-size:.85rem;');
+      empty.textContent = 'Nenhum registo encontrado para este período.';
+      container.appendChild(empty);
+      return;
+    }
+
+    // ─────────────────────────────────────────────
+    //  TOTAL GERAL
+    // ─────────────────────────────────────────────
+    var grand = document.createElement('div');
+    grand.style.cssText = 'border-radius:10px;padding:12px 16px;margin-bottom:16px;overflow-x:auto;';
+    grand.style.setProperty('background', '#111111', 'important');
+
+    var grandLabel = document.createElement('div');
+    grandLabel.style.cssText = 'font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:4px;';
+    grandLabel.style.setProperty('color', '#ffffff', 'important');
+    grandLabel.textContent = 'TOTAL GERAL';
+    grand.appendChild(grandLabel);
+
+    // Subtítulo: período de comparación
+    var cmpSubtitle = document.createElement('div');
+    cmpSubtitle.style.cssText = 'font-size:.67rem;margin-bottom:10px;';
+    cmpSubtitle.style.setProperty('color', 'rgba(255,255,255,0.45)', 'important');
+    cmpSubtitle.textContent = prevRows.length
+      ? 'vs ' + _fmtDate(meta.cmpFrom) + ' – ' + _fmtDate(meta.cmpTo)
+      : 'sin datos comparativos';
+    grand.appendChild(cmpSubtitle);
+
+    var grandGrid = document.createElement('div');
+    grandGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;';
+
+    [
+      { v: gt.numerario, l: 'Numerário', big: false, showCmp: false },
+      { v: gt.mb,        l: 'MB',        big: false, showCmp: false },
+      { v: gt.visa,      l: 'Visa',      big: false, showCmp: false },
+      { v: gt.voucher,   l: 'Voucher',   big: false, showCmp: false },
+      { v: gt.total,     l: 'Total',     big: true,  showCmp: true  }
+    ].forEach(function (item) {
+      var col = document.createElement('div');
+      col.style.cssText = 'display:flex;flex-direction:column;gap:2px;min-width:80px;';
+
+      var val = document.createElement('span');
+      val.style.cssText = 'font-size:' + (item.big ? '1.4rem' : '1.1rem') + ';font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;display:block;';
+      val.style.setProperty('color', item.big ? '#6dcf95' : '#ffffff', 'important');
+      val.textContent = _fmtEur(item.v);
+
+      var lbl = document.createElement('em');
+      lbl.style.cssText = 'font-style:normal;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;display:block;';
+      lbl.style.setProperty('color', 'rgba(255,255,255,0.75)', 'important');
+      lbl.textContent = item.l;
+
+      col.appendChild(val);
+      col.appendChild(lbl);
+
+      // Badge % comparativo solo en Total
+      if (item.showCmp && prevGt > 0) {
+        var pct  = ((gt.total - prevGt) / prevGt) * 100;
+        var isUp = pct >= 0;
+        var badge = document.createElement('span');
+        badge.style.cssText = 'font-size:.7rem;font-weight:800;margin-top:4px;display:block;';
+        badge.style.setProperty('color', isUp ? '#6dcf95' : '#ff7070', 'important');
+        badge.textContent = (isUp ? '↑ +' : '↓ ') + pct.toFixed(1) + '%';
+        col.appendChild(badge);
+      }
+
+      grandGrid.appendChild(col);
+    });
+
+    grand.appendChild(grandGrid);
+    container.appendChild(grand);
+
+    // ─────────────────────────────────────────────
+    //  SECCIONES POR TIENDA (ordenadas por ranking)
+    // ─────────────────────────────────────────────
+    storeOrder.forEach(function (tienda, rankIdx) {
+      var storeRows = byStore[tienda];
+      var label     = TIENDA_LABELS[tienda] || tienda;
+
+      var sub = { numerario: 0, mb: 0, visa: 0, voucher: 0, total: 0 };
+      storeRows.forEach(function (r) {
+        sub.numerario += parseFloat(r.numerario) || 0;
+        sub.mb        += parseFloat(r.mb)        || 0;
+        sub.visa      += parseFloat(r.visa)      || 0;
+        sub.voucher   += parseFloat(r.voucher)   || 0;
+        sub.total     += parseFloat(r.total)     || 0;
+      });
+
+      var prevSub = prevStoreTotals[tienda] || 0;
+      var barPct  = maxTotal > 0 ? (sub.total / maxTotal * 100) : 0;
+
+      var section = document.createElement('div');
+      section.setAttribute('style', 'margin-bottom:28px;');
+
+      // ── Título: medalla ranking + nombre + barra + badge % ──
+      var titleRow = document.createElement('div');
+      titleRow.setAttribute('style',
+        'display:flex;align-items:center;gap:10px;' +
+        'margin-bottom:6px;padding-bottom:5px;border-bottom:2px solid #555;'
+      );
+
+      // Medalla de ranking
+      var medalColors = ['#c8a832', '#9e9e9e', '#a0724a'];
+      var rankBadge = document.createElement('span');
+      rankBadge.setAttribute('style',
+        'display:inline-flex;align-items:center;justify-content:center;' +
+        'width:20px;height:20px;border-radius:50%;font-size:.6rem;font-weight:900;flex-shrink:0;' +
+        'background:' + (rankIdx < 3 ? medalColors[rankIdx] : '#555') + ';color:#fff;'
+      );
+      rankBadge.textContent = rankIdx + 1;
+
+      // Nombre tienda
+      var titleText = document.createElement('span');
+      titleText.setAttribute('style',
+        'font-size:1rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;flex-shrink:0;'
+      );
+      titleText.textContent = label.toUpperCase();
+
+      // Barra proporcional
+      var barWrap = document.createElement('div');
+      barWrap.setAttribute('style', 'flex:1;height:4px;background:#e0e0e0;border-radius:2px;overflow:hidden;min-width:30px;');
+      var barFill = document.createElement('div');
+      barFill.setAttribute('style',
+        'height:100%;border-radius:2px;width:' + barPct.toFixed(1) + '%;background:#4a7c59;'
+      );
+      barWrap.appendChild(barFill);
+
+      titleRow.appendChild(rankBadge);
+      titleRow.appendChild(titleText);
+      titleRow.appendChild(barWrap);
+
+      // Badge % comparativo de la tienda
+      if (prevSub > 0) {
+        var sPct  = ((sub.total - prevSub) / prevSub * 100);
+        var sUp   = sPct >= 0;
+        var sBadge = document.createElement('span');
+        sBadge.setAttribute('style',
+          'font-size:.68rem;font-weight:800;white-space:nowrap;flex-shrink:0;' +
+          'color:' + (sUp ? '#4caf82' : '#e05a5a') + ';'
+        );
+        sBadge.textContent = (sUp ? '↑ +' : '↓ ') + sPct.toFixed(1) + '%';
+        titleRow.appendChild(sBadge);
+      }
+
+      section.appendChild(titleRow);
+
+      // ── Tabla ──
+      var wrap = document.createElement('div');
+      wrap.setAttribute('style', 'overflow-x:auto;-webkit-overflow-scrolling:touch;');
+
+      var table = document.createElement('table');
+      table.setAttribute('style',
+        'width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;' +
+        'font-size:.82rem;border-radius:10px;overflow:hidden;border:1px solid #e6e6e6;'
+      );
+
+      // Colgroup: Data | Numerário | MB | Visa | Voucher | Total | Obs | Colaboradora
+      var cg = document.createElement('colgroup');
+      [88, 90, 90, 78, 78, 90, 36, 180].forEach(function (w) {
+        var col = document.createElement('col');
+        col.style.width = w + 'px';
+        cg.appendChild(col);
+      });
+      table.appendChild(cg);
+
+      // Cabecera
+      var thead = document.createElement('thead');
+      var hRow  = document.createElement('tr');
+      ['Data','Numerário','MB','Visa','Voucher','Total','Obs.','Colaboradora'].forEach(function (h, i) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        var align = i === 6 ? 'center' : (i === 0 || i >= 7 ? 'left' : 'right');
+        th.setAttribute('style',
+          'padding:5px 8px;font-size:.62rem;font-weight:700;text-transform:uppercase;' +
+          'letter-spacing:.05em;border-bottom:1.5px solid #e0e0e0;white-space:nowrap;' +
+          'text-align:' + align + ';'
+        );
+        hRow.appendChild(th);
+      });
+      thead.appendChild(hRow);
+      table.appendChild(thead);
+
+      // Body
+      var tbody = document.createElement('tbody');
+      storeRows.forEach(function (r) {
+        var isToday = (r.fecha === today);
+        var tr = document.createElement('tr');
+        if (isToday) tr.setAttribute('style', 'background:rgba(109,207,149,0.10);');
+
+        // Celda observaciones
+        var obsText = (r.observaciones || '').trim();
+        var hasObs  = obsText && obsText !== '—';
+        var obsHtml = hasObs
+          ? '<span class="vadm-obs-star" data-obs="' + obsText.replace(/"/g, '&quot;') + '" ' +
+            'style="color:#c8a832;font-weight:900;font-size:1rem;line-height:1;cursor:help;">✱</span>'
+          : '<span style="opacity:.35;">—</span>';
+
+        var cells = [
+          { v: _fmtDate(r.fecha),       right: false },
+          { v: _fmtEur(r.numerario),    right: true  },
+          { v: _fmtEur(r.mb),           right: true  },
+          { v: _fmtEur(r.visa),         right: true  },
+          { v: _fmtEur(r.voucher),      right: true  },
+          { v: _fmtEur(r.total),        right: true,  bold: true },
+          { v: obsHtml,                 center: true },
+          { v: _esc(r.empleada || '—'), right: false }
+        ];
+        cells.forEach(function (c, ci) {
+          var td = document.createElement('td');
+          td.innerHTML = c.v;
+          var align = c.center ? 'center' : (c.right ? 'right' : 'left');
+          var ellipsis = ci === 7 ? 'overflow:hidden;text-overflow:ellipsis;' : '';
+          td.setAttribute('style',
+            'padding:5px 8px;border-bottom:1px solid #f0f0f0;vertical-align:middle;' +
+            'white-space:nowrap;' + ellipsis +
+            'text-align:' + align + ';' +
+            'font-weight:' + (c.bold ? '800' : 'normal') + ';' +
+            'font-size:.75rem;font-variant-numeric:tabular-nums;'
+          );
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+
+      // Subtotal — solo si hay más de 1 fila
+      if (storeRows.length > 1) {
+        var tfoot   = document.createElement('tfoot');
+        var trSub   = document.createElement('tr');
+        var subCells = [
+          { v: 'SUBTOTAL',             right: false },
+          { v: _fmtEur(sub.numerario), right: true  },
+          { v: _fmtEur(sub.mb),        right: true  },
+          { v: _fmtEur(sub.visa),      right: true  },
+          { v: _fmtEur(sub.voucher),   right: true  },
+          { v: _fmtEur(sub.total),     right: true,  bold: true },
+          { v: '',                     right: false, colspan: 2 }
+        ];
+        subCells.forEach(function (c) {
+          var td = document.createElement('td');
+          td.innerHTML = c.v;
+          if (c.colspan) td.setAttribute('colspan', c.colspan);
+          td.setAttribute('style',
+            'padding:4px 8px;font-size:.68rem;' +
+            'font-weight:' + (c.bold ? '800' : '600') + ';' +
+            'border-top:2px solid #3a5a45;white-space:nowrap;' +
+            'text-align:' + (c.right ? 'right' : 'left') + ';font-variant-numeric:tabular-nums;'
+          );
+          td.style.setProperty('background', '#1e2a22', 'important');
+          td.style.setProperty('color',      '#b8e8c8', 'important');
+          trSub.appendChild(td);
+        });
+        tfoot.appendChild(trSub);
+        table.appendChild(tfoot);
+      }
+
+      wrap.appendChild(table);
+      section.appendChild(wrap);
+      container.appendChild(section);
+    });
+
+    // ── Delegación tooltip global ──
+    container.addEventListener('mousemove', function (e) {
+      var star = e.target.closest
+        ? e.target.closest('.vadm-obs-star')
+        : (e.target.classList && e.target.classList.contains('vadm-obs-star') ? e.target : null);
+      var tip = document.getElementById('vadm-tip-global');
+      if (!tip) return;
+      if (!star) { tip.style.display = 'none'; return; }
+      tip.textContent = star.getAttribute('data-obs') || '';
+      tip.style.display = 'block';
+      var x = e.clientX + 14, y = e.clientY - 10;
+      var rect = tip.getBoundingClientRect();
+      if (x + rect.width  > window.innerWidth  - 10) x = e.clientX - rect.width  - 14;
+      if (y + rect.height > window.innerHeight - 10) y = e.clientY - rect.height - 10;
+      tip.style.left = x + 'px';
+      tip.style.top  = y + 'px';
+    });
+    container.addEventListener('mouseleave', function () {
+      var tip = document.getElementById('vadm-tip-global');
+      if (tip) tip.style.display = 'none';
+    });
+  }
+
+  // ── Helpers ──
+  function _todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate());
+  }
+  function _dateToStr(d) {
+    return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate());
+  }
+  function _pad(n) { return n < 10 ? '0' + n : String(n); }
+  function _fmtDate(str) {
+    if (!str) return '';
+    var p = str.split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : str;
+  }
+  function _fmtEur(v) {
+    return parseFloat(v || 0).toFixed(2).replace('.', ',') + '\u00a0€';
+  }
+  function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Calcular período de comparación ──
+  // La comparación siempre es justa: se comparan los mismos días transcurridos.
+  // Ej: si hoy es miércoles y el período es lun-dom, compara lun-mié de la semana pasada.
+  // Ej: si estamos a día 12 del mes, compara días 1-12 del mes pasado.
+  function _calcCmpPeriod(fromDate, toDate) {
+    var today  = _todayStr();
+    var fromD  = new Date(fromDate + 'T00:00:00');
+    var toD    = new Date(toDate   + 'T00:00:00');
+    var todayD = new Date(today    + 'T00:00:00');
+
+    var periodLen = Math.round((toD - fromD) / 86400000) + 1;
+
+    // Días transcurridos desde inicio del período hasta hoy (mínimo 1, máximo = periodo completo)
+    var elapsed = Math.min(
+      Math.max(Math.round((todayD - fromD) / 86400000) + 1, 1),
+      periodLen
+    );
+
+    // Período anterior: misma longitud, terminando el día antes del inicio actual
+    var cmpToD   = new Date(fromD);
+    cmpToD.setDate(fromD.getDate() - 1);
+    var cmpFromD = new Date(cmpToD);
+    cmpFromD.setDate(cmpToD.getDate() - periodLen + 1);
+
+    // Cap: solo los días equivalentes transcurridos
+    var cmpEndD = new Date(cmpFromD);
+    cmpEndD.setDate(cmpFromD.getDate() + elapsed - 1);
+
+    return { from: _dateToStr(cmpFromD), to: _dateToStr(cmpEndD) };
+  }
+
+  // ── Helpers período ──
+  function _periodHoy() { var t = _todayStr(); return { from: t, to: t }; }
+  function _periodSemana() {
+    var d = new Date(), day = d.getDay();
+    var mon = new Date(d);
+    mon.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+    var sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    return { from: _dateToStr(mon), to: _dateToStr(sun) };
+  }
+  function _periodMes() {
+    var d    = new Date();
+    var from = new Date(d.getFullYear(), d.getMonth(), 1);
+    var to   = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return { from: _dateToStr(from), to: _dateToStr(to) };
+  }
+
+  function _applyPeriod(period, btnId) {
+    var fromEl = document.getElementById('vadm-from');
+    var toEl   = document.getElementById('vadm-to');
+    if (fromEl) fromEl.value = period.from;
+    if (toEl)   toEl.value   = period.to;
+    _applyBtnStyles(btnId);
+    _vAdmLoadData();
+  }
+
+  // ── Init ──
+  document.addEventListener('DOMContentLoaded', function () {
+    var fromEl = document.getElementById('vadm-from');
+    var toEl   = document.getElementById('vadm-to');
+    if (fromEl) fromEl.value = _todayStr();
+    if (toEl)   toEl.value   = _todayStr();
+
+    _applyBtnStyles(null);
+
+    var buscarBtn = document.getElementById('vadm-buscar-btn');
+    if (buscarBtn) {
+      buscarBtn.addEventListener('click', function () {
+        _applyBtnStyles(null);
+        _vAdmLoadData();
+      });
+    }
+
+    var btnHoy    = document.getElementById('vadm-btn-hoy');
+    var btnSemana = document.getElementById('vadm-btn-semana');
+    var btnMes    = document.getElementById('vadm-btn-mes');
+
+    if (btnHoy)    btnHoy.addEventListener('click',    function () { _applyPeriod(_periodHoy(),    'vadm-btn-hoy');    });
+    if (btnSemana) btnSemana.addEventListener('click', function () { _applyPeriod(_periodSemana(), 'vadm-btn-semana'); });
+    if (btnMes)    btnMes.addEventListener('click',    function () { _applyPeriod(_periodMes(),    'vadm-btn-mes');    });
+
+    if (fromEl) fromEl.addEventListener('change', function () { _applyBtnStyles(null); });
+    if (toEl)   toEl.addEventListener('change',   function () { _applyBtnStyles(null); });
+  });
+
+  window._vAdmLoadData = _vAdmLoadData;
+
+})();

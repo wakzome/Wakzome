@@ -3,15 +3,25 @@
   const word = 'wakzome';
   const el   = document.getElementById('dynamic-text');
 
-  // Each letter gets a random origin far from center
+  // Ajuste de estilo para que coincida con la imagen (Grande y centrado)
+  if (el) {
+    el.style.fontSize = 'clamp(3rem, 10vw, 6rem)'; // Tamaño responsivo similar a la captura
+    el.style.fontWeight = '300'; // Estilo fino/elegante
+    el.style.letterSpacing = '0.05em';
+    el.style.display = 'flex';
+    el.style.justifyContent = 'center';
+    el.style.alignItems = 'center';
+  }
+
+  // Cada letra con orígenes aleatorios (ajustados para mayor escala)
   const origins = [
-    { x: '-120vw', y: '-40vh',  r: '-180deg', s: '3',   blur: '12px' },
-    { x:  '80vw',  y: '-80vh',  r:  '120deg', s: '0.3', blur: '16px' },
-    { x: '-60vw',  y:  '90vh',  r: '-90deg',  s: '2',   blur: '10px' },
-    { x:  '100vw', y:  '30vh',  r:  '200deg', s: '0.5', blur: '20px' },
-    { x: '-90vw',  y: '-60vh',  r: '-150deg', s: '2.5', blur: '14px' },
-    { x:  '60vw',  y:  '70vh',  r:  '80deg',  s: '0.4', blur: '18px' },
-    { x: '-40vw',  y: '-100vh', r:  '160deg', s: '1.8', blur: '8px'  },
+    { x: '-120vw', y: '-40vh',  r: '-180deg', s: '5',   blur: '15px' },
+    { x:  '80vw',  y: '-80vh',  r:  '120deg', s: '0.3', blur: '20px' },
+    { x: '-60vw',  y:  '90vh',  r: '-90deg',  s: '4',   blur: '12px' },
+    { x:  '100vw', y:  '30vh',  r:  '200deg', s: '0.5', blur: '25px' },
+    { x: '-90vw',  y: '-60vh',  r: '-150deg', s: '4.5', blur: '18px' },
+    { x:  '60vw',  y:  '70vh',  r:  '80deg',  s: '0.4', blur: '22px' },
+    { x: '-40vw',  y: '-100vh', r:  '160deg', s: '3.5', blur: '10px' },
   ];
 
   const spans = [];
@@ -19,19 +29,23 @@
     const span = document.createElement('span');
     span.className = 'char';
     span.textContent = ch;
-    const o = origins[i];
-    // Set scatter starting position
+    const o = origins[i] || origins[0];
+    
+    // Estilos iniciales (dispersos)
+    span.style.display   = 'inline-block';
     span.style.transform = `translate(${o.x}, ${o.y}) rotate(${o.r}) scale(${o.s})`;
     span.style.filter    = `blur(${o.blur})`;
-    span.style.color     = '#ccc';
+    span.style.opacity   = '0';
+    span.style.color     = '#fff'; // Color blanco para resaltar sobre fondo negro
+    
     el.appendChild(span);
     spans.push({ span, origin: o });
   });
 
-  // Staggered assembly — each letter flies in to its final position
-  const baseDelay  = 180; // ms before first letter starts
-  const stagger    = 90;  // ms between each letter
-  const duration   = 820; // ms for each letter transition
+  // Staggered assembly
+  const baseDelay  = 200; 
+  const stagger    = 100;  
+  const duration   = 950; // Un poco más lento para notar la magnitud del tamaño
   const easing     = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
   spans.forEach(function(item, i) {
@@ -43,16 +57,16 @@
         `transform ${duration}ms ${easing}`,
         `filter ${duration}ms ${easing}`,
         `color ${duration * 1.2}ms ${easing}`,
-        `opacity 120ms ease`
+        `opacity ${duration}ms ease`
       ].join(', ');
+      
       span.style.opacity   = '1';
       span.style.transform = 'translate(0,0) rotate(0deg) scale(1)';
       span.style.filter    = 'blur(0px)';
-      span.style.color     = '#222';
+      span.style.color     = '#ffffff'; 
     }, delay);
   });
 
-  // Draw line after all letters have landed
   const lineDelay = baseDelay + word.length * stagger + duration * 0.6;
   setTimeout(function() {
     const line = document.getElementById('intro-line');
@@ -61,7 +75,7 @@
 
 })();
 
-// Global reveal utility
+// --- Funciones de utilidad se mantienen igual ---
 function animateReveal(elements, staggerMs) {
   staggerMs = staggerMs || 110;
   Array.from(elements).forEach(function(el, i) {
@@ -69,9 +83,6 @@ function animateReveal(elements, staggerMs) {
     el.classList.add('in');
   });
 }
-
-// Recibos overlay
-var _recibosData = null; // cache de los PDFs cargados
 
 function openRecibosOverlay() {
   var overlay = document.getElementById('recibos-overlay');
@@ -100,12 +111,10 @@ async function _loadRecibosIndex() {
   errEl.style.display   = 'none';
 
   try {
-    // Leer index.json desde Supabase Storage
     var { data: indexData, error: indexError } = await sbClient
       .storage.from('recibos').download('index.json');
     if (indexError) throw new Error('Sem recibos disponíveis de momento.');
     var idx = JSON.parse(await indexData.text());
-    // idx = { mes: "03-2026", ficheiros: ["nome.pdf", ...], dados: [{filename, b64}, ...] }
 
     var mes     = idx.mes || '';
     var parts   = mes.split('-');
@@ -147,7 +156,6 @@ async function _downloadRecibo(i) {
   var item = _recibosData[i];
   if (!item) return;
 
-  // Generar URL firmada (válida 60 segundos) para descargar el PDF privado
   var path = item.mes + '/' + item.filename;
   var { data, error } = await sbClient.storage.from('recibos').createSignedUrl(path, 60);
   if (error || !data) { alert('Erro ao descarregar o recibo.'); return; }
@@ -158,14 +166,10 @@ async function _downloadRecibo(i) {
   a.click();
 }
 
-
-
-
-// ── SWEEP LINE ──
 function sweepThen(callback) {
   var line = document.getElementById('sweep-line');
   line.classList.remove('sweep');
-  void line.offsetWidth; // reflow
+  void line.offsetWidth; 
   line.classList.add('sweep');
   setTimeout(callback, 420);
   setTimeout(function() { line.classList.remove('sweep'); }, 800);
@@ -174,19 +178,22 @@ function sweepThen(callback) {
 window.addEventListener("load", function() {
   setTimeout(function() {
     var intro = document.getElementById("intro-screen");
-    intro.style.opacity = "0";
-    setTimeout(function() {
-      if (intro.parentNode) intro.remove();
-      var loginScreen = document.getElementById('login-screen');
-      // pequeño delay para que el browser pinte opacity:0 antes de la transición
+    if(intro) {
+      intro.style.opacity = "0";
       setTimeout(function() {
-        loginScreen.classList.add('visible');
-        // trigger stagger animations for login items
-        loginScreen.querySelectorAll('.login-item').forEach(function(el) {
-          el.style.animationPlayState = 'running';
-        });
-      }, 50);
-      document.getElementById('key-input').focus();
-    }, 2100);
+        if (intro.parentNode) intro.remove();
+        var loginScreen = document.getElementById('login-screen');
+        setTimeout(function() {
+          if(loginScreen) {
+            loginScreen.classList.add('visible');
+            loginScreen.querySelectorAll('.login-item').forEach(function(el) {
+              el.style.animationPlayState = 'running';
+            });
+          }
+        }, 50);
+        var keyInput = document.getElementById('key-input');
+        if(keyInput) keyInput.focus();
+      }, 2100);
+    }
   }, 1000);
 });

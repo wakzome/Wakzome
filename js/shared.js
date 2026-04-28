@@ -107,6 +107,7 @@
       } else {
         // ── LOGIN TIENDA ──
         currentStore = data.tienda;
+        window._currentStoreGlobal = data.tienda;
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
           showGreeting(data.tienda, function() {

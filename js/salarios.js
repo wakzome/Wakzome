@@ -15,8 +15,9 @@
 
     // Fila destacada ao copiar
     '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s; }',
-    '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied .s-liq-check { display:inline-block; color:#7ecfc0; }',
+    '#s-salary-table tbody tr.s-row-copied td * { color:#ffffff !important; }',
+    '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; }',
+    '#s-salary-table tbody tr.s-row-copied .s-liq-check { display:inline-block !important; color:#7ecfc0 !important; }',
   ].join('\n');
   document.head.appendChild(st);
 })();

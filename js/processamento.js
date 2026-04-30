@@ -3038,6 +3038,43 @@
     /* auto-save every 10 s */
     setInterval(function() { procSaveSession(false); }, 10000);
 
+    /* ── Auto-cierre por inactividad: 10 minutos ──
+       Se resetea con cualquier click, tecla o input dentro del módulo.
+       Si no hay actividad en 10 min y hay sesión activa, guarda y vuelve
+       al dashboard exactamente igual que si el usuario hubiera pulsado volver. */
+    var _inactivityTimer = null;
+    var _INACTIVITY_MS   = 10 * 60 * 1000;
+
+    function procResetInactivity() {
+      clearTimeout(_inactivityTimer);
+      _inactivityTimer = setTimeout(function() {
+        if (!_activeSessionKey) return;
+        var backBtn = document.getElementById('adm-back-btn');
+        if (!backBtn) return;
+        if (_isSynced) procSaveSession(false);
+        procHideFloatingButtons();
+        _isSynced         = false;
+        _activeSessionKey = null;
+        _procInited       = false;
+        faturaCount       = 0;
+        activeFaturas     = [];
+        Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+        _procSentRefs = {};
+        var cont = document.getElementById('proc-faturasContainer');
+        if (cont) cont.innerHTML = '';
+        setTimeout(function() {
+          backBtn._procBound = false;
+          backBtn.click();
+        }, 80);
+      }, _INACTIVITY_MS);
+    }
+
+    var _procRoot = document.getElementById('proc-root') || container;
+    _procRoot.addEventListener('click',   procResetInactivity, true);
+    _procRoot.addEventListener('keydown', procResetInactivity, true);
+    _procRoot.addEventListener('input',   procResetInactivity, true);
+    procResetInactivity();
+
     /* Undo keyboard shortcut (Ctrl+Z) */
     procInitUndoKeyboard();
 

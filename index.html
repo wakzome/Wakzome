@@ -3120,6 +3120,45 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #recibos-overlay-back,
 #etiquetas-overlay-back { color: #fff !important; }
 
+/* ── REGRA UNIVERSAL: fundo escuro = texto sempre claro ──
+   Cobre qualquer elemento com background escuro, agora e no futuro,
+   em qualquer módulo. Nunca mais texto escuro sobre fundo escuro.    */
+[style*="background:#1a1a1a"], [style*="background: #1a1a1a"],
+[style*="background:#2e2e2e"], [style*="background: #2e2e2e"],
+[style*="background:#000"],    [style*="background: #000"],
+[style*="background:#111"],    [style*="background: #111"],
+[style*="background:#222"],    [style*="background: #222"],
+[style*="background:#333"],    [style*="background: #333"],
+[style*="background-color:#1a1a1a"], [style*="background-color: #1a1a1a"],
+[style*="background-color:#000"],    [style*="background-color: #000"],
+[style*="background-color:#111"],    [style*="background-color: #111"],
+[style*="background-color:#222"],    [style*="background-color: #222"],
+[style*="background-color:#333"],    [style*="background-color: #333"] {
+  color: #fff !important;
+}
+[style*="background:#1a1a1a"] *, [style*="background: #1a1a1a"] *,
+[style*="background:#2e2e2e"] *, [style*="background: #2e2e2e"] *,
+[style*="background:#000"] *,    [style*="background: #000"] *,
+[style*="background:#111"] *,    [style*="background: #111"] *,
+[style*="background:#222"] *,    [style*="background: #222"] *,
+[style*="background:#333"] *,    [style*="background: #333"] *,
+[style*="background-color:#000"] *, [style*="background-color: #000"] *,
+[style*="background-color:#111"] *, [style*="background-color: #111"] *,
+[style*="background-color:#222"] *, [style*="background-color: #222"] *,
+[style*="background-color:#333"] *, [style*="background-color: #333"] * {
+  color: #fff !important;
+}
+
+/* Clases con fondo oscuro — cubre cualquier clase presente o futura */
+.bg-dark, .dark, .dark-bg, .s-row-copied,
+[class*="dark-row"], [class*="row-dark"], [class*="bg-black"] {
+  color: #fff !important;
+}
+.bg-dark *, .dark *, .dark-bg *, .s-row-copied *,
+[class*="dark-row"] *, [class*="row-dark"] *, [class*="bg-black"] * {
+  color: #fff !important;
+}
+
 /* Hover de botones que se vuelven negros */
 #key-submit:hover,
 #recibos-link:hover,

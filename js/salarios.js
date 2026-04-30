@@ -14,10 +14,8 @@
     '.s-liq-copy-btn.s-liq-copy-ok { color:#4A7C6F; border-color:#4A7C6F; background:#f0faf8; }',
 
     // Fila destacada ao copiar: subtil, escala de cinzentos, elegante
-    '#s-salary-table tbody tr.s-row-copied { background:#1a1a1a; transition:background .2s, color .2s; }',
-    '#s-salary-table tbody tr.s-row-copied td { color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:color .2s, font-size .2s; }',
-    '#s-salary-table tbody tr.s-row-copied:hover { background:#2a2a2a !important; }',
-    '#s-salary-table tbody tr.s-row-copied:hover td { color:#ffffff !important; }',
+    '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s, font-size .2s; }',
+    '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; color:#ffffff !important; }',
     '#s-salary-table tbody tr.s-row-copied .s-liq-copy-btn { border-color:#555; color:#aaa; }',
   ].join('\n');
   document.head.appendChild(st);

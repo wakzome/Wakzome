@@ -192,10 +192,13 @@
       '@keyframes proc-flag-pulse { 0%,100%{box-shadow:0 1px 6px rgba(155,77,77,.5)} 50%{box-shadow:0 2px 12px rgba(155,77,77,.8)} }',
       /* Active row highlight (when ref/name/price copy button is clicked) */
       '#proc-content .proc-table-wrap tbody tr.proc-row-active { background:#000 !important; outline:2px solid #000; outline-offset:-1px; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-active:hover { background:#000 !important; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-active td { color:#fff !important; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-active td * { color:#fff !important; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-active td input { color:#fff !important; background:transparent !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-active:hover td { background:#000 !important; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-active td.td-ref { background:#111 !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-active:hover td.td-ref { background:#111 !important; }',
       /* Flagged row highlight */
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged { background:linear-gradient(90deg,rgba(155,77,77,.10) 0%,rgba(255,235,238,.45) 100%) !important; outline:2px solid rgba(155,77,77,.35); outline-offset:-1px; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover { background:linear-gradient(90deg,rgba(155,77,77,.16) 0%,rgba(255,235,238,.6) 100%) !important; }',

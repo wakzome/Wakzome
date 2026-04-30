@@ -36,94 +36,6 @@ function rDetectMes() {
   return `${String(month).padStart(2,'0')}-${year}`;
 }
 
-// ── Supabase: cargar senhas ───────────────────────────────────
-async function rLoadSenhas() {
-  try {
-    const { data, error } = await sbClient.from('senhas_recibos').select('nome, nome_orig, senha');
-    if (error) throw error;
-    rSenhasMap.clear();
-    for (const row of data) {
-      rSenhasMap.set(rNormalize(row.nome), { nome_orig: row.nome_orig || row.nome, senha: row.senha });
-    }
-    console.log('[senhas] carregadas:', rSenhasMap.size);
-  } catch(e) { console.error('[senhas]', e); }
-}
-
-function rFindSenha(detectedName) {
-  if (!detectedName) return null;
-  const dn = rNormalize(detectedName);
-  if (rSenhasMap.has(dn)) return rSenhasMap.get(dn);
-  for (const [k,v] of rSenhasMap) { if (k.includes(dn) || dn.includes(k)) return v; }
-  const words = dn.split(' ').filter(w => w.length > 2);
-  if (words.length >= 2) {
-    for (const [k,v] of rSenhasMap) { if (words.every(w => k.includes(w))) return v; }
-    for (const [k,v] of rSenhasMap) { if (words.filter(w => k.includes(w)).length >= Math.max(2, words.length-1)) return v; }
-  }
-  return null;
-}
-
-async function rOnPdfLoaded() {
-  rSetStatus('a consultar senhas…');
-  const panel = document.getElementById('r-senhas-panel');
-  if (panel) panel.innerHTML = '<div style="padding:14px;color:#bbb;font-size:.72rem;text-align:center;">a carregar…</div>';
-  await rLoadSenhas();
-  rSetStatus('a extrair páginas…');
-  const pdfBytes = await rPdfFile.arrayBuffer();
-  const pages = await rExtractPages(pdfBytes);
-  window._rPages = pages;
-  rRenderPanel();
-  rCheckReady();
-}
-
-function rRenderPanel() {
-  const panel = document.getElementById('r-senhas-panel');
-  if (!panel || !window._rPages) return;
-  const pages = window._rPages;
-  const withPwd = pages.filter(p => !!rFindSenha(p.detectedName)).length;
-  const missing = pages.length - withPwd;
-  let rows = '';
-  pages.forEach((page, i) => {
-    const found = rFindSenha(page.detectedName);
-    const name = found ? (found.nome_orig || page.detectedName) : (page.detectedName || 'pág.'+page.pageIndex);
-    const pwd  = found ? found.senha : null;
-    rows += '<tr>'
-      + '<td style="padding:3px 8px;font-size:.72rem;color:#555;border-bottom:1px solid #f2f2f2;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+rEscHtml(name)+'">'+rEscHtml(name)+'</td>'
-      + '<td style="padding:3px 8px;border-bottom:1px solid #f2f2f2;white-space:nowrap;">'
-      + (pwd
-        ? '<span style="font-family:monospace;font-size:.70rem;background:#f2f2f2;border:1px solid #e0e0e0;border-radius:3px;padding:1px 5px;color:#444;">'+rEscHtml(pwd)+'</span>'
-        : '<button onclick="rGerarSenhaPanel('+i+')" style="font-size:.65rem;padding:2px 7px;border:1px solid #ddd;border-radius:4px;background:#f7f7f7;color:#666;cursor:pointer;font-family:inherit;">gerar senha</button>')
-      + '</td>'
-      + '</tr>';
-  });
-  panel.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#f9f9f9;border-bottom:1px solid #ececec;border-radius:10px 10px 0 0;">'
-    + '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#aaa;">colaboradoras <span style="background:#ebebeb;border-radius:20px;padding:0 5px;color:#999;">'+pages.length+'</span></span>'
-    + '<span style="font-size:.65rem;color:#aaa;">'+withPwd+' ✓'+(missing ? ' · <span style="color:#bbb;">'+missing+' sem senha</span>' : '')+'</span>'
-    + '</div>'
-    + '<div style="overflow-y:auto;max-height:420px;">'
-    + '<table style="width:100%;border-collapse:collapse;">'
-    + '<thead><tr>'
-    + '<th style="font-size:.60rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ccc;padding:5px 8px;border-bottom:1px solid #ebebeb;background:#f5f5f5;text-align:left;">nome</th>'
-    + '<th style="font-size:.60rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ccc;padding:5px 8px;border-bottom:1px solid #ebebeb;background:#f5f5f5;text-align:left;">senha</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
-}
-
-async function rGerarSenhaPanel(i) {
-  const page = window._rPages && window._rPages[i];
-  if (!page) return;
-  const upper='ABCDEFGHJKLMNPQRSTUVWXYZ',lower='abcdefghjkmnpqrstuvwxyz',digits='23456789',sp='#@&';
-  const pwd = upper[Math.floor(Math.random()*upper.length)]+lower[Math.floor(Math.random()*lower.length)]+lower[Math.floor(Math.random()*lower.length)]+sp[Math.floor(Math.random()*sp.length)]+digits[Math.floor(Math.random()*digits.length)]+digits[Math.floor(Math.random()*digits.length)];
-  const nomeNorm = rNormalize(page.detectedName || 'PAGINA_'+page.pageIndex);
-  await sbClient.from('senhas_recibos').upsert({ nome: nomeNorm, nome_orig: nomeNorm, senha: pwd, atualizado_em: new Date().toISOString() }, { onConflict: 'nome' });
-  rSenhasMap.set(nomeNorm, { nome_orig: nomeNorm, senha: pwd });
-  rRenderPanel();
-  rCheckReady();
-}
-
-function rEscHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 function rLoadConfig() {
   // Já não há campo manual — o mês é sempre calculado automaticamente
   const mes = rDetectMes();
@@ -155,25 +67,34 @@ function rShowMesBadge(mes) {
   badge.innerHTML = `<span style="color:#888;font-weight:400;font-size:.82rem;">a processar</span><strong style="font-size:1.05em;">${label}</strong>`;
 }
 
-let rPdfFile = null;
-let rSenhasMap = new Map();
+let rPdfFile = null, rCsvFile = null;
 
-function rSetupUpload() {
-  const label  = document.getElementById('r-label-pdf');
-  const input  = document.getElementById('r-input-pdf');
-  const nameEl = document.getElementById('r-name-pdf');
-  const handle = async (f) => {
-    if (!f) return;
-    rPdfFile = f;
-    nameEl.textContent = f.name;
-    await rOnPdfLoaded();
-  };
-  input.addEventListener('change', e => handle(e.target.files[0]));
+function rSetupUpload(labelId, inputId, nameId, type) {
+  const label = document.getElementById(labelId);
+  const input = document.getElementById(inputId);
+  const nameEl = document.getElementById(nameId);
+  input.addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (type === 'pdf') {
+      rPdfFile = f;
+      rShowGuide('right', '③ carrega\no csv\nde senhas', '');
+    } else { rCsvFile = f; }
+    nameEl.textContent = f.name; rCheckReady();
+  });
   label.addEventListener('dragover',  e => { e.preventDefault(); label.classList.add('drag-over'); });
   label.addEventListener('dragleave', () => label.classList.remove('drag-over'));
-  label.addEventListener('drop', e => { e.preventDefault(); label.classList.remove('drag-over'); handle(e.dataTransfer.files[0]); });
+  label.addEventListener('drop', e => {
+    e.preventDefault(); label.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0]; if (!f) return;
+    if (type === 'pdf') {
+      rPdfFile = f;
+      rShowGuide('right', '③ carrega\no csv\nde senhas', '');
+    } else { rCsvFile = f; }
+    nameEl.textContent = f.name; rCheckReady();
+  });
 }
-rSetupUpload();
+rSetupUpload('r-label-pdf', 'r-input-pdf', 'r-name-pdf', 'pdf');
+rSetupUpload('r-label-csv', 'r-input-csv', 'r-name-csv', 'csv');
 
 // ── Guide helpers — geometric shapes with SVG text ──
 function rShowGuide(side, title, note) {
@@ -241,20 +162,19 @@ function rHideAllGuides() {
 }
 
 function rCheckReady() {
-  // sin CSV — el botón aparece cuando el PDF está cargado y todas las páginas tienen decisión
   const btn = document.getElementById('r-process-btn');
-  if (!rPdfFile || !window._rPages || !window._rPages.length) { btn.classList.remove('show'); return; }
-  const pending = window._rPages.filter(p => {
-    const found = rFindSenha(p.detectedName);
-    return !found && !p._decision;
-  }).length;
-  if (pending === 0) {
+  const hasPdf = !!rPdfFile;
+  const hasCsv = !!rCsvFile;
+  if (hasPdf && hasCsv) {
     btn.classList.add('show');
-    rHideAllGuides();
-    rSetStatus('');
+    rShowGuide('left', '', '');
+    rShowGuide('right', '', '');
+    rSetStatus('③ Clica em processar recibos · Atenção: recibos sem senha (pessoal administrativo ou sem chave) não serão publicados — podes actualizar o CSV ou introduzir a senha no aviso que aparecerá.');
+  } else if (hasPdf && !hasCsv) {
+    btn.classList.remove('show');
+    rShowGuide('right', '③ carrega\no csv\nde senhas', '');
   } else {
     btn.classList.remove('show');
-    rSetStatus(pending + ' colaboradora(s) sem senha — gera a senha ou usa o botão no painel');
   }
 }
 
@@ -269,15 +189,21 @@ async function rProcessRecibos() {
   rSetProgressDetail('a ler ficheiros…');
   rHideWarnings();
   try {
-    const pages = window._rPages;
-    if (!pages || !pages.length) { rSetStatus('⚠️ carrega um PDF primeiro'); btn.disabled = false; return; }
+    const csvText    = await rCsvFile.text();
+    const csvEntries = rParseCSV(csvText);
+    if (!csvEntries.length) { rSetStatus('⚠️ CSV vazio ou formato inválido. use nome;senha'); rSetProgressDetail(''); btn.disabled = false; return; }
+    const pdfBytes = await rPdfFile.arrayBuffer();
+    rSetStatus('a ler páginas do pdf…');
+    rSetProgressDetail('a extrair páginas…');
+    const pages = await rExtractPages(pdfBytes);
+    rSetProgressDetail(pages.length + ' páginas encontradas');
     const pageMatches = pages.map(page => {
-      const found = rFindSenha(page.detectedName);
-      let csvEntry = found ? { name: rNormalize(page.detectedName||''), pwd: found.senha } : null;
-      if (!csvEntry && page._decision === 'nopwd') csvEntry = { name: page.detectedName||'', pwd: null };
-      return { page, csvEntry };
+      const matched = csvEntries.find(e =>
+        (page.detectedName && page.detectedName.includes(e.name)) || page.text.includes(e.name)
+      );
+      return { page, csvEntry: matched || null };
     });
-    const missingPages = pageMatches.filter(m => !m.csvEntry && !m.page._decision);
+    const missingPages = pageMatches.filter(m => !m.csvEntry);
     if (missingPages.length > 0) {
       rSetStatus(`${missingPages.length} pessoa(s) sem senha — a aguardar decisão…`);
       for (let i = 0; i < missingPages.length; i++) {

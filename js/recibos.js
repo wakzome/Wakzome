@@ -131,6 +131,33 @@ function rSetupUpload() {
   });
 }
 
+// ── Buscar senha con matching flexible ───────────────────────
+function rFindSenha(detectedName) {
+  if (!detectedName) return null;
+  const dn = rNormalize(detectedName);
+  // 1. Exact
+  if (rSenhasMap.has(dn)) return { key: dn, ...rSenhasMap.get(dn) };
+  // 2. Containment
+  for (const [k, v] of rSenhasMap) {
+    if (k.includes(dn) || dn.includes(k)) return { key: k, ...v };
+  }
+  // 3. All words match
+  const words = dn.split(' ').filter(w => w.length > 2);
+  if (words.length >= 2) {
+    for (const [k, v] of rSenhasMap) {
+      if (words.every(w => k.includes(w))) return { key: k, ...v };
+    }
+  }
+  // 4. Most words match (tolerance for truncated names)
+  if (words.length >= 2) {
+    for (const [k, v] of rSenhasMap) {
+      const matches = words.filter(w => k.includes(w)).length;
+      if (matches >= Math.max(2, words.length - 1)) return { key: k, ...v };
+    }
+  }
+  return null;
+}
+
 // ── Cuando se carga PDF: extraer + cruzar con Supabase ───────
 async function rOnPdfLoaded() {
   rSetStatus('a consultar senhas em Supabase…');
@@ -139,7 +166,7 @@ async function rOnPdfLoaded() {
 
   const ok = await rLoadSenhasFromSupabase();
   if (!ok) {
-    rSetStatus('⚠️ Erro ao carregar senhas de Supabase');
+    rSetStatus('\u26a0\ufe0f Erro ao carregar senhas de Supabase');
     if (panel) panel.innerHTML = '<div class="r-panel-empty">erro ao conectar com Supabase</div>';
     return;
   }
@@ -149,11 +176,11 @@ async function rOnPdfLoaded() {
   const pages = await rExtractPages(pdfBytes);
 
   rPageMatches = pages.map(page => {
-    const nameKey = page.detectedName || '';
-    const entry   = nameKey ? rSenhasMap.get(nameKey) : null;
+    const found = rFindSenha(page.detectedName);
+    console.log('[recibos] pag', page.pageIndex, '| detectado:', page.detectedName, '| match:', found ? found.key : 'NONE');
     return {
       page,
-      csvEntry: entry ? { name: nameKey, nome_orig: entry.nome_orig, pwd: entry.senha } : null,
+      csvEntry: found ? { name: found.key, nome_orig: found.nome_orig, pwd: found.senha } : null,
       decision: null
     };
   });

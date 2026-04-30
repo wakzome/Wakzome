@@ -1442,11 +1442,6 @@ td, th { border-radius:10px; margin:2px; }
   #r-hint-pdf, #r-hint-csv { display: none; }
   #r-upload-grid { grid-column: 1; grid-template-columns: 1fr; }
 }
-#r-recibos-layout { display:flex; flex-direction:row; align-items:flex-start; gap:18px; width:100%; max-width:1060px; }
-#r-recibos-left   { display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
-#r-upload-grid    { grid-template-columns: 220px !important; }
-#r-senhas-panel   { flex:1; border:1px solid #e2e2e2; border-radius:10px; background:#fff; min-width:300px; align-self:flex-start; }
-@media (max-width:860px) { #r-recibos-layout { flex-direction:column; } #r-senhas-panel { min-width:0 !important; width:100%; } }
 .upload-box {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; min-height: 110px;
@@ -3481,29 +3476,29 @@ td                   { font-size: .96rem !important; }
 
     <!-- CONFIG -->
 
-    <div id="r-recibos-layout">
-      <div id="r-recibos-left">
-        <!-- UPLOAD PDF -->
-        <div id="r-upload-outer">
-          <div id="r-hint-pdf" class="r-inline-hint"></div>
-          <div id="r-upload-grid">
-            <label class="upload-box" id="r-label-pdf">
-              <span class="upload-icon">📄</span>
-              pdf de recibos<br>
-              <small style="font-size:.75rem;opacity:.6">clique ou arraste</small>
-              <input type="file" id="r-input-pdf" accept="application/pdf">
-              <span class="file-loaded" id="r-name-pdf"></span>
-            </label>
-          </div>
-        </div>
-        <button id="r-process-btn">processar recibos</button>
-      </div><!-- /r-recibos-left -->
-
-      <!-- Panel senhas -->
-      <div id="r-senhas-panel">
-        <div style="padding:20px;color:#bbb;font-size:.72rem;text-align:center;">carrega um pdf para ver as senhas</div>
+    <!-- UPLOAD GRID with inline step hints -->
+    <div id="r-upload-outer">
+      <div id="r-hint-pdf" class="r-inline-hint"></div>
+      <div id="r-upload-grid">
+        <label class="upload-box" id="r-label-pdf">
+          <span class="upload-icon">📄</span>
+          pdf de recibos<br>
+          <small style="font-size:.75rem;opacity:.6">clique ou arraste</small>
+          <input type="file" id="r-input-pdf" accept="application/pdf">
+          <span class="file-loaded" id="r-name-pdf"></span>
+        </label>
+        <label class="upload-box" id="r-label-csv">
+          <span class="upload-icon">📋</span>
+          csv de senhas<br>
+          <small style="font-size:.75rem;opacity:.6">nome;senha</small>
+          <input type="file" id="r-input-csv" accept=".csv,.txt">
+          <span class="file-loaded" id="r-name-csv"></span>
+        </label>
       </div>
-    </div><!-- /r-recibos-layout -->
+      <div id="r-hint-csv" class="r-inline-hint r-inline-hint-right"></div>
+    </div>
+
+    <button id="r-process-btn">processar recibos</button>
 
     <div id="r-status-area">
       <div id="r-status-msg"></div>

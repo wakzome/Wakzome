@@ -1419,28 +1419,47 @@ td, th { border-radius:10px; margin:2px; }
 #s-salary-table tfoot td:last-child { text-align: right; }
 
 /* ─── RECIBOS ─── */
-/* ── RECIBOS: upload outer wrapper with inline hints ── */
+
+/* ── Layout principal: upload izq + panel senhas der ── */
+#r-main-layout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+  max-width: 1100px;
+  padding: 0 0 16px;
+  box-sizing: border-box;
+}
+#r-left-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-width: 260px;
+}
+
+/* ── RECIBOS: upload outer wrapper con hint izquierdo ── */
 #r-upload-outer {
   display: grid;
-  grid-template-columns: 1fr auto auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 10px;
-  width: 100%; max-width: 980px; margin-bottom: 14px;
+  width: 100%;
+  margin-bottom: 14px;
 }
-/* hint-pdf: col 1 — pushes right toward PDF box */
 #r-hint-pdf  { grid-column: 1; display: flex; justify-content: flex-end; }
-/* upload grid: cols 2-3 */
 #r-upload-grid {
-  grid-column: 2 / 4;
-  display: grid; grid-template-columns: 220px 220px; gap: 14px;
+  grid-column: 2;
+  display: grid; grid-template-columns: 220px; gap: 14px;
 }
-/* hint-csv: col 4 — pushes left toward CSV box */
-#r-hint-csv  { grid-column: 4; display: flex; justify-content: flex-start; }
 
-@media (max-width: 700px) {
+@media (max-width: 860px) {
+  #r-main-layout { grid-template-columns: 1fr; }
   #r-upload-outer { grid-template-columns: 1fr; }
-  #r-hint-pdf, #r-hint-csv { display: none; }
+  #r-hint-pdf { display: none; }
   #r-upload-grid { grid-column: 1; grid-template-columns: 1fr; }
+  #r-senhas-panel { min-width: 0; max-width: 100%; }
 }
 .upload-box {
   display: flex; flex-direction: column; align-items: center;
@@ -1641,6 +1660,114 @@ td, th { border-radius:10px; margin:2px; }
 .modal-btn:hover { background: #f5f5f5; }
 .modal-btn.primary { border-color: #555; }
 .modal-btn.primary:hover { background: #555; color: #fff; }
+
+/* ── Panel senhas (derecha del tab recibos) ── */
+#r-senhas-panel {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 14px;
+  overflow: hidden;
+  font-family: 'MontserratLight', sans-serif;
+  font-size: .82rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+  align-self: start;
+}
+.r-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 10px; border-bottom: 1px solid #f0f0f0;
+  background: #fafafa; flex-shrink: 0;
+}
+.r-panel-title {
+  font-size: .78rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: #555 !important;
+}
+.r-panel-count {
+  background: #e8e8e8; color: #555 !important; border-radius: 20px;
+  padding: 1px 7px; font-size: .72rem; font-weight: 600; margin-left: 5px;
+}
+.r-panel-stats { display: flex; gap: 8px; align-items: center; }
+.r-stat { font-size: .72rem; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+.r-stat-ok   { background: #e8f5e9; color: #388e3c !important; }
+.r-stat-warn { background: #fff8e1; color: #f57f17 !important; }
+
+.r-panel-table-wrap { overflow-y: auto; flex: 1; }
+.r-panel-table { width: 100%; border-collapse: collapse; }
+.r-panel-table thead th {
+  position: sticky; top: 0; background: #f5f5f5;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #888 !important; padding: 7px 10px;
+  border-bottom: 1px solid #e8e8e8; text-align: left; z-index: 1;
+}
+.r-th-num { width: 28px; text-align: center; }
+
+.r-panel-row td {
+  padding: 8px 10px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
+}
+.r-panel-row:last-child td { border-bottom: none; }
+.r-row-ok      { background: #fff; }
+.r-row-missing { background: #fffdf5; }
+.r-row-decided { background: #fafafa; }
+
+.r-td-num  { color: #bbb !important; font-size: .72rem; text-align: center; width: 28px; }
+.r-td-name { font-size: .78rem; font-weight: 600; color: #333 !important; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-td-pwd  { white-space: nowrap; }
+.r-td-action { white-space: nowrap; }
+
+.r-pwd-chip {
+  display: inline-block; font-family: 'SF Mono','Fira Mono',monospace;
+  font-size: .75rem; font-weight: 600; color: #2e7d32 !important;
+  background: #e8f5e9; border: 1px solid #c8e6c9;
+  border-radius: 6px; padding: 2px 8px; letter-spacing: .03em;
+}
+.r-pwd-none { color: #bbb !important; font-size: .75rem; font-style: italic; }
+
+.r-badge { display: inline-block; font-size: .7rem; font-weight: 700; border-radius: 20px; padding: 2px 8px; }
+.r-badge-ok    { background: #e8f5e9; color: #388e3c !important; }
+.r-badge-nopwd { background: #e3f2fd; color: #1565c0 !important; }
+.r-badge-skip  { background: #f5f5f5; color: #999 !important; }
+
+.r-btn-gerar {
+  font-size: .72rem; font-weight: 600; color: #555 !important;
+  background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px;
+  padding: 3px 9px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s; white-space: nowrap;
+}
+.r-btn-gerar:hover { background: #333 !important; color: #fff !important; border-color: #333; }
+.r-btn-gerar:disabled { opacity: .5; cursor: wait; }
+
+.r-decision-wrap { display: flex; gap: 4px; flex-wrap: wrap; }
+.r-btn-nopwd, .r-btn-skip {
+  font-size: .68rem; font-weight: 600; border-radius: 5px; padding: 2px 7px;
+  cursor: pointer; transition: background .15s, color .15s; border: 1px solid; white-space: nowrap;
+}
+.r-btn-nopwd { background: #e3f2fd; color: #1565c0 !important; border-color: #bbdefb; }
+.r-btn-nopwd:hover { background: #1565c0 !important; color: #fff !important; border-color: #1565c0; }
+.r-btn-skip  { background: #f5f5f5; color: #888 !important; border-color: #ddd; }
+.r-btn-skip:hover  { background: #888 !important; color: #fff !important; border-color: #888; }
+
+.r-btn-undo {
+  font-size: .72rem; background: none; border: none;
+  color: #bbb !important; cursor: pointer; padding: 1px 5px; border-radius: 4px;
+  transition: color .15s, background .15s; margin-left: 3px; vertical-align: middle;
+}
+.r-btn-undo:hover { background: #eee; color: #555 !important; }
+
+.r-panel-footer { padding: 9px 16px; font-size: .75rem; font-weight: 600; border-top: 1px solid #f0f0f0; flex-shrink: 0; }
+.r-panel-footer-ok   { background: #e8f5e9; color: #2e7d32 !important; }
+.r-panel-footer-warn { background: #fff8e1; color: #f57f17 !important; }
+
+.r-panel-loading, .r-panel-empty {
+  padding: 40px 20px; text-align: center; color: #aaa !important; font-size: .82rem;
+}
+.r-spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid #ddd; border-top-color: #888; border-radius: 50%;
+  animation: r-spin .7s linear infinite; margin-right: 6px; vertical-align: middle;
+}
+@keyframes r-spin { to { transform: rotate(360deg); } }
 
 /* ══ GRAIN ══ */
 body::before {
@@ -3474,43 +3601,47 @@ td                   { font-size: .96rem !important; }
   <!-- TAB RECIBOS -->
   <div id="tab-recibos" class="tab-panel">
 
-    <!-- CONFIG -->
+    <!-- LAYOUT: upload izquierda + panel senhas derecha -->
+    <div id="r-main-layout">
 
-    <!-- UPLOAD GRID with inline step hints -->
-    <div id="r-upload-outer">
-      <div id="r-hint-pdf" class="r-inline-hint"></div>
-      <div id="r-upload-grid">
-        <label class="upload-box" id="r-label-pdf">
-          <span class="upload-icon">📄</span>
-          pdf de recibos<br>
-          <small style="font-size:.75rem;opacity:.6">clique ou arraste</small>
-          <input type="file" id="r-input-pdf" accept="application/pdf">
-          <span class="file-loaded" id="r-name-pdf"></span>
-        </label>
-        <label class="upload-box" id="r-label-csv">
-          <span class="upload-icon">📋</span>
-          csv de senhas<br>
-          <small style="font-size:.75rem;opacity:.6">nome;senha</small>
-          <input type="file" id="r-input-csv" accept=".csv,.txt">
-          <span class="file-loaded" id="r-name-csv"></span>
-        </label>
+      <!-- Columna izquierda: upload PDF + estado -->
+      <div id="r-left-col">
+
+        <div id="r-upload-outer">
+          <div id="r-hint-pdf" class="r-inline-hint"></div>
+          <div id="r-upload-grid">
+            <label class="upload-box" id="r-label-pdf">
+              <span class="upload-icon">📄</span>
+              pdf de recibos<br>
+              <small style="font-size:.75rem;opacity:.6">clique ou arraste</small>
+              <input type="file" id="r-input-pdf" accept="application/pdf">
+              <span class="file-loaded" id="r-name-pdf"></span>
+            </label>
+          </div>
+        </div>
+
+        <button id="r-process-btn">processar recibos</button>
+
+        <div id="r-status-area">
+          <div id="r-status-msg"></div>
+          <div id="r-warnings-box">
+            <div class="warn-title">senhas em falta — nenhum recibo foi gerado</div>
+            <ul id="r-warnings-list"></ul>
+          </div>
+        </div>
+
+        <!-- PROGRESS -->
+        <div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>
+        <div id="r-progress-detail"></div>
+
+      </div><!-- /#r-left-col -->
+
+      <!-- Columna derecha: panel de senhas -->
+      <div id="r-senhas-panel">
+        <div class="r-panel-empty">carrega um pdf para ver as senhas</div>
       </div>
-      <div id="r-hint-csv" class="r-inline-hint r-inline-hint-right"></div>
-    </div>
 
-    <button id="r-process-btn">processar recibos</button>
-
-    <div id="r-status-area">
-      <div id="r-status-msg"></div>
-      <div id="r-warnings-box">
-        <div class="warn-title">senhas em falta — nenhum recibo foi gerado</div>
-        <ul id="r-warnings-list"></ul>
-      </div>
-    </div>
-
-    <!-- PROGRESS -->
-    <div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>
-    <div id="r-progress-detail"></div>
+    </div><!-- /#r-main-layout -->
 
     <!-- CONFERIR — fixed right -->
     <div id="r-conferir-fixed">

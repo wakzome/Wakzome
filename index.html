@@ -4761,7 +4761,7 @@ td                   { font-size: .96rem !important; }
     sbClient.storage.from('recibos').createSignedUrl('index.json', 60)
       .then(function (signRes) {
         if (signRes.error) throw new Error(signRes.error.message);
-        return fetch(signRes.data.signedUrl, { cache: 'no-store' });
+        return fetch(signRes.data.signedUrl + '&t=' + Date.now(), { cache: 'no-store' });
       })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);

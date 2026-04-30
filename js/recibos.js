@@ -67,11 +67,16 @@ async function rLoadSenhasFromSupabase() {
     if (error) throw error;
     rSenhasMap.clear();
     for (const row of data) {
-      rSenhasMap.set(row.nome.trim(), { nome_orig: row.nome_orig, senha: row.senha });
+      // Store with normalized key (uppercase, no accents)
+      const key = rNormalize(row.nome.trim());
+      rSenhasMap.set(key, { nome_orig: row.nome_orig || row.nome, senha: row.senha });
     }
+    console.log('[recibos] senhas carregadas:', rSenhasMap.size, [...rSenhasMap.keys()].slice(0,3));
+    rSetStatus(`senhas: ${rSenhasMap.size} carregadas de Supabase`);
     return true;
   } catch (e) {
     console.error('[recibos] erro ao carregar senhas:', e);
+    rSetStatus('\u26a0\ufe0f Erro Supabase: ' + e.message);
     return false;
   }
 }
@@ -334,26 +339,6 @@ function rCheckReadyToProcess() {
   }
 }
 
-// ── CSS del panel (se inyecta en <head>) ──────────────────────
-function rInjectPanelStyles() {
-  if (document.getElementById('r-panel-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'r-panel-styles';
-  style.textContent = `
-    /* ── Panel contenedor ── */
-    #r-senhas-panel {
-      position: relative;
-      background: #fff;
-      border: 1px solid #e8e8e8;
-      border-radius: 14px;
-      overflow: hidden;
-      font-family: inherit;
-      font-size: .82rem;
-      box-shadow: 0 2px 12px rgba(0,0,0,.06);
-      display: flex;
-      flex-direction: column;
-      max-height: 520px;
-    }
 
     /* ── Header ── */
     .r-panel-header {
@@ -739,6 +724,5 @@ async function rUploadToSupabase(mes, filename, bytes) {
 }
 
 // ── Init ──────────────────────────────────────────────────────
-rInjectPanelStyles();
 rSetupUpload();
 rLoadConfig();

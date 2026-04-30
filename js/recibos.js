@@ -213,6 +213,7 @@ async function rProcessRecibos() {
     };
     const indexBlob = new Blob([JSON.stringify(indexData, null, 2)], { type: 'application/json' });
     await sbClient.storage.from('recibos').remove(['index.json']);
+    await new Promise(resolve => setTimeout(resolve, 800));
     const indexUploadRes = await sbClient.storage.from('recibos').upload('index.json', indexBlob, { contentType: 'application/json' });
     console.log('[recibos] index.json upload result:', JSON.stringify(indexUploadRes));
     if (indexUploadRes.error) {

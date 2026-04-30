@@ -861,7 +861,7 @@ function agBindLogic() {
     if(e.key==='n'&&!document.getElementById('ag-mo').classList.contains('open')&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='SELECT'){e.preventDefault();openM(null);}
   });
   document.querySelectorAll('.ag-filter-btn').forEach(function(btn){
-    btn.addEventListener('click',function(){agFilter=this.dataset.filter;agForn=null;document.querySelectorAll('.ag-fb').forEach(function(b){b.classList.remove('active');});document.querySelectorAll('.ag-filter-btn').forEach(function(b){b.classList.remove('active');});this.classList.add('active');rBanner();rTable();rForn();});
+    btn.addEventListener('click',function(){agFilter=this.dataset.filter;agForn=null;document.querySelectorAll('.ag-fb').forEach(function(b){b.classList.remove('active');});document.querySelectorAll('.ag-filter-btn').forEach(function(b){b.classList.remove('active');});this.classList.add('active');if(agFilter==='pendente'){agSort.col='vencimento';agSort.dir='asc';}rBanner();rTable();rForn();});
   });
   document.querySelectorAll('#ag-table thead th[data-sort]').forEach(function(th){
     th.addEventListener('click',function(){var c=this.dataset.sort;agSort.dir=agSort.col===c?(agSort.dir==='asc'?'desc':'asc'):'asc';agSort.col=c;rTable();});

@@ -4040,6 +4040,8 @@
     /* Highlight the row */
     procActivateRow(btn);
   }
+
+  function procPVPToggleEdit(btn, fid, id) {
     var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
     if (!pvpEl) return;
     var display   = pvpEl.querySelector('.proc-pvp-display');

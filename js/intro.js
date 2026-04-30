@@ -1,109 +1,70 @@
-// ── INTRO: scatter → assemble animation ──
+// ── INTRO: rise → settle → rise out animation ──
 (function() {
   const word = 'wakzome';
   const el   = document.getElementById('dynamic-text');
 
-  // Ajuste de estilo para que coincida con la imagen (Grande y centrado)
   if (el) {
-    el.style.fontSize = 'clamp(3rem, 10vw, 6rem)'; // Tamaño responsivo similar a la captura
-    el.style.fontWeight = '300'; // Estilo fino/elegante
-    el.style.letterSpacing = '0.05em';
-    el.style.display = 'flex';
+    el.style.fontSize      = 'clamp(3rem, 10vw, 6rem)';
+    el.style.fontWeight    = '300';
+    el.style.letterSpacing = '0.12em';
+    el.style.display       = 'flex';
     el.style.justifyContent = 'center';
-    el.style.alignItems = 'center';
+    el.style.alignItems    = 'center';
   }
 
-  // Cada letra con orígenes aleatorios (ajustados para mayor escala)
-  const origins = [
-    { x: '-120vw', y: '-40vh',  r: '-180deg', s: '5',   blur: '15px' },
-    { x:  '80vw',  y: '-80vh',  r:  '120deg', s: '0.3', blur: '20px' },
-    { x: '-60vw',  y:  '90vh',  r: '-90deg',  s: '4',   blur: '12px' },
-    { x:  '100vw', y:  '30vh',  r:  '200deg', s: '0.5', blur: '25px' },
-    { x: '-90vw',  y: '-60vh',  r: '-150deg', s: '4.5', blur: '18px' },
-    { x:  '60vw',  y:  '70vh',  r:  '80deg',  s: '0.4', blur: '22px' },
-    { x: '-40vw',  y: '-100vh', r:  '160deg', s: '3.5', blur: '10px' },
-  ];
+  // Render word as single element for clean unified motion
+  const span = document.createElement('span');
+  span.textContent = word;
+  span.style.display    = 'inline-block';
+  span.style.color      = '#ffffff';
+  span.style.opacity    = '0';
+  span.style.transform  = 'translateY(38px)';
+  span.style.filter     = 'blur(6px)';
+  span.style.willChange = 'transform, opacity, filter';
+  el.appendChild(span);
 
-  const spans = [];
-  word.split('').forEach(function(ch, i) {
-    const span = document.createElement('span');
-    span.className = 'char';
-    span.textContent = ch;
-    const o = origins[i] || origins[0];
-    
-    // Estilos iniciales (dispersos)
-    span.style.display   = 'inline-block';
-    span.style.transform = `translate(${o.x}, ${o.y}) rotate(${o.r}) scale(${o.s})`;
-    span.style.filter    = `blur(${o.blur})`;
+  const riseIn   = 1100; // ms to rise into center
+  const easeIn   = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const holdMs   = 900;  // how long it stays visible and still
+  const riseOut  = 800;  // ms to rise and fade out
+  const easeOut  = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
+  // Phase 1 — rise in from below, settle to center
+  setTimeout(function() {
+    span.style.transition = [
+      'transform ' + riseIn + 'ms ' + easeIn,
+      'opacity '   + riseIn + 'ms ' + easeIn,
+      'filter '    + riseIn + 'ms ' + easeIn
+    ].join(', ');
+    span.style.opacity   = '1';
+    span.style.transform = 'translateY(0px)';
+    span.style.filter    = 'blur(0px)';
+  }, 200);
+
+  // Phase 2 — after hold, rise up and dissolve
+  setTimeout(function() {
+    span.style.transition = [
+      'transform ' + riseOut + 'ms ' + easeOut,
+      'opacity '   + riseOut + 'ms ' + easeOut,
+      'filter '    + riseOut + 'ms ' + easeOut
+    ].join(', ');
     span.style.opacity   = '0';
-    span.style.color     = '#fff'; // Color blanco para resaltar sobre fondo negro
-    
-    el.appendChild(span);
-    spans.push({ span, origin: o });
-  });
+    span.style.transform = 'translateY(-22px)';
+    span.style.filter    = 'blur(5px)';
 
-  // Staggered assembly
-  const baseDelay  = 200; 
-  const stagger    = 100;  
-  const duration   = 950; // Un poco más lento para notar la magnitud del tamaño
-  const easing     = 'cubic-bezier(0.16, 1, 0.3, 1)';
+    // fade the line too
+    var line = document.getElementById('intro-line');
+    if (line) {
+      line.style.transition = 'opacity ' + riseOut + 'ms ' + easeOut;
+      line.style.opacity    = '0';
+    }
+  }, 200 + riseIn + holdMs);
 
-  spans.forEach(function(item, i) {
-    const span = item.span;
-    const delay = baseDelay + i * stagger;
-
-    setTimeout(function() {
-      span.style.transition = [
-        `transform ${duration}ms ${easing}`,
-        `filter ${duration}ms ${easing}`,
-        `color ${duration * 1.2}ms ${easing}`,
-        `opacity ${duration}ms ease`
-      ].join(', ');
-      
-      span.style.opacity   = '1';
-      span.style.transform = 'translate(0,0) rotate(0deg) scale(1)';
-      span.style.filter    = 'blur(0px)';
-      span.style.color     = '#ffffff'; 
-    }, delay);
-  });
-
-  const lineDelay = baseDelay + word.length * stagger + duration * 0.6;
+  // Draw the line after word settles
   setTimeout(function() {
-    const line = document.getElementById('intro-line');
+    var line = document.getElementById('intro-line');
     if (line) line.classList.add('draw');
-  }, lineDelay);
-
-  // ── Elegant disappear: pause to read, then dissolve upward ──
-  const assembleEnd = baseDelay + word.length * stagger + duration;
-  const pauseAfter  = 600;   // tiempo visible tras ensamblaje
-  const exitDur     = 700;   // duración de la desaparición
-
-  setTimeout(function() {
-    spans.forEach(function(item, i) {
-      var span = item.span;
-      var revStagger = (spans.length - 1 - i) * 55; // orden invertido
-      setTimeout(function() {
-        span.style.transition = [
-          'transform ' + exitDur + 'ms cubic-bezier(0.4, 0, 0.2, 1)',
-          'opacity '   + exitDur + 'ms cubic-bezier(0.4, 0, 0.2, 1)',
-          'filter '    + exitDur + 'ms cubic-bezier(0.4, 0, 0.2, 1)'
-        ].join(', ');
-        span.style.transform = 'translateY(-28px) scale(0.92)';
-        span.style.opacity   = '0';
-        span.style.filter    = 'blur(8px)';
-      }, revStagger);
-    });
-
-    // fade out the line too
-    setTimeout(function() {
-      var line = document.getElementById('intro-line');
-      if (line) {
-        line.style.transition = 'opacity ' + exitDur + 'ms ease';
-        line.style.opacity    = '0';
-      }
-    }, 80);
-
-  }, assembleEnd + pauseAfter);
+  }, 200 + riseIn * 0.7);
 
 })();
 

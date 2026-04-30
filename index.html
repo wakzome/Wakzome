@@ -3111,53 +3111,69 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
   color: #000 !important;
 }
 
-/* ── EXCEPCIONES: texto blanco sobre fondos oscuros ── */
-/* Botones de volver (fondo negro) */
+/* ══════════════════════════════════════════════════════════════
+   REGLA ABSOLUTA: FONDO OSCURO = LETRA BLANCA, SIEMPRE, EN TODO
+   Cubre selectores CSS conocidos + style inline + clases futuras
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 1. Selectores CSS conocidos con fondo oscuro ── */
 #adm-back-btn,
+#adm-back-btn *,
 #agenda-overlay-back,
+#agenda-overlay-back *,
 #rotulos-overlay-back,
+#rotulos-overlay-back *,
 #processamento-overlay-back,
+#processamento-overlay-back *,
 #recibos-overlay-back,
-#etiquetas-overlay-back { color: #fff !important; }
+#recibos-overlay-back *,
+#etiquetas-overlay-back,
+#etiquetas-overlay-back *,
+#ventas-overlay-back,
+#ventas-overlay-back *,
+#intro-screen,
+#intro-screen *,
+#wz-wipe,
+.s-row-copied,
+.s-row-copied *,
+.adm-mod-card:hover .adm-mod-arrow,
+.adm-mod-card:hover .adm-mod-arrow * { color: #fff !important; }
 
-/* ── REGRA UNIVERSAL: fundo escuro = texto sempre claro ──
-   Cobre qualquer elemento com background escuro, agora e no futuro,
-   em qualquer módulo. Nunca mais texto escuro sobre fundo escuro.    */
-[style*="background:#1a1a1a"], [style*="background: #1a1a1a"],
-[style*="background:#2e2e2e"], [style*="background: #2e2e2e"],
-[style*="background:#000"],    [style*="background: #000"],
-[style*="background:#111"],    [style*="background: #111"],
-[style*="background:#222"],    [style*="background: #222"],
-[style*="background:#333"],    [style*="background: #333"],
-[style*="background-color:#1a1a1a"], [style*="background-color: #1a1a1a"],
-[style*="background-color:#000"],    [style*="background-color: #000"],
-[style*="background-color:#111"],    [style*="background-color: #111"],
-[style*="background-color:#222"],    [style*="background-color: #222"],
-[style*="background-color:#333"],    [style*="background-color: #333"] {
+/* ── 2. Qualquer elemento com background escuro via style inline ──
+   Cobre #000, #111, #222, #333, #1a1a1a, #2e2e2e e variantes      */
+[style*="background:#0"],    [style*="background: #0"],
+[style*="background:#1"],    [style*="background: #1"],
+[style*="background:#2"],    [style*="background: #2"],
+[style*="background:#3"],    [style*="background: #3"],
+[style*="background-color:#0"], [style*="background-color: #0"],
+[style*="background-color:#1"], [style*="background-color: #1"],
+[style*="background-color:#2"], [style*="background-color: #2"],
+[style*="background-color:#3"], [style*="background-color: #3"] {
   color: #fff !important;
 }
-[style*="background:#1a1a1a"] *, [style*="background: #1a1a1a"] *,
-[style*="background:#2e2e2e"] *, [style*="background: #2e2e2e"] *,
-[style*="background:#000"] *,    [style*="background: #000"] *,
-[style*="background:#111"] *,    [style*="background: #111"] *,
-[style*="background:#222"] *,    [style*="background: #222"] *,
-[style*="background:#333"] *,    [style*="background: #333"] *,
-[style*="background-color:#000"] *, [style*="background-color: #000"] *,
-[style*="background-color:#111"] *, [style*="background-color: #111"] *,
-[style*="background-color:#222"] *, [style*="background-color: #222"] *,
-[style*="background-color:#333"] *, [style*="background-color: #333"] * {
+[style*="background:#0"] *,    [style*="background: #0"] *,
+[style*="background:#1"] *,    [style*="background: #1"] *,
+[style*="background:#2"] *,    [style*="background: #2"] *,
+[style*="background:#3"] *,    [style*="background: #3"] *,
+[style*="background-color:#0"] *, [style*="background-color: #0"] *,
+[style*="background-color:#1"] *, [style*="background-color: #1"] *,
+[style*="background-color:#2"] *, [style*="background-color: #2"] *,
+[style*="background-color:#3"] *, [style*="background-color: #3"] * {
   color: #fff !important;
 }
 
-/* Clases con fondo oscuro — cubre cualquier clase presente o futura */
-.bg-dark, .dark, .dark-bg, .s-row-copied,
-[class*="dark-row"], [class*="row-dark"], [class*="bg-black"] {
-  color: #fff !important;
-}
-.bg-dark *, .dark *, .dark-bg *, .s-row-copied *,
-[class*="dark-row"] *, [class*="row-dark"] *, [class*="bg-black"] * {
-  color: #fff !important;
-}
+/* ── 3. Clases con semántica oscura — presentes y futuras ── */
+.bg-dark, .bg-dark *,
+.dark,     .dark *,
+.dark-bg,  .dark-bg *,
+[class*="dark-row"],  [class*="dark-row"] *,
+[class*="row-dark"],  [class*="row-dark"] *,
+[class*="bg-black"],  [class*="bg-black"] *,
+[class*="bg-dark"],   [class*="bg-dark"] * { color: #fff !important; }
+
+/* ── 4. Exceção: elementos de decoração sem texto ──
+   #sweep-line e #wz-wipe são divs puramente visuais, sem texto,
+   não precisam de override de color mas tampouco prejudicam       */
 
 /* Hover de botones que se vuelven negros */
 #key-submit:hover,
@@ -3249,6 +3265,45 @@ td                   { font-size: .96rem !important; }
 #adm-dash-greeting .adm-brand {
   font-size: clamp(1.55rem, 3.2vw, 2.15rem) !important;
 }
+</style>
+
+<!-- ══ ÚLTIMA REGLA: FONDO OSCURO = LETRA BLANCA — va al final para ganar siempre ══ -->
+<style id="dark-bg-white-text-override">
+#adm-back-btn, #adm-back-btn *,
+#agenda-overlay-back, #agenda-overlay-back *,
+#rotulos-overlay-back, #rotulos-overlay-back *,
+#processamento-overlay-back, #processamento-overlay-back *,
+#recibos-overlay-back, #recibos-overlay-back *,
+#etiquetas-overlay-back, #etiquetas-overlay-back *,
+#ventas-overlay-back, #ventas-overlay-back *,
+#intro-screen, #intro-screen *,
+.s-row-copied, .s-row-copied *,
+.adm-mod-card:hover .adm-mod-arrow { color: #fff !important; }
+
+[style*="background:#0"],       [style*="background: #0"],
+[style*="background:#1"],       [style*="background: #1"],
+[style*="background:#2"],       [style*="background: #2"],
+[style*="background:#3"],       [style*="background: #3"],
+[style*="background-color:#0"], [style*="background-color: #0"],
+[style*="background-color:#1"], [style*="background-color: #1"],
+[style*="background-color:#2"], [style*="background-color: #2"],
+[style*="background-color:#3"], [style*="background-color: #3"] { color: #fff !important; }
+
+[style*="background:#0"] *, [style*="background: #0"] *,
+[style*="background:#1"] *, [style*="background: #1"] *,
+[style*="background:#2"] *, [style*="background: #2"] *,
+[style*="background:#3"] *, [style*="background: #3"] *,
+[style*="background-color:#0"] *, [style*="background-color: #0"] *,
+[style*="background-color:#1"] *, [style*="background-color: #1"] *,
+[style*="background-color:#2"] *, [style*="background-color: #2"] *,
+[style*="background-color:#3"] *, [style*="background-color: #3"] * { color: #fff !important; }
+
+.bg-dark, .bg-dark *, .dark, .dark *, .dark-bg, .dark-bg *,
+.s-row-copied, .s-row-copied *,
+[class*="dark-row"], [class*="dark-row"] *,
+[class*="row-dark"],  [class*="row-dark"] *,
+[class*="bg-black"],  [class*="bg-black"] *,
+[class*="bg-dark"],   [class*="bg-dark"] * { color: #fff !important; }
 </style>
 </head>
 <body>

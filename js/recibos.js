@@ -36,6 +36,94 @@ function rDetectMes() {
   return `${String(month).padStart(2,'0')}-${year}`;
 }
 
+// ── Supabase: cargar senhas ───────────────────────────────────
+async function rLoadSenhas() {
+  try {
+    const { data, error } = await sbClient.from('senhas_recibos').select('nome, nome_orig, senha');
+    if (error) throw error;
+    rSenhasMap.clear();
+    for (const row of data) {
+      rSenhasMap.set(rNormalize(row.nome), { nome_orig: row.nome_orig || row.nome, senha: row.senha });
+    }
+    console.log('[senhas] carregadas:', rSenhasMap.size);
+  } catch(e) { console.error('[senhas]', e); }
+}
+
+function rFindSenha(detectedName) {
+  if (!detectedName) return null;
+  const dn = rNormalize(detectedName);
+  if (rSenhasMap.has(dn)) return rSenhasMap.get(dn);
+  for (const [k,v] of rSenhasMap) { if (k.includes(dn) || dn.includes(k)) return v; }
+  const words = dn.split(' ').filter(w => w.length > 2);
+  if (words.length >= 2) {
+    for (const [k,v] of rSenhasMap) { if (words.every(w => k.includes(w))) return v; }
+    for (const [k,v] of rSenhasMap) { if (words.filter(w => k.includes(w)).length >= Math.max(2, words.length-1)) return v; }
+  }
+  return null;
+}
+
+async function rOnPdfLoaded() {
+  rSetStatus('a consultar senhas…');
+  const panel = document.getElementById('r-senhas-panel');
+  if (panel) panel.innerHTML = '<div style="padding:14px;color:#bbb;font-size:.72rem;text-align:center;">a carregar…</div>';
+  await rLoadSenhas();
+  rSetStatus('a extrair páginas…');
+  const pdfBytes = await rPdfFile.arrayBuffer();
+  const pages = await rExtractPages(pdfBytes);
+  window._rPages = pages;
+  rRenderPanel();
+  rCheckReady();
+}
+
+function rRenderPanel() {
+  const panel = document.getElementById('r-senhas-panel');
+  if (!panel || !window._rPages) return;
+  const pages = window._rPages;
+  const withPwd = pages.filter(p => !!rFindSenha(p.detectedName)).length;
+  const missing = pages.length - withPwd;
+  let rows = '';
+  pages.forEach((page, i) => {
+    const found = rFindSenha(page.detectedName);
+    const name = found ? (found.nome_orig || page.detectedName) : (page.detectedName || 'pág.'+page.pageIndex);
+    const pwd  = found ? found.senha : null;
+    rows += '<tr>'
+      + '<td style="padding:3px 8px;font-size:.72rem;color:#555;border-bottom:1px solid #f2f2f2;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+rEscHtml(name)+'">'+rEscHtml(name)+'</td>'
+      + '<td style="padding:3px 8px;border-bottom:1px solid #f2f2f2;white-space:nowrap;">'
+      + (pwd
+        ? '<span style="font-family:monospace;font-size:.70rem;background:#f2f2f2;border:1px solid #e0e0e0;border-radius:3px;padding:1px 5px;color:#444;">'+rEscHtml(pwd)+'</span>'
+        : '<button onclick="rGerarSenhaPanel('+i+')" style="font-size:.65rem;padding:2px 7px;border:1px solid #ddd;border-radius:4px;background:#f7f7f7;color:#666;cursor:pointer;font-family:inherit;">gerar senha</button>')
+      + '</td>'
+      + '</tr>';
+  });
+  panel.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#f9f9f9;border-bottom:1px solid #ececec;border-radius:10px 10px 0 0;">'
+    + '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#aaa;">colaboradoras <span style="background:#ebebeb;border-radius:20px;padding:0 5px;color:#999;">'+pages.length+'</span></span>'
+    + '<span style="font-size:.65rem;color:#aaa;">'+withPwd+' ✓'+(missing ? ' · <span style="color:#bbb;">'+missing+' sem senha</span>' : '')+'</span>'
+    + '</div>'
+    + '<div style="overflow-y:auto;max-height:420px;">'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr>'
+    + '<th style="font-size:.60rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ccc;padding:5px 8px;border-bottom:1px solid #ebebeb;background:#f5f5f5;text-align:left;">nome</th>'
+    + '<th style="font-size:.60rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ccc;padding:5px 8px;border-bottom:1px solid #ebebeb;background:#f5f5f5;text-align:left;">senha</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+async function rGerarSenhaPanel(i) {
+  const page = window._rPages && window._rPages[i];
+  if (!page) return;
+  const upper='ABCDEFGHJKLMNPQRSTUVWXYZ',lower='abcdefghjkmnpqrstuvwxyz',digits='23456789',sp='#@&';
+  const pwd = upper[Math.floor(Math.random()*upper.length)]+lower[Math.floor(Math.random()*lower.length)]+lower[Math.floor(Math.random()*lower.length)]+sp[Math.floor(Math.random()*sp.length)]+digits[Math.floor(Math.random()*digits.length)]+digits[Math.floor(Math.random()*digits.length)];
+  const nomeNorm = rNormalize(page.detectedName || 'PAGINA_'+page.pageIndex);
+  await sbClient.from('senhas_recibos').upsert({ nome: nomeNorm, nome_orig: nomeNorm, senha: pwd, atualizado_em: new Date().toISOString() }, { onConflict: 'nome' });
+  rSenhasMap.set(nomeNorm, { nome_orig: nomeNorm, senha: pwd });
+  rRenderPanel();
+  rCheckReady();
+}
+
+function rEscHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function rLoadConfig() {
   // Já não há campo manual — o mês é sempre calculado automaticamente
   const mes = rDetectMes();
@@ -68,9 +156,9 @@ function rShowMesBadge(mes) {
 }
 
 let rPdfFile = null;
-let rSenhasMap = new Map(); // nomeNorm → { nome_orig, senha }
+let rSenhasMap = new Map();
 
-function rSetupUploadPdf() {
+function rSetupUpload() {
   const label  = document.getElementById('r-label-pdf');
   const input  = document.getElementById('r-input-pdf');
   const nameEl = document.getElementById('r-name-pdf');
@@ -83,162 +171,9 @@ function rSetupUploadPdf() {
   input.addEventListener('change', e => handle(e.target.files[0]));
   label.addEventListener('dragover',  e => { e.preventDefault(); label.classList.add('drag-over'); });
   label.addEventListener('dragleave', () => label.classList.remove('drag-over'));
-  label.addEventListener('drop', e => {
-    e.preventDefault(); label.classList.remove('drag-over');
-    handle(e.dataTransfer.files[0]);
-  });
+  label.addEventListener('drop', e => { e.preventDefault(); label.classList.remove('drag-over'); handle(e.dataTransfer.files[0]); });
 }
-
-// ── Cargar senhas de Supabase ─────────────────────────────────
-async function rLoadSenhasFromSupabase() {
-  try {
-    const { data, error } = await sbClient.from('senhas_recibos').select('nome, nome_orig, senha');
-    if (error) throw error;
-    rSenhasMap.clear();
-    for (const row of data) {
-      rSenhasMap.set(rNormalize(row.nome), { nome_orig: row.nome_orig || row.nome, senha: row.senha });
-    }
-    return true;
-  } catch(e) { console.error('[senhas]', e); return false; }
-}
-
-// ── Matching flexible: exact → containment → words ────────────
-function rFindSenha(detectedName) {
-  if (!detectedName) return null;
-  const dn = rNormalize(detectedName);
-  // 1. exact
-  if (rSenhasMap.has(dn)) return { key: dn, ...rSenhasMap.get(dn) };
-  // 2. containment
-  for (const [k, v] of rSenhasMap) {
-    if (k.includes(dn) || dn.includes(k)) return { key: k, ...v };
-  }
-  // 3. todas las palabras del detectado están en la clave
-  const words = dn.split(' ').filter(w => w.length > 2);
-  if (words.length >= 2) {
-    for (const [k, v] of rSenhasMap) {
-      if (words.every(w => k.includes(w))) return { key: k, ...v };
-    }
-    // 4. la mayoría de palabras coinciden
-    for (const [k, v] of rSenhasMap) {
-      if (words.filter(w => k.includes(w)).length >= Math.max(2, words.length - 1)) return { key: k, ...v };
-    }
-  }
-  return null;
-}
-
-// ── Al cargar PDF: senhas de Supabase + panel ─────────────────
-async function rOnPdfLoaded() {
-  rSetStatus('a consultar senhas em Supabase…');
-  rRenderSenhasPanel([]);
-  const ok = await rLoadSenhasFromSupabase();
-  if (!ok) { rSetStatus('⚠️ erro ao carregar senhas de Supabase'); return; }
-  rSetStatus('a extrair páginas do pdf…');
-  const pdfBytes = await rPdfFile.arrayBuffer();
-  const pages = await rExtractPages(pdfBytes);
-  window._rPageMatches = pages.map(page => {
-    const found = rFindSenha(page.detectedName);
-    return { page, csvEntry: found ? { name: found.key, nome_orig: found.nome_orig, pwd: found.senha } : null };
-  });
-  rSetStatus('');
-  rRenderSenhasPanel(window._rPageMatches);
-  rCheckReadyNew();
-}
-
-// ── Render panel derecho ──────────────────────────────────────
-function rRenderSenhasPanel(matches) {
-  const panel = document.getElementById('r-senhas-panel');
-  if (!panel) return;
-  if (!matches || !matches.length) {
-    panel.innerHTML = '<p style="padding:20px;color:#bbb;font-size:.78rem;text-align:center;">carrega um pdf para ver as senhas</p>';
-    return;
-  }
-  const withPwd = matches.filter(m => m.csvEntry && m.csvEntry.pwd).length;
-  const missing = matches.length - withPwd;
-  let rows = '';
-  matches.forEach((m, i) => {
-    const name = m.csvEntry ? (m.csvEntry.nome_orig || m.csvEntry.name) : (m.page.detectedName || 'pág.' + m.page.pageIndex);
-    const hasPwd = !!(m.csvEntry && m.csvEntry.pwd);
-    let pwdCell, actionCell;
-    if (hasPwd) {
-      pwdCell    = '<span class="rsp-chip">' + escHtml(m.csvEntry.pwd) + '</span>';
-      actionCell = '<span class="rsp-ok">✓</span>';
-    } else if (m._decision === 'nopwd') {
-      pwdCell    = '<span class="rsp-none">sem senha</span>';
-      actionCell = '<span class="rsp-tag">publicar</span> <button class="rsp-undo" onclick="rUndoSenha(' + i + ')">↩</button>';
-    } else if (m._decision === 'skip') {
-      pwdCell    = '<span class="rsp-none">—</span>';
-      actionCell = '<span class="rsp-tag">ignorar</span> <button class="rsp-undo" onclick="rUndoSenha(' + i + ')">↩</button>';
-    } else {
-      pwdCell    = '<button class="rsp-gen" id="rsp-gen-' + i + '" onclick="rGerarSenha(' + i + ')">gerar senha</button>';
-      actionCell = '<button class="rsp-nopwd" onclick="rDecideNoPwd(' + i + ')">sem senha</button>'
-                 + '<button class="rsp-skip" onclick="rDecideSkip(' + i + ')">não publicar</button>';
-    }
-    rows += '<tr class="rsp-row' + (hasPwd?'':' rsp-miss') + '" id="rsp-row-' + i + '">'
-          + '<td class="rsp-n">' + (i+1) + '</td>'
-          + '<td class="rsp-name" title="' + escHtml(name) + '">' + escHtml(name) + '</td>'
-          + '<td class="rsp-pwd">' + pwdCell + '</td>'
-          + '<td class="rsp-act">' + actionCell + '</td>'
-          + '</tr>';
-  });
-  const pending = matches.filter(m => !m.csvEntry?.pwd && !m._decision).length;
-  const footerCls = pending > 0 ? 'rsp-foot-warn' : 'rsp-foot-ok';
-  const footerTxt = pending > 0
-    ? '⚠ ' + pending + ' sem decisão'
-    : '✓ pronto para processar';
-  panel.innerHTML =
-    '<div class="rsp-header">'
-    + '<span class="rsp-title">colaboradoras <span class="rsp-cnt">' + matches.length + '</span></span>'
-    + '<span class="rsp-stats"><span class="rsp-s">' + withPwd + ' ✓</span>' + (missing?' <span class="rsp-sw">'+missing+' sem senha</span>':'') + '</span>'
-    + '</div>'
-    + '<table class="rsp-table"><thead><tr>'
-    + '<th class="rsp-n">#</th><th>nome</th><th>senha</th><th>ação</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table>'
-    + '<div class="' + footerCls + '">' + footerTxt + '</div>';
-}
-
-function rGerarSenha(i) {
-  const upper='ABCDEFGHJKLMNPQRSTUVWXYZ', lower='abcdefghjkmnpqrstuvwxyz', digits='23456789', sp='#@&';
-  const pwd = upper[Math.floor(Math.random()*upper.length)]
-    + lower[Math.floor(Math.random()*lower.length)]
-    + lower[Math.floor(Math.random()*lower.length)]
-    + sp[Math.floor(Math.random()*sp.length)]
-    + digits[Math.floor(Math.random()*digits.length)]
-    + digits[Math.floor(Math.random()*digits.length)];
-  const m = window._rPageMatches[i];
-  const nomeNorm = m.page.detectedName ? rNormalize(m.page.detectedName) : 'PAGINA_' + m.page.pageIndex;
-  const nomeOrig = (m.csvEntry && m.csvEntry.nome_orig) || nomeNorm;
-  // Guardar en Supabase
-  sbClient.from('senhas_recibos').upsert({ nome: nomeNorm, nome_orig: nomeOrig, senha: pwd, atualizado_em: new Date().toISOString() }, { onConflict: 'nome' })
-    .then(({error}) => { if (error) console.error('[senhas] upsert:', error); });
-  m.csvEntry = { name: nomeNorm, nome_orig: nomeOrig, pwd };
-  rSenhasMap.set(nomeNorm, { nome_orig: nomeOrig, senha: pwd });
-  rRenderSenhasPanel(window._rPageMatches);
-  rCheckReadyNew();
-}
-function rDecideNoPwd(i) {
-  const m = window._rPageMatches[i];
-  m._decision = 'nopwd';
-  if (!m.csvEntry) m.csvEntry = { name: m.page.detectedName || 'pag'+i, pwd: null };
-  else m.csvEntry.pwd = null;
-  rRenderSenhasPanel(window._rPageMatches); rCheckReadyNew();
-}
-function rDecideSkip(i) {
-  window._rPageMatches[i]._decision = 'skip';
-  rRenderSenhasPanel(window._rPageMatches); rCheckReadyNew();
-}
-function rUndoSenha(i) {
-  const m = window._rPageMatches[i];
-  m._decision = null;
-  if (m.csvEntry) m.csvEntry.pwd = null;
-  rRenderSenhasPanel(window._rPageMatches); rCheckReadyNew();
-}
-function rCheckReadyNew() {
-  const btn = document.getElementById('r-process-btn');
-  if (!btn || !rPdfFile || !window._rPageMatches) { btn && btn.classList.remove('show'); return; }
-  const pending = window._rPageMatches.filter(m => !m.csvEntry?.pwd && !m._decision).length;
-  pending === 0 ? btn.classList.add('show') : btn.classList.remove('show');
-}
-rSetupUploadPdf();
+rSetupUpload();
 
 // ── Guide helpers — geometric shapes with SVG text ──
 function rShowGuide(side, title, note) {
@@ -306,19 +241,20 @@ function rHideAllGuides() {
 }
 
 function rCheckReady() {
+  // sin CSV — el botón aparece cuando el PDF está cargado y todas las páginas tienen decisión
   const btn = document.getElementById('r-process-btn');
-  const hasPdf = !!rPdfFile;
-  const hasCsv = !!rCsvFile;
-  if (hasPdf && hasCsv) {
+  if (!rPdfFile || !window._rPages || !window._rPages.length) { btn.classList.remove('show'); return; }
+  const pending = window._rPages.filter(p => {
+    const found = rFindSenha(p.detectedName);
+    return !found && !p._decision;
+  }).length;
+  if (pending === 0) {
     btn.classList.add('show');
-    rShowGuide('left', '', '');
-    rShowGuide('right', '', '');
-    rSetStatus('③ Clica em processar recibos · Atenção: recibos sem senha (pessoal administrativo ou sem chave) não serão publicados — podes actualizar o CSV ou introduzir a senha no aviso que aparecerá.');
-  } else if (hasPdf && !hasCsv) {
-    btn.classList.remove('show');
-    rShowGuide('right', '③ carrega\no csv\nde senhas', '');
+    rHideAllGuides();
+    rSetStatus('');
   } else {
     btn.classList.remove('show');
+    rSetStatus(pending + ' colaboradora(s) sem senha — gera a senha ou usa o botão no painel');
   }
 }
 
@@ -333,13 +269,25 @@ async function rProcessRecibos() {
   rSetProgressDetail('a ler ficheiros…');
   rHideWarnings();
   try {
-    if (!window._rPageMatches || !window._rPageMatches.length) {
-      rSetStatus('⚠️ carrega um PDF primeiro'); rSetProgressDetail(''); btn.disabled = false; return;
+    const pages = window._rPages;
+    if (!pages || !pages.length) { rSetStatus('⚠️ carrega um PDF primeiro'); btn.disabled = false; return; }
+    const pageMatches = pages.map(page => {
+      const found = rFindSenha(page.detectedName);
+      let csvEntry = found ? { name: rNormalize(page.detectedName||''), pwd: found.senha } : null;
+      if (!csvEntry && page._decision === 'nopwd') csvEntry = { name: page.detectedName||'', pwd: null };
+      return { page, csvEntry };
+    });
+    const missingPages = pageMatches.filter(m => !m.csvEntry && !m.page._decision);
+    if (missingPages.length > 0) {
+      rSetStatus(`${missingPages.length} pessoa(s) sem senha — a aguardar decisão…`);
+      for (let i = 0; i < missingPages.length; i++) {
+        const mp = missingPages[i];
+        const name = mp.page.detectedName || `pagina ${mp.page.pageIndex}`;
+        const decision = await rAskUserAboutMissing(name, i + 1, missingPages.length);
+        if (decision.action === 'pwd')    pageMatches[pageMatches.indexOf(mp)].csvEntry = { name, pwd: decision.pwd };
+        else if (decision.action === 'nopwd') pageMatches[pageMatches.indexOf(mp)].csvEntry = { name, pwd: null };
+      }
     }
-    const pageMatches = window._rPageMatches.map(m => ({
-      page: m.page,
-      csvEntry: m._decision === 'skip' ? null : (m.csvEntry || null)
-    }));
     const grouped = {};
     for (const { page, csvEntry } of pageMatches) {
       if (!csvEntry) continue;

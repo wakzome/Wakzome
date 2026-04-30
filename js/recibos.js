@@ -18,21 +18,21 @@ function rDetectMes() {
   const month = now.getMonth() + 1; // 1–12
   const year  = now.getFullYear();
 
-  // Subsidio de natal: 10–20 de dezembro
+  // Subsidio de natal: 10–20 de dezembro (tem prioridade)
   if (month === 12 && day >= 10 && day <= 20) {
     return `natal-${year}`;
   }
 
-  // Janela de processamento: dia 25 do mês anterior até dia 4 do mês atual
-  // → estamos a processar recibos do mês atual
-  if (day >= 25) {
-    // Estamos no final do mês → processa o mês SEGUINTE
-    const nextMonth = month === 12 ? 1 : month + 1;
-    const nextYear  = month === 12 ? year + 1 : year;
-    return `${String(nextMonth).padStart(2,'0')}-${nextYear}`;
+  // Dia 1–9: ainda a processar recibos do mês ANTERIOR
+  // Ex: 4 maio → abril, 9 janeiro → dezembro do ano anterior
+  if (day <= 9) {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear  = month === 1 ? year - 1 : year;
+    return `${String(prevMonth).padStart(2,'0')}-${prevYear}`;
   }
 
-  // Default: mês atual
+  // Dia 10–31: processa o mês ATUAL
+  // Ex: 25 abril → abril, 30 abril → abril, 10 maio → maio
   return `${String(month).padStart(2,'0')}-${year}`;
 }
 

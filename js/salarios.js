@@ -8,16 +8,16 @@
     // Coluna de vencimento líquido: largura dinâmica ao conteúdo
     '#s-salary-table th:last-child, #s-salary-table td:last-child { width:1%; white-space:nowrap; }',
 
-    '.s-liq-cell { display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:flex-end; }',
-    '.s-liq-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; min-width:18px; padding:0; border:1px solid #d0d0d0; background:transparent; cursor:pointer; color:#aaa; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; }',
-    '.s-liq-copy-btn:hover { color:#000; background:#f0f0f0; border-color:#bbb; }',
-    '.s-liq-copy-btn.s-liq-copy-ok { color:#4A7C6F; border-color:#4A7C6F; background:#f0faf8; }',
+    '#s-salary-table tbody td:last-child { cursor:pointer; user-select:none; transition:background .15s, color .15s; }',
+    '#s-salary-table tbody td:last-child:hover { background:#f0f0f0 !important; }',
+    '#s-salary-table tbody td:last-child.s-liq-copy-ok { color:#4A7C6F !important; background:#f0faf8 !important; }',
+    '.s-liq-cell { display:flex; width:100%; justify-content:flex-end; }',
 
     // Fila destacada ao copiar: subtil, escala de cinzentos, elegante
     '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s, font-size .2s; }',
     '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied .s-liq-cell { color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied .s-liq-copy-btn { border-color:#777 !important; color:#cccccc !important; background:transparent !important; }',
+    '#s-salary-table tbody tr.s-row-copied td:last-child { cursor:pointer; }',
+    '#s-salary-table tbody tr.s-row-copied td:last-child:hover { background:#2e2e2e !important; }',
   ].join('\n');
   document.head.appendChild(st);
 })();
@@ -150,7 +150,7 @@ function sRenderTable(rows) {
   </tr></thead><tbody>`;
   filtered.forEach((r, i) => {
     const cleanVal = r.liquido.replace(/\.(?=\d{3},)/, '');
-    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td><span class="s-liq-cell"><button class="s-liq-copy-btn" onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Copiar valor"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>${escHtml(cleanVal)}</span></td></tr>`;
+    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Clique para copiar"><span class="s-liq-cell">${escHtml(cleanVal)}</span></td></tr>`;
   });
   html += `</tbody><tfoot><tr>
     <td class="row-num"></td><td>total</td>
@@ -163,8 +163,8 @@ function sRenderTable(rows) {
 let sCopyRowTimer = null;
 let sCopiedRow = null;
 
-function sCopyLiquido(btn) {
-  const val = btn.getAttribute('data-val');
+function sCopyLiquido(td) {
+  const val = td.getAttribute('data-val');
   const copy = (navigator.clipboard && navigator.clipboard.writeText)
     ? navigator.clipboard.writeText(val)
     : Promise.reject();
@@ -174,11 +174,9 @@ function sCopyLiquido(btn) {
     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
   });
 
-  // Feedback no botão
-  const orig = btn.innerHTML;
-  btn.classList.add('s-liq-copy-ok');
-  btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-  setTimeout(() => { btn.classList.remove('s-liq-copy-ok'); btn.innerHTML = orig; }, 1000);
+  // Feedback visual na célula
+  td.classList.add('s-liq-copy-ok');
+  setTimeout(() => { td.classList.remove('s-liq-copy-ok'); }, 1000);
 
   // Highlight persistente da fila — remove a anterior imediatamente se existir
   if (sCopiedRow) {
@@ -189,10 +187,9 @@ function sCopyLiquido(btn) {
     sCopyRowTimer = null;
   }
 
-  const row = btn.closest('tr');
+  const row = td.closest('tr');
   if (row) {
     row.classList.add('s-row-copied');
     sCopiedRow = row;
-    // O highlight mantém-se até o utilizador copiar outra fila (sem timeout automático)
   }
 }

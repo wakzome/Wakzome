@@ -1,19 +1,71 @@
 // ══════════════════════════════════════════════════════════════
 //  ADMIN: RECIBOS
 // ══════════════════════════════════════════════════════════════
-function rLoadConfig() {
-  document.getElementById('r-cfg-mes').value = localStorage.getItem('gh_mes') || '';
+
+/**
+ * Determina automaticamente o mês a processar com base na data atual.
+ *
+ * Regras:
+ *  - Dia 10–20 de dezembro          → "natal-YYYY"  (subsidio de natal)
+ *  - Dia 25 do mês anterior até dia 4 do mês atual → mês atual "MM-YYYY"
+ *  - Resto do ano                   → mês atual "MM-YYYY" (default seguro)
+ *
+ * Retorna string no formato "MM-YYYY" ou "natal-YYYY"
+ */
+function rDetectMes() {
+  const now   = new Date();
+  const day   = now.getDate();
+  const month = now.getMonth() + 1; // 1–12
+  const year  = now.getFullYear();
+
+  // Subsidio de natal: 10–20 de dezembro
+  if (month === 12 && day >= 10 && day <= 20) {
+    return `natal-${year}`;
+  }
+
+  // Janela de processamento: dia 25 do mês anterior até dia 4 do mês atual
+  // → estamos a processar recibos do mês atual
+  if (day >= 25) {
+    // Estamos no final do mês → processa o mês SEGUINTE
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear  = month === 12 ? year + 1 : year;
+    return `${String(nextMonth).padStart(2,'0')}-${nextYear}`;
+  }
+
+  // Default: mês atual
+  return `${String(month).padStart(2,'0')}-${year}`;
 }
 
-document.getElementById('r-save-config').addEventListener('click', () => {
-  localStorage.setItem('gh_mes', document.getElementById('r-cfg-mes').value.trim());
-  const saved = document.getElementById('r-config-saved');
-  saved.style.display = 'inline';
-  setTimeout(() => saved.style.display = 'none', 2000);
-  rShowGuide('left', '② carrega\no pdf\nde recibos', '');
-  rShowGuide('right', '', '');
-  document.getElementById('r-mes-hint').style.opacity = '0';
-});
+function rLoadConfig() {
+  // Já não há campo manual — o mês é sempre calculado automaticamente
+  const mes = rDetectMes();
+  localStorage.setItem('gh_mes', mes);
+  rShowMesBadge(mes);
+}
+
+function rShowMesBadge(mes) {
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let label;
+  if (mes.startsWith('natal-')) {
+    label = `🎄 Subsídio de Natal ${mes.split('-')[1]}`;
+  } else {
+    const [mm, yyyy] = mes.split('-');
+    const nomeMes = MESES[parseInt(mm, 10) - 1] || mes;
+    label = `${nomeMes} ${yyyy}`;
+  }
+  // Injeta badge no DOM se existir o contentor, senão cria um
+  let badge = document.getElementById('r-mes-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'r-mes-badge';
+    badge.style.cssText = 'display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 18px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:10px;font-size:.93rem;font-weight:600;color:#333;';
+    // Insere antes dos uploads
+    const anchor = document.getElementById('r-label-pdf') || document.getElementById('r-status-msg');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(badge, anchor);
+    else document.body.prepend(badge);
+  }
+  badge.innerHTML = `<span style="color:#888;font-weight:400;font-size:.82rem;">a processar</span><strong style="font-size:1.05em;">${label}</strong>`;
+}
 
 let rPdfFile = null, rCsvFile = null;
 
@@ -188,8 +240,8 @@ async function rProcessRecibos() {
         });
       }
     }
-    const mes = localStorage.getItem('gh_mes') || '';
-    if (!mes) { rSetStatus('⚠️ mês não configurado — defina o mês (ex: 03-2026) nas configurações.'); rSetProgressDetail(''); btn.disabled = false; return; }
+    const mes = rDetectMes(); // sempre calculado automaticamente
+    localStorage.setItem('gh_mes', mes);
 
     rSetStatus('a enviar pdfs para supabase…');
     rShowProgress();
@@ -372,13 +424,7 @@ function rSetProgressDetail(msg) {
   if (el) el.textContent = msg;
 }
 
-// Mes field hint — show on input focus/change
-document.getElementById('r-cfg-mes').addEventListener('focus', function() {
-  document.getElementById('r-mes-hint').style.opacity = '1';
-});
-document.getElementById('r-cfg-mes').addEventListener('input', function() {
-  document.getElementById('r-mes-hint').style.opacity = '1';
-});
+// Mes auto-detectado — não há campo manual
 
 // Conferir button — open recibos overlay
 document.getElementById('r-conferir-btn').addEventListener('click', function() {

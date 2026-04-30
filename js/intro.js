@@ -3,20 +3,27 @@
   const word = 'wakzome';
   const el   = document.getElementById('dynamic-text');
 
+  // Inject !important color override via <style>
+  var forceStyle = document.createElement('style');
+  forceStyle.textContent =
+    '#dynamic-text, #dynamic-text * {' +
+    '  color: #ffffff !important;' +
+    '}';
+  document.head.appendChild(forceStyle);
+
   if (el) {
-    el.style.fontSize      = 'clamp(3rem, 10vw, 6rem)';
-    el.style.fontWeight    = '300';
-    el.style.letterSpacing = '0.12em';
-    el.style.display       = 'flex';
+    el.style.fontSize       = 'clamp(3rem, 10vw, 6rem)';
+    el.style.fontWeight     = '300';
+    el.style.letterSpacing  = '0.12em';
+    el.style.display        = 'flex';
     el.style.justifyContent = 'center';
-    el.style.alignItems    = 'center';
+    el.style.alignItems     = 'center';
   }
 
   // Render word as single element for clean unified motion
   const span = document.createElement('span');
-  span.textContent = word;
+  span.textContent      = word;
   span.style.display    = 'inline-block';
-  span.style.color      = '#ffffff';
   span.style.opacity    = '0';
   span.style.transform  = 'translateY(38px)';
   span.style.filter     = 'blur(6px)';

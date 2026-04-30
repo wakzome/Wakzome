@@ -1583,29 +1583,7 @@ td, th { border-radius:10px; margin:2px; }
 @media (max-width: 1024px) { #r-conferir-fixed { display: none !important; } }
 
 /* config section compact */
-#r-config-section {
-  width: 100%; max-width: 700px; margin-bottom: 14px;
-  border: 1px solid #e6e6e6; border-radius: 14px; padding: 12px 18px;
-}
-#r-config-section summary {
-  font-size: .85rem; font-weight: bold; text-transform: uppercase;
-  letter-spacing: .04em; cursor: pointer; color: #000; list-style: none;
-}
-#r-config-section summary::-webkit-details-marker { display: none; }
-#r-config-fields { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-#r-config-fields label { font-size: .78rem; font-weight: bold; color: #000; text-transform: uppercase; }
-#r-config-fields input {
-  padding: 7px 10px; border: 1px solid #ccc; border-radius: 8px;
-  font-size: .86rem; outline: none; width: 100%;
-}
-#r-config-fields input:focus { border-color: #555; }
-#r-save-config {
-  margin-top: 4px; padding: 7px 20px; font-size: .83rem;
-  cursor: pointer; border: 1px solid #555; border-radius: 8px;
-  background: #fff; transition: background .2s, color .2s; align-self: flex-start;
-}
-#r-save-config:hover { background: #555; color: #fff; }
-#r-config-saved { font-size: .78rem; color: #2a8a2a; font-weight: 600; display: none; margin-top: 2px; }
+
 
 #r-recibos-table {
   width: 100%; border-collapse: separate; border-spacing: 0;
@@ -2363,7 +2341,6 @@ input, textarea { cursor: text !important; }
     grid-template-columns: 1fr 1fr;
     width: 100%;
   }
-  #r-config-section { max-width: 100%; }
   #r-process-btn { width: 100%; max-width: 100%; box-sizing: border-box; }
   #r-status-area { max-width: 100%; }
   #r-upload-progress { max-width: 100%; }
@@ -2550,7 +2527,7 @@ body.no-glow #glow-layer-2 { animation: none; }
 
 /* ── Button micro-interactions ── */
 button, .tab-btn, #key-submit, #recibos-link,
-.modal-btn, #r-process-btn, #r-save-config,
+.modal-btn, #r-process-btn,
 #r-conferir-btn, #saft-btn, #saft-recibos-btn,
 .ed-modal-btn, #ed-folder-pick-btn {
   transition: transform 0.18s cubic-bezier(0.22,1,0.36,1),
@@ -2560,7 +2537,7 @@ button, .tab-btn, #key-submit, #recibos-link,
 }
 button:hover:not(:disabled), .tab-btn:hover,
 #key-submit:hover, #recibos-link:hover,
-.modal-btn:hover, #r-process-btn:hover, #r-save-config:hover,
+.modal-btn:hover, #r-process-btn:hover,
 #r-conferir-btn:hover, #saft-btn:hover, #saft-recibos-btn:hover,
 .ed-modal-btn:hover, #ed-folder-pick-btn:hover {
   transform: translateY(-2px);
@@ -2576,10 +2553,10 @@ button:active:not(:disabled), .tab-btn:active,
 
 /* ── Input focus lift ── */
 #key-input, #r-cfg-token, #r-cfg-repo, #r-cfg-base-folder,
-#r-cfg-mes, #r-modal-pwd-input, #ed-export-filename, #ed-font-size {
+#r-modal-pwd-input, #ed-export-filename, #ed-font-size {
   transition: border-color 0.25s, box-shadow 0.25s !important;
 }
-#key-input:focus, #r-cfg-token:focus, #r-cfg-mes:focus,
+#key-input:focus, #r-cfg-token:focus,
 #r-modal-pwd-input:focus, #ed-export-filename:focus {
   box-shadow: 0 2px 14px rgba(0,0,0,0.06) !important;
 }
@@ -3101,7 +3078,6 @@ input, button, select, textarea,
 #h-status-msg, #s-status-msg, #r-status-msg,
 #r-progress-detail, #saft-title, #saft-countdown,
 .r-inline-hint, .upload-box, #s-upload-label,
-#r-config-section, #r-config-fields label,
 .results-wrap, .tam-table th, .tam-table td,
 #login-screen .logo-text, #login-screen #current-time,
 #login-screen #current-date,
@@ -3112,7 +3088,7 @@ input, button, select, textarea,
 #ed-export-modal-box, #ed-export-hint, #ed-export-hint span,
 #ed-folder-display, #ed-folder-pick-btn,
 .ed-modal-btn, .ed-tool-label,
-#r-conferir-btn, #r-process-btn, #r-save-config,
+#r-conferir-btn, #r-process-btn,
 #saft-btn, #saft-recibos-btn, #saft-agenda-btn,
 #saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
 #saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
@@ -3153,7 +3129,6 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 .modal-btn.primary:hover,
 .ed-modal-btn.primary:hover,
 #r-process-btn:hover,
-#r-save-config:hover,
 #r-conferir-btn:hover,
 #saft-btn:hover,
 #saft-recibos-btn:hover,
@@ -3177,8 +3152,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .r-status-err { color: #c03000 !important; }
 #r-warnings-box .warn-title,
 #r-warnings-box ul li { color: #b05000 !important; opacity: 1 !important; }
-#r-config-saved { color: #2a8a2a !important; }
-#r-mes-hint { color: #e09000 !important; }
 #r-conferir-note { color: #e09000 !important; }
 .tam-chk-ok  { color: #2a6a2a !important; }
 .tam-chk-err { color: #c00 !important; }
@@ -3502,22 +3475,6 @@ td                   { font-size: .96rem !important; }
   <div id="tab-recibos" class="tab-panel">
 
     <!-- CONFIG -->
-    <details id="r-config-section">
-      <summary>⚙ configuração</summary>
-      <div id="r-config-fields">
-        <div style="display:flex;align-items:flex-start;gap:12px;width:100%;">
-          <div style="flex:1;">
-            <label>mês a processar (ex: 03-2026)</label>
-            <input type="text" id="r-cfg-mes" placeholder="03-2026" maxlength="7" style="letter-spacing:.06em;width:100%;">
-          </div>
-          <div id="r-mes-hint" style="flex:1;font-size:.82rem;font-weight:bold;color:#e09000;line-height:1.5;padding-top:20px;opacity:0;transition:opacity .3s;">
-            ① Actualiza el mes y pulsa <strong>guardar</strong> antes de continuar
-          </div>
-        </div>
-        <button id="r-save-config">guardar</button>
-        <span id="r-config-saved">✓ guardado</span>
-      </div>
-    </details>
 
     <!-- UPLOAD GRID with inline step hints -->
     <div id="r-upload-outer">
@@ -4751,17 +4708,9 @@ td                   { font-size: .96rem !important; }
     tbody.innerHTML        = '';
 
     /* Título do mês */
-    var mes        = localStorage.getItem('gh_mes') || '';
-    var mmMatch    = mes.match(/^(\d{2})-(\d{4})$/);
-    var natalMatch = mes.match(/^natal-(\d{4})$/);
-    var monthName;
-    if (mmMatch) {
-      monthName = MESES[parseInt(mmMatch[1], 10) - 1] || mes;
-    } else if (natalMatch) {
-      monthName = '🎄 Subsídio de Natal ' + natalMatch[1];
-    } else {
-      monthName = mes;
-    }
+    var mes       = localStorage.getItem('gh_mes') || '';
+    var mmMatch   = mes.match(/^(\d{2})-(\d{4})$/);
+    var monthName = mmMatch ? (MESES[parseInt(mmMatch[1], 10) - 1] || mes) : mes;
     if (titleEl)     titleEl.textContent     = monthName || 'recibos';
     if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
 

@@ -1419,47 +1419,117 @@ td, th { border-radius:10px; margin:2px; }
 #s-salary-table tfoot td:last-child { text-align: right; }
 
 /* ─── RECIBOS ─── */
-
-/* ── Layout principal: upload izq + panel senhas der ── */
-#r-main-layout {
+/* ── RECIBOS: upload outer wrapper with inline hints ── */
+#r-upload-outer {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: 1fr auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  width: 100%; max-width: 980px; margin-bottom: 14px;
+}
+/* hint-pdf: col 1 — pushes right toward PDF box */
+#r-hint-pdf  { grid-column: 1; display: flex; justify-content: flex-end; }
+/* upload grid: cols 2-3 */
+#r-upload-grid {
+  grid-column: 2 / 4;
+  display: grid; grid-template-columns: 220px 220px; gap: 14px;
+}
+/* hint-csv: col 4 — pushes left toward CSV box */
+#r-hint-csv  { grid-column: 4; display: flex; justify-content: flex-start; }
+
+@media (max-width: 700px) {
+  #r-upload-outer { grid-template-columns: 1fr; }
+  #r-hint-pdf, #r-hint-csv { display: none; }
+  #r-upload-grid { grid-column: 1; grid-template-columns: 1fr; }
+}
+
+/* ── Layout recibos: upload izq + panel der ── */
+#r-recibos-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 20px;
   width: 100%;
-  max-width: 1100px;
-  padding: 0 0 16px;
-  box-sizing: border-box;
+  max-width: 1060px;
 }
 #r-left-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
-  min-width: 260px;
+  flex-shrink: 0;
 }
-
-/* ── RECIBOS: upload outer wrapper con hint izquierdo ── */
-#r-upload-outer {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin-bottom: 14px;
+/* Panel senhas */
+#r-senhas-panel {
+  flex: 1;
+  border: 1px solid #e2e2e2;
+  border-radius: 10px;
+  background: #fff;
+  font-family: 'MontserratLight', sans-serif;
+  overflow: visible;
+  align-self: flex-start;
 }
-#r-hint-pdf  { grid-column: 1; display: flex; justify-content: flex-end; }
-#r-upload-grid {
-  grid-column: 2;
-  display: grid; grid-template-columns: 220px; gap: 14px;
+.rsp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px solid #ececec;
+  background: #f9f9f9; border-radius: 10px 10px 0 0;
 }
-
-@media (max-width: 860px) {
-  #r-main-layout { grid-template-columns: 1fr; }
-  #r-upload-outer { grid-template-columns: 1fr; }
-  #r-hint-pdf { display: none; }
-  #r-upload-grid { grid-column: 1; grid-template-columns: 1fr; }
-  #r-senhas-panel { min-width: 0; max-width: 100%; }
+.rsp-title { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: #aaa; }
+.rsp-cnt { background: #ebebeb; color: #999; border-radius: 20px; padding: 0 6px; font-size: .62rem; margin-left: 4px; }
+.rsp-stats { display: flex; gap: 6px; font-size: .65rem; font-weight: 600; }
+.rsp-s  { color: #aaa; }
+.rsp-sw { color: #bbb; }
+.rsp-table { width: 100%; border-collapse: collapse; }
+.rsp-table thead th {
+  background: #f5f5f5; font-size: .60rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: #ccc;
+  padding: 5px 8px; border-bottom: 1px solid #ebebeb; text-align: left;
+}
+.rsp-table th.rsp-n, .rsp-table td.rsp-n { width: 22px; text-align: center; }
+.rsp-table td { padding: 5px 8px; border-bottom: 1px solid #f4f4f4; vertical-align: middle; }
+.rsp-table tr:last-child td { border-bottom: none; }
+.rsp-table td.rsp-n { color: #ddd; font-size: .62rem; }
+.rsp-table td.rsp-name { font-size: .72rem; font-weight: 600; color: #555; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rsp-table td.rsp-pwd { white-space: nowrap; }
+.rsp-table td.rsp-act { white-space: nowrap; }
+.rsp-miss td { background: #fff; }
+.rsp-chip {
+  display: inline-block; font-family: 'SF Mono','Fira Mono',monospace;
+  font-size: .68rem; font-weight: 600; color: #444;
+  background: #f2f2f2; border: 1px solid #e2e2e2;
+  border-radius: 4px; padding: 1px 6px;
+}
+.rsp-none { color: #ccc; font-size: .68rem; font-style: italic; }
+.rsp-ok { font-size: .65rem; color: #aaa; font-weight: 700; }
+.rsp-tag {
+  display: inline-block; font-size: .62rem; font-weight: 700;
+  background: #f2f2f2; border: 1px solid #e2e2e2; border-radius: 20px;
+  padding: 1px 6px; color: #888;
+}
+.rsp-gen, .rsp-nopwd, .rsp-skip {
+  font-size: .65rem; font-weight: 600; border-radius: 5px;
+  padding: 2px 7px; cursor: pointer; border: 1px solid #e0e0e0;
+  background: #f7f7f7; color: #666; white-space: nowrap;
+  transition: background .12s, color .12s;
+  font-family: 'MontserratLight', sans-serif;
+}
+.rsp-gen:hover, .rsp-nopwd:hover { background: #111; color: #fff; border-color: #111; }
+.rsp-skip { color: #aaa; }
+.rsp-skip:hover { background: #555; color: #fff; border-color: #555; }
+.rsp-nopwd { margin-right: 3px; }
+.rsp-undo {
+  font-size: .65rem; background: none; border: none; color: #ccc;
+  cursor: pointer; padding: 1px 4px; border-radius: 3px;
+  transition: color .12s; font-family: 'MontserratLight', sans-serif;
+}
+.rsp-undo:hover { color: #555; background: #f0f0f0; }
+.rsp-foot-ok, .rsp-foot-warn {
+  padding: 6px 12px; font-size: .65rem; font-weight: 600;
+  border-top: 1px solid #ececec; border-radius: 0 0 10px 10px;
+  background: #f9f9f9; color: #bbb;
+}
+@media (max-width: 900px) {
+  #r-recibos-wrap { flex-direction: column; }
+  #r-senhas-panel { width: 100%; }
 }
 .upload-box {
   display: flex; flex-direction: column; align-items: center;
@@ -1660,119 +1730,6 @@ td, th { border-radius:10px; margin:2px; }
 .modal-btn:hover { background: #f5f5f5; }
 .modal-btn.primary { border-color: #555; }
 .modal-btn.primary:hover { background: #555; color: #fff; }
-
-/* ── Panel senhas (derecha del tab recibos) ── */
-/* ── Panel senhas: sin scroll propio, fluye con el contenido ── */
-#r-senhas-panel {
-  background: #fff;
-  border: 1px solid #e4e4e4;
-  border-radius: 12px;
-  overflow: visible;
-  font-family: 'MontserratLight', sans-serif;
-  font-size: .82rem;
-  align-self: start;
-}
-.r-panel-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 14px 9px; border-bottom: 1px solid #ececec;
-  background: #fafafa; border-radius: 12px 12px 0 0;
-}
-.r-panel-title {
-  font-size: .72rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .09em; color: #888 !important;
-}
-.r-panel-count {
-  background: #ebebeb; color: #777 !important; border-radius: 20px;
-  padding: 1px 7px; font-size: .70rem; font-weight: 600; margin-left: 5px;
-}
-.r-panel-stats { display: flex; gap: 6px; align-items: center; }
-.r-stat { font-size: .70rem; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
-.r-stat-ok   { background: #f0f0f0; color: #555 !important; }
-.r-stat-warn { background: #f5f5f5; color: #888 !important; }
-
-/* Sin scroll — tabla fluye naturalmente */
-.r-panel-table-wrap { overflow: visible; }
-.r-panel-table { width: 100%; border-collapse: collapse; }
-.r-panel-table thead th {
-  background: #f7f7f7;
-  font-size: .68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: #aaa !important; padding: 6px 10px;
-  border-bottom: 1px solid #ececec; text-align: left;
-}
-.r-th-num { width: 26px; text-align: center; }
-
-.r-panel-row td {
-  padding: 7px 10px; border-bottom: 1px solid #f2f2f2; vertical-align: middle;
-}
-.r-panel-row:last-child td { border-bottom: none; }
-.r-row-ok      { background: #fff; }
-.r-row-missing { background: #fff; }
-.r-row-decided { background: #fafafa; }
-
-.r-td-num  { color: #ccc !important; font-size: .70rem; text-align: center; width: 26px; }
-.r-td-name { font-size: .77rem; font-weight: 600; color: #333 !important; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.r-td-pwd  { white-space: nowrap; }
-.r-td-action { white-space: nowrap; }
-
-/* Contraseña: monoespacio discreto, fondo gris muy claro */
-.r-pwd-chip {
-  display: inline-block; font-family: 'SF Mono','Fira Mono',monospace;
-  font-size: .73rem; font-weight: 600; color: #444 !important;
-  background: #f2f2f2; border: 1px solid #e0e0e0;
-  border-radius: 5px; padding: 2px 7px; letter-spacing: .03em;
-}
-.r-pwd-none { color: #ccc !important; font-size: .73rem; font-style: italic; }
-
-/* Badges: solo grises */
-.r-badge { display: inline-block; font-size: .68rem; font-weight: 700; border-radius: 20px; padding: 2px 8px; }
-.r-badge-ok    { background: #f0f0f0; color: #777 !important; }
-.r-badge-nopwd { background: #ebebeb; color: #666 !important; }
-.r-badge-skip  { background: #f5f5f5; color: #aaa !important; }
-
-/* Botón gerar: gris muy sutil */
-.r-btn-gerar {
-  font-size: .70rem; font-weight: 600; color: #666 !important;
-  background: #fff; border: 1px solid #ddd; border-radius: 6px;
-  padding: 3px 9px; cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s; white-space: nowrap;
-}
-.r-btn-gerar:hover { background: #222 !important; color: #fff !important; border-color: #222; }
-.r-btn-gerar:disabled { opacity: .4; cursor: wait; }
-
-.r-decision-wrap { display: flex; gap: 4px; flex-wrap: wrap; }
-.r-btn-nopwd, .r-btn-skip {
-  font-size: .67rem; font-weight: 600; border-radius: 5px; padding: 2px 7px;
-  cursor: pointer; transition: background .12s, color .12s; border: 1px solid #ddd; white-space: nowrap;
-}
-.r-btn-nopwd { background: #f5f5f5; color: #555 !important; }
-.r-btn-nopwd:hover { background: #222 !important; color: #fff !important; border-color: #222; }
-.r-btn-skip  { background: #f5f5f5; color: #999 !important; }
-.r-btn-skip:hover  { background: #555 !important; color: #fff !important; border-color: #555; }
-
-.r-btn-undo {
-  font-size: .70rem; background: none; border: none;
-  color: #ccc !important; cursor: pointer; padding: 1px 5px; border-radius: 4px;
-  transition: color .12s, background .12s; margin-left: 2px; vertical-align: middle;
-}
-.r-btn-undo:hover { background: #f0f0f0; color: #555 !important; }
-
-/* Footer: línea limpia */
-.r-panel-footer {
-  padding: 8px 14px; font-size: .72rem; font-weight: 600;
-  border-top: 1px solid #ececec; border-radius: 0 0 12px 12px;
-}
-.r-panel-footer-ok   { background: #fafafa; color: #888 !important; }
-.r-panel-footer-warn { background: #fafafa; color: #999 !important; }
-
-.r-panel-loading, .r-panel-empty {
-  padding: 36px 20px; text-align: center; color: #bbb !important; font-size: .80rem;
-}
-.r-spinner {
-  display: inline-block; width: 12px; height: 12px;
-  border: 1.5px solid #e0e0e0; border-top-color: #aaa; border-radius: 50%;
-  animation: r-spin .7s linear infinite; margin-right: 6px; vertical-align: middle;
-}
-@keyframes r-spin { to { transform: rotate(360deg); } }
 
 /* ══ GRAIN ══ */
 body::before {
@@ -3606,12 +3563,11 @@ td                   { font-size: .96rem !important; }
   <!-- TAB RECIBOS -->
   <div id="tab-recibos" class="tab-panel">
 
-    <!-- LAYOUT: upload izquierda + panel senhas derecha -->
-    <div id="r-main-layout">
+    <!-- CONFIG -->
 
-      <!-- Columna izquierda: upload PDF + estado -->
+    <!-- Layout: upload izquierda + panel senhas derecha -->
+    <div id="r-recibos-wrap">
       <div id="r-left-col">
-
         <div id="r-upload-outer">
           <div id="r-hint-pdf" class="r-inline-hint"></div>
           <div id="r-upload-grid">
@@ -3624,29 +3580,24 @@ td                   { font-size: .96rem !important; }
             </label>
           </div>
         </div>
-
         <button id="r-process-btn">processar recibos</button>
-
-        <div id="r-status-area">
-          <div id="r-status-msg"></div>
-          <div id="r-warnings-box">
-            <div class="warn-title">senhas em falta — nenhum recibo foi gerado</div>
-            <ul id="r-warnings-list"></ul>
-          </div>
-        </div>
-
-        <!-- PROGRESS -->
-        <div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>
-        <div id="r-progress-detail"></div>
-
-      </div><!-- /#r-left-col -->
-
-      <!-- Columna derecha: panel de senhas -->
-      <div id="r-senhas-panel">
-        <div class="r-panel-empty">carrega um pdf para ver as senhas</div>
       </div>
+      <div id="r-senhas-panel">
+        <p style="padding:20px;color:#bbb;font-size:.78rem;text-align:center;">carrega um pdf para ver as senhas</p>
+      </div>
+    </div>
 
-    </div><!-- /#r-main-layout -->
+    <div id="r-status-area">
+      <div id="r-status-msg"></div>
+      <div id="r-warnings-box">
+        <div class="warn-title">senhas em falta — nenhum recibo foi gerado</div>
+        <ul id="r-warnings-list"></ul>
+      </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>
+    <div id="r-progress-detail"></div>
 
     <!-- CONFERIR — fixed right -->
     <div id="r-conferir-fixed">

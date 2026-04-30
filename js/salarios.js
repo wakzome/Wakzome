@@ -9,16 +9,14 @@
     '#s-salary-table th:last-child, #s-salary-table td:last-child { width:1%; white-space:nowrap; }',
 
     '#s-salary-table tbody td:last-child { cursor:pointer; user-select:none; transition:background .15s, color .15s; }',
-    '#s-salary-table tbody td:last-child:hover { background:#f0f0f0 !important; }',
-    '#s-salary-table tbody td:last-child.s-liq-copy-ok { color:#4A7C6F !important; background:#f0faf8 !important; }',
-    '.s-liq-cell { display:flex; width:100%; justify-content:flex-end; color:inherit; }',
+    '#s-salary-table tbody td:last-child:hover { background:#f0f0f0 !important; color:#000000 !important; }',
+    '.s-liq-cell { display:inline-flex; align-items:center; gap:5px; width:100%; justify-content:flex-end; color:inherit; }',
+    '.s-liq-check { display:none; flex-shrink:0; }',
 
-    // Fila destacada ao copiar: subtil, escala de cinzentos, elegante
-    '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s, font-size .2s; }',
+    // Fila destacada ao copiar
+    '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s; }',
     '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied td:last-child { cursor:pointer; color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied td:last-child:hover { background:#2e2e2e !important; }',
-    '#s-salary-table tbody tr.s-row-copied td:last-child.s-liq-copy-ok { color:#7ecfc0 !important; background:#1a1a1a !important; }',
+    '#s-salary-table tbody tr.s-row-copied .s-liq-check { display:inline-block; color:#7ecfc0; }',
   ].join('\n');
   document.head.appendChild(st);
 })();
@@ -151,7 +149,7 @@ function sRenderTable(rows) {
   </tr></thead><tbody>`;
   filtered.forEach((r, i) => {
     const cleanVal = r.liquido.replace(/\.(?=\d{3},)/, '');
-    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Clique para copiar"><span class="s-liq-cell">${escHtml(cleanVal)}</span></td></tr>`;
+    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Clique para copiar"><span class="s-liq-cell"><svg class="s-liq-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${escHtml(cleanVal)}</span></td></tr>`;
   });
   html += `</tbody><tfoot><tr>
     <td class="row-num"></td><td>total</td>
@@ -175,22 +173,10 @@ function sCopyLiquido(td) {
     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
   });
 
-  // Feedback visual na célula
-  td.classList.add('s-liq-copy-ok');
-  setTimeout(() => { td.classList.remove('s-liq-copy-ok'); }, 1000);
-
-  // Highlight persistente da fila — remove a anterior imediatamente se existir
-  if (sCopiedRow) {
-    sCopiedRow.classList.remove('s-row-copied');
-  }
-  if (sCopyRowTimer) {
-    clearTimeout(sCopyRowTimer);
-    sCopyRowTimer = null;
-  }
+  // Remove highlight da fila anterior
+  if (sCopiedRow) sCopiedRow.classList.remove('s-row-copied');
+  if (sCopyRowTimer) { clearTimeout(sCopyRowTimer); sCopyRowTimer = null; }
 
   const row = td.closest('tr');
-  if (row) {
-    row.classList.add('s-row-copied');
-    sCopiedRow = row;
-  }
+  if (row) { row.classList.add('s-row-copied'); sCopiedRow = row; }
 }

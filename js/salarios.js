@@ -79,7 +79,9 @@ async function sHandleFile(file) {
     }
     sTableData = rows;
     sRenderTable(rows);
-    document.getElementById('s-status-msg').textContent = rows.length + ' colaboradores encontrados';
+    // O count correto é o de sTableData após o filtro em sRenderTable
+    const countFinal = sTableData.length;
+    document.getElementById('s-status-msg').textContent = countFinal + ' colaboradores encontrados';
     // Switch salários tab to page-level scroll
     document.getElementById('s-upload-label').classList.add('loaded');
     document.getElementById('tab-salarios').classList.add('s-loaded');

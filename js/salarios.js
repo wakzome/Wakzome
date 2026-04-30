@@ -13,7 +13,10 @@
     '.s-liq-cell { display:inline-flex; align-items:center; gap:5px; width:100%; justify-content:flex-end; color:inherit; }',
     '.s-liq-check { display:none; flex-shrink:0; }',
 
-    // Fila destacada ao copiar
+    // Botão de reset
+    '#s-reset-btn { display:none; margin:0 auto 24px auto; width:48px; height:48px; border-radius:50%; border:2px solid #d0d0d0; background:#fff; cursor:pointer; color:#888; font-size:22px; align-items:center; justify-content:center; transition:all .2s; }',
+    '#s-reset-btn:hover { border-color:#555; color:#222; transform:rotate(-30deg); }',
+    '#s-reset-btn.visible { display:flex; }',
     '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s; }',
     '#s-salary-table tbody tr.s-row-copied td * { color:#ffffff !important; }',
     '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; }',
@@ -28,6 +31,33 @@
 let sTableData = [];
 
 const sUploadLabel = document.getElementById('s-upload-label');
+
+// Crear e insertar botón de reset justo después del upload label
+const sResetBtn = document.createElement('button');
+sResetBtn.id = 's-reset-btn';
+sResetBtn.title = 'Carregar novo ficheiro';
+sResetBtn.innerHTML = '↺';
+sUploadLabel.parentNode.insertBefore(sResetBtn, sUploadLabel.nextSibling);
+
+sResetBtn.addEventListener('click', () => {
+  // Resetear estado
+  sTableData = [];
+  sCopiedRow = null;
+  sCopyRowTimer = null;
+  document.getElementById('s-file-name').innerHTML = '';
+  document.getElementById('s-status-msg').textContent = '';
+  document.getElementById('s-results-wrap').innerHTML = '';
+  document.getElementById('s-file-input').value = '';
+  // Mostrar upload, ocultar reset
+  sUploadLabel.style.display = '';
+  sResetBtn.classList.remove('visible');
+  // Quitar clases de estado cargado
+  document.getElementById('tab-salarios').classList.remove('s-loaded');
+  const adminApp = document.getElementById('admin-app');
+  adminApp.classList.remove('s-loaded');
+  delete adminApp.dataset.sLoaded;
+  document.body.style.overflow = '';
+});
 sUploadLabel.addEventListener('dragover',  e => { e.preventDefault(); sUploadLabel.classList.add('drag-over'); });
 sUploadLabel.addEventListener('dragleave', () => sUploadLabel.classList.remove('drag-over'));
 sUploadLabel.addEventListener('drop', e => {
@@ -82,6 +112,9 @@ async function sHandleFile(file) {
     // O count correto é o de sTableData após o filtro em sRenderTable
     const countFinal = sTableData.length;
     document.getElementById('s-status-msg').textContent = countFinal + ' colaboradores encontrados';
+    // Ocultar cuadro de upload, mostrar botón de reset
+    sUploadLabel.style.display = 'none';
+    sResetBtn.classList.add('visible');
     // Switch salários tab to page-level scroll
     document.getElementById('s-upload-label').classList.add('loaded');
     document.getElementById('tab-salarios').classList.add('s-loaded');

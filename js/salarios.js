@@ -8,15 +8,16 @@
     // Coluna de vencimento líquido: largura dinâmica ao conteúdo
     '#s-salary-table th:last-child, #s-salary-table td:last-child { width:1%; white-space:nowrap; }',
 
-    '.s-liq-cell { display:inline-flex; align-items:center; gap:6px; }',
-    '.s-liq-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:1px solid #d0d0d0; background:transparent; cursor:pointer; color:#aaa; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; }',
+    '.s-liq-cell { display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:flex-end; }',
+    '.s-liq-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; min-width:18px; padding:0; border:1px solid #d0d0d0; background:transparent; cursor:pointer; color:#aaa; border-radius:4px; flex-shrink:0; transition:all .15s; vertical-align:middle; }',
     '.s-liq-copy-btn:hover { color:#000; background:#f0f0f0; border-color:#bbb; }',
     '.s-liq-copy-btn.s-liq-copy-ok { color:#4A7C6F; border-color:#4A7C6F; background:#f0faf8; }',
 
     // Fila destacada ao copiar: subtil, escala de cinzentos, elegante
     '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s, font-size .2s; }',
     '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied .s-liq-copy-btn { border-color:#555; color:#aaa; }',
+    '#s-salary-table tbody tr.s-row-copied .s-liq-cell { color:#ffffff !important; }',
+    '#s-salary-table tbody tr.s-row-copied .s-liq-copy-btn { border-color:#777 !important; color:#cccccc !important; background:transparent !important; }',
   ].join('\n');
   document.head.appendChild(st);
 })();
@@ -38,8 +39,26 @@ document.getElementById('s-file-input').addEventListener('change', e => {
   if (e.target.files[0]) sHandleFile(e.target.files[0]);
 });
 
+// Extrai o mês e ano do nome do ficheiro e formata para exibição
+function sFormatFileName(filename) {
+  const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  // Tenta apanhar padrões: MMAAAA, MMYYYY, MM2025, 042026, etc.
+  const m = filename.match(/(\d{2})(\d{4})/);
+  if (m) {
+    const mes = parseInt(m[1], 10);
+    const ano = m[2];
+    if (mes >= 1 && mes <= 12) {
+      const nomeMes = MESES[mes - 1].charAt(0).toUpperCase() + MESES[mes - 1].slice(1);
+      return `<strong style="font-size:1.18em;letter-spacing:0.01em;">${nomeMes} ${ano}</strong>`;
+    }
+  }
+  // Fallback: nome original
+  return `<span style="font-size:1.05em;">${filename}</span>`;
+}
+
 async function sHandleFile(file) {
-  document.getElementById('s-file-name').textContent  = file.name;
+  const displayName = sFormatFileName(file.name);
+  document.getElementById('s-file-name').innerHTML  = displayName;
   document.getElementById('s-status-msg').textContent = 'a processar…';
   document.getElementById('s-results-wrap').innerHTML = '';
   sTableData = [];

@@ -15,7 +15,7 @@
 
     // Fila destacada ao copiar: subtil, escala de cinzentos, elegante
     '#s-salary-table tbody tr.s-row-copied { background:#1a1a1a; transition:background .2s, color .2s; }',
-    '#s-salary-table tbody tr.s-row-copied td { color:#f5f5f5; font-size:1.04em; letter-spacing:0.01em; transition:color .2s, font-size .2s; }',
+    '#s-salary-table tbody tr.s-row-copied td { color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:color .2s, font-size .2s; }',
     '#s-salary-table tbody tr.s-row-copied .s-liq-copy-btn { border-color:#555; color:#aaa; }',
   ].join('\n');
   document.head.appendChild(st);
@@ -125,7 +125,7 @@ function sRenderTable(rows) {
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
   let html = `<table id="s-salary-table"><thead><tr>
-    <th class="row-num">#</th><th>nome</th><th>vencimento líquido</th>
+    <th class="row-num">#</th><th>nome</th><th>vencimento</th>
   </tr></thead><tbody>`;
   filtered.forEach((r, i) => {
     const cleanVal = r.liquido.replace(/\.(?=\d{3},)/, '');

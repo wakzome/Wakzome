@@ -4751,9 +4751,17 @@ td                   { font-size: .96rem !important; }
     tbody.innerHTML        = '';
 
     /* Título do mês */
-    var mes       = localStorage.getItem('gh_mes') || '';
-    var mmMatch   = mes.match(/^(\d{2})-(\d{4})$/);
-    var monthName = mmMatch ? (MESES[parseInt(mmMatch[1], 10) - 1] || mes) : mes;
+    var mes        = localStorage.getItem('gh_mes') || '';
+    var mmMatch    = mes.match(/^(\d{2})-(\d{4})$/);
+    var natalMatch = mes.match(/^natal-(\d{4})$/);
+    var monthName;
+    if (mmMatch) {
+      monthName = MESES[parseInt(mmMatch[1], 10) - 1] || mes;
+    } else if (natalMatch) {
+      monthName = '🎄 Subsídio de Natal ' + natalMatch[1];
+    } else {
+      monthName = mes;
+    }
     if (titleEl)     titleEl.textContent     = monthName || 'recibos';
     if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
 

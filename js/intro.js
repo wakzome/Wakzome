@@ -73,6 +73,38 @@
     if (line) line.classList.add('draw');
   }, lineDelay);
 
+  // ── Elegant disappear: pause to read, then dissolve upward ──
+  const assembleEnd = baseDelay + word.length * stagger + duration;
+  const pauseAfter  = 600;   // tiempo visible tras ensamblaje
+  const exitDur     = 700;   // duración de la desaparición
+
+  setTimeout(function() {
+    spans.forEach(function(item, i) {
+      var span = item.span;
+      var revStagger = (spans.length - 1 - i) * 55; // orden invertido
+      setTimeout(function() {
+        span.style.transition = [
+          'transform ' + exitDur + 'ms cubic-bezier(0.4, 0, 0.2, 1)',
+          'opacity '   + exitDur + 'ms cubic-bezier(0.4, 0, 0.2, 1)',
+          'filter '    + exitDur + 'ms cubic-bezier(0.4, 0, 0.2, 1)'
+        ].join(', ');
+        span.style.transform = 'translateY(-28px) scale(0.92)';
+        span.style.opacity   = '0';
+        span.style.filter    = 'blur(8px)';
+      }, revStagger);
+    });
+
+    // fade out the line too
+    setTimeout(function() {
+      var line = document.getElementById('intro-line');
+      if (line) {
+        line.style.transition = 'opacity ' + exitDur + 'ms ease';
+        line.style.opacity    = '0';
+      }
+    }, 80);
+
+  }, assembleEnd + pauseAfter);
+
 })();
 
 // --- Funciones de utilidad se mantienen igual ---

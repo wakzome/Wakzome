@@ -212,13 +212,10 @@ async function rProcessRecibos() {
       dados: uploadResults.map(r => ({ filename: r.filename, name: r.name, mes }))
     };
     const indexBlob = new Blob([JSON.stringify(indexData, null, 2)], { type: 'application/json' });
-    const removeRes = await sbClient.storage.from('recibos').remove(['index.json']);
-    console.log('[recibos] index.json remove result:', JSON.stringify(removeRes));
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const indexUploadRes = await sbClient.storage.from('recibos').upload('index.json', indexBlob, { contentType: 'application/json' });
-    console.log('[recibos] index.json upload result:', JSON.stringify(indexUploadRes));
-    if (indexUploadRes.error) {
-      rSetStatus('⚠️ Erro ao atualizar index.json: ' + indexUploadRes.error.message);
+    const indexUpdateRes = await sbClient.storage.from('recibos').update('index.json', indexBlob, { upsert: true, contentType: 'application/json' });
+    console.log('[recibos] index.json update result:', JSON.stringify(indexUpdateRes));
+    if (indexUpdateRes.error) {
+      rSetStatus('⚠️ Erro ao atualizar index.json: ' + indexUpdateRes.error.message);
       rSetProgressDetail('Verifica as permissões do bucket em Supabase.');
       btn.disabled = false;
       return;

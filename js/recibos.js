@@ -1,32 +1,43 @@
 // ══════════════════════════════════════════════════════════════
-//  ADMIN: RECIBOS  —  v2  (senhas via Supabase, sem CSV)
+//  ADMIN: RECIBOS
 // ══════════════════════════════════════════════════════════════
 
-// ── Utilidades ────────────────────────────────────────────────
-function rNormalize(str) {
-  return str.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
-}
-function rSanitizeName(name) {
-  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').toLowerCase();
-}
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── Detectar mes ──────────────────────────────────────────────
+/**
+ * Determina automaticamente o mês a processar com base na data atual.
+ *
+ * Regras:
+ *  - Dia 10–20 de dezembro          → "natal-YYYY"  (subsidio de natal)
+ *  - Dia 25 do mês anterior até dia 4 do mês atual → mês atual "MM-YYYY"
+ *  - Resto do ano                   → mês atual "MM-YYYY" (default seguro)
+ *
+ * Retorna string no formato "MM-YYYY" ou "natal-YYYY"
+ */
 function rDetectMes() {
-  const now = new Date(), day = now.getDate(), month = now.getMonth() + 1, year = now.getFullYear();
-  if (month === 12 && day >= 10 && day <= 20) return `natal-${year}`;
-  if (day <= 9) {
-    const pm = month === 1 ? 12 : month - 1;
-    const py = month === 1 ? year - 1 : year;
-    return `${String(pm).padStart(2,'0')}-${py}`;
+  const now   = new Date();
+  const day   = now.getDate();
+  const month = now.getMonth() + 1; // 1–12
+  const year  = now.getFullYear();
+
+  // Subsidio de natal: 10–20 de dezembro (tem prioridade)
+  if (month === 12 && day >= 10 && day <= 20) {
+    return `natal-${year}`;
   }
+
+  // Dia 1–9: ainda a processar recibos do mês ANTERIOR
+  // Ex: 4 maio → abril, 9 janeiro → dezembro do ano anterior
+  if (day <= 9) {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear  = month === 1 ? year - 1 : year;
+    return `${String(prevMonth).padStart(2,'0')}-${prevYear}`;
+  }
+
+  // Dia 10–31: processa o mês ATUAL
+  // Ex: 25 abril → abril, 30 abril → abril, 10 maio → maio
   return `${String(month).padStart(2,'0')}-${year}`;
 }
 
 function rLoadConfig() {
+  // Já não há campo manual — o mês é sempre calculado automaticamente
   const mes = rDetectMes();
   localStorage.setItem('gh_mes', mes);
   rShowMesBadge(mes);
@@ -39,13 +50,16 @@ function rShowMesBadge(mes) {
     label = `🎄 Subsídio de Natal ${mes.split('-')[1]}`;
   } else {
     const [mm, yyyy] = mes.split('-');
-    label = `${MESES[parseInt(mm,10)-1] || mes} ${yyyy}`;
+    const nomeMes = MESES[parseInt(mm, 10) - 1] || mes;
+    label = `${nomeMes} ${yyyy}`;
   }
+  // Injeta badge no DOM se existir o contentor, senão cria um
   let badge = document.getElementById('r-mes-badge');
   if (!badge) {
     badge = document.createElement('div');
     badge.id = 'r-mes-badge';
     badge.style.cssText = 'display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 18px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:10px;font-size:.93rem;font-weight:600;color:#333;';
+    // Insere antes dos uploads
     const anchor = document.getElementById('r-label-pdf') || document.getElementById('r-status-msg');
     if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(badge, anchor);
     else document.body.prepend(badge);
@@ -53,517 +67,294 @@ function rShowMesBadge(mes) {
   badge.innerHTML = `<span style="color:#888;font-weight:400;font-size:.82rem;">a processar</span><strong style="font-size:1.05em;">${label}</strong>`;
 }
 
-// ── Estado global ─────────────────────────────────────────────
 let rPdfFile = null;
 let rSenhasMap = new Map(); // nomeNorm → { nome_orig, senha }
-let rPageMatches = [];      // [{ page, csvEntry, decision }]
 
-// ── Cargar senhas desde Supabase ──────────────────────────────
-async function rLoadSenhasFromSupabase() {
-  try {
-    const { data, error } = await sbClient
-      .from('senhas_recibos')
-      .select('nome, nome_orig, senha');
-    if (error) throw error;
-    rSenhasMap.clear();
-    for (const row of data) {
-      // Store with normalized key (uppercase, no accents)
-      const key = rNormalize(row.nome.trim());
-      rSenhasMap.set(key, { nome_orig: row.nome_orig || row.nome, senha: row.senha });
-    }
-    console.log('[recibos] senhas carregadas:', rSenhasMap.size, [...rSenhasMap.keys()].slice(0,3));
-    rSetStatus(`senhas: ${rSenhasMap.size} carregadas de Supabase`);
-    return true;
-  } catch (e) {
-    console.error('[recibos] erro ao carregar senhas:', e);
-    rSetStatus('\u26a0\ufe0f Erro Supabase: ' + e.message);
-    return false;
-  }
-}
-
-// ── Guardar nueva senha en Supabase ──────────────────────────
-async function rSaveSenhaToSupabase(nomeNorm, nomeOrig, senha) {
-  try {
-    const { error } = await sbClient.from('senhas_recibos').upsert({
-      nome: nomeNorm,
-      nome_orig: nomeOrig,
-      senha: senha,
-      atualizado_em: new Date().toISOString()
-    }, { onConflict: 'nome' });
-    if (error) throw error;
-    rSenhasMap.set(nomeNorm, { nome_orig: nomeOrig, senha });
-    return true;
-  } catch (e) {
-    console.error('[recibos] erro ao guardar senha:', e);
-    return false;
-  }
-}
-
-// ── Generar senha aleatoria estilo consistente (Xxx#99) ───────
-function rGenerateSenha() {
-  const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower   = 'abcdefghjkmnpqrstuvwxyz';
-  const digits  = '23456789';
-  const specials = '#@&';
-  const c1 = upper[Math.floor(Math.random() * upper.length)];
-  const c2 = lower[Math.floor(Math.random() * lower.length)];
-  const c3 = lower[Math.floor(Math.random() * lower.length)];
-  const sp = specials[Math.floor(Math.random() * specials.length)];
-  const d1 = digits[Math.floor(Math.random() * digits.length)];
-  const d2 = digits[Math.floor(Math.random() * digits.length)];
-  return `${c1}${c2}${c3}${sp}${d1}${d2}`;
-}
-
-// ── Setup upload PDF (ya no hay CSV) ─────────────────────────
-function rSetupUpload() {
+function rSetupUploadPdf() {
   const label  = document.getElementById('r-label-pdf');
   const input  = document.getElementById('r-input-pdf');
   const nameEl = document.getElementById('r-name-pdf');
-
-  const handleFile = async (f) => {
+  const handle = async (f) => {
     if (!f) return;
     rPdfFile = f;
     nameEl.textContent = f.name;
     await rOnPdfLoaded();
   };
-
-  input.addEventListener('change', e => handleFile(e.target.files[0]));
+  input.addEventListener('change', e => handle(e.target.files[0]));
   label.addEventListener('dragover',  e => { e.preventDefault(); label.classList.add('drag-over'); });
   label.addEventListener('dragleave', () => label.classList.remove('drag-over'));
   label.addEventListener('drop', e => {
     e.preventDefault(); label.classList.remove('drag-over');
-    handleFile(e.dataTransfer.files[0]);
+    handle(e.dataTransfer.files[0]);
   });
 }
 
-// ── Buscar senha con matching flexible ───────────────────────
+// ── Cargar senhas de Supabase ─────────────────────────────────
+async function rLoadSenhasFromSupabase() {
+  try {
+    const { data, error } = await sbClient.from('senhas_recibos').select('nome, nome_orig, senha');
+    if (error) throw error;
+    rSenhasMap.clear();
+    for (const row of data) {
+      rSenhasMap.set(rNormalize(row.nome), { nome_orig: row.nome_orig || row.nome, senha: row.senha });
+    }
+    return true;
+  } catch(e) { console.error('[senhas]', e); return false; }
+}
+
+// ── Matching flexible: exact → containment → words ────────────
 function rFindSenha(detectedName) {
   if (!detectedName) return null;
   const dn = rNormalize(detectedName);
-  // 1. Exact
+  // 1. exact
   if (rSenhasMap.has(dn)) return { key: dn, ...rSenhasMap.get(dn) };
-  // 2. Containment
+  // 2. containment
   for (const [k, v] of rSenhasMap) {
     if (k.includes(dn) || dn.includes(k)) return { key: k, ...v };
   }
-  // 3. All words match
+  // 3. todas las palabras del detectado están en la clave
   const words = dn.split(' ').filter(w => w.length > 2);
   if (words.length >= 2) {
     for (const [k, v] of rSenhasMap) {
       if (words.every(w => k.includes(w))) return { key: k, ...v };
     }
-  }
-  // 4. Most words match (tolerance for truncated names)
-  if (words.length >= 2) {
+    // 4. la mayoría de palabras coinciden
     for (const [k, v] of rSenhasMap) {
-      const matches = words.filter(w => k.includes(w)).length;
-      if (matches >= Math.max(2, words.length - 1)) return { key: k, ...v };
+      if (words.filter(w => k.includes(w)).length >= Math.max(2, words.length - 1)) return { key: k, ...v };
     }
   }
   return null;
 }
 
-// ── Cuando se carga PDF: extraer + cruzar con Supabase ───────
+// ── Al cargar PDF: senhas de Supabase + panel ─────────────────
 async function rOnPdfLoaded() {
   rSetStatus('a consultar senhas em Supabase…');
-  const panel = document.getElementById('r-senhas-panel');
-  if (panel) panel.innerHTML = '<div class="r-panel-loading"><span class="r-spinner"></span> a carregar…</div>';
-
+  rRenderSenhasPanel([]);
   const ok = await rLoadSenhasFromSupabase();
-  if (!ok) {
-    rSetStatus('\u26a0\ufe0f Erro ao carregar senhas de Supabase');
-    if (panel) panel.innerHTML = '<div class="r-panel-empty">erro ao conectar com Supabase</div>';
-    return;
-  }
-
+  if (!ok) { rSetStatus('⚠️ erro ao carregar senhas de Supabase'); return; }
   rSetStatus('a extrair páginas do pdf…');
   const pdfBytes = await rPdfFile.arrayBuffer();
   const pages = await rExtractPages(pdfBytes);
-
-  rPageMatches = pages.map(page => {
+  window._rPageMatches = pages.map(page => {
     const found = rFindSenha(page.detectedName);
-    console.log('[recibos] pag', page.pageIndex, '| detectado:', page.detectedName, '| match:', found ? found.key : 'NONE');
-    return {
-      page,
-      csvEntry: found ? { name: found.key, nome_orig: found.nome_orig, pwd: found.senha } : null,
-      decision: null
-    };
+    return { page, csvEntry: found ? { name: found.key, nome_orig: found.nome_orig, pwd: found.senha } : null };
   });
-
   rSetStatus('');
-  rRenderSenhasPanel();
-  rCheckReadyToProcess();
+  rRenderSenhasPanel(window._rPageMatches);
+  rCheckReadyNew();
 }
 
 // ── Render panel derecho ──────────────────────────────────────
-function rRenderSenhasPanel() {
+function rRenderSenhasPanel(matches) {
   const panel = document.getElementById('r-senhas-panel');
   if (!panel) return;
-
-  if (!rPageMatches.length) {
-    panel.innerHTML = '<div class="r-panel-empty">nenhuma página detectada</div>';
+  if (!matches || !matches.length) {
+    panel.innerHTML = '<p style="padding:20px;color:#bbb;font-size:.78rem;text-align:center;">carrega um pdf para ver as senhas</p>';
     return;
   }
-
-  const withPwd  = rPageMatches.filter(m => m.csvEntry && m.csvEntry.pwd).length;
-  const missing  = rPageMatches.filter(m => !m.csvEntry || !m.csvEntry.pwd).length;
-  const pending  = rPageMatches.filter(m => !m.csvEntry?.pwd && m.decision === null).length;
-
+  const withPwd = matches.filter(m => m.csvEntry && m.csvEntry.pwd).length;
+  const missing = matches.length - withPwd;
   let rows = '';
-  rPageMatches.forEach((m, i) => {
-    const displayName = m.csvEntry
-      ? (m.csvEntry.nome_orig || m.csvEntry.name)
-      : (m.page.detectedName || `pág. ${m.page.pageIndex}`);
+  matches.forEach((m, i) => {
+    const name = m.csvEntry ? (m.csvEntry.nome_orig || m.csvEntry.name) : (m.page.detectedName || 'pág.' + m.page.pageIndex);
     const hasPwd = !!(m.csvEntry && m.csvEntry.pwd);
-
-    let pwdCell    = '';
-    let actionCell = '';
-
+    let pwdCell, actionCell;
     if (hasPwd) {
-      pwdCell    = `<span class="r-pwd-chip">${escHtml(m.csvEntry.pwd)}</span>`;
-      actionCell = `<span class="r-badge r-badge-ok">✓</span>`;
-    } else if (m.decision === 'nopwd') {
-      pwdCell    = `<span class="r-pwd-none">sem senha</span>`;
-      actionCell = `<span class="r-badge r-badge-nopwd">publicar</span>
-                    <button class="r-btn-undo" onclick="rUndoDecision(${i})" title="desfazer">↩</button>`;
-    } else if (m.decision === 'skip') {
-      pwdCell    = `<span class="r-pwd-none">—</span>`;
-      actionCell = `<span class="r-badge r-badge-skip">ignorar</span>
-                    <button class="r-btn-undo" onclick="rUndoDecision(${i})" title="desfazer">↩</button>`;
+      pwdCell    = '<span class="rsp-chip">' + escHtml(m.csvEntry.pwd) + '</span>';
+      actionCell = '<span class="rsp-ok">✓</span>';
+    } else if (m._decision === 'nopwd') {
+      pwdCell    = '<span class="rsp-none">sem senha</span>';
+      actionCell = '<span class="rsp-tag">publicar</span> <button class="rsp-undo" onclick="rUndoSenha(' + i + ')">↩</button>';
+    } else if (m._decision === 'skip') {
+      pwdCell    = '<span class="rsp-none">—</span>';
+      actionCell = '<span class="rsp-tag">ignorar</span> <button class="rsp-undo" onclick="rUndoSenha(' + i + ')">↩</button>';
     } else {
-      // Sin senha y sin decisión
-      pwdCell    = `<button class="r-btn-gerar" onclick="rGerarSenha(${i})" id="r-gerar-btn-${i}">gerar senha</button>`;
-      actionCell = `<div class="r-decision-wrap">
-                      <button class="r-btn-nopwd" onclick="rDecideNoPwd(${i})">sem senha</button>
-                      <button class="r-btn-skip"  onclick="rDecideSkip(${i})">não publicar</button>
-                    </div>`;
+      pwdCell    = '<button class="rsp-gen" id="rsp-gen-' + i + '" onclick="rGerarSenha(' + i + ')">gerar senha</button>';
+      actionCell = '<button class="rsp-nopwd" onclick="rDecideNoPwd(' + i + ')">sem senha</button>'
+                 + '<button class="rsp-skip" onclick="rDecideSkip(' + i + ')">não publicar</button>';
     }
-
-    const rowClass = hasPwd ? 'r-row-ok' : (m.decision ? 'r-row-decided' : 'r-row-missing');
-    rows += `
-      <tr class="r-panel-row ${rowClass}" id="r-row-${i}">
-        <td class="r-td-num">${i + 1}</td>
-        <td class="r-td-name" title="${escHtml(displayName)}">${escHtml(displayName)}</td>
-        <td class="r-td-pwd">${pwdCell}</td>
-        <td class="r-td-action">${actionCell}</td>
-      </tr>`;
+    rows += '<tr class="rsp-row' + (hasPwd?'':' rsp-miss') + '" id="rsp-row-' + i + '">'
+          + '<td class="rsp-n">' + (i+1) + '</td>'
+          + '<td class="rsp-name" title="' + escHtml(name) + '">' + escHtml(name) + '</td>'
+          + '<td class="rsp-pwd">' + pwdCell + '</td>'
+          + '<td class="rsp-act">' + actionCell + '</td>'
+          + '</tr>';
   });
-
-  const footerClass = pending > 0 ? 'r-panel-footer-warn' : 'r-panel-footer-ok';
-  const footerMsg   = pending > 0
-    ? `⚠ ${pending} colaboradora${pending > 1 ? 's' : ''} sem decisão`
-    : `✓ tudo pronto — podes processar`;
-
-  panel.innerHTML = `
-    <div class="r-panel-header">
-      <span class="r-panel-title">colaboradoras <span class="r-panel-count">${rPageMatches.length}</span></span>
-      <div class="r-panel-stats">
-        <span class="r-stat r-stat-ok">✓ ${withPwd}</span>
-        ${missing > 0 ? `<span class="r-stat r-stat-warn">⚠ ${missing} sem senha</span>` : ''}
-      </div>
-    </div>
-    <div class="r-panel-table-wrap">
-      <table class="r-panel-table">
-        <thead>
-          <tr>
-            <th class="r-th-num">#</th>
-            <th>nome</th>
-            <th>senha</th>
-            <th>ação</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="r-panel-footer ${footerClass}">${footerMsg}</div>
-  `;
+  const pending = matches.filter(m => !m.csvEntry?.pwd && !m._decision).length;
+  const footerCls = pending > 0 ? 'rsp-foot-warn' : 'rsp-foot-ok';
+  const footerTxt = pending > 0
+    ? '⚠ ' + pending + ' sem decisão'
+    : '✓ pronto para processar';
+  panel.innerHTML =
+    '<div class="rsp-header">'
+    + '<span class="rsp-title">colaboradoras <span class="rsp-cnt">' + matches.length + '</span></span>'
+    + '<span class="rsp-stats"><span class="rsp-s">' + withPwd + ' ✓</span>' + (missing?' <span class="rsp-sw">'+missing+' sem senha</span>':'') + '</span>'
+    + '</div>'
+    + '<table class="rsp-table"><thead><tr>'
+    + '<th class="rsp-n">#</th><th>nome</th><th>senha</th><th>ação</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div class="' + footerCls + '">' + footerTxt + '</div>';
 }
 
-// ── Generar senha nueva y guardar en Supabase ─────────────────
-async function rGerarSenha(i) {
-  const m   = rPageMatches[i];
-  const btn = document.getElementById(`r-gerar-btn-${i}`);
-  if (btn) { btn.textContent = '…'; btn.disabled = true; }
-
-  const newPwd   = rGenerateSenha();
-  const nomeNorm = m.page.detectedName || `PAGINA_${m.page.pageIndex}`;
+function rGerarSenha(i) {
+  const upper='ABCDEFGHJKLMNPQRSTUVWXYZ', lower='abcdefghjkmnpqrstuvwxyz', digits='23456789', sp='#@&';
+  const pwd = upper[Math.floor(Math.random()*upper.length)]
+    + lower[Math.floor(Math.random()*lower.length)]
+    + lower[Math.floor(Math.random()*lower.length)]
+    + sp[Math.floor(Math.random()*sp.length)]
+    + digits[Math.floor(Math.random()*digits.length)]
+    + digits[Math.floor(Math.random()*digits.length)];
+  const m = window._rPageMatches[i];
+  const nomeNorm = m.page.detectedName ? rNormalize(m.page.detectedName) : 'PAGINA_' + m.page.pageIndex;
   const nomeOrig = (m.csvEntry && m.csvEntry.nome_orig) || nomeNorm;
+  // Guardar en Supabase
+  sbClient.from('senhas_recibos').upsert({ nome: nomeNorm, nome_orig: nomeOrig, senha: pwd, atualizado_em: new Date().toISOString() }, { onConflict: 'nome' })
+    .then(({error}) => { if (error) console.error('[senhas] upsert:', error); });
+  m.csvEntry = { name: nomeNorm, nome_orig: nomeOrig, pwd };
+  rSenhasMap.set(nomeNorm, { nome_orig: nomeOrig, senha: pwd });
+  rRenderSenhasPanel(window._rPageMatches);
+  rCheckReadyNew();
+}
+function rDecideNoPwd(i) {
+  const m = window._rPageMatches[i];
+  m._decision = 'nopwd';
+  if (!m.csvEntry) m.csvEntry = { name: m.page.detectedName || 'pag'+i, pwd: null };
+  else m.csvEntry.pwd = null;
+  rRenderSenhasPanel(window._rPageMatches); rCheckReadyNew();
+}
+function rDecideSkip(i) {
+  window._rPageMatches[i]._decision = 'skip';
+  rRenderSenhasPanel(window._rPageMatches); rCheckReadyNew();
+}
+function rUndoSenha(i) {
+  const m = window._rPageMatches[i];
+  m._decision = null;
+  if (m.csvEntry) m.csvEntry.pwd = null;
+  rRenderSenhasPanel(window._rPageMatches); rCheckReadyNew();
+}
+function rCheckReadyNew() {
+  const btn = document.getElementById('r-process-btn');
+  if (!btn || !rPdfFile || !window._rPageMatches) { btn && btn.classList.remove('show'); return; }
+  const pending = window._rPageMatches.filter(m => !m.csvEntry?.pwd && !m._decision).length;
+  pending === 0 ? btn.classList.add('show') : btn.classList.remove('show');
+}
+rSetupUploadPdf();
 
-  const saved = await rSaveSenhaToSupabase(nomeNorm, nomeOrig, newPwd);
-  if (!saved) {
-    if (btn) { btn.textContent = 'erro — tentar novamente'; btn.disabled = false; }
+// ── Guide helpers — geometric shapes with SVG text ──
+function rShowGuide(side, title, note) {
+  const elId = side === 'left' ? 'r-hint-pdf' : 'r-hint-csv';
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  if (!title && !note) {
+    el.classList.remove('show');
+    setTimeout(function() { if (!el.classList.contains('show')) el.innerHTML = ''; }, 500);
     return;
   }
 
-  rPageMatches[i].csvEntry = { name: nomeNorm, nome_orig: nomeOrig, pwd: newPwd };
-  rPageMatches[i].decision = null;
-  rRenderSenhasPanel();
-}
+  // Split combined text into lines
+  const allText = ((title || '') + (note ? '\n' + note : '')).trim();
+  const lines = allText.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
 
-// ── Decisiones ────────────────────────────────────────────────
-function rDecideNoPwd(i) {
-  const m = rPageMatches[i];
-  m.decision = 'nopwd';
-  if (!m.csvEntry) {
-    const name = m.page.detectedName || `PAGINA_${m.page.pageIndex}`;
-    m.csvEntry = { name, pwd: null };
+  if (side === 'left') {
+    // Triangle pointing RIGHT: vertices at (8,152) (152,80) (8,8)
+    // Centroid x = (8+152+8)/3 = 56, y = (152+80+8)/3 = 80
+    // But visually the "meat" is between x=8..~100, center around x=52, y=80
+    const cx = 52, cy = 80;
+    const lineH = 14;
+    const startY = cy - ((lines.length - 1) * lineH) / 2;
+    const textEls = lines.map(function(line, i) {
+      return `<text class="hint-svg-text hint-svg-text-dark" x="${cx}" y="${startY + i * lineH}" fill="#333">${line}</text>`;
+    }).join('');
+
+    el.innerHTML = `<div class="hint-shape">
+      <svg class="shape-bg" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon class="hint-svg-fill" points="8,152 152,80 8,8"
+          fill="rgba(247,247,247,0.97)" stroke="#ccc" stroke-width="1.5" stroke-linejoin="round"/>
+        ${textEls}
+      </svg>
+    </div>`;
+
   } else {
-    m.csvEntry.pwd = null;
+    // Circle: center (75,75) radius 68
+    const cx = 75, cy = 75;
+    const lineH = 15;
+    const startY = cy - ((lines.length - 1) * lineH) / 2;
+    const textEls = lines.map(function(line, i) {
+      return `<text class="hint-svg-text" x="${cx}" y="${startY + i * lineH}" fill="#fff">${line}</text>`;
+    }).join('');
+
+    el.innerHTML = `<div class="hint-shape">
+      <svg class="shape-bg" viewBox="0 0 150 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle class="hint-svg-fill" cx="75" cy="75" r="68" fill="#3a3a3a"/>
+        ${textEls}
+      </svg>
+    </div>`;
   }
-  rRenderSenhasPanel();
-  rCheckReadyToProcess();
+
+  el.offsetHeight; // force reflow
+  el.classList.add('show');
+}
+function rHideAllGuides() {
+  ['r-hint-pdf','r-hint-csv'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('show');
+      setTimeout(function() { if (!el.classList.contains('show')) el.innerHTML = ''; }, 500);
+    }
+  });
 }
 
-function rDecideSkip(i) {
-  rPageMatches[i].decision = 'skip';
-  rRenderSenhasPanel();
-  rCheckReadyToProcess();
-}
-
-function rUndoDecision(i) {
-  rPageMatches[i].decision = null;
-  if (rPageMatches[i].csvEntry) rPageMatches[i].csvEntry.pwd = null;
-  rRenderSenhasPanel();
-  rCheckReadyToProcess();
-}
-
-// ── Check si puede procesar ───────────────────────────────────
-function rCheckReadyToProcess() {
-  const btn     = document.getElementById('r-process-btn');
-  if (!btn) return;
-  const pending = rPageMatches.filter(m => !m.csvEntry?.pwd && m.decision === null).length;
-  if (rPdfFile && rPageMatches.length > 0 && pending === 0) {
+function rCheckReady() {
+  const btn = document.getElementById('r-process-btn');
+  const hasPdf = !!rPdfFile;
+  const hasCsv = !!rCsvFile;
+  if (hasPdf && hasCsv) {
     btn.classList.add('show');
+    rShowGuide('left', '', '');
+    rShowGuide('right', '', '');
+    rSetStatus('③ Clica em processar recibos · Atenção: recibos sem senha (pessoal administrativo ou sem chave) não serão publicados — podes actualizar o CSV ou introduzir a senha no aviso que aparecerá.');
+  } else if (hasPdf && !hasCsv) {
+    btn.classList.remove('show');
+    rShowGuide('right', '③ carrega\no csv\nde senhas', '');
   } else {
     btn.classList.remove('show');
   }
 }
 
-
-    /* ── Header ── */
-    .r-panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px 10px;
-      border-bottom: 1px solid #f0f0f0;
-      background: #fafafa;
-      flex-shrink: 0;
-    }
-    .r-panel-title {
-      font-size: .78rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .07em;
-      color: #555;
-    }
-    .r-panel-count {
-      background: #e8e8e8;
-      color: #555;
-      border-radius: 20px;
-      padding: 1px 7px;
-      font-size: .72rem;
-      font-weight: 600;
-      margin-left: 5px;
-    }
-    .r-panel-stats { display: flex; gap: 8px; align-items: center; }
-    .r-stat { font-size: .72rem; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
-    .r-stat-ok   { background: #e8f5e9; color: #388e3c; }
-    .r-stat-warn { background: #fff8e1; color: #f57f17; }
-
-    /* ── Tabla scroll ── */
-    .r-panel-table-wrap {
-      overflow-y: auto;
-      flex: 1;
-    }
-    .r-panel-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .r-panel-table thead th {
-      position: sticky;
-      top: 0;
-      background: #f5f5f5;
-      font-size: .7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: #888;
-      padding: 7px 10px;
-      border-bottom: 1px solid #e8e8e8;
-      text-align: left;
-      z-index: 1;
-    }
-    .r-th-num { width: 28px; text-align: center; }
-
-    /* ── Filas ── */
-    .r-panel-row td {
-      padding: 8px 10px;
-      border-bottom: 1px solid #f5f5f5;
-      vertical-align: middle;
-    }
-    .r-panel-row:last-child td { border-bottom: none; }
-    .r-row-ok      { background: #fff; }
-    .r-row-missing { background: #fffdf5; }
-    .r-row-decided { background: #fafafa; }
-
-    .r-td-num  { color: #bbb; font-size: .72rem; text-align: center; width: 28px; }
-    .r-td-name { font-size: .78rem; font-weight: 600; color: #333; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .r-td-pwd  { white-space: nowrap; }
-    .r-td-action { white-space: nowrap; }
-
-    /* ── Chips de senha ── */
-    .r-pwd-chip {
-      display: inline-block;
-      font-family: 'SF Mono', 'Fira Mono', monospace;
-      font-size: .75rem;
-      font-weight: 600;
-      color: #2e7d32;
-      background: #e8f5e9;
-      border: 1px solid #c8e6c9;
-      border-radius: 6px;
-      padding: 2px 8px;
-      letter-spacing: .03em;
-    }
-    .r-pwd-none {
-      color: #bbb;
-      font-size: .75rem;
-      font-style: italic;
-    }
-
-    /* ── Badges ── */
-    .r-badge {
-      display: inline-block;
-      font-size: .7rem;
-      font-weight: 700;
-      border-radius: 20px;
-      padding: 2px 8px;
-    }
-    .r-badge-ok    { background: #e8f5e9; color: #388e3c; }
-    .r-badge-nopwd { background: #e3f2fd; color: #1565c0; }
-    .r-badge-skip  { background: #f5f5f5; color: #999; }
-
-    /* ── Botones de acción en fila ── */
-    .r-btn-gerar {
-      font-size: .72rem;
-      font-weight: 600;
-      color: #555;
-      background: #f5f5f5;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 3px 9px;
-      cursor: pointer;
-      transition: background .15s, color .15s, border-color .15s;
-      white-space: nowrap;
-    }
-    .r-btn-gerar:hover { background: #333; color: #fff; border-color: #333; }
-    .r-btn-gerar:disabled { opacity: .5; cursor: wait; }
-
-    .r-decision-wrap {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-    }
-    .r-btn-nopwd, .r-btn-skip {
-      font-size: .68rem;
-      font-weight: 600;
-      border-radius: 5px;
-      padding: 2px 7px;
-      cursor: pointer;
-      transition: background .15s, color .15s;
-      border: 1px solid;
-      white-space: nowrap;
-    }
-    .r-btn-nopwd {
-      background: #e3f2fd;
-      color: #1565c0;
-      border-color: #bbdefb;
-    }
-    .r-btn-nopwd:hover { background: #1565c0; color: #fff; border-color: #1565c0; }
-    .r-btn-skip {
-      background: #f5f5f5;
-      color: #888;
-      border-color: #ddd;
-    }
-    .r-btn-skip:hover { background: #888; color: #fff; border-color: #888; }
-
-    /* ── Botón deshacer ↩ ── */
-    .r-btn-undo {
-      font-size: .72rem;
-      background: none;
-      border: none;
-      color: #bbb;
-      cursor: pointer;
-      padding: 1px 5px;
-      border-radius: 4px;
-      transition: color .15s, background .15s;
-      margin-left: 3px;
-      vertical-align: middle;
-    }
-    .r-btn-undo:hover { background: #eee; color: #555; }
-
-    /* ── Footer ── */
-    .r-panel-footer {
-      padding: 9px 16px;
-      font-size: .75rem;
-      font-weight: 600;
-      border-top: 1px solid #f0f0f0;
-      flex-shrink: 0;
-    }
-    .r-panel-footer-ok   { background: #e8f5e9; color: #2e7d32; }
-    .r-panel-footer-warn { background: #fff8e1; color: #f57f17; }
-
-    /* ── Loading / empty ── */
-    .r-panel-loading, .r-panel-empty {
-      padding: 40px 20px;
-      text-align: center;
-      color: #aaa;
-      font-size: .82rem;
-    }
-    .r-spinner {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid #ddd;
-      border-top-color: #888;
-      border-radius: 50%;
-      animation: r-spin .7s linear infinite;
-      margin-right: 6px;
-      vertical-align: middle;
-    }
-    @keyframes r-spin { to { transform: rotate(360deg); } }
-  `;
-  document.head.appendChild(style);
-}
-
-// ── Procesar recibos ──────────────────────────────────────────
 document.getElementById('r-process-btn').addEventListener('click', rProcessRecibos);
 
 async function rProcessRecibos() {
   const btn = document.getElementById('r-process-btn');
   btn.disabled = true;
+  rHideAllGuides();
   document.getElementById('r-conferir-fixed').classList.remove('show');
-  rSetStatus('a encriptar e gerar recibos…');
+  rSetStatus('a processar…');
+  rSetProgressDetail('a ler ficheiros…');
   rHideWarnings();
-
   try {
+    if (!window._rPageMatches || !window._rPageMatches.length) {
+      rSetStatus('⚠️ carrega um PDF primeiro'); rSetProgressDetail(''); btn.disabled = false; return;
+    }
+    const pageMatches = window._rPageMatches.map(m => ({
+      page: m.page,
+      csvEntry: m._decision === 'skip' ? null : (m.csvEntry || null)
+    }));
     const grouped = {};
-    for (const m of rPageMatches) {
-      if (m.decision === 'skip') continue;
-      if (!m.csvEntry) continue;
-      const key = m.csvEntry.name;
-      if (!grouped[key]) grouped[key] = { csvEntry: m.csvEntry, pages: [] };
-      grouped[key].pages.push(m.page);
+    for (const { page, csvEntry } of pageMatches) {
+      if (!csvEntry) continue;
+      const key = csvEntry.name;
+      if (!grouped[key]) grouped[key] = { csvEntry, pages: [] };
+      grouped[key].pages.push(page);
     }
-
-    if (!Object.keys(grouped).length) {
-      rSetStatus('nenhum recibo para gerar.'); btn.disabled = false; return;
-    }
-
+    if (Object.keys(grouped).length === 0) { rSetStatus('nenhum recibo para gerar.'); rSetProgressDetail(''); btn.disabled = false; return; }
+    rSetStatus('a encriptar e gerar recibos…');
     const keys = Object.keys(grouped);
     const fileList = [];
     for (let ki = 0; ki < keys.length; ki++) {
-      const { csvEntry, pages: grpPages } = grouped[keys[ki]];
-      rSetProgressDetail(`a encriptar: ${ki + 1}/${keys.length} — ${csvEntry.name}`);
+      const key = keys[ki];
+      const { csvEntry, pages: grpPages } = grouped[key];
+      rSetProgressDetail(`a encriptar: ${ki + 1} / ${keys.length} — ${csvEntry.name}`);
       for (let idx = 0; idx < grpPages.length; idx++) {
         const encBytes = await rEncryptPDF(grpPages[idx].bytes, csvEntry.pwd);
         const suffix   = grpPages.length > 1 ? `_${idx + 1}` : '';
@@ -575,67 +366,68 @@ async function rProcessRecibos() {
         });
       }
     }
-
-    const mes = rDetectMes();
+    const mes = rDetectMes(); // sempre calculado automaticamente
     localStorage.setItem('gh_mes', mes);
+
     rSetStatus('a enviar pdfs para supabase…');
     rShowProgress();
     const uploadResults = [];
     for (let i = 0; i < fileList.length; i++) {
       const r = fileList[i];
-      rSetProgress(Math.round((i / (fileList.length + 1)) * 100));
-      rSetProgressDetail(`a enviar: ${i + 1}/${fileList.length} — ${r.name}`);
+      const pct = Math.round((i / (fileList.length + 1)) * 100);
+      rSetProgress(pct);
+      rSetProgressDetail(`a enviar: ${i + 1} / ${fileList.length} — ${r.name}`);
       const ok = await rUploadToSupabase(mes, r.filename, r.bytes);
       uploadResults.push({ ...r, uploaded: ok });
     }
 
+    // Guardar index.json en Supabase (sin base64, solo metadatos)
     rSetStatus('a atualizar index.json…');
-    const indexData = { mes,
+    rSetProgressDetail('a publicar lista de recibos…');
+    const indexData = {
+      mes,
       ficheiros: uploadResults.map(r => r.filename),
       dados: uploadResults.map(r => ({ filename: r.filename, name: r.name, mes }))
     };
     const indexBlob = new Blob([JSON.stringify(indexData, null, 2)], { type: 'application/json' });
-    const indexRes = await sbClient.storage.from('recibos').update('index.json', indexBlob, { upsert: true, contentType: 'application/json' });
-    if (indexRes.error) {
-      rSetStatus('⚠️ Erro ao atualizar index.json: ' + indexRes.error.message);
-      btn.disabled = false; return;
+    const indexUpdateRes = await sbClient.storage.from('recibos').update('index.json', indexBlob, { upsert: true, contentType: 'application/json' });
+    console.log('[recibos] index.json update result:', JSON.stringify(indexUpdateRes));
+    if (indexUpdateRes.error) {
+      rSetStatus('⚠️ Erro ao atualizar index.json: ' + indexUpdateRes.error.message);
+      rSetProgressDetail('Verifica as permissões do bucket em Supabase.');
+      btn.disabled = false;
+      return;
     }
 
     rSetProgress(100); rHideProgress();
-    rSetStatus(`✓ ${uploadResults.filter(r => r.uploaded).length} recibos enviados (${mes})`);
+    const uploaded = uploadResults.filter(r => r.uploaded).length;
+    rSetStatus(`✓ ${uploaded} recibos enviados · index.json atualizado (${mes})`);
     rSetProgressDetail('');
     rRenderResults(uploadResults, true);
     document.getElementById('r-conferir-fixed').classList.add('show');
-  } catch (err) {
-    console.error(err); rSetStatus('erro: ' + err.message); rSetProgressDetail('');
-  }
+  } catch (err) { console.error(err); rSetStatus('erro: ' + err.message); rSetProgressDetail(''); }
   btn.disabled = false;
 }
 
-// ── Helpers UI ────────────────────────────────────────────────
-function rRenderResults(results) { window._recibosData = results; }
-function rShowWarnings(names) {
-  const box = document.getElementById('r-warnings-box');
-  const list = document.getElementById('r-warnings-list');
-  if (!box || !list) return;
-  list.innerHTML = names.map(n => `<li>${escHtml(n)}</li>`).join('');
-  box.style.display = 'block';
+function rParseCSV(text) {
+  const entries = [];
+  const clean = text.replace(/^\uFEFF/, '');
+  const lines = clean.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+  for (const line of lines) {
+    const stripped = line.replace(/^"(.*)"$/, '$1');
+    const parts = stripped.split(';');
+    if (parts.length < 2) continue;
+    const name = rNormalize(parts[0].trim());
+    const pwd  = parts[1].trim();
+    if (name && pwd) entries.push({ name, pwd });
+  }
+  return entries;
 }
-function rHideWarnings() {
-  const box = document.getElementById('r-warnings-box');
-  const list = document.getElementById('r-warnings-list');
-  if (box)  box.style.display = 'none';
-  if (list) list.innerHTML = '';
+
+function rNormalize(str) {
+  return str.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 }
-function rShowProgress() { document.getElementById('r-upload-progress').style.display = 'block'; }
-function rHideProgress() { document.getElementById('r-upload-progress').style.display = 'none'; rSetProgress(0); }
-function rSetProgress(pct) { document.getElementById('r-upload-progress-bar').style.width = pct + '%'; }
-function rSetStatus(msg)   { document.getElementById('r-status-msg').textContent = msg; }
-function rSetProgressDetail(msg) { const el = document.getElementById('r-progress-detail'); if (el) el.textContent = msg; }
 
-document.getElementById('r-conferir-btn').addEventListener('click', () => openRecibosOverlay());
-
-// ── Extraer páginas PDF ───────────────────────────────────────
 async function rExtractPages(pdfBytes) {
   const { PDFDocument } = PDFLib;
   const srcDoc   = await PDFDocument.load(pdfBytes);
@@ -652,7 +444,7 @@ async function rExtractPages(pdfBytes) {
     const rawText = items.map(it => it.str).join(' ');
     const text    = rNormalize(rawText);
     let detectedName = null;
-    const tokens  = rawText.split(/\s+/);
+    const tokens = rawText.split(/\s+/);
     const nomeIdx = tokens.findIndex(t => t === 'Nome:');
     if (nomeIdx !== -1) {
       const nameWords = [];
@@ -671,7 +463,6 @@ async function rExtractPages(pdfBytes) {
   return pages;
 }
 
-// ── Encriptar PDF (sin cambios) ───────────────────────────────
 async function rEncryptPDF(pageBytes, password) {
   if (!password) return pageBytes;
   try { return rEncryptPDFpureJS(pageBytes, password); }
@@ -679,11 +470,13 @@ async function rEncryptPDF(pageBytes, password) {
 }
 
 function rEncryptPDFpureJS(rawInput, userPassword) {
-  const raw = rawInput instanceof Uint8Array ? rawInput : rawInput instanceof ArrayBuffer ? new Uint8Array(rawInput) : new Uint8Array(rawInput.buffer, rawInput.byteOffset, rawInput.byteLength);
+  const raw = rawInput instanceof Uint8Array ? rawInput
+    : rawInput instanceof ArrayBuffer ? new Uint8Array(rawInput)
+    : new Uint8Array(rawInput.buffer, rawInput.byteOffset, rawInput.byteLength);
   const head = new TextDecoder('latin1').decode(raw.slice(0, Math.min(4096, raw.length)));
   if (!head.startsWith('%PDF')) throw new Error('Not a PDF');
   if (head.includes('/Encrypt')) return rawInput;
-  const PAD=[0x28,0xBF,0x4E,0x5E,0x4E,0x75,0x8A,0x41,0x64,0x00,0x4E,0x56,0xFF,0xFA,0x01,0x08,0x2E,0x2E,0x00,0xB6,0xD0,0x68,0x3E,0x80,0x2F,0x0C,0xA9,0xFE,0x64,0x53,0x69,0x7A];
+  const PAD = [0x28,0xBF,0x4E,0x5E,0x4E,0x75,0x8A,0x41,0x64,0x00,0x4E,0x56,0xFF,0xFA,0x01,0x08,0x2E,0x2E,0x00,0xB6,0xD0,0x68,0x3E,0x80,0x2F,0x0C,0xA9,0xFE,0x64,0x53,0x69,0x7A];
   function rc4(key,data){const S=[...Array(256)].map((_,i)=>i);for(let i=0,j=0;i<256;i++){j=(j+S[i]+key[i%key.length])&255;[S[i],S[j]]=[S[j],S[i]];}let a=0,b=0;return data.map(x=>{a=(a+1)&255;b=(b+S[a])&255;[S[a],S[b]]=[S[b],S[a]];return x^S[(S[a]+S[b])&255];});}
   function md5(inp){function add(x,y){const l=(x&0xFFFF)+(y&0xFFFF);return(((x>>16)+(y>>16)+(l>>16))<<16)|(l&0xFFFF);}function rol(n,c){return(n<<c)|(n>>>(32-c));}function cmn(q,a,b,x,s,t){return add(rol(add(add(a,q),add(x,t)),s),b);}function ff(a,b,c,d,x,s,t){return cmn((b&c)|(~b&d),a,b,x,s,t);}function gg(a,b,c,d,x,s,t){return cmn((b&d)|(c&~d),a,b,x,s,t);}function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t);}function ii(a,b,c,d,x,s,t){return cmn(c^(b|~d),a,b,x,s,t);}const L=inp.length,extra=64-((L+9)%64);const p=[...inp,0x80,...new Array(extra).fill(0)];const bl=L*8;p.push(bl&255,(bl>>8)&255,(bl>>16)&255,(bl>>24)&255,0,0,0,0);let a=0x67452301,b=0xEFCDAB89,c=0x98BADCFE,d=0x10325476;for(let i=0;i<p.length;i+=64){const M=[];for(let j=0;j<16;j++)M[j]=p[i+j*4]|(p[i+j*4+1]<<8)|(p[i+j*4+2]<<16)|(p[i+j*4+3]<<24);let[aa,bb,cc,dd]=[a,b,c,d];a=ff(a,b,c,d,M[0],7,-680876936);d=ff(d,a,b,c,M[1],12,-389564586);c=ff(c,d,a,b,M[2],17,606105819);b=ff(b,c,d,a,M[3],22,-1044525330);a=ff(a,b,c,d,M[4],7,-176418897);d=ff(d,a,b,c,M[5],12,1200080426);c=ff(c,d,a,b,M[6],17,-1473231341);b=ff(b,c,d,a,M[7],22,-45705983);a=ff(a,b,c,d,M[8],7,1770035416);d=ff(d,a,b,c,M[9],12,-1958414417);c=ff(c,d,a,b,M[10],17,-42063);b=ff(b,c,d,a,M[11],22,-1990404162);a=ff(a,b,c,d,M[12],7,1804603682);d=ff(d,a,b,c,M[13],12,-40341101);c=ff(c,d,a,b,M[14],17,-1502002290);b=ff(b,c,d,a,M[15],22,1236535329);a=gg(a,b,c,d,M[1],5,-165796510);d=gg(d,a,b,c,M[6],9,-1069501632);c=gg(c,d,a,b,M[11],14,643717713);b=gg(b,c,d,a,M[0],20,-373897302);a=gg(a,b,c,d,M[5],5,-701558691);d=gg(d,a,b,c,M[10],9,38016083);c=gg(c,d,a,b,M[15],14,-660478335);b=gg(b,c,d,a,M[4],20,-405537848);a=gg(a,b,c,d,M[9],5,568446438);d=gg(d,a,b,c,M[14],9,-1019803690);c=gg(c,d,a,b,M[3],14,-187363961);b=gg(b,c,d,a,M[8],20,1163531501);a=gg(a,b,c,d,M[13],5,-1444681467);d=gg(d,a,b,c,M[2],9,-51403784);c=gg(c,d,a,b,M[7],14,1735328473);b=gg(b,c,d,a,M[12],20,-1926607734);a=hh(a,b,c,d,M[5],4,-378558);d=hh(d,a,b,c,M[8],11,-2022574463);c=hh(c,d,a,b,M[11],16,1839030562);b=hh(b,c,d,a,M[14],23,-35309556);a=hh(a,b,c,d,M[1],4,-1530992060);d=hh(d,a,b,c,M[4],11,1272893353);c=hh(c,d,a,b,M[7],16,-155497632);b=hh(b,c,d,a,M[10],23,-1094730640);a=hh(a,b,c,d,M[13],4,681279174);d=hh(d,a,b,c,M[0],11,-358537222);c=hh(c,d,a,b,M[3],16,-722521979);b=hh(b,c,d,a,M[6],23,76029189);a=hh(a,b,c,d,M[9],4,-640364487);d=hh(d,a,b,c,M[12],11,-421815835);c=hh(c,d,a,b,M[15],16,530742520);b=hh(b,c,d,a,M[2],23,-995338651);a=ii(a,b,c,d,M[0],6,-198630844);d=ii(d,a,b,c,M[7],10,1126891415);c=ii(c,d,a,b,M[14],15,-1416354905);b=ii(b,c,d,a,M[5],21,-57434055);a=ii(a,b,c,d,M[12],6,1700485571);d=ii(d,a,b,c,M[3],10,-1894986606);c=ii(c,d,a,b,M[10],15,-1051523);b=ii(b,c,d,a,M[1],21,-2054922799);a=ii(a,b,c,d,M[8],6,1873313359);d=ii(d,a,b,c,M[15],10,-30611744);c=ii(c,d,a,b,M[6],15,-1560198380);b=ii(b,c,d,a,M[13],21,1309151649);a=ii(a,b,c,d,M[4],6,-145523070);d=ii(d,a,b,c,M[11],10,-1120210379);c=ii(c,d,a,b,M[2],15,718787259);b=ii(b,c,d,a,M[9],21,-343485551);a=add(a,aa);b=add(b,bb);c=add(c,cc);d=add(d,dd);}const r=[];[a,b,c,d].forEach(v=>{for(let i=0;i<4;i++)r.push((v>>(i*8))&255);});return r;}
   const FID=Array.from({length:16},()=>Math.floor(Math.random()*256));
@@ -723,6 +516,109 @@ async function rUploadToSupabase(mes, filename, bytes) {
   return !error;
 }
 
-// ── Init ──────────────────────────────────────────────────────
-rSetupUpload();
-rLoadConfig();
+function rRenderResults(results, showUpload) {
+  // Store for potential download but don't render table (removed results zone)
+  window._recibosData = results;
+}
+
+function rDownloadRecibo(index) {
+  const r = window._recibosData[index];
+  if (!r || !r.bytes) return;
+  const blob = new Blob([r.bytes], { type: 'application/pdf' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = r.filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function rShowWarnings(names) {
+  const box = document.getElementById('r-warnings-box');
+  const list = document.getElementById('r-warnings-list');
+  list.innerHTML = names.map(n => `<li>${escHtml(n)}</li>`).join('');
+  box.style.display = 'block';
+}
+function rHideWarnings() {
+  document.getElementById('r-warnings-box').style.display = 'none';
+  document.getElementById('r-warnings-list').innerHTML = '';
+}
+function rShowProgress() { document.getElementById('r-upload-progress').style.display = 'block'; }
+function rHideProgress() { document.getElementById('r-upload-progress').style.display = 'none'; rSetProgress(0); }
+function rSetProgress(pct) { document.getElementById('r-upload-progress-bar').style.width = pct + '%'; }
+function rSetStatus(msg) { document.getElementById('r-status-msg').textContent = msg; }
+function rSetProgressDetail(msg) {
+  const el = document.getElementById('r-progress-detail');
+  if (el) el.textContent = msg;
+}
+
+// Mes auto-detectado — não há campo manual
+
+// Conferir button — open recibos overlay
+document.getElementById('r-conferir-btn').addEventListener('click', function() {
+  openRecibosOverlay();
+});
+
+function rAskUserAboutMissing(name, current, total) {
+  return new Promise(resolve => {
+    const overlay   = document.getElementById('r-modal-overlay');
+    const nameEl    = document.getElementById('r-modal-name');
+    const counterEl = document.getElementById('r-modal-counter');
+    const pwdRow    = document.getElementById('r-modal-pwd-row');
+    const pwdInput  = document.getElementById('r-modal-pwd-input');
+    const btnPwd    = document.getElementById('r-modal-btn-pwd');
+    const btnNoPwd  = document.getElementById('r-modal-btn-no-pwd');
+    const btnSkip   = document.getElementById('r-modal-btn-skip');
+    nameEl.textContent = name; counterEl.textContent = `${current} de ${total}`;
+    pwdRow.style.display = 'none'; pwdInput.value = '';
+    overlay.classList.add('show');
+    const newBtnPwd = btnPwd.cloneNode(true);
+    const newBtnNoPwd = btnNoPwd.cloneNode(true);
+    const newBtnSkip = btnSkip.cloneNode(true);
+    btnPwd.replaceWith(newBtnPwd); btnNoPwd.replaceWith(newBtnNoPwd); btnSkip.replaceWith(newBtnSkip);
+    function close(action, pwd) { overlay.classList.remove('show'); resolve({ action, pwd: pwd || null }); }
+    document.getElementById('r-modal-btn-pwd').addEventListener('click', () => {
+      const pwdRowEl = document.getElementById('r-modal-pwd-row');
+      const pwdInputEl = document.getElementById('r-modal-pwd-input');
+      if (pwdRowEl.style.display === 'none') {
+        pwdRowEl.style.display = 'flex';
+        document.getElementById('r-modal-btn-pwd').textContent = '✓ confirmar senha';
+      } else {
+        const pwd = pwdInputEl.value.trim();
+        if (!pwd) { pwdInputEl.focus(); return; }
+        close('pwd', pwd);
+      }
+    });
+    document.getElementById('r-modal-btn-no-pwd').addEventListener('click', () => close('nopwd', null));
+    document.getElementById('r-modal-btn-skip').addEventListener('click',   () => close('skip', null));
+    document.getElementById('r-modal-pwd-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { const pwd = e.target.value.trim(); if (pwd) close('pwd', pwd); }
+    });
+  });
+}
+
+function rGenerateStandaloneHTML(results) {
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const folder    = localStorage.getItem('gh_folder') || '';
+  const mmMatch   = folder.match(/[-\/](\d{2})$/);
+  const monthName = mmMatch ? (MESES[parseInt(mmMatch[1], 10) - 1] || '') : '';
+  const pageTitle = monthName ? `Recibo ${monthName}` : 'Recibos';
+  const items = results.map(r => {
+    let binary = '';
+    const bytes = r.bytes instanceof Uint8Array ? r.bytes : new Uint8Array(r.bytes);
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return { name: r.name, filename: r.filename, b64: btoa(binary), count: r.count||null, index: r.index||null };
+  });
+  const rows = items.map((item, i) => {
+    const nameDisplay = item.count
+      ? `${escHtml(item.name)} <span style="color:#aaa;font-size:.75rem">(${item.index}/${item.count})</span>`
+      : escHtml(item.name);
+    return `<tr><td class="rn">${i + 1}</td><td>${nameDisplay}</td><td><button onclick="dl(${i})">⬇ pdf</button></td></tr>`;
+  }).join('');
+  const dataJSON = JSON.stringify(items.map(it => ({ filename: it.filename, b64: it.b64 })));
+  return `<!DOCTYPE html><html lang="pt"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${pageTitle}</title><style>@font-face{font-family:'ML';src:url('https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf') format('truetype');font-weight:100}*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{min-height:100%;font-family:'ML',sans-serif;background:#fff;color:#000}body{display:flex;flex-direction:column;align-items:center;padding:40px 16px 60px}.logo{font-size:3rem;font-weight:100;text-transform:lowercase;margin-bottom:4px}.page-title{font-size:1.6rem;font-weight:bold;margin-bottom:32px;color:#000}table{width:100%;max-width:700px;border-collapse:separate;border-spacing:0;border-radius:15px;overflow:hidden}th{background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6}td{padding:9px 14px;border:1px solid #efefef;font-size:.88rem;font-weight:bold;vertical-align:middle}tbody tr:hover td{background:#f5f5f5}.rn{color:#aaa;font-size:.78rem;text-align:center;min-width:24px}button{padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;border-radius:7px;background:#fff;font-family:'ML',sans-serif;font-weight:600;transition:background .15s,color .15s}button:hover{background:#555;color:#fff;border-color:#555}.nota{width:100%;max-width:700px;margin-top:32px;padding:18px 22px;border-top:1px solid #e6e6e6;font-size:.78rem;font-weight:600;color:#555;line-height:1.7}.nota p{margin-bottom:6px}.nota p:last-child{margin-bottom:0}.nota strong{color:#111;font-weight:bold}</style></head><body><div class="logo">wakzome</div><div class="page-title">${pageTitle}</div><table><thead><tr><th class="rn">#</th><th>colaborador</th><th>descarregar</th></tr></thead><tbody>${rows}</tbody></table><div class="nota"><p><strong>Após a impressão do recibo:</strong></p><p>· Caso esteja de acordo, poderá colocá-lo juntamente com os restantes recibos num único envelope, como tem sido feito até agora;</p><p>· Em alternativa, poderá guardá-lo em envelope fechado e juntá-lo à restante documentação que habitualmente é enviada para Lisboa.</p><p>Solicitamos igualmente o devido cuidado em assegurar que cada trabalhadora assine o seu recibo original e que este seja enviado, uma vez que, de acordo com a política interna, a assinatura constitui um procedimento obrigatório e regular.</p></div><script>const DATA=${dataJSON};function dl(i){const d=DATA[i];const bin=atob(d.b64);const bytes=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)bytes[j]=bin.charCodeAt(j);const blob=new Blob([bytes],{type:'application/pdf'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=d.filename;a.click();URL.revokeObjectURL(url);}<\/script></body></html>`;
+}
+
+
+function rSanitizeName(name) {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').toLowerCase();
+}

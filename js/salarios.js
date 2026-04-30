@@ -11,13 +11,14 @@
     '#s-salary-table tbody td:last-child { cursor:pointer; user-select:none; transition:background .15s, color .15s; }',
     '#s-salary-table tbody td:last-child:hover { background:#f0f0f0 !important; }',
     '#s-salary-table tbody td:last-child.s-liq-copy-ok { color:#4A7C6F !important; background:#f0faf8 !important; }',
-    '.s-liq-cell { display:flex; width:100%; justify-content:flex-end; }',
+    '.s-liq-cell { display:flex; width:100%; justify-content:flex-end; color:inherit; }',
 
     // Fila destacada ao copiar: subtil, escala de cinzentos, elegante
     '#s-salary-table tbody tr.s-row-copied td { background:#1a1a1a !important; color:#ffffff !important; font-size:1.04em; letter-spacing:0.01em; transition:background .2s, color .2s, font-size .2s; }',
     '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; color:#ffffff !important; }',
-    '#s-salary-table tbody tr.s-row-copied td:last-child { cursor:pointer; }',
+    '#s-salary-table tbody tr.s-row-copied td:last-child { cursor:pointer; color:#ffffff !important; }',
     '#s-salary-table tbody tr.s-row-copied td:last-child:hover { background:#2e2e2e !important; }',
+    '#s-salary-table tbody tr.s-row-copied td:last-child.s-liq-copy-ok { color:#7ecfc0 !important; background:#1a1a1a !important; }',
   ].join('\n');
   document.head.appendChild(st);
 })();

@@ -11,7 +11,7 @@ const overlayHTML = `
   flex-direction:column; opacity:0;
   transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);">
   <div style="display:flex;align-items:center;gap:16px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;">
-    <button onclick="closePreditivoOverlay()" style="font-size:.9rem;font-weight:bold;font-family:'MontserratLight',sans-serif;cursor:pointer;color:#fff;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;text-transform:lowercase;letter-spacing:.03em;box-shadow:0 2px 8px rgba(0,0,0,0.18);">← voltar</button>
+    <button onclick="predLogout()" style="font-size:.9rem;font-weight:bold;font-family:'MontserratLight',sans-serif;cursor:pointer;color:#fff !important;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;text-transform:lowercase;letter-spacing:.03em;box-shadow:0 2px 8px rgba(0,0,0,0.18);">← voltar</button>
     <div style="font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;">sistema predictivo a/b</div>
   </div>
   <div id="pred-content" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;">
@@ -300,6 +300,19 @@ window.closePreditivoOverlay = function() {
   if(!ov) return;
   ov.style.opacity = '0';
   setTimeout(() => { ov.style.display = 'none'; }, 600);
+};
+
+window.predLogout = function() {
+  // Close overlay
+  const ov = document.getElementById('predictivo-overlay');
+  if(ov) { ov.style.opacity = '0'; setTimeout(() => { ov.style.display = 'none'; }, 600); }
+  // Show login screen (same pattern as wakzome)
+  setTimeout(() => {
+    const login = document.getElementById('login-screen');
+    if(login) { login.style.display = 'flex'; login.classList.add('visible'); }
+    const keyInput = document.getElementById('key-input');
+    if(keyInput) { keyInput.value = ''; keyInput.focus(); }
+  }, 400);
 };
 
 // ── Grid Excel ───────────────────────────────────────

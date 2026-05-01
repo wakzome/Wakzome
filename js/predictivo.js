@@ -1129,35 +1129,39 @@ function calcUmbralRentabilidad(hist, metodoIdx) {
 }
 
 function calcScores(histCol) {
-  const scores      = [0, 0, 0, 0];
-  const ventana     = histCol.slice(-SCORE_WIN);
-  const rachaFallos = [0, 0, 0, 0];
+  // Ensemble bayesiano con distribución Beta por método.
+  // Cada método mantiene Beta(α, β) sobre su tasa de acierto real.
+  // Prior α₀=β₀=1 (uniforme — sin sesgo inicial).
+  // Media posterior: α/(α+β) → peso real calibrado.
+  // Con pocas observaciones la media converge al prior (0.5) → penalización
+  // automática por incertidumbre, sin necesidad de umbrales ad-hoc.
 
-  // Umbrales de rentabilidad por método (adaptativos)
-  const umbrales = histCol.length >= 20
-    ? [0,1,2,3].map(m => calcUmbralRentabilidad(histCol, m))
-    : [0.5, 0.5, 0.5, 0.5];
+  const ALPHA0 = 1, BETA0 = 1; // prior uniforme
+  const alpha = [ALPHA0, ALPHA0, ALPHA0, ALPHA0];
+  const beta  = [BETA0,  BETA0,  BETA0,  BETA0];
 
-  for(const entry of ventana) {
+  // Actualización secuencial sobre TODO el historial (no solo ventana)
+  // Para dar más peso a lo reciente, usamos descuento exponencial λ
+  // λ=0.98: observaciones antiguas decaen suavemente sin olvidarlas
+  const LAMBDA = 0.98;
+  const n = histCol.length;
+
+  for(let t = 0; t < n; t++) {
+    const entry = histCol[t];
+    // Peso temporal: más reciente = más peso
+    const w = Math.pow(LAMBDA, n - 1 - t);
     for(let m = 0; m < N_METHODS; m++) {
       if(entry.preds[m] === entry.real) {
-        scores[m]++;
-        rachaFallos[m] = 0;
+        alpha[m] += w; // acierto → incrementa α
       } else {
-        rachaFallos[m]++;
-        // Penalización basada en costo de oportunidad, no en conteo lineal
-        if(rachaFallos[m] >= 2) {
-          const { costo } = calcCostoOportunidad(histCol, m, rachaFallos[m]);
-          if(costo >= umbrales[m]) {
-            // El costo supera el umbral de rentabilidad → penalización progresiva
-            const exceso = costo - umbrales[m];
-            scores[m] = Math.max(0, scores[m] - (1 + exceso * 3));
-          }
-        }
+        beta[m]  += w; // fallo  → incrementa β
       }
     }
   }
-  return scores;
+
+  // Score = media posterior Beta(α,β) = α/(α+β)
+  // Escalamos a [0, SCORE_WIN] para compatibilidad con el resto del ensemble
+  return alpha.map((a, m) => (a / (a + beta[m])) * SCORE_WIN);
 }
 
 
@@ -1264,10 +1268,14 @@ function predecirFila(columnas, upToIndex, colsOtra) {
       const mem = codeMemory[ci] && codeMemory[ci][cod];
       if(mem) {
         const total = mem.A + mem.B;
-        const confianza = Math.abs(mem.A - mem.B) / total;
-        const expFactor = Math.min(1, total / 20);
-        const pesoM5 = (votoA + votoB) * 0.5 * confianza * expFactor;
-        if(m5pred==='A') votoA += pesoM5; else votoB += pesoM5;
+        // Probabilidad posterior con suavizado bayesiano (α=1)
+        const pA = (mem.A + 1) / (total + 2);
+        const señal = Math.abs(pA - 0.5); // distancia al azar
+        if(señal > 0.04) { // solo vota si hay señal real (>4pp sobre el azar)
+          const expFactor = Math.min(1, total / 20);
+          const pesoM5 = (votoA + votoB) * 0.5 * señal * 2 * expFactor;
+          if(pA > 0.5) votoA += pesoM5; else votoB += pesoM5;
+        }
       }
     }
 
@@ -1279,15 +1287,18 @@ function predecirFila(columnas, upToIndex, colsOtra) {
       const trans   = transMemory[codCurr];
       if(trans) {
         const totalTrans = Object.values(trans).reduce((a,b) => a+b, 0);
-        let pA = 0, pB = 0;
+        let rawA = 0, rawB = 0;
         for(const [cn, cnt] of Object.entries(trans)) {
-          const p = cnt / totalTrans;
-          if(cn[ci]==='A') pA += p; else pB += p;
+          if(cn[ci]==='A') rawA += cnt; else rawB += cnt;
         }
-        const confianzaM6 = Math.abs(pA - pB);
-        const expFactorM6 = Math.min(1, totalTrans / 15);
-        const pesoM6 = (votoA + votoB) * 0.4 * confianzaM6 * expFactorM6;
-        if(m6pred==='A') votoA += pesoM6; else votoB += pesoM6;
+        // Suavizado bayesiano sobre conteos crudos
+        const pA_t = (rawA + 1) / (rawA + rawB + 2);
+        const señalT = Math.abs(pA_t - 0.5);
+        if(señalT > 0.04) {
+          const expFactorM6 = Math.min(1, totalTrans / 15);
+          const pesoM6 = (votoA + votoB) * 0.4 * señalT * 2 * expFactorM6;
+          if(pA_t > 0.5) votoA += pesoM6; else votoB += pesoM6;
+        }
       }
     }
 
@@ -1298,10 +1309,13 @@ function predecirFila(columnas, upToIndex, colsOtra) {
       const memV = vertMemory[ci] && vertMemory[ci][pat];
       if(memV) {
         const totalV = memV.A + memV.B;
-        const confianzaM7 = Math.abs(memV.A - memV.B) / totalV;
-        const expFactorM7 = Math.min(1, totalV / 30);
-        const pesoM7 = (votoA + votoB) * 0.5 * confianzaM7 * expFactorM7;
-        if(m7pred==='A') votoA += pesoM7; else votoB += pesoM7;
+        const pA_v = (memV.A + 1) / (totalV + 2);
+        const señalV = Math.abs(pA_v - 0.5);
+        if(señalV > 0.04) {
+          const expFactorM7 = Math.min(1, totalV / 30);
+          const pesoM7 = (votoA + votoB) * 0.5 * señalV * 2 * expFactorM7;
+          if(pA_v > 0.5) votoA += pesoM7; else votoB += pesoM7;
+        }
       }
     }
 
@@ -1322,10 +1336,13 @@ function predecirFila(columnas, upToIndex, colsOtra) {
         const memC = ctrMemory[ci] && ctrMemory[ci][`${bA}_${bB}`];
         if(memC) {
           const totalC = memC.A + memC.B;
-          const confianzaM8 = Math.abs(memC.A - memC.B) / totalC;
-          const expFactorM8 = Math.min(1, totalC / 40); // madura con 40 obs
-          const pesoM8 = (votoA + votoB) * 0.4 * confianzaM8 * expFactorM8;
-          if(m8pred==='A') votoA += pesoM8; else votoB += pesoM8;
+          const pA_c = (memC.A + 1) / (totalC + 2);
+          const señalC = Math.abs(pA_c - 0.5);
+          if(señalC > 0.04) {
+            const expFactorM8 = Math.min(1, totalC / 40);
+            const pesoM8 = (votoA + votoB) * 0.4 * señalC * 2 * expFactorM8;
+            if(pA_c > 0.5) votoA += pesoM8; else votoB += pesoM8;
+          }
         }
       }
     }
@@ -1363,10 +1380,13 @@ function predecirFila(columnas, upToIndex, colsOtra) {
         const memAY = ayMemory[ci] && ayMemory[ci][keyAY];
         if(memAY) {
           const totalAY = memAY.A + memAY.B;
-          const confianzaM9 = Math.abs(memAY.A - memAY.B) / totalAY;
-          const expFactorM9 = Math.min(1, totalAY / 40); // madura con 40 obs
-          const pesoM9 = (votoA + votoB) * 0.4 * confianzaM9 * expFactorM9;
-          if(m9pred==='A') votoA += pesoM9; else votoB += pesoM9;
+          const pA_ay = (memAY.A + 1) / (totalAY + 2);
+          const señalAY = Math.abs(pA_ay - 0.5);
+          if(señalAY > 0.04) {
+            const expFactorM9 = Math.min(1, totalAY / 40);
+            const pesoM9 = (votoA + votoB) * 0.4 * señalAY * 2 * expFactorM9;
+            if(pA_ay > 0.5) votoA += pesoM9; else votoB += pesoM9;
+          }
         }
       }
     }

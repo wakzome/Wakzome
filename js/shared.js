@@ -104,6 +104,15 @@
           });
         }
 
+      } else if (data.rol === 'predictivo') {
+        // ── LOGIN PREDICTIVO ──
+        sweepThen(function() {
+          document.getElementById('login-screen').style.display = 'none';
+          showGreeting('predictivo', function() {
+            if (typeof openPreditivoOverlay === 'function') openPreditivoOverlay();
+          });
+        });
+
       } else {
         // ── LOGIN TIENDA ──
         currentStore = data.tienda;

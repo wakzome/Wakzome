@@ -994,12 +994,17 @@ function _predValidarWork() {
     swapIn(6); swapOut(6);
 
     // Get valid combos using current freq counts
+    // Also capture top-code concentration (prob of code1 / sum of all probs)
+    const topCodeConc = []; // [0..6] concentration ratio of best code per seq
     const top2s = colProbs.map((cp, si) => {
       if(!cp) return null;
       const top2 = getTopNCodes(cp, 4);
       const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
       const raw  = new Set();
       top2.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
+      // Concentration: prob of top code vs sum of top 4
+      const totalProb = top2.reduce((s,x)=>s+x.prob,0);
+      topCodeConc[si] = totalProb > 0 ? top2[0].prob / totalProb : 0;
       // Filter by freq (Q1 of current tmpNumFreq)
       const freq = tmpNumFreq[si] || {};
       const allFreqs = Object.values(freq).filter(f=>f>0).sort((a,b)=>a-b);
@@ -1097,9 +1102,16 @@ function _predValidarWork() {
                   (bestHits === 0 ? 'combos_sin_acierto' : 'ok');
     hitsCount[bestHits] = (hitsCount[bestHits]||0) + 1;
     // row: i+1 because filas is 0-indexed, so filas[i] = row i+1 in 1-indexed
+    const candCounts = top2s.map(t => t ? t.length : 0);
+    const avgConc    = topCodeConc.filter(x=>x>0).reduce((a,b)=>a+b,0) / (topCodeConc.filter(x=>x>0).length||1);
     rowResults.push({row:i+1, real, bestHits, totalCombos:combos.length, cause,
       blk5Count: blk5.length, blk2Count: blk2.length,
-      bestCombos: bestCombosDetail});
+      bestCombos: bestCombosDetail,
+      historySize: i,          // cuántas filas de historia tenía el sistema
+      candCounts,              // candidatos por secuencia [s1..s7]
+      topCodeConc,             // concentración del código top por secuencia
+      avgConc                  // concentración media global (señal de confianza)
+    });
 
     // ── Update memories with row i data ──────────────────────────────────
     for(let si=0; si<7; si++) {
@@ -1213,7 +1225,104 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
   }
   html += '</tbody></table>';
 
-  // Best rows (most hits)
+  // ── DESGLOSE DE FILAS DE ALTO ACIERTO ──────────────────────────────────────
+  const highHit = rowResults.filter(r => r.bestHits >= 5).sort((a,b) => b.bestHits - a.bestHits);
+  if(highHit.length > 0) {
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;color:#1b5e20;margin-bottom:8px;">
+        Filas con 5/7, 6/7 o 7/7 — análisis de condiciones (${highHit.length} filas):
+      </div>`;
+
+    // Stats: what do high-hit rows have in common
+    const avgHist  = (highHit.reduce((s,r)=>s+r.historySize,0)/highHit.length).toFixed(0);
+    const avgCombos= (highHit.reduce((s,r)=>s+r.totalCombos,0)/highHit.length).toFixed(0);
+    const avgConc  = (highHit.reduce((s,r)=>s+(r.avgConc||0),0)/highHit.length*100).toFixed(1);
+    const avgCands = (highHit.reduce((s,r)=>s+r.candCounts.reduce((a,b)=>a+b,0)/r.candCounts.length,0)/highHit.length).toFixed(1);
+
+    // Compare with all rows for context
+    const allAvgHist  = (rowResults.reduce((s,r)=>s+r.historySize,0)/rowResults.length).toFixed(0);
+    const allAvgCombos= (rowResults.reduce((s,r)=>s+r.totalCombos,0)/rowResults.length).toFixed(0);
+    const allAvgConc  = (rowResults.reduce((s,r)=>s+(r.avgConc||0),0)/rowResults.length*100).toFixed(1);
+    const allAvgCands = (rowResults.reduce((s,r)=>s+r.candCounts.reduce((a,b)=>a+b,0)/r.candCounts.length,0)/rowResults.length).toFixed(1);
+
+    const diffColor = (good, all, higherIsBetter=true) => {
+      const d = parseFloat(good) - parseFloat(all);
+      return (higherIsBetter ? d > 0 : d < 0) ? '#1b5e20' : '#721c24';
+    };
+
+    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <div style="background:#d4edda;border-radius:8px;padding:8px 14px;min-width:120px;">
+        <div style="font-size:9px;color:#555;margin-bottom:3px;">Historia disponible</div>
+        <div style="font-size:16px;font-weight:700;color:${diffColor(avgHist,allAvgHist)}">${avgHist} filas</div>
+        <div style="font-size:9px;color:#888;">media global: ${allAvgHist}</div>
+      </div>
+      <div style="background:#d4edda;border-radius:8px;padding:8px 14px;min-width:120px;">
+        <div style="font-size:9px;color:#555;margin-bottom:3px;">Conc. código top</div>
+        <div style="font-size:16px;font-weight:700;color:${diffColor(avgConc,allAvgConc)}">${avgConc}%</div>
+        <div style="font-size:9px;color:#888;">media global: ${allAvgConc}%</div>
+      </div>
+      <div style="background:#d4edda;border-radius:8px;padding:8px 14px;min-width:120px;">
+        <div style="font-size:9px;color:#555;margin-bottom:3px;">Candidatos/sec</div>
+        <div style="font-size:16px;font-weight:700;color:${diffColor(avgCands,allAvgCands,false)}">${avgCands}</div>
+        <div style="font-size:9px;color:#888;">media global: ${allAvgCands}</div>
+      </div>
+      <div style="background:#d4edda;border-radius:8px;padding:8px 14px;min-width:120px;">
+        <div style="font-size:9px;color:#555;margin-bottom:3px;">Combos generadas</div>
+        <div style="font-size:16px;font-weight:700;color:${diffColor(avgCombos,allAvgCombos,false)}">${avgCombos}</div>
+        <div style="font-size:9px;color:#888;">media global: ${allAvgCombos}</div>
+      </div>
+    </div>`;
+
+    // Per-row detail table for high-hit rows
+    html += `<table style="border-collapse:collapse;font-size:10px;width:100%;margin-bottom:8px;">
+      <thead><tr style="background:#f8f9fa;">
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Fila</th>
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Hits</th>
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Historia</th>
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Conc.</th>
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Cands/sec</th>
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Combos</th>
+        <th style="padding:3px 6px;border:1px solid #dee2e6;">Resultado real</th>
+      </tr></thead><tbody>`;
+
+    highHit.forEach(r => {
+      const hbg = r.bestHits===7?'#d1e7dd':r.bestHits===6?'#c3e6cb':'#e8f5e9';
+      const htc = r.bestHits>=6?'#0a3622':'#1b5e20';
+      const concPct = ((r.avgConc||0)*100).toFixed(1);
+      const candAvg = (r.candCounts.reduce((a,b)=>a+b,0)/r.candCounts.length).toFixed(1);
+      const realStr = `<span style="color:#0a3622">${r.real.slice(0,5).join('·')}</span><span style="color:#aaa"> | </span><span style="color:#084298">${r.real.slice(5,7).join('·')}</span>`;
+      html += `<tr style="background:${hbg};">
+        <td style="padding:3px 6px;border:1px solid #dee2e6;font-weight:700;cursor:pointer;" onclick="window.toggleRowDetail(${r.row})">→ ${r.row}</td>
+        <td style="padding:3px 6px;border:1px solid #dee2e6;font-weight:700;color:${htc};text-align:center;">${r.bestHits}/7</td>
+        <td style="padding:3px 6px;border:1px solid #dee2e6;text-align:center;">${r.historySize}</td>
+        <td style="padding:3px 6px;border:1px solid #dee2e6;text-align:center;">${concPct}%</td>
+        <td style="padding:3px 6px;border:1px solid #dee2e6;text-align:center;">${candAvg}</td>
+        <td style="padding:3px 6px;border:1px solid #dee2e6;text-align:center;">${r.totalCombos}</td>
+        <td style="padding:3px 6px;border:1px solid #dee2e6;font-family:monospace;">${realStr}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+
+    // Insight automático
+    const concHigher = parseFloat(avgConc) > parseFloat(allAvgConc);
+    const histHigher = parseFloat(avgHist) > parseFloat(allAvgHist);
+    const candsLower = parseFloat(avgCands) < parseFloat(allAvgCands);
+    const insights = [];
+    if(concHigher) insights.push(`mayor concentración del código top (<b>${avgConc}%</b> vs ${allAvgConc}% global) → el sistema tiene más certeza sobre el código predicho`);
+    if(histHigher) insights.push(`más historia disponible (<b>${avgHist}</b> vs ${allAvgHist} global) → las memorias están más maduras`);
+    if(candsLower) insights.push(`menos candidatos por secuencia (<b>${avgCands}</b> vs ${allAvgCands} global) → el espacio de búsqueda es más concentrado`);
+    if(insights.length > 0) {
+      html += `<div style="font-size:11px;color:#555;background:#f0fff4;border:1px solid #c3e6cb;border-radius:6px;padding:8px 12px;">
+        <b>Patrón detectado:</b> Las filas de alto acierto tienen ${insights.join(', y ')}.
+      </div>`;
+    }
+
+    html += '</div>';
+  } else {
+    html += `<div style="font-size:11px;color:#888;font-style:italic;margin-bottom:12px;">
+      Ninguna fila alcanzó 5/7 o más en esta validación.
+    </div>`;
+  }
   const best = [...rowResults].sort((a,b)=>b.bestHits-a.bestHits).slice(0,10);
   html += `<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:5px;">Mejores predicciones:</div>`;
   html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';

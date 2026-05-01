@@ -533,17 +533,16 @@ function _predWork() {
     if(totalPreds>0) predRenderSummary(suffixes[si], nums[si], totalPreds, hitCounts, totalHitsSum, colCorrect, cols);
   }
 
-  // Collect historical sums from actual numbers in all 7 sequences
-  histSumsBlk5 = []; histSumsBlk2 = [];
-  const allN = allSeqsData.map(s => s.n);
-  const minN = Math.min(...allN.filter(n=>n>0));
+  // Collect historical sums + frequency counts from all 7 sequences
+  histSumsBlk5 = []; histSumsBlk2 = []; histSumsGlobal = [];
+  numFreq = Array.from({length:7}, () => ({}));
+  const minN = Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++) {
     const rowNums = allSeqsData.map(s => s.filas[i] ? s.filas[i].num : 0);
     if(rowNums.every(n=>n>0)) updateHistSums(rowNums);
   }
 
-  // Run combination analysis using last predicted column probs
-  // Get column probs for next prediction (upToIndex = last row)
+  // Get column probabilities for last row (next prediction)
   const lastProbs = allSeqsData.map((seq, si) => {
     if(!seq || seq.n < 2) return null;
     swapIn(si);
@@ -552,8 +551,9 @@ function _predWork() {
     return probs;
   });
 
-  const comboResult = analizarCombinaciones(lastProbs);
-  renderCombinaciones(comboResult);
+  const totalRows = minN;
+  const comboResult = analizarCombinaciones(lastProbs, totalRows);
+  renderCombinaciones(comboResult, totalRows);
 
   const btn2 = document.getElementById('pred-btn-conv');
   if(btn2) { btn2.disabled=false; btn2.textContent='Convertir'; }
@@ -588,10 +588,10 @@ window.predExportTabla = function(si) {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ANÁLISIS DE COMBINACIONES — filtro por estructura y distribución de sumas
+// ANÁLISIS DE COMBINACIONES — filtro histórico + sumas + combinaciones finales
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Tabla: código ABCD → números del 1-50
+// Tabla: código ABCD → números del 1-50 y 1-12
 const CODIGO_A_NUMS_50 = {};
 const CODIGO_A_NUMS_12 = {};
 (function buildCodeMaps() {
@@ -603,32 +603,56 @@ const CODIGO_A_NUMS_12 = {};
   for(let n=1;n<=12;n++){const c=getCode(n);if(!CODIGO_A_NUMS_12[c])CODIGO_A_NUMS_12[c]=[];CODIGO_A_NUMS_12[c].push(n);}
 })();
 
-// Historical sum distributions — populated during training
-let histSumsBlk5 = []; // sums of S1-S5 numbers per row
-let histSumsBlk2 = []; // sums of S6-S7 numbers per row
+// Historical data per sequence — populated during training
+// numFreq[si][num] = count of appearances
+let numFreq    = Array.from({length:7}, () => ({}));
+let histSumsBlk5 = [];  // sum of S1-S5 numbers per row
+let histSumsBlk2 = [];  // sum of S6-S7 numbers per row
+let histSumsGlobal = []; // sum of all 7 per row
 
 function updateHistSums(seqNums) {
-  // seqNums = array of 7 actual numbers (one per sequence) for a given row
-  if(seqNums.length < 7) return;
-  const s5 = seqNums.slice(0,5).reduce((a,b)=>a+b,0);
-  const s2 = seqNums.slice(5,7).reduce((a,b)=>a+b,0);
+  // seqNums = [n1,n2,n3,n4,n5,n6,n7] actual numbers for a row
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  // Update frequency counts
+  seqNums.forEach((n,si) => {
+    if(!numFreq[si]) numFreq[si] = {};
+    numFreq[si][n] = (numFreq[si][n]||0) + 1;
+  });
+  const s5  = seqNums.slice(0,5).reduce((a,b)=>a+b,0);
+  const s2  = seqNums.slice(5,7).reduce((a,b)=>a+b,0);
   histSumsBlk5.push(s5);
   histSumsBlk2.push(s2);
+  histSumsGlobal.push(s5+s2);
 }
 
-function getSumBounds(hist, pLow=0.05, pHigh=0.95) {
-  if(hist.length < 20) return null; // not enough data
-  const sorted = [...hist].sort((a,b)=>a-b);
-  return {
-    lo: sorted[Math.floor(sorted.length * pLow)],
-    hi: sorted[Math.floor(sorted.length * pHigh)]
-  };
+function getPercentile(arr, p) {
+  if(!arr.length) return null;
+  const s = [...arr].sort((a,b)=>a-b);
+  return s[Math.floor(s.length * p)];
+}
+
+function getSumBounds(hist) {
+  if(hist.length < 30) return null;
+  return { lo: getPercentile(hist, 0.05), hi: getPercentile(hist, 0.95) };
+}
+
+// Filter numbers by historical frequency
+// Threshold = mean - 1 sigma of observed frequencies (per sequence)
+// Adapts automatically to each sequence's distribution
+function getValidNums(si, candidates, totalRows) {
+  if(totalRows < 30) return candidates;
+  const freq = numFreq[si] || {};
+  // Only consider numbers that appeared at least once
+  const allFreqs = Object.values(freq).filter(f => f > 0);
+  if(allFreqs.length < 3) return candidates;
+  const mean = allFreqs.reduce((a,b)=>a+b,0) / allFreqs.length;
+  const sigma = Math.sqrt(allFreqs.reduce((s,f)=>s+Math.pow(f-mean,2),0) / allFreqs.length);
+  const threshold = Math.max(1, mean - sigma); // mean - 1σ, minimum 1
+  return candidates.filter(n => (freq[n]||0) >= threshold);
 }
 
 // Top-2 codes per sequence using column probability product
 function getTop2Codes(colProbs) {
-  // colProbs = [{pA, pB}, {pA, pB}, {pA, pB}, {pA, pB}]
-  // 16 possible codes = all combinations of A/B for 4 columns
   const codes = [];
   for(let mask=0; mask<16; mask++) {
     const letters = [
@@ -638,7 +662,6 @@ function getTop2Codes(colProbs) {
       (mask&8)?'B':'A'
     ];
     const code = letters.join('');
-    // P(code) = product of P(each column value)
     let prob = 1;
     for(let c=0;c<4;c++) {
       prob *= (letters[c]==='A') ? colProbs[c].pA : colProbs[c].pB;
@@ -646,38 +669,43 @@ function getTop2Codes(colProbs) {
     codes.push({code, prob});
   }
   codes.sort((a,b)=>b.prob-a.prob);
-  return [codes[0], codes[1]]; // top-2
+  return codes.slice(0,2); // top-2 most probable codes
 }
 
-// Main combination analysis — called after training
-function analizarCombinaciones(allColProbs) {
-  // allColProbs[si] = [{pA,pB} x4] from predecirFilaConProbs for each sequence
-  // Returns filtered combinations for display
+// Main combination analysis
+function analizarCombinaciones(allColProbs, totalRows) {
+  const boundsBlk5   = getSumBounds(histSumsBlk5);
+  const boundsBlk2   = getSumBounds(histSumsBlk2);
+  const boundsGlobal = getSumBounds(histSumsGlobal);
 
-  const boundsBlk5 = getSumBounds(histSumsBlk5);
-  const boundsBlk2 = getSumBounds(histSumsBlk2);
-
-  // Get top-2 codes per sequence
-  const top2 = allColProbs.map(cp => cp ? getTop2Codes(cp) : null);
-
-  // Get candidate numbers per sequence
-  const candNums = top2.map((t2, si) => {
-    if(!t2) return [];
-    const map = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
-    const nums = new Set();
-    t2.forEach(({code}) => { (map[code]||[]).forEach(n => nums.add(n)); });
-    return [...nums].sort((a,b)=>a-b);
+  // Step 1: Get top-2 codes per sequence → numbers → filter by history
+  const candCodes = allColProbs.map((cp, si) => {
+    if(!cp) return null;
+    const top2 = getTop2Codes(cp);
+    const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
+    const nums1 = (map[top2[0].code]||[]).filter(n => (numFreq[si]||{})[n] > 0);
+    const nums2 = (map[top2[1].code]||[]).filter(n => (numFreq[si]||{})[n] > 0);
+    return { code1: top2[0].code, nums1, code2: top2[1].code, nums2 };
   });
 
-  // Product cartesian for bloque S1-S5
-  // Pick one number per sequence (si 0-4), all distinct, ascending, sum in bounds
-  function cartesianFilter(seqCands, maxNums, bounds) {
+  const candNums = allColProbs.map((cp, si) => {
+    if(!cp) return [];
+    const top2 = getTop2Codes(cp);
+    const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
+    const raw = new Set();
+    top2.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
+    const valid = getValidNums(si, [...raw].sort((a,b)=>a-b), totalRows);
+    return valid;
+  });
+
+  // Step 2: Cartesian product with structural filters
+  function cartesianFilter(seqCands, maxNum, bounds) {
     const results = [];
+    const nSeqs = seqCands.length;
+
     function recurse(si, chosen) {
-      if(si === seqCands.length) {
-        // Valid combination
+      if(si === nSeqs) {
         const sorted = [...chosen].sort((a,b)=>a-b);
-        // Check ascending (no repeats — already checked)
         const sum = sorted.reduce((a,b)=>a+b,0);
         if(!bounds || (sum >= bounds.lo && sum <= bounds.hi)) {
           results.push({nums: sorted, sum});
@@ -685,7 +713,7 @@ function analizarCombinaciones(allColProbs) {
         return;
       }
       for(const n of seqCands[si]) {
-        if(!chosen.has(n) && n <= maxNums) {
+        if(n > 0 && n <= maxNum && !chosen.has(n)) {
           chosen.add(n);
           recurse(si+1, chosen);
           chosen.delete(n);
@@ -693,83 +721,125 @@ function analizarCombinaciones(allColProbs) {
       }
     }
     recurse(0, new Set());
-    return results;
+    return results.sort((a,b) => a.sum - b.sum);
   }
 
   const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5);
   const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2);
 
-  return { blk5: blk5Results, blk2: blk2Results, candNums, boundsBlk5, boundsBlk2 };
+  // Step 3: Cross-block combinations (global sum filter)
+  const globalResults = [];
+  for(const b5 of blk5Results) {
+    for(const b2 of blk2Results) {
+      const allNums = [...b5.nums, ...b2.nums];
+      const globalSum = b5.sum + b2.sum;
+      if(!boundsGlobal || (globalSum >= boundsGlobal.lo && globalSum <= boundsGlobal.hi)) {
+        globalResults.push({
+          blk5: b5.nums, blk5sum: b5.sum,
+          blk2: b2.nums, blk2sum: b2.sum,
+          total: globalSum
+        });
+      }
+    }
+  }
+
+  return {
+    candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
+    blk5Results, blk2Results, globalResults
+  };
 }
 
 // Render combination analysis panel
-function renderCombinaciones(result) {
+function renderCombinaciones(result, totalRows) {
   let panel = document.getElementById('pred-combo-panel');
   if(!panel) {
     panel = document.createElement('div');
     panel.id = 'pred-combo-panel';
-    panel.style.cssText = 'margin-top:16px;border:1px solid #ddd;border-radius:10px;padding:12px;background:#fff;';
+    panel.style.cssText = 'margin-top:16px;border:1px solid #ddd;border-radius:10px;padding:14px;background:#fff;';
     const content = document.getElementById('pred-content');
     if(content) content.appendChild(panel);
   }
 
-  const {blk5, blk2, candNums, boundsBlk5, boundsBlk2} = result;
+  const {candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal, blk5Results, blk2Results, globalResults} = result;
 
   let html = '<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">Análisis de Combinaciones</h3>';
 
-  // Candidate numbers per sequence
+  // Códigos + candidatos por secuencia
   html += '<div style="margin-bottom:10px;">';
-  html += '<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px;">Números candidatos por secuencia:</div>';
-  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-  candNums.forEach((nums, si) => {
-    html += `<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:5px;padding:4px 8px;font-size:10px;">
-      <span style="font-weight:700;color:#555;">S${si+1}:</span> ${nums.join(', ')||'—'}
-    </div>`;
+  html += '<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;">Códigos predichos → números candidatos (filtro histórico mean-1σ):</div>';
+  html += '<table style="border-collapse:collapse;font-size:10px;width:100%;">';
+  html += '<tr style="background:#f8f9fa;"><th style="padding:3px 8px;border:1px solid #dee2e6;text-align:left;">Sec</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 1</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 2</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Candidatos finales</th></tr>';
+  candCodes.forEach((cc, si) => {
+    if(!cc) return;
+    const color = si < 5 ? '#e8f5e9' : '#e3f2fd';
+    html += `<tr style="background:${color};">
+      <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">S${si+1}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code1}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;">${cc.nums1.join(', ')||'—'}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code2}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;">${cc.nums2.join(', ')||'—'}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">${candNums[si].join(', ')||'<span style="color:#999">sin candidatos</span>'}</td>
+    </tr>`;
   });
-  html += '</div></div>';
+  html += '</table></div>';
 
-  // Sum bounds info
-  if(boundsBlk5) html += `<div style="font-size:10px;color:#888;margin-bottom:6px;">Rango suma S1-S5: [${boundsBlk5.lo}–${boundsBlk5.hi}] | Rango suma S6-S7: [${boundsBlk2?boundsBlk2.lo:'?'}–${boundsBlk2?boundsBlk2.hi:'?'}]</div>`;
+  // Sum ranges
+  html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">
+    Rango histórico (P5–P95) &nbsp;·&nbsp;
+    S1–S5: ${boundsBlk5 ? `Σ[${boundsBlk5.lo}–${boundsBlk5.hi}]` : 'insuficiente'} &nbsp;·&nbsp;
+    S6–S7: ${boundsBlk2 ? `Σ[${boundsBlk2.lo}–${boundsBlk2.hi}]` : 'insuficiente'} &nbsp;·&nbsp;
+    Global: ${boundsGlobal ? `Σ[${boundsGlobal.lo}–${boundsGlobal.hi}]` : 'insuficiente'}
+  </div>`;
 
-  // Bloque S1-S5 results
-  html += `<div style="margin-bottom:10px;">
-    <div style="font-size:11px;font-weight:600;color:#1b5e20;margin-bottom:4px;">
-      Combinaciones válidas S1–S5 (${blk5.length} encontradas):
+  // Results
+  if(globalResults.length > 0) {
+    html += `<div style="font-size:12px;font-weight:700;color:#333;margin-bottom:6px;">
+      Combinaciones válidas (${globalResults.length}):
     </div>`;
-  if(blk5.length === 0) {
-    html += '<div style="font-size:11px;color:#999;font-style:italic;">Ninguna combinación supera los filtros.</div>';
-  } else {
-    html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
-    blk5.slice(0,30).forEach(({nums, sum}) => {
-      html += `<div style="background:#d1e7dd;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#0a3622;">
-        ${nums.join(' · ')} <span style="font-size:9px;color:#555;">(Σ${sum})</span>
+    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    globalResults.slice(0, 60).forEach(({blk5, blk2, total}) => {
+      html += `<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;white-space:nowrap;">
+        <span style="color:#0a3622;">${blk5.join(' · ')}</span>
+        <span style="color:#aaa;margin:0 4px;">|</span>
+        <span style="color:#084298;">${blk2.join(' · ')}</span>
+        <span style="font-size:9px;color:#888;margin-left:4px;">(Σ${total})</span>
       </div>`;
     });
-    if(blk5.length > 30) html += `<div style="font-size:10px;color:#888;padding:3px 8px;">+${blk5.length-30} más...</div>`;
+    if(globalResults.length > 60) html += `<div style="font-size:10px;color:#888;padding:5px 0;">+${globalResults.length-60} más...</div>`;
     html += '</div>';
-  }
-  html += '</div>';
-
-  // Bloque S6-S7 results
-  html += `<div>
-    <div style="font-size:11px;font-weight:600;color:#084298;margin-bottom:4px;">
-      Combinaciones válidas S6–S7 (${blk2.length} encontradas):
-    </div>`;
-  if(blk2.length === 0) {
-    html += '<div style="font-size:11px;color:#999;font-style:italic;">Ninguna combinación supera los filtros.</div>';
   } else {
-    html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
-    blk2.forEach(({nums, sum}) => {
-      html += `<div style="background:#cfe2ff;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#084298;">
-        ${nums.join(' · ')} <span style="font-size:9px;color:#555;">(Σ${sum})</span>
-      </div>`;
-    });
-    html += '</div>';
+    // No global combinations — show by block
+    html += '<div style="font-size:11px;color:#666;margin-bottom:6px;font-style:italic;">Sin combinaciones globales válidas. Resultados por bloque:</div>';
+
+    if(blk5Results.length > 0) {
+      html += `<div style="font-size:11px;font-weight:600;color:#1b5e20;margin-bottom:4px;">S1–S5 (${blk5Results.length} combinaciones):</div>`;
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">';
+      blk5Results.slice(0,30).forEach(({nums, sum}) => {
+        html += `<div style="background:#d1e7dd;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#0a3622;">
+          ${nums.join(' · ')} <span style="font-size:9px;opacity:0.7;">(Σ${sum})</span></div>`;
+      });
+      if(blk5Results.length > 30) html += `<div style="font-size:10px;color:#888;padding:3px;">+${blk5Results.length-30} más</div>`;
+      html += '</div>';
+    }
+
+    if(blk2Results.length > 0) {
+      html += `<div style="font-size:11px;font-weight:600;color:#084298;margin-bottom:4px;">S6–S7 (${blk2Results.length} combinaciones):</div>`;
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+      blk2Results.forEach(({nums, sum}) => {
+        html += `<div style="background:#cfe2ff;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#084298;">
+          ${nums.join(' · ')} <span style="font-size:9px;opacity:0.7;">(Σ${sum})</span></div>`;
+      });
+      html += '</div>';
+    }
+
+    if(blk5Results.length === 0 && blk2Results.length === 0) {
+      html += '<div style="font-size:11px;color:#999;">Sin candidatos suficientes para formar combinaciones.</div>';
+    }
   }
-  html += '</div>';
 
   panel.innerHTML = html;
 }
+
 
 })();
 

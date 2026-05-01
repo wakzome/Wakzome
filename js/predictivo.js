@@ -2171,10 +2171,7 @@ function convertir7() {
   document.getElementById('btnExportTablas').style.display='';
 }
 
-// Override the original convertir to use the 7-seq version
-function convertir() {
-  convertir7();
-}
+// (convertir removed - conflicts with index.html)
 
 // ── EXPORTAR PREDICCIONES — 7 SECUENCIAS ──────────────────────────────────────
 function exportarExcel() {
@@ -2240,14 +2237,7 @@ function exportTablaSeq(si){
   XLSX.writeFile(wb,'tablas_S'+(si+1)+'.xlsx');
 }
 
-// Override convertir to handle 7 sequences
-function convertir() {
-  // Show processing indicator immediately so browser doesn't freeze UI
-  const btn = document.querySelector('button[onclick="convertir()"]');
-  if(btn){ btn.disabled = true; btn.textContent = 'Calculando...'; }
-  // Yield to browser to render the button state, then start heavy work
-  setTimeout(_convertirWork, 30);
-}
+// (convertir removed - conflicts with index.html)
 
 function _convertirWork() {
   // Parse all 7 sequences

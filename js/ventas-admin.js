@@ -216,14 +216,16 @@
         '  pointer-events:none !important; display:none;' +
         '}' +
         '.vadm-emp-cell { color:#ffffff !important; }' +
-        '.vadm-table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; }' +
-        '@media (max-width:600px) {' +
-        '  .vadm-table { font-size:.65rem !important; }' +
-        '  .vadm-table th, .vadm-table td {' +
-        '    padding:4px 5px !important;' +
-        '    font-size:.65rem !important;' +
-        '    white-space:nowrap !important;' +
-        '  }' +
+        '.vadm-table-wrap {' +
+        '  overflow-x:auto !important;' +
+        '  -webkit-overflow-scrolling:touch !important;' +
+        '  position:relative;' +
+        '}' +
+        '.vadm-table-wrap::after {' +
+        '  content:"";' +
+        '  position:absolute;top:0;right:0;bottom:0;width:18px;' +
+        '  background:linear-gradient(to right,transparent,rgba(0,0,0,0.07));' +
+        '  pointer-events:none;border-radius:0 10px 10px 0;' +
         '}';
       document.head.appendChild(styleEl);
     }
@@ -600,7 +602,10 @@
     return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : str;
   }
   function _fmtEur(v) {
-    return parseFloat(v || 0).toFixed(2).replace('.', ',') + '\u00a0€';
+    var n = parseFloat(v || 0).toFixed(2);
+    var parts = n.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return parts[0] + ',' + parts[1] + '\u00a0€';
   }
   function _esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

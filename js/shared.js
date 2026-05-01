@@ -104,15 +104,6 @@
           });
         }
 
-      } else if (data.rol === 'predictivo') {
-        // ── LOGIN PREDICTIVO ──
-        sweepThen(function() {
-          document.getElementById('login-screen').style.display = 'none';
-          showGreeting('predictivo', function() {
-            if (typeof openPreditivoOverlay === 'function') openPreditivoOverlay();
-          });
-        });
-
       } else {
         // ── LOGIN TIENDA ──
         currentStore = data.tienda;
@@ -139,10 +130,7 @@
   }
 
   document.getElementById('key-submit').addEventListener('click', attemptLogin);
-  document.getElementById('key-input').addEventListener('input', function() {
-    clearTimeout(window.__loginDebounce);
-    window.__loginDebounce = setTimeout(attemptLogin, 600);
-  });
+  document.getElementById('key-input').addEventListener('keydown', function(e){ if(e.key==='Enter') attemptLogin(); });
 
   // — Logo click → reload —
 

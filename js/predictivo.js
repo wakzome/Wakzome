@@ -962,10 +962,12 @@ function _predValidarWork() {
       if(hits > bestHits) bestHits = hits;
     }
 
-    if(combos.length > 0) {
-      hitsCount[bestHits] = (hitsCount[bestHits]||0) + 1;
-      rowResults.push({row:i+1, real, bestHits, totalCombos:combos.length});
-    }
+    // Always record result, including 0-combo cases
+    const cause = combos.length === 0 ? 'sin_combos' :
+                  (bestHits === 0 ? 'combos_sin_acierto' : 'ok');
+    hitsCount[bestHits] = (hitsCount[bestHits]||0) + 1;
+    rowResults.push({row:i+1, real, bestHits, totalCombos:combos.length, cause,
+      blk5Count: blk5.length, blk2Count: blk2.length});
 
     // ── Update memories with row i data ──────────────────────────────────
     for(let si=0; si<7; si++) {
@@ -1090,6 +1092,55 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
     </div>`;
   });
   html += '</div>';
+
+  // ── Análisis de casos 0/7 ───────────────────────────────────────────────
+  const zeros = rowResults.filter(r => r.bestHits === 0);
+  if(zeros.length > 0) {
+    const sinCombos = zeros.filter(r => r.cause === 'sin_combos');
+    const conCombos = zeros.filter(r => r.cause === 'combos_sin_acierto');
+
+    html += `<div style="margin-top:14px;border-top:1px solid #eee;padding-top:12px;">
+      <div style="font-size:12px;font-weight:700;color:#721c24;margin-bottom:8px;">
+        Análisis de los ${zeros.length} casos 0/7:
+      </div>`;
+
+    html += `<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="background:#f8d7da;border-radius:6px;padding:8px 14px;font-size:11px;">
+        <div style="font-weight:700;color:#721c24;">Sin combinaciones generadas</div>
+        <div style="font-size:13px;font-weight:700;color:#721c24;">${sinCombos.length} filas</div>
+        <div style="font-size:10px;color:#888;">Filtros de suma descartaron todo</div>
+      </div>
+      <div style="background:#fff3cd;border-radius:6px;padding:8px 14px;font-size:11px;">
+        <div style="font-weight:700;color:#664d03;">Combos generadas pero sin acierto</div>
+        <div style="font-size:13px;font-weight:700;color:#664d03;">${conCombos.length} filas</div>
+        <div style="font-size:10px;color:#888;">Números candidatos incorrectos</div>
+      </div>
+    </div>`;
+
+    // Show the 0/7 rows detail
+    html += '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:5px;">Filas 0/7 — resultado real vs candidatos:</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+    zeros.slice(0, 20).forEach(({row, real, cause, totalCombos, blk5Count, blk2Count}) => {
+      const bg = cause==='sin_combos' ? '#f8d7da' : '#fff3cd';
+      const tc = cause==='sin_combos' ? '#721c24' : '#664d03';
+      const label = cause==='sin_combos' ? `0 combos (blk5:${blk5Count}, blk2:${blk2Count})` : `${totalCombos} combos sin acierto`;
+      html += `<div style="background:${bg};color:${tc};border-radius:5px;padding:4px 8px;font-size:10px;border:1px solid ${bg};">
+        <b>Fila ${row}</b>: real=[${real.join(',')}] — ${label}
+      </div>`;
+    });
+    if(zeros.length > 20) html += `<div style="font-size:10px;color:#888;padding:4px;">+${zeros.length-20} más...</div>`;
+    html += '</div>';
+
+    // Diagnosis
+    html += `<div style="margin-top:10px;font-size:11px;color:#555;border-top:1px solid #eee;padding-top:8px;">
+      <b>Diagnóstico:</b> `;
+    if(sinCombos.length > conCombos.length) {
+      html += `El problema principal es el <b>filtro de suma demasiado restrictivo</b> — en ${sinCombos.length} casos descartó todas las combinaciones válidas estructuralmente. Considera ampliar el rango P5-P95 a P3-P97.`;
+    } else {
+      html += `El problema principal es que los <b>números candidatos no incluyen los correctos</b> — en ${conCombos.length} casos se generaron combinaciones pero ninguna contenía suficientes números del resultado real. El Q1 puede estar siendo demasiado agresivo.`;
+    }
+    html += '</div></div>';
+  }
 
   panel.innerHTML = html;
 }

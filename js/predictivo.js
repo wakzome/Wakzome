@@ -518,6 +518,7 @@ function _predWork() {
 
   // Collect historical sums + frequency counts from all 7 sequences
   histSumsBlk5 = []; histSumsBlk2 = []; histSumsGlobal = [];
+  histEvensBlk5 = []; histEvensBlk2 = []; histEvensGlobal = [];
   numFreq = Array.from({length:7}, () => ({}));
   const minN = Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++) {
@@ -594,6 +595,9 @@ let numFreq    = Array.from({length:7}, () => ({}));
 let histSumsBlk5 = [];  // sum of S1-S5 numbers per row
 let histSumsBlk2 = [];  // sum of S6-S7 numbers per row
 let histSumsGlobal = []; // sum of all 7 per row
+let histEvensBlk5  = []; // count of even numbers in S1-S5 per row
+let histEvensBlk2  = []; // count of even numbers in S6-S7 per row
+let histEvensGlobal= []; // count of even numbers in all 7 per row
 
 function updateHistSums(seqNums) {
   // seqNums = [n1,n2,n3,n4,n5,n6,n7] actual numbers for a row
@@ -608,6 +612,12 @@ function updateHistSums(seqNums) {
   histSumsBlk5.push(s5);
   histSumsBlk2.push(s2);
   histSumsGlobal.push(s5+s2);
+  // Even-count accumulators
+  const e5 = seqNums.slice(0,5).filter(n => n%2===0).length;
+  const e2 = seqNums.slice(5,7).filter(n => n%2===0).length;
+  histEvensBlk5.push(e5);
+  histEvensBlk2.push(e2);
+  histEvensGlobal.push(e5+e2);
 }
 
 function getPercentile(arr, p) {
@@ -619,6 +629,52 @@ function getPercentile(arr, p) {
 function getSumBounds(hist) {
   if(hist.length < 30) return null;
   return { lo: getPercentile(hist, 0.03), hi: getPercentile(hist, 0.97) };
+}
+
+// ── FILTRO DE PARES — μ ± σ_óptimo ──────────────────────────────────────────
+// El sistema elige automáticamente cuántas sigmas usar probando 1.0…2.0
+// y eligiendo el que mejor separa señal de ruido:
+// criterio = maximizar cobertura de filas reales dentro del rango
+// penalizando rangos demasiado anchos (que incluirían casi todo).
+function calcOptimalSigma(hist) {
+  if(hist.length < 30) return null;
+  const n    = hist.length;
+  const mean = hist.reduce((a,b)=>a+b,0) / n;
+  const std  = Math.sqrt(hist.reduce((a,v)=>a+(v-mean)**2,0) / n);
+  if(std === 0) return { mean, std, sigma: 1.5, lo: mean, hi: mean };
+
+  const sigmas = [1.0, 1.25, 1.5, 1.75, 2.0];
+  let bestSigma = 1.5, bestScore = -1;
+
+  for(const s of sigmas) {
+    const lo = mean - s * std;
+    const hi = mean + s * std;
+    const inside = hist.filter(v => v >= lo && v <= hi).length;
+    const coverage = inside / n;            // qué fracción de filas reales cubre
+    const width    = (hi - lo) / (std * 4); // anchura relativa (normalizada)
+    // Score: queremos cobertura alta pero rango estrecho
+    // Penalizamos rangos que cubren casi todo (>95%) porque no filtran nada útil
+    const penalty = coverage > 0.95 ? (coverage - 0.95) * 5 : 0;
+    const score   = coverage - width * 0.3 - penalty;
+    if(score > bestScore) { bestScore = score; bestSigma = s; }
+  }
+
+  return {
+    mean,
+    std,
+    sigma: bestSigma,
+    lo: Math.floor(mean - bestSigma * std),
+    hi: Math.ceil (mean + bestSigma * std)
+  };
+}
+
+function getEvenBounds(hist) {
+  if(hist.length < 30) return null;
+  const result = calcOptimalSigma(hist);
+  if(!result) return null;
+  // Clamp to valid integer range (can't have negative evens)
+  result.lo = Math.max(0, result.lo);
+  return result; // exposes .lo, .hi, .mean, .std, .sigma
 }
 
 // Filter numbers by historical frequency
@@ -664,6 +720,11 @@ function analizarCombinaciones(allColProbs, totalRows) {
   const boundsBlk2   = getSumBounds(histSumsBlk2);
   const boundsGlobal = getSumBounds(histSumsGlobal);
 
+  // Even-count bounds (auto σ)
+  const evenBlk5   = getEvenBounds(histEvensBlk5);
+  const evenBlk2   = getEvenBounds(histEvensBlk2);
+  const evenGlobal = getEvenBounds(histEvensGlobal);
+
   // Step 1: Get top-2 codes per sequence → numbers → filter by history
   const candCodes = allColProbs.map((cp, si) => {
     if(!cp) return null;
@@ -694,7 +755,7 @@ function analizarCombinaciones(allColProbs, totalRows) {
   });
 
   // Step 2: Cartesian product with structural filters
-  function cartesianFilter(seqCands, maxNum, bounds) {
+  function cartesianFilter(seqCands, maxNum, bounds, evenBounds) {
     const results = [];
     const nSeqs = seqCands.length;
 
@@ -702,10 +763,11 @@ function analizarCombinaciones(allColProbs, totalRows) {
     // Each sequence contributes exactly one number, must be > previous
     function recurse(si, prevNum, chosen) {
       if(si === nSeqs) {
-        const sum = chosen.reduce((a,b)=>a+b,0);
-        if(!bounds || (sum >= bounds.lo && sum <= bounds.hi)) {
-          results.push({nums: [...chosen], sum});
-        }
+        const sum   = chosen.reduce((a,b)=>a+b,0);
+        const evens = chosen.filter(n=>n%2===0).length;
+        if(bounds     && (sum   < bounds.lo    || sum   > bounds.hi))    return;
+        if(evenBounds && (evens < evenBounds.lo || evens > evenBounds.hi)) return;
+        results.push({nums: [...chosen], sum, evens});
         return;
       }
       for(const n of seqCands[si]) {
@@ -720,27 +782,29 @@ function analizarCombinaciones(allColProbs, totalRows) {
     return results.sort((a,b) => a.sum - b.sum);
   }
 
-  const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5);
-  const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2);
+  const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5, evenBlk5);
+  const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2, evenBlk2);
 
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
   for(const b5 of blk5Results) {
     for(const b2 of blk2Results) {
-      const allNums = [...b5.nums, ...b2.nums];
-      const globalSum = b5.sum + b2.sum;
-      if(!boundsGlobal || (globalSum >= boundsGlobal.lo && globalSum <= boundsGlobal.hi)) {
-        globalResults.push({
-          blk5: b5.nums, blk5sum: b5.sum,
-          blk2: b2.nums, blk2sum: b2.sum,
-          total: globalSum
-        });
-      }
+      const allNums    = [...b5.nums, ...b2.nums];
+      const globalSum  = b5.sum + b2.sum;
+      const globalEven = (b5.evens||0) + (b2.evens||0);
+      if(boundsGlobal && (globalSum  < boundsGlobal.lo || globalSum  > boundsGlobal.hi)) continue;
+      if(evenGlobal   && (globalEven < evenGlobal.lo   || globalEven > evenGlobal.hi))   continue;
+      globalResults.push({
+        blk5: b5.nums, blk5sum: b5.sum, blk5evens: b5.evens||0,
+        blk2: b2.nums, blk2sum: b2.sum, blk2evens: b2.evens||0,
+        total: globalSum, totalEvens: globalEven
+      });
     }
   }
 
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
+    evenBlk5, evenBlk2, evenGlobal,
     blk5Results, blk2Results, globalResults
   };
 }
@@ -756,7 +820,9 @@ function renderCombinaciones(result, totalRows) {
     if(content) content.appendChild(panel);
   }
 
-  const {candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal, blk5Results, blk2Results, globalResults} = result;
+  const {candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
+         evenBlk5, evenBlk2, evenGlobal,
+         blk5Results, blk2Results, globalResults} = result;
 
   let html = '<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">Análisis de Combinaciones</h3>';
 
@@ -786,12 +852,20 @@ function renderCombinaciones(result, totalRows) {
   });
   html += '</table></div>';
 
-  // Sum ranges
+  // Sum ranges + even-count ranges
+  const fmtEven = (e) => e
+    ? `par[${e.lo}–${e.hi}] σ${e.sigma}`
+    : 'insuficiente';
   html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">
-    Rango histórico (P5–P95) &nbsp;·&nbsp;
+    Suma (P3–P97) &nbsp;·&nbsp;
     S1–S5: ${boundsBlk5 ? `Σ[${boundsBlk5.lo}–${boundsBlk5.hi}]` : 'insuficiente'} &nbsp;·&nbsp;
     S6–S7: ${boundsBlk2 ? `Σ[${boundsBlk2.lo}–${boundsBlk2.hi}]` : 'insuficiente'} &nbsp;·&nbsp;
     Global: ${boundsGlobal ? `Σ[${boundsGlobal.lo}–${boundsGlobal.hi}]` : 'insuficiente'}
+    <br>
+    Pares (μ±σ auto) &nbsp;·&nbsp;
+    S1–S5: ${fmtEven(evenBlk5)} &nbsp;·&nbsp;
+    S6–S7: ${fmtEven(evenBlk2)} &nbsp;·&nbsp;
+    Global: ${fmtEven(evenGlobal)}
   </div>`;
 
   // Results
@@ -800,12 +874,12 @@ function renderCombinaciones(result, totalRows) {
       Combinaciones válidas (${globalResults.length}):
     </div>`;
     html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
-    globalResults.slice(0, 60).forEach(({blk5, blk2, total}) => {
+    globalResults.slice(0, 60).forEach(({blk5, blk2, total, totalEvens}) => {
       html += `<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;white-space:nowrap;">
         <span style="color:#0a3622;">${blk5.join(' · ')}</span>
         <span style="color:#aaa;margin:0 4px;">|</span>
         <span style="color:#084298;">${blk2.join(' · ')}</span>
-        <span style="font-size:9px;color:#888;margin-left:4px;">(Σ${total})</span>
+        <span style="font-size:9px;color:#888;margin-left:4px;">(Σ${total} · ${totalEvens}P)</span>
       </div>`;
     });
     if(globalResults.length > 60) html += `<div style="font-size:10px;color:#888;padding:5px 0;">+${globalResults.length-60} más...</div>`;
@@ -817,9 +891,9 @@ function renderCombinaciones(result, totalRows) {
     if(blk5Results.length > 0) {
       html += `<div style="font-size:11px;font-weight:600;color:#1b5e20;margin-bottom:4px;">S1–S5 (${blk5Results.length} combinaciones):</div>`;
       html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">';
-      blk5Results.slice(0,30).forEach(({nums, sum}) => {
+      blk5Results.slice(0,30).forEach(({nums, sum, evens}) => {
         html += `<div style="background:#d1e7dd;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#0a3622;">
-          ${nums.join(' · ')} <span style="font-size:9px;opacity:0.7;">(Σ${sum})</span></div>`;
+          ${nums.join(' · ')} <span style="font-size:9px;opacity:0.7;">(Σ${sum} · ${evens}P)</span></div>`;
       });
       if(blk5Results.length > 30) html += `<div style="font-size:10px;color:#888;padding:3px;">+${blk5Results.length-30} más</div>`;
       html += '</div>';
@@ -828,9 +902,9 @@ function renderCombinaciones(result, totalRows) {
     if(blk2Results.length > 0) {
       html += `<div style="font-size:11px;font-weight:600;color:#084298;margin-bottom:4px;">S6–S7 (${blk2Results.length} combinaciones):</div>`;
       html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
-      blk2Results.forEach(({nums, sum}) => {
+      blk2Results.forEach(({nums, sum, evens}) => {
         html += `<div style="background:#cfe2ff;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#084298;">
-          ${nums.join(' · ')} <span style="font-size:9px;opacity:0.7;">(Σ${sum})</span></div>`;
+          ${nums.join(' · ')} <span style="font-size:9px;opacity:0.7;">(Σ${sum} · ${evens}P)</span></div>`;
       });
       html += '</div>';
     }

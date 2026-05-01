@@ -996,17 +996,41 @@ function _predValidarWork() {
     // Get valid combos using current freq counts
     // Also capture top-code concentration (prob of code1 / sum of all probs)
     const topCodeConc = []; // [0..6] concentration ratio of best code per seq
+    // numScore[si][n] = log-probability of number n in sequence si
+    const numScore = Array.from({length:7}, () => ({}));
+
     const top2s = colProbs.map((cp, si) => {
       if(!cp) return null;
       const top2 = getTopNCodes(cp, 4);
       const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
       const raw  = new Set();
-      top2.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
+
+      // Build probability score for each number: use the prob of the code that maps to it
+      // If a number appears in multiple top codes, take the highest prob code
+      top2.forEach(({code, prob}) => {
+        (map[code]||[]).forEach(n => {
+          raw.add(n);
+          // log-prob: higher = better. Use max if number in multiple codes.
+          const lp = Math.log(Math.max(prob, 1e-9));
+          if(numScore[si][n] === undefined || lp > numScore[si][n]) {
+            numScore[si][n] = lp;
+          }
+        });
+      });
+
+      // Frequency score: add log of relative frequency to reinforce historically common numbers
+      const freq = tmpNumFreq[si] || {};
+      const totalFreq = Object.values(freq).reduce((a,b)=>a+b,0) || 1;
+      [...raw].forEach(n => {
+        const freqLp = Math.log(Math.max((freq[n]||0)/totalFreq, 1e-9));
+        numScore[si][n] = (numScore[si][n]||0) + freqLp * 0.5; // weighted blend
+      });
+
       // Concentration: prob of top code vs sum of top 4
       const totalProb = top2.reduce((s,x)=>s+x.prob,0);
       topCodeConc[si] = totalProb > 0 ? top2[0].prob / totalProb : 0;
+
       // Filter by freq (Q1 of current tmpNumFreq)
-      const freq = tmpNumFreq[si] || {};
       const allFreqs = Object.values(freq).filter(f=>f>0).sort((a,b)=>a-b);
       let threshold = 1;
       if(allFreqs.length >= 4) {
@@ -1066,17 +1090,21 @@ function _predValidarWork() {
     cart5(0, 0, []);
     cart2(0, 0, []);
 
-    // Full combos with global filter
-    // Each combo stores bySeq: [n_s1, n_s2, n_s3, n_s4, n_s5, n_s6, n_s7]
-    // so we can compare position-by-position with real result
+    // Full combos with global filter — scored by log-probability
     const combos = [];
     for(const b5 of blk5){
       for(const b2 of blk2){
         const tot=b5.sum+b2.sum;
-        if(!boundsGl||(tot>=boundsGl.lo&&tot<=boundsGl.hi))
-          combos.push([...b5.bySeq, ...b2.bySeq]); // ordered by sequence
+        if(!boundsGl||(tot>=boundsGl.lo&&tot<=boundsGl.hi)) {
+          const combo = [...b5.bySeq, ...b2.bySeq];
+          // Score = sum of log-probs of each number in its sequence position
+          const score = combo.reduce((s, n, si) => s + (numScore[si][n] || -20), 0);
+          combos.push({nums: combo, score});
+        }
       }
     }
+    // Sort by score descending — highest probability first
+    combos.sort((a,b) => b.score - a.score);
 
     // Real result for row i — memories trained on 0..i-1, so row i is the prediction target
     const real = allSeqsData.map(seq => seq&&seq.filas[i]?seq.filas[i].num:0);
@@ -1085,14 +1113,19 @@ function _predValidarWork() {
     const realBlk5Set = new Set(real.slice(0,5).filter(n=>n>0));
     const realBlk2Set = new Set(real.slice(5,7).filter(n=>n>0));
     let bestHits = 0;
-    let bestCombosDetail = []; // store all combos with their hits for display
-    combos.forEach((combo, comboIdx) => {
+    let bestRank = -1;       // rank (0-indexed) of the best combo by score
+    let top10Hits = 0;       // best hits achievable in top-10 combos by score
+    let top100Hits = 0;      // best hits achievable in top-100 combos by score
+    let bestCombosDetail = [];
+    combos.forEach(({nums: combo, score}, comboIdx) => {
       const hitsBlk5 = combo.slice(0,5).filter(n => realBlk5Set.has(n)).length;
       const hitsBlk2 = combo.slice(5,7).filter(n => realBlk2Set.has(n)).length;
       const hits = hitsBlk5 + hitsBlk2;
-      if(hits > bestHits) bestHits = hits;
-      if(hits >= 4) { // store notable combos (4+ hits)
-        bestCombosDetail.push({idx: comboIdx+1, combo, hits, hitsBlk5, hitsBlk2});
+      if(hits > bestHits) { bestHits = hits; bestRank = comboIdx; }
+      if(comboIdx < 10  && hits > top10Hits)  top10Hits  = hits;
+      if(comboIdx < 100 && hits > top100Hits) top100Hits = hits;
+      if(hits >= 4) {
+        bestCombosDetail.push({idx: comboIdx+1, combo, hits, hitsBlk5, hitsBlk2, score});
       }
     });
     bestCombosDetail.sort((a,b)=>b.hits-a.hits).splice(5); // keep top 5
@@ -1107,10 +1140,13 @@ function _predValidarWork() {
     rowResults.push({row:i+1, real, bestHits, totalCombos:combos.length, cause,
       blk5Count: blk5.length, blk2Count: blk2.length,
       bestCombos: bestCombosDetail,
-      historySize: i,          // cuántas filas de historia tenía el sistema
-      candCounts,              // candidatos por secuencia [s1..s7]
-      topCodeConc,             // concentración del código top por secuencia
-      avgConc                  // concentración media global (señal de confianza)
+      historySize: i,
+      candCounts,
+      topCodeConc,
+      avgConc,
+      bestRank,      // position of best combo in the ranked list (0 = top)
+      top10Hits,     // best hits achievable if we only look at top-10 by score
+      top100Hits,    // best hits achievable if we only look at top-100 by score
     });
 
     // ── Update memories with row i data ──────────────────────────────────
@@ -1224,6 +1260,65 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
     </tr>`;
   }
   html += '</tbody></table>';
+
+  // ── ANÁLISIS DE CALIDAD DEL RANKING ────────────────────────────────────────
+  // Mide si el scoring por log-probabilidad está poniendo los mejores combos arriba
+  const rowsWithCombos = rowResults.filter(r => r.totalCombos > 0);
+  if(rowsWithCombos.length > 0) {
+    // % de filas donde top-10 por score iguala o supera el mejor hit global
+    const top10Match  = rowsWithCombos.filter(r => r.top10Hits  >= r.bestHits).length;
+    const top100Match = rowsWithCombos.filter(r => r.top100Hits >= r.bestHits).length;
+    const pct10  = (top10Match  / rowsWithCombos.length * 100).toFixed(1);
+    const pct100 = (top100Match / rowsWithCombos.length * 100).toFixed(1);
+
+    // Distribución de posición del mejor combo
+    const rankBuckets = {top10:0, top100:0, top1000:0, resto:0};
+    rowsWithCombos.forEach(r => {
+      if(r.bestRank < 0) return;
+      if(r.bestRank < 10)   rankBuckets.top10++;
+      else if(r.bestRank < 100)  rankBuckets.top100++;
+      else if(r.bestRank < 1000) rankBuckets.top1000++;
+      else rankBuckets.resto++;
+    });
+    const n = rowsWithCombos.length;
+    const rankColor = pct10 >= 30 ? '#1b5e20' : pct10 >= 15 ? '#664d03' : '#721c24';
+
+    html += `<div style="margin-bottom:14px;border:1px solid #dee2e6;border-radius:8px;padding:10px 14px;">
+      <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px;">Calidad del ranking por score</div>
+      <div style="font-size:11px;color:#555;margin-bottom:8px;">
+        ¿Con qué frecuencia el mejor combo posible cae en las primeras posiciones del ranking?
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <div style="background:#f8f9fa;border-radius:6px;padding:8px 14px;min-width:110px;text-align:center;">
+          <div style="font-size:9px;color:#888;margin-bottom:3px;">Mejor en top-10</div>
+          <div style="font-size:20px;font-weight:700;color:${rankColor}">${pct10}%</div>
+          <div style="font-size:9px;color:#aaa;">${top10Match} / ${n} filas</div>
+        </div>
+        <div style="background:#f8f9fa;border-radius:6px;padding:8px 14px;min-width:110px;text-align:center;">
+          <div style="font-size:9px;color:#888;margin-bottom:3px;">Mejor en top-100</div>
+          <div style="font-size:20px;font-weight:700;color:#333">${pct100}%</div>
+          <div style="font-size:9px;color:#aaa;">${top100Match} / ${n} filas</div>
+        </div>
+        <div style="background:#f8f9fa;border-radius:6px;padding:8px 14px;min-width:160px;">
+          <div style="font-size:9px;color:#888;margin-bottom:5px;">Posición del mejor combo</div>
+          <div style="font-size:10px;">
+            Top-10: <b>${(rankBuckets.top10/n*100).toFixed(1)}%</b> &nbsp;
+            Top-100: <b>${(rankBuckets.top100/n*100).toFixed(1)}%</b> &nbsp;
+            Top-1000: <b>${(rankBuckets.top1000/n*100).toFixed(1)}%</b> &nbsp;
+            Resto: <b>${(rankBuckets.resto/n*100).toFixed(1)}%</b>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:#666;font-style:italic;">
+        ${parseFloat(pct10) >= 20
+          ? `✓ El ranking tiene señal real — en ${pct10}% de los casos el mejor combo está en las primeras 10 posiciones.`
+          : parseFloat(pct10) >= 10
+          ? `△ El ranking tiene señal débil — mejorar el scoring aumentaría la concentración de aciertos en el top-10.`
+          : `✗ El ranking no está aportando — el mejor combo aparece distribuido aleatoriamente. El scoring necesita revisión.`
+        }
+      </div>
+    </div>`;
+  }
 
   // ── DESGLOSE DE FILAS DE ALTO ACIERTO ──────────────────────────────────────
   const highHit = rowResults.filter(r => r.bestHits >= 5).sort((a,b) => b.bestHits - a.bestHits);

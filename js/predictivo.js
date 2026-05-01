@@ -98,7 +98,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F3</div><div class="col-acc-val" id="pred-acc3">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F4</div><div class="col-acc-val" id="pred-acc4">-</div></div>
         </div>
-        <div id="pred-ranking" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(0)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(0)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -125,7 +124,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F7</div><div class="col-acc-val" id="pred-acc3b">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F8</div><div class="col-acc-val" id="pred-acc4b">-</div></div>
         </div>
-        <div id="pred-ranking2" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(1)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(1)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -152,7 +150,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F11</div><div class="col-acc-val" id="pred-acc3c">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F12</div><div class="col-acc-val" id="pred-acc4c">-</div></div>
         </div>
-        <div id="pred-ranking3" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(2)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(2)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -179,7 +176,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F15</div><div class="col-acc-val" id="pred-acc3d">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F16</div><div class="col-acc-val" id="pred-acc4d">-</div></div>
         </div>
-        <div id="pred-ranking4" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(3)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(3)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -206,7 +202,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F19</div><div class="col-acc-val" id="pred-acc3e">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F20</div><div class="col-acc-val" id="pred-acc4e">-</div></div>
         </div>
-        <div id="pred-ranking5" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(4)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(4)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -233,7 +228,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F23</div><div class="col-acc-val" id="pred-acc3f">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F24</div><div class="col-acc-val" id="pred-acc4f">-</div></div>
         </div>
-        <div id="pred-ranking6" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(5)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(5)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -260,7 +254,6 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F27</div><div class="col-acc-val" id="pred-acc3g">-</div></div>
           <div class="col-acc-block"><div class="col-acc-label">F28</div><div class="col-acc-val" id="pred-acc4g">-</div></div>
         </div>
-        <div id="pred-ranking7" style="font-size:10px;margin-top:6px;border-top:1px solid #eee;padding-top:5px;">Esperando...</div>
         <div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="predExportPred(6)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
           <button onclick="predExportTabla(6)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
@@ -444,18 +437,7 @@ function predRenderSummary(suf, num, totalPreds, hitCounts, totalHitsSum, colCor
     if(el) { const p=(colCorrect[c]/totalPreds*100); const col=predPctColor(p); el.textContent=p.toFixed(1)+'%'; el.style.background=col.bg; el.style.color=col.color; }
   }
 
-  // Inferencia
-  const stats = cols.map((col, idx) => {
-    const total=col.length, aC=col.filter(x=>x==='A').length, bC=total-aC;
-    let cA=1,cB=1; for(const v of col) { if(v==='A'){cA=1;cB++;}else{cB=1;cA++;} }
-    const fA=(cB*10)+(bC/total*100), fB=(cA*10)+(aC/total*100);
-    return {col:idx+1, tendencia:fA>fB?'A':'B', score:Math.max(fA,fB), color:fA>fB?'#d1e7dd':'#f8d7da'};
-  }).sort((a,b)=>b.score-a.score);
-  const rkId = suf==='' ? 'pred-ranking' : 'pred-ranking'+num;
-  const rkEl = document.getElementById(rkId);
-  if(rkEl) rkEl.innerHTML = stats.map(s =>
-    `<div class="score-bar" style="background:${s.color};padding:4px 8px;border-radius:4px;margin:2px 0;display:flex;justify-content:space-between;font-size:11px;"><span><strong>C${s.col}</strong>: ${s.tendencia}</span><span>${s.score.toFixed(0)}</span></div>`
-  ).join('');
+  // Inferencia eliminada del visual (datos disponibles en análisis de combinaciones)
 }
 
 // ── Store data for export ─────────────────────────────
@@ -637,17 +619,17 @@ function getSumBounds(hist) {
 }
 
 // Filter numbers by historical frequency
-// Threshold = mean - 1 sigma of observed frequencies (per sequence)
-// Adapts automatically to each sequence's distribution
+// Threshold = Q1 (percentil 25) de las frecuencias observadas
+// Q1 es resistente a outliers y corta el cuartil inferior de forma robusta
 function getValidNums(si, candidates, totalRows) {
   if(totalRows < 30) return candidates;
   const freq = numFreq[si] || {};
-  // Only consider numbers that appeared at least once
-  const allFreqs = Object.values(freq).filter(f => f > 0);
-  if(allFreqs.length < 3) return candidates;
-  const mean = allFreqs.reduce((a,b)=>a+b,0) / allFreqs.length;
-  const sigma = Math.sqrt(allFreqs.reduce((s,f)=>s+Math.pow(f-mean,2),0) / allFreqs.length);
-  const threshold = Math.max(1, mean - sigma); // mean - 1σ, minimum 1
+  // Solo frecuencias de números que aparecieron al menos una vez
+  const allFreqs = Object.values(freq).filter(f => f > 0).sort((a,b)=>a-b);
+  if(allFreqs.length < 4) return candidates;
+  // Q1 = percentil 25
+  const q1 = allFreqs[Math.floor(allFreqs.length * 0.25)];
+  const threshold = Math.max(1, q1);
   return candidates.filter(n => (freq[n]||0) >= threshold);
 }
 

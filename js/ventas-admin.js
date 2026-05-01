@@ -214,7 +214,8 @@
         '  white-space:pre-wrap !important; max-width:260px !important;' +
         '  box-shadow:0 4px 14px rgba(0,0,0,.55) !important;' +
         '  pointer-events:none !important; display:none;' +
-        '}';
+        '}' +
+        '.vadm-emp-cell { color:#ffffff !important; }';
       document.head.appendChild(styleEl);
     }
     if (!document.getElementById('vadm-tip-global')) {
@@ -422,18 +423,8 @@
       );
       titleText.textContent = label.toUpperCase();
 
-      // Barra proporcional
-      var barWrap = document.createElement('div');
-      barWrap.setAttribute('style', 'flex:1;height:4px;background:#e0e0e0;border-radius:2px;overflow:hidden;min-width:30px;');
-      var barFill = document.createElement('div');
-      barFill.setAttribute('style',
-        'height:100%;border-radius:2px;width:' + barPct.toFixed(1) + '%;background:#4a7c59;'
-      );
-      barWrap.appendChild(barFill);
-
       titleRow.appendChild(rankBadge);
       titleRow.appendChild(titleText);
-      titleRow.appendChild(barWrap);
 
       // Badge % comparativo de la tienda
       if (prevSub > 0) {
@@ -460,9 +451,9 @@
         'font-size:.82rem;border-radius:10px;overflow:hidden;border:1px solid #e6e6e6;'
       );
 
-      // Colgroup: Data | Numerário | MB | Visa | Voucher | Total | Obs | Colaboradora
+      // Colgroup: Data | Num.# | MB | Visa | Voucher | Total | Obs | E*
       var cg = document.createElement('colgroup');
-      [88, 90, 90, 78, 78, 90, 36, 180].forEach(function (w) {
+      [88, 80, 80, 70, 70, 82, 36, 52].forEach(function (w) {
         var col = document.createElement('col');
         col.style.width = w + 'px';
         cg.appendChild(col);
@@ -472,14 +463,13 @@
       // Cabecera
       var thead = document.createElement('thead');
       var hRow  = document.createElement('tr');
-      ['Data','Numerário','MB','Visa','Voucher','Total','Obs.','Colaboradora'].forEach(function (h, i) {
+      ['Data','Num.#','MB','Visa','Voucher','Total','Obs.','E*'].forEach(function (h, i) {
         var th = document.createElement('th');
         th.textContent = h;
-        var align = i === 6 ? 'center' : (i === 0 || i >= 7 ? 'left' : 'right');
         th.setAttribute('style',
           'padding:5px 8px;font-size:.62rem;font-weight:700;text-transform:uppercase;' +
           'letter-spacing:.05em;border-bottom:1.5px solid #e0e0e0;white-space:nowrap;' +
-          'text-align:' + align + ';'
+          'text-align:center;'
         );
         hRow.appendChild(th);
       });
@@ -501,28 +491,34 @@
             'style="color:#c8a832;font-weight:900;font-size:1rem;line-height:1;cursor:help;">✱</span>'
           : '<span style="opacity:.35;">—</span>';
 
+        // Celda colaboradora con lógica de asterisco tooltip
+        var empText = (r.empleada || '').trim();
+        var hasEmp  = empText && empText !== '—';
+        var empHtml = hasEmp
+          ? '<span class="vadm-obs-star" data-obs="' + empText.replace(/"/g, '&quot;') + '" ' +
+            'style="color:#ffffff !important;font-weight:900;font-size:1rem;line-height:1;cursor:help;">✱</span>'
+          : '<span style="opacity:.35;color:#ffffff !important;">—</span>';
+
         var cells = [
-          { v: _fmtDate(r.fecha),       right: false },
-          { v: _fmtEur(r.numerario),    right: true  },
-          { v: _fmtEur(r.mb),           right: true  },
-          { v: _fmtEur(r.visa),         right: true  },
-          { v: _fmtEur(r.voucher),      right: true  },
-          { v: _fmtEur(r.total),        right: true,  bold: true },
-          { v: obsHtml,                 center: true },
-          { v: _esc(r.empleada || '—'), right: false }
+          { v: _fmtDate(r.fecha),    center: true },
+          { v: _fmtEur(r.numerario), center: true },
+          { v: _fmtEur(r.mb),        center: true },
+          { v: _fmtEur(r.visa),      center: true },
+          { v: _fmtEur(r.voucher),   center: true },
+          { v: _fmtEur(r.total),     center: true, bold: true },
+          { v: obsHtml,              center: true },
+          { v: empHtml,              center: true, emp: true  }
         ];
         cells.forEach(function (c, ci) {
           var td = document.createElement('td');
           td.innerHTML = c.v;
-          var align = c.center ? 'center' : (c.right ? 'right' : 'left');
-          var ellipsis = ci === 7 ? 'overflow:hidden;text-overflow:ellipsis;' : '';
           td.setAttribute('style',
             'padding:5px 8px;border-bottom:1px solid #f0f0f0;vertical-align:middle;' +
-            'white-space:nowrap;' + ellipsis +
-            'text-align:' + align + ';' +
+            'white-space:nowrap;text-align:center;' +
             'font-weight:' + (c.bold ? '800' : 'normal') + ';' +
             'font-size:.75rem;font-variant-numeric:tabular-nums;'
           );
+          if (c.emp) td.style.setProperty('color', '#ffffff', 'important');
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -534,13 +530,13 @@
         var tfoot   = document.createElement('tfoot');
         var trSub   = document.createElement('tr');
         var subCells = [
-          { v: 'SUBTOTAL',             right: false },
-          { v: _fmtEur(sub.numerario), right: true  },
-          { v: _fmtEur(sub.mb),        right: true  },
-          { v: _fmtEur(sub.visa),      right: true  },
-          { v: _fmtEur(sub.voucher),   right: true  },
-          { v: _fmtEur(sub.total),     right: true,  bold: true },
-          { v: '',                     right: false, colspan: 2 }
+          { v: 'SUBTOTAL',             center: false },
+          { v: _fmtEur(sub.numerario), center: true  },
+          { v: _fmtEur(sub.mb),        center: true  },
+          { v: _fmtEur(sub.visa),      center: true  },
+          { v: _fmtEur(sub.voucher),   center: true  },
+          { v: _fmtEur(sub.total),     center: true,  bold: true },
+          { v: '',                     center: false, colspan: 2 }
         ];
         subCells.forEach(function (c) {
           var td = document.createElement('td');
@@ -550,7 +546,7 @@
             'padding:4px 8px;font-size:.68rem;' +
             'font-weight:' + (c.bold ? '800' : '600') + ';' +
             'border-top:2px solid #3a5a45;white-space:nowrap;' +
-            'text-align:' + (c.right ? 'right' : 'left') + ';font-variant-numeric:tabular-nums;'
+            'text-align:' + (c.center ? 'center' : 'left') + ';font-variant-numeric:tabular-nums;'
           );
           td.style.setProperty('background', '#1e2a22', 'important');
           td.style.setProperty('color',      '#b8e8c8', 'important');

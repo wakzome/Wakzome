@@ -52,8 +52,9 @@ const overlayHTML = `
     <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:0;">
       <!-- Input grid -->
       <div style="display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;">
-        <div style="display:flex;align-items:center;gap:10px;justify-content:center;">
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;">
           <button onclick="predConvertir()" id="pred-btn-conv" style="padding:6px 16px;border:1px solid #aaa;border-radius:4px;background:#f2f2f2;cursor:pointer;font-size:13px;">Convertir</button>
+          <button onclick="predValidar()" id="pred-btn-val" style="display:none;padding:6px 16px;border:1px solid #90caf9;border-radius:4px;background:#e3f2fd;cursor:pointer;font-size:13px;color:#0d47a1;">Validar Combinaciones</button>
           <span style="font-size:11px;color:#888;">Pega desde Excel directamente en la tabla (Ctrl+V)</span>
         </div>
         <div style="overflow:auto;max-height:260px;border:1px solid #ccc;border-radius:6px;display:inline-block;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
@@ -539,6 +540,8 @@ function _predWork() {
 
   const btn2 = document.getElementById('pred-btn-conv');
   if(btn2) { btn2.disabled=false; btn2.textContent='Convertir'; }
+  const btnVal = document.getElementById('pred-btn-val');
+  if(btnVal) btnVal.style.display='';
 }
 
 // ── Export functions ──────────────────────────────────
@@ -822,6 +825,274 @@ function renderCombinaciones(result, totalRows) {
   panel.innerHTML = html;
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VALIDACIÓN RETROSPECTIVA DE COMBINACIONES
+// Para cada fila i: predice combinaciones con datos hasta i,
+// compara con resultado real i+1, cuenta aciertos por número
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.predValidar = function() {
+  const btn = document.getElementById('pred-btn-val');
+  if(btn) { btn.disabled=true; btn.textContent='Validando...'; }
+  setTimeout(_predValidarWork, 50);
+};
+
+function _predValidarWork() {
+  const minN = Math.min(...allSeqsData.filter(s=>s&&s.n>1).map(s=>s.n));
+  if(minN < 10) {
+    alert('Datos insuficientes para validar.');
+    const btn = document.getElementById('pred-btn-val');
+    if(btn) { btn.disabled=false; btn.textContent='Validar Combinaciones'; }
+    return;
+  }
+
+  // Results accumulator
+  // hits[k] = number of rows where best combination had k matching numbers
+  const hitsCount = {}; // k -> count
+  const rowResults = []; // {row, real, bestHits, totalCombos}
+
+  // We need to rebuild memories incrementally for each row
+  // This is expensive but correct — same as training but stopped at each i
+
+  // Reset all memories
+  const tempSeqMem = Array.from({length:7}, (_,si) => {
+    initSeqMem(si);
+    const m = {
+      predHist:    [[],[],[],[]],
+      contextMap:  {},
+      codeMemory:  [{},{},{},{}],
+      codeRegistry: new Set(),
+      transMemory: {},
+      vertMemory:  [{},{},{},{}],
+      ctrMemory:   [{},{},{},{}],
+      ayMemory:    [{},{},{},{}],
+    };
+    return m;
+  });
+
+  // Reset block memories and freq counts
+  const tmpNumFreq    = Array.from({length:7}, () => ({}));
+  const tmpSumsBlk5  = [];
+  const tmpSumsBlk2  = [];
+  const tmpSumsGlobal= [];
+
+  // Min rows needed before we start validating (need some history)
+  const START_FROM = 50;
+
+  for(let i = START_FROM; i < minN - 1; i++) {
+    // ── At row i: generate combo prediction for row i+1 ──────────────────
+
+    // Swap in memories for each seq, get column probs
+    const colProbs = allSeqsData.map((seq, si) => {
+      if(!seq || seq.n <= i) return null;
+      // Temporarily set globals to this seq's memories at row i
+      predHist    = tempSeqMem[si].predHist;
+      contextMap  = tempSeqMem[si].contextMap;
+      codeMemory  = tempSeqMem[si].codeMemory;
+      codeRegistry= tempSeqMem[si].codeRegistry;
+      transMemory = tempSeqMem[si].transMemory;
+      vertMemory  = tempSeqMem[si].vertMemory;
+      ctrMemory   = tempSeqMem[si].ctrMemory;
+      ayMemory    = tempSeqMem[si].ayMemory;
+      return predecirFilaConProbs(seq.cols, i, null);
+    });
+
+    // Restore last seq's globals (needed for getValidNums to use numFreq)
+    swapIn(6); swapOut(6);
+
+    // Get valid combos using current freq counts
+    const top2s = colProbs.map((cp, si) => {
+      if(!cp) return null;
+      const top2 = getTop2Codes(cp);
+      const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
+      const raw  = new Set();
+      top2.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
+      // Filter by freq (Q1 of current tmpNumFreq)
+      const freq = tmpNumFreq[si] || {};
+      const allFreqs = Object.values(freq).filter(f=>f>0).sort((a,b)=>a-b);
+      let threshold = 1;
+      if(allFreqs.length >= 4) {
+        threshold = Math.max(1, allFreqs[Math.floor(allFreqs.length * 0.25)]);
+      }
+      return [...raw].filter(n => (freq[n]||0) >= threshold).sort((a,b)=>a-b);
+    });
+
+    // Build combos (cartesian) — use current sum bounds
+    const boundsB5 = tmpSumsBlk5.length>=30 ? {
+      lo: [...tmpSumsBlk5].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk5.length*0.05)],
+      hi: [...tmpSumsBlk5].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk5.length*0.95)]
+    } : null;
+    const boundsB2 = tmpSumsBlk2.length>=30 ? {
+      lo: [...tmpSumsBlk2].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk2.length*0.05)],
+      hi: [...tmpSumsBlk2].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk2.length*0.95)]
+    } : null;
+    const boundsGl = tmpSumsGlobal.length>=30 ? {
+      lo: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.05)],
+      hi: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.95)]
+    } : null;
+
+    // Cartesian blk5
+    const blk5 = [], blk2 = [];
+    function cart5(si, chosen) {
+      if(si===5){const s=[...chosen].sort((a,b)=>a-b);const sum=s.reduce((a,b)=>a+b,0);if(!boundsB5||(sum>=boundsB5.lo&&sum<=boundsB5.hi))blk5.push({nums:s,sum});return;}
+      const cands=top2s[si]||[];
+      for(const n of cands){if(!chosen.has(n)){chosen.add(n);cart5(si+1,chosen);chosen.delete(n);}}
+    }
+    function cart2(si, chosen) {
+      if(si===2){const s=[...chosen].sort((a,b)=>a-b);const sum=s.reduce((a,b)=>a+b,0);if(!boundsB2||(sum>=boundsB2.lo&&sum<=boundsB2.hi))blk2.push({nums:s,sum});return;}
+      const cands=top2s[5+si]||[];
+      for(const n of cands){if(!chosen.has(n)){chosen.add(n);cart2(si+1,chosen);chosen.delete(n);}}
+    }
+    cart5(0, new Set());
+    cart2(0, new Set());
+
+    // Full combos with global filter
+    const combos = [];
+    for(const b5 of blk5){for(const b2 of blk2){const tot=b5.sum+b2.sum;if(!boundsGl||(tot>=boundsGl.lo&&tot<=boundsGl.hi))combos.push([...b5.nums,...b2.nums]);}}
+
+    // Real result for row i+1
+    const real = allSeqsData.map(seq => seq&&seq.filas[i+1]?seq.filas[i+1].num:0);
+
+    // Count max hits across all combos
+    let bestHits = 0;
+    for(const combo of combos) {
+      let hits = 0;
+      for(const n of combo) { if(real.includes(n)) hits++; }
+      if(hits > bestHits) bestHits = hits;
+    }
+
+    if(combos.length > 0) {
+      hitsCount[bestHits] = (hitsCount[bestHits]||0) + 1;
+      rowResults.push({row:i+1, real, bestHits, totalCombos:combos.length});
+    }
+
+    // ── Update memories with row i data ──────────────────────────────────
+    for(let si=0; si<7; si++) {
+      const seq = allSeqsData[si];
+      if(!seq || seq.n <= i) continue;
+      // Swap in this seq's temp memory
+      predHist    = tempSeqMem[si].predHist;
+      contextMap  = tempSeqMem[si].contextMap;
+      codeMemory  = tempSeqMem[si].codeMemory;
+      codeRegistry= tempSeqMem[si].codeRegistry;
+      transMemory = tempSeqMem[si].transMemory;
+      vertMemory  = tempSeqMem[si].vertMemory;
+      ctrMemory   = tempSeqMem[si].ctrMemory;
+      ayMemory    = tempSeqMem[si].ayMemory;
+
+      const cols = seq.cols;
+      const real_si = seq.filas[i].fila;
+      const subC_arr = cols.map(col => col.slice(0,i));
+      const ctrSnap  = cols.map(col => {let cA=1,cB=1;for(let k=0;k<i;k++){if(col[k]==='A'){cA=1;cB++;}else{cB=1;cA++;}}return{A:cA,B:cB};});
+
+      for(let c=0;c<4;c++){
+        const subC=subC_arr[c];
+        const v30=subC.slice(-Math.min(30,subC.length)),v5=subC.slice(-Math.min(5,subC.length)),v8=subC.slice(-Math.min(8,subC.length));
+        const allP=[metodo1(v30),metodo2(v5),metodo3(v8),metodo4(subC)];
+        const ctxKey=buildContextKey(c,subC,cols,i);
+        predHist[c].push({preds:allP,real:real_si[c]});
+        updateContextMap(c,ctxKey,allP,real_si[c]);
+        updateCodeMemory(c,cols,i,real_si[c]);
+        if(c===0){registrarCodigo(cols,i);updateTransMemory(cols,i);}
+        updateVertMemory(cols,i);
+        ctrMemory[c]=ctrMemory[c]||{};
+        const bA=Math.min(ctrSnap[c].A,6),bB=Math.min(ctrSnap[c].B,6);
+        const ck=`${bA}_${bB}`;
+        if(!ctrMemory[c][ck])ctrMemory[c][ck]={A:0,B:0};
+        ctrMemory[c][ck][real_si[c]]++;
+      }
+      let nA=0,n1=0;
+      for(let c=0;c<4;c++){if(cols[c][i]==='A')nA++;if(i>=1&&cols[c][i]===cols[c][i-1])n1++;}
+      if(i+1<seq.n) updateAyMemory(cols,i+1,nA,n1);
+
+      // Save back
+      tempSeqMem[si].predHist    = predHist;
+      tempSeqMem[si].contextMap  = contextMap;
+      tempSeqMem[si].codeMemory  = codeMemory;
+      tempSeqMem[si].codeRegistry= codeRegistry;
+      tempSeqMem[si].transMemory = transMemory;
+      tempSeqMem[si].vertMemory  = vertMemory;
+      tempSeqMem[si].ctrMemory   = ctrMemory;
+      tempSeqMem[si].ayMemory    = ayMemory;
+
+      // Update freq counts
+      const num_si = seq.filas[i].num;
+      if(num_si>0) tmpNumFreq[si][num_si] = (tmpNumFreq[si][num_si]||0)+1;
+    }
+
+    // Update sum history
+    const rowNums = allSeqsData.map(s=>s&&s.filas[i]?s.filas[i].num:0);
+    if(rowNums.every(n=>n>0)){
+      const s5=rowNums.slice(0,5).reduce((a,b)=>a+b,0);
+      const s2=rowNums.slice(5,7).reduce((a,b)=>a+b,0);
+      tmpSumsBlk5.push(s5); tmpSumsBlk2.push(s2); tmpSumsGlobal.push(s5+s2);
+    }
+  }
+
+  // ── Render results ────────────────────────────────────────────────────────
+  renderValidacion(hitsCount, rowResults, minN - START_FROM - 1);
+
+  const btn = document.getElementById('pred-btn-val');
+  if(btn) { btn.disabled=false; btn.textContent='Validar Combinaciones'; }
+}
+
+function renderValidacion(hitsCount, rowResults, totalRows) {
+  let panel = document.getElementById('pred-val-panel');
+  if(!panel) {
+    panel = document.createElement('div');
+    panel.id = 'pred-val-panel';
+    panel.style.cssText = 'margin-top:16px;border:1px solid #ddd;border-radius:10px;padding:14px;background:#fff;';
+    const content = document.getElementById('pred-content');
+    if(content) content.appendChild(panel);
+  }
+
+  const maxHits = Math.max(...Object.keys(hitsCount).map(Number));
+  const barColors = {7:'#0a3622',6:'#1b5e20',5:'#388e3c',4:'#81c784',3:'#fff3cd',2:'#f8d7da',1:'#f0d0d0',0:'#eee'};
+
+  let html = `<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">
+    Validación Retrospectiva <span style="font-size:11px;font-weight:400;color:#888;">(${totalRows} filas evaluadas)</span>
+  </h3>`;
+
+  // Summary table
+  html += '<table style="border-collapse:collapse;font-size:11px;margin-bottom:12px;width:100%;">';
+  html += '<thead><tr style="background:#f8f9fa;"><th style="padding:4px 10px;border:1px solid #dee2e6;text-align:center;">Aciertos</th><th style="padding:4px 10px;border:1px solid #dee2e6;text-align:center;">Filas</th><th style="padding:4px 10px;border:1px solid #dee2e6;text-align:center;">%</th><th style="padding:4px 10px;border:1px solid #dee2e6;">Distribución</th></tr></thead><tbody>';
+
+  for(let k=7; k>=0; k--) {
+    const cnt = hitsCount[k]||0;
+    const pct = totalRows>0 ? (cnt/totalRows*100).toFixed(1) : '0.0';
+    const barW = totalRows>0 ? (cnt/totalRows*100).toFixed(1) : 0;
+    const bg = barColors[k]||'#eee';
+    const textColor = k>=5?'#fff':'#333';
+    html += `<tr>
+      <td style="padding:4px 10px;border:1px solid #dee2e6;text-align:center;font-weight:700;background:${bg};color:${textColor};">${k}/7</td>
+      <td style="padding:4px 10px;border:1px solid #dee2e6;text-align:center;">${cnt}</td>
+      <td style="padding:4px 10px;border:1px solid #dee2e6;text-align:center;">${pct}%</td>
+      <td style="padding:4px 10px;border:1px solid #dee2e6;">
+        <div style="background:#eee;border-radius:3px;height:14px;width:100%;">
+          <div style="background:${bg};height:100%;width:${barW}%;border-radius:3px;"></div>
+        </div>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  // Best rows (most hits)
+  const best = [...rowResults].sort((a,b)=>b.bestHits-a.bestHits).slice(0,10);
+  html += `<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:5px;">Mejores predicciones:</div>`;
+  html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+  best.forEach(({row, real, bestHits, totalCombos}) => {
+    const bg = barColors[bestHits]||'#eee';
+    const tc = bestHits>=5?'#fff':'#333';
+    html += `<div style="background:${bg};color:${tc};border-radius:5px;padding:4px 8px;font-size:10px;">
+      <b>Fila ${row}</b>: ${bestHits}/7 aciertos
+      <span style="opacity:0.7;">(${totalCombos} combos)</span>
+    </div>`;
+  });
+  html += '</div>';
+
+  panel.innerHTML = html;
+}
 
 })();
 

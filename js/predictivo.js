@@ -618,7 +618,7 @@ function getPercentile(arr, p) {
 
 function getSumBounds(hist) {
   if(hist.length < 30) return null;
-  return { lo: getPercentile(hist, 0.05), hi: getPercentile(hist, 0.95) };
+  return { lo: getPercentile(hist, 0.03), hi: getPercentile(hist, 0.97) };
 }
 
 // Filter numbers by historical frequency
@@ -920,16 +920,16 @@ function _predValidarWork() {
 
     // Build combos (cartesian) — use current sum bounds
     const boundsB5 = tmpSumsBlk5.length>=30 ? {
-      lo: [...tmpSumsBlk5].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk5.length*0.05)],
-      hi: [...tmpSumsBlk5].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk5.length*0.95)]
+      lo: [...tmpSumsBlk5].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk5.length*0.03)],
+      hi: [...tmpSumsBlk5].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk5.length*0.97)]
     } : null;
     const boundsB2 = tmpSumsBlk2.length>=30 ? {
-      lo: [...tmpSumsBlk2].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk2.length*0.05)],
-      hi: [...tmpSumsBlk2].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk2.length*0.95)]
+      lo: [...tmpSumsBlk2].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk2.length*0.03)],
+      hi: [...tmpSumsBlk2].sort((a,b)=>a-b)[Math.floor(tmpSumsBlk2.length*0.97)]
     } : null;
     const boundsGl = tmpSumsGlobal.length>=30 ? {
-      lo: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.05)],
-      hi: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.95)]
+      lo: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.03)],
+      hi: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.97)]
     } : null;
 
     // Cartesian blk5
@@ -1051,6 +1051,7 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
 
   const maxHits = Math.max(...Object.keys(hitsCount).map(Number));
   const barColors = {7:'#0a3622',6:'#1b5e20',5:'#388e3c',4:'#81c784',3:'#fff3cd',2:'#f8d7da',1:'#f0d0d0',0:'#eee'};
+  const textColors = {7:'#fff',6:'#fff',5:'#fff',4:'#1b3a1b',3:'#664d03',2:'#721c24',1:'#721c24',0:'#666'};
 
   let html = `<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">
     Validación Retrospectiva <span style="font-size:11px;font-weight:400;color:#888;">(${totalRows} filas evaluadas)</span>
@@ -1085,7 +1086,7 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
   html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
   best.forEach(({row, real, bestHits, totalCombos}) => {
     const bg = barColors[bestHits]||'#eee';
-    const tc = bestHits>=5?'#fff':'#333';
+    const tc = textColors[bestHits]||'#333';
     html += `<div style="background:${bg};color:${tc};border-radius:5px;padding:4px 8px;font-size:10px;">
       <b>Fila ${row}</b>: ${bestHits}/7 aciertos
       <span style="opacity:0.7;">(${totalCombos} combos)</span>

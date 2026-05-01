@@ -215,7 +215,16 @@
         '  box-shadow:0 4px 14px rgba(0,0,0,.55) !important;' +
         '  pointer-events:none !important; display:none;' +
         '}' +
-        '.vadm-emp-cell { color:#ffffff !important; }';
+        '.vadm-emp-cell { color:#ffffff !important; }' +
+        '.vadm-table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; }' +
+        '@media (max-width:600px) {' +
+        '  .vadm-table { font-size:.65rem !important; }' +
+        '  .vadm-table th, .vadm-table td {' +
+        '    padding:4px 5px !important;' +
+        '    font-size:.65rem !important;' +
+        '    white-space:nowrap !important;' +
+        '  }' +
+        '}';
       document.head.appendChild(styleEl);
     }
     if (!document.getElementById('vadm-tip-global')) {
@@ -432,11 +441,13 @@
 
       // ── Tabla ──
       var wrap = document.createElement('div');
+      wrap.className = 'vadm-table-wrap';
       wrap.setAttribute('style', 'overflow-x:auto;-webkit-overflow-scrolling:touch;');
 
       var table = document.createElement('table');
+      table.className = 'vadm-table';
       table.setAttribute('style',
-        'width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;' +
+        'width:100%;table-layout:auto;border-collapse:separate;border-spacing:0;' +
         'font-size:.82rem;border-radius:10px;overflow:hidden;border:1px solid #e6e6e6;'
       );
 

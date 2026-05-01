@@ -932,33 +932,70 @@ function _predValidarWork() {
       hi: [...tmpSumsGlobal].sort((a,b)=>a-b)[Math.floor(tmpSumsGlobal.length*0.97)]
     } : null;
 
-    // Cartesian blk5
+    // Cartesian blk5 — store chosen number per sequence position
     const blk5 = [], blk2 = [];
-    function cart5(si, chosen) {
-      if(si===5){const s=[...chosen].sort((a,b)=>a-b);const sum=s.reduce((a,b)=>a+b,0);if(!boundsB5||(sum>=boundsB5.lo&&sum<=boundsB5.hi))blk5.push({nums:s,sum});return;}
+    function cart5(si, chosen, bySeq) {
+      if(si===5){
+        const s=[...chosen].sort((a,b)=>a-b);
+        const sum=s.reduce((a,b)=>a+b,0);
+        if(!boundsB5||(sum>=boundsB5.lo&&sum<=boundsB5.hi))
+          blk5.push({nums:s, sum, bySeq:[...bySeq]});
+        return;
+      }
       const cands=top2s[si]||[];
-      for(const n of cands){if(!chosen.has(n)){chosen.add(n);cart5(si+1,chosen);chosen.delete(n);}}
+      for(const n of cands){
+        if(!chosen.has(n)){
+          chosen.add(n); bySeq.push(n);
+          cart5(si+1,chosen,bySeq);
+          chosen.delete(n); bySeq.pop();
+        }
+      }
     }
-    function cart2(si, chosen) {
-      if(si===2){const s=[...chosen].sort((a,b)=>a-b);const sum=s.reduce((a,b)=>a+b,0);if(!boundsB2||(sum>=boundsB2.lo&&sum<=boundsB2.hi))blk2.push({nums:s,sum});return;}
+    function cart2(si, chosen, bySeq) {
+      if(si===2){
+        const s=[...chosen].sort((a,b)=>a-b);
+        const sum=s.reduce((a,b)=>a+b,0);
+        if(!boundsB2||(sum>=boundsB2.lo&&sum<=boundsB2.hi))
+          blk2.push({nums:s, sum, bySeq:[...bySeq]});
+        return;
+      }
       const cands=top2s[5+si]||[];
-      for(const n of cands){if(!chosen.has(n)){chosen.add(n);cart2(si+1,chosen);chosen.delete(n);}}
+      for(const n of cands){
+        if(!chosen.has(n)){
+          chosen.add(n); bySeq.push(n);
+          cart2(si+1,chosen,bySeq);
+          chosen.delete(n); bySeq.pop();
+        }
+      }
     }
-    cart5(0, new Set());
-    cart2(0, new Set());
+    cart5(0, new Set(), []);
+    cart2(0, new Set(), []);
 
     // Full combos with global filter
+    // Each combo stores bySeq: [n_s1, n_s2, n_s3, n_s4, n_s5, n_s6, n_s7]
+    // so we can compare position-by-position with real result
     const combos = [];
-    for(const b5 of blk5){for(const b2 of blk2){const tot=b5.sum+b2.sum;if(!boundsGl||(tot>=boundsGl.lo&&tot<=boundsGl.hi))combos.push([...b5.nums,...b2.nums]);}}
+    for(const b5 of blk5){
+      for(const b2 of blk2){
+        const tot=b5.sum+b2.sum;
+        if(!boundsGl||(tot>=boundsGl.lo&&tot<=boundsGl.hi))
+          combos.push([...b5.bySeq, ...b2.bySeq]); // ordered by sequence
+      }
+    }
 
-    // Real result for row i+1
+    // Real result for row i+1 — one number per sequence in order
     const real = allSeqsData.map(seq => seq&&seq.filas[i+1]?seq.filas[i+1].num:0);
 
-    // Count max hits across all combos
+    // Count hits: membership by block (not positional)
+    // Blk1: how many of combo[0..4] appear in real[0..4] (as a set)
+    // Blk2: how many of combo[5..6] appear in real[5..6] (as a set)
+    const realBlk5Set = new Set(real.slice(0,5).filter(n=>n>0));
+    const realBlk2Set = new Set(real.slice(5,7).filter(n=>n>0));
     let bestHits = 0;
     for(const combo of combos) {
-      let hits = 0;
-      for(const n of combo) { if(real.includes(n)) hits++; }
+      const hitsBlk5 = combo.slice(0,5).filter(n => realBlk5Set.has(n)).length;
+      const hitsBlk2 = combo.slice(5,7).filter(n => realBlk2Set.has(n)).length;
+      const hits = hitsBlk5 + hitsBlk2;
       if(hits > bestHits) bestHits = hits;
     }
 

@@ -1129,32 +1129,39 @@ function calcUmbralRentabilidad(hist, metodoIdx) {
 }
 
 function calcScores(histCol) {
-  const scores      = [0, 0, 0, 0];
-  const ventana     = histCol.slice(-SCORE_WIN);
-  const rachaFallos = [0, 0, 0, 0];
+  // Ensemble bayesiano con distribución Beta por método.
+  // Cada método mantiene Beta(α, β) sobre su tasa de acierto real.
+  // Prior α₀=β₀=1 (uniforme — sin sesgo inicial).
+  // Media posterior: α/(α+β) → peso real calibrado.
+  // Con pocas observaciones la media converge al prior (0.5) → penalización
+  // automática por incertidumbre, sin necesidad de umbrales ad-hoc.
 
-  const umbrales = histCol.length >= 20
-    ? [0,1,2,3].map(m => calcUmbralRentabilidad(histCol, m))
-    : [0.5, 0.5, 0.5, 0.5];
+  const ALPHA0 = 1, BETA0 = 1; // prior uniforme
+  const alpha = [ALPHA0, ALPHA0, ALPHA0, ALPHA0];
+  const beta  = [BETA0,  BETA0,  BETA0,  BETA0];
 
-  for(const entry of ventana) {
+  // Actualización secuencial sobre TODO el historial (no solo ventana)
+  // Para dar más peso a lo reciente, usamos descuento exponencial λ
+  // λ=0.98: observaciones antiguas decaen suavemente sin olvidarlas
+  const LAMBDA = 0.98;
+  const n = histCol.length;
+
+  for(let t = 0; t < n; t++) {
+    const entry = histCol[t];
+    // Peso temporal: más reciente = más peso
+    const w = Math.pow(LAMBDA, n - 1 - t);
     for(let m = 0; m < N_METHODS; m++) {
       if(entry.preds[m] === entry.real) {
-        scores[m]++;
-        rachaFallos[m] = 0;
+        alpha[m] += w; // acierto → incrementa α
       } else {
-        rachaFallos[m]++;
-        if(rachaFallos[m] >= 2) {
-          const { costo } = calcCostoOportunidad(histCol, m, rachaFallos[m]);
-          if(costo >= umbrales[m]) {
-            const exceso = costo - umbrales[m];
-            scores[m] = Math.max(0, scores[m] - (1 + exceso * 3));
-          }
-        }
+        beta[m]  += w; // fallo  → incrementa β
       }
     }
   }
-  return scores;
+
+  // Score = media posterior Beta(α,β) = α/(α+β)
+  // Escalamos a [0, SCORE_WIN] para compatibilidad con el resto del ensemble
+  return alpha.map((a, m) => (a / (a + beta[m])) * SCORE_WIN);
 }
 
 
@@ -2171,7 +2178,10 @@ function convertir7() {
   document.getElementById('btnExportTablas').style.display='';
 }
 
-// (convertir removed - conflicts with index.html)
+// Override the original convertir to use the 7-seq version
+function convertir() {
+  convertir7();
+}
 
 // ── EXPORTAR PREDICCIONES — 7 SECUENCIAS ──────────────────────────────────────
 function exportarExcel() {
@@ -2237,7 +2247,14 @@ function exportTablaSeq(si){
   XLSX.writeFile(wb,'tablas_S'+(si+1)+'.xlsx');
 }
 
-// (convertir removed - conflicts with index.html)
+// Override convertir to handle 7 sequences
+function convertir() {
+  // Show processing indicator immediately so browser doesn't freeze UI
+  const btn = document.querySelector('button[onclick="convertir()"]');
+  if(btn){ btn.disabled = true; btn.textContent = 'Calculando...'; }
+  // Yield to browser to render the button state, then start heavy work
+  setTimeout(_convertirWork, 30);
+}
 
 function _convertirWork() {
   // Parse all 7 sequences

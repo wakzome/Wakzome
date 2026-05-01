@@ -688,24 +688,25 @@ function analizarCombinaciones(allColProbs, totalRows) {
     const results = [];
     const nSeqs = seqCands.length;
 
-    function recurse(si, chosen) {
+    // Enforce strict ascending order: S1 < S2 < S3 < ... 
+    // Each sequence contributes exactly one number, must be > previous
+    function recurse(si, prevNum, chosen) {
       if(si === nSeqs) {
-        const sorted = [...chosen].sort((a,b)=>a-b);
-        const sum = sorted.reduce((a,b)=>a+b,0);
+        const sum = chosen.reduce((a,b)=>a+b,0);
         if(!bounds || (sum >= bounds.lo && sum <= bounds.hi)) {
-          results.push({nums: sorted, sum});
+          results.push({nums: [...chosen], sum});
         }
         return;
       }
       for(const n of seqCands[si]) {
-        if(n > 0 && n <= maxNum && !chosen.has(n)) {
-          chosen.add(n);
-          recurse(si+1, chosen);
-          chosen.delete(n);
+        if(n > prevNum && n <= maxNum) {
+          chosen.push(n);
+          recurse(si+1, n, chosen);
+          chosen.pop();
         }
       }
     }
-    recurse(0, new Set());
+    recurse(0, 0, []);
     return results.sort((a,b) => a.sum - b.sum);
   }
 
@@ -934,42 +935,40 @@ function _predValidarWork() {
 
     // Cartesian blk5 — store chosen number per sequence position
     const blk5 = [], blk2 = [];
-    function cart5(si, chosen, bySeq) {
+    function cart5(si, prevNum, bySeq) {
       if(si===5){
-        const s=[...chosen].sort((a,b)=>a-b);
-        const sum=s.reduce((a,b)=>a+b,0);
+        const sum=bySeq.reduce((a,b)=>a+b,0);
         if(!boundsB5||(sum>=boundsB5.lo&&sum<=boundsB5.hi))
-          blk5.push({nums:s, sum, bySeq:[...bySeq]});
+          blk5.push({nums:[...bySeq], sum, bySeq:[...bySeq]});
         return;
       }
       const cands=top2s[si]||[];
       for(const n of cands){
-        if(!chosen.has(n)){
-          chosen.add(n); bySeq.push(n);
-          cart5(si+1,chosen,bySeq);
-          chosen.delete(n); bySeq.pop();
+        if(n > prevNum){ // enforce strict ascending order across sequences
+          bySeq.push(n);
+          cart5(si+1, n, bySeq);
+          bySeq.pop();
         }
       }
     }
-    function cart2(si, chosen, bySeq) {
+    function cart2(si, prevNum, bySeq) {
       if(si===2){
-        const s=[...chosen].sort((a,b)=>a-b);
-        const sum=s.reduce((a,b)=>a+b,0);
+        const sum=bySeq.reduce((a,b)=>a+b,0);
         if(!boundsB2||(sum>=boundsB2.lo&&sum<=boundsB2.hi))
-          blk2.push({nums:s, sum, bySeq:[...bySeq]});
+          blk2.push({nums:[...bySeq], sum, bySeq:[...bySeq]});
         return;
       }
       const cands=top2s[5+si]||[];
       for(const n of cands){
-        if(!chosen.has(n)){
-          chosen.add(n); bySeq.push(n);
-          cart2(si+1,chosen,bySeq);
-          chosen.delete(n); bySeq.pop();
+        if(n > prevNum){
+          bySeq.push(n);
+          cart2(si+1, n, bySeq);
+          bySeq.pop();
         }
       }
     }
-    cart5(0, new Set(), []);
-    cart2(0, new Set(), []);
+    cart5(0, 0, []);
+    cart2(0, 0, []);
 
     // Full combos with global filter
     // Each combo stores bySeq: [n_s1, n_s2, n_s3, n_s4, n_s5, n_s6, n_s7]

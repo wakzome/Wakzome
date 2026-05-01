@@ -480,6 +480,7 @@ function _predWork() {
   const suffixes = ['','b','c','d','e','f','g'];
   const nums     = ['1','2','3','4','5','6','7'];
 
+  // Parse all 7 sequences
   for(let si=0;si<7;si++) {
     const nums_si = parsed[si];
     const cols=[[],[],[],[]]; const filas=[];
@@ -493,25 +494,40 @@ function _predWork() {
     predAllSeqs.push({cols,filas,n:filas.length});
   }
 
-  const seqs5=allSeqsData.slice(0,5).filter(s=>s.n>1);
-  const seqs2=allSeqsData.slice(5,7).filter(s=>s.n>1);
-  const seqs7=allSeqsData.filter(s=>s.n>1);
+  // Block references
+  const seqs5 = allSeqsData.slice(0,5).filter(s=>s.n>1);
+  const seqs2 = allSeqsData.slice(5,7).filter(s=>s.n>1);
+  const seqs7 = allSeqsData.filter(s=>s.n>1);
+  const nMin  = seqs7.length ? Math.min(...seqs7.map(s=>s.n)) : 0;
 
+  // Process each sequence with M1-M9 + block memories
   for(let si=0;si<7;si++) {
     const seq=allSeqsData[si]; if(!seq||seq.n<2) continue;
     const {cols,filas,n}=seq;
+
     swapIn(si);
     crossMemory={}; crossAY={}; crossVert=[]; crossSub={};
+
     const hitCounts=[0,0,0,0,0]; let totalHitsSum=0,totalPreds=0;
     const colCorrect=[0,0,0,0];
 
     for(let i=1;i<n;i++) {
-      const pred=predecirFila(cols,i,null);
-      const real=filas[i].fila;
+      // Build extraCtx for block signals
+      const extraCtx = {
+        seqs5: si<5  ? seqs5 : null,
+        seqs2: si>=5 ? seqs2 : null,
+        seqs7: seqs7,
+        _si: si
+      };
+
+      const pred = predecirFila(cols, i, null, extraCtx);
+      const real = filas[i].fila;
       let hits=0;
       for(let c=0;c<4;c++) { const ok=pred[c]===real[c]; if(ok){hits++;colCorrect[c]++;} }
       hitCounts[hits]++; totalHitsSum+=hits; totalPreds++;
       predDataAll[si].push({c1:pred[0]===real[0]?1:0,c2:pred[1]===real[1]?1:0,c3:pred[2]===real[2]?1:0,c4:pred[3]===real[3]?1:0,total:hits});
+
+      // Update independent memories
       const ctrSnap=cols.map(col=>{let cA=1,cB=1;for(let k=0;k<i;k++){if(col[k]==='A'){cA=1;cB++;}else{cB=1;cA++;}}return{A:cA,B:cB};});
       for(let c=0;c<4;c++) {
         const subC=cols[c].slice(0,i);
@@ -530,6 +546,31 @@ function _predWork() {
         ctrMemory[c][ck][real[c]]++;
       }
       if(i+1<n){let nA=0,n1=0;for(let c=0;c<4;c++){if(cols[c][i]==='A')nA++;if(i>=1&&cols[c][i]===cols[c][i-1])n1++;}updateAyMemory(cols,i+1,nA,n1);}
+
+      // Update block memories (only when all seqs have this row)
+      if(i+1<=nMin) {
+        // Bloque S1-S5
+        if(si<5 && seqs5.length>1) {
+          for(let c=0;c<4;c++) {
+            updateBlkAY(blk5_AY, si, c, seqs5, i+1, real[c]);
+            updateBlkPos(blk5_pos, si, c, seqs5, i+1, real[c]);
+          }
+        }
+        // Bloque S6-S7
+        if(si>=5 && seqs2.length>1) {
+          for(let c=0;c<4;c++) {
+            updateBlkAY(blk2_AY, si-5, c, seqs2, i+1, real[c]);
+            updateBlkPos(blk2_pos, si-5, c, seqs2, i+1, real[c]);
+          }
+        }
+        // Global S1-S7
+        if(seqs7.length>1) {
+          for(let c=0;c<4;c++) {
+            updateBlkAY(blk7_AY, si, c, seqs7, i+1, real[c]);
+            updateBlkPos(blk7_pos, si, c, seqs7, i+1, real[c]);
+          }
+        }
+      }
     }
     swapOut(si);
     if(totalPreds>0) predRenderSummary(suffixes[si], nums[si], totalPreds, hitCounts, totalHitsSum, colCorrect, cols);
@@ -1228,7 +1269,7 @@ function updateContextMap(ci, ctxKey, predsForRow, real) {
 
 // ── PREDICCIÓN PRINCIPAL ──────────────────────────────────────────────────────
 
-function predecirFila(columnas, upToIndex, colsOtra) {
+function predecirFila(columnas, upToIndex, colsOtra, extraCtx) {
   return columnas.map((col, ci) => {
     const subCol = col.slice(0, upToIndex);
     const total  = subCol.length;
@@ -1370,6 +1411,33 @@ function predecirFila(columnas, upToIndex, colsOtra) {
           const pesoM9 = (votoA + votoB) * 0.4 * confianzaM9 * expFactorM9;
           if(m9pred==='A') votoA += pesoM9; else votoB += pesoM9;
         }
+      }
+    }
+
+    // Block signals (extraCtx)
+    if(extraCtx) {
+      const _si = ci; // col index used as seq proxy — actual seq idx passed via closure
+      // Bloque 5 (S1-S5)
+      if(extraCtx.seqs5) {
+        const b5p = predictBlkAY(blk5_AY, extraCtx._si, ci, extraCtx.seqs5, upToIndex);
+        if(b5p!==null){const nA=calcNABlock(extraCtx.seqs5,upToIndex-1);const n1=calcN1Block(extraCtx.seqs5,upToIndex-1);const key=`${extraCtx._si}_${ci}_${nA}_${n1}`;const m=blk5_AY[key];if(m){const t=m.A+m.B;const conf=Math.abs(m.A-m.B)/t;const exp=Math.min(1,t/25);const pw=(votoA+votoB)*0.55*conf*exp;if(b5p==='A')votoA+=pw;else votoB+=pw;}}
+        const pc5p = predictBlkPos(blk5_pos, extraCtx._si, ci, extraCtx.seqs5, upToIndex);
+        if(pc5p!==null){const cod=extraCtx.seqs5.map(s=>s.cols[ci][upToIndex-1]||'?').join('');const key=`${extraCtx._si}_${ci}_${cod}`;const m=blk5_pos[key];if(m){const t=m.A+m.B;const conf=Math.abs(m.A-m.B)/t;const exp=Math.min(1,t/20);const pw=(votoA+votoB)*0.45*conf*exp;if(pc5p==='A')votoA+=pw;else votoB+=pw;}}
+      }
+      // Bloque 2 (S6-S7)
+      if(extraCtx.seqs2) {
+        const _si2 = extraCtx._si>=5?extraCtx._si-5:0;
+        const b2p = predictBlkAY(blk2_AY, _si2, ci, extraCtx.seqs2, upToIndex);
+        if(b2p!==null){const nA=calcNABlock(extraCtx.seqs2,upToIndex-1);const n1=calcN1Block(extraCtx.seqs2,upToIndex-1);const key=`${_si2}_${ci}_${nA}_${n1}`;const m=blk2_AY[key];if(m){const t=m.A+m.B;const conf=Math.abs(m.A-m.B)/t;const exp=Math.min(1,t/25);const pw=(votoA+votoB)*0.55*conf*exp;if(b2p==='A')votoA+=pw;else votoB+=pw;}}
+        const pc2p = predictBlkPos(blk2_pos, _si2, ci, extraCtx.seqs2, upToIndex);
+        if(pc2p!==null){const cod=extraCtx.seqs2.map(s=>s.cols[ci][upToIndex-1]||'?').join('');const key=`${_si2}_${ci}_${cod}`;const m=blk2_pos[key];if(m){const t=m.A+m.B;const conf=Math.abs(m.A-m.B)/t;const exp=Math.min(1,t/20);const pw=(votoA+votoB)*0.45*conf*exp;if(pc2p==='A')votoA+=pw;else votoB+=pw;}}
+      }
+      // Global S1-S7
+      if(extraCtx.seqs7) {
+        const b7p = predictBlkAY(blk7_AY, extraCtx._si, ci, extraCtx.seqs7, upToIndex);
+        if(b7p!==null){const nA=calcNABlock(extraCtx.seqs7,upToIndex-1);const n1=calcN1Block(extraCtx.seqs7,upToIndex-1);const key=`${extraCtx._si}_${ci}_${nA}_${n1}`;const m=blk7_AY[key];if(m){const t=m.A+m.B;const conf=Math.abs(m.A-m.B)/t;const exp=Math.min(1,t/25);const pw=(votoA+votoB)*0.50*conf*exp;if(b7p==='A')votoA+=pw;else votoB+=pw;}}
+        const pc7p = predictBlkPos(blk7_pos, extraCtx._si, ci, extraCtx.seqs7, upToIndex);
+        if(pc7p!==null){const cod=extraCtx.seqs7.map(s=>s.cols[ci][upToIndex-1]||'?').join('');const key=`${extraCtx._si}_${ci}_${cod}`;const m=blk7_pos[key];if(m){const t=m.A+m.B;const conf=Math.abs(m.A-m.B)/t;const exp=Math.min(1,t/20);const pw=(votoA+votoB)*0.40*conf*exp;if(pc7p==='A')votoA+=pw;else votoB+=pw;}}
       }
     }
 

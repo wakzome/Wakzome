@@ -898,7 +898,7 @@ function _predValidarWork() {
   // Min rows needed before we start validating (need some history)
   const START_FROM = 50;
 
-  for(let i = START_FROM; i < minN - 1; i++) {
+  for(let i = START_FROM; i < minN; i++) {
     // ── At row i: generate combo prediction for row i+1 ──────────────────
 
     // Swap in memories for each seq, get column probs
@@ -999,28 +999,33 @@ function _predValidarWork() {
       }
     }
 
-    // Real result for row i+1 — one number per sequence in order
-    const real = allSeqsData.map(seq => seq&&seq.filas[i+1]?seq.filas[i+1].num:0);
+    // Real result for row i — memories trained on 0..i-1, so row i is the prediction target
+    const real = allSeqsData.map(seq => seq&&seq.filas[i]?seq.filas[i].num:0);
 
     // Count hits: membership by block (not positional)
-    // Blk1: how many of combo[0..4] appear in real[0..4] (as a set)
-    // Blk2: how many of combo[5..6] appear in real[5..6] (as a set)
     const realBlk5Set = new Set(real.slice(0,5).filter(n=>n>0));
     const realBlk2Set = new Set(real.slice(5,7).filter(n=>n>0));
     let bestHits = 0;
-    for(const combo of combos) {
+    let bestCombosDetail = []; // store all combos with their hits for display
+    combos.forEach((combo, comboIdx) => {
       const hitsBlk5 = combo.slice(0,5).filter(n => realBlk5Set.has(n)).length;
       const hitsBlk2 = combo.slice(5,7).filter(n => realBlk2Set.has(n)).length;
       const hits = hitsBlk5 + hitsBlk2;
       if(hits > bestHits) bestHits = hits;
-    }
+      if(hits >= 4) { // store notable combos (4+ hits)
+        bestCombosDetail.push({idx: comboIdx+1, combo, hits, hitsBlk5, hitsBlk2});
+      }
+    });
+    bestCombosDetail.sort((a,b)=>b.hits-a.hits).splice(5); // keep top 5
 
     // Always record result, including 0-combo cases
     const cause = combos.length === 0 ? 'sin_combos' :
                   (bestHits === 0 ? 'combos_sin_acierto' : 'ok');
     hitsCount[bestHits] = (hitsCount[bestHits]||0) + 1;
+    // row: i+1 because filas is 0-indexed, so filas[i] = row i+1 in 1-indexed
     rowResults.push({row:i+1, real, bestHits, totalCombos:combos.length, cause,
-      blk5Count: blk5.length, blk2Count: blk2.length});
+      blk5Count: blk5.length, blk2Count: blk2.length,
+      bestCombos: bestCombosDetail});
 
     // ── Update memories with row i data ──────────────────────────────────
     for(let si=0; si<7; si++) {
@@ -1086,6 +1091,7 @@ function _predValidarWork() {
   }
 
   // ── Render results ────────────────────────────────────────────────────────
+  window._predRowResults = rowResults; // store for detail view
   renderValidacion(hitsCount, rowResults, minN - START_FROM - 1);
 
   const btn = document.getElementById('pred-btn-val');
@@ -1103,8 +1109,8 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
   }
 
   const maxHits = Math.max(...Object.keys(hitsCount).map(Number));
-  const barColors = {7:'#0a3622',6:'#1b5e20',5:'#388e3c',4:'#81c784',3:'#fff3cd',2:'#f8d7da',1:'#f0d0d0',0:'#eee'};
-  const textColors = {7:'#fff',6:'#fff',5:'#fff',4:'#1b3a1b',3:'#664d03',2:'#721c24',1:'#721c24',0:'#666'};
+  const barColors = {7:'#d1e7dd',6:'#c3e6cb',5:'#d4edda',4:'#e8f5e9',3:'#fff3cd',2:'#f8d7da',1:'#f0d0d0',0:'#f8f9fa'};
+  const textColors = {7:'#0a3622',6:'#155724',5:'#1e7e34',4:'#1b5e20',3:'#664d03',2:'#721c24',1:'#721c24',0:'#666'};
 
   let html = `<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">
     Validación Retrospectiva <span style="font-size:11px;font-weight:400;color:#888;">(${totalRows} filas evaluadas)</span>
@@ -1138,10 +1144,10 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
   html += `<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:5px;">Mejores predicciones:</div>`;
   html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
   best.forEach(({row, real, bestHits, totalCombos}) => {
-    const bg = barColors[bestHits]||'#eee';
+    const bg = barColors[bestHits]||'#f8f9fa';
     const tc = textColors[bestHits]||'#333';
-    html += `<div style="background:${bg};color:${tc};border-radius:5px;padding:4px 8px;font-size:10px;">
-      <b>Fila ${row}</b>: ${bestHits}/7 aciertos
+    html += `<div style="background:${bg};color:${tc} !important;border:1px solid #dee2e6;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;" onclick="window.toggleRowDetail(${row})">
+      <b>Fila ${row}</b>: <b>${bestHits}/7</b>
       <span style="opacity:0.7;">(${totalCombos} combos)</span>
     </div>`;
   });
@@ -1198,6 +1204,50 @@ function renderValidacion(hitsCount, rowResults, totalRows) {
 
   panel.innerHTML = html;
 }
+
+window.toggleRowDetail = function(row) {
+  let detailDiv = document.getElementById('pred-row-detail-' + row);
+  if(detailDiv) { detailDiv.remove(); return; }
+  const rowData = (window._predRowResults||[]).find(r => r.row === row);
+  if(!rowData) return;
+  detailDiv = document.createElement('div');
+  detailDiv.id = 'pred-row-detail-' + row;
+  detailDiv.style.cssText = 'margin-top:8px;padding:10px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;font-size:11px;';
+  const realBlk5 = rowData.real.slice(0,5).filter(n=>n>0);
+  const realBlk2 = rowData.real.slice(5,7).filter(n=>n>0);
+  let html = `<div style="font-weight:700;margin-bottom:6px;">
+    Fila ${row} — Resultado real: 
+    <span style="color:#0a3622;font-family:monospace;">${realBlk5.join(' · ')}</span>
+    <span style="color:#aaa;margin:0 4px;">|</span>
+    <span style="color:#084298;font-family:monospace;">${realBlk2.join(' · ')}</span>
+    <button onclick="document.getElementById('pred-row-detail-${row}').remove()" style="float:right;border:none;background:none;cursor:pointer;color:#999;">✕</button>
+  </div>`;
+  if(rowData.bestCombos && rowData.bestCombos.length > 0) {
+    html += '<div style="font-weight:600;margin-bottom:4px;color:#555;">Combinaciones con 4+ aciertos (numeradas):</div>';
+    const realSet5 = new Set(realBlk5);
+    const realSet2 = new Set(realBlk2);
+    rowData.bestCombos.forEach(({idx, combo, hits, hitsBlk5, hitsBlk2}) => {
+      const b5h = combo.slice(0,5).map(n => realSet5.has(n)
+        ? `<b style="color:#1b5e20;background:#d4edda;padding:1px 4px;border-radius:3px;">${n}</b>`
+        : `<span style="color:#aaa;">${n}</span>`).join(' · ');
+      const b2h = combo.slice(5,7).map(n => realSet2.has(n)
+        ? `<b style="color:#084298;background:#cfe2ff;padding:1px 4px;border-radius:3px;">${n}</b>`
+        : `<span style="color:#aaa;">${n}</span>`).join(' · ');
+      const hcolor = hits>=6?'#1b5e20':hits>=4?'#664d03':'#721c24';
+      html += `<div style="margin:3px 0;padding:4px 8px;background:#fff;border:1px solid #dee2e6;border-radius:4px;">
+        <span style="color:#aaa;margin-right:6px;font-size:10px;">Combo #${idx}</span>
+        ${b5h} <span style="color:#ccc;margin:0 4px;">|</span> ${b2h}
+        <span style="margin-left:8px;font-weight:700;color:${hcolor};">${hits}/7</span>
+        <span style="color:#aaa;font-size:10px;"> (${hitsBlk5}/5 + ${hitsBlk2}/2)</span>
+      </div>`;
+    });
+  } else {
+    html += '<div style="color:#999;font-style:italic;">Sin combinaciones con 4+ aciertos.</div>';
+  }
+  detailDiv.innerHTML = html;
+  const panel = document.getElementById('pred-val-panel');
+  if(panel) panel.appendChild(detailDiv);
+};
 
 })();
 

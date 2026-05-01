@@ -406,16 +406,6 @@
         'margin-bottom:6px;padding-bottom:5px;border-bottom:2px solid #555;'
       );
 
-      // Medalla de ranking
-      var medalColors = ['#c8a832', '#9e9e9e', '#a0724a'];
-      var rankBadge = document.createElement('span');
-      rankBadge.setAttribute('style',
-        'display:inline-flex;align-items:center;justify-content:center;' +
-        'width:20px;height:20px;border-radius:50%;font-size:.6rem;font-weight:900;flex-shrink:0;' +
-        'background:' + (rankIdx < 3 ? medalColors[rankIdx] : '#555') + ';color:#fff;'
-      );
-      rankBadge.textContent = rankIdx + 1;
-
       // Nombre tienda
       var titleText = document.createElement('span');
       titleText.setAttribute('style',
@@ -423,7 +413,6 @@
       );
       titleText.textContent = label.toUpperCase();
 
-      titleRow.appendChild(rankBadge);
       titleRow.appendChild(titleText);
 
       // Badge % comparativo de la tienda
@@ -496,8 +485,8 @@
         var hasEmp  = empText && empText !== '—';
         var empHtml = hasEmp
           ? '<span class="vadm-obs-star" data-obs="' + empText.replace(/"/g, '&quot;') + '" ' +
-            'style="color:#ffffff !important;font-weight:900;font-size:1rem;line-height:1;cursor:help;">✱</span>'
-          : '<span style="opacity:.35;color:#ffffff !important;">—</span>';
+            'style="color:#1a1a1a !important;font-weight:900;font-size:1rem;line-height:1;cursor:help;">✱</span>'
+          : '<span style="opacity:.35;">—</span>';
 
         var cells = [
           { v: _fmtDate(r.fecha),    center: true },
@@ -515,10 +504,11 @@
           td.setAttribute('style',
             'padding:5px 8px;border-bottom:1px solid #f0f0f0;vertical-align:middle;' +
             'white-space:nowrap;text-align:center;' +
-            'font-weight:' + (c.bold ? '800' : 'normal') + ';' +
+            'font-weight:' + (c.bold ? '800 !important' : 'normal') + ';' +
             'font-size:.75rem;font-variant-numeric:tabular-nums;'
           );
-          if (c.emp) td.style.setProperty('color', '#ffffff', 'important');
+          if (c.bold) td.style.setProperty('font-weight', '800', 'important');
+          if (c.emp) td.style.setProperty('color', '#1a1a1a', 'important');
           tr.appendChild(td);
         });
         tbody.appendChild(tr);

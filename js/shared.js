@@ -139,7 +139,10 @@
   }
 
   document.getElementById('key-submit').addEventListener('click', attemptLogin);
-  document.getElementById('key-input').addEventListener('keydown', function(e){ if(e.key==='Enter') attemptLogin(); });
+  document.getElementById('key-input').addEventListener('input', function() {
+    clearTimeout(window.__loginDebounce);
+    window.__loginDebounce = setTimeout(attemptLogin, 600);
+  });
 
   // — Logo click → reload —
 

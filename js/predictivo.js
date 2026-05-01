@@ -533,6 +533,28 @@ function _predWork() {
     if(totalPreds>0) predRenderSummary(suffixes[si], nums[si], totalPreds, hitCounts, totalHitsSum, colCorrect, cols);
   }
 
+  // Collect historical sums from actual numbers in all 7 sequences
+  histSumsBlk5 = []; histSumsBlk2 = [];
+  const allN = allSeqsData.map(s => s.n);
+  const minN = Math.min(...allN.filter(n=>n>0));
+  for(let i=0;i<minN;i++) {
+    const rowNums = allSeqsData.map(s => s.filas[i] ? s.filas[i].num : 0);
+    if(rowNums.every(n=>n>0)) updateHistSums(rowNums);
+  }
+
+  // Run combination analysis using last predicted column probs
+  // Get column probs for next prediction (upToIndex = last row)
+  const lastProbs = allSeqsData.map((seq, si) => {
+    if(!seq || seq.n < 2) return null;
+    swapIn(si);
+    const probs = predecirFilaConProbs(seq.cols, seq.n, null);
+    swapOut(si);
+    return probs;
+  });
+
+  const comboResult = analizarCombinaciones(lastProbs);
+  renderCombinaciones(comboResult);
+
   const btn2 = document.getElementById('pred-btn-conv');
   if(btn2) { btn2.disabled=false; btn2.textContent='Convertir'; }
 }
@@ -564,6 +586,190 @@ window.predExportTabla = function(si) {
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['#A','#1'],...ay]),'A y 1');
   XLSX.writeFile(wb,'tablas_S'+(si+1)+'.xlsx');
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANÁLISIS DE COMBINACIONES — filtro por estructura y distribución de sumas
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Tabla: código ABCD → números del 1-50
+const CODIGO_A_NUMS_50 = {};
+const CODIGO_A_NUMS_12 = {};
+(function buildCodeMaps() {
+  function getCode(n) {
+    const base = (n-1) % 16;
+    return [(base&1)?'B':'A',(base&2)?'B':'A',(base&4)?'B':'A',(base&8)?'B':'A'].join('');
+  }
+  for(let n=1;n<=50;n++){const c=getCode(n);if(!CODIGO_A_NUMS_50[c])CODIGO_A_NUMS_50[c]=[];CODIGO_A_NUMS_50[c].push(n);}
+  for(let n=1;n<=12;n++){const c=getCode(n);if(!CODIGO_A_NUMS_12[c])CODIGO_A_NUMS_12[c]=[];CODIGO_A_NUMS_12[c].push(n);}
+})();
+
+// Historical sum distributions — populated during training
+let histSumsBlk5 = []; // sums of S1-S5 numbers per row
+let histSumsBlk2 = []; // sums of S6-S7 numbers per row
+
+function updateHistSums(seqNums) {
+  // seqNums = array of 7 actual numbers (one per sequence) for a given row
+  if(seqNums.length < 7) return;
+  const s5 = seqNums.slice(0,5).reduce((a,b)=>a+b,0);
+  const s2 = seqNums.slice(5,7).reduce((a,b)=>a+b,0);
+  histSumsBlk5.push(s5);
+  histSumsBlk2.push(s2);
+}
+
+function getSumBounds(hist, pLow=0.05, pHigh=0.95) {
+  if(hist.length < 20) return null; // not enough data
+  const sorted = [...hist].sort((a,b)=>a-b);
+  return {
+    lo: sorted[Math.floor(sorted.length * pLow)],
+    hi: sorted[Math.floor(sorted.length * pHigh)]
+  };
+}
+
+// Top-2 codes per sequence using column probability product
+function getTop2Codes(colProbs) {
+  // colProbs = [{pA, pB}, {pA, pB}, {pA, pB}, {pA, pB}]
+  // 16 possible codes = all combinations of A/B for 4 columns
+  const codes = [];
+  for(let mask=0; mask<16; mask++) {
+    const letters = [
+      (mask&1)?'B':'A',
+      (mask&2)?'B':'A',
+      (mask&4)?'B':'A',
+      (mask&8)?'B':'A'
+    ];
+    const code = letters.join('');
+    // P(code) = product of P(each column value)
+    let prob = 1;
+    for(let c=0;c<4;c++) {
+      prob *= (letters[c]==='A') ? colProbs[c].pA : colProbs[c].pB;
+    }
+    codes.push({code, prob});
+  }
+  codes.sort((a,b)=>b.prob-a.prob);
+  return [codes[0], codes[1]]; // top-2
+}
+
+// Main combination analysis — called after training
+function analizarCombinaciones(allColProbs) {
+  // allColProbs[si] = [{pA,pB} x4] from predecirFilaConProbs for each sequence
+  // Returns filtered combinations for display
+
+  const boundsBlk5 = getSumBounds(histSumsBlk5);
+  const boundsBlk2 = getSumBounds(histSumsBlk2);
+
+  // Get top-2 codes per sequence
+  const top2 = allColProbs.map(cp => cp ? getTop2Codes(cp) : null);
+
+  // Get candidate numbers per sequence
+  const candNums = top2.map((t2, si) => {
+    if(!t2) return [];
+    const map = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
+    const nums = new Set();
+    t2.forEach(({code}) => { (map[code]||[]).forEach(n => nums.add(n)); });
+    return [...nums].sort((a,b)=>a-b);
+  });
+
+  // Product cartesian for bloque S1-S5
+  // Pick one number per sequence (si 0-4), all distinct, ascending, sum in bounds
+  function cartesianFilter(seqCands, maxNums, bounds) {
+    const results = [];
+    function recurse(si, chosen) {
+      if(si === seqCands.length) {
+        // Valid combination
+        const sorted = [...chosen].sort((a,b)=>a-b);
+        // Check ascending (no repeats — already checked)
+        const sum = sorted.reduce((a,b)=>a+b,0);
+        if(!bounds || (sum >= bounds.lo && sum <= bounds.hi)) {
+          results.push({nums: sorted, sum});
+        }
+        return;
+      }
+      for(const n of seqCands[si]) {
+        if(!chosen.has(n) && n <= maxNums) {
+          chosen.add(n);
+          recurse(si+1, chosen);
+          chosen.delete(n);
+        }
+      }
+    }
+    recurse(0, new Set());
+    return results;
+  }
+
+  const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5);
+  const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2);
+
+  return { blk5: blk5Results, blk2: blk2Results, candNums, boundsBlk5, boundsBlk2 };
+}
+
+// Render combination analysis panel
+function renderCombinaciones(result) {
+  let panel = document.getElementById('pred-combo-panel');
+  if(!panel) {
+    panel = document.createElement('div');
+    panel.id = 'pred-combo-panel';
+    panel.style.cssText = 'margin-top:16px;border:1px solid #ddd;border-radius:10px;padding:12px;background:#fff;';
+    const content = document.getElementById('pred-content');
+    if(content) content.appendChild(panel);
+  }
+
+  const {blk5, blk2, candNums, boundsBlk5, boundsBlk2} = result;
+
+  let html = '<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">Análisis de Combinaciones</h3>';
+
+  // Candidate numbers per sequence
+  html += '<div style="margin-bottom:10px;">';
+  html += '<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px;">Números candidatos por secuencia:</div>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+  candNums.forEach((nums, si) => {
+    html += `<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:5px;padding:4px 8px;font-size:10px;">
+      <span style="font-weight:700;color:#555;">S${si+1}:</span> ${nums.join(', ')||'—'}
+    </div>`;
+  });
+  html += '</div></div>';
+
+  // Sum bounds info
+  if(boundsBlk5) html += `<div style="font-size:10px;color:#888;margin-bottom:6px;">Rango suma S1-S5: [${boundsBlk5.lo}–${boundsBlk5.hi}] | Rango suma S6-S7: [${boundsBlk2?boundsBlk2.lo:'?'}–${boundsBlk2?boundsBlk2.hi:'?'}]</div>`;
+
+  // Bloque S1-S5 results
+  html += `<div style="margin-bottom:10px;">
+    <div style="font-size:11px;font-weight:600;color:#1b5e20;margin-bottom:4px;">
+      Combinaciones válidas S1–S5 (${blk5.length} encontradas):
+    </div>`;
+  if(blk5.length === 0) {
+    html += '<div style="font-size:11px;color:#999;font-style:italic;">Ninguna combinación supera los filtros.</div>';
+  } else {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+    blk5.slice(0,30).forEach(({nums, sum}) => {
+      html += `<div style="background:#d1e7dd;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#0a3622;">
+        ${nums.join(' · ')} <span style="font-size:9px;color:#555;">(Σ${sum})</span>
+      </div>`;
+    });
+    if(blk5.length > 30) html += `<div style="font-size:10px;color:#888;padding:3px 8px;">+${blk5.length-30} más...</div>`;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Bloque S6-S7 results
+  html += `<div>
+    <div style="font-size:11px;font-weight:600;color:#084298;margin-bottom:4px;">
+      Combinaciones válidas S6–S7 (${blk2.length} encontradas):
+    </div>`;
+  if(blk2.length === 0) {
+    html += '<div style="font-size:11px;color:#999;font-style:italic;">Ninguna combinación supera los filtros.</div>';
+  } else {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+    blk2.forEach(({nums, sum}) => {
+      html += `<div style="background:#cfe2ff;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#084298;">
+        ${nums.join(' · ')} <span style="font-size:9px;color:#555;">(Σ${sum})</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  panel.innerHTML = html;
+}
 
 })();
 
@@ -1223,6 +1429,46 @@ function updateContextMap(ci, ctxKey, predsForRow, real) {
 
 // ── PREDICCIÓN PRINCIPAL ──────────────────────────────────────────────────────
 
+// Returns predicted combo + per-column probabilities for top-2 analysis
+function predecirFilaConProbs(columnas, upToIndex, colsOtra) {
+  const results = [];
+  columnas.forEach((col, ci) => {
+    const subCol = col.slice(0, upToIndex);
+    const total  = subCol.length;
+    if(total===0){ results.push({pred:'A', pA:0.5, pB:0.5}); return; }
+
+    const v30 = subCol.slice(-Math.min(30,total));
+    const v5  = subCol.slice(-Math.min(5,total));
+    const v8  = subCol.slice(-Math.min(8,total));
+    const preds = [metodo1(v30), metodo2(v5), metodo3(v8), metodo4(subCol)];
+    const histCol = predHist[ci] || [];
+    const scores  = calcScores(histCol);
+    const ctxKey     = buildContextKey(ci, subCol, columnas, upToIndex);
+    const rarezaInfo = pesoRareza(ci, subCol, columnas, upToIndex);
+    const ctxW       = getContextWeights(ci, ctxKey, rarezaInfo);
+
+    let votoA = 0, votoB = 0;
+    for(let m = 0; m < 4; m++) {
+      const wA = (scores[m]+1) * ctxW[m] * pesoCodigoPosible(ci, 'A', columnas, upToIndex);
+      const wB = (scores[m]+1) * ctxW[m] * pesoCodigoPosible(ci, 'B', columnas, upToIndex);
+      if(preds[m]==='A') votoA += wA; else votoB += wB;
+    }
+    // Apply M5-M9 votes same as predecirFila
+    const m5p = metodo5(ci, columnas, upToIndex);
+    if(m5p!==null){const cod=columnas.map(c=>c[upToIndex-1]||'?').join('');const mem=codeMemory[ci]&&codeMemory[ci][cod];if(mem){const t=mem.A+mem.B;const conf=Math.abs(mem.A-mem.B)/t;const exp=Math.min(1,t/20);const p=(votoA+votoB)*0.5*conf*exp;if(m5p==='A')votoA+=p;else votoB+=p;}}
+    const m6p = metodo6(ci, columnas, upToIndex);
+    if(m6p!==null){const codC=columnas.map(c=>c[upToIndex-1]||'?').join('');const tr=transMemory[codC];if(tr){const tT=Object.values(tr).reduce((a,b)=>a+b,0);let pA2=0,pB2=0;for(const[cn,cnt]of Object.entries(tr)){const p=cnt/tT;if(cn[ci]==='A')pA2+=p;else pB2+=p;}const conf=Math.abs(pA2-pB2);const exp=Math.min(1,tT/15);const pw=(votoA+votoB)*0.4*conf*exp;if(m6p==='A')votoA+=pw;else votoB+=pw;}}
+    const m7p = metodo7(ci, columnas, upToIndex);
+    if(m7p!==null&&upToIndex>=3){const pat=columnas[ci][upToIndex-3]+columnas[ci][upToIndex-2]+columnas[ci][upToIndex-1];const mV=vertMemory[ci]&&vertMemory[ci][pat];if(mV){const t=mV.A+mV.B;const conf=Math.abs(mV.A-mV.B)/t;const exp=Math.min(1,t/30);const pw=(votoA+votoB)*0.5*conf*exp;if(m7p==='A')votoA+=pw;else votoB+=pw;}}
+    if(subCol.length>=2){let cA=1,cB=1;for(const v of subCol){if(v==='A'){cA=1;cB++;}else{cB=1;cA++;}}const m8p=metodo8(ci,subCol,{A:cA,B:cB});if(m8p!==null){const bA=Math.min(cA,6),bB=Math.min(cB,6);const mC=ctrMemory[ci]&&ctrMemory[ci][`${bA}_${bB}`];if(mC){const t=mC.A+mC.B;const conf=Math.abs(mC.A-mC.B)/t;const exp=Math.min(1,t/40);const pw=(votoA+votoB)*0.4*conf*exp;if(m8p==='A')votoA+=pw;else votoB+=pw;}}}
+    if(upToIndex>=1){let nAc=0,n1c=0;for(let c2=0;c2<columnas.length;c2++){if(columnas[c2][upToIndex-1]==='A')nAc++;if(upToIndex>=2&&columnas[c2][upToIndex-1]===columnas[c2][upToIndex-2])n1c++;}const m9p=metodo9(ci,nAc,n1c);if(m9p!==null){const k=`${nAc}_${n1c}`;const mAY=ayMemory[ci]&&ayMemory[ci][k];if(mAY){const t=mAY.A+mAY.B;const conf=Math.abs(mAY.A-mAY.B)/t;const exp=Math.min(1,t/40);const pw=(votoA+votoB)*0.4*conf*exp;if(m9p==='A')votoA+=pw;else votoB+=pw;}}}
+
+    const tot = votoA + votoB || 1;
+    results.push({ pred: votoA>=votoB?'A':'B', pA: votoA/tot, pB: votoB/tot });
+  });
+  return results;
+}
+
 function predecirFila(columnas, upToIndex, colsOtra) {
   return columnas.map((col, ci) => {
     const subCol = col.slice(0, upToIndex);
@@ -1261,14 +1507,10 @@ function predecirFila(columnas, upToIndex, colsOtra) {
       const mem = codeMemory[ci] && codeMemory[ci][cod];
       if(mem) {
         const total = mem.A + mem.B;
-        // Probabilidad posterior con suavizado bayesiano (α=1)
-        const pA = (mem.A + 1) / (total + 2);
-        const señal = Math.abs(pA - 0.5); // distancia al azar
-        if(señal > 0.04) { // solo vota si hay señal real (>4pp sobre el azar)
-          const expFactor = Math.min(1, total / 20);
-          const pesoM5 = (votoA + votoB) * 0.5 * señal * 2 * expFactor;
-          if(pA > 0.5) votoA += pesoM5; else votoB += pesoM5;
-        }
+        const confianza = Math.abs(mem.A - mem.B) / total;
+        const expFactor = Math.min(1, total / 20);
+        const pesoM5 = (votoA + votoB) * 0.5 * confianza * expFactor;
+        if(m5pred==='A') votoA += pesoM5; else votoB += pesoM5;
       }
     }
 
@@ -1280,18 +1522,15 @@ function predecirFila(columnas, upToIndex, colsOtra) {
       const trans   = transMemory[codCurr];
       if(trans) {
         const totalTrans = Object.values(trans).reduce((a,b) => a+b, 0);
-        let rawA = 0, rawB = 0;
+        let pA = 0, pB = 0;
         for(const [cn, cnt] of Object.entries(trans)) {
-          if(cn[ci]==='A') rawA += cnt; else rawB += cnt;
+          const p = cnt / totalTrans;
+          if(cn[ci]==='A') pA += p; else pB += p;
         }
-        // Suavizado bayesiano sobre conteos crudos
-        const pA_t = (rawA + 1) / (rawA + rawB + 2);
-        const señalT = Math.abs(pA_t - 0.5);
-        if(señalT > 0.04) {
-          const expFactorM6 = Math.min(1, totalTrans / 15);
-          const pesoM6 = (votoA + votoB) * 0.4 * señalT * 2 * expFactorM6;
-          if(pA_t > 0.5) votoA += pesoM6; else votoB += pesoM6;
-        }
+        const confianzaM6 = Math.abs(pA - pB);
+        const expFactorM6 = Math.min(1, totalTrans / 15);
+        const pesoM6 = (votoA + votoB) * 0.4 * confianzaM6 * expFactorM6;
+        if(m6pred==='A') votoA += pesoM6; else votoB += pesoM6;
       }
     }
 
@@ -1302,13 +1541,10 @@ function predecirFila(columnas, upToIndex, colsOtra) {
       const memV = vertMemory[ci] && vertMemory[ci][pat];
       if(memV) {
         const totalV = memV.A + memV.B;
-        const pA_v = (memV.A + 1) / (totalV + 2);
-        const señalV = Math.abs(pA_v - 0.5);
-        if(señalV > 0.04) {
-          const expFactorM7 = Math.min(1, totalV / 30);
-          const pesoM7 = (votoA + votoB) * 0.5 * señalV * 2 * expFactorM7;
-          if(pA_v > 0.5) votoA += pesoM7; else votoB += pesoM7;
-        }
+        const confianzaM7 = Math.abs(memV.A - memV.B) / totalV;
+        const expFactorM7 = Math.min(1, totalV / 30);
+        const pesoM7 = (votoA + votoB) * 0.5 * confianzaM7 * expFactorM7;
+        if(m7pred==='A') votoA += pesoM7; else votoB += pesoM7;
       }
     }
 
@@ -1329,13 +1565,10 @@ function predecirFila(columnas, upToIndex, colsOtra) {
         const memC = ctrMemory[ci] && ctrMemory[ci][`${bA}_${bB}`];
         if(memC) {
           const totalC = memC.A + memC.B;
-          const pA_c = (memC.A + 1) / (totalC + 2);
-          const señalC = Math.abs(pA_c - 0.5);
-          if(señalC > 0.04) {
-            const expFactorM8 = Math.min(1, totalC / 40);
-            const pesoM8 = (votoA + votoB) * 0.4 * señalC * 2 * expFactorM8;
-            if(pA_c > 0.5) votoA += pesoM8; else votoB += pesoM8;
-          }
+          const confianzaM8 = Math.abs(memC.A - memC.B) / totalC;
+          const expFactorM8 = Math.min(1, totalC / 40);
+          const pesoM8 = (votoA + votoB) * 0.4 * confianzaM8 * expFactorM8;
+          if(m8pred==='A') votoA += pesoM8; else votoB += pesoM8;
         }
       }
     }
@@ -1373,13 +1606,10 @@ function predecirFila(columnas, upToIndex, colsOtra) {
         const memAY = ayMemory[ci] && ayMemory[ci][keyAY];
         if(memAY) {
           const totalAY = memAY.A + memAY.B;
-          const pA_ay = (memAY.A + 1) / (totalAY + 2);
-          const señalAY = Math.abs(pA_ay - 0.5);
-          if(señalAY > 0.04) {
-            const expFactorM9 = Math.min(1, totalAY / 40);
-            const pesoM9 = (votoA + votoB) * 0.4 * señalAY * 2 * expFactorM9;
-            if(pA_ay > 0.5) votoA += pesoM9; else votoB += pesoM9;
-          }
+          const confianzaM9 = Math.abs(memAY.A - memAY.B) / totalAY;
+          const expFactorM9 = Math.min(1, totalAY / 40);
+          const pesoM9 = (votoA + votoB) * 0.4 * confianzaM9 * expFactorM9;
+          if(m9pred==='A') votoA += pesoM9; else votoB += pesoM9;
         }
       }
     }

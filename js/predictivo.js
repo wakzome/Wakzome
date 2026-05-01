@@ -519,11 +519,13 @@ function _predWork() {
   // Collect historical sums + frequency counts from all 7 sequences
   histSumsBlk5 = []; histSumsBlk2 = []; histSumsGlobal = [];
   histEvensBlk5 = []; histEvensBlk2 = []; histEvensGlobal = [];
-  numFreq = Array.from({length:7}, () => ({}));
+  numFreq  = Array.from({length:7}, () => ({}));
+  letraFreq = Array.from({length:7}, () => ({}));
+  letrasHist = Array.from({length:7}, () => []);
   const minN = Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++) {
     const rowNums = allSeqsData.map(s => s.filas[i] ? s.filas[i].num : 0);
-    if(rowNums.every(n=>n>0)) updateHistSums(rowNums);
+    if(rowNums.every(n=>n>0)) { updateHistSums(rowNums); updateLetraHist(rowNums); }
   }
 
   // Get column probabilities for last row (next prediction)
@@ -589,9 +591,160 @@ const CODIGO_A_NUMS_12 = {};
   for(let n=1;n<=12;n++){const c=getCode(n);if(!CODIGO_A_NUMS_12[c])CODIGO_A_NUMS_12[c]=[];CODIGO_A_NUMS_12[c].push(n);}
 })();
 
-// Historical data per sequence — populated during training
-// numFreq[si][num] = count of appearances
-let numFreq    = Array.from({length:7}, () => ({}));
+// ── SISTEMA DE LETRAS (grupos de números por rango) ──────────────────────────
+// S1–S5: A=1-10, B=11-20, C=21-30, D=31-40, E=41-50  (5 grupos de 10)
+// S6–S7: A=1-3,  B=4-6,   C=7-9,   D=10-12            (4 grupos de 3)
+
+const LETRA_GRUPOS_50 = { A:[1,2,3,4,5,6,7,8,9,10], B:[11,12,13,14,15,16,17,18,19,20], C:[21,22,23,24,25,26,27,28,29,30], D:[31,32,33,34,35,36,37,38,39,40], E:[41,42,43,44,45,46,47,48,49,50] };
+const LETRA_GRUPOS_12 = { A:[1,2,3], B:[4,5,6], C:[7,8,9], D:[10,11,12] };
+const LETRAS_50 = ['A','B','C','D','E'];
+const LETRAS_12 = ['A','B','C','D'];
+
+// Num → letra para acceso rápido
+const NUM_A_LETRA_50 = {};
+const NUM_A_LETRA_12 = {};
+LETRAS_50.forEach(l => LETRA_GRUPOS_50[l].forEach(n => NUM_A_LETRA_50[n] = l));
+LETRAS_12.forEach(l => LETRA_GRUPOS_12[l].forEach(n => NUM_A_LETRA_12[n] = l));
+
+function getLetra(n, si) { return si < 5 ? NUM_A_LETRA_50[n] : NUM_A_LETRA_12[n]; }
+function getLetras(si)   { return si < 5 ? LETRAS_50 : LETRAS_12; }
+function getLetraGrupos(si) { return si < 5 ? LETRA_GRUPOS_50 : LETRA_GRUPOS_12; }
+
+// letraFreq[si][letra] = total histórico de apariciones
+// letrasHist[si] = array de letras en orden cronológico (para ausencias)
+let letraFreq = Array.from({length:7}, () => ({}));
+let letrasHist = Array.from({length:7}, () => []);  // secuencia cronológica de letras
+
+function updateLetraHist(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  seqNums.forEach((n, si) => {
+    const l = getLetra(n, si);
+    if(!l) return;
+    if(!letraFreq[si][l]) letraFreq[si][l] = 0;
+    letraFreq[si][l]++;
+    letrasHist[si].push(l);
+  });
+}
+
+// Calcula ausencia actual de cada letra (cuántas rondas lleva sin salir)
+function calcAusenciasActuales(si) {
+  const hist = letrasHist[si];
+  const letras = getLetras(si);
+  const aus = {};
+  letras.forEach(l => aus[l] = 0);
+  // Recorrer desde el final hasta encontrar cada letra
+  for(let i = hist.length - 1; i >= 0; i--) {
+    const l = hist[i];
+    letras.forEach(lx => { if(aus[lx] !== null && lx !== l) aus[lx]++; });
+    if(aus[l] !== null) aus[l] = 0;  // reset cuando aparece
+    // Parar cuando todas tienen su ausencia definida
+    // (simplificado: recorremos todo y tomamos la distancia real)
+  }
+  // Recalcular correctamente: distancia desde última aparición
+  const resultado = {};
+  letras.forEach(l => {
+    let idx = -1;
+    for(let i = hist.length - 1; i >= 0; i--) {
+      if(hist[i] === l) { idx = i; break; }
+    }
+    resultado[l] = idx === -1 ? hist.length : (hist.length - 1 - idx);
+  });
+  return resultado;
+}
+
+// Calcula ausencia "normal" histórica de cada letra (media de sus intervalos)
+function calcAusenciaNormal(si) {
+  const hist = letrasHist[si];
+  const letras = getLetras(si);
+  const normal = {};
+  letras.forEach(l => {
+    const posiciones = [];
+    for(let i = 0; i < hist.length; i++) if(hist[i] === l) posiciones.push(i);
+    if(posiciones.length < 2) { normal[l] = hist.length; return; }
+    let totalGap = 0;
+    for(let i = 1; i < posiciones.length; i++) totalGap += posiciones[i] - posiciones[i-1];
+    normal[l] = totalGap / (posiciones.length - 1);
+  });
+  return normal;
+}
+
+// Score de letra = frecuencia × multiplicador de presión por ausencia
+// El multiplicador crece cuando la ausencia supera la ausencia normal
+function calcLetraScores(si) {
+  const letras = getLetras(si);
+  const freq = letraFreq[si] || {};
+  const totalRows = letrasHist[si].length;
+  if(totalRows < 10) return null;  // sin historia suficiente
+
+  const ausActual = calcAusenciasActuales(si);
+  const ausNormal = calcAusenciaNormal(si);
+
+  const scores = {};
+  letras.forEach(l => {
+    const f = freq[l] || 0;
+    if(f === 0) { scores[l] = 0; return; }
+    const aus = ausActual[l];
+    const norm = ausNormal[l] || 1;
+    // Ratio de ausencia: cuántas veces la ausencia normal lleva acumulada
+    const ratio = aus / norm;
+    // Multiplicador: crece suavemente cuando ratio > 1, aplana cuando < 1
+    // ratio=0 → mult=0.7 (acaba de salir, presión baja)
+    // ratio=1 → mult=1.0 (ausencia normal)
+    // ratio=2 → mult=1.5 (doble de ausencia normal, presión alta)
+    // ratio=3 → mult=2.0 (triple, presión muy alta)
+    const mult = ratio < 1
+      ? 0.7 + 0.3 * ratio          // amortiguado cuando salió recientemente
+      : 1.0 + 0.5 * (ratio - 1);   // amplificado cuando lleva tiempo sin salir
+    scores[l] = f * mult;
+  });
+  return scores;
+}
+
+// Selecciona qué letras conservar — objetivo: 1-3, excepcionalmente 4
+// Método: cobertura acumulada de masa de score
+function selectLetras(scores, letras) {
+  if(!scores) return letras;  // sin historia: todas pasan
+
+  // Ordenar por score descendente
+  const ordenadas = [...letras].sort((a,b) => (scores[b]||0) - (scores[a]||0));
+  const total = ordenadas.reduce((s,l) => s + (scores[l]||0), 0);
+  if(total === 0) return letras;
+
+  // Umbral adaptativo:
+  // Si la letra top tiene >60% de la masa → corte agresivo (top 1-2)
+  // Si distribución plana → umbral más permisivo (top 3)
+  // Nunca más de 4 letras
+  const topShare = (scores[ordenadas[0]]||0) / total;
+
+  let umbral;
+  if(topShare >= 0.70) umbral = 0.90;       // dominancia clara → cubrir 90% con pocas
+  else if(topShare >= 0.50) umbral = 0.88;  // moderada → 88%
+  else umbral = 0.85;                        // plana → 85% (puede necesitar más letras)
+
+  let acum = 0;
+  const seleccionadas = [];
+  for(const l of ordenadas) {
+    if(seleccionadas.length >= 4) break;  // máximo 4
+    acum += (scores[l]||0) / total;
+    seleccionadas.push(l);
+    if(acum >= umbral) break;
+  }
+
+  // Garantizar mínimo 1 letra con frecuencia real
+  if(seleccionadas.length === 0) return [ordenadas[0]];
+  return seleccionadas;
+}
+
+// Filtra candidatos por letra — aplica el sistema de letras sobre la lista de números
+function filtrarCandidatosPorLetra(candidates, si) {
+  const scores = calcLetraScores(si);
+  const letras  = getLetras(si);
+  const letrasOk = new Set(selectLetras(scores, letras));
+  return candidates.filter(n => {
+    const l = getLetra(n, si);
+    return l && letrasOk.has(l);
+  });
+}
 let histSumsBlk5 = [];  // sum of S1-S5 numbers per row
 let histSumsBlk2 = [];  // sum of S6-S7 numbers per row
 let histSumsGlobal = []; // sum of all 7 per row
@@ -751,7 +904,8 @@ function analizarCombinaciones(allColProbs, totalRows) {
     const raw = new Set();
     top3.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
     const valid = getValidNums(si, [...raw].sort((a,b)=>a-b), totalRows);
-    return valid;
+    // Aplicar filtro de letras — descarta números de grupos improbables
+    return filtrarCandidatosPorLetra(valid, si);
   });
 
   // Step 2: Cartesian product with structural filters
@@ -852,7 +1006,13 @@ function renderCombinaciones(result, totalRows) {
   });
   html += '</table></div>';
 
-  // Sum ranges + even-count ranges
+  // Sum ranges + even-count ranges + letras seleccionadas
+  const letraInfo = Array.from({length:7}, (_,si) => {
+    const scores = calcLetraScores(si);
+    const letras = getLetras(si);
+    const ok = selectLetras(scores, letras);
+    return ok.join('');
+  });
   const fmtEven = (e) => e
     ? `par[${e.lo}–${e.hi}] σ${e.sigma}`
     : 'insuficiente';
@@ -866,6 +1026,9 @@ function renderCombinaciones(result, totalRows) {
     S1–S5: ${fmtEven(evenBlk5)} &nbsp;·&nbsp;
     S6–S7: ${fmtEven(evenBlk2)} &nbsp;·&nbsp;
     Global: ${fmtEven(evenGlobal)}
+    <br>
+    Letras activas &nbsp;·&nbsp;
+    ${letraInfo.map((l,si) => `S${si+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}
   </div>`;
 
   // Results
@@ -968,6 +1131,9 @@ function _predValidarWork() {
   const tmpSumsBlk5  = [];
   const tmpSumsBlk2  = [];
   const tmpSumsGlobal= [];
+  // Letra history for validation (incremental, mirrors updateLetraHist)
+  const tmpLetraFreq  = Array.from({length:7}, () => ({}));
+  const tmpLetrasHist = Array.from({length:7}, () => []);
 
   // Min rows needed before we start validating (need some history)
   const START_FROM = 50;
@@ -1036,7 +1202,42 @@ function _predValidarWork() {
       if(allFreqs.length >= 4) {
         threshold = Math.max(1, allFreqs[Math.floor(allFreqs.length * 0.25)]);
       }
-      return [...raw].filter(n => (freq[n]||0) >= threshold).sort((a,b)=>a-b);
+      const afterFreq = [...raw].filter(n => (freq[n]||0) >= threshold).sort((a,b)=>a-b);
+      // Aplicar filtro de letras usando historias temporales
+      if(tmpLetrasHist[si].length >= 10) {
+        const lScores = {};
+        const letras = getLetras(si);
+        const lFreq  = tmpLetraFreq[si];
+        const lHist  = tmpLetrasHist[si];
+        const totalL = lHist.length;
+        // Ausencia actual
+        const ausAct = {};
+        letras.forEach(l => {
+          let idx = -1;
+          for(let k = lHist.length-1; k >= 0; k--) { if(lHist[k]===l){idx=k;break;} }
+          ausAct[l] = idx === -1 ? totalL : (totalL - 1 - idx);
+        });
+        // Ausencia normal
+        const ausNorm = {};
+        letras.forEach(l => {
+          const pos = [];
+          for(let k=0;k<lHist.length;k++) if(lHist[k]===l) pos.push(k);
+          if(pos.length < 2) { ausNorm[l] = totalL; return; }
+          let gap=0; for(let k=1;k<pos.length;k++) gap+=pos[k]-pos[k-1];
+          ausNorm[l] = gap/(pos.length-1);
+        });
+        // Score
+        letras.forEach(l => {
+          const f = lFreq[l] || 0;
+          if(f===0){lScores[l]=0;return;}
+          const ratio = ausAct[l] / (ausNorm[l]||1);
+          const mult  = ratio < 1 ? 0.7+0.3*ratio : 1.0+0.5*(ratio-1);
+          lScores[l] = f * mult;
+        });
+        const letrasOk = new Set(selectLetras(lScores, letras));
+        return afterFreq.filter(n => { const l=getLetra(n,si); return l && letrasOk.has(l); });
+      }
+      return afterFreq;
     });
 
     // Build combos (cartesian) — use current sum bounds
@@ -1203,12 +1404,20 @@ function _predValidarWork() {
       if(num_si>0) tmpNumFreq[si][num_si] = (tmpNumFreq[si][num_si]||0)+1;
     }
 
-    // Update sum history
+    // Update sum history + letra history
     const rowNums = allSeqsData.map(s=>s&&s.filas[i]?s.filas[i].num:0);
     if(rowNums.every(n=>n>0)){
       const s5=rowNums.slice(0,5).reduce((a,b)=>a+b,0);
       const s2=rowNums.slice(5,7).reduce((a,b)=>a+b,0);
       tmpSumsBlk5.push(s5); tmpSumsBlk2.push(s2); tmpSumsGlobal.push(s5+s2);
+      // Letra history update
+      rowNums.forEach((n, si) => {
+        const l = getLetra(n, si);
+        if(!l) return;
+        if(!tmpLetraFreq[si][l]) tmpLetraFreq[si][l] = 0;
+        tmpLetraFreq[si][l]++;
+        tmpLetrasHist[si].push(l);
+      });
     }
   }
 

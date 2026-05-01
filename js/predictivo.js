@@ -667,25 +667,17 @@ function analizarCombinaciones(allColProbs, totalRows) {
   // Step 1: Get top-2 codes per sequence → numbers → filter by history
   const candCodes = allColProbs.map((cp, si) => {
     if(!cp) return null;
-    const top4 = getTopNCodes(cp, 4);
+    const top3 = getTopNCodes(cp, 3);
     const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
-    const freq = numFreq[si] || {};
-    const getDisp = (code) => (map[code]||[]).map(n => ({n, valid: freq[n] > 0}));
-    const nums1 = (map[top4[0].code]||[]).filter(n => freq[n] > 0);
-    const nums2 = (map[top4[1].code]||[]).filter(n => freq[n] > 0);
-    const nums3 = (map[top4[2].code]||[]).filter(n => freq[n] > 0);
-    const nums4 = (map[top4[3].code]||[]).filter(n => freq[n] > 0);
-    return {
-      code1: top4[0].code, nums1, disp1: getDisp(top4[0].code),
-      code2: top4[1].code, nums2, disp2: getDisp(top4[1].code),
-      code3: top4[2].code, nums3, disp3: getDisp(top4[2].code),
-      code4: top4[3].code, nums4, disp4: getDisp(top4[3].code),
-    };
+    const nums1 = (map[top3[0].code]||[]).filter(n => (numFreq[si]||{})[n] > 0);
+    const nums2 = (map[top3[1].code]||[]).filter(n => (numFreq[si]||{})[n] > 0);
+    const nums3 = (map[top3[2].code]||[]).filter(n => (numFreq[si]||{})[n] > 0);
+    return { code1: top3[0].code, nums1, code2: top3[1].code, nums2, code3: top3[2].code, nums3 };
   });
 
   const candNums = allColProbs.map((cp, si) => {
     if(!cp) return [];
-    const top3 = getTopNCodes(cp, 4);
+    const top3 = getTopNCodes(cp, 3);
     const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
     const raw = new Set();
     top3.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
@@ -764,23 +756,18 @@ function renderCombinaciones(result, totalRows) {
   html += '<div style="margin-bottom:10px;">';
   html += '<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;">Códigos predichos → números candidatos (filtro histórico mean-1σ):</div>';
   html += '<table style="border-collapse:collapse;font-size:10px;width:100%;">';
-  html += '<tr style="background:#f8f9fa;"><th style="padding:3px 8px;border:1px solid #dee2e6;text-align:left;">Sec</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 1</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 2</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 3</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 4</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Candidatos finales</th></tr>';
+  html += '<tr style="background:#f8f9fa;"><th style="padding:3px 8px;border:1px solid #dee2e6;text-align:left;">Sec</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 1</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 2</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 3</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Candidatos finales</th></tr>';
   candCodes.forEach((cc, si) => {
     if(!cc) return;
     const color = si < 5 ? '#e8f5e9' : '#e3f2fd';
-    const dispNums = (disp) => disp.map(({n,valid}) =>
-      valid ? n : `<span style="color:#ccc;text-decoration:line-through;">${n}</span>`
-    ).join(', ') || '—';
     html += `<tr style="background:${color};">
       <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">S${si+1}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code1}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;">${dispNums(cc.disp1)}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;">${cc.nums1.join(', ')||'—'}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code2}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;">${dispNums(cc.disp2)}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code3}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;">${dispNums(cc.disp3)}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code4}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;">${dispNums(cc.disp4)}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;">${cc.nums2.join(', ')||'—'}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code3||'—'}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;">${cc.nums3?(cc.nums3.join(', ')||'—'):'—'}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">${candNums[si].join(', ')||'<span style="color:#999">sin candidatos</span>'}</td>
     </tr>`;
   });
@@ -922,7 +909,7 @@ function _predValidarWork() {
     // Get valid combos using current freq counts
     const top2s = colProbs.map((cp, si) => {
       if(!cp) return null;
-      const top2 = getTopNCodes(cp, 4);
+      const top2 = getTopNCodes(cp, 3);
       const map  = si < 5 ? CODIGO_A_NUMS_50 : CODIGO_A_NUMS_12;
       const raw  = new Set();
       top2.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });

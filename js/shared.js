@@ -55,9 +55,9 @@
     btn.disabled = true;
 
     try {
-      const { data, error } = await sbClient
-        .rpc('validar_clave', { p_clave: userKey })
-        .maybeSingle();
+      const { data: rows, error } = await sbClient
+        .rpc('validar_clave', { p_clave: userKey });
+      const data = rows && rows[0] ? rows[0] : null;
 
       if (error || !data) {
         alert('Senha incorreta');

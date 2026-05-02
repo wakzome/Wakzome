@@ -10,13 +10,18 @@
   const SUPA_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
   const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
 
-  function getSupabase() {
+  async function getSupabase() {
     if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
+    // Esperar a que sbAdmin esté disponible (máx 5 segundos)
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
+    }
     return null;
   }
 
   async function supabaseFetch(table, filters = {}) {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) { console.warn('Supabase client not available'); return []; }
     try {
       let query = sb.from(table).select('*');
@@ -31,7 +36,7 @@
   }
 
   async function supabaseInsert(table, data) {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) return null;
     try {
       const { data: result, error } = await sb.from(table).insert(data).select();
@@ -44,7 +49,7 @@
   }
 
   async function supabaseUpdate(table, id, data) {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) return null;
     try {
       // Remove 'id' from data payload to avoid conflict with the filter
@@ -736,7 +741,7 @@
         if (!confirm(`Zerar banco de horas de ${shortName(p?.name||pid)}?`)) return;
         if (!S._banco) S._banco = {};
         S._banco[pid] = 0;
-        const sb = getSupabase();
+        const sb = await getSupabase();
         if (sb) {
           try {
             await sb.from('gh_banco_horas').upsert(
@@ -781,7 +786,7 @@
   // Carrega TUDO para a semana actual
   async function loadIncidencias() {
     if (!S.weekStart) return;
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) return;
     const weekKey  = S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0');
     const weekEnd  = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
@@ -825,7 +830,7 @@
 
   // Guardar folga da semana
   async function saveFolga(pid, dias) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     if (!weekKey) return;
     if (!S._folgas) S._folgas = {};
@@ -838,7 +843,7 @@
 
   // Guardar/actualizar baixa
   async function saveBaixa(pid, data) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     if (!S._baixas) S._baixas = {};
     try {
       if (S._baixas[pid]?.id) {
@@ -854,7 +859,7 @@
 
   // Guardar/actualizar licença
   async function saveLicenca(pid, data) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     if (!S._licencas) S._licencas = {};
     try {
       if (S._licencas[pid]?.id) {
@@ -870,7 +875,7 @@
 
   // Lançar horas no banco
   async function lancarBanco(pid, horas) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     if (!S._banco) S._banco = {};
     const novoSaldo = Math.round(((S._banco[pid] || 0) + horas) * 10) / 10;
     S._banco[pid] = novoSaldo;
@@ -885,7 +890,7 @@
 
   // Limpar incidências da semana para uma pessoa (folga + baixa + licença)
   async function limparIncidencias(pid) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     try {
       // Folga desta semana
@@ -911,7 +916,7 @@
   async function deletePersonConfirm(pid) {
     const p = PEOPLE.find(x => x.id === pid);
     if (!p) return;
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) { alert('Supabase não disponível.'); return; }
 
     // Se a pessoa está associada a mais do que uma loja (via knows),
@@ -1296,7 +1301,7 @@
 
   // ── CONFIRMAR HORARIO — graba todo en Supabase ──
   async function confirmSchedule(active) {
-    const sb = getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
+    const sb = await getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
     const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     if (!weekKey) return;
 
@@ -1330,7 +1335,7 @@
 
       // Actualizar banco de horas — diferença horas reais vs 40h contratadas
       try {
-        const sb = getSupabase();
+        const sb = await getSupabase();
         if (sb) {
           const bancoUpdates = [];
           PEOPLE.forEach(p => {
@@ -1576,7 +1581,7 @@
 
   // ── LOAD A PUBLISHED PORTO WEEK BACK INTO THE GERADOR FOR EDITING ──
   async function loadPortoWeekForEdit(weekISO) {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) { renderWiz(); return; }
 
     const c = getContainer(); if (!c) return;
@@ -1736,7 +1741,7 @@
   // Upload the CSV to Supabase Storage as porto_horarios.csv
   // Strategy: fetch existing file, append/replace the block for this week, re-upload
   async function publishPortoSantoCSV() {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) return;
     const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
     if (!weekKey) return;
@@ -1803,7 +1808,7 @@
   }
 
   async function saveBorrador() {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     const data = buildBorradorData();
     if (!data.weekKey) { alert('Sem semana definida.'); return; }
     try {
@@ -1819,7 +1824,7 @@
   }
 
   async function deleteBorrador(weekKey) {
-    const sb = getSupabase(); if (!sb) return;
+    const sb = await getSupabase(); if (!sb) return;
     await sb.from('gh_borradores').delete().eq('semana', weekKey);
   }
 
@@ -1843,7 +1848,7 @@
   }
 
   async function renderBorradores(container) {
-    const sb = getSupabase(); if (!sb || !container) return;
+    const sb = await getSupabase(); if (!sb || !container) return;
     try {
       const { data } = await sb.from('gh_borradores').select('semana, updated_at').order('semana', { ascending: false });
       if (!data || !data.length) return;
@@ -2441,7 +2446,7 @@
 
     el.innerHTML = '<div style="text-align:center;padding:24px;color:#bbb;font-size:.75rem;">A carregar equidade de folgas…</div>';
 
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) { el.innerHTML = ''; return; }
 
     try {

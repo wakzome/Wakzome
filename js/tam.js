@@ -150,7 +150,7 @@
 
   /* Obtener cliente Supabase del sistema (definido en supabase-config.js como sbClient) */
   function tamSB() {
-    return (typeof sbClient !== 'undefined') ? sbClient : null;
+    return (typeof sbAdmin !== "undefined") ? sbAdmin : null;
   }
 
   /* ══════════════════════════════════════════════════════════════

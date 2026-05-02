@@ -1333,17 +1333,27 @@
       S.alerts.push({ type: 'info', text: '✓ Folgas guardadas.' });
       if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
 
-      // Actualizar banco de horas — diferença horas reais vs 40h contratadas
+      // Actualizar banco de horas — lógica correcta con historial por semana
+      S._isEditing = false;
       try {
         const sb = await getSupabase();
         if (sb) {
+          // Cargar registros actuales de banco de horas
+          const { data: bancoDB } = await sb.from('gh_banco_horas').select('*');
+          const bancoMap = {};
+          (bancoDB || []).forEach(b => { bancoMap[b.pessoa_id] = b; });
+
           const bancoUpdates = [];
           PEOPLE.forEach(p => {
             if (!S.schedule[p.id]) return;
+
+            // Calcular horas reales de esta persona en esta semana
             let realHrs = 0;
+            let tieneHorario = false;
             DAYS.forEach(d => {
               const cl = S.schedule[p.id]?.[d];
               if (cl?.type === 'work' && cl.shift) {
+                tieneHorario = true;
                 cl.shift.split('|').forEach(sg => {
                   const pts = sg.split('-');
                   if (pts.length < 2) return;
@@ -1354,6 +1364,7 @@
               }
               const apoio = S._apoioShifts?.[p.id]?.[d];
               if (apoio?.shift) {
+                tieneHorario = true;
                 const pts = apoio.shift.split('-');
                 if (pts.length>=2) {
                   const [h1,m1]=pts[0].split(':').map(Number);
@@ -1362,15 +1373,33 @@
                 }
               }
             });
+
+            // Si la persona no tiene horario esta semana, no tocar su saldo
+            if (!tieneHorario) return;
+
             realHrs = Math.round(realHrs * 10) / 10;
-            const diff = Math.round((realHrs - 40) * 10) / 10;
-            if (diff === 0) return;
-            const saldoAtual = S._banco?.[p.id] || 0;
-            const novoSaldo = Math.round((saldoAtual + diff) * 10) / 10;
+            const diffSemana = Math.round((realHrs - 40) * 10) / 10;
+
+            const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
+            let saldoBase = registro.saldo || 0;
+
+            // Si ya calculamos esta semana antes, restar el aporte anterior
+            if (registro.ultima_semana === weekKey) {
+              saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
+            }
+
+            const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
             S._banco[p.id] = novoSaldo;
+
             bancoUpdates.push(
               sb.from('gh_banco_horas').upsert(
-                { pessoa_id: p.id, saldo: novoSaldo, updated_at: new Date().toISOString() },
+                {
+                  pessoa_id: p.id,
+                  saldo: novoSaldo,
+                  saldo_semana: diffSemana,
+                  ultima_semana: weekKey,
+                  updated_at: new Date().toISOString()
+                },
                 { onConflict: 'pessoa_id' }
               )
             );
@@ -1729,6 +1758,7 @@
       }
 
       wStep = 3; // jump straight to schedule view
+      S._isEditing = true; // flag: editando horario publicado
       await loadIncidencias();
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       showSchedule(active);

@@ -56,9 +56,7 @@
 
     try {
       const { data, error } = await sbClient
-        .from('claves')
-        .select('tienda, rol')
-        .eq('clave', userKey)
+        .rpc('validar_clave', { p_clave: userKey })
         .maybeSingle();
 
       if (error || !data) {

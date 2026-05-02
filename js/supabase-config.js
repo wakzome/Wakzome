@@ -12,6 +12,7 @@ async function initSupabase(sessionToken) {
 
   window.SUPABASE_URL = url;
   window.SUPABASE_KEY = key;
+  window.ADMIN_TOKEN  = adminToken;
   window.sbClient = window.supabase.createClient(url, key);
   window.sbAdmin  = window.supabase.createClient(url, key, {
     global: { headers: { 'x-admin-token': adminToken } }

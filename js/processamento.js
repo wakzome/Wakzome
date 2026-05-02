@@ -495,11 +495,11 @@
   var _undoPaused  = false; /* evita gravacao durante restore */
 
   /* ── 2a. SUPABASE CONFIG ── */
-  var PROC_SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
-  var PROC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
+  var PROC_SB_URL = window.SUPABASE_URL || '';
+  var PROC_SB_KEY = window.SUPABASE_KEY || '';
 
   function procSbHeaders() {
-    return { 'Content-Type': 'application/json', 'apikey': PROC_SB_KEY, 'Authorization': 'Bearer ' + PROC_SB_KEY };
+    return { 'Content-Type': 'application/json', 'apikey': PROC_SB_KEY, 'Authorization': 'Bearer ' + PROC_SB_KEY, 'x-admin-token': window.ADMIN_TOKEN || '' };
   }
   function procSbFetch(path, opts) {
     return fetch(PROC_SB_URL + '/rest/v1/' + path, Object.assign({ headers: procSbHeaders() }, opts || {}));

@@ -101,7 +101,7 @@
         } else {
           sweepThen(function() {
             document.getElementById('login-screen').style.display = 'none';
-            showGreeting('administração', function() {
+            showGreeting(data.nombre || 'administração', function() {
               const adminApp = document.getElementById('admin-app');
               adminApp.classList.add('show');
               const adminHdr = document.getElementById('admin-header');

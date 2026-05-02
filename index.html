@@ -4317,7 +4317,7 @@ td                   { font-size: .96rem !important; }
       if (dashboard) dashboard.style.display = 'none';
       if (moduleBar) moduleBar.style.display  = 'flex';
       if (barTitle)  barTitle.textContent     = 'vendas declaradas';
-      if (adminApp)  adminApp.classList.add('module-open');
+      if (adminApp)  { adminApp.classList.add('module-open'); adminApp.scrollTop = 0; }
       if (panel)     panel.style.display      = 'block';
       if (typeof _vAdmLoadData === 'function') _vAdmLoadData();
       return;
@@ -4343,7 +4343,16 @@ td                   { font-size: .96rem !important; }
 
     // Show module mode
     adminApp.classList.add('module-open');
+    adminApp.scrollTop = 0;
     if (barTitle) barTitle.textContent = MODULE_LABELS[tab] || tab;
+
+    // Forzar reflow en móvil para que el navegador recalcule el scroll
+    // tras la inyección dinámica de contenido
+    setTimeout(function () {
+      adminApp.style.overflow = 'hidden';
+      adminApp.offsetHeight; // reflow
+      adminApp.style.overflow = '';
+    }, 80);
 
     // Special overlays that are handled by openAgendaOverlay etc.
     // Those functions will handle their own overlay; we just need

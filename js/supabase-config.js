@@ -1,8 +1,13 @@
 // ══════════════════════════════════════════════════════════════
 //  SUPABASE — configuración central
 // ══════════════════════════════════════════════════════════════
-async function initSupabase() {
-  const res = await fetch('/api/config');
+async function initSupabase(sessionToken) {
+  const res = await fetch('/api/config', {
+    headers: { 'x-session-token': sessionToken }
+  });
+
+  if (!res.ok) throw new Error('No autorizado');
+
   const { url, key, adminToken } = await res.json();
 
   window.SUPABASE_URL = url;
@@ -13,4 +18,4 @@ async function initSupabase() {
   });
 }
 
-window.supabaseReady = initSupabase();
+window.initSupabase = initSupabase;

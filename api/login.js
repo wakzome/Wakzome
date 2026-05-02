@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-const sessions = new Map();
+function createToken(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 8 * 60 * 60 * 1000 })).toString('base64url');
+  const signature = crypto.createHmac('sha256', process.env.JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -23,12 +28,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Clave incorrecta' });
   }
 
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { tienda: resultado.tienda, rol: resultado.rol });
-
-  setTimeout(() => sessions.delete(token), 8 * 60 * 60 * 1000);
-
-  global._wkzSessions = sessions;
+  const token = createToken({ tienda: resultado.tienda, rol: resultado.rol });
 
   return res.json({ token, tienda: resultado.tienda, rol: resultado.rol });
 }

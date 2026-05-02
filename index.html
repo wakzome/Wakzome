@@ -4914,5 +4914,38 @@ td                   { font-size: .96rem !important; }
 <script src="js/ventas-empleada.js"></script>
 <script src="js/ventas-admin.js"></script>
 <script src="js/predictivo.js"></script>
+
+<script>
+/* ── Interceptar botón/gesto "atrás" de Android ── */
+(function () {
+  history.pushState({ appLayer: 0 }, '');
+
+  window.addEventListener('popstate', function () {
+    history.pushState({ appLayer: 0 }, '');
+
+    var overlays = [
+      { id: 'agenda-overlay',        close: function () { if (typeof closeAgendaOverlay === 'function') closeAgendaOverlay(); } },
+      { id: 'rotulos-overlay',       close: function () { if (typeof closeRotulosOverlay === 'function') closeRotulosOverlay(); } },
+      { id: 'processamento-overlay', close: function () { if (typeof closeProcessamentoOverlay === 'function') { closeProcessamentoOverlay(); document.body.classList.remove('no-glow'); } } },
+      { id: 'recibos-overlay',       close: function () { if (typeof closeRecibosOverlay === 'function') closeRecibosOverlay(); } },
+      { id: 'etiquetas-overlay',     close: function () { if (typeof closeEtiquetasOverlay === 'function') closeEtiquetasOverlay(); } },
+      { id: 'ventas-overlay',        close: function () { if (typeof closeVentasOverlay === 'function') closeVentasOverlay(); } },
+      { id: 'horarios-overlay',      close: function () { var btn = document.getElementById('horarios-overlay-back'); if (btn) btn.click(); } },
+      { id: 'faturas-overlay',       close: function () { var btn = document.getElementById('faturas-overlay-back'); if (btn) btn.click(); } }
+    ];
+
+    for (var i = 0; i < overlays.length; i++) {
+      var el = document.getElementById(overlays[i].id);
+      if (el && el.classList.contains('open')) {
+        overlays[i].close();
+        return;
+      }
+    }
+
+    var backBtn = document.getElementById('adm-back-btn');
+    if (backBtn) backBtn.click();
+  });
+})();
+</script>
 </body>
 </html>

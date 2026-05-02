@@ -794,11 +794,7 @@
     if (active) renderFerias();
   }, 3600000);
 
-  // Arrancar
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initFerias);
-  } else {
-    setTimeout(initFerias, 200);
-  }
+  // Arrancar solo cuando hay sesión activa (no al cargar la página)
+  // La inicialización ocurre al abrir la pestaña de férias
 
 })();

@@ -14,7 +14,7 @@
   function getSupabase() {
     if (_supabaseClient) return _supabaseClient;
     if (window.supabase && window.supabase.createClient) {
-      _supabaseClient = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+      _supabaseClient = (typeof sbAdmin !== "undefined") ? sbAdmin : window.supabase.createClient(SUPA_URL, SUPA_KEY);
       return _supabaseClient;
     }
     return null;

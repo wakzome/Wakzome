@@ -28,15 +28,22 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Clave incorrecta' });
   }
 
+  // Registrar acceso
+  await supabase.from('access_log').insert({
+    nombre: resultado.nombre || resultado.tienda,
+    tienda: resultado.tienda,
+    rol:    resultado.rol
+  }).catch(() => {});
+
   const token = createToken({ tienda: resultado.tienda, rol: resultado.rol });
 
   return res.json({
     token,
     tienda: resultado.tienda,
-    rol: resultado.rol,
+    rol:    resultado.rol,
     nombre: resultado.nombre,
-    url: process.env.SUPABASE_URL,
-    key: process.env.SUPABASE_KEY,
+    url:    process.env.SUPABASE_URL,
+    key:    process.env.SUPABASE_KEY,
     adminToken: process.env.ADMIN_TOKEN
   });
 }

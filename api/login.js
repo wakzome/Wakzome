@@ -30,5 +30,5 @@ export default async function handler(req, res) {
 
   const token = createToken({ tienda: resultado.tienda, rol: resultado.rol });
 
-  return res.json({ token, tienda: resultado.tienda, rol: resultado.rol });
+  return res.json({ token, tienda: resultado.tienda, rol: resultado.rol, nombre: resultado.nombre });
 }

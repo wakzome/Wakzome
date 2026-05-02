@@ -430,7 +430,7 @@ function rtBindLogic() {
   };
 
   /* ── Helpers ── */
-  function rtSB() { return (typeof sbClient !== 'undefined') ? sbClient : null; }
+  function rtSB() { return (typeof sbAdmin !== 'undefined') ? sbAdmin : null; }
 
   function setSyncDot(state) {
     var d = document.getElementById('rt-sync-dot');

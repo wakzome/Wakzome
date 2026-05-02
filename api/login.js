@@ -30,5 +30,13 @@ export default async function handler(req, res) {
 
   const token = createToken({ tienda: resultado.tienda, rol: resultado.rol });
 
-  return res.json({ token, tienda: resultado.tienda, rol: resultado.rol, nombre: resultado.nombre });
+  return res.json({
+    token,
+    tienda: resultado.tienda,
+    rol: resultado.rol,
+    nombre: resultado.nombre,
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_KEY,
+    adminToken: process.env.ADMIN_TOKEN
+  });
 }

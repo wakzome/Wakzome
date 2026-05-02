@@ -55,17 +55,25 @@
     btn.disabled = true;
 
     try {
-      const { data: rows, error } = await sbClient
-        .rpc('validar_clave', { p_clave: userKey });
-      const data = rows && rows[0] ? rows[0] : null;
+      const loginRes = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave: userKey })
+      });
 
-      if (error || !data) {
+      if (!loginRes.ok) {
         alert('Senha incorreta');
         document.getElementById('key-input').value = '';
         document.getElementById('key-input').focus();
         btn.disabled = false;
         return;
       }
+
+      const data = await loginRes.json();
+      const sessionToken = data.token;
+
+      // Inicializar Supabase con el token de sesión
+      await window.initSupabase(sessionToken);
 
       isLoggedIn = true;
 

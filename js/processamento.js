@@ -495,14 +495,14 @@
   var _undoPaused  = false; /* evita gravacao durante restore */
 
   /* ── 2a. SUPABASE CONFIG ── */
-  var PROC_SB_URL = window.SUPABASE_URL || '';
-  var PROC_SB_KEY = window.SUPABASE_KEY || '';
-
+  // Lee credenciales dinámicamente en cada llamada para respetar el timing de initSupabase
   function procSbHeaders() {
-    return { 'Content-Type': 'application/json', 'apikey': PROC_SB_KEY, 'Authorization': 'Bearer ' + PROC_SB_KEY, 'x-admin-token': window.ADMIN_TOKEN || '' };
+    var key = window.SUPABASE_KEY || '';
+    return { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key, 'x-admin-token': window.ADMIN_TOKEN || '' };
   }
   function procSbFetch(path, opts) {
-    return fetch(PROC_SB_URL + '/rest/v1/' + path, Object.assign({ headers: procSbHeaders() }, opts || {}));
+    var url = window.SUPABASE_URL || '';
+    return fetch(url + '/rest/v1/' + path, Object.assign({ headers: procSbHeaders() }, opts || {}));
   }
 
   /* ── 2b. SYNC STATUS ── */

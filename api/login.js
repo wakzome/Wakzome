@@ -29,11 +29,13 @@ export default async function handler(req, res) {
   }
 
   // Registrar acceso
-  await supabase.from('access_log').insert({
-    nombre: resultado.nombre || resultado.tienda,
-    tienda: resultado.tienda,
-    rol:    resultado.rol
-  }).catch(() => {});
+  try {
+    await supabase.from('access_log').insert({
+      nombre: resultado.nombre || resultado.tienda,
+      tienda: resultado.tienda,
+      rol:    resultado.rol
+    });
+  } catch(e) {}
 
   const token = createToken({ tienda: resultado.tienda, rol: resultado.rol });
 

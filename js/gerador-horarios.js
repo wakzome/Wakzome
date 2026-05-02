@@ -7,8 +7,7 @@
   let PEOPLE = [];
 
   // ── SUPABASE CONFIG ──
-  const SUPA_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
-  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
+  // Credenciales gestionadas por el servidor — no hardcodeadas
 
   async function getSupabase() {
     if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;

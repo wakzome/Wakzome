@@ -2,15 +2,9 @@
 (function() {
 
   // ── SUPABASE ──
-  const SUPA_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
-  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
-
-  // Esperar a que el cliente Supabase esté disponible
+  // Usar cliente global sbAdmin (inicializado tras login)
   function getSupabase() {
-    if (window.supabase && window.supabase.createClient) {
-      return window.supabase.createClient(SUPA_URL, SUPA_KEY, { global: { headers: { 'x-admin-token': 'wkz-admin-2025-secret' } } });
-    }
-    return null;
+    return (typeof sbAdmin !== 'undefined') ? sbAdmin : null;
   }
 
   // ── ESTADO GLOBAL ──

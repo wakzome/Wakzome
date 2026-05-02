@@ -764,8 +764,7 @@
   async function initFerias() {
     _supaClient = getSupabase();
     if (!_supaClient) {
-      console.warn('[Férias] Supabase no disponible, reintentando…');
-      setTimeout(initFerias, 500);
+      console.warn('[Férias] Supabase no disponible — esperando login');
       return;
     }
     await loadFromSupabase();

@@ -112,12 +112,12 @@
     if (!tienda) {
       return Promise.reject(new Error('Nenhuma loja definida. Por favor, refresque a página e volte a entrar.'));
     }
-    if (typeof sbClient === 'undefined' || !sbClient) {
+    if (typeof sbAdmin === "undefined" || !sbAdmin) {
       return Promise.reject(new Error('Ligação à base de dados não disponível. Refresque a página.'));
     }
     var cutoff = _offsetDate(-3) < SYSTEM_START ? SYSTEM_START : _offsetDate(-3);
     try {
-      return sbClient
+      return sbAdmin
         .from('ventas_diarias')
         .select('*')
         .eq('tienda', tienda)
@@ -411,7 +411,7 @@
       updated_at:   new Date().toISOString()
     };
 
-    sbClient
+    sbAdmin
       .from('ventas_diarias')
       .upsert(record, { onConflict: 'tienda,fecha' })
       .then(function (res) {

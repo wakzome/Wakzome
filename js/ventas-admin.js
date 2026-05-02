@@ -162,7 +162,7 @@
     }
 
     // Consulta principal
-    var q = sbClient.from('ventas_diarias').select('*')
+    var q = sbAdmin.from('ventas_diarias').select('*')
       .gte('fecha', fromDate).lte('fecha', toDate)
       .order('fecha', { ascending: false });
     if (filterStore) q = q.eq('tienda', filterStore);
@@ -178,7 +178,7 @@
     });
 
     // Consulta comparativa (mismo filtro de tienda)
-    var q2 = sbClient.from('ventas_diarias').select('*')
+    var q2 = sbAdmin.from('ventas_diarias').select('*')
       .gte('fecha', cmp.from).lte('fecha', cmp.to);
     if (filterStore) q2 = q2.eq('tienda', filterStore);
     q2.then(function (res) {

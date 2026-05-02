@@ -125,7 +125,7 @@
         window._currentStoreGlobal = data.tienda;
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
-          showGreeting(data.tienda, function() {
+          showGreeting(data.nombre || data.tienda, function() {
             document.getElementById('main-header').classList.add('show');
             document.getElementById('main-header').style.display = 'flex';
             document.getElementById('container-tables').style.display = 'flex';

@@ -422,7 +422,7 @@ function agBindLogic() {
 
   /* ── Supabase REST helpers ── */
   function sbHeaders(){
-    return { 'Content-Type':'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+    return { 'Content-Type':'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'x-admin-token': 'wkz-admin-2025-secret' };
   }
   function sbFetch(path, opts){
     return fetch(SB_URL + '/rest/v1/' + path, Object.assign({ headers: sbHeaders() }, opts||{}));

@@ -8,7 +8,7 @@
   // Esperar a que el cliente Supabase esté disponible
   function getSupabase() {
     if (window.supabase && window.supabase.createClient) {
-      return window.supabase.createClient(SUPA_URL, SUPA_KEY);
+      return window.supabase.createClient(SUPA_URL, SUPA_KEY, { global: { headers: { 'x-admin-token': 'wkz-admin-2025-secret' } } });
     }
     return null;
   }

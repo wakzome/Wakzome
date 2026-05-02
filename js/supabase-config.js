@@ -1,14 +1,25 @@
 // ══════════════════════════════════════════════════════════════
 //  SUPABASE — configuración central
 // ══════════════════════════════════════════════════════════════
-async function initSupabase(sessionToken) {
-  const res = await fetch('/api/config', {
-    headers: { 'x-session-token': sessionToken }
-  });
+async function initSupabase(sessionToken, credentials) {
+  let url, key, adminToken;
 
-  if (!res.ok) throw new Error('No autorizado');
-
-  const { url, key, adminToken } = await res.json();
+  if (credentials) {
+    // Usar credenciales recibidas directamente del login — sin llamada extra
+    url        = credentials.url;
+    key        = credentials.key;
+    adminToken = credentials.adminToken;
+  } else {
+    // Fallback: pedir credenciales al servidor
+    const res = await fetch('/api/config', {
+      headers: { 'x-session-token': sessionToken }
+    });
+    if (!res.ok) throw new Error('No autorizado');
+    const data = await res.json();
+    url        = data.url;
+    key        = data.key;
+    adminToken = data.adminToken;
+  }
 
   window.SUPABASE_URL = url;
   window.SUPABASE_KEY = key;

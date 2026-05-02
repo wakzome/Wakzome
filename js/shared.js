@@ -72,8 +72,12 @@
       const data = await loginRes.json();
       const sessionToken = data.token;
 
-      // Inicializar Supabase con el token de sesión
-      await window.initSupabase(sessionToken);
+      // Inicializar Supabase con credenciales del login — sin llamada extra
+      await window.initSupabase(sessionToken, {
+        url: data.url,
+        key: data.key,
+        adminToken: data.adminToken
+      });
 
       isLoggedIn = true;
 
@@ -125,7 +129,7 @@
         window._currentStoreGlobal = data.tienda;
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
-          showGreeting(data.nombre || data.tienda, function() {
+          showGreeting(data.tienda, function() {
             document.getElementById('main-header').classList.add('show');
             document.getElementById('main-header').style.display = 'flex';
             document.getElementById('container-tables').style.display = 'flex';

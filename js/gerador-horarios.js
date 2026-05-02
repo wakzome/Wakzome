@@ -1729,6 +1729,7 @@
       }
 
       wStep = 3; // jump straight to schedule view
+      await loadIncidencias();
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       showSchedule(active);
 

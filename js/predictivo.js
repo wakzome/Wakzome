@@ -3,7 +3,6 @@
    Cargado por index.html, abre overlay con clave 'predictivo'
    v2: Histórico en Supabase + input de nuevos eventos
 ═══════════════════════════════════════════════════════ */
-(function() {
 
 // ── Inject overlay HTML ───────────────────────────────
 const overlayHTML = `
@@ -3002,4 +3001,4 @@ function _convertirWork() {
 }
 
 
-})(); // end main IIFE
+// end predictivo.js

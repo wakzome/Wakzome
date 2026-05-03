@@ -85,16 +85,6 @@ const overlayHTML = `
         </div>
       </div>
 
-      <!-- ══ RESULTADO REAL HISTÓRICO (visible solo cuando hay límite y el evento existe) ══ -->
-      <div id="pred-resultado-real-box" class="pred-info-box" style="display:none;border:1.5px solid #198754;background:#f0fff4;padding:10px 16px;">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <span style="font-size:11px;font-weight:700;color:#198754;text-transform:uppercase;letter-spacing:.04em;">🔍 Resultado real histórico</span>
-          <span id="pred-real-evento-num" style="background:#198754;color:#fff !important;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">—</span>
-          <span id="pred-real-evento-label" style="font-size:12px;font-weight:700;color:#333;">—</span>
-          <span id="pred-real-evento-detail" style="font-size:11px;color:#555;">—</span>
-        </div>
-      </div>
-
       <!-- ══ FILA DE NUEVO EVENTO ══ -->
       <div style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px;">
         <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;">➕ Agregar nuevo evento al histórico</div>
@@ -362,6 +352,17 @@ const overlayHTML = `
 <div id="pred-panelPred6"><table><tbody id="pred-predTable6"></tbody></table></div>
 <div id="pred-panelPred7"><table><tbody id="pred-predTable7"></tbody></table></div>
 </div>
+
+      <!-- ══ RESULTADO REAL HISTÓRICO (aparece cuando hay límite activo y el evento existe) ══ -->
+      <div id="pred-resultado-real-box" style="display:none;width:100%;box-sizing:border-box;border:2px solid #198754;background:#f0fff4;border-radius:10px;padding:14px 18px;">
+        <div style="font-size:11px;font-weight:700;color:#198754;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">🔍 Resultado real histórico</div>
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+          <span id="pred-real-evento-num" style="background:#198754;color:#fff !important;border-radius:20px;padding:3px 12px;font-size:13px;font-weight:700;white-space:nowrap;">—</span>
+          <span id="pred-real-evento-label" style="font-size:15px;font-weight:700;color:#0a3622;">—</span>
+        </div>
+        <div id="pred-real-evento-detail" style="margin-top:8px;font-size:14px;font-weight:700;color:#111;letter-spacing:.03em;">—</div>
+        <div id="pred-real-evento-fecha" style="margin-top:4px;font-size:11px;color:#555;font-weight:500;">—</div>
+      </div>
 
       <!-- ══ RESULTADOS COMBINACIONES (renderizados por el motor) ══ -->
       <div id="pred-combinaciones-panel" style="width:100%;"></div>
@@ -3066,10 +3067,11 @@ function _convertirWork() {
 
 // ── Consulta histórica: resultado real del evento N+1 ──
 function predMostrarResultadoReal(evento) {
-  const box = document.getElementById('pred-resultado-real-box');
-  const num  = document.getElementById('pred-real-evento-num');
-  const lbl  = document.getElementById('pred-real-evento-label');
-  const det  = document.getElementById('pred-real-evento-detail');
+  const box   = document.getElementById('pred-resultado-real-box');
+  const num   = document.getElementById('pred-real-evento-num');
+  const lbl   = document.getElementById('pred-real-evento-label');
+  const det   = document.getElementById('pred-real-evento-detail');
+  const fecha = document.getElementById('pred-real-evento-fecha');
   if(!box || !num || !lbl || !det) return;
 
   if(!evento) {
@@ -3082,19 +3084,14 @@ function predMostrarResultadoReal(evento) {
   const dia  = evento.dia     || '—';
   const mes  = evento.mes     || '—';
   const anio = evento.anio    || '—';
-  const s1   = evento.s1  != null ? evento.s1  : '—';
-  const s2   = evento.s2  != null ? evento.s2  : '—';
-  const s3   = evento.s3  != null ? evento.s3  : '—';
-  const s4   = evento.s4  != null ? evento.s4  : '—';
-  const s5   = evento.s5  != null ? evento.s5  : '—';
-  const s6   = evento.s6  != null ? evento.s6  : '—';
-  const s7   = evento.s7  != null ? evento.s7  : '—';
+  const vals = [evento.s1, evento.s2, evento.s3, evento.s4, evento.s5, evento.s6, evento.s7]
+                 .map(v => v != null ? v : '—');
 
   num.textContent = 'Evento #' + n;
   lbl.textContent = 'Resultado: ' + ev;
-  det.textContent = 'Fecha: ' + dia + ' ' + mes + ' ' + anio +
-    '  |  S1:' + s1 + '  S2:' + s2 + '  S3:' + s3 + '  S4:' + s4 +
-    '  S5:' + s5 + '  S6:' + s6 + '  S7:' + s7;
+  // Formato: 1, 2, 3, 4, 5, 6, 7  (negrita grande, definido en el HTML)
+  det.textContent = vals.join(', ');
+  if(fecha) fecha.textContent = 'Fecha: ' + dia + ' ' + mes + ' ' + anio;
 
   box.style.display = '';
 }

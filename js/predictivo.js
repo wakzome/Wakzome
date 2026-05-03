@@ -85,6 +85,16 @@ const overlayHTML = `
         </div>
       </div>
 
+      <!-- ══ RESULTADO REAL HISTÓRICO (visible solo cuando hay límite y el evento existe) ══ -->
+      <div id="pred-resultado-real-box" class="pred-info-box" style="display:none;border:1.5px solid #198754;background:#f0fff4;padding:10px 16px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:11px;font-weight:700;color:#198754;text-transform:uppercase;letter-spacing:.04em;">🔍 Resultado real histórico</span>
+          <span id="pred-real-evento-num" style="background:#198754;color:#fff !important;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">—</span>
+          <span id="pred-real-evento-label" style="font-size:12px;font-weight:700;color:#333;">—</span>
+          <span id="pred-real-evento-detail" style="font-size:11px;color:#555;">—</span>
+        </div>
+      </div>
+
       <!-- ══ FILA DE NUEVO EVENTO ══ -->
       <div style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px;">
         <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;">➕ Agregar nuevo evento al histórico</div>
@@ -512,6 +522,13 @@ function _predWorkFromHistorico() {
   let rows = [...predHistorico].sort((a,b) => a.n_evento - b.n_evento);
   if(!isNaN(limitVal) && limitVal > 0 && limitVal < rows.length) {
     rows = rows.slice(0, limitVal);
+    // Mostrar el resultado real del evento siguiente (limitVal + 1) si existe en el histórico
+    const allRowsSorted = [...predHistorico].sort((a,b) => a.n_evento - b.n_evento);
+    const eventoReal = allRowsSorted[limitVal]; // índice limitVal → posición limitVal+1
+    predMostrarResultadoReal(eventoReal);
+  } else {
+    // Sin límite activo o límite >= total: ocultar el panel
+    predOcultarResultadoReal();
   }
 
   // Construir parsed: array de 7 columnas, cada una con los números de la secuencia
@@ -3045,5 +3062,46 @@ function _convertirWork() {
   if(btn2){btn2.disabled=false;btn2.textContent='Convertir';}
 }
 
+
+
+// ── Consulta histórica: resultado real del evento N+1 ──
+function predMostrarResultadoReal(evento) {
+  const box = document.getElementById('pred-resultado-real-box');
+  const num  = document.getElementById('pred-real-evento-num');
+  const lbl  = document.getElementById('pred-real-evento-label');
+  const det  = document.getElementById('pred-real-evento-detail');
+  if(!box || !num || !lbl || !det) return;
+
+  if(!evento) {
+    box.style.display = 'none';
+    return;
+  }
+
+  const n    = evento.n_evento;
+  const ev   = evento.evento  || '—';
+  const dia  = evento.dia     || '—';
+  const mes  = evento.mes     || '—';
+  const anio = evento.anio    || '—';
+  const s1   = evento.s1  != null ? evento.s1  : '—';
+  const s2   = evento.s2  != null ? evento.s2  : '—';
+  const s3   = evento.s3  != null ? evento.s3  : '—';
+  const s4   = evento.s4  != null ? evento.s4  : '—';
+  const s5   = evento.s5  != null ? evento.s5  : '—';
+  const s6   = evento.s6  != null ? evento.s6  : '—';
+  const s7   = evento.s7  != null ? evento.s7  : '—';
+
+  num.textContent = 'Evento #' + n;
+  lbl.textContent = 'Resultado: ' + ev;
+  det.textContent = 'Fecha: ' + dia + ' ' + mes + ' ' + anio +
+    '  |  S1:' + s1 + '  S2:' + s2 + '  S3:' + s3 + '  S4:' + s4 +
+    '  S5:' + s5 + '  S6:' + s6 + '  S7:' + s7;
+
+  box.style.display = '';
+}
+
+function predOcultarResultadoReal() {
+  const box = document.getElementById('pred-resultado-real-box');
+  if(box) box.style.display = 'none';
+}
 
 // end predictivo.js

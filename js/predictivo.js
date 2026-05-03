@@ -442,7 +442,8 @@ async function predCargarHistorico() {
     const { data, error } = await window.sbAdmin
       .from('pred_eventos')
       .select('*')
-      .order('n_evento', { ascending: false });
+      .order('n_evento', { ascending: true })
+      .limit(10000);
     if(error) throw error;
     predHistorico = data || [];
     const cnt = document.getElementById('pred-hist-count');

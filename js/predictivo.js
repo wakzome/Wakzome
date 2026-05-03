@@ -17,57 +17,55 @@ const overlayHTML = `
   <div id="pred-content" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;">
 
     <style id="pred-styles">
-/* Sistema Predictivo — CSS */
+/* Sistema Predictivo — CSS — REGLAS BLINDADAS */
 
-/* Botones con fondo oscuro → letras blancas (solo los que tienen fondo oscuro fijo) */
-#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000;color:#fff;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
-#pred-content .pred-btn-primary:disabled { background:#999;color:#fff;cursor:not-allowed; }
-#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #555;border-radius:6px;background:#444;color:#fff;cursor:pointer;font-size:12px; }
-#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
-#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
+/* Botones con fondo oscuro → letras blancas (100% garantizado) */
+#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000 !important;color:#fff !important;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
+#pred-content .pred-btn-primary:disabled { background:#999 !important;color:#fff !important;cursor:not-allowed; }
+#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #555 !important;border-radius:6px;background:#444 !important;color:#fff !important;cursor:pointer;font-size:12px; }
+#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754 !important;color:#fff !important;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd !important;color:#fff !important;cursor:pointer;font-size:12px;font-weight:600; }
 
 /* Badge histórico (fondo negro) → blanco */
 #pred-content span[style*="background:#000"] { color:#fff !important; }
 
-/* Cards de capacidad predictiva — colores originales */
+/* Cards de capacidad predictiva — fondos claros → letras oscuras garantizadas */
 #pred-content .summary-card { border-radius: 5px; padding: 5px 2px; text-align: center; }
 #pred-content .sc-num { font-size: 11px; font-weight: 700; display: block; line-height: 1.1; }
 #pred-content .sc-lbl { font-size: 9px; display: block; margin-top: 2px; opacity: 0.85; }
-#pred-content .sc-4 { background: #d1e7dd; color: #0a3622; }
-#pred-content .sc-3 { background: #cfe2ff; color: #084298; }
-#pred-content .sc-2 { background: #fff3cd; color: #664d03; }
-#pred-content .sc-1 { background: #f8d7da; color: #721c24; }
-#pred-content .sc-0 { background: #f0d0d0; color: #721c24; }
+#pred-content .sc-4 { background: #d1e7dd !important; color: #0a3622 !important; }
+#pred-content .sc-3 { background: #cfe2ff !important; color: #084298 !important; }
+#pred-content .sc-2 { background: #fff3cd !important; color: #664d03 !important; }
+#pred-content .sc-1 { background: #f8d7da !important; color: #721c24 !important; }
+#pred-content .sc-0 { background: #f0d0d0 !important; color: #721c24 !important; }
 
-/* Precisión y col-acc-val — el motor JS setea el color correcto, no interferir */
+/* Textos fijos garantizados */
+#pred-content .stat-val { font-size:12px;font-weight:700;color:#222 !important; }
+#pred-content .stat-val.big { font-size:13px; }
+#pred-content .summary-panel > h3 { font-size:14px;font-weight:700;margin-bottom:8px;text-align:center;color:#333 !important; }
+#pred-content .seq-summary h4 { font-size:11px;font-weight:600;color:#555 !important;margin-bottom:6px;text-align:center; }
+#pred-content .stat-lbl { font-size:9px;color:#888 !important;margin-bottom:2px; }
+#pred-content .bar-lbl { font-size:9px;color:#888 !important;margin-bottom:3px; }
+#pred-content .col-acc-label { font-size:9px;color:#888 !important;margin-bottom:2px; }
+#pred-content .pred-status { font-size:11px;color:#666 !important;font-style:italic; }
+
+/* Precisión y col-acc-val — el motor JS setea el color con setProperty, no interferir */
 #pred-content .col-acc-val { font-size: 10px; font-weight: 700; padding: 2px; border-radius: 3px; text-align: center; }
 #pred-content .score-bar { padding: 4px 8px; border-radius: 4px; margin: 2px 0; display: flex; justify-content: space-between; font-size: 11px; }
 
-/* Stat values */
-#pred-content .stat-val { font-size:12px;font-weight:700;color:#222; }
-#pred-content .stat-val.big { font-size:13px; }
-
-/* Layout */
+/* Layout general */
 #pred-content .summary-panel { background:#fff;border:1px solid #ddd;border-radius:10px;padding:10px 12px;width:100%;box-sizing:border-box; }
-#pred-content .summary-panel > h3 { font-size:14px;font-weight:700;margin-bottom:8px;text-align:center;color:#333; }
 #pred-content .dual-summary { display:flex;gap:8px;flex-wrap:wrap;justify-content:center; }
 #pred-content .seq-summary { flex:1;min-width:120px;max-width:180px;border:1px solid #eee;border-radius:7px;padding:6px; }
-#pred-content .seq-summary h4 { font-size:11px;font-weight:600;color:#555;margin-bottom:6px;text-align:center; }
 #pred-content .summary-grid { display:grid;grid-template-columns:repeat(5,1fr);gap:2px;margin-bottom:4px; }
-#pred-content .summary-card { border-radius:5px;padding:5px 2px;text-align:center; }
 #pred-content .summary-stats { display:flex;justify-content:space-between;border-top:1px solid #eee;padding-top:8px;margin-bottom:8px;gap:4px; }
 #pred-content .stat-block { text-align:center; }
-#pred-content .stat-lbl { font-size:9px;color:#888;margin-bottom:2px; }
-#pred-content .bar-lbl { font-size:9px;color:#888;margin-bottom:3px; }
 #pred-content .bar-track { display:flex;height:5px;border-radius:3px;overflow:hidden;background:#eee; }
 #pred-content .bar-seg { height:100%; }
 #pred-content .col-accuracy { display:flex;gap:2px;margin-top:6px;border-top:1px solid #eee;padding-top:6px; }
 #pred-content .col-acc-block { flex:1;text-align:center; }
-#pred-content .col-acc-label { font-size:9px;color:#888;margin-bottom:2px; }
-#pred-content .score-bar { padding:4px 8px;border-radius:4px;margin:2px 0;display:flex;justify-content:space-between;font-size:11px; }
 #pred-content .pred-info-box { background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px 14px;font-size:12px; }
 #pred-content .pred-input-row input { border:1px solid #ccc;border-radius:4px;padding:4px 8px;font-size:12px;font-family:monospace;text-align:center; }
-#pred-content .pred-status { font-size:11px;color:#666;font-style:italic; }
 </style>
 
     <div style="display:flex;flex-direction:column;gap:16px;">
@@ -397,7 +395,10 @@ window.predLogout = function() {
 // ── Helpers UI ────────────────────────────────────────
 function predSetStatus(id, msg, color) {
   const el = document.getElementById(id);
-  if(el) { el.textContent = msg; el.style.color = color || '#666'; }
+  if(el) {
+    el.textContent = msg;
+    if(color) el.style.setProperty('color', color, 'important');
+  }
 }
 
 // ── SUPABASE: Cargar histórico ────────────────────────
@@ -632,7 +633,10 @@ function predPctColor(p) {
 function predRenderSummary(suf, num, totalPreds, hitCounts, totalHitsSum, colCorrect, cols) {
   const barColors=['#d1e7dd','#cfe2ff','#fff3cd','#f8d7da','#f0d0d0'];
   const set=(id,val)=>{const el=document.getElementById('pred-'+id+suf);if(el)el.textContent=val;};
-  const setstyle=(id,prop,val)=>{const el=document.getElementById('pred-'+id+suf);if(el)el.style[prop]=val;};
+  const setstyle=(id,prop,val)=>{
+    const el=document.getElementById('pred-'+id+suf);
+    if(el) el.style.setProperty(prop, val, 'important');
+  };
 
   const blk=document.getElementById('pred-summary'+num+'Block');
   if(blk) blk.style.display='';
@@ -646,7 +650,8 @@ function predRenderSummary(suf, num, totalPreds, hitCounts, totalHitsSum, colCor
   const gp=totalHitsSum/(totalPreds*4)*100;
   const pc=predPctColor(gp);
   set('sPct',gp.toFixed(1)+'%');
-  setstyle('sPct','background',pc.bg);setstyle('sPct','color',pc.color);
+  setstyle('sPct','background',pc.bg);
+  setstyle('sPct','color',pc.color);
   set('sPerfect',hitCounts[4]+' ('+(hitCounts[4]/totalPreds*100).toFixed(1)+'%)');
 
   const bar=document.getElementById('pred-sBar'+suf);
@@ -654,12 +659,24 @@ function predRenderSummary(suf, num, totalPreds, hitCounts, totalHitsSum, colCor
     bar.innerHTML='';
     for(let h=4;h>=0;h--){
       const pct=hitCounts[h]/totalPreds*100;
-      if(pct>0){const seg=document.createElement('div');seg.className='bar-seg';seg.style.width=pct+'%';seg.style.background=barColors[4-h];bar.appendChild(seg);}
+      if(pct>0){
+        const seg=document.createElement('div');
+        seg.className='bar-seg';
+        seg.style.width=pct+'%';
+        seg.style.setProperty('background', barColors[4-h], 'important');
+        bar.appendChild(seg);
+      }
     }
   }
   for(let c=0;c<4;c++){
     const el=document.getElementById('pred-acc'+(c+1)+suf);
-    if(el){const p=(colCorrect[c]/totalPreds*100);const col=predPctColor(p);el.textContent=p.toFixed(1)+'%';el.style.background=col.bg;el.style.color=col.color;}
+    if(el){
+      const p=(colCorrect[c]/totalPreds*100);
+      const col=predPctColor(p);
+      el.textContent=p.toFixed(1)+'%';
+      el.style.setProperty('background', col.bg, 'important');
+      el.style.setProperty('color', col.color, 'important');
+    }
   }
 }
 

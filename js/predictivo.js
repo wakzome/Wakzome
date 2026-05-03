@@ -47,11 +47,12 @@ const overlayHTML = `
 #pred-content .score-bar { padding: 4px 8px; border-radius: 4px; margin: 2px 0; display: flex; justify-content: space-between; font-size: 11px; }
 /* Info boxes */
 #pred-content .pred-info-box { background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px 14px;font-size:12px; }
-#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000;color:#fff;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
-#pred-content .pred-btn-primary:disabled { background:#999;cursor:not-allowed; }
-#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #aaa;border-radius:6px;background:#f2f2f2;cursor:pointer;font-size:12px; }
-#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
-#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000;color:#fff !important;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
+#pred-content .pred-btn-primary:disabled { background:#999;color:#fff !important;cursor:not-allowed; }
+#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #555;border-radius:6px;background:#444;color:#fff !important;cursor:pointer;font-size:12px; }
+#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754;color:#fff !important;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd;color:#fff !important;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content button { color:#fff !important; }
 #pred-content .pred-input-row input { border:1px solid #ccc;border-radius:4px;padding:4px 8px;font-size:12px;font-family:monospace;text-align:center; }
 #pred-content .pred-status { font-size:11px;color:#666;font-style:italic; }
 </style>
@@ -389,6 +390,12 @@ function predSetStatus(id, msg, color) {
 async function predCargarHistorico() {
   predSetStatus('pred-hist-status', 'cargando...', '#666');
   try {
+    // Esperar hasta 3s a que sbAdmin esté disponible
+    let intentos = 0;
+    while(!window.sbAdmin && intentos < 30) {
+      await new Promise(r => setTimeout(r, 100));
+      intentos++;
+    }
     if(!window.sbAdmin) throw new Error('Supabase admin no inicializado');
     const { data, error } = await window.sbAdmin
       .from('pred_eventos')

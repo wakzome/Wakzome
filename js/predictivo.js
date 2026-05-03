@@ -454,7 +454,6 @@ async function predCargarHistorico() {
       if(data.length < pageSize) break;
       from += pageSize;
     }
-    if(error) throw error;
     predHistorico = allData;
     const cnt = document.getElementById('pred-hist-count');
     if(cnt) cnt.textContent = predHistorico.length;

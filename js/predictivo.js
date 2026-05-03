@@ -51,16 +51,16 @@ const overlayHTML = `
   color: #fff !important;
 }
 
-/* Col-accuracy badges — fondo claro dinámico → texto oscuro */
-#pred-content .col-acc-val { font-size:10px;font-weight:700;padding:2px;border-radius:3px;text-align:center;color:#222 !important; }
-
-/* Summary cards — fondo CLARO, texto OSCURO */
-#pred-content .sc-4 { background: #d1e7dd; color: #0a3622 !important; }
-#pred-content .sc-3 { background: #cfe2ff; color: #084298 !important; }
-#pred-content .sc-2 { background: #fff3cd; color: #664d03 !important; }
-#pred-content .sc-1 { background: #f8d7da; color: #721c24 !important; }
-#pred-content .sc-0 { background: #e2e3e5; color: #41464b !important; }
-#pred-content .sc-4 *,#pred-content .sc-3 *,#pred-content .sc-2 *,#pred-content .sc-1 *,#pred-content .sc-0 * { color: inherit !important; }
+#pred-content .summary-card { border-radius: 5px; padding: 5px 2px; text-align: center; }
+#pred-content .sc-num { font-size: 11px; font-weight: 700; display: block; line-height: 1.1; }
+#pred-content .sc-lbl { font-size: 9px; display: block; margin-top: 2px; opacity: 0.85; }
+#pred-content .sc-4 { background: #d1e7dd; color: #0a3622; }
+#pred-content .sc-3 { background: #cfe2ff; color: #084298; }
+#pred-content .sc-2 { background: #fff3cd; color: #664d03; }
+#pred-content .sc-1 { background: #f8d7da; color: #721c24; }
+#pred-content .sc-0 { background: #f0d0d0; color: #721c24; }
+#pred-content .col-acc-val { font-size: 10px; font-weight: 700; padding: 2px; border-radius: 3px; text-align: center; }
+#pred-content .score-bar { padding: 4px 8px; border-radius: 4px; margin: 2px 0; display: flex; justify-content: space-between; font-size: 11px; }
 
 /* Stat values */
 #pred-content .stat-val { font-size:12px;font-weight:700;color:#222; }

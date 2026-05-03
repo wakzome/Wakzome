@@ -390,8 +390,8 @@ function predSetStatus(id, msg, color) {
 async function predCargarHistorico() {
   predSetStatus('pred-hist-status', 'cargando...', '#666');
   try {
-    if(!window.sbClient) throw new Error('Supabase no inicializado');
-    const { data, error } = await window.sbClient
+    if(!window.sbAdmin) throw new Error('Supabase admin no inicializado');
+    const { data, error } = await window.sbAdmin
       .from('pred_eventos')
       .select('*')
       .order('n_evento', { ascending: false });
@@ -422,7 +422,7 @@ window.predGuardarEvento = async function() {
 
   predSetStatus('pred-save-status','Guardando...','#666');
   try {
-    const { error } = await window.sbClient
+    const { error } = await window.sbAdmin
       .from('pred_eventos')
       .upsert({
         n_evento: n,

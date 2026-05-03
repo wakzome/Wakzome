@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════
    predictivo.js — Sistema Predictivo A/B
    Cargado por index.html, abre overlay con clave 'predictivo'
+   v2: Histórico en Supabase + input de nuevos eventos
 ═══════════════════════════════════════════════════════ */
 (function() {
 
@@ -17,9 +18,7 @@ const overlayHTML = `
   <div id="pred-content" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;">
 
     <style id="pred-styles">
-
-/* Sistema Predictivo — scoped to #pred-content, no bleeding */
-#pred-content .top-layout { display: flex; flex-direction: column; gap: 16px; margin-bottom: 0; align-items: center; }
+/* Sistema Predictivo — scoped to #pred-content */
 #pred-content .summary-panel { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; width: 100%; box-sizing: border-box; }
 #pred-content .summary-panel > h3 { font-size: 14px; font-weight: 700; margin-bottom: 8px; text-align: center; color: #333; }
 #pred-content .dual-summary { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -47,33 +46,102 @@ const overlayHTML = `
 #pred-content .col-acc-label { font-size: 9px; color: #888; margin-bottom: 2px; }
 #pred-content .col-acc-val { font-size: 10px; font-weight: 700; padding: 2px; border-radius: 3px; text-align: center; }
 #pred-content .score-bar { padding: 4px 8px; border-radius: 4px; margin: 2px 0; display: flex; justify-content: space-between; font-size: 11px; }
+/* Info boxes */
+#pred-content .pred-info-box { background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px 14px;font-size:12px; }
+#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000;color:#fff;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
+#pred-content .pred-btn-primary:disabled { background:#999;cursor:not-allowed; }
+#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #aaa;border-radius:6px;background:#f2f2f2;cursor:pointer;font-size:12px; }
+#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content .pred-input-row input { border:1px solid #ccc;border-radius:4px;padding:4px 8px;font-size:12px;font-family:monospace;text-align:center; }
+#pred-content .pred-status { font-size:11px;color:#666;font-style:italic; }
 </style>
 
-    <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:0;">
-      <!-- Input grid -->
-      <div style="display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;">
-        <div style="display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;">
-          <button onclick="predConvertir()" id="pred-btn-conv" style="padding:6px 16px;border:1px solid #aaa;border-radius:4px;background:#f2f2f2;cursor:pointer;font-size:13px;">Convertir</button>
-          <span style="font-size:11px;color:#888;">Pega desde Excel directamente en la tabla (Ctrl+V)</span>
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- ══ PANEL HISTÓRICO ══ -->
+      <div class="pred-info-box" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;">Histórico Supabase</span>
+          <span id="pred-hist-count" style="background:#000;color:#fff;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">—</span>
+          <span class="pred-status" id="pred-hist-status">cargando...</span>
         </div>
-        <div style="overflow:auto;max-height:260px;border:1px solid #ccc;border-radius:6px;display:inline-block;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-          <table id="pred-inputGrid" style="border-collapse:collapse;font-size:11px;font-family:monospace;background:#fff;">
-            <thead><tr>
-              <th style="background:#f2f2f2;border:1px solid #ccc;padding:2px 6px;min-width:32px;text-align:center;position:sticky;top:0;z-index:2;">#</th>
-              <th style="background:#e8f5e9;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S1</th>
-              <th style="background:#e8f5e9;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S2</th>
-              <th style="background:#e8f5e9;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S3</th>
-              <th style="background:#e8f5e9;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S4</th>
-              <th style="background:#e8f5e9;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S5</th>
-              <th style="background:#e3f2fd;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S6</th>
-              <th style="background:#e3f2fd;border:1px solid #ccc;padding:2px 8px;min-width:52px;text-align:center;position:sticky;top:0;">S7</th>
-            </tr></thead>
-            <tbody id="pred-inputGridBody"></tbody>
-          </table>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <span style="font-size:11px;color:#666;">Calcular con primeras</span>
+          <input id="pred-limit-input" type="number" min="10" style="width:70px;border:1px solid #ccc;border-radius:4px;padding:3px 6px;font-size:12px;text-align:center;" placeholder="todas">
+          <span style="font-size:11px;color:#666;">filas</span>
         </div>
       </div>
 
-      <!-- Capacidad predictiva -->
+      <!-- ══ FILA DE NUEVO EVENTO ══ -->
+      <div style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px;">
+        <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;">➕ Agregar nuevo evento al histórico</div>
+        <div class="pred-input-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">N°</span>
+            <input id="pred-new-n" type="number" min="1" style="width:55px;" placeholder="N°">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">EVENTO</span>
+            <select id="pred-new-event" style="border:1px solid #ccc;border-radius:4px;padding:4px 6px;font-size:12px;">
+              <option value="X">X</option>
+              <option value="Y">Y</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">DÍA</span>
+            <input id="pred-new-day" type="number" min="1" max="31" style="width:48px;" placeholder="Día">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">MES</span>
+            <select id="pred-new-month" style="border:1px solid #ccc;border-radius:4px;padding:4px 6px;font-size:12px;">
+              <option>Jan</option><option>Feb</option><option>Mar</option><option>Apr</option>
+              <option>May</option><option>Jun</option><option>Jul</option><option>Aug</option>
+              <option>Sep</option><option>Oct</option><option>Nov</option><option>Dec</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">AÑO</span>
+            <input id="pred-new-year" type="number" min="2000" max="2099" style="width:62px;" placeholder="Año">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S1</span>
+            <input id="pred-new-s1" type="number" min="1" style="width:48px;" placeholder="S1">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S2</span>
+            <input id="pred-new-s2" type="number" min="1" style="width:48px;" placeholder="S2">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S3</span>
+            <input id="pred-new-s3" type="number" min="1" style="width:48px;" placeholder="S3">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S4</span>
+            <input id="pred-new-s4" type="number" min="1" style="width:48px;" placeholder="S4">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S5</span>
+            <input id="pred-new-s5" type="number" min="1" style="width:48px;" placeholder="S5">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S6</span>
+            <input id="pred-new-s6" type="number" min="1" style="width:48px;" placeholder="S6">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="font-size:9px;color:#888;font-weight:600;">S7</span>
+            <input id="pred-new-s7" type="number" min="1" style="width:48px;" placeholder="S7">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">
+          <button class="pred-btn-green" onclick="predGuardarEvento()">💾 Guardar evento</button>
+          <button class="pred-btn-primary" id="pred-btn-calcular" onclick="predCalcular()">⚡ Calcular</button>
+          <button class="pred-btn-blue" onclick="predExportarEventos()">📥 Exportar eventos</button>
+          <span class="pred-status" id="pred-save-status"></span>
+        </div>
+      </div>
+
+      <!-- ══ CAPACIDAD PREDICTIVA ══ -->
       <div class="summary-panel" id="pred-summaryPanel" style="display:none;width:100%;box-sizing:border-box;">
         <h3>Capacidad Predictiva</h3>
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
@@ -262,16 +330,19 @@ const overlayHTML = `
         </div>
       </div>
 
-      <!-- Hidden data tables -->
-      <div style="display:none;"><table><tbody id="pred-output"></tbody></table><table><tbody id="pred-analysis"></tbody></table><table><tbody id="pred-counterAB"></tbody></table><table><tbody id="pred-rowAcount"></tbody></table><table><tbody id="pred-rowOneCount"></tbody></table></div>
+      <!-- Pred tables (hidden, for engine state) -->
+<div style="display:none;">
+<div id="pred-panelPred1"><table><tbody id="pred-predTable1"></tbody></table></div>
+<div id="pred-panelPred2"><table><tbody id="pred-predTable2"></tbody></table></div>
+<div id="pred-panelPred3"><table><tbody id="pred-predTable3"></tbody></table></div>
+<div id="pred-panelPred4"><table><tbody id="pred-predTable4"></tbody></table></div>
+<div id="pred-panelPred5"><table><tbody id="pred-predTable5"></tbody></table></div>
+<div id="pred-panelPred6"><table><tbody id="pred-predTable6"></tbody></table></div>
+<div id="pred-panelPred7"><table><tbody id="pred-predTable7"></tbody></table></div>
+</div>
 
-      <div id="pred-panelPred1" style="display:none;"><table><tbody id="pred-predTable"></tbody></table></div>
-<div id="pred-panelPred2" style="display:none;"><table><tbody id="pred-predTable2"></tbody></table></div>
-<div id="pred-panelPred3" style="display:none;"><table><tbody id="pred-predTable3"></tbody></table></div>
-<div id="pred-panelPred4" style="display:none;"><table><tbody id="pred-predTable4"></tbody></table></div>
-<div id="pred-panelPred5" style="display:none;"><table><tbody id="pred-predTable5"></tbody></table></div>
-<div id="pred-panelPred6" style="display:none;"><table><tbody id="pred-predTable6"></tbody></table></div>
-<div id="pred-panelPred7" style="display:none;"><table><tbody id="pred-predTable7"></tbody></table></div>
+      <!-- ══ RESULTADOS COMBINACIONES (renderizados por el motor) ══ -->
+      <div id="pred-combinaciones-panel" style="width:100%;"></div>
 
     </div>
   </div>
@@ -279,13 +350,16 @@ const overlayHTML = `
 
 document.body.insertAdjacentHTML('beforeend', overlayHTML);
 
+// ── Estado del histórico ──────────────────────────────
+let predHistorico = [];  // todos los eventos cargados de Supabase
+
 // ── Open / Close ─────────────────────────────────────
 window.openPreditivoOverlay = function() {
   const ov = document.getElementById('predictivo-overlay');
   if(!ov) return;
   ov.style.display = 'flex';
   requestAnimationFrame(() => requestAnimationFrame(() => { ov.style.opacity = '1'; }));
-  if(!ov.dataset.gridInit) { ov.dataset.gridInit = '1'; predInitGrid(); }
+  if(!ov.dataset.histLoaded) { ov.dataset.histLoaded = '1'; predCargarHistorico(); }
 };
 
 window.closePreditivoOverlay = function() {
@@ -296,10 +370,8 @@ window.closePreditivoOverlay = function() {
 };
 
 window.predLogout = function() {
-  // Close overlay
   const ov = document.getElementById('predictivo-overlay');
   if(ov) { ov.style.opacity = '0'; setTimeout(() => { ov.style.display = 'none'; }, 600); }
-  // Show login screen (same pattern as wakzome)
   setTimeout(() => {
     const login = document.getElementById('login-screen');
     if(login) { login.style.display = 'flex'; login.classList.add('visible'); }
@@ -308,153 +380,127 @@ window.predLogout = function() {
   }, 400);
 };
 
-// ── Grid Excel ───────────────────────────────────────
-function predInitGrid() {
-  const COLS = 7, INIT_ROWS = 10;
-  function getBody() { return document.getElementById('pred-inputGridBody'); }
+// ── Helpers UI ────────────────────────────────────────
+function predSetStatus(id, msg, color) {
+  const el = document.getElementById(id);
+  if(el) { el.textContent = msg; el.style.color = color || '#666'; }
+}
 
-  function addRow(rowNum, values) {
-    const tbody = getBody(); if(!tbody) return;
-    const rowBg = rowNum % 2 === 0 ? '#fafafa' : '#fff';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="background:#f5f5f5;border:1px solid #e0e0e0;padding:1px 4px;text-align:center;color:#999;font-size:10px;user-select:none;">${rowNum}</td>` +
-      Array.from({length:COLS}, (_,ci) =>
-        `<td contenteditable="true" style="border:1px solid #e0e0e0;padding:1px 4px;min-width:52px;text-align:center;background:${rowBg};outline:none;" data-row="${rowNum}" data-col="${ci}">${values&&values[ci]?values[ci]:''}</td>`
-      ).join('');
-    tbody.appendChild(tr);
+// ── SUPABASE: Cargar histórico ────────────────────────
+async function predCargarHistorico() {
+  predSetStatus('pred-hist-status', 'cargando...', '#666');
+  try {
+    if(!window.sbClient) throw new Error('Supabase no inicializado');
+    const { data, error } = await window.sbClient
+      .from('pred_eventos')
+      .select('*')
+      .order('n_evento', { ascending: false });
+    if(error) throw error;
+    predHistorico = data || [];
+    const cnt = document.getElementById('pred-hist-count');
+    if(cnt) cnt.textContent = predHistorico.length;
+    predSetStatus('pred-hist-status', `${predHistorico.length} eventos listos`, '#198754');
+  } catch(e) {
+    predSetStatus('pred-hist-status', 'Error: ' + e.message, '#dc3545');
   }
+}
 
-  function attachListeners() {
-    const tbody = getBody(); if(!tbody) return;
-    tbody.addEventListener('paste', function(e) {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      if(!lines.length) return;
-      const active = document.activeElement;
-      let startRow = 1, startCol = 0;
-      if(active && active.dataset.row) { startRow = parseInt(active.dataset.row); startCol = parseInt(active.dataset.col); }
-      tbody.innerHTML = '';
-      const vals = {};
-      lines.forEach((line, li) => {
-        const cells = line.split('\t');
-        cells.forEach((cell, ci) => {
-          const r = startRow + li, col = startCol + ci;
-          if(col < COLS) { if(!vals[r]) vals[r] = []; vals[r][col] = cell.trim(); }
-        });
-      });
-      const totalRows = Math.max(INIT_ROWS, startRow - 1 + lines.length) + 3;
-      for(let r = 1; r <= totalRows; r++) addRow(r, vals[r] || []);
-      attachListeners();
-    }, true);
-    tbody.addEventListener('input', function() {
-      const rows = tbody.querySelectorAll('tr');
-      const last = rows[rows.length-1];
-      if(last && Array.from(last.querySelectorAll('td[contenteditable]')).some(td => td.textContent.trim())) {
-        addRow(rows.length + 1); attachListeners();
-      }
+// ── SUPABASE: Guardar nuevo evento ─────────────────────
+window.predGuardarEvento = async function() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const n    = parseInt(get('pred-new-n'));
+  const evt  = get('pred-new-event');
+  const day  = parseInt(get('pred-new-day'));
+  const mon  = get('pred-new-month');
+  const yr   = parseInt(get('pred-new-year'));
+  const s    = [1,2,3,4,5,6,7].map(i => parseInt(get('pred-new-s'+i)));
+
+  if(isNaN(n) || n < 1)        { predSetStatus('pred-save-status','❌ N° inválido','#dc3545'); return; }
+  if(isNaN(day)||day<1||day>31){ predSetStatus('pred-save-status','❌ Día inválido','#dc3545'); return; }
+  if(isNaN(yr)||yr<2000)       { predSetStatus('pred-save-status','❌ Año inválido','#dc3545'); return; }
+  if(s.some(isNaN))            { predSetStatus('pred-save-status','❌ Faltan secuencias','#dc3545'); return; }
+
+  predSetStatus('pred-save-status','Guardando...','#666');
+  try {
+    const { error } = await window.sbClient
+      .from('pred_eventos')
+      .upsert({
+        n_evento: n,
+        evento: evt,
+        dia: day,
+        mes: mon,
+        anio: yr,
+        s1: s[0], s2: s[1], s3: s[2], s4: s[3],
+        s5: s[4], s6: s[5], s7: s[6]
+      }, { onConflict: 'n_evento' });
+    if(error) throw error;
+    predSetStatus('pred-save-status','✅ Guardado correctamente','#198754');
+    // Limpiar inputs
+    ['pred-new-n','pred-new-day','pred-new-year','pred-new-s1','pred-new-s2',
+     'pred-new-s3','pred-new-s4','pred-new-s5','pred-new-s6','pred-new-s7'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.value='';
     });
-    tbody.addEventListener('keydown', function(e) {
-      if(e.key==='Tab') {
-        e.preventDefault();
-        const td = e.target; if(!td.dataset) return;
-        const row = parseInt(td.dataset.row), col = parseInt(td.dataset.col);
-        const nc = e.shiftKey ? col-1 : col+1;
-        if(nc >= 0 && nc < COLS) { const n = tbody.querySelector(`td[data-row="${row}"][data-col="${nc}"]`); if(n) n.focus(); }
-        else if(!e.shiftKey && nc >= COLS) { const n = tbody.querySelector(`td[data-row="${row+1}"][data-col="0"]`); if(n) n.focus(); }
-      }
-      if(e.key==='Enter') {
-        e.preventDefault();
-        const td = e.target; if(!td.dataset) return;
-        const n = tbody.querySelector(`td[data-row="${parseInt(td.dataset.row)+1}"][data-col="${td.dataset.col}"]`);
-        if(n) n.focus();
-      }
-    });
+    // Recargar conteo
+    await predCargarHistorico();
+  } catch(e) {
+    predSetStatus('pred-save-status','❌ ' + e.message, '#dc3545');
   }
-
-  const tbody = getBody(); if(!tbody) return;
-  tbody.innerHTML = '';
-  for(let i = 1; i <= INIT_ROWS; i++) addRow(i);
-  attachListeners();
-}
-
-// ── Parse grid data ───────────────────────────────────
-function predParseGrid() {
-  const tbody = document.getElementById('pred-inputGridBody');
-  if(!tbody) return [[],[],[],[],[],[],[]];
-  const cols = [[],[],[],[],[],[],[]];
-  tbody.querySelectorAll('tr').forEach(tr => {
-    const cells = tr.querySelectorAll('td[contenteditable]');
-    if(!cells.length) return;
-    let hasAny = false;
-    cells.forEach(td => { if(td.textContent.trim()) hasAny = true; });
-    if(!hasAny) return;
-    cells.forEach((td, ci) => { if(ci < 7 && td.textContent.trim()) cols[ci].push(td.textContent.trim()); });
-  });
-  return cols;
-}
-
-// ── pctColor helper ──────────────────────────────────
-function predPctColor(p) {
-  if(p>=70) return {bg:'#d1e7dd',color:'#0a3622'};
-  if(p>=55) return {bg:'#cfe2ff',color:'#084298'};
-  if(p>=40) return {bg:'#fff3cd',color:'#664d03'};
-  return {bg:'#f8d7da',color:'#721c24'};
-}
-
-// ── Render summary per sequence ───────────────────────
-function predRenderSummary(suf, num, totalPreds, hitCounts, totalHitsSum, colCorrect, cols) {
-  const barColors = ['#d1e7dd','#cfe2ff','#fff3cd','#f8d7da','#f0d0d0'];
-  const set = (id, val) => { const el = document.getElementById('pred-'+id+suf); if(el) el.textContent = val; };
-  const setstyle = (id, prop, val) => { const el = document.getElementById('pred-'+id+suf); if(el) el.style[prop] = val; };
-
-  const blk = document.getElementById('pred-summary'+num+'Block');
-  if(blk) blk.style.display = '';
-  const sp = document.getElementById('pred-summaryPanel');
-  if(sp) sp.style.display = '';
-
-  set('s4', hitCounts[4]); set('s3', hitCounts[3]); set('s2', hitCounts[2]);
-  set('s1', hitCounts[1]); set('s0', hitCounts[0]);
-  set('sTotalPred', totalPreds);
-
-  const gp = totalHitsSum/(totalPreds*4)*100;
-  const pc = predPctColor(gp);
-  set('sPct', gp.toFixed(1)+'%');
-  setstyle('sPct','background',pc.bg); setstyle('sPct','color',pc.color);
-  set('sPerfect', hitCounts[4]+' ('+(hitCounts[4]/totalPreds*100).toFixed(1)+'%)');
-
-  const bar = document.getElementById('pred-sBar'+suf);
-  if(bar) {
-    bar.innerHTML = '';
-    for(let h=4;h>=0;h--) {
-      const pct = hitCounts[h]/totalPreds*100;
-      if(pct>0) { const seg=document.createElement('div'); seg.className='bar-seg'; seg.style.width=pct+'%'; seg.style.background=barColors[4-h]; bar.appendChild(seg); }
-    }
-  }
-
-  for(let c=0;c<4;c++) {
-    const el = document.getElementById('pred-acc'+(c+1)+suf);
-    if(el) { const p=(colCorrect[c]/totalPreds*100); const col=predPctColor(p); el.textContent=p.toFixed(1)+'%'; el.style.background=col.bg; el.style.color=col.color; }
-  }
-
-  // Inferencia eliminada del visual (datos disponibles en análisis de combinaciones)
-}
-
-// ── Store data for export ─────────────────────────────
-let predAllData = [];
-let predAllSeqs = [];
-
-// ── Convertir ────────────────────────────────────────
-window.predConvertir = function() {
-  const btn = document.getElementById('pred-btn-conv');
-  if(btn) { btn.disabled=true; btn.textContent='Calculando...'; }
-  setTimeout(_predWork, 30);
 };
 
-function _predWork() {
-  const parsed = predParseGrid();
-  predAllData = []; predAllSeqs = [];
+// ── Exportar eventos a Excel ───────────────────────────
+window.predExportarEventos = function() {
+  if(!predHistorico.length) { alert('No hay eventos cargados'); return; }
+  // Ordenar ascendente para la exportación
+  const sorted = [...predHistorico].sort((a,b) => a.n_evento - b.n_evento);
+  const rows = [['N','EVENTO','DIA','MES','AÑO','S1','S2','S3','S4','S5','S6','S7']];
+  sorted.forEach(r => rows.push([r.n_evento, r.evento, r.dia, r.mes, r.anio,
+    r.s1, r.s2, r.s3, r.s4, r.s5, r.s6, r.s7]));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Eventos');
+  XLSX.writeFile(wb, 'pred_historico_eventos.xlsx');
+};
 
+// ── CALCULAR: lanza el motor con datos del histórico ──
+window.predCalcular = function() {
+  if(!predHistorico.length) {
+    alert('No hay histórico cargado. Espera a que cargue o verifica Supabase.');
+    return;
+  }
+  const btn = document.getElementById('pred-btn-calcular');
+  if(btn) { btn.disabled=true; btn.textContent='Calculando...'; }
+  predSetStatus('pred-save-status','','#666');
+  setTimeout(_predWorkFromHistorico, 30);
+};
+
+function _predWorkFromHistorico() {
+  // Determinar límite de filas
+  const limitEl = document.getElementById('pred-limit-input');
+  const limitVal = limitEl ? parseInt(limitEl.value) : NaN;
+  // Ordenar historico ascendente (de más antiguo a más nuevo, como estaba en el CSV)
+  let rows = [...predHistorico].sort((a,b) => a.n_evento - b.n_evento);
+  if(!isNaN(limitVal) && limitVal > 0 && limitVal < rows.length) {
+    rows = rows.slice(0, limitVal);
+  }
+
+  // Construir parsed: array de 7 columnas, cada una con los números de la secuencia
+  // Los motores trabajan con números (s1..s7) como strings
+  const parsed = [[],[],[],[],[],[],[]];
+  rows.forEach(r => {
+    parsed[0].push(String(r.s1));
+    parsed[1].push(String(r.s2));
+    parsed[2].push(String(r.s3));
+    parsed[3].push(String(r.s4));
+    parsed[4].push(String(r.s5));
+    parsed[5].push(String(r.s6));
+    parsed[6].push(String(r.s7));
+  });
+
+  _predWorkWithParsed(parsed);
+}
+
+// ── Motor (recibe parsed igual que antes) ─────────────
+function _predWorkWithParsed(parsed) {
+  predAllData = []; predAllSeqs = [];
   allSeqsData=[]; predDataAll=[]; tableDataAll=[]; seqMem=[];
   blk5_AY={}; blk5_pos={}; blk2_AY={}; blk2_pos={}; blk7_AY={}; blk7_pos={};
 
@@ -515,39 +561,85 @@ function _predWork() {
     if(totalPreds>0) predRenderSummary(suffixes[si], nums[si], totalPreds, hitCounts, totalHitsSum, colCorrect, cols);
   }
 
-  // Collect historical sums + frequency counts from all 7 sequences
-  histSumsBlk5 = []; histSumsBlk2 = []; histSumsGlobal = [];
-  histEvensBlk5 = []; histEvensBlk2 = []; histEvensGlobal = [];
-  numFreq  = Array.from({length:7}, () => ({}));
-  letraFreq = Array.from({length:7}, () => ({}));
-  letrasHist = Array.from({length:7}, () => []);
-  const minN = Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
-  for(let i=0;i<minN;i++) {
-    const rowNums = allSeqsData.map(s => s.filas[i] ? s.filas[i].num : 0);
-    if(rowNums.every(n=>n>0)) { updateHistSums(rowNums); updateLetraHist(rowNums); }
+  // Sumas y frecuencias
+  histSumsBlk5=[]; histSumsBlk2=[]; histSumsGlobal=[];
+  histEvensBlk5=[]; histEvensBlk2=[]; histEvensGlobal=[];
+  numFreq=Array.from({length:7},()=>({}));
+  letraFreq=Array.from({length:7},()=>({}));
+  letrasHist=Array.from({length:7},()=>[]);
+  const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
+  for(let i=0;i<minN;i++){
+    const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);}
   }
 
-  // Get column probabilities for last row (next prediction)
-  const lastProbs = allSeqsData.map((seq, si) => {
-    if(!seq || seq.n < 2) return null;
+  const lastProbs=allSeqsData.map((seq,si)=>{
+    if(!seq||seq.n<2) return null;
     swapIn(si);
-    const probs = predecirFilaConProbs(seq.cols, seq.n, null);
+    const probs=predecirFilaConProbs(seq.cols,seq.n,null);
     swapOut(si);
     return probs;
   });
 
-  const totalRows = minN;
-  const comboResult = analizarCombinaciones(lastProbs, totalRows);
-  renderCombinaciones(comboResult, totalRows);
+  const totalRows=minN;
+  const comboResult=analizarCombinaciones(lastProbs,totalRows);
+  renderCombinaciones(comboResult,totalRows);
 
-  const btn2 = document.getElementById('pred-btn-conv');
-  if(btn2) { btn2.disabled=false; btn2.textContent='Convertir'; }
+  const btn=document.getElementById('pred-btn-calcular');
+  if(btn){btn.disabled=false;btn.textContent='⚡ Calcular';}
 }
 
-// ── Export functions ──────────────────────────────────
+// ── pctColor helper ──────────────────────────────────
+function predPctColor(p) {
+  if(p>=70) return {bg:'#d1e7dd',color:'#0a3622'};
+  if(p>=55) return {bg:'#cfe2ff',color:'#084298'};
+  if(p>=40) return {bg:'#fff3cd',color:'#664d03'};
+  return {bg:'#f8d7da',color:'#721c24'};
+}
+
+// ── Render summary per sequence ───────────────────────
+function predRenderSummary(suf, num, totalPreds, hitCounts, totalHitsSum, colCorrect, cols) {
+  const barColors=['#d1e7dd','#cfe2ff','#fff3cd','#f8d7da','#f0d0d0'];
+  const set=(id,val)=>{const el=document.getElementById('pred-'+id+suf);if(el)el.textContent=val;};
+  const setstyle=(id,prop,val)=>{const el=document.getElementById('pred-'+id+suf);if(el)el.style[prop]=val;};
+
+  const blk=document.getElementById('pred-summary'+num+'Block');
+  if(blk) blk.style.display='';
+  const sp=document.getElementById('pred-summaryPanel');
+  if(sp) sp.style.display='';
+
+  set('s4',hitCounts[4]);set('s3',hitCounts[3]);set('s2',hitCounts[2]);
+  set('s1',hitCounts[1]);set('s0',hitCounts[0]);
+  set('sTotalPred',totalPreds);
+
+  const gp=totalHitsSum/(totalPreds*4)*100;
+  const pc=predPctColor(gp);
+  set('sPct',gp.toFixed(1)+'%');
+  setstyle('sPct','background',pc.bg);setstyle('sPct','color',pc.color);
+  set('sPerfect',hitCounts[4]+' ('+(hitCounts[4]/totalPreds*100).toFixed(1)+'%)');
+
+  const bar=document.getElementById('pred-sBar'+suf);
+  if(bar){
+    bar.innerHTML='';
+    for(let h=4;h>=0;h--){
+      const pct=hitCounts[h]/totalPreds*100;
+      if(pct>0){const seg=document.createElement('div');seg.className='bar-seg';seg.style.width=pct+'%';seg.style.background=barColors[4-h];bar.appendChild(seg);}
+    }
+  }
+  for(let c=0;c<4;c++){
+    const el=document.getElementById('pred-acc'+(c+1)+suf);
+    if(el){const p=(colCorrect[c]/totalPreds*100);const col=predPctColor(p);el.textContent=p.toFixed(1)+'%';el.style.background=col.bg;el.style.color=col.color;}
+  }
+}
+
+// ── Store data for export ─────────────────────────────
+let predAllData=[];
+let predAllSeqs=[];
+
+// ── Export per-sequence ───────────────────────────────
 window.predExportPred = function(si) {
-  const data = predDataAll[si];
-  if(!data||!data.length) { alert('Sin datos S'+(si+1)); return; }
+  const data=predDataAll[si];
+  if(!data||!data.length){alert('Sin datos S'+(si+1));return;}
   const f=si*4+1;
   const rows=[['F'+f,'F'+(f+1),'F'+(f+2),'F'+(f+3),'Total'],...data.map(r=>[r.c1,r.c2,r.c3,r.c4,r.total])];
   const wb=XLSX.utils.book_new();
@@ -556,7 +648,7 @@ window.predExportPred = function(si) {
 };
 
 window.predExportTabla = function(si) {
-  const seq=predAllSeqs[si]; if(!seq||!seq.n){alert('Sin datos S'+(si+1));return;}
+  const seq=predAllSeqs[si];if(!seq||!seq.n){alert('Sin datos S'+(si+1));return;}
   const {cols,filas,n}=seq;
   const ws1=[['No','C1','C2','C3','C4'],...filas.map(r=>[r.num,r.fila[0],r.fila[1],r.fila[2],r.fila[3]])];
   const aus=[];let last=[{A:-1,B:-1},{A:-1,B:-1},{A:-1,B:-1},{A:-1,B:-1}];
@@ -571,6 +663,7 @@ window.predExportTabla = function(si) {
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['#A','#1'],...ay]),'A y 1');
   XLSX.writeFile(wb,'tablas_S'+(si+1)+'.xlsx');
 };
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ANÁLISIS DE COMBINACIONES — filtro histórico + sumas + combinaciones finales
@@ -2909,169 +3002,4 @@ function _convertirWork() {
 }
 
 
-// ── EXCEL-LIKE INPUT GRID ─────────────────────────────────────────────────────
-(function() {
-  // Initialize grid with some empty rows
-  const COLS = 7;
-  const INIT_ROWS = 10;
-  
-  function getBody() { return document.getElementById('inputGridBody'); }
-
-  function addRow(rowNum, values) {
-    const tbody = getBody();
-    if (!tbody) return;
-    const tr = document.createElement('tr');
-    const rowBg = rowNum % 2 === 0 ? '#fafafa' : '#fff';
-    tr.innerHTML = `<td style="background:#f5f5f5;border:1px solid #e0e0e0;padding:1px 4px;text-align:center;color:#999;font-size:10px;user-select:none;">${rowNum}</td>` +
-      Array.from({length:COLS}, (_,ci) =>
-        `<td contenteditable="true" style="border:1px solid #e0e0e0;padding:1px 4px;min-width:52px;text-align:center;background:${rowBg};outline:none;" data-row="${rowNum}" data-col="${ci}">${values&&values[ci]?values[ci]:''}</td>`
-      ).join('');
-    tbody.appendChild(tr);
-  }
-
-  function initGrid() {
-    const tbody = getBody();
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    for (let i = 1; i <= INIT_ROWS; i++) addRow(i);
-    attachGridListeners();
-  }
-
-  function attachGridListeners() {
-    const tbody = getBody();
-    if (!tbody) return;
-
-    // Handle paste: intercept Excel paste
-    tbody.addEventListener('paste', function(e) {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      if (!lines.length) return;
-
-      // Find start cell
-      const active = document.activeElement;
-      let startRow = 1, startCol = 0;
-      if (active && active.dataset.row) {
-        startRow = parseInt(active.dataset.row);
-        startCol = parseInt(active.dataset.col);
-      }
-
-      // Clear existing and rebuild
-      tbody.innerHTML = '';
-      const maxRow = startRow - 1 + lines.length;
-      const totalRows = Math.max(INIT_ROWS, maxRow) + 3;
-
-      // Build values matrix
-      const vals = {};
-      lines.forEach((line, li) => {
-        const cells = line.split('\t');
-        cells.forEach((cell, ci) => {
-          const r = startRow + li;
-          const col = startCol + ci;
-          if (col < COLS) {
-            if (!vals[r]) vals[r] = [];
-            vals[r][col] = cell.trim();
-          }
-        });
-      });
-
-      for (let r = 1; r <= totalRows; r++) {
-        addRow(r, vals[r] || []);
-      }
-      attachGridListeners();
-      syncInputMain();
-    }, true);
-
-    // Expand grid when typing in last row
-    tbody.addEventListener('input', function(e) {
-      const rows = tbody.querySelectorAll('tr');
-      const lastRow = rows[rows.length - 1];
-      const lastCells = lastRow.querySelectorAll('td[contenteditable]');
-      const hasContent = Array.from(lastCells).some(td => td.textContent.trim());
-      if (hasContent) {
-        const newRowNum = rows.length + 1;
-        addRow(newRowNum);
-        attachGridListeners();
-      }
-      syncInputMain();
-    });
-
-    // Tab navigation between cells
-    tbody.addEventListener('keydown', function(e) {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const td = e.target;
-        if (!td.dataset) return;
-        const row = parseInt(td.dataset.row);
-        const col = parseInt(td.dataset.col);
-        const nextCol = e.shiftKey ? col - 1 : col + 1;
-        if (nextCol >= 0 && nextCol < COLS) {
-          const next = tbody.querySelector(`td[data-row="${row}"][data-col="${nextCol}"]`);
-          if (next) next.focus();
-        } else if (!e.shiftKey && nextCol >= COLS) {
-          const nextRow = tbody.querySelector(`td[data-row="${row+1}"][data-col="0"]`);
-          if (nextRow) nextRow.focus();
-        }
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const td = e.target;
-        if (!td.dataset) return;
-        const row = parseInt(td.dataset.row);
-        const col = parseInt(td.dataset.col);
-        const next = tbody.querySelector(`td[data-row="${row+1}"][data-col="${col}"]`);
-        if (next) next.focus();
-      }
-    });
-  }
-
-  // Sync grid content into hidden inputMain for parseMultiInput()
-  function syncInputMain() {
-    const tbody = getBody();
-    if (!tbody) return;
-    const rows = tbody.querySelectorAll('tr');
-    const lines = [];
-    rows.forEach(tr => {
-      const cells = tr.querySelectorAll('td[contenteditable]');
-      if (!cells.length) return;
-      const vals = Array.from(cells).map(td => td.textContent.trim());
-      if (vals.some(v => v)) lines.push(vals.join('\t'));
-    });
-    // Also update parseMultiInput to read from grid
-    window._gridData = lines;
-  }
-
-  // Override parseMultiInput to read from grid
-  window.parseMultiInputGrid = function() {
-    const tbody = getBody();
-    if (!tbody) return [[],[],[],[],[],[],[]];
-    const cols = [[],[],[],[],[],[],[]];
-    const rows = tbody.querySelectorAll('tr');
-    rows.forEach(tr => {
-      const cells = tr.querySelectorAll('td[contenteditable]');
-      if (!cells.length) return;
-      let hasAny = false;
-      cells.forEach((td, ci) => { if(td.textContent.trim()) hasAny = true; });
-      if (!hasAny) return;
-      cells.forEach((td, ci) => {
-        const val = td.textContent.trim();
-        if (val && ci < 7) cols[ci].push(val);
-      });
-    });
-    return cols;
-  };
-
-  // Wait for DOM
-  document.addEventListener('DOMContentLoaded', function() {
-    initGrid();
-    // Override parseMultiInput globally
-    if (typeof parseMultiInput === 'function') {
-      window._origParseMultiInput = parseMultiInput;
-    }
-    window.parseMultiInput = function() {
-      return window.parseMultiInputGrid();
-    };
-  });
-})();
-
-
+})(); // end main IIFE

@@ -51,17 +51,16 @@ const overlayHTML = `
   color: #fff !important;
 }
 
-/* Col-accuracy badges — siempre texto visible */
-#pred-content .col-acc-val { font-size:10px;font-weight:700;padding:2px;border-radius:3px;text-align:center;color:#fff !important; }
+/* Col-accuracy badges — fondo claro dinámico → texto oscuro */
+#pred-content .col-acc-val { font-size:10px;font-weight:700;padding:2px;border-radius:3px;text-align:center;color:#222 !important; }
 
-/* Summary cards con colores de fondo específicos */
-#pred-content .sc-num { font-size:11px;font-weight:700;display:block;line-height:1.1; }
-#pred-content .sc-lbl { font-size:9px;display:block;margin-top:2px;opacity:0.85; }
-#pred-content .sc-4 { background:#0a3622;color:#fff !important; }
-#pred-content .sc-3 { background:#084298;color:#fff !important; }
-#pred-content .sc-2 { background:#664d03;color:#fff !important; }
-#pred-content .sc-1 { background:#721c24;color:#fff !important; }
-#pred-content .sc-0 { background:#4a0f0f;color:#fff !important; }
+/* Summary cards — fondo CLARO, texto OSCURO */
+#pred-content .sc-4 { background: #d1e7dd; color: #0a3622 !important; }
+#pred-content .sc-3 { background: #cfe2ff; color: #084298 !important; }
+#pred-content .sc-2 { background: #fff3cd; color: #664d03 !important; }
+#pred-content .sc-1 { background: #f8d7da; color: #721c24 !important; }
+#pred-content .sc-0 { background: #e2e3e5; color: #41464b !important; }
+#pred-content .sc-4 *,#pred-content .sc-3 *,#pred-content .sc-2 *,#pred-content .sc-1 *,#pred-content .sc-0 * { color: inherit !important; }
 
 /* Stat values */
 #pred-content .stat-val { font-size:12px;font-weight:700;color:#222; }
@@ -439,13 +438,24 @@ async function predCargarHistorico() {
       intentos++;
     }
     if(!window.sbAdmin) throw new Error('Supabase admin no inicializado');
-    const { data, error } = await window.sbAdmin
-      .from('pred_eventos')
-      .select('*')
-      .order('n_evento', { ascending: true })
-      .limit(10000);
+    // Paginación: Supabase tiene límite duro de 1000 por request
+    let allData = [];
+    let from = 0;
+    const pageSize = 1000;
+    while(true) {
+      const { data, error } = await window.sbAdmin
+        .from('pred_eventos')
+        .select('*')
+        .order('n_evento', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if(error) throw error;
+      if(!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if(data.length < pageSize) break;
+      from += pageSize;
+    }
     if(error) throw error;
-    predHistorico = data || [];
+    predHistorico = allData;
     const cnt = document.getElementById('pred-hist-count');
     if(cnt) cnt.textContent = predHistorico.length;
     predSetStatus('pred-hist-status', `${predHistorico.length} eventos listos`, '#198754');

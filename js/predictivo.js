@@ -17,40 +17,19 @@ const overlayHTML = `
   <div id="pred-content" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;">
 
     <style id="pred-styles">
-/* ═══════════════════════════════════════════════════════
-   Sistema Predictivo — CSS
-   REGLA ABSOLUTA: Fondo oscuro = letras blancas. Siempre.
-═══════════════════════════════════════════════════════ */
+/* Sistema Predictivo — CSS */
 
-/* NUCLEAR: cualquier botón dentro del overlay → letras blancas */
-#predictivo-overlay button,
-#predictivo-overlay button *,
-#pred-content button,
-#pred-content button * {
-  color: #fff !important;
-}
+/* Botones con fondo oscuro → letras blancas (solo los que tienen fondo oscuro fijo) */
+#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000;color:#fff;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
+#pred-content .pred-btn-primary:disabled { background:#999;color:#fff;cursor:not-allowed; }
+#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #555;border-radius:6px;background:#444;color:#fff;cursor:pointer;font-size:12px; }
+#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
+#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd;color:#fff;cursor:pointer;font-size:12px;font-weight:600; }
 
-/* Botones con fondo oscuro específico — doble seguro */
-#pred-content .pred-btn-primary,
-#pred-content .pred-btn-green,
-#pred-content .pred-btn-blue,
-#pred-content .pred-btn-secondary {
-  color: #fff !important;
-}
-#pred-content .pred-btn-primary { padding:7px 18px;border:none;border-radius:6px;background:#000;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em; }
-#pred-content .pred-btn-primary:disabled { background:#999;cursor:not-allowed; }
-#pred-content .pred-btn-secondary { padding:7px 14px;border:1px solid #555;border-radius:6px;background:#444;cursor:pointer;font-size:12px; }
-#pred-content .pred-btn-green { padding:7px 14px;border:none;border-radius:6px;background:#198754;cursor:pointer;font-size:12px;font-weight:600; }
-#pred-content .pred-btn-blue { padding:7px 14px;border:none;border-radius:6px;background:#0d6efd;cursor:pointer;font-size:12px;font-weight:600; }
+/* Badge histórico (fondo negro) → blanco */
+#pred-content span[style*="background:#000"] { color:#fff !important; }
 
-/* Badges / pills con fondo oscuro → blanco */
-#pred-content span[style*="background:#000"],
-#pred-content span[style*="background: #000"],
-#pred-content span[style*="background:rgb(0,0,0)"],
-#predictivo-overlay span[style*="background:#000"] {
-  color: #fff !important;
-}
-
+/* Cards de capacidad predictiva — colores originales */
 #pred-content .summary-card { border-radius: 5px; padding: 5px 2px; text-align: center; }
 #pred-content .sc-num { font-size: 11px; font-weight: 700; display: block; line-height: 1.1; }
 #pred-content .sc-lbl { font-size: 9px; display: block; margin-top: 2px; opacity: 0.85; }
@@ -59,20 +38,14 @@ const overlayHTML = `
 #pred-content .sc-2 { background: #fff3cd; color: #664d03; }
 #pred-content .sc-1 { background: #f8d7da; color: #721c24; }
 #pred-content .sc-0 { background: #f0d0d0; color: #721c24; }
+
+/* Precisión y col-acc-val — el motor JS setea el color correcto, no interferir */
 #pred-content .col-acc-val { font-size: 10px; font-weight: 700; padding: 2px; border-radius: 3px; text-align: center; }
 #pred-content .score-bar { padding: 4px 8px; border-radius: 4px; margin: 2px 0; display: flex; justify-content: space-between; font-size: 11px; }
 
 /* Stat values */
 #pred-content .stat-val { font-size:12px;font-weight:700;color:#222; }
 #pred-content .stat-val.big { font-size:13px; }
-#pred-content .sPct,
-#pred-content [id$="sPct"],
-#pred-content [id$="sPctb"],
-#pred-content [id$="sPctc"],
-#pred-content [id$="sPctd"],
-#pred-content [id$="sPcte"],
-#pred-content [id$="sPctf"],
-#pred-content [id$="sPctg"] { color:#fff !important; }
 
 /* Layout */
 #pred-content .summary-panel { background:#fff;border:1px solid #ddd;border-radius:10px;padding:10px 12px;width:100%;box-sizing:border-box; }
@@ -208,8 +181,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F4</div><div class="col-acc-val" id="pred-acc4">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(0)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(0)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(0)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(0)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
       <div class="seq-summary" id="pred-summary2Block" style="display:none;">
@@ -234,8 +207,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F8</div><div class="col-acc-val" id="pred-acc4b">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(1)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(1)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(1)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(1)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
       <div class="seq-summary" id="pred-summary3Block" style="display:none;">
@@ -260,8 +233,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F12</div><div class="col-acc-val" id="pred-acc4c">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(2)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(2)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(2)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(2)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
       <div class="seq-summary" id="pred-summary4Block" style="display:none;">
@@ -286,8 +259,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F16</div><div class="col-acc-val" id="pred-acc4d">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(3)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(3)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(3)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(3)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
       <div class="seq-summary" id="pred-summary5Block" style="display:none;">
@@ -312,8 +285,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F20</div><div class="col-acc-val" id="pred-acc4e">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(4)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(4)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(4)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(4)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
       <div class="seq-summary" id="pred-summary6Block" style="display:none;">
@@ -338,8 +311,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F24</div><div class="col-acc-val" id="pred-acc4f">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(5)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(5)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(5)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(5)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
       <div class="seq-summary" id="pred-summary7Block" style="display:none;">
@@ -364,8 +337,8 @@ const overlayHTML = `
           <div class="col-acc-block"><div class="col-acc-label">F28</div><div class="col-acc-val" id="pred-acc4g">-</div></div>
         </div>
         <div style="display:flex;gap:4px;margin-top:6px;">
-          <button onclick="predExportPred(6)" style="flex:1;font-size:10px;padding:3px 0;background:#e8f5e9;border:1px solid #81c784;color:#1b5e20;border-radius:3px;cursor:pointer;">↓ Pred</button>
-          <button onclick="predExportTabla(6)" style="flex:1;font-size:10px;padding:3px 0;background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1;border-radius:3px;cursor:pointer;">↓ Tablas</button>
+          <button onclick="predExportPred(6)" style="flex:1;font-size:10px;padding:3px 0;background:#2e7d32;border:1px solid #1b5e20;color:#fff;border-radius:3px;cursor:pointer;">↓ Pred</button>
+          <button onclick="predExportTabla(6)" style="flex:1;font-size:10px;padding:3px 0;background:#1565c0;border:1px solid #0d47a1;color:#fff;border-radius:3px;cursor:pointer;">↓ Tablas</button>
         </div>
       </div>
         </div>

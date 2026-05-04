@@ -23,6 +23,9 @@
     'Maxx':                          'Maxx'
   };
 
+  var PORTO_SANTO_TIENDAS = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx'];
+  var FUNCHAL_TIENDAS     = ['mezka funchal', 'parfois madeira shopping', 'parfois arcadas são francisco'];
+
   // ── Estilos inline para botones ──
   var S = {
     btnNormal: 'background:#3d3d3d !important;color:#f0f0f0 !important;border:1.5px solid #666 !important;border-radius:20px !important;padding:7px 18px !important;font-size:.82rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;',
@@ -30,7 +33,7 @@
   };
 
   function _applyBtnStyles(activeId) {
-    ['vadm-btn-hoy', 'vadm-btn-semana', 'vadm-btn-mes'].forEach(function (id) {
+    ['vadm-btn-hoy', 'vadm-btn-semana', 'vadm-btn-mes', 'vadm-btn-porto', 'vadm-btn-funchal'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.setAttribute('style', id === activeId ? S.btnActive : S.btnNormal);
@@ -144,7 +147,9 @@
 
     var fromDate    = document.getElementById('vadm-from').value   || _todayStr();
     var toDate      = document.getElementById('vadm-to').value     || _todayStr();
-    var filterStore = document.getElementById('vadm-tienda').value || '';
+    var tiendaEl    = document.getElementById('vadm-tienda');
+    var filterStore = tiendaEl ? (tiendaEl.value || '') : '';
+    var zoneFilter  = (tiendaEl && tiendaEl.dataset.zoneFilter) ? JSON.parse(tiendaEl.dataset.zoneFilter) : null;
 
     // Período de comparación
     var cmp = _calcCmpPeriod(fromDate, toDate);
@@ -157,7 +162,8 @@
       _render(results.main, results.prev, container, {
         from: fromDate, to: toDate,
         cmpFrom: cmp.from, cmpTo: cmp.to,
-        filterStore: filterStore
+        filterStore: filterStore,
+        zoneFilter: zoneFilter
       });
     }
 
@@ -165,7 +171,11 @@
     var q = sbAdmin.from('ventas_diarias').select('*')
       .gte('fecha', fromDate).lte('fecha', toDate)
       .order('fecha', { ascending: false });
-    if (filterStore) q = q.eq('tienda', filterStore);
+    if (filterStore) {
+      q = q.eq('tienda', filterStore);
+    } else if (zoneFilter) {
+      q = q.in('tienda', zoneFilter);
+    }
     q.then(function (res) {
       if (res.error) {
         container.innerHTML = '<div style="padding:20px;color:#c03000;font-size:.85rem;">⚠ Erro: ' + res.error.message + '</div>';
@@ -180,7 +190,11 @@
     // Consulta comparativa (mismo filtro de tienda)
     var q2 = sbAdmin.from('ventas_diarias').select('*')
       .gte('fecha', cmp.from).lte('fecha', cmp.to);
-    if (filterStore) q2 = q2.eq('tienda', filterStore);
+    if (filterStore) {
+      q2 = q2.eq('tienda', filterStore);
+    } else if (zoneFilter) {
+      q2 = q2.in('tienda', zoneFilter);
+    }
     q2.then(function (res) {
       results.prev = res.error ? [] : (res.data || []);
       _tryRender();
@@ -660,16 +674,18 @@
   }
 
   function _applyPeriod(period, btnId) {
-    var fromEl = document.getElementById('vadm-from');
-    var toEl   = document.getElementById('vadm-to');
+    var fromEl   = document.getElementById('vadm-from');
+    var toEl     = document.getElementById('vadm-to');
+    var tiendaEl = document.getElementById('vadm-tienda');
     if (fromEl) fromEl.value = period.from;
     if (toEl)   toEl.value   = period.to;
+    if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
     _applyBtnStyles(btnId);
     _vAdmLoadData();
   }
 
-  // ── Init ──
-  document.addEventListener('DOMContentLoaded', function () {
+  // ── Init ── (script corre después del DOM, ejecutar directamente)
+  setTimeout(function () {
     var fromEl = document.getElementById('vadm-from');
     var toEl   = document.getElementById('vadm-to');
     if (fromEl) fromEl.value = _todayStr();
@@ -680,6 +696,8 @@
     var buscarBtn = document.getElementById('vadm-buscar-btn');
     if (buscarBtn) {
       buscarBtn.addEventListener('click', function () {
+        var tiendaEl = document.getElementById('vadm-tienda');
+        if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
         _applyBtnStyles(null);
         _vAdmLoadData();
       });
@@ -693,9 +711,44 @@
     if (btnSemana) btnSemana.addEventListener('click', function () { _applyPeriod(_periodSemana(), 'vadm-btn-semana'); });
     if (btnMes)    btnMes.addEventListener('click',    function () { _applyPeriod(_periodMes(),    'vadm-btn-mes');    });
 
-    if (fromEl) fromEl.addEventListener('change', function () { _applyBtnStyles(null); });
-    if (toEl)   toEl.addEventListener('change',   function () { _applyBtnStyles(null); });
-  });
+    // ── Filtros de zona: Porto Santo / Funchal ──
+    function _applyZoneFilter(tiendas, btnId) {
+      var tiendaEl = document.getElementById('vadm-tienda');
+      if (!tiendaEl) return;
+      // Guardar valor actual del select para saber si hay una opción múltiple
+      // Como el select es single-value, usamos valor vacío = todas las tiendas
+      // y forzamos filtrado en _vAdmLoadData vía dataset
+      tiendaEl.value = '';
+      tiendaEl.dataset.zoneFilter = JSON.stringify(tiendas);
+      _applyBtnStyles(btnId);
+      _vAdmLoadData();
+    }
+
+    var btnPorto   = document.getElementById('vadm-btn-porto');
+    var btnFunchal = document.getElementById('vadm-btn-funchal');
+
+    if (btnPorto) {
+      btnPorto.addEventListener('click', function () {
+        _applyZoneFilter(PORTO_SANTO_TIENDAS, 'vadm-btn-porto');
+      });
+    }
+    if (btnFunchal) {
+      btnFunchal.addEventListener('click', function () {
+        _applyZoneFilter(FUNCHAL_TIENDAS, 'vadm-btn-funchal');
+      });
+    }
+
+    if (fromEl) fromEl.addEventListener('change', function () {
+      var tiendaEl = document.getElementById('vadm-tienda');
+      if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+      _applyBtnStyles(null);
+    });
+    if (toEl) toEl.addEventListener('change', function () {
+      var tiendaEl = document.getElementById('vadm-tienda');
+      if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+      _applyBtnStyles(null);
+    });
+  }, 0);
 
   window._vAdmLoadData = _vAdmLoadData;
 

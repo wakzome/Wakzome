@@ -701,6 +701,7 @@
     if (fromEl) fromEl.value = period.from;
     if (toEl)   toEl.value   = period.to;
     if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+    _activeZoneBtn = null;
     _applyBtnStyles(btnId);
     _vAdmLoadData();
   }

@@ -21,7 +21,7 @@
     'Catia Temtem', 'Débora Fernandes', 'Edna Melim', 'Filipa Rodrigues',
     'Isaltina Fernandes', 'Jacinta Alves', 'Joana Baptista', 'Marilia Silva',
     'Sandra Melim', 'Sandra Nunes', 'Djanice Lopes', 'Matilde Rodrigues',
-    'Sara Almeida', 'Claudia Nunes'
+    'Sara Almeida', 'Claudia Nunes', 'Leonia Pereira'
   ].map(function (n) { return n.toUpperCase(); });
 
   // ── Abrir overlay ──
@@ -673,7 +673,14 @@
       opts[activeIdx].classList.add('v-emp-active');
     }
 
+    inp.addEventListener('keydown', function (e) {
+      if (e.key >= '0' && e.key <= '9') { e.preventDefault(); return; }
+    });
+
     inp.addEventListener('input', function () {
+      // Eliminar cualquier dígito que llegue por pegado u otro medio
+      var cur = inp.value.replace(/[0-9]/g, '');
+      if (cur !== inp.value) inp.value = cur;
       var q = inp.value.toUpperCase().trim();
       if (q.length < 1) { _hideDropdown(); return; }
       _showDropdown(q);

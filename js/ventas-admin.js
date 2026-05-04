@@ -54,7 +54,7 @@
       if (!el) return;
       el.setAttribute('style', id === _activePeriodBtn ? S.btnActive : S.btnNormal);
     });
-    ['vadm-btn-porto', 'vadm-btn-funchal'].forEach(function (id) {
+    ['vadm-btn-porto', 'vadm-btn-funchal', 'vadm-btn-domingos'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.setAttribute('style', id === _activeZoneBtn ? S.btnActive : S.btnNormal);
@@ -170,7 +170,8 @@
     var toDate      = document.getElementById('vadm-to').value     || _todayStr();
     var tiendaEl    = document.getElementById('vadm-tienda');
     var filterStore = tiendaEl ? (tiendaEl.value || '') : '';
-    var zoneFilter  = (tiendaEl && tiendaEl.dataset.zoneFilter) ? JSON.parse(tiendaEl.dataset.zoneFilter) : null;
+    var zoneFilter  = (tiendaEl && tiendaEl.dataset.zoneFilter)  ? JSON.parse(tiendaEl.dataset.zoneFilter) : null;
+    var sundayFilter = (tiendaEl && tiendaEl.dataset.sundayFilter === 'true');
 
     // Período de comparación
     var cmp = _calcCmpPeriod(fromDate, toDate);
@@ -180,7 +181,13 @@
 
     function _tryRender() {
       if (results.main === null || results.prev === null) return;
-      _render(results.main, results.prev, container, {
+      var mainData = results.main;
+      var prevData = results.prev;
+      if (sundayFilter) {
+        mainData = mainData.filter(function (r) { return new Date(r.fecha + 'T00:00:00').getDay() === 0; });
+        prevData = prevData.filter(function (r) { return new Date(r.fecha + 'T00:00:00').getDay() === 0; });
+      }
+      _render(mainData, prevData, container, {
         from: fromDate, to: toDate,
         cmpFrom: cmp.from, cmpTo: cmp.to,
         filterStore: filterStore,
@@ -700,7 +707,7 @@
     var tiendaEl = document.getElementById('vadm-tienda');
     if (fromEl) fromEl.value = period.from;
     if (toEl)   toEl.value   = period.to;
-    if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+    if (tiendaEl) { delete tiendaEl.dataset.zoneFilter; delete tiendaEl.dataset.sundayFilter; }
     _activeZoneBtn = null;
     _applyBtnStyles(btnId);
     _vAdmLoadData();
@@ -719,7 +726,7 @@
     if (buscarBtn) {
       buscarBtn.addEventListener('click', function () {
         var tiendaEl = document.getElementById('vadm-tienda');
-        if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+        if (tiendaEl) { delete tiendaEl.dataset.zoneFilter; delete tiendaEl.dataset.sundayFilter; }
         _applyBtnStyles(null, null);
         _vAdmLoadData();
       });
@@ -739,12 +746,14 @@
       if (!tiendaEl) return;
       tiendaEl.value = '';
       tiendaEl.dataset.zoneFilter = JSON.stringify(tiendas);
+      delete tiendaEl.dataset.sundayFilter;
       _applyBtnStyles(btnId);
       _vAdmLoadData();
     }
 
-    var btnPorto   = document.getElementById('vadm-btn-porto');
-    var btnFunchal = document.getElementById('vadm-btn-funchal');
+    var btnPorto    = document.getElementById('vadm-btn-porto');
+    var btnFunchal  = document.getElementById('vadm-btn-funchal');
+    var btnDomingos = document.getElementById('vadm-btn-domingos');
 
     if (btnPorto) {
       btnPorto.addEventListener('click', function () {
@@ -756,15 +765,26 @@
         _applyZoneFilter(FUNCHAL_TIENDAS, 'vadm-btn-funchal');
       });
     }
+    if (btnDomingos) {
+      btnDomingos.addEventListener('click', function () {
+        var tiendaEl = document.getElementById('vadm-tienda');
+        if (!tiendaEl) return;
+        tiendaEl.value = '';
+        tiendaEl.dataset.zoneFilter   = JSON.stringify(PORTO_SANTO_TIENDAS);
+        tiendaEl.dataset.sundayFilter = 'true';
+        _applyBtnStyles('vadm-btn-domingos');
+        _vAdmLoadData();
+      });
+    }
 
     if (fromEl) fromEl.addEventListener('change', function () {
       var tiendaEl = document.getElementById('vadm-tienda');
-      if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+      if (tiendaEl) { delete tiendaEl.dataset.zoneFilter; delete tiendaEl.dataset.sundayFilter; }
       _applyBtnStyles(null, null);
     });
     if (toEl) toEl.addEventListener('change', function () {
       var tiendaEl = document.getElementById('vadm-tienda');
-      if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
+      if (tiendaEl) { delete tiendaEl.dataset.zoneFilter; delete tiendaEl.dataset.sundayFilter; }
       _applyBtnStyles(null, null);
     });
   }, 0);

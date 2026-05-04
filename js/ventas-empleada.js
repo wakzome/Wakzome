@@ -325,9 +325,17 @@
     // Nombre empleada — widget multi-nombre con autocompletado
     var empGroup = document.createElement('div');
     empGroup.className = 'v-field-group';
+    var empLabelRow = document.createElement('div');
+    empLabelRow.style.cssText = 'display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px;';
     var empLabel = document.createElement('label');
     empLabel.textContent = 'Nome da colaboradora';
-    empGroup.appendChild(empLabel);
+    empLabel.style.margin = '0';
+    var empHint = document.createElement('span');
+    empHint.textContent = 'Indica o nome de todas as colaboradoras que trabalharam neste dia.';
+    empHint.style.cssText = 'font-size:.72rem;color:#7a9e8a;font-style:italic;letter-spacing:.01em;line-height:1.3;';
+    empLabelRow.appendChild(empLabel);
+    empLabelRow.appendChild(empHint);
+    empGroup.appendChild(empLabelRow);
     _buildEmpleadaWidget(empGroup, rec.empleada || '');
     formSection.appendChild(empGroup);
 

@@ -32,11 +32,32 @@
     btnActive: 'background:#4a7c59 !important;color:#ffffff !important;border:1.5px solid #4a7c59 !important;border-radius:20px !important;padding:7px 18px !important;font-size:.82rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;'
   };
 
-  function _applyBtnStyles(activeId) {
-    ['vadm-btn-hoy', 'vadm-btn-semana', 'vadm-btn-mes', 'vadm-btn-porto', 'vadm-btn-funchal'].forEach(function (id) {
+  var _activePeriodBtn = null;
+  var _activeZoneBtn   = null;
+
+  function _applyBtnStyles(activePeriodId, activeZoneId) {
+    // Si se llama con un solo argumento (compatibilidad previa), interpretar según grupo
+    if (activeZoneId === undefined) {
+      // Detectar a qué grupo pertenece el id
+      var zoneIds = ['vadm-btn-porto', 'vadm-btn-funchal'];
+      if (activePeriodId === null || zoneIds.indexOf(activePeriodId) === -1) {
+        _activePeriodBtn = activePeriodId;
+      } else {
+        _activeZoneBtn = activePeriodId;
+      }
+    } else {
+      _activePeriodBtn = activePeriodId;
+      _activeZoneBtn   = activeZoneId;
+    }
+    ['vadm-btn-hoy', 'vadm-btn-semana', 'vadm-btn-mes'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.setAttribute('style', id === activeId ? S.btnActive : S.btnNormal);
+      el.setAttribute('style', id === _activePeriodBtn ? S.btnActive : S.btnNormal);
+    });
+    ['vadm-btn-porto', 'vadm-btn-funchal'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('style', id === _activeZoneBtn ? S.btnActive : S.btnNormal);
     });
   }
 
@@ -691,14 +712,14 @@
     if (fromEl) fromEl.value = _todayStr();
     if (toEl)   toEl.value   = _todayStr();
 
-    _applyBtnStyles(null);
+    _applyBtnStyles(null, null);
 
     var buscarBtn = document.getElementById('vadm-buscar-btn');
     if (buscarBtn) {
       buscarBtn.addEventListener('click', function () {
         var tiendaEl = document.getElementById('vadm-tienda');
         if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
-        _applyBtnStyles(null);
+        _applyBtnStyles(null, null);
         _vAdmLoadData();
       });
     }
@@ -715,9 +736,6 @@
     function _applyZoneFilter(tiendas, btnId) {
       var tiendaEl = document.getElementById('vadm-tienda');
       if (!tiendaEl) return;
-      // Guardar valor actual del select para saber si hay una opción múltiple
-      // Como el select es single-value, usamos valor vacío = todas las tiendas
-      // y forzamos filtrado en _vAdmLoadData vía dataset
       tiendaEl.value = '';
       tiendaEl.dataset.zoneFilter = JSON.stringify(tiendas);
       _applyBtnStyles(btnId);
@@ -741,12 +759,12 @@
     if (fromEl) fromEl.addEventListener('change', function () {
       var tiendaEl = document.getElementById('vadm-tienda');
       if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
-      _applyBtnStyles(null);
+      _applyBtnStyles(null, null);
     });
     if (toEl) toEl.addEventListener('change', function () {
       var tiendaEl = document.getElementById('vadm-tienda');
       if (tiendaEl) delete tiendaEl.dataset.zoneFilter;
-      _applyBtnStyles(null);
+      _applyBtnStyles(null, null);
     });
   }, 0);
 

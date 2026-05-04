@@ -39,7 +39,7 @@
     // Si se llama con un solo argumento (compatibilidad previa), interpretar según grupo
     if (activeZoneId === undefined) {
       // Detectar a qué grupo pertenece el id
-      var zoneIds = ['vadm-btn-porto', 'vadm-btn-funchal'];
+      var zoneIds = ['vadm-btn-porto', 'vadm-btn-funchal', 'vadm-btn-domingos'];
       if (activePeriodId === null || zoneIds.indexOf(activePeriodId) === -1) {
         _activePeriodBtn = activePeriodId;
       } else {
@@ -769,9 +769,16 @@
       btnDomingos.addEventListener('click', function () {
         var tiendaEl = document.getElementById('vadm-tienda');
         if (!tiendaEl) return;
+        // Fijar rango completo para no depender del período activo
+        var fromEl = document.getElementById('vadm-from');
+        var toEl   = document.getElementById('vadm-to');
+        if (fromEl) fromEl.value = '2020-01-01';
+        if (toEl)   toEl.value   = _todayStr();
         tiendaEl.value = '';
         tiendaEl.dataset.zoneFilter   = JSON.stringify(PORTO_SANTO_TIENDAS);
         tiendaEl.dataset.sundayFilter = 'true';
+        _activeZoneBtn   = 'vadm-btn-domingos';
+        _activePeriodBtn = null;
         _applyBtnStyles('vadm-btn-domingos');
         _vAdmLoadData();
       });

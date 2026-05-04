@@ -332,7 +332,7 @@
     empLabel.style.margin = '0';
     var empHint = document.createElement('span');
     empHint.textContent = 'Indica o nome de todas as colaboradoras que trabalharam neste dia.';
-    empHint.style.cssText = 'font-size:.72rem;color:#7a9e8a;font-style:italic;letter-spacing:.01em;line-height:1.3;';
+    empHint.style.cssText = 'font-size:.72rem;color:#7a9e8a;font-style:italic;font-weight:700;letter-spacing:.01em;line-height:1.3;';
     empLabelRow.appendChild(empLabel);
     empLabelRow.appendChild(empHint);
     empGroup.appendChild(empLabelRow);

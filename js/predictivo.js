@@ -1221,7 +1221,11 @@ function analizarCombinaciones(allColProbs, totalRows) {
 
 // Render combination analysis panel
 function renderCombinaciones(result, totalRows) {
-  let panel = document.getElementById('pred-combo-panel');
+  // Usar el panel del overlay si existe, si no crear uno dinámico
+  let panel = document.getElementById('pred-combinaciones-panel');
+  if(!panel) {
+    panel = document.getElementById('pred-combo-panel');
+  }
   if(!panel) {
     panel = document.createElement('div');
     panel.id = 'pred-combo-panel';
@@ -1233,6 +1237,24 @@ function renderCombinaciones(result, totalRows) {
   const {candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
          evenBlk5, evenBlk2, evenGlobal,
          blk5Results, blk2Results, globalResults} = result;
+
+  // Calcular letraInfo y abInfo antes de usarlos en la tabla
+  const letraInfo = Array.from({length:7}, (_,si) => {
+    const scores = calcLetraScores(si);
+    const letras = getLetras(si);
+    const ok = selectLetras(scores, letras);
+    return ok.join('');
+  });
+  const abInfo = Array.from({length:7}, (_,si) => {
+    const scores = calcAbScores(si);
+    if(!scores) return '?';
+    const total = AB_LETRAS.reduce((s,l) => s + (scores[l]||0), 0);
+    if(total === 0) return 'AB';
+    const topShare = (scores['A']||0) / total;
+    if(topShare >= 0.60) return 'A';
+    if((1 - topShare) >= 0.60) return 'B';
+    return 'AB';
+  });
 
   let html = '<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">Análisis de Combinaciones</h3>';
 
@@ -1257,28 +1279,12 @@ function renderCombinaciones(result, totalRows) {
       <td style="padding:3px 8px;border:1px solid #dee2e6;">${dispNums(cc.disp3)}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;font-family:monospace;font-weight:700;">${cc.code4}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;">${dispNums(cc.disp4)}</td>
-      <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">${candNums[si].join(', ')||'<span style="color:#999">sin candidatos</span>'}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">${candNums[si].join(', ')||'<span style="color:#999">sin candidatos</span>'} <span style="font-size:9px;color:#0d6efd;font-weight:400;">[AB:${abInfo[si]}]</span></td>
     </tr>`;
   });
   html += '</table></div>';
 
   // Sum ranges + even-count ranges + letras seleccionadas
-  const letraInfo = Array.from({length:7}, (_,si) => {
-    const scores = calcLetraScores(si);
-    const letras = getLetras(si);
-    const ok = selectLetras(scores, letras);
-    return ok.join('');
-  });
-  const abInfo = Array.from({length:7}, (_,si) => {
-    const scores = calcAbScores(si);
-    if(!scores) return '?';
-    const total = AB_LETRAS.reduce((s,l) => s + (scores[l]||0), 0);
-    if(total === 0) return 'AB';
-    const topShare = (scores['A']||0) / total;
-    if(topShare >= 0.60) return 'A';
-    if((1 - topShare) >= 0.60) return 'B';
-    return 'AB';
-  });
   const fmtEven = (e) => e
     ? `par[${e.lo}–${e.hi}] σ${e.sigma}`
     : 'insuficiente';

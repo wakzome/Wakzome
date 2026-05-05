@@ -617,16 +617,12 @@ function _predWorkWithParsed(parsed) {
   numFreq=Array.from({length:7},()=>({}));
   letraFreq=Array.from({length:7},()=>({}));
   letrasHist=Array.from({length:7},()=>[]);
-  letraFreqAB=Array.from({length:7},()=>({}));
-  letrasHistAB=Array.from({length:7},()=>[]);
+  abFreq=Array.from({length:7},()=>({}));
+  abHist=Array.from({length:7},()=>[]);
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){
-      updateHistSums(rowNums);
-      updateLetraHist(rowNums);
-      rowNums.forEach((n,si) => updateLetraHistAB(n, si));
-    }
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -777,6 +773,102 @@ function getLetraGrupos(si) { return si < 5 ? LETRA_GRUPOS_50 : LETRA_GRUPOS_12;
 let letraFreq = Array.from({length:7}, () => ({}));
 let letrasHist = Array.from({length:7}, () => []);  // secuencia cronológica de letras
 
+// ── SISTEMA AB — criterio binario alternativo ────────────────────────────────
+// S1–S5: A=1-25, B=26-50
+// S6–S7: A=1-6,  B=7-12
+const AB_GRUPOS_50 = { A: Array.from({length:25}, (_,i)=>i+1), B: Array.from({length:25}, (_,i)=>i+26) };
+const AB_GRUPOS_12 = { A: Array.from({length:6},  (_,i)=>i+1), B: Array.from({length:6},  (_,i)=>i+7)  };
+const AB_LETRAS = ['A','B'];
+
+const NUM_A_AB_50 = {};
+const NUM_A_AB_12 = {};
+AB_LETRAS.forEach(l => {
+  AB_GRUPOS_50[l].forEach(n => NUM_A_AB_50[n] = l);
+  AB_GRUPOS_12[l].forEach(n => NUM_A_AB_12[n] = l);
+});
+
+function getLetraAB(n, si) { return si < 5 ? NUM_A_AB_50[n] : NUM_A_AB_12[n]; }
+
+let abFreq  = Array.from({length:7}, () => ({}));
+let abHist  = Array.from({length:7}, () => []);
+
+function updateAbHist(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  seqNums.forEach((n, si) => {
+    const l = getLetraAB(n, si);
+    if(!l) return;
+    if(!abFreq[si][l]) abFreq[si][l] = 0;
+    abFreq[si][l]++;
+    abHist[si].push(l);
+  });
+}
+
+function calcAbScores(si) {
+  const hist  = abHist[si];
+  const freq  = abFreq[si] || {};
+  const total = hist.length;
+  if(total < 10) return null;
+
+  // Ausencia actual de cada letra AB
+  const ausActual = {};
+  AB_LETRAS.forEach(l => {
+    let idx = -1;
+    for(let i = hist.length - 1; i >= 0; i--) { if(hist[i] === l) { idx = i; break; } }
+    ausActual[l] = idx === -1 ? hist.length : (hist.length - 1 - idx);
+  });
+
+  // Ausencia normal (media de intervalos)
+  const ausNormal = {};
+  AB_LETRAS.forEach(l => {
+    const pos = [];
+    for(let i = 0; i < hist.length; i++) if(hist[i] === l) pos.push(i);
+    if(pos.length < 2) { ausNormal[l] = hist.length; return; }
+    let gap = 0;
+    for(let i = 1; i < pos.length; i++) gap += pos[i] - pos[i-1];
+    ausNormal[l] = gap / (pos.length - 1);
+  });
+
+  const scores = {};
+  AB_LETRAS.forEach(l => {
+    const f = freq[l] || 0;
+    if(f === 0) { scores[l] = 0; return; }
+    const aus  = ausActual[l];
+    const norm = ausNormal[l] || 1;
+    const ratio = aus / norm;
+    const mult  = ratio < 1 ? 0.7 + 0.3 * ratio : 1.0 + 0.5 * (ratio - 1);
+    scores[l] = f * mult;
+  });
+  return scores;
+}
+
+function filtrarCandidatosPorAB(candidates, si) {
+  const scores = calcAbScores(si);
+  if(!scores) return candidates; // sin historia suficiente: pasan todos
+  // Seleccionar letra(s) AB con mayor score
+  const total = AB_LETRAS.reduce((s,l) => s + (scores[l]||0), 0);
+  if(total === 0) return candidates;
+  const topShare = (scores[AB_LETRAS[0]]||0) / total;
+  // Solo filtrar si hay dominancia clara (>60%) — evita filtros agresivos en distribuciones planas
+  const letraOk = new Set();
+  if(topShare >= 0.60) {
+    // Dominancia de A
+    letraOk.add('A');
+  } else if((1 - topShare) >= 0.60) {
+    // Dominancia de B
+    letraOk.add('B');
+  } else {
+    // Sin dominancia clara → ambas pasan
+    letraOk.add('A');
+    letraOk.add('B');
+  }
+  const filtered = candidates.filter(n => {
+    const l = getLetraAB(n, si);
+    return l && letraOk.has(l);
+  });
+  // Seguridad: si el filtro vacía la lista, devolver candidatos originales
+  return filtered.length > 0 ? filtered : candidates;
+}
+
 function updateLetraHist(seqNums) {
   if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
   seqNums.forEach((n, si) => {
@@ -905,101 +997,6 @@ function filtrarCandidatosPorLetra(candidates, si) {
   return candidates.filter(n => {
     const l = getLetra(n, si);
     return l && letrasOk.has(l);
-  });
-}
-
-// ── SISTEMA AB (filtro binario paralelo) ──────────────────────────────────────
-// S1–S5: A=1-25, B=26-50
-// S6–S7: A=1-6,  B=7-12
-// Misma lógica que ABCDE: frecuencias + ausencias + scores → filtra candidatos
-
-function getLetraAB(n, si) {
-  if(si < 5) return n <= 25 ? 'A' : 'B';
-  return n <= 6 ? 'A' : 'B';
-}
-
-const LETRAS_AB = ['A', 'B'];
-
-// letraFreqAB[si][letra] = total histórico
-// letrasHistAB[si] = secuencia cronológica
-let letraFreqAB = Array.from({length:7}, () => ({}));
-let letrasHistAB = Array.from({length:7}, () => []);
-
-function updateLetraHistAB(n, si) {
-  if(!n || n <= 0) return;
-  const l = getLetraAB(n, si);
-  if(!letraFreqAB[si][l]) letraFreqAB[si][l] = 0;
-  letraFreqAB[si][l]++;
-  letrasHistAB[si].push(l);
-}
-
-function calcAusenciasActualesAB(si) {
-  const hist = letrasHistAB[si];
-  const resultado = {};
-  LETRAS_AB.forEach(l => {
-    let idx = -1;
-    for(let i = hist.length - 1; i >= 0; i--) {
-      if(hist[i] === l) { idx = i; break; }
-    }
-    resultado[l] = idx === -1 ? hist.length : (hist.length - 1 - idx);
-  });
-  return resultado;
-}
-
-function calcAusenciaNormalAB(si) {
-  const hist = letrasHistAB[si];
-  const normal = {};
-  LETRAS_AB.forEach(l => {
-    const posiciones = [];
-    for(let i = 0; i < hist.length; i++) if(hist[i] === l) posiciones.push(i);
-    if(posiciones.length < 2) { normal[l] = hist.length; return; }
-    let totalGap = 0;
-    for(let i = 1; i < posiciones.length; i++) totalGap += posiciones[i] - posiciones[i-1];
-    normal[l] = totalGap / (posiciones.length - 1);
-  });
-  return normal;
-}
-
-function calcLetraScoresAB(si) {
-  const freq = letraFreqAB[si] || {};
-  const totalRows = letrasHistAB[si].length;
-  if(totalRows < 10) return null;
-
-  const ausActual = calcAusenciasActualesAB(si);
-  const ausNormal = calcAusenciaNormalAB(si);
-
-  const scores = {};
-  LETRAS_AB.forEach(l => {
-    const f = freq[l] || 0;
-    if(f === 0) { scores[l] = 0; return; }
-    const aus  = ausActual[l];
-    const norm = ausNormal[l] || 1;
-    const ratio = aus / norm;
-    const mult = ratio < 1
-      ? 0.7 + 0.3 * ratio
-      : 1.0 + 0.5 * (ratio - 1);
-    scores[l] = f * mult;
-  });
-  return scores;
-}
-
-function selectLetrasAB(scores) {
-  if(!scores) return LETRAS_AB;
-  const total = LETRAS_AB.reduce((s,l) => s + (scores[l]||0), 0);
-  if(total === 0) return LETRAS_AB;
-  const ordenadas = [...LETRAS_AB].sort((a,b) => (scores[b]||0) - (scores[a]||0));
-  const topShare = (scores[ordenadas[0]]||0) / total;
-  // Con solo 2 letras: si dominancia clara (>75%) → solo la top; si no → ambas
-  if(topShare >= 0.75) return [ordenadas[0]];
-  return LETRAS_AB;
-}
-
-function filtrarCandidatosPorLetraAB(candidates, si) {
-  const scores  = calcLetraScoresAB(si);
-  const letrasOk = new Set(selectLetrasAB(scores));
-  return candidates.filter(n => {
-    const l = getLetraAB(n, si);
-    return letrasOk.has(l);
   });
 }
 let histSumsBlk5 = [];  // sum of S1-S5 numbers per row
@@ -1161,12 +1158,10 @@ function analizarCombinaciones(allColProbs, totalRows) {
     const raw = new Set();
     top3.forEach(({code}) => { (map[code]||[]).forEach(n => raw.add(n)); });
     const valid = getValidNums(si, [...raw].sort((a,b)=>a-b), totalRows);
-    // Filtro ABCDE — descarta números de grupos improbables por rango de 10/3
-    const filtradoABCDE = filtrarCandidatosPorLetra(valid, si);
-    // Filtro AB — intersección paralela (1-25/26-50 para S1-S5, 1-6/7-12 para S6-S7)
-    const filtradoAB = filtrarCandidatosPorLetraAB(filtradoABCDE, si);
-    // Si el doble filtro deja vacío, usar solo ABCDE como fallback
-    return filtradoAB.length > 0 ? filtradoAB : filtradoABCDE;
+    // Aplicar filtro de letras — descarta números de grupos improbables
+    const byLetra = filtrarCandidatosPorLetra(valid, si);
+    // Aplicar filtro AB — criterio binario complementario
+    return filtrarCandidatosPorAB(byLetra, si);
   });
 
   // Step 2: Cartesian product with structural filters
@@ -1274,6 +1269,16 @@ function renderCombinaciones(result, totalRows) {
     const ok = selectLetras(scores, letras);
     return ok.join('');
   });
+  const abInfo = Array.from({length:7}, (_,si) => {
+    const scores = calcAbScores(si);
+    if(!scores) return '?';
+    const total = AB_LETRAS.reduce((s,l) => s + (scores[l]||0), 0);
+    if(total === 0) return 'AB';
+    const topShare = (scores['A']||0) / total;
+    if(topShare >= 0.60) return 'A';
+    if((1 - topShare) >= 0.60) return 'B';
+    return 'AB';
+  });
   const fmtEven = (e) => e
     ? `par[${e.lo}–${e.hi}] σ${e.sigma}`
     : 'insuficiente';
@@ -1290,6 +1295,9 @@ function renderCombinaciones(result, totalRows) {
     <br>
     Letras activas &nbsp;·&nbsp;
     ${letraInfo.map((l,si) => `S${si+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}
+    <br>
+    Criterio A/B &nbsp;·&nbsp;
+    ${abInfo.map((l,si) => `S${si+1}:<b>${l}</b>`).join(' &nbsp;·&nbsp; ')}
   </div>`;
 
   // Results

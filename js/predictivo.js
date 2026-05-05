@@ -1301,9 +1301,10 @@ function renderCombinaciones(result, totalRows) {
     <br>
     Letras activas &nbsp;·&nbsp;
     ${letraInfo.map((l,si) => `S${si+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}
-    <br>
+  </div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">
     Criterio A/B &nbsp;·&nbsp;
-    ${abInfo.map((l,si) => `S${si+1}:<b>${l}</b>`).join(' &nbsp;·&nbsp; ')}
+    ${abInfo.map((l,i) => `S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}
   </div>`;
 
   // Results

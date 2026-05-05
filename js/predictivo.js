@@ -1487,10 +1487,10 @@ function renderCombinaciones(result, totalRows) {
     : 'insuficiente';
   html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">Suma (P3–P97) &nbsp;·&nbsp; S1–S5: ${boundsBlk5?`Σ[${boundsBlk5.lo}–${boundsBlk5.hi}]`:'insuficiente'} &nbsp;·&nbsp; S6–S7: ${boundsBlk2?`Σ[${boundsBlk2.lo}–${boundsBlk2.hi}]`:'insuficiente'} &nbsp;·&nbsp; Global: ${boundsGlobal?`Σ[${boundsGlobal.lo}–${boundsGlobal.hi}]`:'insuficiente'}</div>`;
   html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">Pares (μ±σ auto) &nbsp;·&nbsp; S1–S5: ${fmtEven(evenBlk5)} &nbsp;·&nbsp; S6–S7: ${fmtEven(evenBlk2)} &nbsp;·&nbsp; Global: ${fmtEven(evenGlobal)}</div>`;
-  html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">Letras activas &nbsp;·&nbsp; ${letraInfo.map((l,i)=>`S${i+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
-  html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">Criterio A/B &nbsp;·&nbsp; ${abInfo.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
-  html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">Criterio 2 (ABC) &nbsp;·&nbsp; ${c2Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
-  html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">Criterio 3 (ABCD) &nbsp;·&nbsp; ${c3Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B) &nbsp;·&nbsp; ${abInfo.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B/C) &nbsp;·&nbsp; ${c2Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B/C/D) &nbsp;·&nbsp; ${c3Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">(A/B/C/D/E) &nbsp;·&nbsp; ${letraInfo.map((l,i)=>`S${i+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
 
   // Results
   if(globalResults.length > 0) {

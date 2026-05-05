@@ -1458,9 +1458,7 @@ function renderCombinaciones(result, totalRows) {
   let html = '<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">Análisis de Combinaciones</h3>';
 
   // Códigos + candidatos por secuencia
-  html += '<div style="margin-bottom:10px;">';
-  html += '<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;">Códigos predichos → números candidatos (filtro histórico mean-1σ):</div>';
-  html += '<table style="border-collapse:collapse;font-size:10px;width:100%;">';
+  html += '<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;">Códigos predichos → números candidatos (filtro histórico mean-1σ):</div><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="border-collapse:collapse;font-size:10px;min-width:600px;">';
   html += '<tr style="background:#f8f9fa;"><th style="padding:3px 8px;border:1px solid #dee2e6;text-align:left;">Sec</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 1</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 2</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 3</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Código 4</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Números</th><th style="padding:3px 8px;border:1px solid #dee2e6;">Candidatos finales</th></tr>';
   candCodes.forEach((cc, si) => {
     if(!cc) return;
@@ -1481,7 +1479,7 @@ function renderCombinaciones(result, totalRows) {
       <td style="padding:3px 8px;border:1px solid #dee2e6;font-weight:700;">${candNums[si].join(', ')||'<span style="color:#999">sin candidatos</span>'} <span style="font-size:9px;color:#0d6efd;font-weight:400;">[AB:${abInfo[si]}]</span></td>
     </tr>`;
   });
-  html += '</table></div>';
+  html += '</table></div></div>';
 
   // Sum ranges + even-count ranges + letras seleccionadas
   const fmtEven = (e) => e

@@ -619,10 +619,14 @@ function _predWorkWithParsed(parsed) {
   letrasHist=Array.from({length:7},()=>[]);
   abFreq=Array.from({length:7},()=>({}));
   abHist=Array.from({length:7},()=>[]);
+  c2Freq=Array.from({length:7},()=>({}));
+  c2Hist=Array.from({length:7},()=>[]);
+  c3Freq=Array.from({length:7},()=>({}));
+  c3Hist=Array.from({length:7},()=>[]);
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);}
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -866,6 +870,175 @@ function filtrarCandidatosPorAB(candidates, si) {
     return l && letraOk.has(l);
   });
   // Seguridad: si el filtro vacía la lista, devolver candidatos originales
+  return filtered.length > 0 ? filtered : candidates;
+}
+
+// ── CRITERIO 2 — ABC para S1-S5, ABC para S6-S7 ─────────────────────────────
+// S1–S5: A=1-17, B=18-34, C=35-50
+// S6–S7: A=1-4,  B=5-8,   C=9-12
+const C2_GRUPOS_50 = {
+  A: Array.from({length:17}, (_,i)=>i+1),
+  B: Array.from({length:17}, (_,i)=>i+18),
+  C: Array.from({length:16}, (_,i)=>i+35)
+};
+const C2_GRUPOS_12 = {
+  A: [1,2,3,4],
+  B: [5,6,7,8],
+  C: [9,10,11,12]
+};
+const C2_LETRAS = ['A','B','C'];
+const NUM_A_C2_50 = {};
+const NUM_A_C2_12 = {};
+C2_LETRAS.forEach(l => {
+  C2_GRUPOS_50[l].forEach(n => NUM_A_C2_50[n] = l);
+  C2_GRUPOS_12[l].forEach(n => NUM_A_C2_12[n] = l);
+});
+function getLetraC2(n, si) { return si < 5 ? NUM_A_C2_50[n] : NUM_A_C2_12[n]; }
+
+let c2Freq = Array.from({length:7}, () => ({}));
+let c2Hist = Array.from({length:7}, () => []);
+
+function updateC2Hist(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  seqNums.forEach((n, si) => {
+    const l = getLetraC2(n, si);
+    if(!l) return;
+    if(!c2Freq[si][l]) c2Freq[si][l] = 0;
+    c2Freq[si][l]++;
+    c2Hist[si].push(l);
+  });
+}
+
+function calcC2Scores(si) {
+  const hist = c2Hist[si];
+  const freq = c2Freq[si] || {};
+  if(hist.length < 10) return null;
+  const letras = C2_LETRAS;
+  const ausActual = {};
+  letras.forEach(l => {
+    let idx = -1;
+    for(let i = hist.length-1; i >= 0; i--) { if(hist[i]===l){idx=i;break;} }
+    ausActual[l] = idx === -1 ? hist.length : (hist.length-1-idx);
+  });
+  const ausNormal = {};
+  letras.forEach(l => {
+    const pos = [];
+    for(let i=0;i<hist.length;i++) if(hist[i]===l) pos.push(i);
+    if(pos.length < 2) { ausNormal[l] = hist.length; return; }
+    let gap=0; for(let i=1;i<pos.length;i++) gap+=pos[i]-pos[i-1];
+    ausNormal[l] = gap/(pos.length-1);
+  });
+  const scores = {};
+  letras.forEach(l => {
+    const f = freq[l]||0;
+    if(f===0){scores[l]=0;return;}
+    const ratio = ausActual[l]/(ausNormal[l]||1);
+    scores[l] = f*(ratio<1?0.7+0.3*ratio:1.0+0.5*(ratio-1));
+  });
+  return scores;
+}
+
+function filtrarCandidatosPorC2(candidates, si) {
+  const scores = calcC2Scores(si);
+  if(!scores) return candidates;
+  const letras = C2_LETRAS;
+  const total = letras.reduce((s,l)=>s+(scores[l]||0),0);
+  if(total===0) return candidates;
+  const ordenadas = [...letras].sort((a,b)=>(scores[b]||0)-(scores[a]||0));
+  // Umbral: cubrir 85% de la masa con mínimo 1 letra
+  let acum=0, seleccionadas=[];
+  for(const l of ordenadas) {
+    acum += (scores[l]||0)/total;
+    seleccionadas.push(l);
+    if(acum >= 0.85) break;
+  }
+  const ok = new Set(seleccionadas);
+  const filtered = candidates.filter(n => { const l=getLetraC2(n,si); return l&&ok.has(l); });
+  return filtered.length > 0 ? filtered : candidates;
+}
+
+// ── CRITERIO 3 — ABCD para S1-S5, ABCD para S6-S7 ───────────────────────────
+// S1–S5: A=1-13, B=14-26, C=27-38, D=39-50
+// S6–S7: A=1-3,  B=4-6,   C=7-9,   D=10-12
+const C3_GRUPOS_50 = {
+  A: Array.from({length:13}, (_,i)=>i+1),
+  B: Array.from({length:13}, (_,i)=>i+14),
+  C: Array.from({length:12}, (_,i)=>i+27),
+  D: Array.from({length:12}, (_,i)=>i+39)
+};
+const C3_GRUPOS_12 = {
+  A: [1,2,3],
+  B: [4,5,6],
+  C: [7,8,9],
+  D: [10,11,12]
+};
+const C3_LETRAS = ['A','B','C','D'];
+const NUM_A_C3_50 = {};
+const NUM_A_C3_12 = {};
+C3_LETRAS.forEach(l => {
+  C3_GRUPOS_50[l].forEach(n => NUM_A_C3_50[n] = l);
+  C3_GRUPOS_12[l].forEach(n => NUM_A_C3_12[n] = l);
+});
+function getLetraC3(n, si) { return si < 5 ? NUM_A_C3_50[n] : NUM_A_C3_12[n]; }
+
+let c3Freq = Array.from({length:7}, () => ({}));
+let c3Hist = Array.from({length:7}, () => []);
+
+function updateC3Hist(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  seqNums.forEach((n, si) => {
+    const l = getLetraC3(n, si);
+    if(!l) return;
+    if(!c3Freq[si][l]) c3Freq[si][l] = 0;
+    c3Freq[si][l]++;
+    c3Hist[si].push(l);
+  });
+}
+
+function calcC3Scores(si) {
+  const hist = c3Hist[si];
+  const freq = c3Freq[si] || {};
+  if(hist.length < 10) return null;
+  const letras = C3_LETRAS;
+  const ausActual = {};
+  letras.forEach(l => {
+    let idx = -1;
+    for(let i = hist.length-1; i >= 0; i--) { if(hist[i]===l){idx=i;break;} }
+    ausActual[l] = idx === -1 ? hist.length : (hist.length-1-idx);
+  });
+  const ausNormal = {};
+  letras.forEach(l => {
+    const pos = [];
+    for(let i=0;i<hist.length;i++) if(hist[i]===l) pos.push(i);
+    if(pos.length < 2) { ausNormal[l] = hist.length; return; }
+    let gap=0; for(let i=1;i<pos.length;i++) gap+=pos[i]-pos[i-1];
+    ausNormal[l] = gap/(pos.length-1);
+  });
+  const scores = {};
+  letras.forEach(l => {
+    const f = freq[l]||0;
+    if(f===0){scores[l]=0;return;}
+    const ratio = ausActual[l]/(ausNormal[l]||1);
+    scores[l] = f*(ratio<1?0.7+0.3*ratio:1.0+0.5*(ratio-1));
+  });
+  return scores;
+}
+
+function filtrarCandidatosPorC3(candidates, si) {
+  const scores = calcC3Scores(si);
+  if(!scores) return candidates;
+  const letras = C3_LETRAS;
+  const total = letras.reduce((s,l)=>s+(scores[l]||0),0);
+  if(total===0) return candidates;
+  const ordenadas = [...letras].sort((a,b)=>(scores[b]||0)-(scores[a]||0));
+  let acum=0, seleccionadas=[];
+  for(const l of ordenadas) {
+    acum += (scores[l]||0)/total;
+    seleccionadas.push(l);
+    if(acum >= 0.85) break;
+  }
+  const ok = new Set(seleccionadas);
+  const filtered = candidates.filter(n => { const l=getLetraC3(n,si); return l&&ok.has(l); });
   return filtered.length > 0 ? filtered : candidates;
 }
 
@@ -1161,7 +1334,11 @@ function analizarCombinaciones(allColProbs, totalRows) {
     // Aplicar filtro de letras — descarta números de grupos improbables
     const byLetra = filtrarCandidatosPorLetra(valid, si);
     // Aplicar filtro AB — criterio binario complementario
-    return filtrarCandidatosPorAB(byLetra, si);
+    const byAB = filtrarCandidatosPorAB(byLetra, si);
+    // Aplicar filtro C2 (ABC 17-17-16 / 4-4-4)
+    const byC2 = filtrarCandidatosPorC2(byAB, si);
+    // Aplicar filtro C3 (ABCD 13-13-12-12 / 3-3-3-3)
+    return filtrarCandidatosPorC3(byC2, si);
   });
 
   // Step 2: Cartesian product with structural filters
@@ -1255,6 +1432,28 @@ function renderCombinaciones(result, totalRows) {
     if((1 - topShare) >= 0.60) return 'B';
     return 'AB';
   });
+  const c2Info = Array.from({length:7}, (_,si) => {
+    const scores = calcC2Scores(si);
+    if(!scores) return '?';
+    const letras = C2_LETRAS;
+    const total = letras.reduce((s,l)=>s+(scores[l]||0),0);
+    if(total===0) return letras.join('');
+    const ordenadas = [...letras].sort((a,b)=>(scores[b]||0)-(scores[a]||0));
+    let acum=0, sel=[];
+    for(const l of ordenadas){ acum+=(scores[l]||0)/total; sel.push(l); if(acum>=0.85) break; }
+    return sel.join('');
+  });
+  const c3Info = Array.from({length:7}, (_,si) => {
+    const scores = calcC3Scores(si);
+    if(!scores) return '?';
+    const letras = C3_LETRAS;
+    const total = letras.reduce((s,l)=>s+(scores[l]||0),0);
+    if(total===0) return letras.join('');
+    const ordenadas = [...letras].sort((a,b)=>(scores[b]||0)-(scores[a]||0));
+    let acum=0, sel=[];
+    for(const l of ordenadas){ acum+=(scores[l]||0)/total; sel.push(l); if(acum>=0.85) break; }
+    return sel.join('');
+  });
 
   let html = '<h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#333;">Análisis de Combinaciones</h3>';
 
@@ -1305,6 +1504,14 @@ function renderCombinaciones(result, totalRows) {
   html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">
     Criterio A/B &nbsp;·&nbsp;
     ${abInfo.map((l,i) => `S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}
+  </div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">
+    Criterio 2 (ABC) &nbsp;·&nbsp;
+    ${c2Info.map((l,i) => `S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}
+  </div>`;
+  html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">
+    Criterio 3 (ABCD) &nbsp;·&nbsp;
+    ${c3Info.map((l,i) => `S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}
   </div>`;
 
   // Results

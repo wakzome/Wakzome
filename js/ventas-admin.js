@@ -772,7 +772,7 @@
         // Fijar rango completo para no depender del período activo
         var fromEl = document.getElementById('vadm-from');
         var toEl   = document.getElementById('vadm-to');
-        if (fromEl) fromEl.value = '2020-01-01';
+        if (fromEl) fromEl.value = '2026-01-01';
         if (toEl)   toEl.value   = _todayStr();
         tiendaEl.value = '';
         tiendaEl.dataset.zoneFilter   = JSON.stringify(PORTO_SANTO_TIENDAS);

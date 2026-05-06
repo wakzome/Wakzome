@@ -4931,7 +4931,7 @@ td                   { font-size: .96rem !important; }
 <script src="js/predictivo.js"></script>
 
 <!-- ── AVISO PORTO SANTO ── -->
-<div id="ps-notice-backdrop" style="display:none;">
+<div id="ps-notice-backdrop">
   <div id="ps-notice-modal">
     <button id="ps-notice-close" title="Fechar">✕</button>
     <div id="ps-notice-body">
@@ -4951,19 +4951,19 @@ td                   { font-size: .96rem !important; }
   inset: 0;
   background: rgba(0,0,0,0.55);
   z-index: 8000;
-  display: flex !important;
+  display: none;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
+#ps-notice-backdrop.ps-open {
+  display: flex;
+}
 #ps-notice-backdrop.ps-visible {
   opacity: 1;
   pointer-events: all;
-}
-#ps-notice-backdrop.ps-hidden {
-  display: none !important;
 }
 #ps-notice-modal {
   position: relative;
@@ -4977,7 +4977,7 @@ td                   { font-size: .96rem !important; }
   padding: 36px 32px 32px;
   font-family: 'MontserratLight', sans-serif;
   font-weight: 300;
-  color: #e0e0e0;
+  color: #e0e0e0 !important;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6);
   transform: translateY(10px);
   transition: transform 0.3s ease;
@@ -4991,7 +4991,7 @@ td                   { font-size: .96rem !important; }
   right: 16px;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.4) !important;
   font-size: 16px;
   cursor: pointer;
   line-height: 1;
@@ -4999,15 +4999,15 @@ td                   { font-size: .96rem !important; }
   transition: color 0.2s;
   font-family: 'MontserratLight', sans-serif;
 }
-#ps-notice-close:hover { color: rgba(255,255,255,0.9); }
+#ps-notice-close:hover { color: rgba(255,255,255,0.9) !important; }
 #ps-notice-body p {
   margin: 0 0 14px;
   font-size: 0.82rem;
   line-height: 1.65;
-  color: #ccc;
+  color: #ccc !important;
 }
 #ps-notice-body p:last-child { margin-bottom: 0; }
-#ps-notice-body em { color: rgba(255,255,255,0.55); font-style: normal; }
+#ps-notice-body em { color: rgba(255,255,255,0.55) !important; font-style: normal; }
 @media (max-width: 600px) {
   #ps-notice-modal { padding: 28px 20px 24px; }
   #ps-notice-body p { font-size: 0.78rem; }
@@ -5018,11 +5018,12 @@ td                   { font-size: .96rem !important; }
 (function () {
   var backdrop = document.getElementById('ps-notice-backdrop');
   var closeBtn = document.getElementById('ps-notice-close');
-  var storeSelect = document.getElementById('h-store-select');
+  var shown    = false;
 
   function showNotice() {
-    if (!backdrop) return;
-    backdrop.style.display = 'flex';
+    if (!backdrop || shown) return;
+    shown = true;
+    backdrop.classList.add('ps-open');
     requestAnimationFrame(function () {
       requestAnimationFrame(function () { backdrop.classList.add('ps-visible'); });
     });
@@ -5031,20 +5032,57 @@ td                   { font-size: .96rem !important; }
   function hideNotice() {
     if (!backdrop) return;
     backdrop.classList.remove('ps-visible');
-    setTimeout(function () { backdrop.style.display = 'none'; }, 320);
+    setTimeout(function () { backdrop.classList.remove('ps-open'); }, 320);
   }
 
   if (closeBtn) closeBtn.addEventListener('click', hideNotice);
-
-  backdrop.addEventListener('click', function (e) {
+  if (backdrop) backdrop.addEventListener('click', function (e) {
     if (e.target === backdrop) hideNotice();
   });
 
-  if (storeSelect) {
-    storeSelect.addEventListener('change', function () {
-      if (this.value === 'porto santo') showNotice();
-    });
+  function isPortoSanto() {
+    /* 1. Variable global expuesta por los JS externos */
+    if (window.currentLoja && /porto/i.test(window.currentLoja)) return true;
+    if (window.userLoja    && /porto/i.test(window.userLoja))    return true;
+    if (window.loja        && /porto/i.test(window.loja))        return true;
+    if (window.storeName   && /porto/i.test(window.storeName))   return true;
+    if (window.currentStore && /porto/i.test(window.currentStore)) return true;
+
+    /* 2. greeting-text contiene "porto" */
+    var gt = document.getElementById('greeting-text');
+    if (gt && /porto/i.test(gt.textContent)) return true;
+
+    /* 3. page-name-popup contiene "porto" */
+    var pp = document.getElementById('page-name-popup');
+    if (pp && /porto/i.test(pp.textContent)) return true;
+
+    /* 4. Encabezado de la tabla renderizada contiene "porto" */
+    var tc = document.getElementById('table-container');
+    if (tc && /porto/i.test(tc.textContent)) return true;
+
+    return false;
   }
+
+  /* Observar cambios en el DOM del área de empleados */
+  var observer = new MutationObserver(function () {
+    if (!shown && isPortoSanto()) showNotice();
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var targets = [
+      document.getElementById('greeting-text'),
+      document.getElementById('page-name-popup'),
+      document.getElementById('table-container'),
+      document.getElementById('greeting-overlay'),
+      document.body
+    ];
+    targets.forEach(function (t) {
+      if (t) observer.observe(t, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
+    });
+
+    /* También comprobar inmediatamente por si ya está cargado */
+    if (isPortoSanto()) showNotice();
+  });
 })();
 </script>
 

@@ -683,11 +683,12 @@
 
     inp.addEventListener('keydown', function (e) {
       if (e.key >= '0' && e.key <= '9') { e.preventDefault(); return; }
+      if (e.key === ',' || e.key === '.') { e.preventDefault(); return; }
     });
 
     inp.addEventListener('input', function () {
-      // Eliminar cualquier dígito que llegue por pegado u otro medio
-      var cur = inp.value.replace(/[0-9]/g, '');
+      // Eliminar cualquier dígito, coma o punto que llegue por pegado u otro medio
+      var cur = inp.value.replace(/[0-9.,]/g, '');
       if (cur !== inp.value) inp.value = cur;
       var q = inp.value.toUpperCase().trim();
       if (q.length < 1) { _hideDropdown(); return; }
@@ -701,7 +702,9 @@
         if (activeIdx >= 0 && opts[activeIdx]) {
           _addTag(opts[activeIdx].textContent);
         } else if (inp.value.trim()) {
-          _addTag(inp.value);
+          var val = inp.value.trim().toUpperCase();
+          if (EMPLEADAS_LIST.indexOf(val) !== -1) _addTag(val);
+          // Si no está en la lista, no se añade (se ignora silenciosamente)
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -721,7 +724,9 @@
     inp.addEventListener('blur', function () {
       // Pequeño delay para permitir click en dropdown
       setTimeout(function () {
-        if (inp.value.trim()) _addTag(inp.value);
+        var val = inp.value.trim().toUpperCase();
+        if (val && EMPLEADAS_LIST.indexOf(val) !== -1) _addTag(val);
+        else inp.value = '';
         _hideDropdown();
       }, 150);
     });

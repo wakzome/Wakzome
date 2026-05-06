@@ -4930,6 +4930,124 @@ td                   { font-size: .96rem !important; }
 <script src="js/ventas-admin.js"></script>
 <script src="js/predictivo.js"></script>
 
+<!-- ── AVISO PORTO SANTO ── -->
+<div id="ps-notice-backdrop" style="display:none;">
+  <div id="ps-notice-modal">
+    <button id="ps-notice-close" title="Fechar">✕</button>
+    <div id="ps-notice-body">
+      <p>Olá equipa,</p>
+      <p>Queremos aproveitar este momento para reforçar algo que é fundamental para todas: o respeito e a colaboração no nosso dia a dia. Sabemos que cada uma traz muito valor e compromisso, e isso é algo que valorizamos bastante.</p>
+      <p>Ao mesmo tempo, é importante lembrar que a forma como comunicamos e tratamos as nossas colegas tem um impacto direto no bem-estar de todas. Queremos um ambiente onde qualquer pessoa se sinta confortável, ouvida e apoiada, independentemente de ter acabado de entrar ou de já estar connosco há mais tempo.</p>
+      <p>Incentivamos todas a cuidarem do tom, da empatia e da colaboração em cada interação. Sempre que surjam tensões ou desacordos, é essencial geri-los com respeito e profissionalismo.</p>
+      <p>Além disso, queremos relembrar que existem sempre canais abertos e um ambiente de confiança para se poderem expressar junto das chefias e partilhar qualquer preocupação ou dificuldade. Estamos disponíveis para ouvir e encontrar soluções em conjunto.</p>
+      <p>Continuamos a trabalhar para que este seja um local onde todas possam dar o seu melhor, num ambiente positivo.</p>
+      <p><em>Obrigado a todas pelo vosso empenho.</em></p>
+    </div>
+  </div>
+</div>
+<style>
+#ps-notice-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 8000;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+#ps-notice-backdrop.ps-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+#ps-notice-backdrop.ps-hidden {
+  display: none !important;
+}
+#ps-notice-modal {
+  position: relative;
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  max-width: 520px;
+  width: calc(100% - 40px);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 36px 32px 32px;
+  font-family: 'MontserratLight', sans-serif;
+  font-weight: 300;
+  color: #e0e0e0;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  transform: translateY(10px);
+  transition: transform 0.3s ease;
+}
+#ps-notice-backdrop.ps-visible #ps-notice-modal {
+  transform: translateY(0);
+}
+#ps-notice-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 6px;
+  transition: color 0.2s;
+  font-family: 'MontserratLight', sans-serif;
+}
+#ps-notice-close:hover { color: rgba(255,255,255,0.9); }
+#ps-notice-body p {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: #ccc;
+}
+#ps-notice-body p:last-child { margin-bottom: 0; }
+#ps-notice-body em { color: rgba(255,255,255,0.55); font-style: normal; }
+@media (max-width: 600px) {
+  #ps-notice-modal { padding: 28px 20px 24px; }
+  #ps-notice-body p { font-size: 0.78rem; }
+}
+</style>
+<script>
+/* ── Aviso Porto Santo ── */
+(function () {
+  var backdrop = document.getElementById('ps-notice-backdrop');
+  var closeBtn = document.getElementById('ps-notice-close');
+  var storeSelect = document.getElementById('h-store-select');
+
+  function showNotice() {
+    if (!backdrop) return;
+    backdrop.style.display = 'flex';
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { backdrop.classList.add('ps-visible'); });
+    });
+  }
+
+  function hideNotice() {
+    if (!backdrop) return;
+    backdrop.classList.remove('ps-visible');
+    setTimeout(function () { backdrop.style.display = 'none'; }, 320);
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', hideNotice);
+
+  backdrop.addEventListener('click', function (e) {
+    if (e.target === backdrop) hideNotice();
+  });
+
+  if (storeSelect) {
+    storeSelect.addEventListener('change', function () {
+      if (this.value === 'porto santo') showNotice();
+    });
+  }
+})();
+</script>
+
 <script>
 /* ── Interceptar botón/gesto "atrás" de Android ── */
 (function () {

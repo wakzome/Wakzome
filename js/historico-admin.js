@@ -122,6 +122,12 @@
       adminApp.style.setProperty('overflow',       'hidden', 'important');
       adminApp.style.setProperty('height',         '100vh',  'important');
       adminApp.style.setProperty('padding',        '0',      'important');
+      adminApp.style.setProperty('position',       'fixed',  'important');
+      adminApp.style.setProperty('top',            '0',      'important');
+      adminApp.style.setProperty('left',           '0',      'important');
+      adminApp.style.setProperty('right',          '0',      'important');
+      adminApp.style.setProperty('bottom',         '0',      'important');
+      adminApp.style.setProperty('z-index',        '999',    'important');
     }
     if (moduleBar) {
       moduleBar.style.setProperty('display',     'flex', 'important');
@@ -166,12 +172,15 @@
     }
     if (moduleBar) {
       moduleBar.style.display = 'none';
-      ['flex-shrink','width'].forEach(function (p) { moduleBar.style.removeProperty(p); });
+      ['flex-shrink','width','position','top','z-index'].forEach(function (p) {
+        moduleBar.style.removeProperty(p);
+      });
     }
     if (dashboard) dashboard.style.display = '';
     if (adminApp) {
       adminApp.classList.remove('module-open');
-      ['display','flex-direction','overflow','height','padding'].forEach(function (p) {
+      ['display','flex-direction','overflow','height','padding',
+       'position','top','left','right','bottom','z-index'].forEach(function (p) {
         adminApp.style.removeProperty(p);
       });
     }

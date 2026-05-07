@@ -623,10 +623,11 @@ function _predWorkWithParsed(parsed) {
   c2Hist=Array.from({length:7},()=>[]);
   c3Freq=Array.from({length:7},()=>({}));
   c3Hist=Array.from({length:7},()=>[]);
+  initPatternHistograms();
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);}
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -804,6 +805,125 @@ function updateAbHist(seqNums) {
     if(!abFreq[si][l]) abFreq[si][l] = 0;
     abFreq[si][l]++;
     abHist[si].push(l);
+  });
+}
+
+// ── HISTOGRAMAS DE PATRÓN Y CONTEO ───────────────────────────────────────────
+// Para cada criterio acumulamos:
+//   patHist[criterio] = { "AABBB|AB": count, ... }
+//   cntHist[criterio][bloque][letra] = [freq de 0, freq de 1, freq de 2, ...]
+//   bloque: 0=S1-S5, 1=S6-S7, 2=global
+
+const CRITERIOS_DEF = [
+  { name:'AB',   getLetra: (n,si) => getLetraAB(n,si),  letras: AB_LETRAS },
+  { name:'C2',   getLetra: (n,si) => getLetraC2(n,si),  letras: C2_LETRAS },
+  { name:'C3',   getLetra: (n,si) => getLetraC3(n,si),  letras: C3_LETRAS },
+  { name:'ABCDE',getLetra: (n,si) => getLetra(n,si),    letras: ['A','B','C','D','E'] },
+];
+
+let patHist  = {};  // patHist[criterioName][patString] = count
+let cntHist  = {};  // cntHist[criterioName][bloque][letra][count] = freq
+
+function initPatternHistograms() {
+  CRITERIOS_DEF.forEach(({name, letras}) => {
+    patHist[name] = {};
+    cntHist[name] = [0,1,2].map(() => {
+      const obj = {};
+      letras.forEach(l => obj[l] = {});
+      return obj;
+    });
+  });
+}
+initPatternHistograms();
+
+function updatePatternHistograms(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  CRITERIOS_DEF.forEach(({name, getLetra, letras}) => {
+    const ls = seqNums.map((n,si) => getLetra(n,si) || '?');
+    const pat5   = ls.slice(0,5).join('');
+    const pat2   = ls.slice(5,7).join('');
+    const patAll = pat5 + '|' + pat2;
+    patHist[name][patAll] = (patHist[name][patAll]||0) + 1;
+
+    // Conteo de cada letra por bloque
+    const bloques = [ls.slice(0,5), ls.slice(5,7), ls];
+    bloques.forEach((blq, bi) => {
+      letras.forEach(l => {
+        const cnt = blq.filter(x=>x===l).length;
+        cntHist[name][bi][l][cnt] = (cntHist[name][bi][l][cnt]||0) + 1;
+      });
+    });
+  });
+}
+
+// Calcula umbral mínimo de frecuencia para patrón (P3 del histórico de counts)
+function getPatThreshold(name) {
+  const counts = Object.values(patHist[name]);
+  if(counts.length < 5) return 0;
+  const sorted = [...counts].sort((a,b)=>a-b);
+  return sorted[Math.floor(sorted.length * 0.03)] || 1;
+}
+
+// Calcula rangos típicos de conteo por letra/bloque (P3–P97)
+function getCntBounds(name) {
+  const bounds = {};
+  CRITERIOS_DEF.find(c=>c.name===name).letras.forEach(l => {
+    bounds[l] = [0,1,2].map(bi => {
+      const freqObj = cntHist[name][bi][l];
+      // Expandir en array de observaciones
+      const obs = [];
+      Object.entries(freqObj).forEach(([cnt, freq]) => {
+        for(let i=0;i<freq;i++) obs.push(Number(cnt));
+      });
+      if(obs.length < 10) return null;
+      obs.sort((a,b)=>a-b);
+      return {
+        lo: obs[Math.floor(obs.length*0.03)],
+        hi: obs[Math.floor(obs.length*0.97)]
+      };
+    });
+  });
+  return bounds;
+}
+
+// Filtra globalResults por patrón y conteo de letras (los 4 criterios)
+function filtrarPorPatronYConteo(globalResults) {
+  if(!globalResults.length) return globalResults;
+
+  // Precomputar umbrales una vez
+  const thresholds = {};
+  const boundsMaps = {};
+  CRITERIOS_DEF.forEach(({name}) => {
+    thresholds[name] = getPatThreshold(name);
+    boundsMaps[name] = getCntBounds(name);
+  });
+
+  return globalResults.filter(({blk5, blk2}) => {
+    const allNums = [...blk5, ...blk2];
+
+    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
+      const ls     = allNums.map((n,si) => getLetra(n,si) || '?');
+      const pat5   = ls.slice(0,5).join('');
+      const pat2   = ls.slice(5,7).join('');
+      const patAll = pat5 + '|' + pat2;
+
+      // Filtro 1: patrón completo
+      const patCount = patHist[name][patAll] || 0;
+      if(patCount < thresholds[name]) return false;
+
+      // Filtro 2: conteo de cada letra por bloque
+      const bounds = boundsMaps[name];
+      const bloques = [ls.slice(0,5), ls.slice(5,7), ls];
+      for(const l of letras) {
+        for(let bi=0;bi<3;bi++) {
+          const b = bounds[l][bi];
+          if(!b) continue;
+          const cnt = bloques[bi].filter(x=>x===l).length;
+          if(cnt < b.lo || cnt > b.hi) return false;
+        }
+      }
+    }
+    return true;
   });
 }
 
@@ -1389,10 +1509,13 @@ function analizarCombinaciones(allColProbs, totalRows) {
     }
   }
 
+  // Filtro de patrón y conteo de letras sobre combinaciones globales
+  const globalFiltered = filtrarPorPatronYConteo(globalResults);
+
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
     evenBlk5, evenBlk2, evenGlobal,
-    blk5Results, blk2Results, globalResults
+    blk5Results, blk2Results, globalResults: globalFiltered
   };
 }
 

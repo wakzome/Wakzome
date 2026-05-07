@@ -110,18 +110,18 @@
     var moduleBar = document.getElementById('adm-module-bar');
     var barTitle  = document.getElementById('adm-module-bar-title');
     var panel     = document.getElementById('adm-historico-panel');
-    var content   = document.getElementById('hadm-content');
 
+    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
     if (dashboard) dashboard.style.display = 'none';
     if (barTitle)  barTitle.textContent = 'histórico de vendas';
-    if (adminApp)  adminApp.classList.add('module-open');
-
-    if (adminApp) {
+    if (adminApp)  {
+      adminApp.classList.add('module-open');
       adminApp.style.setProperty('display',        'flex',   'important');
       adminApp.style.setProperty('flex-direction', 'column', 'important');
       adminApp.style.setProperty('overflow',       'hidden', 'important');
       adminApp.style.setProperty('height',         '100vh',  'important');
       adminApp.style.setProperty('padding',        '0',      'important');
+      adminApp.style.setProperty('z-index',        '9999',   'important');
     }
     if (moduleBar) {
       moduleBar.style.setProperty('display',     'flex', 'important');
@@ -140,25 +140,20 @@
       panel.style.setProperty('width',          '100%',   'important');
       panel.style.setProperty('height',         '0',      'important');
       panel.style.removeProperty('min-height');
-
-      _activeTab       = 'analise';
-      _activePeriodBtn = 'hadm-btn-90';
-      _activeZoneBtn   = null;
-      _applyBtnStyles();
-
-      var p = _period90();
-      var fEl = document.getElementById('hadm-from');
-      var tEl = document.getElementById('hadm-to');
-      if (fEl) fEl.value = p.from;
-      if (tEl) tEl.value = p.to;
-
-      _hadmLoadData();
     }
-    if (content) {
-      content.style.setProperty('overflow', 'visible', 'important');
-      content.style.setProperty('height',   'auto',    'important');
-      content.style.setProperty('flex',     'none',    'important');
-    }
+
+    _activeTab       = 'analise';
+    _activePeriodBtn = 'hadm-btn-90';
+    _activeZoneBtn   = null;
+    _applyBtnStyles();
+
+    var p = _period90();
+    var fEl = document.getElementById('hadm-from');
+    var tEl = document.getElementById('hadm-to');
+    if (fEl) fEl.value = p.from;
+    if (tEl) tEl.value = p.to;
+
+    _hadmLoadData();
   };
 
   window.closeHistoricoAdmin = function () {
@@ -166,16 +161,12 @@
     var dashboard = document.getElementById('adm-dashboard');
     var moduleBar = document.getElementById('adm-module-bar');
     var panel     = document.getElementById('adm-historico-panel');
-    var content   = document.getElementById('hadm-content');
 
     if (panel) {
       panel.style.display = 'none';
-      ['flex','flex-direction','overflow-y','overflow-x','width','height','min-height'].forEach(function (p) {
+      ['flex','flex-direction','overflow-y','overflow-x','width','height'].forEach(function (p) {
         panel.style.removeProperty(p);
       });
-    }
-    if (content) {
-      ['overflow','height','flex'].forEach(function (p) { content.style.removeProperty(p); });
     }
     if (moduleBar) {
       moduleBar.style.display = 'none';
@@ -186,7 +177,8 @@
     if (dashboard) dashboard.style.display = '';
     if (adminApp) {
       adminApp.classList.remove('module-open');
-      ['display','flex-direction','overflow','height','padding'].forEach(function (p) {
+      ['display','flex-direction','overflow','height','padding',
+       'position','top','left','right','bottom','z-index'].forEach(function (p) {
         adminApp.style.removeProperty(p);
       });
     }
@@ -194,28 +186,6 @@
 
   // ── Cargar datos según tab activo ──
   function _hadmLoadData() {
-    var adminApp  = document.getElementById('admin-app');
-    var panel     = document.getElementById('adm-historico-panel');
-    var moduleBar = document.getElementById('adm-module-bar');
-
-    if (adminApp) {
-      adminApp.style.setProperty('overflow',   'hidden', 'important');
-      adminApp.style.setProperty('overflow-y', 'hidden', 'important');
-    }
-    if (panel) {
-      panel.style.setProperty('display',        'flex',   'important');
-      panel.style.setProperty('flex-direction', 'column', 'important');
-      panel.style.setProperty('flex',           '1',      'important');
-      panel.style.setProperty('min-height',     '0',      'important');
-      panel.style.setProperty('overflow-y',     'auto',   'important');
-      panel.style.setProperty('overflow-x',     'hidden', 'important');
-      panel.style.setProperty('width',          '100%',   'important');
-      panel.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
-    }
-    if (moduleBar) {
-      moduleBar.style.setProperty('flex-shrink', '0', 'important');
-    }
-
     if (_activeTab === 'analise')    _renderAnalise();
     if (_activeTab === 'estacional') _renderEstacional();
     if (_activeTab === 'carregar')   _renderCarregar();

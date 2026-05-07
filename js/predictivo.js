@@ -1542,11 +1542,13 @@ function analizarCombinaciones(allColProbs, totalRows) {
   const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2, evenBlk2);
 
   // Precomputar filtros una sola vez
-  const {thresholds, boundsMaps} = precomputarFiltros();
+  // const {thresholds, boundsMaps} = precomputarFiltros(); // PAUSADO
 
-  // Etapa 1: filtrar blk5 y blk2 antes del producto cartesiano
-  const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
-  const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
+  // Etapa 1: filtrar blk5 y blk2 antes del producto cartesiano — PAUSADO
+  // const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
+  // const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
+  const blk5Filtered = blk5Results;
+  const blk2Filtered = blk2Results;
 
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
@@ -1565,8 +1567,9 @@ function analizarCombinaciones(allColProbs, totalRows) {
     }
   }
 
-  // Etapa 2: filtro final sobre combinaciones globales (patrón completo + conteo global)
-  const globalFiltered = filtrarGlobal(globalResults, thresholds, boundsMaps);
+  // Etapa 2: filtro final sobre combinaciones globales — PAUSADO
+  // const globalFiltered = filtrarGlobal(globalResults, thresholds, boundsMaps);
+  const globalFiltered = globalResults;
 
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,

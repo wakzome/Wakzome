@@ -1557,7 +1557,8 @@ function analizarCombinaciones(allColProbs, totalRows) {
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
     evenBlk5, evenBlk2, evenGlobal,
-    blk5Results, blk2Results, globalResults: globalFiltered
+    blk5Results, blk2Results, globalResults: globalFiltered,
+    boundsMaps
   };
 }
 
@@ -1578,7 +1579,7 @@ function renderCombinaciones(result, totalRows) {
 
   const {candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
          evenBlk5, evenBlk2, evenGlobal,
-         blk5Results, blk2Results, globalResults} = result;
+         blk5Results, blk2Results, globalResults, boundsMaps} = result;
 
   // Calcular letraInfo y abInfo antes de usarlos en la tabla
   const letraInfo = Array.from({length:7}, (_,si) => {
@@ -1656,6 +1657,49 @@ function renderCombinaciones(result, totalRows) {
   html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B/C) &nbsp;·&nbsp; ${c2Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
   html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B/C/D) &nbsp;·&nbsp; ${c3Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
   html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">(A/B/C/D/E) &nbsp;·&nbsp; ${letraInfo.map((l,i)=>`S${i+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
+
+  // ── PANEL DE DIAGNÓSTICO DE FILTROS ─────────────────────────────────────────
+  const critLabels = {'AB':'(A/B)','C2':'(A/B/C)','C3':'(A/B/C/D)','ABCDE':'(A/B/C/D/E)'};
+  let diagHtml = '<div style="margin-bottom:12px;">';
+  diagHtml += '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;">🔍 Diagnóstico de filtros</div>';
+
+  CRITERIOS_DEF.forEach(({name, letras}) => {
+    const bounds = boundsMaps[name];
+    diagHtml += `<div style="margin-bottom:8px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px;">`;
+    diagHtml += `<div style="font-size:10px;font-weight:700;color:#495057;margin-bottom:5px;">${critLabels[name]||name}</div>`;
+
+    // Patrones S1-S5 que pasaron
+    const pats5 = Object.keys(pat5Hash[name]||{}).filter(p=>(pat5Hash[name][p]||0)>=1).sort();
+    diagHtml += `<div style="font-size:9px;color:#666;margin-bottom:3px;"><b>Patrones S1–S5 válidos (${pats5.length}):</b> `;
+    diagHtml += pats5.length ? `<span style="font-family:monospace;">${pats5.slice(0,30).join(' ')}</span>${pats5.length>30?` +${pats5.length-30}…`:''}` : '<i>ninguno</i>';
+    diagHtml += '</div>';
+
+    // Patrones S6-S7 que pasaron
+    const pats2 = Object.keys(pat2Hash[name]||{}).filter(p=>(pat2Hash[name][p]||0)>=1).sort();
+    diagHtml += `<div style="font-size:9px;color:#666;margin-bottom:3px;"><b>Patrones S6–S7 válidos (${pats2.length}):</b> `;
+    diagHtml += pats2.length ? `<span style="font-family:monospace;">${pats2.join(' ')}</span>` : '<i>ninguno</i>';
+    diagHtml += '</div>';
+
+    // Conteos permitidos por letra — 3 bloques
+    const bloqueNames = ['S1–S5','S6–S7','S1–S7'];
+    [0,1,2].forEach(bi => {
+      diagHtml += `<div style="font-size:9px;color:#555;margin-bottom:2px;"><b>${bloqueNames[bi]}:</b> `;
+      const partes = letras.map(l => {
+        const b = bounds[l][bi];
+        if(!b) return `${l}(?)`;
+        const allowed = [];
+        const maxPosible = bi===0?5:bi===1?2:7;
+        for(let c=0;c<=maxPosible;c++) if(c>=b.lo && c<=b.hi) allowed.push(c);
+        return `${l}(${allowed.join(',')})`;
+      });
+      diagHtml += partes.join(' · ');
+      diagHtml += '</div>';
+    });
+
+    diagHtml += '</div>';
+  });
+  diagHtml += '</div>';
+  html += diagHtml;
 
   // Results
   if(globalResults.length > 0) {

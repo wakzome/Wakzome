@@ -320,23 +320,23 @@
       return { pct: (a1 - a2) / a2 * 100, avg: a1 };
     }
 
-    // ── Anomalías ──
+    // ── Anomalías — excluir días con 0€ ──
     function _detectAnomalies(lojaRows) {
-      if (lojaRows.length < 10) return [];
-      var vals = lojaRows.map(function (r) { return parseFloat(r.montante) || 0; });
+      var validRows = lojaRows.filter(function (r) { return (parseFloat(r.montante) || 0) > 0; });
+      if (validRows.length < 10) return [];
+      var vals = validRows.map(function (r) { return parseFloat(r.montante); });
       vals.sort(function (a, b) { return a - b; });
       var median = vals[Math.floor(vals.length / 2)];
       var mad = vals.map(function (v) { return Math.abs(v - median); });
       mad.sort(function (a, b) { return a - b; });
       var madVal = mad[Math.floor(mad.length / 2)] || 1;
       var anomalies = [];
-      lojaRows.forEach(function (r) {
-        var v = parseFloat(r.montante) || 0;
+      validRows.forEach(function (r) {
+        var v = parseFloat(r.montante);
         var z = Math.abs(v - median) / madVal;
-        if (z > 3.5) {
-          anomalies.push({ data: r.data, montante: v, z: z, alto: v > median });
-        }
+        if (z > 3.5) anomalies.push({ data: r.data, montante: v, z: z, alto: v > median });
       });
+      anomalies.sort(function (a, b) { return b.z - a.z; });
       return anomalies.slice(0, 3);
     }
 
@@ -386,7 +386,7 @@
       var label   = LOJA_LABELS[loja] || loja;
       var trend   = _avg30(byLoja[loja]);
 
-      var row = _el('div', 'margin-bottom:14px;', null);
+      var row = _el('div', 'margin-bottom:14px;border-radius:10px;padding:10px 14px;', '#1a1a1a');
 
       // Nombre + badge tendencia
       var nameRow = _el('div', 'display:flex;align-items:center;gap:10px;margin-bottom:5px;', null);
@@ -928,6 +928,10 @@
       '}' +
       '#hadm-content {' +
         'background:#ffffff !important; width:100% !important; box-sizing:border-box !important;' +
+        'padding-left:180px !important;' +
+      '}' +
+      '@media (max-width:1024px) {' +
+        '#hadm-content { padding-left:0 !important; }' +
       '}';
     document.head.appendChild(s);
   }

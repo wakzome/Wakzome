@@ -138,12 +138,10 @@
       panel.style.setProperty('display',        'flex',   'important');
       panel.style.setProperty('flex',           '1',      'important');
       panel.style.setProperty('flex-direction', 'column', 'important');
-      panel.style.setProperty('align-items',    'center', 'important');
       panel.style.setProperty('overflow-y',     'auto',   'important');
       panel.style.setProperty('overflow-x',     'hidden', 'important');
       panel.style.setProperty('width',          '100%',   'important');
       panel.style.setProperty('height',         '0',      'important');
-      panel.style.removeProperty('min-height');
     }
 
     _activeTab       = 'analise';
@@ -210,7 +208,14 @@
 
   function _setLoading() {
     var c = _getContent();
-    if (c) c.innerHTML = '<div style="padding:30px;opacity:.6;font-size:.85rem;color:#fff !important;">a carregar…</div>';
+    if (!c) return;
+    c.innerHTML = '<div style="padding:30px;font-size:.85rem;color:#333 !important;">a carregar…</div>';
+    c.style.setProperty('background', '#ffffff', 'important');
+    c.style.setProperty('padding', '16px 24px 80px', 'important');
+    c.style.setProperty('max-width', '860px', 'important');
+    c.style.setProperty('margin', '0 auto', 'important');
+    c.style.setProperty('width', '100%', 'important');
+    c.style.setProperty('box-sizing', 'border-box', 'important');
   }
 
   // ════════════════════════════════════════════════════════════
@@ -261,13 +266,18 @@
     var c = _getContent();
     if (!c) return;
     c.innerHTML = '';
-    c.style.setProperty('padding', '12px 8px 80px', 'important');
+    c.style.setProperty('background', '#ffffff', 'important');
+    c.style.setProperty('padding', '16px 24px 80px', 'important');
+    c.style.setProperty('max-width', '860px', 'important');
+    c.style.setProperty('margin', '0 auto', 'important');
+    c.style.setProperty('width', '100%', 'important');
+    c.style.setProperty('box-sizing', 'border-box', 'important');
 
     _injectStyles();
 
     if (!rows.length) {
       var empty = document.createElement('div');
-      empty.setAttribute('style', 'padding:50px 0;text-align:center;opacity:.5;font-size:.85rem;color:#fff !important;');
+      empty.setAttribute('style', 'padding:50px 0;text-align:center;font-size:.85rem;color:#666 !important;');
       empty.textContent = 'Nenhum registo encontrado para este período.';
       c.appendChild(empty);
       return;
@@ -321,30 +331,30 @@
       return { pct: (a1 - a2) / a2 * 100, avg: a1 };
     }
 
-    // ── Anomalías ──
+    // ── Anomalías — solo días con valor > 0 ──
     function _detectAnomalies(lojaRows) {
-      if (lojaRows.length < 10) return [];
-      var vals = lojaRows.map(function (r) { return parseFloat(r.montante) || 0; });
+      var validRows = lojaRows.filter(function (r) { return (parseFloat(r.montante) || 0) > 0; });
+      if (validRows.length < 10) return [];
+      var vals = validRows.map(function (r) { return parseFloat(r.montante); });
       vals.sort(function (a, b) { return a - b; });
       var median = vals[Math.floor(vals.length / 2)];
       var mad = vals.map(function (v) { return Math.abs(v - median); });
       mad.sort(function (a, b) { return a - b; });
       var madVal = mad[Math.floor(mad.length / 2)] || 1;
       var anomalies = [];
-      lojaRows.forEach(function (r) {
-        var v = parseFloat(r.montante) || 0;
+      validRows.forEach(function (r) {
+        var v = parseFloat(r.montante);
         var z = Math.abs(v - median) / madVal;
-        if (z > 3.5) {
-          anomalies.push({ data: r.data, montante: v, z: z, alto: v > median });
-        }
+        if (z > 3.5) anomalies.push({ data: r.data, montante: v, z: z, alto: v > median });
       });
+      anomalies.sort(function (a, b) { return b.z - a.z; });
       return anomalies.slice(0, 3);
     }
 
     // ═══ TOTAL GERAL ═══
-    var grand = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:18px;', '#111111');
+    var grand = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:18px;border:1px solid #e0e0e0;', '#1a1a1a');
     var grandLbl = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;', null);
-    grandLbl.style.setProperty('color', '#ffffff', 'important');
+    grandLbl.style.setProperty('color', '#aaaaaa', 'important');
     grandLbl.textContent = 'TOTAL GERAL — ' + _fmtDate(f.from) + ' a ' + _fmtDate(f.to);
     grand.appendChild(grandLbl);
 
@@ -357,13 +367,12 @@
     if (prevGt > 0) {
       var pct = (gt - prevGt) / prevGt * 100;
       var badge = _el('span', 'font-size:.82rem;font-weight:800;', null);
-      badge.style.setProperty('color', pct >= 0 ? '#4caf82' : '#e05a5a', 'important');
+      badge.style.setProperty('color', pct >= 0 ? '#4caf82' : '#ff8080', 'important');
       badge.textContent = (pct >= 0 ? '↑ +' : '↓ ') + pct.toFixed(1) + '% vs período anterior';
       grandRow.appendChild(badge);
     }
     grand.appendChild(grandRow);
 
-    // Promedio diario
     var fromD2 = new Date(f.from + 'T00:00:00');
     var toD2   = new Date(f.to   + 'T00:00:00');
     var dias   = Math.round((toD2 - fromD2) / 86400000) + 1;
@@ -371,12 +380,11 @@
     avgDia.style.setProperty('color', '#aaaaaa', 'important');
     avgDia.textContent = 'Média diária: ' + _fmtEur(gt / dias) + ' · ' + rows.length + ' registos · ' + dias + ' dias';
     grand.appendChild(avgDia);
-
     c.appendChild(grand);
 
-    // ═══ RANKING + BARRA ═══
-    var rankTitle = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;', null);
-    rankTitle.style.setProperty('color', '#888888', 'important');
+    // ═══ RANKING + BARRAS ═══
+    var rankTitle = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;margin-top:8px;', null);
+    rankTitle.style.setProperty('color', '#555555', 'important');
     rankTitle.textContent = 'RANKING DE LOJAS';
     c.appendChild(rankTitle);
 
@@ -387,13 +395,14 @@
       var label   = LOJA_LABELS[loja] || loja;
       var trend   = _avg30(byLoja[loja]);
 
-      var row = _el('div', 'margin-bottom:14px;', null);
+      var card = _el('div', 'border-radius:10px;padding:12px 16px;margin-bottom:10px;border:1px solid #e8e8e8;', '#fafafa');
 
-      // Nombre + badge tendencia
-      var nameRow = _el('div', 'display:flex;align-items:center;gap:10px;margin-bottom:5px;', null);
+      // Fila nombre + badges
+      var nameRow = _el('div', 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;', null);
+
       var medal = ['🥇','🥈','🥉'][idx] || '';
-      var nameSpan = _el('span', 'font-size:.88rem;font-weight:800;', null);
-      nameSpan.style.setProperty('color', '#ffffff', 'important');
+      var nameSpan = _el('span', 'font-size:.92rem;font-weight:800;', null);
+      nameSpan.style.setProperty('color', '#111111', 'important');
       nameSpan.textContent = (medal ? medal + ' ' : (idx+1) + '. ') + label;
       nameRow.appendChild(nameSpan);
 
@@ -401,67 +410,66 @@
       if (prevT > 0) {
         var vPct  = (total - prevT) / prevT * 100;
         var vBadge = _el('span', 'font-size:.68rem;font-weight:800;padding:2px 8px;border-radius:10px;', null);
-        vBadge.style.setProperty('background', vPct >= 0 ? 'rgba(74,175,130,.18)' : 'rgba(224,90,90,.18)', 'important');
-        vBadge.style.setProperty('color', vPct >= 0 ? '#4caf82' : '#e05a5a', 'important');
+        vBadge.style.setProperty('background', vPct >= 0 ? '#e6f4ed' : '#fdecea', 'important');
+        vBadge.style.setProperty('color', vPct >= 0 ? '#2a6a40' : '#a03020', 'important');
         vBadge.textContent = (vPct >= 0 ? '↑ +' : '↓ ') + vPct.toFixed(1) + '%';
         nameRow.appendChild(vBadge);
       }
 
       // Badge tendência 30d
       if (trend) {
-        var tIcon = trend.pct > 3 ? '▲ acelerando' : trend.pct < -3 ? '▼ desacelerando' : '→ estável';
+        var tIcon = trend.pct > 3 ? '▲ acelerando' : trend.pct < -3 ? '▼ a desacelerar' : '→ estável';
         var tBadge = _el('span', 'font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px;', null);
-        tBadge.style.setProperty('background', trend.pct > 3 ? 'rgba(74,175,130,.12)' : trend.pct < -3 ? 'rgba(224,90,90,.12)' : 'rgba(180,180,180,.12)', 'important');
-        tBadge.style.setProperty('color', trend.pct > 3 ? '#4caf82' : trend.pct < -3 ? '#e05a5a' : '#aaaaaa', 'important');
+        tBadge.style.setProperty('background', trend.pct > 3 ? '#e6f4ed' : trend.pct < -3 ? '#fdecea' : '#f0f0f0', 'important');
+        tBadge.style.setProperty('color', trend.pct > 3 ? '#2a6a40' : trend.pct < -3 ? '#a03020' : '#666666', 'important');
         tBadge.textContent = tIcon;
         nameRow.appendChild(tBadge);
       }
 
-      row.appendChild(nameRow);
+      card.appendChild(nameRow);
 
       // Barra
-      var barWrap = _el('div', 'border-radius:6px;overflow:hidden;margin-bottom:4px;', null);
-      barWrap.style.setProperty('background', '#2a2a2a', 'important');
+      var barWrap = _el('div', 'border-radius:5px;overflow:hidden;margin-bottom:6px;', null);
+      barWrap.style.setProperty('background', '#e8e8e8', 'important');
       barWrap.style.height = '8px';
-      var barFill = _el('div', 'height:100%;border-radius:6px;transition:width .6s ease;', null);
+      var barFill = _el('div', 'height:100%;border-radius:5px;', null);
       barFill.style.setProperty('width', barPct.toFixed(1) + '%', 'important');
-      barFill.style.setProperty('background', 'linear-gradient(90deg,#3a6a4a,#4caf82)', 'important');
+      barFill.style.setProperty('background', 'linear-gradient(90deg,#3a8a5a,#4caf82)', 'important');
       barWrap.appendChild(barFill);
-      row.appendChild(barWrap);
+      card.appendChild(barWrap);
 
-      // Total
-      var totalRow = _el('div', 'display:flex;justify-content:space-between;', null);
-      var totalSpan = _el('span', 'font-size:.82rem;font-weight:800;', null);
-      totalSpan.style.setProperty('color', '#ffffff', 'important');
+      // Total + media
+      var totalRow = _el('div', 'display:flex;justify-content:space-between;align-items:baseline;', null);
+      var totalSpan = _el('span', 'font-size:.88rem;font-weight:800;', null);
+      totalSpan.style.setProperty('color', '#111111', 'important');
       totalSpan.textContent = _fmtEur(total);
       var avgSpan = _el('span', 'font-size:.72rem;', null);
-      avgSpan.style.setProperty('color', '#888888', 'important');
-      var nDias = byLoja[loja].length;
-      avgSpan.textContent = 'média ' + _fmtEur(total / nDias) + '/dia';
+      avgSpan.style.setProperty('color', '#666666', 'important');
+      avgSpan.textContent = 'média ' + _fmtEur(total / byLoja[loja].length) + '/dia';
       totalRow.appendChild(totalSpan);
       totalRow.appendChild(avgSpan);
-      row.appendChild(totalRow);
+      card.appendChild(totalRow);
 
-      // Anomalías de esta loja
+      // Anomalías — solo picos reales
       var anomalies = _detectAnomalies(byLoja[loja]);
       if (anomalies.length) {
-        var aBox = _el('div', 'margin-top:6px;padding:8px 12px;border-radius:8px;border-left:3px solid #c8a832;', null);
-        aBox.style.setProperty('background', '#1e1a0a', 'important');
+        var aBox = _el('div', 'margin-top:8px;padding:6px 10px;border-radius:7px;border-left:3px solid #c8a832;', null);
+        aBox.style.setProperty('background', '#fffbea', 'important');
         anomalies.forEach(function (a) {
           var aLine = _el('div', 'font-size:.7rem;', null);
-          aLine.style.setProperty('color', '#f0d080', 'important');
+          aLine.style.setProperty('color', '#7a5a00', 'important');
           aLine.textContent = (a.alto ? '⚡ Pico' : '⚠ Queda') + ' em ' + _fmtDate(a.data) + ': ' + _fmtEur(a.montante);
           aBox.appendChild(aLine);
         });
-        row.appendChild(aBox);
+        card.appendChild(aBox);
       }
 
-      c.appendChild(row);
+      c.appendChild(card);
     });
 
     // ═══ SEPARADOR ═══
     var sep = _el('div', 'height:1px;margin:22px 0;', null);
-    sep.style.setProperty('background', '#333333', 'important');
+    sep.style.setProperty('background', '#e8e8e8', 'important');
     c.appendChild(sep);
 
     // ═══ INSIGHT AUTOMÁTICO ═══
@@ -469,17 +477,15 @@
   }
 
   function _buildInsight(c, rows, prevRows, gt, prevGt, lojaOrder, lojaTotals, f) {
-    var box = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:18px;border-left:4px solid #4a7c59;', null);
-    box.style.setProperty('background', '#0d1f13', 'important');
+    var box = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:18px;border-left:4px solid #4a7c59;border:1px solid #d0eada;', '#f0faf4');
 
     var title = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;', null);
-    title.style.setProperty('color', '#4caf82', 'important');
+    title.style.setProperty('color', '#2a6a40', 'important');
     title.textContent = '🧠 INTELIGÊNCIA DO NEGÓCIO';
     box.appendChild(title);
 
     var insights = [];
 
-    // Tendência geral
     if (prevGt > 0) {
       var pct = (gt - prevGt) / prevGt * 100;
       if (pct > 5)       insights.push('✅ Tendência positiva: o período atual supera o anterior em ' + pct.toFixed(1) + '%.');
@@ -487,7 +493,6 @@
       else               insights.push('→ Desempenho estável em relação ao período anterior (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%).');
     }
 
-    // Mejor y peor loja
     if (lojaOrder.length > 1) {
       var best  = lojaOrder[0];
       var worst = lojaOrder[lojaOrder.length - 1];
@@ -495,21 +500,17 @@
       insights.push('📉 Menor volume: ' + (LOJA_LABELS[worst]||worst) + ' (' + _fmtEur(lojaTotals[worst]) + ').');
     }
 
-    // Concentración
     if (lojaOrder.length > 1) {
       var topShare = lojaTotals[lojaOrder[0]] / gt * 100;
-      if (topShare > 40) {
-        insights.push('📊 Concentração: a loja líder representa ' + topShare.toFixed(0) + '% do total — dependência elevada.');
-      }
+      if (topShare > 40) insights.push('📊 Concentração: a loja líder representa ' + topShare.toFixed(0) + '% do total.');
     }
 
-    // Días con ventas 0
     var zeroDays = rows.filter(function (r) { return (parseFloat(r.montante)||0) === 0; }).length;
     if (zeroDays > 0) insights.push('⚪ ' + zeroDays + ' dia(s) com vendas zero no período.');
 
     insights.forEach(function (txt) {
-      var line = _el('div', 'font-size:.78rem;line-height:1.55;margin-bottom:4px;', null);
-      line.style.setProperty('color', '#d4f0e2', 'important');
+      var line = _el('div', 'font-size:.78rem;line-height:1.6;margin-bottom:4px;', null);
+      line.style.setProperty('color', '#1a3a28', 'important');
       line.textContent = txt;
       box.appendChild(line);
     });
@@ -543,7 +544,12 @@
     var c = _getContent();
     if (!c) return;
     c.innerHTML = '';
-    c.style.setProperty('padding', '12px 8px 80px', 'important');
+    c.style.setProperty('background', '#ffffff', 'important');
+    c.style.setProperty('padding', '16px 24px 80px', 'important');
+    c.style.setProperty('max-width', '860px', 'important');
+    c.style.setProperty('margin', '0 auto', 'important');
+    c.style.setProperty('width', '100%', 'important');
+    c.style.setProperty('box-sizing', 'border-box', 'important');
     _injectStyles();
 
     // ── Média por día de semana ──
@@ -558,34 +564,33 @@
     var maxDow = Math.max.apply(null, avgDow) || 1;
 
     var dowTitle = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px;', null);
-    dowTitle.style.setProperty('color', '#888888', 'important');
+    dowTitle.style.setProperty('color', '#555555', 'important');
     dowTitle.textContent = 'MÉDIA DE VENDAS POR DIA DA SEMANA';
     c.appendChild(dowTitle);
 
-    var dowBox = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:22px;', null);
-    dowBox.style.setProperty('background', '#111111', 'important');
+    var dowBox = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:22px;border:1px solid #e8e8e8;', '#fafafa');
 
     DIAS_SEMANA.forEach(function (dia, i) {
       var v   = avgDow[i];
       var pct = v / maxDow * 100;
       var row = _el('div', 'display:flex;align-items:center;gap:12px;margin-bottom:10px;', null);
       var dLabel = _el('span', 'font-size:.75rem;font-weight:700;width:28px;flex-shrink:0;', null);
-      dLabel.style.setProperty('color', '#cccccc', 'important');
+      dLabel.style.setProperty('color', '#333333', 'important');
       dLabel.textContent = dia;
       row.appendChild(dLabel);
 
       var barWrap = _el('div', 'flex:1;border-radius:5px;overflow:hidden;', null);
-      barWrap.style.setProperty('background', '#2a2a2a', 'important');
+      barWrap.style.setProperty('background', '#e0e0e0', 'important');
       barWrap.style.height = '14px';
       var barFill = _el('div', 'height:100%;border-radius:5px;', null);
       barFill.style.setProperty('width', pct.toFixed(1) + '%', 'important');
       var isWeekend = (i === 0 || i === 6);
-      barFill.style.setProperty('background', isWeekend ? 'linear-gradient(90deg,#4a3a7c,#8a6ccc)' : 'linear-gradient(90deg,#3a6a4a,#4caf82)', 'important');
+      barFill.style.setProperty('background', isWeekend ? 'linear-gradient(90deg,#6a4acc,#9a7cee)' : 'linear-gradient(90deg,#3a8a5a,#4caf82)', 'important');
       barWrap.appendChild(barFill);
       row.appendChild(barWrap);
 
       var vLabel = _el('span', 'font-size:.75rem;font-weight:800;width:80px;text-align:right;flex-shrink:0;', null);
-      vLabel.style.setProperty('color', '#ffffff', 'important');
+      vLabel.style.setProperty('color', '#111111', 'important');
       vLabel.textContent = _fmtEur(v);
       row.appendChild(vLabel);
       dowBox.appendChild(row);
@@ -604,14 +609,12 @@
     var maxMonth = Math.max.apply(null, avgMonth) || 1;
 
     var mTitle = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px;', null);
-    mTitle.style.setProperty('color', '#888888', 'important');
+    mTitle.style.setProperty('color', '#555555', 'important');
     mTitle.textContent = 'MÉDIA DIÁRIA POR MÊS (histórico completo)';
     c.appendChild(mTitle);
 
-    var mBox = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:22px;', null);
-    mBox.style.setProperty('background', '#111111', 'important');
+    var mBox = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:22px;border:1px solid #e8e8e8;', '#fafafa');
 
-    // Determinar melhor e pior mês
     var sortedMonths = avgMonth.map(function (v, i) { return { v: v, i: i }; }).filter(function (x) { return x.v > 0; });
     sortedMonths.sort(function (a, b) { return b.v - a.v; });
     var bestMIdx  = sortedMonths.length ? sortedMonths[0].i : -1;
@@ -623,26 +626,26 @@
       var row = _el('div', 'display:flex;align-items:center;gap:12px;margin-bottom:8px;', null);
 
       var mLabel = _el('span', 'font-size:.75rem;font-weight:700;width:28px;flex-shrink:0;', null);
-      mLabel.style.setProperty('color', i === bestMIdx ? '#4caf82' : i === worstMIdx ? '#e05a5a' : '#cccccc', 'important');
+      mLabel.style.setProperty('color', i === bestMIdx ? '#2a6a40' : i === worstMIdx ? '#a03020' : '#333333', 'important');
       mLabel.textContent = mes;
       row.appendChild(mLabel);
 
       var barWrap = _el('div', 'flex:1;border-radius:5px;overflow:hidden;', null);
-      barWrap.style.setProperty('background', '#2a2a2a', 'important');
+      barWrap.style.setProperty('background', '#e0e0e0', 'important');
       barWrap.style.height = '12px';
       var barFill = _el('div', 'height:100%;border-radius:5px;', null);
       barFill.style.setProperty('width', pct.toFixed(1) + '%', 'important');
-      barFill.style.setProperty('background', i === bestMIdx ? 'linear-gradient(90deg,#2a6a3a,#4caf82)' : i === worstMIdx ? 'linear-gradient(90deg,#6a2a2a,#e05a5a)' : 'linear-gradient(90deg,#3a5a6a,#5a9abf)', 'important');
+      barFill.style.setProperty('background', i === bestMIdx ? 'linear-gradient(90deg,#2a8a4a,#4caf82)' : i === worstMIdx ? 'linear-gradient(90deg,#c04030,#e07060)' : 'linear-gradient(90deg,#4a7aaa,#6aaccc)', 'important');
       barWrap.appendChild(barFill);
       row.appendChild(barWrap);
 
       var vLabel = _el('span', 'font-size:.72rem;font-weight:800;width:80px;text-align:right;flex-shrink:0;', null);
-      vLabel.style.setProperty('color', '#ffffff', 'important');
+      vLabel.style.setProperty('color', '#111111', 'important');
       vLabel.textContent = v > 0 ? _fmtEur(v) : '—';
       row.appendChild(vLabel);
 
-      if (i === bestMIdx)  { var tag = _el('span','font-size:.6rem;padding:1px 6px;border-radius:8px;flex-shrink:0;',null); tag.style.setProperty('background','rgba(74,175,130,.2)','important'); tag.style.setProperty('color','#4caf82','important'); tag.textContent='melhor'; row.appendChild(tag); }
-      if (i === worstMIdx) { var tag2 = _el('span','font-size:.6rem;padding:1px 6px;border-radius:8px;flex-shrink:0;',null); tag2.style.setProperty('background','rgba(224,90,90,.2)','important'); tag2.style.setProperty('color','#e05a5a','important'); tag2.textContent='pior'; row.appendChild(tag2); }
+      if (i === bestMIdx)  { var tag = _el('span','font-size:.6rem;padding:1px 6px;border-radius:8px;flex-shrink:0;',null); tag.style.setProperty('background','#e6f4ed','important'); tag.style.setProperty('color','#2a6a40','important'); tag.textContent='melhor'; row.appendChild(tag); }
+      if (i === worstMIdx) { var tag2 = _el('span','font-size:.6rem;padding:1px 6px;border-radius:8px;flex-shrink:0;',null); tag2.style.setProperty('background','#fdecea','important'); tag2.style.setProperty('color','#a03020','important'); tag2.textContent='pior'; row.appendChild(tag2); }
 
       mBox.appendChild(row);
     });
@@ -658,12 +661,11 @@
     var years = Object.keys(byYear).sort();
     if (years.length > 1) {
       var yTitle = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px;', null);
-      yTitle.style.setProperty('color', '#888888', 'important');
+      yTitle.style.setProperty('color', '#555555', 'important');
       yTitle.textContent = 'EVOLUÇÃO ANUAL TOTAL';
       c.appendChild(yTitle);
 
-      var yBox = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:22px;', null);
-      yBox.style.setProperty('background', '#111111', 'important');
+      var yBox = _el('div', 'border-radius:12px;padding:14px 18px;margin-bottom:22px;border:1px solid #e8e8e8;', '#fafafa');
 
       var maxYear = Math.max.apply(null, years.map(function (y) { return byYear[y]; })) || 1;
       var prevYearVal = null;
@@ -674,28 +676,28 @@
         var row = _el('div', 'display:flex;align-items:center;gap:12px;margin-bottom:10px;', null);
 
         var yLabel = _el('span', 'font-size:.75rem;font-weight:700;width:36px;flex-shrink:0;', null);
-        yLabel.style.setProperty('color', '#cccccc', 'important');
+        yLabel.style.setProperty('color', '#333333', 'important');
         yLabel.textContent = yr;
         row.appendChild(yLabel);
 
         var barWrap = _el('div', 'flex:1;border-radius:5px;overflow:hidden;', null);
-        barWrap.style.setProperty('background', '#2a2a2a', 'important');
+        barWrap.style.setProperty('background', '#e0e0e0', 'important');
         barWrap.style.height = '14px';
         var barFill = _el('div', 'height:100%;border-radius:5px;', null);
         barFill.style.setProperty('width', pct.toFixed(1) + '%', 'important');
-        barFill.style.setProperty('background', 'linear-gradient(90deg,#2a4a6a,#4a8abf)', 'important');
+        barFill.style.setProperty('background', 'linear-gradient(90deg,#4a7aaa,#6aacdd)', 'important');
         barWrap.appendChild(barFill);
         row.appendChild(barWrap);
 
         var vLabel = _el('span', 'font-size:.75rem;font-weight:800;width:90px;text-align:right;flex-shrink:0;', null);
-        vLabel.style.setProperty('color', '#ffffff', 'important');
+        vLabel.style.setProperty('color', '#111111', 'important');
         vLabel.textContent = _fmtEur(v);
         row.appendChild(vLabel);
 
         if (prevYearVal !== null) {
           var ypct = (v - prevYearVal) / prevYearVal * 100;
           var yBadge = _el('span', 'font-size:.65rem;font-weight:700;width:50px;flex-shrink:0;text-align:right;', null);
-          yBadge.style.setProperty('color', ypct >= 0 ? '#4caf82' : '#e05a5a', 'important');
+          yBadge.style.setProperty('color', ypct >= 0 ? '#2a6a40' : '#a03020', 'important');
           yBadge.textContent = (ypct >= 0 ? '+' : '') + ypct.toFixed(1) + '%';
           row.appendChild(yBadge);
         }
@@ -713,45 +715,47 @@
     var c = _getContent();
     if (!c) return;
     c.innerHTML = '';
-    c.style.setProperty('padding', '16px 12px 80px', 'important');
+    c.style.setProperty('background', '#ffffff', 'important');
+    c.style.setProperty('padding', '16px 24px 80px', 'important');
+    c.style.setProperty('max-width', '860px', 'important');
+    c.style.setProperty('margin', '0 auto', 'important');
+    c.style.setProperty('width', '100%', 'important');
+    c.style.setProperty('box-sizing', 'border-box', 'important');
     _injectStyles();
 
-    // ── Título ──
     var title = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:16px;', null);
-    title.style.setProperty('color', '#888888', 'important');
+    title.style.setProperty('color', '#555555', 'important');
     title.textContent = 'REGISTAR VENDA HISTÓRICA';
     c.appendChild(title);
 
-    // ── Formulário ──
-    var form = _el('div', 'border-radius:12px;padding:18px;margin-bottom:22px;', null);
-    form.style.setProperty('background', '#111111', 'important');
+    var form = _el('div', 'border-radius:12px;padding:18px;margin-bottom:22px;border:1px solid #e8e8e8;', '#f8f8f8');
 
     function _fRow(labelTxt, inputEl) {
       var row = _el('div', 'margin-bottom:14px;', null);
       var lbl = _el('label', 'display:block;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;', null);
-      lbl.style.setProperty('color', '#888888', 'important');
+      lbl.style.setProperty('color', '#555555', 'important');
       lbl.textContent = labelTxt;
       row.appendChild(lbl);
       row.appendChild(inputEl);
       return row;
     }
 
-    var inputStyle = 'width:100%;box-sizing:border-box;padding:10px 14px;font-size:.88rem;font-weight:600;font-family:MontserratLight,sans-serif;border:1.5px solid #444;border-radius:9px;outline:none;';
+    var inputStyle = 'width:100%;box-sizing:border-box;padding:10px 14px;font-size:.88rem;font-weight:600;font-family:MontserratLight,sans-serif;border:1.5px solid #cccccc;border-radius:9px;outline:none;';
 
     // Data
-    var inpData = _el('input', inputStyle, '#1e1e1e');
+    var inpData = _el('input', inputStyle, '#ffffff');
     inpData.type = 'date';
     inpData.id   = 'hadm-inp-data';
     inpData.value = _todayStr();
-    inpData.style.setProperty('color', '#ffffff', 'important');
+    inpData.style.setProperty('color', '#111111', 'important');
     form.appendChild(_fRow('Data', inpData));
 
     // Loja
     var inpLoja = document.createElement('select');
     inpLoja.id = 'hadm-inp-loja';
     inpLoja.setAttribute('style', inputStyle);
-    inpLoja.style.setProperty('background', '#1e1e1e', 'important');
-    inpLoja.style.setProperty('color', '#ffffff', 'important');
+    inpLoja.style.setProperty('background', '#ffffff', 'important');
+    inpLoja.style.setProperty('color', '#111111', 'important');
     var optPlaceholder = document.createElement('option');
     optPlaceholder.value = '';
     optPlaceholder.textContent = 'Selecionar loja…';
@@ -765,13 +769,13 @@
     form.appendChild(_fRow('Loja', inpLoja));
 
     // Montante
-    var inpMont = _el('input', inputStyle, '#1e1e1e');
+    var inpMont = _el('input', inputStyle, '#ffffff');
     inpMont.type        = 'number';
     inpMont.id          = 'hadm-inp-montante';
     inpMont.placeholder = '0.00';
     inpMont.step        = '0.01';
     inpMont.min         = '0';
-    inpMont.style.setProperty('color', '#ffffff', 'important');
+    inpMont.style.setProperty('color', '#111111', 'important');
     form.appendChild(_fRow('Montante (€)', inpMont));
 
     // Feedback
@@ -802,7 +806,7 @@
 
       btnGuardar.style.opacity = '.5';
       btnGuardar.style.pointerEvents = 'none';
-      if (fb) { fb.textContent = 'A guardar…'; fb.style.setProperty('color', '#aaaaaa', 'important'); }
+      if (fb) { fb.textContent = 'A guardar…'; fb.style.setProperty('color', '#666666', 'important'); }
 
       sbAdmin.from('ventas_historicas')
         .upsert({ loja: loja, data: data, montante: parseFloat(montante) }, { onConflict: 'loja,data' })
@@ -834,6 +838,7 @@
     var recTitle = _el('div', 'font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;', null);
     recTitle.style.setProperty('color', '#888888', 'important');
     recTitle.textContent = 'ÚLTIMOS REGISTOS INSERIDOS';
+    recTitle.style.setProperty('color', '#555555', 'important');
     c.appendChild(recTitle);
 
     var recBox = _el('div', '', null);
@@ -846,48 +851,46 @@
   function _loadRecentes() {
     var box = document.getElementById('hadm-recentes');
     if (!box) return;
-    box.innerHTML = '<div style="opacity:.5;font-size:.8rem;padding:8px 0;color:#fff !important;">a carregar…</div>';
+    box.innerHTML = '<div style="font-size:.8rem;padding:8px 0;color:#666 !important;">a carregar…</div>';
 
     sbAdmin.from('ventas_historicas')
       .select('*').order('created_at', { ascending: false }).limit(15)
       .then(function (res) {
         box.innerHTML = '';
         if (res.error || !res.data || !res.data.length) {
-          var e = _el('div', 'opacity:.5;font-size:.8rem;padding:8px 0;', null);
-          e.style.setProperty('color', '#ffffff', 'important');
+          var e = _el('div', 'font-size:.8rem;padding:8px 0;', null);
+          e.style.setProperty('color', '#666666', 'important');
           e.textContent = 'Sem registos recentes.';
           box.appendChild(e);
           return;
         }
-        var tWrap = _el('div', 'overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;', null);
+        var tWrap = _el('div', 'overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;border:1px solid #e8e8e8;', null);
         var table = document.createElement('table');
         table.setAttribute('style', 'width:100%;border-collapse:collapse;font-size:.78rem;');
 
-        // Thead
         var thead = document.createElement('thead');
         var htr   = document.createElement('tr');
         ['Data','Loja','Montante'].forEach(function (h) {
           var th = document.createElement('th');
           th.textContent = h;
-          th.setAttribute('style', 'padding:7px 12px;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:left;border-bottom:1.5px solid #333;');
-          th.style.setProperty('color', '#888888', 'important');
-          th.style.setProperty('background', '#111111', 'important');
+          th.setAttribute('style', 'padding:7px 12px;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:left;border-bottom:1.5px solid #e0e0e0;');
+          th.style.setProperty('color', '#555555', 'important');
+          th.style.setProperty('background', '#f5f5f5', 'important');
           htr.appendChild(th);
         });
         thead.appendChild(htr);
         table.appendChild(thead);
 
-        // Tbody
         var tbody = document.createElement('tbody');
         res.data.forEach(function (r, i) {
           var tr = document.createElement('tr');
-          var bg = i % 2 === 0 ? '#161616' : '#111111';
+          var bg = i % 2 === 0 ? '#ffffff' : '#fafafa';
           [_fmtDate(r.data), LOJA_LABELS[r.loja] || r.loja, _fmtEur(r.montante)].forEach(function (v, ci) {
             var td = document.createElement('td');
             td.textContent = v;
-            td.setAttribute('style', 'padding:7px 12px;border-bottom:1px solid #222;white-space:nowrap;' + (ci === 2 ? 'font-weight:800;text-align:right;' : ''));
+            td.setAttribute('style', 'padding:7px 12px;border-bottom:1px solid #eeeeee;white-space:nowrap;' + (ci === 2 ? 'font-weight:800;text-align:right;' : ''));
             td.style.setProperty('background', bg, 'important');
-            td.style.setProperty('color', '#ffffff', 'important');
+            td.style.setProperty('color', '#111111', 'important');
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
@@ -916,20 +919,7 @@
       '#adm-historico-panel input[type="number"]::-webkit-outer-spin-button,' +
       '#adm-historico-panel input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }' +
       '#adm-historico-panel input[type="number"] { -moz-appearance:textfield; }' +
-      '#adm-historico-panel select option { background:#1e1e1e !important; color:#ffffff !important; }' +
-      '.hadm-filter-container {' +
-        'display:flex; flex-direction:column; align-items:center; gap:15px;' +
-        'background:#f5f5f5; padding:20px; border-radius:15px;' +
-        'margin:20px auto; width:fit-content; max-width:100%;' +
-        'border:1px solid #e0e0e0; box-sizing:border-box;' +
-      '}' +
-      '.hadm-row {' +
-        'display:flex; gap:10px; justify-content:center;' +
-        'align-items:flex-end; flex-wrap:wrap;' +
-      '}' +
-      '#adm-historico-panel input, #adm-historico-panel select {' +
-        'border:1px solid #ccc !important; border-radius:8px !important;' +
-      '}';
+      '#adm-historico-panel select option { background:#1e1e1e !important; color:#ffffff !important; }';
     document.head.appendChild(s);
   }
 

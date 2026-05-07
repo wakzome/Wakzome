@@ -623,10 +623,11 @@ function _predWorkWithParsed(parsed) {
   c2Hist=Array.from({length:7},()=>[]);
   c3Freq=Array.from({length:7},()=>({}));
   c3Hist=Array.from({length:7},()=>[]);
+  initPatternHistograms();
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);}
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -1042,6 +1043,162 @@ function filtrarCandidatosPorC3(candidates, si) {
   return filtered.length > 0 ? filtered : candidates;
 }
 
+// ── HISTOGRAMAS DE PATRÓN Y CONTEO ───────────────────────────────────────────
+// Para cada criterio acumula:
+//   patHist[crit][pat5][pat2] = count  → O(1) lookup por bloque y global
+//   pat5Hash[crit][pat5]      = count  → lookup parcial S1-S5
+//   pat2Hash[crit][pat2]      = count  → lookup parcial S6-S7
+//   cntHist[crit][bi][letra]  = {count: freq} distribución de conteos
+
+const CRITERIOS_DEF = [
+  { name:'AB',    getLetra:(n,si)=>getLetraAB(n,si),  letras:AB_LETRAS },
+  { name:'C2',    getLetra:(n,si)=>getLetraC2(n,si),  letras:C2_LETRAS },
+  { name:'C3',    getLetra:(n,si)=>getLetraC3(n,si),  letras:C3_LETRAS },
+  { name:'ABCDE', getLetra:(n,si)=>getLetra(n,si),    letras:['A','B','C','D','E'] },
+];
+
+let patHist  = {};
+let pat5Hash = {};
+let pat2Hash = {};
+let cntHist  = {};
+
+function initPatternHistograms() {
+  CRITERIOS_DEF.forEach(({name, letras}) => {
+    patHist[name]  = {};
+    pat5Hash[name] = {};
+    pat2Hash[name] = {};
+    cntHist[name]  = [0,1,2].map(() => {
+      const obj = {};
+      letras.forEach(l => { obj[l] = {}; });
+      return obj;
+    });
+  });
+}
+initPatternHistograms();
+
+function updatePatternHistograms(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
+  CRITERIOS_DEF.forEach(({name, getLetra, letras}) => {
+    const ls   = seqNums.map((n,si) => getLetra(n,si) || '?');
+    const pat5 = ls.slice(0,5).join('');
+    const pat2 = ls.slice(5,7).join('');
+    // patrón global
+    if(!patHist[name][pat5]) patHist[name][pat5] = {};
+    patHist[name][pat5][pat2] = (patHist[name][pat5][pat2]||0) + 1;
+    // índices parciales O(1)
+    pat5Hash[name][pat5] = (pat5Hash[name][pat5]||0) + 1;
+    pat2Hash[name][pat2] = (pat2Hash[name][pat2]||0) + 1;
+    // conteos por bloque
+    const bloques = [ls.slice(0,5), ls.slice(5,7), ls];
+    bloques.forEach((blq, bi) => {
+      letras.forEach(l => {
+        const cnt = blq.filter(x=>x===l).length;
+        cntHist[name][bi][l][cnt] = (cntHist[name][bi][l][cnt]||0) + 1;
+      });
+    });
+  });
+}
+
+function getPatThreshold(name) {
+  // Mínimo viable: al menos 1 aparición histórica (sin percentil agresivo)
+  return 1;
+}
+
+function getCntBounds(name) {
+  const bounds = {};
+  const def = CRITERIOS_DEF.find(c=>c.name===name);
+  def.letras.forEach(l => {
+    bounds[l] = [0,1,2].map(bi => {
+      const freqObj = cntHist[name][bi][l];
+      const obs = [];
+      Object.entries(freqObj).forEach(([cnt, freq]) => {
+        for(let i=0;i<freq;i++) obs.push(Number(cnt));
+      });
+      if(obs.length < 10) return null;
+      obs.sort((a,b)=>a-b);
+      return {
+        lo: obs[Math.floor(obs.length*0.03)],
+        hi: obs[Math.floor(obs.length*0.97)]
+      };
+    });
+  });
+  return bounds;
+}
+
+// Precomputa umbrales y bounds una sola vez por cálculo
+function precomputarFiltros() {
+  const thresholds = {};
+  const boundsMaps = {};
+  CRITERIOS_DEF.forEach(({name}) => {
+    thresholds[name] = getPatThreshold(name);
+    boundsMaps[name] = getCntBounds(name);
+  });
+  return {thresholds, boundsMaps};
+}
+
+// Filtro sobre blk5 — usa pat5Hash O(1) + conteo bloque 0
+function filtrarBlk5(blk5Results, thresholds, boundsMaps) {
+  if(!blk5Results.length) return blk5Results;
+  return blk5Results.filter(({nums}) => {
+    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
+      const ls  = nums.map((n,i) => getLetra(n,i) || '?');
+      const pat = ls.join('');
+      if((pat5Hash[name][pat]||0) < thresholds[name]) return false;
+      const bounds = boundsMaps[name];
+      for(const l of letras) {
+        const b = bounds[l][0];
+        if(!b) continue;
+        const cnt = ls.filter(x=>x===l).length;
+        if(cnt < b.lo || cnt > b.hi) return false;
+      }
+    }
+    return true;
+  });
+}
+
+// Filtro sobre blk2 — usa pat2Hash O(1) + conteo bloque 1
+function filtrarBlk2(blk2Results, thresholds, boundsMaps) {
+  if(!blk2Results.length) return blk2Results;
+  return blk2Results.filter(({nums}) => {
+    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
+      const ls  = nums.map((n,i) => getLetra(n,5+i) || '?');
+      const pat = ls.join('');
+      if((pat2Hash[name][pat]||0) < thresholds[name]) return false;
+      const bounds = boundsMaps[name];
+      for(const l of letras) {
+        const b = bounds[l][1];
+        if(!b) continue;
+        const cnt = ls.filter(x=>x===l).length;
+        if(cnt < b.lo || cnt > b.hi) return false;
+      }
+    }
+    return true;
+  });
+}
+
+// Filtro global — patrón completo + conteo global
+function filtrarGlobal(globalResults, thresholds, boundsMaps) {
+  if(!globalResults.length) return globalResults;
+  return globalResults.filter(({blk5, blk2}) => {
+    const allNums = [...blk5, ...blk2];
+    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
+      const ls   = allNums.map((n,si) => getLetra(n,si) || '?');
+      const pat5 = ls.slice(0,5).join('');
+      const pat2 = ls.slice(5,7).join('');
+      const patCount = (patHist[name][pat5]||{})[pat2] || 0;
+      if(patCount < thresholds[name]) return false;
+      const bounds = boundsMaps[name];
+      for(const l of letras) {
+        const b = bounds[l][2];
+        if(!b) continue;
+        const cnt = ls.filter(x=>x===l).length;
+        if(cnt < b.lo || cnt > b.hi) return false;
+      }
+    }
+    return true;
+  });
+}
+
 function updateLetraHist(seqNums) {
   if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
   seqNums.forEach((n, si) => {
@@ -1372,10 +1529,15 @@ function analizarCombinaciones(allColProbs, totalRows) {
   const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5, evenBlk5);
   const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2, evenBlk2);
 
+  // Filtros de patrón/conteo — precomputar umbrales una sola vez
+  const {thresholds, boundsMaps} = precomputarFiltros();
+  const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
+  const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
+
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
-  for(const b5 of blk5Results) {
-    for(const b2 of blk2Results) {
+  for(const b5 of blk5Filtered) {
+    for(const b2 of blk2Filtered) {
       const allNums    = [...b5.nums, ...b2.nums];
       const globalSum  = b5.sum + b2.sum;
       const globalEven = (b5.evens||0) + (b2.evens||0);
@@ -1389,10 +1551,13 @@ function analizarCombinaciones(allColProbs, totalRows) {
     }
   }
 
+  // Filtro global final (patrón completo + conteo global)
+  const globalFiltered = filtrarGlobal(globalResults, thresholds, boundsMaps);
+
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
     evenBlk5, evenBlk2, evenGlobal,
-    blk5Results, blk2Results, globalResults
+    blk5Results, blk2Results, globalResults: globalFiltered
   };
 }
 

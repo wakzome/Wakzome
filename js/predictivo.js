@@ -623,6 +623,8 @@ function _predWorkWithParsed(parsed) {
   c2Hist=Array.from({length:7},()=>[]);
   c3Freq=Array.from({length:7},()=>({}));
   c3Hist=Array.from({length:7},()=>[]);
+  pat5Hash={};
+  pat2Hash={};
   initPatternHistograms();
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
@@ -824,10 +826,17 @@ const CRITERIOS_DEF = [
 let patHist  = {};  // patHist[criterioName][patString] = count
 let cntHist  = {};  // cntHist[criterioName][bloque][letra][count] = freq
 
+// pat5Hash[name][pat5] = count total de filas con ese prefijo S1-S5
+// pat2Hash[name][pat2] = count total de filas con ese sufijo S6-S7
+let pat5Hash = {};
+let pat2Hash = {};
+
 function initPatternHistograms() {
   CRITERIOS_DEF.forEach(({name, letras}) => {
-    patHist[name] = {};
-    cntHist[name] = [0,1,2].map(() => {
+    patHist[name]  = {};
+    pat5Hash[name] = {};
+    pat2Hash[name] = {};
+    cntHist[name]  = [0,1,2].map(() => {
       const obj = {};
       letras.forEach(l => obj[l] = {});
       return obj;
@@ -839,11 +848,13 @@ initPatternHistograms();
 function updatePatternHistograms(seqNums) {
   if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
   CRITERIOS_DEF.forEach(({name, getLetra, letras}) => {
-    const ls = seqNums.map((n,si) => getLetra(n,si) || '?');
-    const pat5   = ls.slice(0,5).join('');
-    const pat2   = ls.slice(5,7).join('');
+    const ls    = seqNums.map((n,si) => getLetra(n,si) || '?');
+    const pat5  = ls.slice(0,5).join('');
+    const pat2  = ls.slice(5,7).join('');
     const patAll = pat5 + '|' + pat2;
-    patHist[name][patAll] = (patHist[name][patAll]||0) + 1;
+    patHist[name][patAll]  = (patHist[name][patAll]||0)  + 1;
+    pat5Hash[name][pat5]   = (pat5Hash[name][pat5]||0)   + 1;
+    pat2Hash[name][pat2]   = (pat2Hash[name][pat2]||0)   + 1;
 
     // Conteo de cada letra por bloque
     const bloques = [ls.slice(0,5), ls.slice(5,7), ls];
@@ -906,12 +917,9 @@ function filtrarBlk5(blk5Results, thresholds, boundsMaps) {
     for(const {name, getLetra, letras} of CRITERIOS_DEF) {
       const ls  = nums.map((n,i) => getLetra(n, i) || '?');
       const pat = ls.join('');
-      // Verificar patrón parcial S1-S5 en el histórico
-      const patCount = Object.entries(patHist[name])
-        .filter(([k]) => k.startsWith(pat + '|'))
-        .reduce((s,[,v]) => s+v, 0);
-      if(patCount < thresholds[name]) return false;
-      // Verificar conteo de cada letra en bloque 0 (S1-S5)
+      // O(1): usar pat5Hash preconstruido
+      if((pat5Hash[name][pat]||0) < thresholds[name]) return false;
+      // Conteo de cada letra en bloque 0 (S1-S5)
       const bounds = boundsMaps[name];
       for(const l of letras) {
         const b = bounds[l][0];
@@ -924,19 +932,16 @@ function filtrarBlk5(blk5Results, thresholds, boundsMaps) {
   });
 }
 
-// Filtro sobre blk2Results (S6-S7) — verifica patrón parcial y conteo bloque 1
+// Filtro sobre blk2Results (S6-S7) — O(1) via pat2Hash
 function filtrarBlk2(blk2Results, thresholds, boundsMaps) {
   if(!blk2Results.length) return blk2Results;
   return blk2Results.filter(({nums}) => {
     for(const {name, getLetra, letras} of CRITERIOS_DEF) {
       const ls  = nums.map((n,i) => getLetra(n, 5+i) || '?');
       const pat = ls.join('');
-      // Verificar patrón parcial S6-S7 en el histórico
-      const patCount = Object.entries(patHist[name])
-        .filter(([k]) => k.endsWith('|' + pat))
-        .reduce((s,[,v]) => s+v, 0);
-      if(patCount < thresholds[name]) return false;
-      // Verificar conteo de cada letra en bloque 1 (S6-S7)
+      // O(1): usar pat2Hash preconstruido
+      if((pat2Hash[name][pat]||0) < thresholds[name]) return false;
+      // Conteo de cada letra en bloque 1 (S6-S7)
       const bounds = boundsMaps[name];
       for(const l of letras) {
         const b = bounds[l][1];

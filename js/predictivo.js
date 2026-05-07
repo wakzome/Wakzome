@@ -623,13 +623,10 @@ function _predWorkWithParsed(parsed) {
   c2Hist=Array.from({length:7},()=>[]);
   c3Freq=Array.from({length:7},()=>({}));
   c3Hist=Array.from({length:7},()=>[]);
-  pat5Hash={};
-  pat2Hash={};
-  initPatternHistograms();
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);}
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -807,172 +804,6 @@ function updateAbHist(seqNums) {
     if(!abFreq[si][l]) abFreq[si][l] = 0;
     abFreq[si][l]++;
     abHist[si].push(l);
-  });
-}
-
-// ── HISTOGRAMAS DE PATRÓN Y CONTEO ───────────────────────────────────────────
-// Para cada criterio acumulamos:
-//   patHist[criterio] = { "AABBB|AB": count, ... }
-//   cntHist[criterio][bloque][letra] = [freq de 0, freq de 1, freq de 2, ...]
-//   bloque: 0=S1-S5, 1=S6-S7, 2=global
-
-const CRITERIOS_DEF = [
-  { name:'AB',   getLetra: (n,si) => getLetraAB(n,si),  letras: AB_LETRAS },
-  { name:'C2',   getLetra: (n,si) => getLetraC2(n,si),  letras: C2_LETRAS },
-  { name:'C3',   getLetra: (n,si) => getLetraC3(n,si),  letras: C3_LETRAS },
-  { name:'ABCDE',getLetra: (n,si) => getLetra(n,si),    letras: ['A','B','C','D','E'] },
-];
-
-let patHist  = {};  // patHist[criterioName][patString] = count
-let cntHist  = {};  // cntHist[criterioName][bloque][letra][count] = freq
-
-// pat5Hash[name][pat5] = count total de filas con ese prefijo S1-S5
-// pat2Hash[name][pat2] = count total de filas con ese sufijo S6-S7
-let pat5Hash = {};
-let pat2Hash = {};
-
-function initPatternHistograms() {
-  CRITERIOS_DEF.forEach(({name, letras}) => {
-    patHist[name]  = {};
-    pat5Hash[name] = {};
-    pat2Hash[name] = {};
-    cntHist[name]  = [0,1,2].map(() => {
-      const obj = {};
-      letras.forEach(l => obj[l] = {});
-      return obj;
-    });
-  });
-}
-initPatternHistograms();
-
-function updatePatternHistograms(seqNums) {
-  if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
-  CRITERIOS_DEF.forEach(({name, getLetra, letras}) => {
-    const ls    = seqNums.map((n,si) => getLetra(n,si) || '?');
-    const pat5  = ls.slice(0,5).join('');
-    const pat2  = ls.slice(5,7).join('');
-    const patAll = pat5 + '|' + pat2;
-    patHist[name][patAll]  = (patHist[name][patAll]||0)  + 1;
-    pat5Hash[name][pat5]   = (pat5Hash[name][pat5]||0)   + 1;
-    pat2Hash[name][pat2]   = (pat2Hash[name][pat2]||0)   + 1;
-
-    // Conteo de cada letra por bloque
-    const bloques = [ls.slice(0,5), ls.slice(5,7), ls];
-    bloques.forEach((blq, bi) => {
-      letras.forEach(l => {
-        const cnt = blq.filter(x=>x===l).length;
-        cntHist[name][bi][l][cnt] = (cntHist[name][bi][l][cnt]||0) + 1;
-      });
-    });
-  });
-}
-
-// Calcula umbral mínimo de frecuencia para patrón (P3 del histórico de counts)
-function getPatThreshold(name) {
-  const counts = Object.values(patHist[name]);
-  if(counts.length < 5) return 0;
-  const sorted = [...counts].sort((a,b)=>a-b);
-  return sorted[Math.floor(sorted.length * 0.03)] || 1;
-}
-
-// Calcula rangos típicos de conteo por letra/bloque (P3–P97)
-function getCntBounds(name) {
-  const bounds = {};
-  CRITERIOS_DEF.find(c=>c.name===name).letras.forEach(l => {
-    bounds[l] = [0,1,2].map(bi => {
-      const freqObj = cntHist[name][bi][l];
-      // Expandir en array de observaciones
-      const obs = [];
-      Object.entries(freqObj).forEach(([cnt, freq]) => {
-        for(let i=0;i<freq;i++) obs.push(Number(cnt));
-      });
-      if(obs.length < 10) return null;
-      obs.sort((a,b)=>a-b);
-      return {
-        lo: obs[Math.floor(obs.length*0.03)],
-        hi: obs[Math.floor(obs.length*0.97)]
-      };
-    });
-  });
-  return bounds;
-}
-
-// Filtra globalResults por patrón y conteo de letras (los 4 criterios)
-// Filtros de patrón+conteo en 3 etapas: blk5, blk2, global
-
-function precomputarFiltros() {
-  const thresholds = {};
-  const boundsMaps = {};
-  CRITERIOS_DEF.forEach(({name}) => {
-    thresholds[name] = getPatThreshold(name);
-    boundsMaps[name] = getCntBounds(name);
-  });
-  return {thresholds, boundsMaps};
-}
-
-// Filtro sobre blk5Results (S1-S5) — verifica patrón parcial y conteo bloque 0
-function filtrarBlk5(blk5Results, thresholds, boundsMaps) {
-  if(!blk5Results.length) return blk5Results;
-  return blk5Results.filter(({nums}) => {
-    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
-      const ls  = nums.map((n,i) => getLetra(n, i) || '?');
-      const pat = ls.join('');
-      // O(1): usar pat5Hash preconstruido
-      if((pat5Hash[name][pat]||0) < thresholds[name]) return false;
-      // Conteo de cada letra en bloque 0 (S1-S5)
-      const bounds = boundsMaps[name];
-      for(const l of letras) {
-        const b = bounds[l][0];
-        if(!b) continue;
-        const cnt = ls.filter(x=>x===l).length;
-        if(cnt < b.lo || cnt > b.hi) return false;
-      }
-    }
-    return true;
-  });
-}
-
-// Filtro sobre blk2Results (S6-S7) — O(1) via pat2Hash
-function filtrarBlk2(blk2Results, thresholds, boundsMaps) {
-  if(!blk2Results.length) return blk2Results;
-  return blk2Results.filter(({nums}) => {
-    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
-      const ls  = nums.map((n,i) => getLetra(n, 5+i) || '?');
-      const pat = ls.join('');
-      // O(1): usar pat2Hash preconstruido
-      if((pat2Hash[name][pat]||0) < thresholds[name]) return false;
-      // Conteo de cada letra en bloque 1 (S6-S7)
-      const bounds = boundsMaps[name];
-      for(const l of letras) {
-        const b = bounds[l][1];
-        if(!b) continue;
-        const cnt = ls.filter(x=>x===l).length;
-        if(cnt < b.lo || cnt > b.hi) return false;
-      }
-    }
-    return true;
-  });
-}
-
-// Filtro final sobre globalResults (7 secuencias) — patrón completo y conteo global
-function filtrarGlobal(globalResults, thresholds, boundsMaps) {
-  if(!globalResults.length) return globalResults;
-  return globalResults.filter(({blk5, blk2}) => {
-    const allNums = [...blk5, ...blk2];
-    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
-      const ls     = allNums.map((n,si) => getLetra(n,si) || '?');
-      const patAll = ls.slice(0,5).join('') + '|' + ls.slice(5,7).join('');
-      const patCount = patHist[name][patAll] || 0;
-      if(patCount < thresholds[name]) return false;
-      const bounds = boundsMaps[name];
-      for(const l of letras) {
-        const b = bounds[l][2];
-        if(!b) continue;
-        const cnt = ls.filter(x=>x===l).length;
-        if(cnt < b.lo || cnt > b.hi) return false;
-      }
-    }
-    return true;
   });
 }
 
@@ -1541,19 +1372,10 @@ function analizarCombinaciones(allColProbs, totalRows) {
   const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5, evenBlk5);
   const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2, evenBlk2);
 
-  // Precomputar filtros una sola vez
-  // const {thresholds, boundsMaps} = precomputarFiltros(); // PAUSADO
-
-  // Etapa 1: filtrar blk5 y blk2 antes del producto cartesiano — PAUSADO
-  // const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
-  // const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
-  const blk5Filtered = blk5Results;
-  const blk2Filtered = blk2Results;
-
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
-  for(const b5 of blk5Filtered) {
-    for(const b2 of blk2Filtered) {
+  for(const b5 of blk5Results) {
+    for(const b2 of blk2Results) {
       const allNums    = [...b5.nums, ...b2.nums];
       const globalSum  = b5.sum + b2.sum;
       const globalEven = (b5.evens||0) + (b2.evens||0);
@@ -1567,14 +1389,10 @@ function analizarCombinaciones(allColProbs, totalRows) {
     }
   }
 
-  // Etapa 2: filtro final sobre combinaciones globales — PAUSADO
-  // const globalFiltered = filtrarGlobal(globalResults, thresholds, boundsMaps);
-  const globalFiltered = globalResults;
-
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
     evenBlk5, evenBlk2, evenGlobal,
-    blk5Results, blk2Results, globalResults: globalFiltered
+    blk5Results, blk2Results, globalResults
   };
 }
 

@@ -554,10 +554,55 @@ body {
 /* ── HISTÓRICO ADMIN ── */
 #adm-historico-panel {
   display: none; width: 100%; box-sizing: border-box;
+  flex-direction: column;
   animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
 }
-#admin-app.module-open ~ #saft-reminder {
-  display: none !important;
+.hadm-filter-bar {
+  display: flex; flex-wrap: wrap; flex-direction: column;
+  align-items: flex-start; gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1.5px solid #e6e6e6;
+  background: #f7f7f7;
+  flex-shrink: 0;
+}
+.hadm-tab-bar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px;
+  background: #f7f7f7;
+  border-bottom: 1.5px solid #e6e6e6;
+  flex-shrink: 0;
+}
+.hadm-period-btns {
+  display: flex; gap: 8px; width: 100%; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.hadm-filter-dates {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: 12px; width: 100%;
+}
+.hadm-filter-group { display: flex; flex-direction: column; gap: 4px; }
+.hadm-filter-group label {
+  font-size: .68rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .1em; opacity: .5;
+}
+.hadm-filter-group input[type="date"],
+.hadm-filter-group select {
+  padding: 8px 12px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 9px;
+  background: #fff; outline: none; cursor: pointer;
+}
+.hadm-buscar-btn {
+  padding: 9px 22px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  background: #000; color: #fff !important; border: none;
+  border-radius: 9px; cursor: pointer; align-self: flex-end;
+}
+.hadm-buscar-btn:hover { background: #333; }
+#hadm-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  width: 100%; box-sizing: border-box;
 }
 .adm-mod-card[data-module="historico"]::before {
   background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%);
@@ -4404,17 +4449,13 @@ td                   { font-size: .96rem !important; }
 
     // Intercept historico → open admin historico panel
     if (tab === 'historico') {
-      var adminApp = document.getElementById('admin-app');
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
       var dashboard = document.getElementById('adm-dashboard');
       var moduleBar = document.getElementById('adm-module-bar');
       var barTitle  = document.getElementById('adm-module-bar-title');
-      var panel     = document.getElementById('adm-historico-panel');
-      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
       if (dashboard) dashboard.style.display = 'none';
       if (moduleBar) moduleBar.style.display  = 'flex';
       if (barTitle)  barTitle.textContent     = 'histórico de vendas';
-      if (adminApp)  { adminApp.classList.add('module-open'); adminApp.scrollTop = 0; }
-      if (panel)     panel.style.display      = 'block';
       if (typeof openHistoricoAdmin === 'function') openHistoricoAdmin();
       return;
     }
@@ -4495,8 +4536,11 @@ td                   { font-size: .96rem !important; }
     if (vPanel) vPanel.style.display = 'none';
 
     // Hide historico admin panel
-    var hPanel = document.getElementById('adm-historico-panel');
-    if (hPanel) { hPanel.style.display = 'none'; hPanel.classList.remove('hadm-visible'); }
+    if (typeof closeHistoricoAdmin === 'function') closeHistoricoAdmin();
+    else {
+      var hPanel = document.getElementById('adm-historico-panel');
+      if (hPanel) hPanel.style.display = 'none';
+    }
 
     // Restaurar dashboard (puede haber sido ocultado con style.display='none')
     var dashboard = document.getElementById('adm-dashboard');

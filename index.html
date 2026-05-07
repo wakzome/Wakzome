@@ -554,8 +554,16 @@ body {
 /* ── HISTÓRICO ADMIN ── */
 #adm-historico-panel {
   display: none; width: 100%; box-sizing: border-box;
-  flex-direction: column;
+  flex-direction: column; align-items: stretch;
+  min-height: 0;
   animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+#adm-historico-panel.hadm-visible {
+  display: flex !important;
+  flex: 1 !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
 }
 .hadm-filter-bar {
   display: flex; flex-wrap: wrap; flex-direction: column;
@@ -4449,14 +4457,18 @@ td                   { font-size: .96rem !important; }
 
     // Intercept historico → open admin historico panel
     if (tab === 'historico') {
-      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+      var adminApp = document.getElementById('admin-app');
       var dashboard = document.getElementById('adm-dashboard');
       var moduleBar = document.getElementById('adm-module-bar');
       var barTitle  = document.getElementById('adm-module-bar-title');
+      var panel     = document.getElementById('adm-historico-panel');
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
       if (dashboard) dashboard.style.display = 'none';
       if (moduleBar) moduleBar.style.display  = 'flex';
       if (barTitle)  barTitle.textContent     = 'histórico de vendas';
-      if (typeof openHistoricoAdmin === 'function') openHistoricoAdmin();
+      if (adminApp)  { adminApp.classList.add('module-open'); adminApp.scrollTop = 0; }
+      if (panel)     { panel.classList.add('hadm-visible'); }
+      if (typeof _hadmLoadData === 'function') _hadmLoadData();
       return;
     }
 
@@ -4536,11 +4548,8 @@ td                   { font-size: .96rem !important; }
     if (vPanel) vPanel.style.display = 'none';
 
     // Hide historico admin panel
-    if (typeof closeHistoricoAdmin === 'function') closeHistoricoAdmin();
-    else {
-      var hPanel = document.getElementById('adm-historico-panel');
-      if (hPanel) hPanel.style.display = 'none';
-    }
+    var hPanel = document.getElementById('adm-historico-panel');
+    if (hPanel) { hPanel.style.display = 'none'; hPanel.classList.remove('hadm-visible'); }
 
     // Restaurar dashboard (puede haber sido ocultado con style.display='none')
     var dashboard = document.getElementById('adm-dashboard');

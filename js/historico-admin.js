@@ -105,35 +105,8 @@
 
   // ── Abrir módulo ──
   window.openHistoricoAdmin = function () {
-    var adminApp  = document.getElementById('admin-app');
-    var dashboard = document.getElementById('adm-dashboard');
-    var moduleBar = document.getElementById('adm-module-bar');
-    var barTitle  = document.getElementById('adm-module-bar-title');
-    var panel     = document.getElementById('adm-historico-panel');
+    var panel = document.getElementById('adm-historico-panel');
 
-    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
-    if (dashboard) dashboard.style.display = 'none';
-    if (barTitle)  barTitle.textContent = 'histórico de vendas';
-    if (adminApp)  adminApp.classList.add('module-open');
-
-    if (adminApp) {
-      adminApp.style.setProperty('display',        'flex',   'important');
-      adminApp.style.setProperty('flex-direction', 'column', 'important');
-      adminApp.style.setProperty('overflow',       'hidden', 'important');
-      adminApp.style.setProperty('height',         '100vh',  'important');
-      adminApp.style.setProperty('padding',        '0',      'important');
-      adminApp.style.setProperty('position',       'fixed',  'important');
-      adminApp.style.setProperty('top',            '0',      'important');
-      adminApp.style.setProperty('left',           '0',      'important');
-      adminApp.style.setProperty('right',          '0',      'important');
-      adminApp.style.setProperty('bottom',         '0',      'important');
-      adminApp.style.setProperty('z-index',        '999',    'important');
-    }
-    if (moduleBar) {
-      moduleBar.style.setProperty('display',     'flex', 'important');
-      moduleBar.style.setProperty('flex-shrink', '0',    'important');
-      moduleBar.style.setProperty('width',       '100%', 'important');
-    }
     if (panel) {
       panel.style.setProperty('display',        'flex',   'important');
       panel.style.setProperty('flex',           '1',      'important');

@@ -114,27 +114,31 @@
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
     if (dashboard) dashboard.style.display = 'none';
     if (barTitle)  barTitle.textContent = 'histórico de vendas';
-    if (adminApp)  {
-      adminApp.classList.add('module-open');
+    if (adminApp)  adminApp.classList.add('module-open');
+
+    if (adminApp) {
       adminApp.style.setProperty('display',        'flex',   'important');
       adminApp.style.setProperty('flex-direction', 'column', 'important');
       adminApp.style.setProperty('overflow',       'hidden', 'important');
       adminApp.style.setProperty('height',         '100vh',  'important');
       adminApp.style.setProperty('padding',        '0',      'important');
-      adminApp.style.setProperty('z-index',        '9999',   'important');
+      adminApp.style.setProperty('position',       'fixed',  'important');
+      adminApp.style.setProperty('top',            '0',      'important');
+      adminApp.style.setProperty('left',           '0',      'important');
+      adminApp.style.setProperty('right',          '0',      'important');
+      adminApp.style.setProperty('bottom',         '0',      'important');
+      adminApp.style.setProperty('z-index',        '999',    'important');
     }
     if (moduleBar) {
       moduleBar.style.setProperty('display',     'flex', 'important');
       moduleBar.style.setProperty('flex-shrink', '0',    'important');
       moduleBar.style.setProperty('width',       '100%', 'important');
-      moduleBar.style.removeProperty('position');
-      moduleBar.style.removeProperty('top');
-      moduleBar.style.removeProperty('z-index');
     }
     if (panel) {
       panel.style.setProperty('display',        'flex',   'important');
       panel.style.setProperty('flex',           '1',      'important');
       panel.style.setProperty('flex-direction', 'column', 'important');
+      panel.style.setProperty('align-items',    'center', 'important');
       panel.style.setProperty('overflow-y',     'auto',   'important');
       panel.style.setProperty('overflow-x',     'hidden', 'important');
       panel.style.setProperty('width',          '100%',   'important');
@@ -912,7 +916,20 @@
       '#adm-historico-panel input[type="number"]::-webkit-outer-spin-button,' +
       '#adm-historico-panel input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }' +
       '#adm-historico-panel input[type="number"] { -moz-appearance:textfield; }' +
-      '#adm-historico-panel select option { background:#1e1e1e !important; color:#ffffff !important; }';
+      '#adm-historico-panel select option { background:#1e1e1e !important; color:#ffffff !important; }' +
+      '.hadm-filter-container {' +
+        'display:flex; flex-direction:column; align-items:center; gap:15px;' +
+        'background:#f5f5f5; padding:20px; border-radius:15px;' +
+        'margin:20px auto; width:fit-content; max-width:100%;' +
+        'border:1px solid #e0e0e0; box-sizing:border-box;' +
+      '}' +
+      '.hadm-row {' +
+        'display:flex; gap:10px; justify-content:center;' +
+        'align-items:flex-end; flex-wrap:wrap;' +
+      '}' +
+      '#adm-historico-panel input, #adm-historico-panel select {' +
+        'border:1px solid #ccc !important; border-radius:8px !important;' +
+      '}';
     document.head.appendChild(s);
   }
 

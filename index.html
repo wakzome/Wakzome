@@ -556,6 +556,9 @@ body {
   display: none; width: 100%; box-sizing: border-box;
   animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
 }
+#admin-app.module-open ~ #saft-reminder {
+  display: none !important;
+}
 .adm-mod-card[data-module="historico"]::before {
   background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%);
 }

@@ -553,7 +553,8 @@ body {
 /* ─── ADMIN VENTAS PANEL ─── */
 /* ── HISTÓRICO ADMIN ── */
 #adm-historico-panel {
-  display: none; width: 100%; box-sizing: border-box;
+  display: none; width: 100%; max-width: 1100px;
+  margin: 0 auto; box-sizing: border-box;
   flex-direction: column;
   animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
 }
@@ -3741,8 +3742,8 @@ td                   { font-size: .96rem !important; }
 
   <!-- ── HISTÓRICO ADMIN PANEL ── -->
   <div id="adm-historico-panel">
-    <div class="hadm-filter-container">
-      <div class="hadm-row">
+    <div class="hadm-filter-bar">
+      <div class="hadm-period-btns">
         <button class="vadm-period-btn" id="hadm-btn-30">Últ. 30 dias</button>
         <button class="vadm-period-btn" id="hadm-btn-90">Últ. 90 dias</button>
         <button class="vadm-period-btn" id="hadm-btn-mes">Este mês</button>
@@ -3751,7 +3752,7 @@ td                   { font-size: .96rem !important; }
         <button class="vadm-period-btn" id="hadm-btn-porto">Porto Santo</button>
         <button class="vadm-period-btn" id="hadm-btn-funchal">Funchal</button>
       </div>
-      <div class="hadm-row">
+      <div class="hadm-filter-dates">
         <div class="hadm-filter-group">
           <label>De</label>
           <input type="date" id="hadm-from">
@@ -3775,11 +3776,11 @@ td                   { font-size: .96rem !important; }
         </div>
         <button class="hadm-buscar-btn" id="hadm-buscar-btn">pesquisar</button>
       </div>
-      <div class="hadm-row">
-        <button id="hadm-tab-analise">📊 Análise</button>
-        <button id="hadm-tab-estacional">📅 Estacional</button>
-        <button id="hadm-tab-carregar">➕ Carregar dados</button>
-      </div>
+    </div>
+    <div class="hadm-tab-bar">
+      <button id="hadm-tab-analise">📊 Análise</button>
+      <button id="hadm-tab-estacional">📅 Estacional</button>
+      <button id="hadm-tab-carregar">➕ Carregar dados</button>
     </div>
     <div id="hadm-content"></div>
   </div>

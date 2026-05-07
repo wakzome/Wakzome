@@ -105,8 +105,17 @@
 
   // ── Abrir módulo ──
   window.openHistoricoAdmin = function () {
-    var panel = document.getElementById('adm-historico-panel');
+    var adminApp  = document.getElementById('admin-app');
+    var panel     = document.getElementById('adm-historico-panel');
+    var content   = document.getElementById('hadm-content');
 
+    if (adminApp) {
+      adminApp.style.setProperty('display',        'flex',   'important');
+      adminApp.style.setProperty('flex-direction', 'column', 'important');
+      adminApp.style.setProperty('overflow',       'hidden', 'important');
+      adminApp.style.setProperty('height',         '100vh',  'important');
+      adminApp.style.setProperty('padding',        '0',      'important');
+    }
     if (panel) {
       panel.style.setProperty('display',        'flex',   'important');
       panel.style.setProperty('flex',           '1',      'important');
@@ -115,6 +124,12 @@
       panel.style.setProperty('overflow-x',     'hidden', 'important');
       panel.style.setProperty('width',          '100%',   'important');
       panel.style.setProperty('height',         '0',      'important');
+      panel.style.removeProperty('min-height');
+    }
+    if (content) {
+      content.style.setProperty('overflow', 'visible', 'important');
+      content.style.setProperty('height',   'auto',    'important');
+      content.style.setProperty('flex',     'none',    'important');
     }
 
     _activeTab       = 'analise';
@@ -136,12 +151,16 @@
     var dashboard = document.getElementById('adm-dashboard');
     var moduleBar = document.getElementById('adm-module-bar');
     var panel     = document.getElementById('adm-historico-panel');
+    var content   = document.getElementById('hadm-content');
 
     if (panel) {
       panel.style.display = 'none';
-      ['flex','flex-direction','overflow-y','overflow-x','width','height'].forEach(function (p) {
+      ['flex','flex-direction','overflow-y','overflow-x','width','height','min-height'].forEach(function (p) {
         panel.style.removeProperty(p);
       });
+    }
+    if (content) {
+      ['overflow','height','flex'].forEach(function (p) { content.style.removeProperty(p); });
     }
     if (moduleBar) {
       moduleBar.style.display = 'none';
@@ -152,8 +171,7 @@
     if (dashboard) dashboard.style.display = '';
     if (adminApp) {
       adminApp.classList.remove('module-open');
-      ['display','flex-direction','overflow','height','padding',
-       'position','top','left','right','bottom','z-index'].forEach(function (p) {
+      ['display','flex-direction','overflow','height','padding'].forEach(function (p) {
         adminApp.style.removeProperty(p);
       });
     }

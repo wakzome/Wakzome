@@ -551,6 +551,64 @@ body {
 @media (max-width: 480px) { .v-num-grid { grid-template-columns: 1fr; } }
 
 /* ─── ADMIN VENTAS PANEL ─── */
+/* ── HISTÓRICO ADMIN ── */
+#adm-historico-panel {
+  display: none; width: 100%; box-sizing: border-box;
+  flex-direction: column;
+  animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+.hadm-filter-bar {
+  display: flex; flex-wrap: wrap; flex-direction: column;
+  align-items: flex-start; gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1.5px solid #e6e6e6;
+  background: #f7f7f7;
+  flex-shrink: 0;
+}
+.hadm-tab-bar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px;
+  background: #f7f7f7;
+  border-bottom: 1.5px solid #e6e6e6;
+  flex-shrink: 0;
+}
+.hadm-period-btns {
+  display: flex; gap: 8px; width: 100%; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.hadm-filter-dates {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: 12px; width: 100%;
+}
+.hadm-filter-group { display: flex; flex-direction: column; gap: 4px; }
+.hadm-filter-group label {
+  font-size: .68rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .1em; opacity: .5;
+}
+.hadm-filter-group input[type="date"],
+.hadm-filter-group select {
+  padding: 8px 12px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1.5px solid #ddd; border-radius: 9px;
+  background: #fff; outline: none; cursor: pointer;
+}
+.hadm-buscar-btn {
+  padding: 9px 22px; font-size: .88rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  background: #000; color: #fff !important; border: none;
+  border-radius: 9px; cursor: pointer; align-self: flex-end;
+}
+.hadm-buscar-btn:hover { background: #333; }
+#hadm-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  width: 100%; box-sizing: border-box;
+}
+.adm-mod-card[data-module="historico"]::before {
+  background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%);
+}
+/* ── FIN HISTÓRICO ADMIN ── */
+
 #adm-ventas-panel {
   display: none; width: 100%; max-width: 1100px;
   margin: 0 auto; padding: 24px 16px 60px; box-sizing: border-box;
@@ -3374,6 +3432,20 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
+      <div class="adm-mod-card" data-module="historico" style="animation-delay:0.22s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+              stroke="rgba(255,255,255,0.85)" stroke-width="1.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HISTÓRICO</div>
+          <div class="adm-mod-desc">análise de vendas históricas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
       <div class="adm-mod-card" data-module="rotulos" style="animation-delay:0.20s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3666,6 +3738,52 @@ td                   { font-size: .96rem !important; }
     <div id="adm-ventas-content"></div>
   </div>
   <!-- /VENTAS ADMIN PANEL -->
+
+  <!-- ── HISTÓRICO ADMIN PANEL ── -->
+  <div id="adm-historico-panel">
+    <div class="hadm-filter-bar">
+      <div class="hadm-period-btns">
+        <button class="vadm-period-btn" id="hadm-btn-30">Últ. 30 dias</button>
+        <button class="vadm-period-btn" id="hadm-btn-90">Últ. 90 dias</button>
+        <button class="vadm-period-btn" id="hadm-btn-mes">Este mês</button>
+        <button class="vadm-period-btn" id="hadm-btn-ano">Este ano</button>
+        <button class="vadm-period-btn" id="hadm-btn-hist">Histórico</button>
+        <button class="vadm-period-btn" id="hadm-btn-porto">Porto Santo</button>
+        <button class="vadm-period-btn" id="hadm-btn-funchal">Funchal</button>
+      </div>
+      <div class="hadm-filter-dates">
+        <div class="hadm-filter-group">
+          <label>De</label>
+          <input type="date" id="hadm-from">
+        </div>
+        <div class="hadm-filter-group">
+          <label>Até</label>
+          <input type="date" id="hadm-to">
+        </div>
+        <div class="hadm-filter-group">
+          <label>Loja</label>
+          <select id="hadm-loja">
+            <option value="">todas as lojas</option>
+            <option value="MAXX">Maxx</option>
+            <option value="MEZKA AVENIDA">Mezka Avenida</option>
+            <option value="MEZKA FUNCHAL">Mezka Funchal</option>
+            <option value="MEZKA MERCADO">Mezka Mercado</option>
+            <option value="PARFOIS ARCADAS SAO FRANCISCO">Parfois Arcadas</option>
+            <option value="PARFOIS MADEIRA SHOPPING">Madeira Shopping</option>
+            <option value="SHANA">Shana</option>
+          </select>
+        </div>
+        <button class="hadm-buscar-btn" id="hadm-buscar-btn">pesquisar</button>
+      </div>
+    </div>
+    <div class="hadm-tab-bar">
+      <button id="hadm-tab-analise">📊 Análise</button>
+      <button id="hadm-tab-estacional">📅 Estacional</button>
+      <button id="hadm-tab-carregar">➕ Carregar dados</button>
+    </div>
+    <div id="hadm-content"></div>
+  </div>
+  <!-- /HISTÓRICO ADMIN PANEL -->
 
 </div><!-- /#admin-app -->
 
@@ -4329,6 +4447,19 @@ td                   { font-size: .96rem !important; }
       return;
     }
 
+    // Intercept historico → open admin historico panel
+    if (tab === 'historico') {
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+      var dashboard = document.getElementById('adm-dashboard');
+      var moduleBar = document.getElementById('adm-module-bar');
+      var barTitle  = document.getElementById('adm-module-bar-title');
+      if (dashboard) dashboard.style.display = 'none';
+      if (moduleBar) moduleBar.style.display  = 'flex';
+      if (barTitle)  barTitle.textContent     = 'histórico de vendas';
+      if (typeof openHistoricoAdmin === 'function') openHistoricoAdmin();
+      return;
+    }
+
     // If navigating away from gerador, clean up its layout first
     if (tab !== 'gerador' && typeof cleanupGeradorLayout === 'function') {
       cleanupGeradorLayout();
@@ -4403,6 +4534,10 @@ td                   { font-size: .96rem !important; }
     // Hide ventas admin panel
     var vPanel = document.getElementById('adm-ventas-panel');
     if (vPanel) vPanel.style.display = 'none';
+
+    // Hide historico admin panel
+    var hPanel = document.getElementById('adm-historico-panel');
+    if (hPanel) hPanel.style.display = 'none';
 
     // Restaurar dashboard (puede haber sido ocultado con style.display='none')
     var dashboard = document.getElementById('adm-dashboard');
@@ -4928,6 +5063,7 @@ td                   { font-size: .96rem !important; }
 <script src="js/gerador-horarios.js"></script>
 <script src="js/ventas-empleada.js"></script>
 <script src="js/ventas-admin.js"></script>
+<script src="js/historico-admin.js"></script>
 <script src="js/predictivo.js"></script>
 
 <script>

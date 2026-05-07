@@ -887,40 +887,84 @@ function getCntBounds(name) {
 }
 
 // Filtra globalResults por patrón y conteo de letras (los 4 criterios)
-function filtrarPorPatronYConteo(globalResults) {
-  if(!globalResults.length) return globalResults;
+// Filtros de patrón+conteo en 3 etapas: blk5, blk2, global
 
-  // Precomputar umbrales una vez
+function precomputarFiltros() {
   const thresholds = {};
   const boundsMaps = {};
   CRITERIOS_DEF.forEach(({name}) => {
     thresholds[name] = getPatThreshold(name);
     boundsMaps[name] = getCntBounds(name);
   });
+  return {thresholds, boundsMaps};
+}
 
+// Filtro sobre blk5Results (S1-S5) — verifica patrón parcial y conteo bloque 0
+function filtrarBlk5(blk5Results, thresholds, boundsMaps) {
+  if(!blk5Results.length) return blk5Results;
+  return blk5Results.filter(({nums}) => {
+    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
+      const ls  = nums.map((n,i) => getLetra(n, i) || '?');
+      const pat = ls.join('');
+      // Verificar patrón parcial S1-S5 en el histórico
+      const patCount = Object.entries(patHist[name])
+        .filter(([k]) => k.startsWith(pat + '|'))
+        .reduce((s,[,v]) => s+v, 0);
+      if(patCount < thresholds[name]) return false;
+      // Verificar conteo de cada letra en bloque 0 (S1-S5)
+      const bounds = boundsMaps[name];
+      for(const l of letras) {
+        const b = bounds[l][0];
+        if(!b) continue;
+        const cnt = ls.filter(x=>x===l).length;
+        if(cnt < b.lo || cnt > b.hi) return false;
+      }
+    }
+    return true;
+  });
+}
+
+// Filtro sobre blk2Results (S6-S7) — verifica patrón parcial y conteo bloque 1
+function filtrarBlk2(blk2Results, thresholds, boundsMaps) {
+  if(!blk2Results.length) return blk2Results;
+  return blk2Results.filter(({nums}) => {
+    for(const {name, getLetra, letras} of CRITERIOS_DEF) {
+      const ls  = nums.map((n,i) => getLetra(n, 5+i) || '?');
+      const pat = ls.join('');
+      // Verificar patrón parcial S6-S7 en el histórico
+      const patCount = Object.entries(patHist[name])
+        .filter(([k]) => k.endsWith('|' + pat))
+        .reduce((s,[,v]) => s+v, 0);
+      if(patCount < thresholds[name]) return false;
+      // Verificar conteo de cada letra en bloque 1 (S6-S7)
+      const bounds = boundsMaps[name];
+      for(const l of letras) {
+        const b = bounds[l][1];
+        if(!b) continue;
+        const cnt = ls.filter(x=>x===l).length;
+        if(cnt < b.lo || cnt > b.hi) return false;
+      }
+    }
+    return true;
+  });
+}
+
+// Filtro final sobre globalResults (7 secuencias) — patrón completo y conteo global
+function filtrarGlobal(globalResults, thresholds, boundsMaps) {
+  if(!globalResults.length) return globalResults;
   return globalResults.filter(({blk5, blk2}) => {
     const allNums = [...blk5, ...blk2];
-
     for(const {name, getLetra, letras} of CRITERIOS_DEF) {
       const ls     = allNums.map((n,si) => getLetra(n,si) || '?');
-      const pat5   = ls.slice(0,5).join('');
-      const pat2   = ls.slice(5,7).join('');
-      const patAll = pat5 + '|' + pat2;
-
-      // Filtro 1: patrón completo
+      const patAll = ls.slice(0,5).join('') + '|' + ls.slice(5,7).join('');
       const patCount = patHist[name][patAll] || 0;
       if(patCount < thresholds[name]) return false;
-
-      // Filtro 2: conteo de cada letra por bloque
       const bounds = boundsMaps[name];
-      const bloques = [ls.slice(0,5), ls.slice(5,7), ls];
       for(const l of letras) {
-        for(let bi=0;bi<3;bi++) {
-          const b = bounds[l][bi];
-          if(!b) continue;
-          const cnt = bloques[bi].filter(x=>x===l).length;
-          if(cnt < b.lo || cnt > b.hi) return false;
-        }
+        const b = bounds[l][2];
+        if(!b) continue;
+        const cnt = ls.filter(x=>x===l).length;
+        if(cnt < b.lo || cnt > b.hi) return false;
       }
     }
     return true;
@@ -1492,10 +1536,17 @@ function analizarCombinaciones(allColProbs, totalRows) {
   const blk5Results = cartesianFilter(candNums.slice(0,5), 50, boundsBlk5, evenBlk5);
   const blk2Results = cartesianFilter(candNums.slice(5,7), 12, boundsBlk2, evenBlk2);
 
+  // Precomputar filtros una sola vez
+  const {thresholds, boundsMaps} = precomputarFiltros();
+
+  // Etapa 1: filtrar blk5 y blk2 antes del producto cartesiano
+  const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
+  const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
+
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
-  for(const b5 of blk5Results) {
-    for(const b2 of blk2Results) {
+  for(const b5 of blk5Filtered) {
+    for(const b2 of blk2Filtered) {
       const allNums    = [...b5.nums, ...b2.nums];
       const globalSum  = b5.sum + b2.sum;
       const globalEven = (b5.evens||0) + (b2.evens||0);
@@ -1509,8 +1560,8 @@ function analizarCombinaciones(allColProbs, totalRows) {
     }
   }
 
-  // Filtro de patrón y conteo de letras sobre combinaciones globales
-  const globalFiltered = filtrarPorPatronYConteo(globalResults);
+  // Etapa 2: filtro final sobre combinaciones globales (patrón completo + conteo global)
+  const globalFiltered = filtrarGlobal(globalResults, thresholds, boundsMaps);
 
   return {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,

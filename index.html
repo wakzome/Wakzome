@@ -4536,8 +4536,11 @@ td                   { font-size: .96rem !important; }
     if (vPanel) vPanel.style.display = 'none';
 
     // Hide historico admin panel
-    var hPanel = document.getElementById('adm-historico-panel');
-    if (hPanel) hPanel.style.display = 'none';
+    if (typeof closeHistoricoAdmin === 'function') closeHistoricoAdmin();
+    else {
+      var hPanel = document.getElementById('adm-historico-panel');
+      if (hPanel) hPanel.style.display = 'none';
+    }
 
     // Restaurar dashboard (puede haber sido ocultado con style.display='none')
     var dashboard = document.getElementById('adm-dashboard');

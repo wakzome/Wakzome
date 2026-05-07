@@ -386,7 +386,7 @@
       var label   = LOJA_LABELS[loja] || loja;
       var trend   = _avg30(byLoja[loja]);
 
-      var row = _el('div', 'margin-bottom:14px;border-radius:10px;padding:10px 14px;', '#1a1a1a');
+      var row = _el('div', 'margin-bottom:14px;', null);
 
       // Nombre + badge tendencia
       var nameRow = _el('div', 'display:flex;align-items:center;gap:10px;margin-bottom:5px;', null);
@@ -928,10 +928,6 @@
       '}' +
       '#hadm-content {' +
         'background:#ffffff !important; width:100% !important; box-sizing:border-box !important;' +
-        'padding-left:180px !important;' +
-      '}' +
-      '@media (max-width:1024px) {' +
-        '#hadm-content { padding-left:0 !important; }' +
       '}';
     document.head.appendChild(s);
   }

@@ -532,6 +532,22 @@ function _predWorkFromHistorico() {
     predOcultarResultadoReal();
   }
 
+  // Determinar el tipo del próximo evento basado en el último dentro de las filas usadas
+  const lastRow = rows[rows.length - 1];
+  let nextEvento = null;
+  if(lastRow && lastRow.evento) {
+    const lastEvt = lastRow.evento.toString().trim().toUpperCase();
+    // Si en las filas usadas solo existe un tipo de evento, el siguiente es el mismo
+    const eventosEnUso = [...new Set(rows.map(r => r.evento.toString().trim().toUpperCase()))];
+    if(eventosEnUso.length === 1) {
+      // Solo un tipo (ej: solo X en los primeros años) → siguiente es el mismo
+      nextEvento = eventosEnUso[0];
+    } else {
+      // Hay ambos tipos → alternan: el siguiente es el opuesto al último
+      nextEvento = lastEvt === 'X' ? 'Y' : 'X';
+    }
+  }
+
   // Construir parsed: array de 7 columnas, cada una con los números de la secuencia
   // Los motores trabajan con números (s1..s7) como strings
   const parsed = [[],[],[],[],[],[],[]];
@@ -545,11 +561,13 @@ function _predWorkFromHistorico() {
     parsed[6].push(String(r.s7));
   });
 
-  _predWorkWithParsed(parsed);
+  _predWorkWithParsed(parsed, nextEvento);
 }
 
 // ── Motor (recibe parsed igual que antes) ─────────────
-function _predWorkWithParsed(parsed) {
+function _predWorkWithParsed(parsed, nextEvento) {
+  // Guardar el tipo del próximo evento para usarlo en el análisis
+  window._predNextEvento = nextEvento || null;
   predAllData = []; predAllSeqs = [];
   allSeqsData=[]; predDataAll=[]; tableDataAll=[]; seqMem=[];
   blk5_AY={}; blk5_pos={}; blk2_AY={}; blk2_pos={}; blk7_AY={}; blk7_pos={};
@@ -1043,6 +1061,45 @@ function filtrarCandidatosPorC3(candidates, si) {
   return filtered.length > 0 ? filtered : candidates;
 }
 
+// ── FILTRO POR TIPO DE EVENTO ─────────────────────────────────────────────────
+// Basado en análisis estadístico: S4_C3, S6_C1, S7_C3, S7_C4 varían según X/Y
+// Solo filtra cuando hay dominancia clara para no ser agresivo
+function filtrarCandidatosPorEvento(candidates, si) {
+  const ev = window._predNextEvento;
+  if(!ev) return candidates;
+
+  // Mapas de probabilidad por evento (basados en análisis histórico 1943 eventos)
+  // formato: { X: { letraFavorable: letra, umbral: proporcion }, Y: ... }
+  const reglas = {
+    3: { // S4 (índice 3) — C3: X→B(53%), Y→A(54%)
+      getL: (n) => getLetraC3(n, 3),
+      favX: 'B', favY: 'A'
+    },
+    5: { // S6 (índice 5) — C1: X→A(57%), Y→A(52%) — diferencia menor, solo usar como desempate
+      getL: (n) => getLetraAB(n, 5),
+      favX: 'A', favY: 'A'
+    },
+    6: { // S7 (índice 6) — C3: X→B(45%→descarta si Y), Y→A(64%)
+      getL: (n) => getLetraC3(n, 6),
+      favX: 'B', favY: 'A'
+    }
+  };
+
+  const regla = reglas[si];
+  if(!regla) return candidates;
+
+  const letraFav = ev === 'X' ? regla.favX : regla.favY;
+  // Para S6 ambos favorecen A → no filtrar
+  if(si === 5 && regla.favX === regla.favY) return candidates;
+
+  const filtered = candidates.filter(n => {
+    const l = regla.getL(n);
+    return !l || l === letraFav;
+  });
+  // Seguridad: si vacía la lista, devolver originales
+  return filtered.length > 0 ? filtered : candidates;
+}
+
 // ── HISTOGRAMAS DE PATRÓN Y CONTEO ───────────────────────────────────────────
 // Para cada criterio acumula:
 //   patHist[crit][pat5][pat2] = count  → O(1) lookup por bloque y global
@@ -1495,7 +1552,9 @@ function analizarCombinaciones(allColProbs, totalRows) {
     // Aplicar filtro C2 (ABC 17-17-16 / 4-4-4)
     const byC2 = filtrarCandidatosPorC2(byAB, si);
     // Aplicar filtro C3 (ABCD 13-13-12-12 / 3-3-3-3)
-    return filtrarCandidatosPorC3(byC2, si);
+    const byC3 = filtrarCandidatosPorC3(byC2, si);
+    // Aplicar filtro por tipo de evento (X/Y) — solo S4, S6, S7
+    return filtrarCandidatosPorEvento(byC3, si);
   });
 
   // Step 2: Cartesian product with structural filters
@@ -1660,8 +1719,9 @@ function renderCombinaciones(result, totalRows) {
 
   // ── PANEL DE DIAGNÓSTICO DE FILTROS ─────────────────────────────────────────
   const critLabels = {'AB':'(A/B)','C2':'(A/B/C)','C3':'(A/B/C/D)','ABCDE':'(A/B/C/D/E)'};
+  const nextEv = window._predNextEvento;
   let diagHtml = '<div style="margin-bottom:12px;">';
-  diagHtml += '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;">🔍 Diagnóstico de filtros</div>';
+  diagHtml += `<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;">🔍 Diagnóstico de filtros${nextEv ? ` &nbsp;·&nbsp; Próximo evento: <b style="color:${nextEv==='X'?'#0a3622':'#084298'};">${nextEv}</b>` : ''}</div>`;
 
   CRITERIOS_DEF.forEach(({name, letras}) => {
     const bounds = boundsMaps[name];

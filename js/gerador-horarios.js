@@ -2,15 +2,10 @@
 (function () {
 
   // ── KNOWLEDGE BASE — loaded dynamically from Supabase ──
-  // No names or personal data hardcoded here. All data comes from the database.
   let STORES = [];
   let PEOPLE = [];
 
-  // ── SUPABASE CONFIG ──
-  // Credenciales gestionadas por el servidor — no hardcodeadas
-
-  // FIX 1: getSupabase() síncrona — elimina el polling asíncrono que causaba
-  // el lag con las férias y el comportamiento cíclico.
+  // ── SUPABASE — usa sbAdmin definido em supabase-config.js ──
   function getSupabase() {
     if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
     return null;

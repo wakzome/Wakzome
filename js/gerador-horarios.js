@@ -1,167 +1,3068 @@
-// ═══════════════════════════════════════════════════════════════════
-// PATCH 1 — getSupabase() síncrono (elimina el polling asíncrono)
-// Mantiene sbAdmin (sin credenciales hardcodeadas) pero lo lee de
-// forma síncrona igual que el antiguo leía window.supabase.
-// ═══════════════════════════════════════════════════════════════════
+// ══ GERADOR DE HORÁRIOS — Porto Santo ══
+(function () {
 
-// SUSTITUIR este bloque completo (líneas ~18-30 del nuevo archivo):
-//
-//   async function getSupabase() {
-//     if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
-//     for (let i = 0; i < 50; i++) {
-//       await new Promise(r => setTimeout(r, 100));
-//       if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
-//     }
-//     return null;
-//   }
-//
-// POR ESTO:
+  // ── KNOWLEDGE BASE — loaded dynamically from Supabase ──
+  // No names or personal data hardcoded here. All data comes from the database.
+  let STORES = [];
+  let PEOPLE = [];
 
-function getSupabase() {
-  if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
-  return null;
-}
+  // ── SUPABASE CONFIG ──
+  // Credenciales gestionadas por el servidor — no hardcodeadas
 
-// IMPORTANTE: como ahora getSupabase() es síncrona, todas las
-// funciones que la llaman con "await getSupabase()" siguen
-// funcionando — await sobre un valor no-Promise simplemente lo
-// devuelve tal cual. No hay que cambiar nada más por esto.
+  // FIX 1: getSupabase() síncrona — elimina el polling asíncrono que causaba
+  // el lag con las férias y el comportamiento cíclico.
+  function getSupabase() {
+    if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
+    return null;
+  }
 
+  async function supabaseFetch(table, filters = {}) {
+    const sb = getSupabase();
+    if (!sb) { console.warn('Supabase client not available'); return []; }
+    try {
+      let query = sb.from(table).select('*');
+      Object.entries(filters).forEach(([col, val]) => { query = query.eq(col, val); });
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    } catch (e) {
+      console.error(`Supabase fetch error (${table}):`, e);
+      return [];
+    }
+  }
 
-// ═══════════════════════════════════════════════════════════════════
-// PATCH 2 — loadIncidencias() y lancarBanco(): eliminar await
-//           innecesario en getSupabase() (ahora síncrona)
-//
-// En la práctica "const sb = await getSupabase()" sigue funcionando
-// aunque la función ya no sea async, pero para consistencia y para
-// evitar confusión futura, en las funciones clave basta con:
-//   const sb = getSupabase();
-//
-// No es obligatorio cambiar todos los sitios — JavaScript lo
-// maneja correctamente en ambos casos. Solo hay que asegurarse
-// de que la función exportada initGeradorHorarios llame
-// loadKnowledgeBase() correctamente (ver Patch 3).
-// ═══════════════════════════════════════════════════════════════════
+  async function supabaseInsert(table, data) {
+    const sb = getSupabase();
+    if (!sb) return null;
+    try {
+      const { data: result, error } = await sb.from(table).insert(data).select();
+      if (error) throw error;
+      return result;
+    } catch (e) {
+      console.error(`Supabase insert error (${table}):`, e);
+      return null;
+    }
+  }
 
+  async function supabaseUpdate(table, id, data) {
+    const sb = getSupabase();
+    if (!sb) return null;
+    try {
+      const payload = { ...data };
+      delete payload.id;
+      const { data: result, error } = await sb.from(table).update(payload).eq('id', id).select();
+      if (error) throw error;
+      return result && result.length > 0 ? result : [payload];
+    } catch (e) {
+      console.error(`Supabase update error (${table}):`, e);
+      return null;
+    }
+  }
 
-// ═══════════════════════════════════════════════════════════════════
-// PATCH 3 — confirmSchedule(): corregir cálculo banco de horas
-//           para personas con férias/baixa/licença parciales.
-//
-// El bug: diffSemana = realHrs - 40 se aplica a TODAS las personas
-// con horario, incluyendo a quien solo trabajó 3 días porque estaba
-// de férias el resto. Eso genera deuda falsa.
-//
-// Solución: si la persona tiene ausencia (férias, baixa, licença)
-// esta semana, NO tocar su banco de horas — sus horas ya están
-// justificadas por la ausencia. Solo calcular banco para personas
-// que trabajaron la semana completa sin ausencias.
-// ═══════════════════════════════════════════════════════════════════
+  async function loadKnowledgeBase() {
+    const [storesRaw, peopleRaw] = await Promise.all([
+      supabaseFetch('gh_stores', { active: true }),
+      supabaseFetch('gh_people', { active: true })
+    ]);
 
-// SUSTITUIR el bloque de "Actualizar banco de horas" dentro de
-// confirmSchedule() — el try/catch que empieza con:
-//   "// Actualizar banco de horas — lógica correcta con historial por semana"
-//
-// POR ESTO:
+    STORES = storesRaw.map(s => ({
+      id: s.id, name: s.name, short: s.short, priority: s.priority
+    }));
 
-      // Actualizar banco de horas
-      S._isEditing = false;
-      try {
+    PEOPLE = peopleRaw.map(p => {
+      let autonomia = p.autonomia || null;
+      if (!autonomia) {
+        if (p.efetiva)          autonomia = 'efectiva';
+        else if (p.can_alone)   autonomia = 'autonoma';
+        else                    autonomia = 'nao_autonoma';
+      }
+      const efetiva        = autonomia === 'efectiva';
+      const canAlone       = autonomia === 'efectiva' || autonomia === 'autonoma';
+      const canAloneInterval = autonomia !== 'nao_autonoma';
+      const pesoBase = efetiva ? 2 : (autonomia === 'nao_autonoma' ? 1 : 1.5);
+
+      return {
+        id: p.id,
+        name: p.name,
+        hrs: p.hrs || 40,
+        store: p.store_id || null,
+        autonomia,
+        efetiva,
+        canAlone,
+        canAloneInterval,
+        pesoBase,
+        start: p.start_date,
+        end: p.end_date || null,
+        mobile: p.mobile || false,
+        coverPri: p.cover_pri || 9,
+        knows: p.knows || (p.store_id ? [p.store_id] : []),
+        hardAvoid: p.hard_avoid || [],
+        softAvoid: p.soft_avoid || []
+      };
+    });
+
+    window.GERADOR_PEOPLE = PEOPLE;
+  }
+
+  const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+  const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
+
+  const SH_A = '10:00-13:00|14:00-19:00';
+  const SH_B = '10:00-14:00|15:00-19:00';
+  const SH_C = '10:00-15:00|16:00-19:00';
+  const SH_D = '09:00-12:00|13:00-18:00';
+  const SH_E = '11:00-15:00|16:00-20:00';
+  const SH_F = '09:00-13:00|19:00-23:00';
+
+  const SH_DEFAULT = SH_B;
+  const SH_ALT     = SH_A;
+
+  let MEM = (function () {
+    try { const r = sessionStorage.getItem('mzk_gh8'); if (r) return JSON.parse(r); } catch (e) {}
+    return { cycleWeek: 0, offsets: {}, sundays: {} };
+  })();
+  function saveMem() { try { sessionStorage.setItem('mzk_gh8', JSON.stringify(MEM)); } catch (e) {} }
+
+  function blank() {
+    return {
+      weekStart: null, openStores: [], openDays: {}, storeMin: {}, storeMax: {},
+      storeMode: {}, domPessoas: null,
+      absences: [],
+      sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
+      schedule: {}, alerts: [], decisions: [],
+      _personStores: {}, _storeOrder: {}
+    };
+  }
+  let S = blank();
+
+  function P(id)    { return PEOPLE.find(p => p.id === id); }
+  function ST(id)   { return STORES.find(s => s.id === id); }
+  function sname(id)  { return ST(id)?.name  || id || '—'; }
+  function sshort(id) { return ST(id)?.short || id || '—'; }
+  function wkDates() {
+    return DAYS.map((_, i) => { const d = new Date(S.weekStart); d.setDate(d.getDate() + i); return d; });
+  }
+  function fmt(d) { if (!d) return ''; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+  function nextMonday() {
+    const t = new Date();
+    const dow = t.getDay();
+    const daysUntilMonday = dow === 0 ? 1 : dow === 1 ? 7 : 8 - dow;
+    t.setDate(t.getDate() + daysUntilMonday);
+    return t.toISOString().split('T')[0];
+  }
+  function isoWeek(date) { const d = new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()+3-(d.getDay()+6)%7); const w1 = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
+  function weeksSince(s, ref) { return Math.floor((ref - new Date(s)) / (7*864e5)); }
+  function absOf(pid)       { return S.absences.find(a => a.pid === pid) || null; }
+
+  function dayOfWeekKey(dateStr) {
+    if (!dateStr || !S.weekStart) return null;
+    const d    = new Date(dateStr + 'T00:00:00');
+    const diff = Math.round((d - new Date(S.weekStart)) / 86400000);
+    if (diff < 0 || diff > 6) return null;
+    return DAYS[diff];
+  }
+
+  function isAbsent(pid, day) {
+    const a = absOf(pid); if (!a) return false;
+    const di    = DAYS.indexOf(day);
+    const fromI = DAYS.indexOf(a.from);
+    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
+    return di >= fromI && di <= toI;
+  }
+
+  function fullyAbsent(pid) {
+    const a = absOf(pid); if (!a) return false;
+    const fromI = DAYS.indexOf(a.from);
+    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
+    return fromI === 0 && toI === 6;
+  }
+
+  function significantlyAbsent(pid) {
+    const a = absOf(pid); if (!a) return false;
+    const fromI = DAYS.indexOf(a.from);
+    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
+    return (toI - fromI + 1) >= 4;
+  }
+
+  function isContractEnded(p, day) {
+    if (!p.end || !S.weekStart) return false;
+    const endDate = new Date(p.end + 'T00:00:00');
+    const di = DAYS.indexOf(day);
+    const dayDate = new Date(S.weekStart);
+    dayDate.setDate(dayDate.getDate() + di);
+    dayDate.setHours(0, 0, 0, 0);
+    return dayDate > endDate;
+  }
+
+  function storeOpen(sid, day) { return S.openStores.includes(sid) && S.openDays[sid]?.includes(day); }
+  function storeMin(sid)  { return S.storeMin?.[sid] > 0 ? S.storeMin[sid] : 1; }
+  function storeMax(sid)  { const m = S.storeMax?.[sid]; return (m && m > 0) ? m : Infinity; }
+
+  function storeBaseShift(sid) { return (window._STORE_MODE_SHIFTS?.[sid] || '10:00-14:00|15:00-19:00'); }
+
+  let wStep = 0;
+  function getContainer() { return document.getElementById('gh-container'); }
+
+  function fixPanelLayout() {
+    const panel = document.getElementById('tab-gerador');
+    if (panel) {
+      panel.style.background = '#fff';
+      panel.style.color = '#111';
+    }
+  }
+
+  function cleanupGeradorLayout() {
+    const panel = document.getElementById('tab-gerador');
+    if (panel) {
+      panel.style.background = '';
+      panel.style.color = '';
+    }
+    const modal = document.getElementById('gh-modal');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.style.display = 'none';
+    }
+    editCtx = null;
+  }
+
+  function renderWiz() {
+    const c = getContainer(); if (!c) return;
+    fixPanelLayout();
+    c.style.animation = 'none'; c.offsetWidth; c.style.animation = '';
+    [wiz_week, wiz_absences, wiz_stores][wStep]();
+  }
+
+  function wiz_week() {
+    const c = getContainer(); if (!c) return;
+    c.innerHTML = `
+      <div class="gh-wiz-box">
+        <div class="gh-wiz-label">Passo 1 de 3</div>
+        <div class="gh-wiz-title">Qual semana vamos planear?</div>
+        <div class="gh-wiz-sub">Indique a segunda-feira da semana.</div>
+        <input type="date" class="gh-field" id="gh-inp-week" value="${nextMonday()}">
+        <div class="gh-wiz-nav">
+          <button class="gh-btn gh-btn-solid" id="gh-sub-week">Continuar →</button>
+        </div>
+        <div id="gh-borradores-list" style="margin-top:48px;"></div>
+      </div>`;
+    document.getElementById('gh-sub-week').addEventListener('click', sub_week);
+    renderBorradores(document.getElementById('gh-borradores-list'));
+  }
+
+  function sub_week() {
+    const v = document.getElementById('gh-inp-week').value; if (!v) return;
+    const d = new Date(v + 'T00:00:00'), dow = d.getDay();
+    d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+    S.weekStart = d; wStep = 1; renderWiz();
+  }
+
+  async function wiz_absences() {
+    const c = getContainer(); if (!c) return;
+
+    let feriasAuto = [];
+    if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
+      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => (f.loja||'').toLowerCase().includes('porto santo'));
+    }
+
+    const feriasAutoPids = new Set(feriasAuto.map(f => f.pid));
+    const storeOptions = STORES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+    c.innerHTML = `
+      <div class="gh-step2-wrap">
+        <div class="gh-step2-header">
+          <div class="gh-step2-header-top">
+            <div>
+              <div class="gh-wiz-label">Passo 2 de 3</div>
+              <div class="gh-step2-title-row">
+                <div class="gh-wiz-title" style="margin-bottom:0">Pessoal Activo</div>
+                <div class="gh-step2-badge">
+                  ${(PEOPLE.length - feriasAuto.length)} activa${(PEOPLE.length - feriasAuto.length) !== 1 ? 's' : ''} · ${feriasAuto.length} férias
+                </div>
+              </div>
+              <div class="gh-wiz-sub">Gere o pessoal de Porto Santo.</div>
+            </div>
+          </div>
+          ${feriasAuto.length ? `<div class="gh-ferias-banner" style="margin-top:6px;margin-bottom:6px">
+            <span class="gh-ferias-banner-icon">🏖</span>
+            <span>Férias esta semana: <strong>${feriasAuto.map(f => {
+              const nomeLower = (f.nome || '').toLowerCase();
+              const p = PEOPLE.find(x =>
+                x.id === f.pid ||
+                x.name === f.nome ||
+                nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+              );
+              return p ? p.name.split(' ')[0] : (f.nome || f.pid || '?');
+            }).join(', ')}</strong></span>
+          </div>` : ''}
+          <div class="gh-step2-actions">
+            <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-1">← Voltar</button>
+            <button class="gh-add-btn" id="gh-add-person" style="margin:0">+ Adicionar pessoa</button>
+            <button class="gh-btn gh-btn-solid" id="gh-sub-abs">Continuar →</button>
+          </div>
+        </div>
+        <div id="gh-person-form" style="display:none" class="gh-person-form">
+          <div class="gh-pf-title" id="gh-pf-title">Nova pessoa</div>
+          <div class="gh-pf-grid">
+            <div class="gh-pf-field">
+              <label>Nome completo</label>
+              <input type="text" id="gh-pf-name" class="gh-field-sm" placeholder="Nome Apelido">
+            </div>
+            <div class="gh-pf-field">
+              <label>Horas contrato</label>
+              <input type="number" id="gh-pf-hrs" class="gh-field-sm" value="40" min="1" max="40">
+            </div>
+            <div class="gh-pf-field" id="gh-pf-start-field">
+              <label id="gh-pf-start-label">Data de entrada</label>
+              <input type="date" id="gh-pf-start" class="gh-field-sm">
+            </div>
+            <div class="gh-pf-field">
+              <label>Último dia de trabalho (opcional)</label>
+              <input type="date" id="gh-pf-end" class="gh-field-sm">
+            </div>
+            <div class="gh-pf-field">
+              <label>Loja fixa</label>
+              <select id="gh-pf-store" class="gh-field-sm">
+                <option value="">— Sem loja fixa —</option>
+                ${storeOptions}
+              </select>
+            </div>
+            <div class="gh-pf-field" style="grid-column:1/-1">
+              <label>Autonomia</label>
+              <select id="gh-pf-autonomia" class="gh-field-sm">
+                <option value="efectiva">Efectiva — vínculo permanente, pode ficar sozinha todo o dia (peso 2)</option>
+                <option value="autonoma">Autónoma — pode ficar sozinha todo o dia (peso 1.5)</option>
+                <option value="autonoma_h">Autónoma-H — pode fazer intervalo sozinha, não fica sozinha o dia todo (peso 1.5)</option>
+                <option value="nao_autonoma">Não autónoma — precisa sempre de supervisão (peso 1)</option>
+              </select>
+            </div>
+            <div class="gh-pf-field">
+              <label>Móvel (pode ser deslocada)</label>
+              <select id="gh-pf-mobile" class="gh-field-sm">
+                <option value="false">Não</option>
+                <option value="true">Sim</option>
+              </select>
+            </div>
+          </div>
+          <div class="gh-pf-field" style="margin-top:10px">
+            <label>Lojas onde pode trabalhar</label>
+            <div class="gh-pf-stores" id="gh-pf-knows">
+              ${STORES.map(s => `<label class="gh-pf-check"><input type="checkbox" value="${s.id}"> ${s.name}</label>`).join('')}
+            </div>
+          </div>
+          <div class="gh-pf-field" style="margin-top:10px">
+            <label>Evitar coincidência de folga/turno com (softAvoid)</label>
+            <div class="gh-pf-stores" id="gh-pf-softavoid"></div>
+          </div>
+          <div class="gh-pf-actions">
+            <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pf-cancel">Cancelar</button>
+            <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-pf-save">Guardar</button>
+          </div>
+        </div>
+        <div class="gh-staff-list" id="gh-staff-list"></div>
+      </div>`;
+
+    await loadIncidencias();
+    renderStaffList(feriasAutoPids, feriasAuto);
+    bindPersonForm(storeOptions);
+
+    document.getElementById('gh-back-1').addEventListener('click', () => { wStep = 0; renderWiz(); });
+    document.getElementById('gh-sub-abs').addEventListener('click', sub_abs);
+  }
+
+  function parseDateInput(val) {
+    if (!val) return null;
+    if (val.includes('-')) return val;
+    const parts = val.split('/');
+    if (parts.length < 3) return null;
+    let [d, m, y] = parts;
+    if (y.length === 2) y = '20' + y;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+
+  function shortName(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    return parts[0] + ' ' + parts[parts.length - 1];
+  }
+
+  function renderStaffList(feriasAutoPids, feriasAuto = []) {
+    const list = document.getElementById('gh-staff-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const feriasMatchedPids = new Set();
+    feriasAuto.forEach(f => {
+      const nomeLower = (f.nome || '').toLowerCase();
+      const matched = PEOPLE.find(x =>
+        x.id === f.pid ||
+        x.name === f.nome ||
+        nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+      );
+      if (matched) feriasMatchedPids.add(matched.id);
+    });
+
+    const DIAS_FULL = {SEG:'Segunda',TER:'Terça',QUA:'Quarta',QUI:'Quinta',SEX:'Sexta',SAB:'Sábado',DOM:'Domingo'};
+    const DIAS = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+
+    const sortedPeople = [...PEOPLE].sort((a,b) => a.name.localeCompare(b.name));
+    sortedPeople.forEach(p => {
+      const onFerias = feriasMatchedPids.has(p.id) || feriasAutoPids.has(p.id);
+      const autoLabels = { efectiva: 'Efectiva', autonoma: 'Autónoma', autonoma_h: 'Autónoma-H', nao_autonoma: 'Não autónoma' };
+      const condLabel = autoLabels[p.autonomia] || (p.efetiva ? 'Efectiva' : 'Nova');
+      const storeName = p.store ? STORES.find(s=>s.id===p.store)?.name || p.store : 'Sem loja fixa';
+      const folga   = S._folgas?.[p.id]   || {};
+      const baixa   = S._baixas?.[p.id]   || {};
+      const licenca = S._licencas?.[p.id] || {};
+      const saldo   = S._banco?.[p.id]    || 0;
+      const diasDirigidos = S._folgasDirigidas?.[p.id] || [];
+
+      const dayBtns = DIAS.map(d => {
+        const active = diasDirigidos.includes(d);
+        return `<button class="gh-day-btn${active?' gh-day-btn-on':''}" data-pid="${p.id}" data-day="${d}" title="${DIAS_FULL[d]}">${d.charAt(0)}</button>`;
+      }).join('');
+
+      const row = document.createElement('div');
+      row.className = `gh-sr${onFerias ? ' gh-sr-ferias' : ''}`;
+      row.dataset.pid = p.id;
+      const saldoTag = saldo !== 0 ? `<sup class="gh-saldo-sup ${saldo>0?'gh-saldo-sup-neg':'gh-saldo-sup-pos'}">${saldo>0?'+':''}${saldo}h</sup>` : '';
+
+      const hasContractEnd = p.end && S.weekStart;
+      let contractEndTag = '';
+      if (hasContractEnd) {
+        const endDate = new Date(p.end + 'T00:00:00');
+        const weekEnd = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23,59,59,0);
+        if (endDate <= weekEnd) {
+          const endFmt = `${String(endDate.getDate()).padStart(2,'0')}/${String(endDate.getMonth()+1).padStart(2,'0')}`;
+          contractEndTag = ` · <span style="font-size:.58rem;color:#e57373;font-weight:700;">fim contrato ${endFmt}</span>`;
+        }
+      }
+
+      row.innerHTML = `
+        <div class="gh-sr-header">
+          <div class="gh-sr-header-left">
+            <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
+            <div class="gh-sr-nameblock">
+              <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
+              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndTag}</span>
+            </div>
+          </div>
+          <div class="gh-sr-btns">
+            <button class="gh-icon-btn gh-edit-person" data-pid="${p.id}" title="Editar">✏</button>
+            <button class="gh-icon-btn gh-limpar-inc" data-pid="${p.id}" title="Limpar" style="color:#b8860b">↺</button>
+            <button class="gh-icon-btn gh-del-person" data-pid="${p.id}" title="Eliminar" style="color:#c0392b">✕</button>
+          </div>
+        </div>
+        <div class="gh-sr-body" id="gh-body-${p.id}" style="display:none">
+          <div class="gh-sr-cols">
+            <div class="gh-sr-col">
+              <div class="gh-sr-col-title">📅 Folga</div>
+              <div class="gh-day-btns">${dayBtns}</div>
+              <div class="gh-sr-col-title" style="margin-top:8px">📋 Licença <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="lic_active" ${licenca.active?'checked':''}></div>
+              <div class="gh-date-row">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_from" value="${licenca.data_inicio?licenca.data_inicio.slice(5).split('-').reverse().join('/')+'/'+licenca.data_inicio.slice(2,4):''}" placeholder="dd/mm/aa">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="lic_to" value="${licenca.data_fim?licenca.data_fim.slice(5).split('-').reverse().join('/')+'/'+licenca.data_fim.slice(2,4):''}" placeholder="dd/mm/aa">
+              </div>
+              <div class="gh-date-row" style="margin-top:3px">
+                <select class="gh-field-sm gh-inc-inp gh-sel-mini" data-pid="${p.id}" data-col="lic_tipo">
+                  <option value="recuperavel" ${licenca.tipo==='recuperavel'||!licenca.tipo?'selected':''}>Rec.</option>
+                  <option value="nao_recuperavel" ${licenca.tipo==='nao_recuperavel'?'selected':''}>N.Rec.</option>
+                </select>
+                <input type="number" class="gh-field-sm gh-inc-inp gh-num-mini" data-pid="${p.id}" data-col="lic_horas" value="${licenca.horas||''}" placeholder="h" step="0.5">
+              </div>
+            </div>
+            <div class="gh-sr-col">
+              <div class="gh-sr-col-title">🏥 Baixa <input type="checkbox" class="gh-inc-usar" data-pid="${p.id}" data-col="baixa_active" ${baixa.active?'checked':''}></div>
+              <div class="gh-date-row">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_from" value="${baixa.data_inicio?baixa.data_inicio.slice(5).split('-').reverse().join('/')+'/'+baixa.data_inicio.slice(2,4):''}" placeholder="dd/mm/aa">
+                <input type="text" class="gh-field-sm gh-inc-inp gh-date-txt" data-pid="${p.id}" data-col="baixa_to" value="${baixa.data_fim?baixa.data_fim.slice(5).split('-').reverse().join('/')+'/'+baixa.data_fim.slice(2,4):''}" placeholder="dd/mm/aa">
+              </div>
+              <div class="gh-sr-col-title" style="margin-top:8px">⏱ Banco <button class="gh-btn-guardar-inc gh-icon-btn" data-pid="${p.id}" title="Guardar baixa, licença e banco" style="margin-left:auto;font-size:.6rem;padding:1px 6px;width:auto;color:#1a5c1a;border-color:#b7ddb7;background:#f0fdf0;">💾</button></div>
+              <div class="gh-inc-saldo ${saldo>0?'gh-inc-saldo-neg':saldo<0?'gh-inc-saldo-pos':''}" id="gh-saldo-${p.id}">${saldo>0?'+':''}${saldo}h</div>
+              <div class="gh-banco-add-row">
+                <input type="number" class="gh-field-sm gh-banco-h gh-num-mini" data-pid="${p.id}" placeholder="±h" step="0.5">
+                <button class="gh-icon-btn gh-banco-lancar" data-pid="${p.id}" title="Lançar">＋</button>
+                <button class="gh-icon-btn gh-banco-zero" data-pid="${p.id}" title="Zerar" style="color:#c0392b">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      list.appendChild(row);
+    });
+
+    list.querySelectorAll('.gh-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.pid;
+        const body = document.getElementById('gh-body-' + pid);
+        if (!body) return;
+        const open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        btn.textContent = open ? '▶' : '▼';
+        btn.style.transform = '';
+      });
+    });
+
+    list.querySelectorAll('.gh-edit-person').forEach(btn => {
+      btn.addEventListener('click', () => openEditPerson(btn.dataset.pid));
+    });
+    list.querySelectorAll('.gh-del-person').forEach(btn => {
+      btn.addEventListener('click', () => deletePersonConfirm(btn.dataset.pid));
+    });
+
+    list.querySelectorAll('.gh-day-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.pid;
+        const day = btn.dataset.day;
+        if (!S._folgasDirigidas) S._folgasDirigidas = {};
+        if (!S._folgasDirigidas[pid]) S._folgasDirigidas[pid] = [];
+        const dias = S._folgasDirigidas[pid];
+        const idx = dias.indexOf(day);
+        if (idx >= 0) dias.splice(idx, 1); else dias.push(day);
+        btn.classList.toggle('gh-day-btn-on', dias.includes(day));
+        if (!S._folgas) S._folgas = {};
+        if (!S._folgas[pid]) S._folgas[pid] = { dias: [] };
+        S._folgas[pid].dias = [...dias];
+      });
+    });
+
+    list.querySelectorAll('.gh-inc-usar[data-col="baixa_active"]').forEach(el => {
+      el.addEventListener('change', () => {
+        const pid = el.dataset.pid;
+        if (!S._baixas) S._baixas = {};
+        if (!S._baixas[pid]) S._baixas[pid] = {};
+        S._baixas[pid]._pendente = true;
+        const btn = list.querySelector(`.gh-btn-guardar-inc[data-pid="${pid}"]`);
+        if (btn) { btn.style.background = '#fff8e8'; btn.style.borderColor = '#f0d080'; btn.style.color = '#9a6f00'; }
+      });
+    });
+    list.querySelectorAll('.gh-inc-inp[data-col^="baixa"]').forEach(el => {
+      el.addEventListener('change', () => {
+        const pid = el.dataset.pid;
+        if (!S._baixas) S._baixas = {};
+        if (!S._baixas[pid]) S._baixas[pid] = {};
+        S._baixas[pid]._pendente = true;
+        const btn = list.querySelector(`.gh-btn-guardar-inc[data-pid="${pid}"]`);
+        if (btn) { btn.style.background = '#fff8e8'; btn.style.borderColor = '#f0d080'; btn.style.color = '#9a6f00'; }
+      });
+    });
+
+    list.querySelectorAll('.gh-inc-usar[data-col="lic_active"], .gh-inc-inp[data-col^="lic"]').forEach(el => {
+      el.addEventListener('change', () => {
+        const pid = el.dataset.pid;
+        if (el.dataset.col === 'lic_tipo') {
+          const tipo = el.value;
+          const obsEl = document.getElementById('gh-lic-obs-' + pid);
+          if (obsEl) obsEl.style.display = tipo === 'nao_recuperavel' ? '' : 'none';
+        }
+        if (!S._licencas) S._licencas = {};
+        if (!S._licencas[pid]) S._licencas[pid] = {};
+        S._licencas[pid]._pendente = true;
+        const btn = list.querySelector(`.gh-btn-guardar-inc[data-pid="${pid}"]`);
+        if (btn) { btn.style.background = '#fff8e8'; btn.style.borderColor = '#f0d080'; btn.style.color = '#9a6f00'; }
+      });
+    });
+
+    list.querySelectorAll('.gh-btn-guardar-inc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        btn.textContent = '⏳'; btn.style.opacity = '0.6';
+        let saved = false;
+
+        if (S._baixas?.[pid]?._pendente) {
+          const active = document.querySelector(`[data-col="baixa_active"][data-pid="${pid}"]`)?.checked || false;
+          const from   = parseDateInput(document.querySelector(`[data-col="baixa_from"][data-pid="${pid}"]`)?.value);
+          const to     = parseDateInput(document.querySelector(`[data-col="baixa_to"][data-pid="${pid}"]`)?.value);
+          await saveBaixa(pid, { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, observacao: '' });
+          if (S._baixas[pid]) delete S._baixas[pid]._pendente;
+          saved = true;
+        }
+
+        if (S._licencas?.[pid]?._pendente) {
+          const active = document.querySelector(`[data-col="lic_active"][data-pid="${pid}"]`)?.checked || false;
+          const from   = parseDateInput(document.querySelector(`[data-col="lic_from"][data-pid="${pid}"]`)?.value);
+          const to     = parseDateInput(document.querySelector(`[data-col="lic_to"][data-pid="${pid}"]`)?.value);
+          const tipo   = document.querySelector(`[data-col="lic_tipo"][data-pid="${pid}"]`)?.value || 'recuperavel';
+          const horas  = parseFloat(document.querySelector(`[data-col="lic_horas"][data-pid="${pid}"]`)?.value || 0) || 0;
+          const obs    = document.querySelector(`[data-col="lic_obs"][data-pid="${pid}"]`)?.value || '';
+          const licData = { active, data_inicio: from || new Date().toISOString().split('T')[0], data_fim: to || null, tipo, horas, observacao: obs };
+          await saveLicenca(pid, licData);
+          if (active && tipo === 'recuperavel' && horas > 0 && !S._licencas[pid]?._addedToBanco) {
+            const novoSaldo = await lancarBanco(pid, horas);
+            if (S._licencas) S._licencas[pid] = { ...(S._licencas[pid]||{}), _addedToBanco: true };
+            const saldoEl = document.getElementById('gh-saldo-' + pid);
+            if (saldoEl && novoSaldo !== undefined) {
+              saldoEl.textContent = `${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
+              saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
+            }
+          }
+          if (S._licencas[pid]) delete S._licencas[pid]._pendente;
+          saved = true;
+        }
+
+        btn.textContent = saved ? '✓' : '💾';
+        btn.style.opacity = '1';
+        btn.style.background = '#f0fdf0';
+        btn.style.borderColor = '#b7ddb7';
+        btn.style.color = '#1a5c1a';
+        if (saved) setTimeout(() => { btn.textContent = '💾'; }, 1500);
+      });
+    });
+
+    list.querySelectorAll('.gh-banco-lancar').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        const input = list.querySelector(`.gh-banco-h[data-pid="${pid}"]`);
+        const h = parseFloat(input?.value || 0);
+        if (!h) return;
+        const novoSaldo = await lancarBanco(pid, h);
+        input.value = '';
+        const saldoEl = document.getElementById('gh-saldo-' + pid);
+        if (saldoEl && novoSaldo !== undefined) {
+          saldoEl.textContent = `Saldo: ${novoSaldo > 0 ? '+' : ''}${novoSaldo}h`;
+          saldoEl.className = 'gh-inc-saldo ' + (novoSaldo > 0 ? 'gh-inc-saldo-neg' : novoSaldo < 0 ? 'gh-inc-saldo-pos' : '');
+        }
+      });
+    });
+
+    list.querySelectorAll('.gh-banco-zero').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        const p = PEOPLE.find(x => x.id === pid);
+        if (!confirm(`Zerar banco de horas de ${shortName(p?.name||pid)}?`)) return;
+        if (!S._banco) S._banco = {};
+        S._banco[pid] = 0;
         const sb = getSupabase();
         if (sb) {
-          const { data: bancoDB } = await sb.from('gh_banco_horas').select('*');
-          const bancoMap = {};
-          (bancoDB || []).forEach(b => { bancoMap[b.pessoa_id] = b; });
+          try {
+            await sb.from('gh_banco_horas').upsert(
+              { pessoa_id: pid, saldo: 0, updated_at: new Date().toISOString() },
+              { onConflict: 'pessoa_id' }
+            );
+          } catch(e) { console.error('Erro ao zerar banco:', e); }
+        }
+        const saldoEl = document.getElementById('gh-saldo-' + pid);
+        if (saldoEl) { saldoEl.textContent = 'Saldo: 0h'; saldoEl.className = 'gh-inc-saldo'; }
+        const input = list.querySelector(`.gh-banco-h[data-pid="${pid}"]`);
+        if (input) input.value = '';
+      });
+    });
 
-          const bancoUpdates = [];
-          PEOPLE.forEach(p => {
-            if (!S.schedule[p.id]) return;
+    list.querySelectorAll('.gh-limpar-inc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.pid;
+        const p = PEOPLE.find(x => x.id === pid);
+        if (!confirm(`Limpar todas as incidências de ${shortName(p?.name||pid)}?`)) return;
+        await limparIncidencias(pid);
+        list.querySelectorAll(`.gh-day-btn[data-pid="${pid}"]`).forEach(b => b.classList.remove('gh-day-btn-on'));
+        list.querySelectorAll(`.gh-inc-usar[data-pid="${pid}"]`).forEach(b => { b.checked = false; });
+        list.querySelectorAll(`.gh-inc-inp[data-pid="${pid}"]`).forEach(b => { b.value = ''; });
+        const saldoEl = document.getElementById('gh-saldo-' + pid);
+        if (saldoEl) { saldoEl.textContent = 'Saldo: 0h'; saldoEl.className = 'gh-inc-saldo'; }
+      });
+    });
+  }
 
-            // ── NUEVO: si la persona tiene férias/baixa/licença esta semana,
-            // no tocar su banco — sus ausencias justifican las horas no trabajadas.
-            const temAusencia = S.absences?.some(a => a.pid === p.id)
-              || Object.values(S.schedule[p.id] || {}).some(c =>
-                  ['ferias','baixa','licenca','na'].includes(c.type));
-            if (temAusencia) return;
+  async function loadIncidencias() {
+    if (!S.weekStart) return;
+    const sb = getSupabase();
+    if (!sb) return;
+    const weekKey  = S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0');
+    const weekEnd  = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndKey = weekEnd.toISOString().split('T')[0];
 
-            // Calcular horas reales trabajadas esta semana
-            let realHrs = 0;
-            let tieneHorario = false;
-            DAYS.forEach(d => {
-              const cl = S.schedule[p.id]?.[d];
-              if (cl?.type === 'work' && cl.shift) {
-                tieneHorario = true;
-                cl.shift.split('|').forEach(sg => {
-                  const pts = sg.split('-');
-                  if (pts.length < 2) return;
-                  const [h1,m1] = pts[0].split(':').map(Number);
-                  const [h2,m2] = pts[1].split(':').map(Number);
-                  if (!isNaN(h1) && !isNaN(h2)) realHrs += (h2+m2/60)-(h1+m1/60);
-                });
+    S._baixas   = {};
+    S._licencas = {};
+    S._folgas   = {};
+    S._banco    = {};
+    S._bancoBase = {};
+
+    try {
+      const { data: baixas } = await sb.from('gh_baixas')
+        .select('*').eq('active', true)
+        .lte('data_inicio', weekEndKey);
+      (baixas || []).forEach(b => {
+        if (!b.data_fim || b.data_fim >= weekKey) S._baixas[b.pessoa_id] = b;
+      });
+
+      const { data: licencas } = await sb.from('gh_licencas')
+        .select('*').eq('active', true)
+        .lte('data_inicio', weekEndKey);
+      (licencas || []).forEach(l => {
+        if (!l.data_fim || l.data_fim >= weekKey) S._licencas[l.pessoa_id] = l;
+      });
+
+      const { data: folgas } = await sb.from('gh_folgas')
+        .select('*').eq('semana', weekKey);
+      (folgas || []).forEach(f => { S._folgas[f.pessoa_id] = f; });
+
+      const { data: banco } = await sb.from('gh_banco_horas').select('*');
+      (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
+
+    } catch(e) { console.error('Erro ao carregar incidências:', e); }
+  }
+
+  async function saveFolga(pid, dias) {
+    const sb = getSupabase(); if (!sb) return;
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
+    if (!weekKey) return;
+    if (!S._folgas) S._folgas = {};
+    S._folgas[pid] = { ...(S._folgas[pid] || {}), pessoa_id: pid, semana: weekKey, dias };
+    try {
+      await sb.from('gh_folgas').upsert({ pessoa_id: pid, semana: weekKey, dias },
+        { onConflict: 'pessoa_id,semana' });
+    } catch(e) { console.error('Erro ao guardar folga:', e); }
+  }
+
+  async function saveBaixa(pid, data) {
+    const sb = getSupabase(); if (!sb) return;
+    if (!S._baixas) S._baixas = {};
+    try {
+      if (S._baixas[pid]?.id) {
+        await sb.from('gh_baixas').update(data).eq('id', S._baixas[pid].id);
+        S._baixas[pid] = { ...S._baixas[pid], ...data };
+      } else {
+        const { data: res } = await sb.from('gh_baixas')
+          .insert({ pessoa_id: pid, ...data }).select().single();
+        if (res) S._baixas[pid] = res;
+      }
+    } catch(e) { console.error('Erro ao guardar baixa:', e); }
+  }
+
+  async function saveLicenca(pid, data) {
+    const sb = getSupabase(); if (!sb) return;
+    if (!S._licencas) S._licencas = {};
+    try {
+      if (S._licencas[pid]?.id) {
+        await sb.from('gh_licencas').update(data).eq('id', S._licencas[pid].id);
+        S._licencas[pid] = { ...S._licencas[pid], ...data };
+      } else {
+        const { data: res } = await sb.from('gh_licencas')
+          .insert({ pessoa_id: pid, ...data }).select().single();
+        if (res) S._licencas[pid] = res;
+      }
+    } catch(e) { console.error('Erro ao guardar licença:', e); }
+  }
+
+  async function lancarBanco(pid, horas) {
+    const sb = getSupabase(); if (!sb) return;
+    if (!S._banco) S._banco = {};
+    const novoSaldo = Math.round(((S._banco[pid] || 0) + horas) * 10) / 10;
+    S._banco[pid] = novoSaldo;
+    try {
+      await sb.from('gh_banco_horas').upsert(
+        { pessoa_id: pid, saldo: novoSaldo, updated_at: new Date().toISOString() },
+        { onConflict: 'pessoa_id' }
+      );
+    } catch(e) { console.error('Erro ao lançar banco de horas:', e); }
+    return novoSaldo;
+  }
+
+  async function limparIncidencias(pid) {
+    const sb = getSupabase(); if (!sb) return;
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
+    try {
+      if (S._folgas?.[pid]?.id) {
+        await sb.from('gh_folgas').delete().eq('id', S._folgas[pid].id);
+        delete S._folgas[pid];
+      } else if (weekKey) {
+        await sb.from('gh_folgas').delete().eq('pessoa_id', pid).eq('semana', weekKey);
+      }
+      if (S._baixas?.[pid]?.id) {
+        await sb.from('gh_baixas').update({ active: false }).eq('id', S._baixas[pid].id);
+        delete S._baixas[pid];
+      }
+      if (S._licencas?.[pid]?.id) {
+        await sb.from('gh_licencas').update({ active: false }).eq('id', S._licencas[pid].id);
+        delete S._licencas[pid];
+      }
+    } catch(e) { console.error('Erro ao limpar incidências:', e); }
+  }
+
+  async function deletePersonConfirm(pid) {
+    const p = PEOPLE.find(x => x.id === pid);
+    if (!p) return;
+    const sb = getSupabase();
+    if (!sb) { alert('Supabase não disponível.'); return; }
+
+    const knows = p.knows || [];
+    if (knows.length > 1) {
+      const storeNames = knows.map(sid => {
+        const st = STORES.find(s => s.id === sid);
+        return st ? `• ${st.name} (id: ${sid})` : `• ${sid}`;
+      }).join('\n');
+      const choice = window.prompt(
+        `"${p.name}" está associada a ${knows.length} lojas:\n${storeNames}\n\n` +
+        `Escreva o NOME da loja para a remover apenas dessa loja,\n` +
+        `ou deixe em branco e prima OK para ELIMINAR a pessoa por completo.`
+      );
+      if (choice === null) return;
+
+      if (choice.trim() !== '') {
+        const matchedStore = STORES.find(s =>
+          s.name.toLowerCase().includes(choice.trim().toLowerCase()) ||
+          s.short?.toLowerCase().includes(choice.trim().toLowerCase()) ||
+          s.id === choice.trim()
+        );
+        if (!matchedStore) {
+          alert(`Loja "${choice.trim()}" não encontrada. Operação cancelada.`);
+          return;
+        }
+        try {
+          const newKnows = knows.filter(sid => sid !== matchedStore.id);
+          const newStore = p.store === matchedStore.id ? (newKnows[0] || null) : p.store;
+          const { error } = await sb.from('gh_people')
+            .update({ knows: newKnows, store_id: newStore })
+            .eq('id', pid);
+          if (error) throw error;
+          await loadKnowledgeBase();
+          await loadIncidencias();
+          const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
+            ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
+          renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
+        } catch(e) {
+          console.error('Remove from store error:', e);
+          alert('Erro ao remover da loja. Verifique a consola.');
+        }
+        return;
+      }
+    }
+
+    if (!confirm(`Eliminar "${p.name}" por completo? Esta acção não pode ser desfeita.`)) return;
+    try {
+      await sb.from('gh_licencas').delete().eq('pessoa_id', pid);
+      await sb.from('gh_baixas').delete().eq('pessoa_id', pid);
+      await sb.from('gh_folgas').delete().eq('pessoa_id', pid);
+      await sb.from('gh_banco_horas').delete().eq('pessoa_id', pid);
+      const { error } = await sb.from('gh_people').delete().eq('id', pid);
+      if (error) throw error;
+      if (S._licencas) delete S._licencas[pid];
+      if (S._baixas)   delete S._baixas[pid];
+      if (S._folgas)   delete S._folgas[pid];
+      if (S._banco)    delete S._banco[pid];
+      await loadKnowledgeBase();
+      await loadIncidencias();
+      const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
+        ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
+      renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
+    } catch(e) {
+      console.error('Delete error:', e);
+      alert('Erro ao eliminar. Verifique a consola.');
+    }
+  }
+
+  let _editingPid = null;
+
+  function bindPersonForm(storeOptions) {
+    document.getElementById('gh-add-person').addEventListener('click', () => {
+      _editingPid = null;
+      document.getElementById('gh-pf-title').textContent = 'Nova pessoa';
+      document.getElementById('gh-pf-name').value = '';
+      document.getElementById('gh-pf-hrs').value = '40';
+      document.getElementById('gh-pf-start').value = '';
+      document.getElementById('gh-pf-end').value = '';
+      document.getElementById('gh-pf-store').value = '';
+      document.getElementById('gh-pf-autonomia').value = 'autonoma';
+      document.getElementById('gh-pf-mobile').value = 'false';
+      document.querySelectorAll('#gh-pf-knows input').forEach(cb => { cb.checked = false; });
+      renderSoftAvoidOptions(null, []);
+      document.getElementById('gh-person-form').style.display = 'block';
+    });
+
+    document.getElementById('gh-pf-cancel').addEventListener('click', () => {
+      document.getElementById('gh-person-form').style.display = 'none';
+      _editingPid = null;
+    });
+
+    document.getElementById('gh-pf-autonomia').addEventListener('change', function() {
+      const lbl = document.getElementById('gh-pf-start-label');
+      if (lbl) lbl.textContent = this.value === 'efectiva' ? 'Data de entrada (opcional)' : 'Data de entrada';
+    });
+
+    document.getElementById('gh-pf-save').addEventListener('click', savePersonForm);
+  }
+
+  function openEditPerson(pid) {
+    const p = PEOPLE.find(x => x.id === pid); if (!p) return;
+    _editingPid = pid;
+    document.getElementById('gh-pf-title').textContent = 'Editar — ' + p.name;
+    document.getElementById('gh-pf-name').value = p.name;
+    document.getElementById('gh-pf-hrs').value = p.hrs || 40;
+    document.getElementById('gh-pf-start').value = p.start || '';
+    const lbl = document.getElementById('gh-pf-start-label');
+    if (lbl) lbl.textContent = p.autonomia === 'efectiva' ? 'Data de entrada (opcional)' : 'Data de entrada';
+    document.getElementById('gh-pf-end').value = p.end || '';
+    document.getElementById('gh-pf-store').value = p.store || '';
+    document.getElementById('gh-pf-autonomia').value = p.autonomia || 'autonoma';
+    document.getElementById('gh-pf-mobile').value = p.mobile ? 'true' : 'false';
+    document.querySelectorAll('#gh-pf-knows input').forEach(cb => {
+      cb.checked = (p.knows || []).includes(cb.value);
+    });
+    renderSoftAvoidOptions(p.id, p.softAvoid || []);
+    document.getElementById('gh-person-form').style.display = 'block';
+  }
+
+  function renderSoftAvoidOptions(selfPid, currentSoftAvoid) {
+    const container = document.getElementById('gh-pf-softavoid');
+    if (!container) return;
+    const others = PEOPLE.filter(p => p.id !== selfPid).sort((a,b) => a.name.localeCompare(b.name));
+    if (!others.length) { container.innerHTML = '<span style="font-size:.72rem;color:#bbb">Sem outras pessoas na BD.</span>'; return; }
+    container.innerHTML = others.map(p =>
+      `<label class="gh-pf-check">
+        <input type="checkbox" name="gh-pf-softavoid-cb" value="${p.id}" ${(currentSoftAvoid||[]).includes(p.id) ? 'checked' : ''}>
+        ${p.name.split(' ')[0]}
+      </label>`
+    ).join('');
+  }
+
+  async function savePersonForm() {
+    const name     = document.getElementById('gh-pf-name').value.trim();
+    const hrs      = parseInt(document.getElementById('gh-pf-hrs').value) || 40;
+    const start    = document.getElementById('gh-pf-start').value;
+    const end      = document.getElementById('gh-pf-end').value || null;
+    const store    = document.getElementById('gh-pf-store').value || null;
+    const autonomia  = document.getElementById('gh-pf-autonomia').value || 'autonoma';
+    const efetiva    = autonomia === 'efectiva';
+    const canAlone   = autonomia === 'efectiva' || autonomia === 'autonoma';
+    const mobile   = document.getElementById('gh-pf-mobile').value === 'true';
+    const knows     = [...document.querySelectorAll('#gh-pf-knows input:checked')].map(cb => cb.value);
+    const newSoftAvoid = [...document.querySelectorAll('[name="gh-pf-softavoid-cb"]:checked')].map(cb => cb.value);
+
+    if (!name) { alert('Nome é obrigatório.'); return; }
+    if (autonomia !== 'efectiva' && !start) { alert('Data de entrada é obrigatória para pessoal não-efectivo.'); return; }
+
+    const existingP = _editingPid ? PEOPLE.find(x => x.id === _editingPid) : null;
+    const softAvoid = newSoftAvoid;
+    const hardAvoid = existingP?.hardAvoid || [];
+
+    const autoPriMap = { efectiva: 1, autonoma: 3, autonoma_h: 5, nao_autonoma: 9 };
+    const coverPri = autoPriMap[autonomia] ?? 9;
+
+    const data = {
+      name, hrs, store_id: store,
+      autonomia,
+      efetiva,
+      can_alone: canAlone,
+      start_date: start || null,
+      end_date: end || null,
+      mobile, cover_pri: coverPri,
+      knows, hard_avoid: hardAvoid, soft_avoid: softAvoid, active: true
+    };
+
+    let saved;
+    if (_editingPid) {
+      saved = await supabaseUpdate('gh_people', _editingPid, data);
+    } else {
+      data.id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').substring(0, 20) + '_' + Date.now().toString(36);
+      saved = await supabaseInsert('gh_people', data);
+    }
+
+    if (saved) {
+      await loadKnowledgeBase();
+      document.getElementById('gh-person-form').style.display = 'none';
+      _editingPid = null;
+      const feriasAuto = typeof window.getFeriasParaSemana === 'function' && S.weekStart
+        ? window.getFeriasParaSemana(S.weekStart).filter(f => f.pid) : [];
+      renderStaffList(new Set(feriasAuto.map(f => f.pid)), feriasAuto);
+    } else {
+      alert('Erro ao guardar. Verifique a ligação ao Supabase.');
+    }
+  }
+
+  function sub_abs() {
+    let feriasAuto = [];
+    if (typeof window.getFeriasParaSemana === 'function' && S.weekStart) {
+      feriasAuto = window.getFeriasParaSemana(S.weekStart).filter(f => (f.loja||'').toLowerCase().includes('porto santo'));
+    }
+
+    S.absences = feriasAuto.map(f => {
+      const nomeLower = (f.nome || '').toLowerCase();
+      const p = PEOPLE.find(x =>
+        x.id === f.pid ||
+        x.name === f.nome ||
+        nomeLower.split(' ').every(w => x.name.toLowerCase().includes(w))
+      );
+      const toDay = f.to || (f.data_fim ? dayOfWeekKey(f.data_fim) : null) || 'DOM';
+      return { pid: p ? p.id : f.pid, type: 'ferias', from: f.from || 'SEG', to: toDay };
+    }).filter(a => a.pid);
+
+    if (S._baixas) {
+      Object.entries(S._baixas).forEach(([pid, b]) => {
+        if (!b.active) return;
+        if (S.absences.find(a => a.pid === pid)) return;
+        const toDay = b.data_fim ? dayOfWeekKey(b.data_fim) : null;
+        S.absences.push({ pid, type: 'baixa', from: 'SEG', to: toDay || 'DOM' });
+      });
+    }
+
+    if (S._licencas) {
+      Object.entries(S._licencas).forEach(([pid, l]) => {
+        if (!l.active) return;
+        if (S.absences.find(a => a.pid === pid)) return;
+        const toDay = l.data_fim ? dayOfWeekKey(l.data_fim) : null;
+        S.absences.push({ pid, type: l.tipo === 'nao_recuperavel' ? 'na' : 'licenca', from: 'SEG', to: toDay || 'DOM' });
+      });
+    }
+
+    S._folgaDirigida = {};
+    if (S._folgas) {
+      Object.entries(S._folgas).forEach(([pid, f]) => {
+        if (f.dias?.length) S._folgaDirigida[pid] = f.dias;
+      });
+    }
+
+    wStep = 2; renderWiz();
+  }
+
+  function wiz_stores() {
+    const c = getContainer(); if (!c) return;
+    const defD = ['SEG','TER','QUA','QUI','SEX','SAB'];
+
+    const rows = STORES.map(st => {
+      const open    = S.openStores.length ? S.openStores.includes(st.id) : (STORES.find(s=>s.id===st.id)?.priority ?? 9) < 4;
+      const days    = S.openDays[st.id]   || (open ? [...defD] : []);
+
+      const togs = DAYS.map(d => {
+        const isOn = days.includes(d);
+        const isDom = d === 'DOM';
+        return `<span class="gh-dtog ${isOn ? 'on' : ''} ${isDom ? 'gh-dtog-dom' : ''}" data-store="${st.id}" data-day="${d}">${d}</span>`;
+      }).join('');
+
+      return `
+      <div class="gh-sc-row ${!open ? 'closed' : ''}" id="gh-scr-${st.id}">
+        <div class="gh-sc-top">
+          <input type="checkbox" id="gh-chk-${st.id}" ${open ? 'checked' : ''} data-store="${st.id}">
+          <label for="gh-chk-${st.id}" class="gh-sc-name">${st.name}</label>
+        </div>
+        <div class="gh-sc-days" id="gh-scd-${st.id}">${togs}</div>
+      </div>`;
+    }).join('');
+
+    const activePeopleCount = PEOPLE.filter(p => !fullyAbsent(p.id) && !significantlyAbsent(p.id)).length;
+    const savedDomTrab = S.domTrabalhadores ?? '';
+
+    c.innerHTML = `
+      <div class="gh-wiz-box gh-wiz-box--wide">
+        <div class="gh-wiz-label">Passo 3 de 3</div>
+        <div class="gh-wiz-title">Lojas e dias</div>
+        <div class="gh-store-cfg">${rows}</div>
+        <div class="gh-dom-trab-row">
+          <div class="gh-dom-trab-label">
+            <span class="gh-dom-trab-icon">☀️</span>
+            <div>
+              <div class="gh-dom-trab-title">Pessoas a trabalhar ao domingo</div>
+              <div class="gh-dom-trab-hint">${activePeopleCount} pessoas activas esta semana. Quantas trabalham ao domingo?</div>
+            </div>
+          </div>
+          <input type="number" id="gh-inp-dom-trab" class="gh-field-sm gh-dom-trab-inp"
+            min="0" max="${activePeopleCount}" value="${savedDomTrab}" placeholder="0">
+        </div>
+        <div class="gh-wiz-nav">
+          <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
+          <button class="gh-btn gh-btn-solid" id="gh-sub-stores">Gerar horário →</button>
+        </div>
+      </div>`;
+
+    c.querySelectorAll('input[type=checkbox][data-store]').forEach(el => {
+      el.addEventListener('change', () => {
+        const row = document.getElementById(`gh-scr-${el.dataset.store}`);
+        row.classList.toggle('closed', !el.checked);
+        if (el.checked) {
+          row.querySelectorAll('.gh-dtog').forEach(tog => {
+            if (['SEG','TER','QUA','QUI','SEX','SAB'].includes(tog.dataset.day)) tog.classList.add('on');
+            else tog.classList.remove('on');
+          });
+        } else {
+          row.querySelectorAll('.gh-dtog').forEach(tog => tog.classList.remove('on'));
+        }
+      });
+    });
+
+    c.querySelectorAll('.gh-dtog').forEach(el => {
+      el.addEventListener('click', () => { el.classList.toggle('on'); });
+    });
+
+    document.getElementById('gh-back-2').addEventListener('click', () => { wStep = 1; renderWiz(); });
+    document.getElementById('gh-sub-stores').addEventListener('click', sub_stores);
+  }
+
+  function sub_stores() {
+    S.openStores = []; S.openDays = {}; S.storeMin = {}; S.storeMax = {}; S.storeMode = {};
+    STORES.forEach(st => {
+      const chk = document.getElementById(`gh-chk-${st.id}`); if (!chk?.checked) return;
+      const days = [...document.querySelectorAll(`[data-store="${st.id}"].gh-dtog.on`)].map(e => e.dataset.day);
+      if (!days.length) return;
+      S.openStores.push(st.id); S.openDays[st.id] = days;
+    });
+    if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
+
+    const domInp = document.getElementById('gh-inp-dom-trab');
+    const domVal = domInp ? parseInt(domInp.value) : NaN;
+    S.domTrabalhadores = (!isNaN(domVal) && domVal >= 0) ? domVal : null;
+    S.domingoAberto = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
+
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    S.schedule = {};
+    active.forEach(p => {
+      S.schedule[p.id] = {};
+      DAYS.forEach(day => {
+        if (isContractEnded(p, day)) {
+          S.schedule[p.id][day] = { type: 'fim_contrato', shift: null, store: null };
+          return;
+        }
+        if (isAbsent(p.id, day)) {
+          const a = absOf(p.id);
+          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+          S.schedule[p.id][day] = { type: t, shift: null, store: null };
+          return;
+        }
+        const folgaDias = S._folgasDirigidas?.[p.id] || [];
+        if (folgaDias.includes(day)) {
+          S.schedule[p.id][day] = { type: 'folga', shift: null, store: null };
+          return;
+        }
+        S.schedule[p.id][day] = { type: 'empty', shift: null, store: null };
+      });
+    });
+    S.alerts = []; S.decisions = [];
+    showSchedule(active);
+  }
+
+  async function confirmSchedule(active) {
+    const sb = getSupabase(); if (!sb) { alert('Supabase não disponível.'); return; }
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
+    if (!weekKey) return;
+
+    const btn = document.getElementById('gh-btn-confirm');
+    if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
+
+    const domingoAberto = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
+
+    try {
+      for (const p of active) {
+        const dias = [];
+        DAYS.forEach(day => {
+          const cell = S.schedule[p.id]?.[day];
+          if (cell?.type !== 'folga') return;
+          if (day === 'DOM' && !domingoAberto) return;
+          dias.push(day);
+        });
+        if (!dias.length) continue;
+        await sb.from('gh_folgas').upsert(
+          { pessoa_id: p.id, semana: weekKey, dias },
+          { onConflict: 'pessoa_id,semana' }
+        );
+      }
+
+      S.alerts.push({ type: 'info', text: '✓ Folgas guardadas.' });
+      if (btn) { btn.textContent = '✓ Guardado'; btn.style.background = '#1a6c1a'; }
+
+      // FIX 2: banco de horas — excluir pessoas com férias/baixa/licença
+      S._isEditing = false;
+      try {
+        const { data: bancoDB } = await sb.from('gh_banco_horas').select('*');
+        const bancoMap = {};
+        (bancoDB || []).forEach(b => { bancoMap[b.pessoa_id] = b; });
+
+        const bancoUpdates = [];
+        PEOPLE.forEach(p => {
+          if (!S.schedule[p.id]) return;
+
+          // Se tem ausência esta semana (férias, baixa, licença) → não tocar banco
+          const temAusencia = S.absences?.some(a => a.pid === p.id)
+            || Object.values(S.schedule[p.id] || {}).some(c =>
+                ['ferias','baixa','licenca','na'].includes(c.type));
+          if (temAusencia) return;
+
+          let realHrs = 0;
+          let tieneHorario = false;
+          DAYS.forEach(d => {
+            const cl = S.schedule[p.id]?.[d];
+            if (cl?.type === 'work' && cl.shift) {
+              tieneHorario = true;
+              cl.shift.split('|').forEach(sg => {
+                const pts = sg.split('-');
+                if (pts.length < 2) return;
+                const [h1,m1] = pts[0].split(':').map(Number);
+                const [h2,m2] = pts[1].split(':').map(Number);
+                if (!isNaN(h1) && !isNaN(h2)) realHrs += (h2+m2/60)-(h1+m1/60);
+              });
+            }
+            const apoio = S._apoioShifts?.[p.id]?.[d];
+            if (apoio?.shift) {
+              tieneHorario = true;
+              const pts = apoio.shift.split('-');
+              if (pts.length >= 2) {
+                const [h1,m1] = pts[0].split(':').map(Number);
+                const [h2,m2] = pts[1].split(':').map(Number);
+                if (!isNaN(h1) && !isNaN(h2)) realHrs += (h2+m2/60)-(h1+m1/60);
               }
-              const apoio = S._apoioShifts?.[p.id]?.[d];
-              if (apoio?.shift) {
-                tieneHorario = true;
-                const pts = apoio.shift.split('-');
-                if (pts.length >= 2) {
-                  const [h1,m1] = pts[0].split(':').map(Number);
-                  const [h2,m2] = pts[1].split(':').map(Number);
-                  if (!isNaN(h1) && !isNaN(h2)) realHrs += (h2+m2/60)-(h1+m1/60);
+            }
+          });
+
+          if (!tieneHorario) return;
+
+          realHrs = Math.round(realHrs * 10) / 10;
+          const diffSemana = Math.round((realHrs - 40) * 10) / 10;
+
+          const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
+          let saldoBase = registro.saldo || 0;
+
+          if (registro.ultima_semana === weekKey) {
+            saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
+          }
+
+          const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
+          S._banco[p.id] = novoSaldo;
+
+          bancoUpdates.push(
+            sb.from('gh_banco_horas').upsert(
+              {
+                pessoa_id: p.id,
+                saldo: novoSaldo,
+                saldo_semana: diffSemana,
+                ultima_semana: weekKey,
+                updated_at: new Date().toISOString()
+              },
+              { onConflict: 'pessoa_id' }
+            )
+          );
+        });
+        await Promise.all(bancoUpdates);
+      } catch(e) { console.warn('Erro ao actualizar banco de horas:', e); }
+
+      await deleteBorrador(weekKey);
+
+      try {
+        await publishPortoSantoCSV();
+        S.alerts.push({ type: 'info', text: '✓ Horário publicado.' });
+        const retryBtn = document.getElementById('gh-btn-retry-csv');
+        if (retryBtn) retryBtn.remove();
+      } catch(csvErr) {
+        console.error('Erro ao publicar CSV:', csvErr);
+        let retryBtn = document.getElementById('gh-btn-retry-csv');
+        if (!retryBtn) {
+          retryBtn = document.createElement('button');
+          retryBtn.id = 'gh-btn-retry-csv';
+          retryBtn.className = 'gh-btn gh-btn-ghost gh-btn-sm';
+          retryBtn.textContent = '↺ Republicar CSV';
+          retryBtn.style.cssText = 'margin-left:8px;color:#b8860b;border-color:#b8860b;';
+          retryBtn.addEventListener('click', async () => {
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'A publicar…';
+            try {
+              await publishPortoSantoCSV();
+              retryBtn.remove();
+              S.alerts.push({ type: 'info', text: '✓ CSV publicado.' });
+              const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+              showSchedule(active);
+            } catch(e2) {
+              retryBtn.disabled = false;
+              retryBtn.textContent = '↺ Republicar CSV';
+              alert('Erro ao publicar: ' + (e2.message || e2));
+            }
+          });
+          const confirmBtn = document.getElementById('gh-btn-confirm');
+          confirmBtn?.parentNode?.insertBefore(retryBtn, confirmBtn.nextSibling);
+        }
+        S.alerts.push({ type: 'warn', text: '⚠ Folgas guardadas mas CSV não publicado. Clique em "Republicar CSV".' });
+      }
+
+    } catch(e) {
+      console.error('Erro ao confirmar horário:', e);
+      alert('Erro ao guardar folgas. Verifique a consola.');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar horário'; }
+    }
+  }
+
+  const PS_STORE_SHORT = {
+    'shana':   'SHANA',
+    'mercado': 'MEZKA MERCADO',
+    'avenida': 'MEZKA AVENIDA',
+    'maxx':    'MAXX',
+  };
+
+  const PS_STORE_ALIAS = {
+    'shana':   'SHANA',
+    'mercado': 'MEZKA MERCADO',
+    'avenida': 'MEZKA AVENIDA',
+    'maxx':    'MAXX',
+  };
+
+  function psShortName(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].toUpperCase();
+    const first = parts[0];
+    const last  = parts[parts.length - 1];
+    return (first + ' ' + last[0] + '.').toUpperCase();
+  }
+
+  function psDateFmt(d) {
+    return String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' +
+           d.getFullYear();
+  }
+
+  function buildPortoSantoCSV() {
+    if (!S.weekStart) return '';
+    const DAYS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+    const dates = DAYS_ORDER.map((_,i) => {
+      const d = new Date(S.weekStart);
+      d.setDate(d.getDate() + i);
+      return psDateFmt(d);
+    });
+
+    console.log('[GH] S.openStores:', S.openStores, 'STORES:', STORES.map(s=>s.id), 'S.schedule keys:', Object.keys(S.schedule).length);
+    const openStoreIds = STORES
+      .filter(st => S.openStores.includes(st.id))
+      .sort((a,b) => a.priority - b.priority)
+      .map(st => st.id)
+      .filter(sid => {
+        return PEOPLE.some(p => {
+          return DAYS_ORDER.some(day => {
+            const cell = S.schedule[p.id]?.[day];
+            return cell && cell.type === 'work' && cell.store === sid;
+          });
+        });
+      });
+
+    if (!openStoreIds.length) return '';
+
+    const lines = [];
+
+    openStoreIds.forEach((sid) => {
+      const storeShort = PS_STORE_SHORT[sid] || sid.toUpperCase();
+
+      const storePeople = PEOPLE.filter(p =>
+        S._personStores?.[p.id]?.includes(sid) ||
+        DAYS_ORDER.some(day => S.schedule[p.id]?.[day]?.store === sid && S.schedule[p.id]?.[day]?.type === 'work') ||
+        DAYS_ORDER.some(day => S._apoioShifts?.[p.id]?.[day]?.store === sid)
+      );
+
+      if (!storePeople.length) return;
+
+      lines.push(['PORTO SANTO', 'SEG','TER','QUA','QUI','SEX','SAB','DOM'].join(','));
+      lines.push([storeShort, ...dates].join(','));
+
+      storePeople.forEach(p => {
+        let actualHrs = 0;
+        DAYS_ORDER.forEach(d => {
+          const cl = S.schedule[p.id]?.[d];
+          if (cl?.type === 'work' && cl.shift) {
+            cl.shift.split('|').forEach(sg => {
+              const pts = sg.split('-');
+              if (pts.length < 2) return;
+              const [h1,m1] = pts[0].split(':').map(Number);
+              const [h2,m2] = pts[1].split(':').map(Number);
+              if (!isNaN(h1) && !isNaN(h2)) actualHrs += (h2+m2/60)-(h1+m1/60);
+            });
+          }
+          const apoio = S._apoioShifts?.[p.id]?.[d];
+          if (apoio?.shift) {
+            const pts = apoio.shift.split('-');
+            if (pts.length >= 2) {
+              const [h1,m1] = pts[0].split(':').map(Number);
+              const [h2,m2] = pts[1].split(':').map(Number);
+              if (!isNaN(h1) && !isNaN(h2)) actualHrs += (h2+m2/60)-(h1+m1/60);
+            }
+          }
+        });
+        actualHrs = Math.round(actualHrs * 10) / 10;
+        const nameLabel = psShortName(p.name) + actualHrs + 'hrs';
+        const rowA = [nameLabel];
+        const rowB = [nameLabel];
+
+        DAYS_ORDER.forEach(day => {
+          const cell = S.schedule[p.id]?.[day] || { type: 'na' };
+
+          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa') {
+            const lbl = cell.type === 'ferias' ? 'FERIAS' : cell.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+            rowA.push(lbl);
+            rowB.push(cell.type === 'baixa' ? '' : lbl);
+          } else if (cell.type === 'work') {
+            const apoioHere = S._apoioShifts?.[p.id]?.[day]?.store === sid;
+            if (apoioHere) {
+              rowA.push(S._apoioShifts[p.id][day].shift || '14:00-15:00');
+              rowB.push('');
+            } else if (cell.store === sid) {
+              const parts = (cell.shift || '').split('|');
+              rowA.push(parts[0] || '');
+              rowB.push(parts[1] || '');
+            } else {
+              const alias = PS_STORE_ALIAS[cell.store] || (cell.store || '').toUpperCase();
+              rowA.push(alias);
+              rowB.push('');
+            }
+          } else if (cell.type === 'fim_contrato') {
+            rowA.push('');
+            rowB.push('');
+          } else {
+            rowA.push('');
+            rowB.push('');
+          }
+        });
+
+        lines.push(rowA.map(v => v.includes(',') ? '"' + v + '"' : v).join(','));
+        lines.push(rowB.map(v => v.includes(',') ? '"' + v + '"' : v).join(','));
+      });
+    });
+
+    return lines.join('\r\n');
+  }
+
+  async function loadPortoWeekForEdit(weekISO) {
+    const sb = getSupabase();
+    if (!sb) { renderWiz(); return; }
+
+    const c = getContainer(); if (!c) return;
+    c.innerHTML = '<div style="padding:40px;text-align:center;color:#aaa;font-size:.85rem;">A carregar horário publicado…</div>';
+    fixPanelLayout();
+
+    try {
+      const BASE_DATE_EDIT = new Date('2026-01-05T00:00:00');
+      const weekMsEdit = new Date(weekISO + 'T00:00:00') - BASE_DATE_EDIT;
+      const weekNumEdit = Math.round(weekMsEdit / (7 * 86400000)) + 1;
+      const portoFile = 'porto_s' + weekNumEdit + '.csv';
+      const { data: urlData } = sb.storage.from('horarios').getPublicUrl(portoFile);
+      const res = await fetch(urlData.publicUrl + '?t=' + Date.now());
+      if (!res.ok) throw new Error(portoFile + ' não encontrado');
+      const csvText = await res.text();
+
+      const rows = csvText.split(/\r?\n/).map(line => line.split(',').map(c => c.replace(/^"|"$/g,'').trim()));
+      const blocks = [];
+      let cur = [];
+      rows.forEach(r => {
+        if (r.every(c => c === '')) { if (cur.length) { blocks.push(cur); cur = []; } }
+        else cur.push(r);
+      });
+      if (cur.length) blocks.push(cur);
+
+      const d = new Date(weekISO + 'T00:00:00');
+      const targetDate = String(d.getDate()).padStart(2,'0') + '/' +
+                         String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+
+      let targetBlock = null;
+      for (const block of blocks) {
+        for (const row of block) {
+          if (row.slice(1).some(c => c === targetDate)) { targetBlock = block; break; }
+        }
+        if (targetBlock) break;
+      }
+
+      if (!targetBlock) throw new Error('Semana não encontrada no CSV publicado');
+
+      S = blank();
+      S.weekStart = new Date(weekISO + 'T00:00:00');
+      S.openStores = STORES.map(st => st.id);
+      S.openDays   = {};
+      S.storeMin   = {};
+      S.storeMax   = {};
+      S._personStores = {};
+      S._storeOrder   = {};
+
+      const DAYS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+      const SHORT_TO_ID = {};
+      STORES.forEach(st => { SHORT_TO_ID[(PS_STORE_SHORT[st.id] || st.id).toLowerCase()] = st.id; });
+
+      PEOPLE.forEach(p => {
+        S.schedule[p.id] = {};
+        DAYS_ORDER.forEach(day => { S.schedule[p.id][day] = { type: 'empty', shift: null, store: null }; });
+      });
+
+      let i = 0;
+      while (i < targetBlock.length) {
+        const row = targetBlock[i];
+        const firstCell = (row[0] || '').trim().toLowerCase();
+
+        if (firstCell === 'porto santo') { i++; continue; }
+
+        const storeShortRaw = (row[0] || '').trim().toLowerCase();
+        const storeId = SHORT_TO_ID[storeShortRaw];
+        if (!storeId) { i++; continue; }
+
+        if (!S.openStores.includes(storeId)) S.openStores.push(storeId);
+        S.openDays[storeId] = DAYS_ORDER.slice();
+        if (!S._storeOrder[storeId]) S._storeOrder[storeId] = [];
+
+        i++;
+        while (i + 1 < targetBlock.length) {
+          const rowA = targetBlock[i];
+          const rowB = targetBlock[i+1];
+          const nameRawA = (rowA[0] || '').trim();
+
+          if ((rowA[0]||'').toLowerCase() === 'porto santo') break;
+          const nextShort = (rowA[0]||'').trim().toLowerCase();
+          if (SHORT_TO_ID[nextShort] !== undefined && nextShort !== storeShortRaw) break;
+          if (!nameRawA.includes('.')) break;
+
+          const namePart = nameRawA.replace(/\.\d+hrs?/i, '').trim().toLowerCase();
+          const person = PEOPLE.find(p => {
+            const sn = psShortName(p.name).toLowerCase().replace('.','');
+            const nm = namePart.replace('.','');
+            return sn === nm || p.name.toLowerCase().startsWith(namePart.split(' ')[0]);
+          });
+
+          if (person) {
+            if (!S._personStores[person.id]) S._personStores[person.id] = [];
+            if (!S._personStores[person.id].includes(storeId)) S._personStores[person.id].push(storeId);
+            if (!S._storeOrder[storeId].includes(person.id)) S._storeOrder[storeId].push(person.id);
+
+            DAYS_ORDER.forEach((day, di) => {
+              const cellA = (rowA[di+1] || '').trim();
+              const cellB = (rowB[di+1] || '').trim();
+              const upper = cellA.toUpperCase();
+
+              if (upper === 'FOLGA') {
+                S.schedule[person.id][day] = { type: 'folga', shift: null, store: null };
+              } else if (upper === 'FERIAS') {
+                S.schedule[person.id][day] = { type: 'ferias', shift: null, store: null };
+              } else if (cellA === '' && cellB === '') {
+                // leave as empty
+              } else {
+                const aliasId = SHORT_TO_ID[upper.toLowerCase()];
+                if (aliasId && aliasId !== storeId) {
+                  const cur = S.schedule[person.id][day];
+                  if (cur.type === 'empty') {
+                    S.schedule[person.id][day] = { type: 'work', shift: null, store: aliasId };
+                  }
+                } else {
+                  const shift = cellB ? (cellA + '|' + cellB) : cellA;
+                  S.schedule[person.id][day] = { type: 'work', shift, store: storeId };
                 }
               }
             });
-
-            // Si no tiene ningún turno asignado, no tocar el banco
-            if (!tieneHorario) return;
-
-            realHrs = Math.round(realHrs * 10) / 10;
-            const diffSemana = Math.round((realHrs - 40) * 10) / 10;
-
-            const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
-            let saldoBase = registro.saldo || 0;
-
-            // Si ya calculamos esta semana antes, restar el aporte anterior
-            if (registro.ultima_semana === weekKey) {
-              saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
-            }
-
-            const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
-            S._banco[p.id] = novoSaldo;
-
-            bancoUpdates.push(
-              sb.from('gh_banco_horas').upsert(
-                {
-                  pessoa_id: p.id,
-                  saldo: novoSaldo,
-                  saldo_semana: diffSemana,
-                  ultima_semana: weekKey,
-                  updated_at: new Date().toISOString()
-                },
-                { onConflict: 'pessoa_id' }
-              )
-            );
-          });
-          await Promise.all(bancoUpdates);
+          }
+          i += 2;
         }
-      } catch(e) { console.warn('Erro ao actualizar banco de horas:', e); }
+      }
 
+      wStep = 3;
+      S._isEditing = true;
+      await loadIncidencias();
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      showSchedule(active);
 
-// ═══════════════════════════════════════════════════════════════════
-// RESUMEN DE CAMBIOS
-// ═══════════════════════════════════════════════════════════════════
-//
-// 1. getSupabase() → síncrona. Elimina el polling de 50×100ms que
-//    causaba el lag y el comportamiento cíclico con las férias.
-//    Seguridad intacta: sigue usando sbAdmin del servidor, sin
-//    credenciales hardcodeadas.
-//
-// 2. Banco de horas → personas con férias/baixa/licença esta semana
-//    quedan EXCLUIDAS del cálculo. Sus horas no trabajadas están
-//    justificadas por la ausencia y no deben generar deuda.
-//    Esto corrige el bug de Edna Melim (+16h falsas).
-//
-// 3. Edna específicamente: para corregir su saldo actual (18h de
-//    deuda en lugar de 2h), ir al paso 2 del wizard → expandir su
-//    perfil → sección "Banco" → introducir -16 y pulsar ＋.
-//    Esto deja su saldo en 2h como corresponde.
-// ═══════════════════════════════════════════════════════════════════
+    } catch(e) {
+      console.error('[GH] loadPortoWeekForEdit error:', e);
+      c.innerHTML = '<div style="padding:40px;text-align:center;color:#c0392b;font-size:.85rem;">Erro ao carregar: ' + e.message + '</div>';
+    }
+  }
+
+  async function publishPortoSantoCSV() {
+    const sb = getSupabase();
+    if (!sb) return;
+    const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
+    if (!weekKey) return;
+
+    const newBlock = buildPortoSantoCSV();
+    console.log('[GH] CSV block length:', newBlock?.length, 'weekKey:', weekKey);
+    if (!newBlock) { console.warn('[GH] buildPortoSantoCSV returned empty'); throw new Error('CSV gerado está vazio — verifique se há pessoas e turnos assignados'); }
+
+    const BUCKET = 'horarios';
+    const BASE_DATE = new Date('2026-01-05T00:00:00');
+    const weekMs = new Date(weekKey + 'T00:00:00') - BASE_DATE;
+    const weekNum = Math.round(weekMs / (7 * 86400000)) + 1;
+    const FILE = 'porto_s' + weekNum + '.csv';
+
+    try {
+      const blob = new Blob([newBlock], { type: 'text/csv' });
+      const { error } = await sb.storage.from(BUCKET).upload(FILE, blob, {
+        upsert: true,
+        contentType: 'text/csv'
+      });
+      if (error) throw error;
+      console.log('[GH] ' + FILE + ' publicado');
+    } catch(e) {
+      console.error('[GH] Erro ao publicar ' + FILE + ':', e);
+      throw e;
+    }
+  }
+
+  function buildBorradorData() {
+    return {
+      weekKey: S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null,
+      openStores: S.openStores,
+      openDays: S.openDays,
+      storeMin: S.storeMin,
+      storeMax: S.storeMax,
+      storeMode: S.storeMode,
+      schedule: S.schedule,
+      _personStores: S._personStores,
+      _storeOrder: S._storeOrder,
+      _folgasDirigidas: S._folgasDirigidas,
+    };
+  }
+
+  function showToast(msg, duration = 3000) {
+    let t = document.getElementById('gh-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'gh-toast';
+      t.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.95);background:#111;color:#fff !important;-webkit-text-fill-color:#fff !important;padding:20px 36px;border-radius:14px;font-size:.95rem;font-weight:600;font-family:inherit;letter-spacing:.02em;opacity:0;transition:all .25s ease;z-index:99999;pointer-events:none;white-space:nowrap;box-shadow:0 16px 48px rgba(0,0,0,.35);';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translate(-50%,-50%) scale(1)';
+    clearTimeout(t._timeout);
+    t._timeout = setTimeout(() => {
+      t.style.opacity = '0';
+      t.style.transform = 'translate(-50%,-50%) scale(0.95)';
+    }, duration);
+  }
+
+  async function saveBorrador() {
+    const sb = getSupabase(); if (!sb) return;
+    const data = buildBorradorData();
+    if (!data.weekKey) { alert('Sem semana definida.'); return; }
+    try {
+      const { error } = await sb.from('gh_borradores').upsert(
+        { semana: data.weekKey, datos: data, updated_at: new Date().toISOString() },
+        { onConflict: 'semana' }
+      );
+      if (error) throw error;
+      showToast('✓ Borrador guardado para semana ' + data.weekKey);
+    } catch(e) {
+      alert('Erro ao guardar borrador: ' + (e.message || e));
+    }
+  }
+
+  async function deleteBorrador(weekKey) {
+    const sb = getSupabase(); if (!sb) return;
+    await sb.from('gh_borradores').delete().eq('semana', weekKey);
+  }
+
+  async function loadBorrador(borrador) {
+    const d = borrador.datos;
+    S = blank();
+    S.weekStart = new Date(d.weekKey + 'T00:00:00');
+    S.openStores = d.openStores || [];
+    S.openDays = d.openDays || {};
+    S.storeMin = d.storeMin || {};
+    S.storeMax = d.storeMax || {};
+    S.storeMode = d.storeMode || {};
+    S.schedule = d.schedule || {};
+    S._personStores = d._personStores || {};
+    S._storeOrder = d._storeOrder || {};
+    S._folgasDirigidas = d._folgasDirigidas || {};
+    await loadKnowledgeBase();
+    await loadIncidencias();
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
+  async function renderBorradores(container) {
+    const sb = getSupabase(); if (!sb || !container) return;
+    try {
+      const { data } = await sb.from('gh_borradores').select('semana, updated_at').order('semana', { ascending: false });
+      if (!data || !data.length) return;
+
+      container.innerHTML = '<div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#ccc;margin-bottom:16px;text-align:center;">Borradores guardados</div>';
+
+      data.forEach(b => {
+        const d = new Date(b.semana + 'T00:00:00');
+        const label = d.toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const updated = new Date(b.updated_at).toLocaleString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #efefef;border-radius:8px;margin-bottom:8px;background:#fafafa;gap:12px;';
+        row.innerHTML =
+          '<div>' +
+            '<div style="font-size:.85rem;font-weight:600;color:#111;">Semana ' + label + '</div>' +
+            '<div style="font-size:.63rem;color:#bbb;margin-top:2px;">Guardado: ' + updated + '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+            '<button class="gh-btn gh-btn-solid gh-btn-sm" data-week="' + b.semana + '" data-action="load">Carregar</button>' +
+            '<button class="gh-btn gh-btn-ghost gh-btn-sm" data-week="' + b.semana + '" data-action="delete" style="color:#c0392b !important;-webkit-text-fill-color:#c0392b !important;border-color:#e0b0b0 !important;">✕</button>' +
+          '</div>';
+        row.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const week = btn.dataset.week;
+            if (btn.dataset.action === 'delete') {
+              if (!confirm('Eliminar borrador semana ' + label + '?')) return;
+              await deleteBorrador(week);
+              row.remove();
+              if (!container.querySelector('[data-action="load"]')) container.innerHTML = '';
+            } else {
+              const { data: bd } = await sb.from('gh_borradores').select('semana, datos, updated_at').eq('semana', week).single();
+              if (bd) await loadBorrador(bd);
+            }
+          });
+        });
+        container.appendChild(row);
+      });
+    } catch(e) {
+      console.warn('Erro ao carregar borradores:', e.message);
+    }
+  }
+
+  function calcPersonHrs(pid) {
+    let h = 0;
+    DAYS.forEach(d => {
+      const cl = S.schedule[pid]?.[d];
+      if (cl?.type === 'work' && cl.shift) {
+        cl.shift.split('|').forEach(sg => {
+          const pts = sg.split('-');
+          if (pts.length < 2) return;
+          const [h1,m1] = pts[0].split(':').map(Number);
+          const [h2,m2] = pts[1].split(':').map(Number);
+          if (!isNaN(h1)&&!isNaN(h2)) h += (h2+m2/60)-(h1+m1/60);
+        });
+      }
+      const apoio = S._apoioShifts?.[pid]?.[d];
+      if (apoio?.shift) {
+        const pts = apoio.shift.split('-');
+        if (pts.length>=2) {
+          const [h1,m1]=pts[0].split(':').map(Number);
+          const [h2,m2]=pts[1].split(':').map(Number);
+          if (!isNaN(h1)&&!isNaN(h2)) h+=(h2+m2/60)-(h1+m1/60);
+        }
+      }
+    });
+    return Math.round(h * 10) / 10;
+  }
+
+  function updateBancoBadge(pid) {
+    const realHrs = calcPersonHrs(pid);
+    const diff = Math.round((realHrs - 40) * 10) / 10;
+    const saldoBase = S._bancoBase?.[pid] ?? S._banco?.[pid] ?? 0;
+    const saldoVivo = Math.round((saldoBase + diff) * 10) / 10;
+    if (!S._banco) S._banco = {};
+    S._banco[pid] = saldoVivo;
+    document.querySelectorAll(`.gh-banco-badge[data-pid="${pid}"]`).forEach(badge => {
+      if (saldoVivo === 0) { badge.style.display = 'none'; return; }
+      const pos = saldoVivo > 0;
+      badge.className = `gh-banco-badge${pos ? ' gh-banco-pos' : ' gh-banco-neg'}`;
+      badge.textContent = (pos ? '+' : '') + saldoVivo + 'h';
+      badge.style.display = '';
+    });
+  }
+
+  window._ghCommit = function(pid) { commitInlineEdit(pid); };
+
+  function normTime(t) {
+    t = (t || '').trim();
+    if (!t) return t;
+    if (/^\d{1,2}$/.test(t)) return t.padStart(2,'0') + ':00';
+    if (/^\d{1,2}:\d{2}$/.test(t)) return t.padStart(5,'0');
+    return t;
+  }
+
+  function commitInlineEdit(pid) {
+    const inputs = document.querySelectorAll(`.gh-sh-time-inp[data-pid="${pid}"]`);
+    const dayShifts = {};
+    inputs.forEach(inp => {
+      const day = inp.dataset.day;
+      const seg = parseInt(inp.dataset.seg);
+      const part = parseInt(inp.dataset.part);
+      if (!dayShifts[day]) dayShifts[day] = {};
+      if (!dayShifts[day][seg]) dayShifts[day][seg] = ['',''];
+      dayShifts[day][seg][part] = inp.value.trim();
+    });
+    Object.entries(dayShifts).forEach(([day, segs]) => {
+      const cell = S.schedule[pid]?.[day];
+      if (!cell || cell.type !== 'work') return;
+      const parts = Object.values(segs);
+      const newShift = parts.map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
+      S.schedule[pid][day] = { ...cell, shift: newShift };
+    });
+    if (!S._bancoBase) S._bancoBase = {};
+    if (S._bancoBase[pid] === undefined) S._bancoBase[pid] = S._banco?.[pid] ?? 0;
+    const realHrs = calcPersonHrs(pid);
+    const diff = Math.round((realHrs - 40) * 10) / 10;
+    const saldoVivo = Math.round(((S._bancoBase[pid] ?? 0) + diff) * 10) / 10;
+    S._banco[pid] = saldoVivo;
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
+  function shortNameInitial(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
+  }
+
+  function showSchedule(active) {
+    const c = getContainer(); if (!c) return;
+    fixPanelLayout();
+    const dates = wkDates();
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    const alertsHTML = S.alerts.length
+      ? `<div class="gh-alert-bar"><div class="gh-al-inner">${S.alerts.map(a => `<div class="gh-al-chip ${a.type}">${a.text}</div>`).join('')}</div></div>`
+      : '';
+
+    const topBar = `
+      <div class="gh-sched-bar">
+        <div>
+          <div class="gh-sb-week">Porto Santo · Semana ${isoWeek(S.weekStart)}</div>
+          <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-borrador">💾 Guardar rascunho</button>
+          <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">↑ Publicar horário</button>
+        </div>
+      </div>
+      ${alertsHTML}`;
+
+    const _col0W = (function () {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const BASE = 16;
+      let max = 0;
+      function measure(text, fontStr) { ctx.font = fontStr; return ctx.measureText(text).width; }
+      const openStores = STORES.filter(st => S.openStores.includes(st.id));
+      openStores.forEach(st => {
+        const headerFont = `bold ${0.75 * BASE}px sans-serif`;
+        ['PORTO SANTO', ...st.short.split(' ')].forEach(line => { max = Math.max(max, measure(line, headerFont)); });
+      });
+      const nameFont = `600 ${0.85 * BASE}px sans-serif`;
+      active.forEach(p => { const w = measure('● ' + shortName(p.name), nameFont); max = Math.max(max, w); });
+      return Math.ceil(max + 36);
+    })();
+
+    let bodyHTML = '';
+    STORES.filter(st => S.openStores.includes(st.id)).sort((a, b) => a.priority - b.priority).forEach(st => {
+      const inSectionSet = active.filter(p =>
+        (S._personStores?.[p.id]?.includes(st.id)) ||
+        DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === st.id)
+      );
+      const order = S._storeOrder?.[st.id] || [];
+      const inSection = [
+        ...order.map(pid => inSectionSet.find(p => p.id === pid)).filter(Boolean),
+        ...inSectionSet.filter(p => !order.includes(p.id))
+      ];
+
+      const rows = inSection.map(p => {
+        const sched = S.schedule[p.id] || {};
+        const cells = DAYS.map((day, di) => {
+          const c2 = sched[day] || { type: 'na' };
+          const open = S.openDays[st.id]?.includes(day);
+          if (!open) {
+            if (c2.type === 'work' && c2.store && c2.store !== st.id) {
+              const content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
+              return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-elsewhere">${content}</div></td>`;
+            }
+            if (c2.type === 'empty' || c2.type === 'na') {
+              return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-empty"></div></td>`;
+            }
+            if (c2.type === 'fim_contrato') {
+              return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-fim-contrato"><span class="gh-sh-line gh-fim-txt">fim de contrato</span></div></td>`;
+            }
+            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+            const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
+            return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
+          }
+          let cls = '', content = '';
+          if (c2.type === 'fim_contrato') { cls = 'c-fim-contrato'; content = `<span class="gh-sh-line gh-fim-txt">fim de contrato</span>`; }
+          else if (c2.type === 'folga') { cls = 'c-folga'; content = `<span class="gh-sh-line">FOLGA</span>`; }
+          else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
+          else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">LICENÇA</span>`; }
+          else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
+          else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
+          else if (c2.type === 'work') {
+            const apoioHereRender = S._apoioShifts?.[p.id]?.[day]?.store === st.id;
+            if (apoioHereRender) {
+              cls = 'c-shift-b';
+              content = `<span class="gh-sh-line" style="color:#e67e22;font-weight:700;">⚡ ${S._apoioShifts[p.id][day].shift}</span>`;
+            } else if (c2.store === st.id) {
+              const soft = p.softAvoid?.some(oid => S.schedule[oid]?.[day]?.type === 'work' && S.schedule[oid]?.[day]?.store === st.id);
+              const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f' };
+              cls = soft ? 'c-soft' : (shiftColorMap[c2.shift] || 'c-shift-b');
+              content = c2.shift ? c2.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('') : `<span class="gh-sh-line">—</span>`;
+            } else {
+              cls = 'c-elsewhere';
+              content = sshort(c2.store).split(' ').map(w => `<span class="gh-sh-loc">${w}</span>`).join('');
+            }
+          }
+          const noClick = (c2.type === 'fim_contrato') ? ' gh-no-click' : '';
+          return `<td class="gh-sh-td${noClick}" data-pid="${p.id}" data-day="${day}" data-store="${st.id}"><div class="gh-sh-inner ${cls}">${content}</div></td>`;
+        }).join('');
+
+        let aH = 0;
+        DAYS.forEach(d => {
+          const cl = S.schedule[p.id]?.[d];
+          if (cl?.type === 'work' && cl.shift && cl.shift.includes(':')) {
+            cl.shift.split('|').forEach(sg => {
+              const parts = sg.split('-');
+              if (parts.length < 2) return;
+              const [h1, m1] = parts[0].split(':').map(Number);
+              const [h2, m2] = parts[1].split(':').map(Number);
+              if (isNaN(h1) || isNaN(h2)) return;
+              aH += (h2 + m2/60) - (h1 + m1/60);
+            });
+          }
+          const apoio = S._apoioShifts?.[p.id]?.[d];
+          if (apoio?.shift) {
+            const parts = apoio.shift.split('-');
+            if (parts.length >= 2) {
+              const [h1, m1] = parts[0].split(':').map(Number);
+              const [h2, m2] = parts[1].split(':').map(Number);
+              if (!isNaN(h1) && !isNaN(h2)) aH += (h2 + m2/60) - (h1 + m1/60);
+            }
+          }
+        });
+        aH = Math.round(aH * 10) / 10;
+        return `<tr>
+          <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
+            <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
+              <span class="gh-p-dot">●</span>${shortName(p.name)}
+              ${(()=>{const s=S._banco?.[p.id]??0;const pos=s>0;const zero=s===0;return `<span class="gh-banco-badge${zero?' gh-banco-zero':pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}">${pos?'+':''}${s}h</span>`;})()}
+              <span class="gh-p-remove-x">✕</span>
+            </button>
+            <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
+          </div></td>${cells}</tr>`;
+      }).join('');
+
+      bodyHTML += `<div class="gh-store-block" id="gh-sb-${st.id}"><table class="gh-sched-tbl">
+        <thead>
+          <tr class="gh-tbl-store-hdr">
+            <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box">
+              <button class="gh-store-name-btn" data-store="${st.id}">PORTO SANTO<br>${st.short.split(' ').join('<br>')}</button>
+              <div class="gh-store-actions" id="gh-sa-${st.id}" style="display:flex">
+                <button class="gh-store-act-btn gh-store-add" data-store="${st.id}" title="Adicionar pessoa">＋</button>
+              </div>
+            </td>
+            ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Loja vazia — use ＋ para adicionar pessoal</td></tr>`}</tbody>
+      </table></div>`;
+    });
+
+    const patternHTML = buildPatternPanel(active);
+
+    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>` + patternHTML + `<div id="gh-equity-panel"></div>`;
+
+    renderEquityPanel();
+
+    document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
+    document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
+    document.getElementById('gh-btn-borrador')?.addEventListener('click', () => saveBorrador());
+    document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
+      const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
+      const confirmed = confirm(`Confirmar e guardar o horário da semana de ${weekKey}?\n\nEsta acção gravará as folgas em Supabase e não poderá ser regenerada.`);
+      if (!confirmed) return;
+      const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+      confirmSchedule(active);
+    });
+
+    bindPatternPanel(active);
+
+    c.querySelectorAll('.gh-store-add').forEach(btn => {
+      btn.addEventListener('click', () => { openAddPersonToStore(btn.dataset.store); });
+    });
+
+    c.querySelectorAll('.gh-banco-badge').forEach(badge => {
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation(); e.preventDefault();
+        const pid = badge.dataset.pid;
+        c.querySelectorAll('tr').forEach(row => {
+          const nameBtn = row.querySelector('.gh-p-remove-btn');
+          if (!nameBtn || nameBtn.dataset.pid !== pid) return;
+          if (row.classList.contains('gh-editing')) { commitInlineEdit(pid); return; }
+          row.classList.add('gh-editing');
+          const nameCell = row.querySelector('.gh-p-cell');
+          if (nameCell && !nameCell.querySelector('.gh-inline-ok')) {
+            const okBtn = document.createElement('div');
+            okBtn.className = 'gh-inline-ok';
+            okBtn.textContent = '✓ OK';
+            okBtn.dataset.pid = pid;
+            okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;text-align:center;box-sizing:border-box;';
+            nameCell.appendChild(okBtn);
+          }
+          row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
+            const day = td.dataset.day;
+            const cell = S.schedule[pid]?.[day];
+            if (!cell || cell.type !== 'work' || !cell.shift) return;
+            const parts = cell.shift.split('|');
+            const inner = td.querySelector('.gh-sh-inner');
+            if (!inner) return;
+            inner.innerHTML = parts.map((seg, i) => {
+              const [t1, t2] = seg.split('-');
+              return `<div style="display:flex;align-items:center;gap:1px;justify-content:center;">
+                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="0" value="${t1}">
+                <span style="font-size:.65rem;color:#999">-</span>
+                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
+              </div>`;
+            }).join('');
+            row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
+              inp.setAttribute('onkeydown', `if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();window._ghCommit('${pid}');}`);
+            });
+          });
+        });
+      });
+    });
+
+    c.querySelectorAll('.gh-p-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.pid;
+        const sid = btn.dataset.store;
+        const p = P(pid);
+        showConfirmModal(
+          `Eliminar ${shortName(p?.name || pid)} da tabela de ${sname(sid)}?`,
+          () => {
+            DAYS.forEach(day => {
+              const cell = S.schedule[pid]?.[day];
+              if (cell?.type === 'work' && cell?.store === sid) {
+                S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+              }
+            });
+            if (S._personStores?.[pid]) {
+              S._personStores[pid] = S._personStores[pid].filter(s => s !== sid);
+              if (S._personStores[pid].length === 0) delete S._personStores[pid];
+            }
+            if (S._storeOrder?.[sid]) {
+              S._storeOrder[sid] = S._storeOrder[sid].filter(id => id !== pid);
+            }
+            const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+            showSchedule(active);
+          }
+        );
+      });
+    });
+
+    if (!c.dataset.hasClickDelegation) {
+      c.addEventListener('click', (e) => {
+        const okDiv = e.target.closest('.gh-inline-ok');
+        if (okDiv) { e.preventDefault(); e.stopPropagation(); commitInlineEdit(okDiv.dataset.pid); return; }
+        if (e.target.closest('.gh-sh-time-inp')) return;
+        const editingRows = c.querySelectorAll('tr.gh-editing');
+        editingRows.forEach(row => {
+          if (!row.contains(e.target)) {
+            const pid = row.querySelector('.gh-banco-badge')?.dataset?.pid ||
+                        row.querySelector('[data-pid]')?.dataset?.pid;
+            if (pid) commitInlineEdit(pid);
+          }
+        });
+      });
+      c.dataset.hasClickDelegation = 'true';
+    }
+
+    c.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
+      td.addEventListener('click', (e) => {
+        if (td.closest('tr')?.classList.contains('gh-editing')) return;
+        if (e.target.closest('.gh-sh-time-inp')) return;
+        if (_addCtx) {
+          const { pid, sid } = _addCtx;
+          const day = td.dataset.day;
+          if (!S.openDays[sid]?.includes(day)) { alert(`${sname(sid)} não está aberta ao ${DAY_PT[day]}.`); return; }
+          S.schedule[pid][day] = { type: 'work', shift: storeBaseShift(sid), store: sid };
+          _addCtx = null;
+          closeModal();
+          const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+          showSchedule(active);
+          return;
+        }
+        openEdit(td.dataset.pid, td.dataset.day, td.dataset.store);
+      });
+    });
+  }
+
+  const PATTERNS = {
+     1: [false,true, true, false,true, true, true ],
+     2: [true, false,true, true, false,true, true ],
+     3: [false,true, true, true, true, true, false],
+     4: [true, false,true, true, true, true, false],
+     5: [true, true, false,true, true, true, false],
+     6: [true, true, true, false,true, true, false],
+     7: [true, true, true, true, false,true, false],
+     8: [true, true, true, true, true, false,false],
+     9: [true, false,true, true, true, true, false],
+    10: [false,true, true, false,true, true, true ],
+    11: [true, true, false,true, true, true, false],
+    12: [true, false,true, true, false,true, true ],
+    13: [true, true, true, true, true, false,false],
+    14: [true, false,true, true, false,true, true ],
+    15: [true, true, false,true, true, true, false],
+    16: [false,true, true, false,true, true, true ],
+    17: [true, true, true, true, true, false,false],
+  };
+
+  const SCENARIOS = {
+    '4_0_3':  [4,5,6,7],
+    '5_0_3':  [3,4,5,6,7],
+    '6_0_3':  [3,4,5,6,7,8],
+    '6_1_3':  [1,6,4,8,7,5],
+    '7_0_3':  [3,4,5,6,7,8,9],
+    '7_0_4':  [3,4,5,6,7,8,9],
+    '7_1_3':  [1,4,5,6,7,8,9],
+    '7_1_4':  [1,4,5,6,7,8,9],
+    '7_2_3':  [1,2,5,6,7,8,4],
+    '7_2_4':  [1,2,5,6,7,8,4],
+    '7_3_3':  [1,10,2,4,5,7,8],
+    '7_3_4':  [1,10,2,4,5,7,8],
+    '8_0_3':  [3,4,5,6,7,8,9,11],
+    '8_0_4':  [3,4,5,6,7,8,9,11],
+    '8_1_3':  [1,6,4,8,9,5,11,7],
+    '8_1_4':  [1,6,4,8,9,5,11,7],
+    '8_2_3':  [1,2,4,5,6,7,8,11],
+    '8_2_4':  [1,2,4,5,6,7,8,11],
+    '8_3_3':  [1,2,12,5,6,8,13,11],
+    '8_3_4':  [1,2,12,5,6,8,13,11],
+    '8_4_3':  [1,10,2,12,5,11,8,13],
+    '8_4_4':  [1,10,2,12,5,11,8,13],
+    '8_5_3':  [1,10,2,12,14,5,11,8],
+    '8_5_4':  [1,10,2,12,14,5,11,8],
+    '9_2_3':  [1,6,2,8,4,5,11,7,13],
+    '9_2_4':  [1,6,2,8,4,5,11,7,13],
+    '9_3_3':  [1,10,2,8,4,5,11,7,13],
+    '9_3_4':  [1,10,2,8,4,5,11,7,13],
+    '9_4_3':  [1,10,2,12,4,5,11,8,13],
+    '9_4_4':  [1,10,2,12,4,5,11,8,13],
+    '9_5_3':  [1,10,2,12,5,11,8,13,14],
+    '9_5_4':  [1,10,2,12,5,11,8,13,14],
+    '10_3_4': [1,10,2,8,4,5,6,7,13,11],
+    '10_4_4': [1,10,2,12,5,11,8,13,4,15],
+    '10_5_3': [1,10,2,12,5,11,8,13,4,16],
+    '10_5_4': [1,10,2,12,5,11,8,13,4,16],
+    '11_4_3': [1,10,16,2,4,5,9,11,8,13,7],
+    '11_4_4': [1,10,16,2,4,5,9,11,8,13,7],
+    '11_5_4': [1,10,2,12,5,11,8,13,4,16,15],
+    '12_4_3': [1,10,2,12,4,5,11,15,6,8,13,17],
+    '12_4_4': [1,10,2,12,4,5,11,15,6,8,13,17],
+    '12_5_3': [1,10,16,2,12,4,5,11,15,8,13,17],
+    '12_5_4': [1,10,16,2,12,4,5,11,15,8,13,17],
+  };
+
+  function patternFolgas(pNum) {
+    const p = PATTERNS[pNum];
+    if (!p) return [];
+    return DAYS.filter((d, i) => p[i] === false);
+  }
+
+  function computeScenarioKey(active) {
+    const patternActive = active.filter(p => !significantlyAbsent(p.id));
+    const nPessoas = patternActive.length;
+    const nLojas   = S.openStores.length;
+    const domTrab  = (!S.domingoAberto) ? 0
+                   : (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined)
+                     ? S.domTrabalhadores
+                     : 0;
+    const key = `${nPessoas}_${domTrab}_${nLojas}`;
+    return { key, nPessoas, domTrab, nLojas };
+  }
+
+  if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {};
+
+  async function renderEquityPanel() {
+    const el = document.getElementById('gh-equity-panel');
+    if (!el) return;
+
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:#bbb;font-size:.75rem;">A carregar equidade de folgas…</div>';
+
+    const sb = getSupabase();
+    if (!sb) { el.innerHTML = ''; return; }
+
+    try {
+      const { data: folgas } = await sb.from('gh_folgas').select('pessoa_id, semana, dias');
+      const { data: people } = await sb.from('gh_people').select('id, name').eq('active', true);
+      if (!folgas || !people) { el.innerHTML = ''; return; }
+
+      const DIAS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
+      const DOM_START  = '2026-04-06';
+
+      const stats = {};
+      people.forEach(p => {
+        stats[p.id] = {
+          name: (p.name || p.id).split(' ').filter((_,i,a) => i===0||i===a.length-1).join(' '),
+          semanas: 0,
+          domSemanas: 0,
+          dias: { SEG:0, TER:0, QUA:0, QUI:0, SEX:0, SAB:0, DOM:0 }
+        };
+      });
+
+      folgas.forEach(f => {
+        const s = stats[f.pessoa_id];
+        if (!s || !f.dias || !f.dias.length) return;
+        s.semanas++;
+        if (f.semana >= DOM_START) s.domSemanas++;
+        f.dias.forEach(d => {
+          if (!(d in s.dias)) return;
+          if (d === 'DOM' && f.semana < DOM_START) return;
+          s.dias[d]++;
+        });
+      });
+
+      const rows = Object.entries(stats)
+        .filter(([,s]) => s.semanas > 0)
+        .sort((a,b) => a[1].name.localeCompare(b[1].name));
+
+      if (!rows.length) { el.innerHTML = ''; return; }
+
+      const colMin = {}, colMax = {};
+      DIAS_ORDER.forEach(d => {
+        const vals = rows.map(([pid]) => stats[pid].dias[d]);
+        colMin[d] = Math.min(...vals);
+        colMax[d] = Math.max(...vals);
+      });
+
+      function diff(pid, d) { return stats[pid].dias[d] - colMin[d]; }
+      function cellStyle(pid, d) {
+        const dif = diff(pid, d);
+        const maxDif = colMax[d] - colMin[d];
+        if (maxDif === 0) return { bg: '#fff', color: '#111' };
+        if (dif === 0)      return { bg: '#111', color: '#fff' };
+        if (dif === maxDif) return { bg: '#ddd', color: '#666' };
+        return { bg: '#fff', color: '#111' };
+      }
+      function cellText(pid, d) { return String(stats[pid].dias[d]); }
+
+      let thead = `<tr><th style="text-align:left;padding:8px 12px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.08em;border-bottom:2px solid #e8e8e8;background:#fafafa;">PESSOA</th>`;
+      DIAS_ORDER.forEach(d => { thead += `<th style="padding:8px 6px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:2px solid #e8e8e8;background:#fafafa;">${d}</th>`; });
+      thead += `</tr>`;
+
+      let tbody = '';
+      rows.forEach(([pid, s], ri) => {
+        const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
+        tbody += `<tr style="background:${rowBg}">`;
+        tbody += `<td style="padding:8px 12px;font-size:.75rem;font-weight:600;color:#111;white-space:nowrap;border-bottom:1px solid #f0f0f0;">${s.name}</td>`;
+        DIAS_ORDER.forEach(d => {
+          const { bg, color } = cellStyle(pid, d);
+          const txt = cellText(pid, d);
+          tbody += `<td style="padding:7px 6px;text-align:center;font-size:.72rem;font-weight:600;background:${bg} !important;color:${color} !important;-webkit-text-fill-color:${color} !important;border-bottom:1px solid #f0f0f0;border-left:1px solid #f0f0f0;">${txt}</td>`;
+        });
+        tbody += `</tr>`;
+      });
+
+      el.innerHTML = `
+        <div style="margin:24px auto 60px;max-width:700px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
+          <div style="padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;background:#fafafa;">
+            <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;margin-bottom:4px;">Equidade de Folgas</div>
+            <div style="font-size:.68rem;color:#aaa;">Folgas acumuladas · <span style="background:#111;color:#fff !important;-webkit-text-fill-color:#fff !important;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = menos descansado · debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = más descansado · debe trabajar · DOM desde semana 14</div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="border-collapse:collapse;width:100%;table-layout:auto;">
+              <thead>${thead}</thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </div>
+        </div>`;
+
+    } catch(e) {
+      console.error('Erro ao carregar equidade:', e);
+      el.innerHTML = '';
+    }
+  }
+
+  function buildPatternPanel(active) {
+    const { key, nPessoas, domTrab, nLojas } = computeScenarioKey(active);
+    const scenario = SCENARIOS[key];
+    const assigned = window._GH_ASSIGNED_PATTERNS || {};
+
+    const slotUsed = {};
+    Object.values(assigned).forEach(pn => { slotUsed[pn] = (slotUsed[pn] || 0) + 1; });
+
+    let patternRows = '';
+    if (scenario) {
+      scenario.forEach((pNum, slotIdx) => {
+        const folgas = patternFolgas(pNum);
+        const cells = DAYS.map(d => {
+          const isFolga = folgas.includes(d);
+          return `<td class="gh-pt-cell ${isFolga ? 'gh-pt-folga' : 'gh-pt-work'}">${isFolga ? 'FOLGA' : '1'}</td>`;
+        }).join('');
+
+        const slotsForPattern = scenario.map((p,i) => [p,i]).filter(([p]) => p === pNum);
+        const mySlotRank = slotsForPattern.findIndex(([,i]) => i === slotIdx);
+        const assignedPeople = active.filter(p => assigned[p.id] === pNum);
+        const assignedPerson = assignedPeople[mySlotRank] || null;
+
+        const dimClass = assignedPerson ? ' gh-pt-row-used' : '';
+        const assignedTag = assignedPerson
+          ? `<span class="gh-pt-assigned-tag">✓ ${shortName(assignedPerson.name)}<button class="gh-pt-clear-row" data-pid="${assignedPerson.id}" title="Limpar">✕</button></span>`
+          : '';
+
+        patternRows += `
+          <tr class="gh-pt-row${dimClass}" data-slot="${slotIdx}" data-pattern="${pNum}">
+            <td class="gh-pt-num">${pNum}</td>
+            ${cells}
+            <td class="gh-pt-assigned-cell">${assignedTag}</td>
+          </tr>`;
+      });
+    }
+
+    const noScenario = !scenario
+      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${domTrab} trabalham ao dom · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
+      : '';
+
+    return `
+    <div class="gh-pattern-panel" id="gh-pattern-panel">
+      <div class="gh-pt-header">
+        <div class="gh-pt-title">Padrão de Folgas</div>
+        <div class="gh-pt-meta">
+          <span class="gh-pt-badge">${nPessoas} pessoas p/ padrão</span>
+          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? domTrab + ' trabalham dom' : 'dom fechado'}</span>
+          <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
+          ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
+        </div>
+        <div class="gh-pt-hint">Clique no nome de uma pessoa nas tabelas acima para lhe atribuir um padrão.</div>
+      </div>
+      ${noScenario}
+      ${scenario ? `
+      <div class="gh-pt-table-wrap">
+        <table class="gh-pt-table">
+          <thead>
+            <tr>
+              <th class="gh-pt-th-num">#</th>
+              <th>SEG</th><th>TER</th><th>QUA</th><th>QUI</th><th>SEX</th><th>SAB</th><th>DOM</th>
+              <th class="gh-pt-th-assigned">Atribuído a</th>
+            </tr>
+          </thead>
+          <tbody>${patternRows}</tbody>
+        </table>
+      </div>
+      <div class="gh-pt-footer">
+        <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pt-clear-all">↺ Limpar tudo</button>
+      </div>
+      ` : ''}
+    </div>`;
+  }
+
+  let _patternAssignCtx = null;
+
+  function bindPatternPanel(active) {
+    document.getElementById('gh-pt-clear-all')?.addEventListener('click', () => {
+      const prevAssigned = { ...(window._GH_ASSIGNED_PATTERNS || {}) };
+      window._GH_ASSIGNED_PATTERNS = {};
+      active.forEach(p => {
+        const pNum = prevAssigned[p.id];
+        if (!pNum) return;
+        const folgas = patternFolgas(pNum);
+        DAYS.forEach(day => {
+          const cur = S.schedule[p.id]?.[day];
+          if (!cur) return;
+          if (['ferias','baixa','fim_contrato','na'].includes(cur.type)) return;
+          if (folgas.includes(day) && cur.type === 'folga') {
+            S.schedule[p.id][day] = { type: 'empty', shift: null, store: null };
+          }
+        });
+      });
+      showSchedule(active);
+    });
+
+    document.querySelectorAll('.gh-pt-clear-row').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pid = btn.dataset.pid;
+        if (pid && window._GH_ASSIGNED_PATTERNS) {
+          const pNum = window._GH_ASSIGNED_PATTERNS[pid];
+          if (pNum) {
+            const folgas = patternFolgas(pNum);
+            DAYS.forEach(day => {
+              const cur = S.schedule[pid]?.[day];
+              if (!cur) return;
+              if (['ferias','baixa','fim_contrato','na'].includes(cur.type)) return;
+              if (folgas.includes(day) && cur.type === 'folga') {
+                S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+              }
+            });
+          }
+          delete window._GH_ASSIGNED_PATTERNS[pid];
+          showSchedule(active);
+        }
+      });
+    });
+
+    document.querySelectorAll('.gh-p-cell').forEach(cell => {
+      const btn = cell.querySelector('.gh-p-remove-btn');
+      if (!btn) return;
+      const pid = btn.dataset.pid;
+      const hrsDiv = cell.querySelector('.gh-p-hrs');
+      const assignBtn = document.createElement('button');
+      assignBtn.className = 'gh-pt-assign-trigger';
+      assignBtn.dataset.pid = pid;
+      assignBtn.title = 'Atribuir padrão de folga';
+      assignBtn.innerHTML = '<span class="gh-pt-assign-trigger-dot"></span>';
+      if (hrsDiv) {
+        hrsDiv.style.display = 'flex';
+        hrsDiv.style.alignItems = 'center';
+        hrsDiv.appendChild(assignBtn);
+      } else {
+        cell.appendChild(assignBtn);
+      }
+
+      assignBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _patternAssignCtx = pid;
+        document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.add('gh-pt-row-pick'));
+        document.querySelectorAll('.gh-pt-assign-trigger').forEach(b => {
+          b.classList.toggle('active', b.dataset.pid === pid);
+        });
+        document.getElementById('gh-pattern-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    document.querySelectorAll('.gh-pt-row').forEach(row => {
+      row.addEventListener('click', () => {
+        if (!_patternAssignCtx) return;
+        const pid = _patternAssignCtx;
+        const pNum = parseInt(row.dataset.pattern);
+
+        if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {};
+        window._GH_ASSIGNED_PATTERNS[pid] = pNum;
+
+        const folgas = patternFolgas(pNum);
+        DAYS.forEach(day => {
+          const current = S.schedule[pid]?.[day];
+          if (!current) return;
+          if (['ferias','baixa','fim_contrato','na'].includes(current.type)) return;
+          if (folgas.includes(day)) {
+            S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
+          } else {
+            if (current.type === 'folga') {
+              S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
+            }
+          }
+        });
+
+        _patternAssignCtx = null;
+        showSchedule(active);
+      });
+    });
+
+    document.getElementById('gh-pattern-panel')?.addEventListener('click', (e) => {
+      if (!e.target.closest('.gh-pt-row') && !e.target.closest('.gh-pt-assign-trigger') && _patternAssignCtx) {
+        _patternAssignCtx = null;
+        document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.remove('gh-pt-row-pick'));
+      }
+    });
+  }
+
+  function regenSchedule() {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
+  function closeConfirmModal() {
+    const cm = document.getElementById('gh-confirm-modal');
+    if (cm) { cm.classList.remove('open'); cm._onOk = null; }
+  }
+
+  function showConfirmModal(msg, onOk) {
+    let cm = document.getElementById('gh-confirm-modal');
+    if (!cm) {
+      cm = document.createElement('div');
+      cm.id = 'gh-confirm-modal';
+      cm.innerHTML = `<div class="gh-cm-box"><div class="gh-cm-msg" id="gh-cm-msg"></div><div class="gh-cm-btns"><button class="gh-cm-cancel" id="gh-cm-cancel">Cancelar</button><button class="gh-cm-ok" id="gh-cm-ok">Eliminar</button></div></div>`;
+      document.body.appendChild(cm);
+      cm.addEventListener('click', e => { if (e.target === cm) closeConfirmModal(); });
+      document.getElementById('gh-cm-cancel').addEventListener('click', closeConfirmModal);
+    }
+    document.getElementById('gh-cm-msg').textContent = msg;
+    cm._onOk = onOk;
+    const okBtn = document.getElementById('gh-cm-ok');
+    okBtn.onclick = () => { closeConfirmModal(); onOk && onOk(); };
+    cm.classList.add('open');
+  }
+
+  function ghSyncPillGroup(groupId, val) {
+    const grp = document.getElementById(groupId);
+    if (!grp) return;
+    grp.querySelectorAll('.gh-pill[data-val]').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === val);
+    });
+  }
+
+  let editCtx = null;
+
+  function openEdit(pid, day, ctxStore) {
+    editCtx = { pid, day, ctxStore };
+    const p = P(pid), c2 = S.schedule[pid]?.[day] || {};
+    const modal = document.getElementById('gh-modal');
+    if (!modal) return;
+    modal.style.display = '';
+    document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
+    const typeEl = document.getElementById('gh-me-type');
+    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'baixa' ? 'baixa' : c2.type === 'empty' ? 'work' : 'folga';
+    const shEl = document.getElementById('gh-me-shift');
+    if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
+    const stEl = document.getElementById('gh-me-store');
+    const defaultStore = c2.store || ctxStore;
+    stEl.innerHTML = STORES.map(st => {
+      const knows = P(pid)?.knows?.includes(st.id);
+      return `<option value="${st.id}" ${defaultStore===st.id?'selected':''}>${sname(st.id)}${!knows?' ⚠':''}</option>`;
+    }).join('');
+    ghSyncPillGroup('gh-me-type-btns', typeEl.value);
+
+    const apoioSel = document.getElementById('gh-apoio-store');
+    if (apoioSel) {
+      apoioSel.innerHTML = '';
+      STORES.filter(st => S.openStores.includes(st.id)).sort((a,b)=>a.priority-b.priority).forEach(st => {
+        const op = document.createElement('option');
+        op.value = st.id;
+        op.textContent = st.short || st.name;
+        apoioSel.appendChild(op);
+      });
+    }
+
+    function updateApoioWrap() {
+      const shiftVal = document.getElementById('gh-me-shift')?.value || '';
+      const wrap = document.getElementById('gh-apoio-store-wrap');
+      if (wrap) wrap.style.display = shiftVal.includes('APOIO') ? 'block' : 'none';
+    }
+    updateApoioWrap();
+
+    document.getElementById('gh-apoio-store')?.addEventListener('change', () => { applyEdit(); });
+    ghSyncPillGroup('gh-me-shift-btns', shEl.value);
+    const storeBtns = document.getElementById('gh-me-store-btns');
+    storeBtns.innerHTML = STORES.map(st => {
+      const knows = P(pid)?.knows?.includes(st.id);
+      return `<button class="gh-pill gh-pill-store${defaultStore===st.id?' active':''}" data-val="${st.id}">${sname(st.id)}${!knows?' ⚠':''}</button>`;
+    }).join('');
+    document.getElementById('gh-me-conf').style.display = 'none';
+    meTypeChange();
+    modal.classList.add('open');
+  }
+
+  function meTypeChange() {
+    const v = document.getElementById('gh-me-type').value;
+    document.getElementById('gh-me-work').style.display = v === 'work' ? '' : 'none';
+  }
+
+  async function applyEdit() {
+    const modal = document.getElementById('gh-modal');
+    const mode = modal?.dataset.mode;
+
+    if (mode === 'add') {
+      cleanupModalExtras();
+      closeModal();
+      return;
+    }
+
+    if (!editCtx) return;
+    const { pid, day } = editCtx;
+    const type = document.getElementById('gh-me-type').value;
+    if (type !== 'work') {
+      const cellType = type === 'ferias' ? 'ferias' : type === 'baixa' ? 'baixa' : 'folga';
+      S.schedule[pid][day] = { type: cellType, shift: null, store: null };
+    } else {
+      const shiftRaw = document.getElementById('gh-me-shift').value;
+      const sid   = document.getElementById('gh-me-store').value;
+      let shift = shiftRaw;
+
+      if (shiftRaw.includes('APOIO')) {
+        const apoioSid = document.getElementById('gh-apoio-store')?.value;
+        if (!apoioSid) { alert('Selecione a tienda de apoio.'); return; }
+        if (!S._personStores) S._personStores = {};
+        if (!S._personStores[pid]) S._personStores[pid] = [];
+        if (!S._personStores[pid].includes(apoioSid)) S._personStores[pid].push(apoioSid);
+        if (!S._storeOrder) S._storeOrder = {};
+        if (!S._storeOrder[apoioSid]) S._storeOrder[apoioSid] = [];
+        if (!S._storeOrder[apoioSid].includes(pid)) S._storeOrder[apoioSid].push(pid);
+        if (!S._apoioShifts) S._apoioShifts = {};
+        if (!S._apoioShifts[pid]) S._apoioShifts[pid] = {};
+        S._apoioShifts[pid][day] = { store: apoioSid, shift: '14:00-15:00' };
+        shift = shiftRaw.replace('|APOIO', '');
+      }
+      const p = P(pid), ce = document.getElementById('gh-me-conf');
+      const hard = PEOPLE.find(o => o.id !== pid && p?.hardAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);
+      if (hard) { ce.textContent = `⚠ ${p?.name} e ${hard.name} não podem estar juntas.`; ce.className = 'gh-conf-note hard'; ce.style.display = ''; return; }
+      const soft = PEOPLE.find(o => o.id !== pid && p?.softAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);
+      if (soft) { ce.textContent = `Atenção: ${p?.name} e ${soft.name} — preferido evitar.`; ce.className = 'gh-conf-note soft'; ce.style.display = ''; }
+      else ce.style.display = 'none';
+      S.schedule[pid][day] = { type: 'work', shift, store: sid };
+
+      const isApoioShift = shiftRaw.includes('APOIO');
+      if (!isApoioShift) {
+        const hasOtherWork = DAYS.some(d => {
+          if (d === day) return false;
+          const cell = S.schedule[pid]?.[d];
+          return cell && cell.type === 'work';
+        });
+        if (!hasOtherWork) {
+          DAYS.forEach(d => {
+            if (d === day) return;
+            const cell = S.schedule[pid]?.[d];
+            if (cell && cell.type === 'empty') {
+              S.schedule[pid][d] = { type: 'work', shift, store: sid };
+            }
+          });
+        }
+      }
+    }
+    closeModal();
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
+  let _addCtx = null;
+
+  function openAddPersonToStore(sid) {
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    const modal = document.getElementById('gh-modal');
+    if (!modal) return;
+
+    document.getElementById('gh-me-ttl').textContent = `Adicionar pessoa — ${sname(sid)}`;
+    document.getElementById('gh-me-work').style.display = 'none';
+    document.getElementById('gh-me-conf').style.display = 'none';
+    document.getElementById('gh-me-type').style.display = 'none';
+
+    const alreadyIn = new Set(
+      active.filter(p =>
+        (S._personStores?.[p.id]?.includes(sid)) ||
+        DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work' && S.schedule[p.id]?.[d]?.store === sid)
+      ).map(p => p.id)
+    );
+    const candidates = active.filter(p => !alreadyIn.has(p.id));
+
+    const bdy = modal.querySelector('.gh-modal-bdy');
+    let injected = bdy.querySelector('#gh-add-person-list');
+    if (!injected) { injected = document.createElement('div'); injected.id = 'gh-add-person-list'; bdy.appendChild(injected); }
+
+    injected.innerHTML = `
+      <div style="font-size:.7rem;color:#888;margin-bottom:10px;">Selecione a pessoa para adicionar a ${sname(sid)}.</div>
+      <div style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;">
+        ${candidates.length ? candidates.map(p => {
+          const hasBadge = (() => {
+            const feriaDias = S._folgasDirigidas?.[p.id] || S._folgas?.[p.id]?.dias || [];
+            const hasAbs = !!absOf(p.id);
+            return hasAbs ? '🏖' : feriaDias.length ? '📅' : '';
+          })();
+          return `<button class="gh-add-person-pick" data-pid="${p.id}"
+            style="text-align:left;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.82rem;font-family:inherit;display:flex;justify-content:space-between;align-items:center;">
+            <span>${shortName(p.name)}</span>
+            <span style="font-size:.7rem;color:#888">${hasBadge}</span>
+          </button>`;
+        }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas as pessoas já foram adicionadas.</div>'}
+      </div>`;
+
+    injected.querySelectorAll('.gh-add-person-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.pid;
+        addPersonToStore(pid, sid);
+        closeModal();
+      });
+    });
+
+    modal.dataset.mode = 'add';
+    modal.classList.add('open');
+  }
+
+  function addPersonToStore(pid, sid) {
+    if (!S.schedule[pid]) {
+      S.schedule[pid] = {};
+      DAYS.forEach(day => { S.schedule[pid][day] = { type: 'empty', shift: null, store: null }; });
+      DAYS.forEach(day => {
+        if (isContractEnded(PEOPLE.find(x => x.id === pid) || {}, day)) {
+          S.schedule[pid][day] = { type: 'fim_contrato', shift: null, store: null };
+          return;
+        }
+        if (isAbsent(pid, day)) {
+          const a = absOf(pid);
+          const t = a?.type === 'ferias' ? 'ferias' : a?.type === 'baixa' ? 'baixa' : a?.type === 'na' ? 'na' : 'folga';
+          S.schedule[pid][day] = { type: t, shift: null, store: null };
+          return;
+        }
+      });
+    }
+    if (!S._personStores) S._personStores = {};
+    if (!S._personStores[pid]) S._personStores[pid] = [];
+    if (!S._personStores[pid].includes(sid)) S._personStores[pid].push(sid);
+    if (!S._storeOrder) S._storeOrder = {};
+    if (!S._storeOrder[sid]) S._storeOrder[sid] = [];
+    if (!S._storeOrder[sid].includes(pid)) S._storeOrder[sid].push(pid);
+    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
+    showSchedule(active);
+  }
+
+  function cleanupModalExtras() {
+    const injected = document.querySelector('#gh-add-person-list');
+    if (injected) injected.remove();
+    const typeEl = document.getElementById('gh-me-type');
+    if (typeEl) typeEl.style.display = '';
+    const workEl = document.getElementById('gh-me-work');
+    if (workEl) workEl.style.display = '';
+    if (document.getElementById('gh-modal')) document.getElementById('gh-modal').dataset.mode = '';
+    _addCtx = null;
+  }
+
+  function closeModal() {
+    cleanupModalExtras();
+    document.getElementById('gh-modal')?.classList.remove('open');
+    editCtx = null;
+  }
+
+  function startNew() {
+    S = blank(); wStep = 0; renderWiz();
+  }
+
+  window.initGeradorHorarios = function () {
+    const panel = document.getElementById('tab-gerador');
+    if (!panel) return;
+
+    if (!document.getElementById('gh-styles')) {
+      const style = document.createElement('style');
+      style.id = 'gh-styles';
+      style.textContent = `
+        #tab-gerador { background:#fff !important; color:#111 !important; }
+        @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        #tab-gerador .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; box-sizing:border-box; }
+        #tab-gerador .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
+        #tab-gerador .gh-wiz-title { font-size:1.6rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
+        #tab-gerador .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
+        #tab-gerador .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
+        #tab-gerador .gh-field:focus { border-color:#000; }
+        #tab-gerador .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
+        #tab-gerador .gh-btn { padding:9px 20px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
+        #tab-gerador .gh-btn-solid { background:#111 !important; color:#fff !important; border:1px solid #111 !important; }
+        #tab-gerador .gh-btn-solid:hover { background:#333 !important; border-color:#333 !important; }
+        #tab-gerador .gh-btn-ghost { background:#fff !important; color:#111 !important; border:1px solid #999 !important; }
+        #tab-gerador .gh-btn-ghost:hover { border-color:#111 !important; }
+        #tab-gerador .gh-btn-sm { padding:6px 14px; font-size:.65rem; }
+        #tab-gerador .gh-wiz-back { background:none !important; border:none !important; font-size:.68rem; color:#bbb !important; cursor:pointer; font-family:inherit; letter-spacing:.06em; text-transform:uppercase; padding:6px 4px; }
+        #tab-gerador .gh-wiz-back:hover { color:#111 !important; }
+        #tab-gerador .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; }
+        #tab-gerador .gh-add-btn:hover { border-color:#111; color:#111; }
+        #tab-gerador .gh-store-cfg { margin-bottom:28px; display:flex; flex-direction:column; gap:0; }
+        #tab-gerador .gh-sc-row { padding:14px 0 10px; border-bottom:1px solid #f0f0f0; display:flex; flex-direction:column; gap:8px; }
+        #tab-gerador .gh-sc-row:last-child { border-bottom:none; }
+        #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        #tab-gerador .gh-sc-name { font-size:.88rem; cursor:pointer; color:#111; font-weight:600; flex:1; min-width:80px; }
+        #tab-gerador .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
+        #tab-gerador .gh-sc-days { display:flex; gap:5px; flex-wrap:wrap; padding-left:26px; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-name { color:#bbb; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
+        #tab-gerador .gh-dtog { padding:5px 9px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.04em; cursor:pointer; user-select:none; color:#555; background:#fff; transition:all .12s; }
+        #tab-gerador .gh-dtog:hover { border-color:#555; }
+        #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
+        #tab-gerador .gh-dtog-dom { border-style:dashed; }
+        #tab-gerador .gh-dtog-dom.on { background:#1a5c9e; border-color:#1a5c9e; border-style:solid; }
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
+        #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
+        #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
+        #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
+        #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
+        #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
+        #tab-gerador .gh-sched-body { padding:20px 20px 0; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; overflow:visible; }
+        #tab-gerador .gh-store-block { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; width:100% !important; display:block !important; margin-bottom:48px; padding-bottom:15px !important; box-sizing:border-box; }
+        #tab-gerador .gh-sched-tbl { width:auto !important; min-width:unset !important; border-collapse:collapse !important; table-layout:auto !important; margin:0 auto !important; }
+        #tab-gerador .gh-sched-tbl th, #tab-gerador .gh-sched-tbl td { white-space:nowrap !important; background-color:#ffffff !important; }
+        #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
+        #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
+        #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
+        #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
+        #tab-gerador .gh-store-act-btn { width:26px; height:26px; border-radius:50%; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:1rem; font-weight:700; display:flex; align-items:center; justify-content:center; transition:all .15s; line-height:1; }
+        #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
+        #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
+        #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; box-sizing:border-box; }
+        #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
+        #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
+        #tab-gerador .gh-no-click { cursor:default; }
+        #tab-gerador .gh-no-click:hover { background:transparent !important; }
+        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; text-align:center; }
+        #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
+        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0; text-align:center; }
+        #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
+        #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
+        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:2px; font-weight:600; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }
+        #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
+        #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
+        #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; font-family:inherit; line-height:1.4; display:inline-block; cursor:pointer; }
+        #tab-gerador .gh-banco-zero { background:#f5f5f5; color:#aaa; }
+        #tab-gerador .gh-banco-pos { background:#e8f5e9; color:#2e7d32; }
+        #tab-gerador .gh-banco-neg { background:#ffebee; color:#c62828; }
+        #tab-gerador .gh-banco-badge:hover { opacity:.8; }
+        #tab-gerador .gh-sh-time-inp { width:44px; font-size:.72rem; font-weight:700; text-align:center; border:1px solid #bbb; border-radius:3px; padding:2px; color:#111; background:#fff; font-family:inherit; outline:none; }
+        #tab-gerador .gh-sh-time-inp:focus { border-color:#111; }
+        #tab-gerador tr.gh-editing td.gh-sh-td { background:#fffde7 !important; }
+        #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .c-empty  { background:#fff; min-height:48px; }
+        #tab-gerador .c-folga  { background:#f9f9f9; }
+        #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
+        #tab-gerador .c-ferias { background:#f9f9f9; }
+        #tab-gerador .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
+        #tab-gerador .c-na .gh-sh-line     { color:#e0e0e0; }
+        #tab-gerador .c-elsewhere { background:#f5f5f5; }
+        #tab-gerador .c-soft { background:#fffbf0; }
+        #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
+        #tab-gerador .c-shift-a { background:#fdf6e3; }
+        #tab-gerador .c-shift-a .gh-sh-line { color:#8a6000; }
+        #tab-gerador .c-shift-b { background:#e8f5e9; }
+        #tab-gerador .c-shift-b .gh-sh-line { color:#1b5e20; }
+        #tab-gerador .c-shift-c { background:#e3f2fd; }
+        #tab-gerador .c-shift-c .gh-sh-line { color:#0d47a1; }
+        #tab-gerador .c-shift-d { background:#fce4ec; }
+        #tab-gerador .c-shift-d .gh-sh-line { color:#880e4f; }
+        #tab-gerador .c-shift-e { background:#f3e5f5; }
+        #tab-gerador .c-shift-e .gh-sh-line { color:#4a148c; }
+        #tab-gerador .c-shift-f { background:#e8eaf6; }
+        #tab-gerador .c-shift-f .gh-sh-line { color:#1a237e; }
+        #tab-gerador .c-fim-contrato { background:#fff5f5; cursor:default; }
+        #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
+        #gh-modal #gh-me-type, #gh-modal #gh-me-shift, #gh-modal #gh-me-store { display:none !important; }
+        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(4px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+        #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:16px; width:400px; max-width:96vw; overflow:hidden; transform:translateY(10px); transition:transform .22s cubic-bezier(.25,.8,.25,1); box-shadow:0 20px 60px rgba(0,0,0,.18); color:#111; }
+        #gh-modal.open .gh-modal { transform:translateY(0); }
+        #gh-modal .gh-modal-hdr { padding:16px 20px 14px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        #gh-modal .gh-modal-ttl { font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#333; }
+        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#aaa; font-size:1.1rem; line-height:1; padding:2px 4px; border-radius:4px; transition:color .15s; }
+        #gh-modal .gh-modal-x:hover { color:#555; }
+        #gh-modal .gh-modal-bdy { padding:18px 18px 20px; }
+        #gh-modal .gh-form-grp  { margin-bottom:14px; }
+        #gh-modal .gh-form-grp-last { margin-bottom:2px; }
+        #gh-modal .gh-conf-note { padding:9px 12px; border-radius:7px; font-size:.74rem; margin-top:10px; line-height:1.5; }
+        #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
+        #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
+        #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+        #gh-modal .gh-pill { background:#f7f7f7; border:1.5px solid #e5e5e5; border-radius:50px; padding:9px 20px; font-size:.82rem; font-weight:600; cursor:pointer; color:#444; transition:all .15s; white-space:nowrap; font-family:inherit; line-height:1.2; }
+        #gh-modal .gh-pill:hover { background:#f0f0f0; border-color:#ccc; color:#111; transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
+        #gh-modal .gh-pill-tipo.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+        #gh-modal .gh-pill-shift.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        #gh-modal .gh-pill-store.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        #gh-modal .gh-pill-shift { border-radius:10px; padding:12px 8px; font-size:.82rem; font-weight:600; text-align:center; line-height:1.55; white-space:normal; color:#333; }
+        #gh-modal .gh-pill-shift[data-val="10:00-13:00|14:00-19:00"] { background:#fdf6e3; border-color:#f0d080; }
+        #gh-modal .gh-pill-shift[data-val="10:00-14:00|15:00-19:00"] { background:#e8f5e9; border-color:#a5d6a7; }
+        #gh-modal .gh-pill-shift[data-val="10:00-15:00|16:00-19:00"] { background:#e3f2fd; border-color:#90caf9; }
+        #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#fce4ec; border-color:#f48fb1; }
+        #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#f3e5f5; border-color:#ce93d8; }
+        #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e8eaf6; border-color:#9fa8da; }
+        #gh-modal .gh-pill-shift.gh-pill-apoio { background:#fff3e0; border-color:#e67e22; }
+        #gh-modal .gh-pill-shift.gh-pill-apoio.active { background:#e67e22 !important; border-color:#e67e22 !important; color:#fff !important; }
+        #gh-modal .gh-pill-shift.active, #gh-modal .gh-pill-shift[data-val].active { background:#111 !important; border-color:#111 !important; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        #gh-modal .gh-btn-group-stores { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+        #gh-modal .gh-pill-store { border-radius:50px; padding:9px 20px; font-size:.82rem; }
+        #gh-confirm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9100; align-items:center; justify-content:center; }
+        #gh-confirm-modal.open { display:flex; }
+        #gh-confirm-modal .gh-cm-box { background:#fff; border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.18); padding:28px 28px 20px; max-width:340px; width:90vw; text-align:center; }
+        #gh-confirm-modal .gh-cm-msg { font-size:.88rem; font-weight:500; color:#222; margin-bottom:22px; line-height:1.5; }
+        #gh-confirm-modal .gh-cm-btns { display:flex; gap:10px; justify-content:center; }
+        #gh-confirm-modal .gh-cm-cancel { padding:8px 22px; border:1px solid #ddd; background:#fff; border-radius:6px; font-size:.78rem; font-weight:600; cursor:pointer; color:#666; font-family:inherit; }
+        #gh-confirm-modal .gh-cm-cancel:hover { background:#f5f5f5; }
+        #gh-confirm-modal .gh-cm-ok { padding:8px 22px; border:none; background:#c0392b; border-radius:6px; font-size:.78rem; font-weight:700; cursor:pointer; color:#fff; font-family:inherit; }
+        #gh-confirm-modal .gh-cm-ok:hover { background:#a93226; }
+        #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
+        #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
+        #tab-gerador .gh-step2-wrap { width:100%; max-width:780px; margin:0 auto; padding:12px 8px 40px; box-sizing:border-box; }
+        #tab-gerador .gh-step2-header { margin-bottom:14px; }
+        #tab-gerador .gh-step2-header-top { margin-bottom:10px; }
+        #tab-gerador .gh-step2-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+        #tab-gerador .gh-step2-badge { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-radius:20px; padding:4px 14px; font-size:.75rem; font-weight:700; letter-spacing:.04em; white-space:nowrap; flex-shrink:0; }
+        #tab-gerador .gh-step2-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        #tab-gerador .gh-wiz-box--wide { max-width:680px; }
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:5px; margin-top:12px; }
+        #tab-gerador .gh-sr { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-sizing:border-box; width:100%; }
+        #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-sr-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:8px; }
+        #tab-gerador .gh-sr-header-left { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
+        #tab-gerador .gh-toggle-btn { background:none; border:none; cursor:pointer; font-size:.65rem; color:#bbb; padding:0; width:14px; flex-shrink:0; }
+        #tab-gerador .gh-toggle-btn:hover { color:#555; }
+        #tab-gerador .gh-sr-nameblock { display:flex; flex-direction:column; gap:1px; min-width:0; }
+        #tab-gerador .gh-sr-name { font-size:.82rem; font-weight:700; color:#111; white-space:nowrap; display:flex; align-items:baseline; gap:3px; }
+        #tab-gerador .gh-sr-meta { font-size:.62rem; color:#999; white-space:nowrap; }
+        #tab-gerador .gh-auto-badge { font-size:.58rem; font-weight:700; padding:1px 5px; border-radius:3px; letter-spacing:.03em; }
+        #tab-gerador .gh-auto-efectiva   { background:#e8f5e9; color:#2e7d32; }
+        #tab-gerador .gh-auto-autonoma   { background:#e3f2fd; color:#1565c0; }
+        #tab-gerador .gh-auto-autonoma_h { background:#fff3e0; color:#e65100; }
+        #tab-gerador .gh-auto-nao_autonoma { background:#fce4ec; color:#c62828; }
+        #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; flex-shrink:0; }
+        #tab-gerador .gh-icon-btn { width:24px; height:24px; border:1px solid #e0e0e0; border-radius:5px; background:#fafafa; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#555; font-size:.78rem; font-weight:600; line-height:1; transition:background .15s; flex-shrink:0; }
+        #tab-gerador .gh-icon-btn:hover { background:#efefef; border-color:#bbb; }
+        #tab-gerador .gh-sr-body { border-top:1px solid #f0f0f0; }
+        #tab-gerador .gh-sr-cols { display:flex; flex-direction:row; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        #tab-gerador .gh-sr-col { padding:10px 12px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; flex-shrink:0; }
+        #tab-gerador .gh-sr-col:last-child { border-right:none; }
+        #tab-gerador .gh-sr-col-title { font-size:.62rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
+        #tab-gerador .gh-saldo-sup { font-size:.58rem; font-weight:700; padding:1px 4px; border-radius:3px; vertical-align:super; margin-left:2px; }
+        #tab-gerador .gh-saldo-sup-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
+        #tab-gerador .gh-saldo-sup-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
+        #tab-gerador .gh-day-btns { display:flex; flex-direction:row; gap:2px; flex-wrap:nowrap; }
+        #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:3px; width:22px; height:22px; font-size:.62rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+        #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
+        #tab-gerador .gh-date-row { display:flex; flex-direction:row; gap:3px; }
+        #tab-gerador .gh-date-txt { width:68px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-sel-mini { width:auto !important; max-width:80px; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-num-mini { width:40px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-inc-saldo { font-size:.74rem; font-weight:700; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:3px; }
+        #tab-gerador .gh-inc-saldo-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
+        #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
+        #tab-gerador .gh-banco-add-row { display:flex; flex-direction:row; gap:3px; align-items:center; }
+        #tab-gerador .gh-person-form { border:1px solid #e0e0e0; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; }
+        #tab-gerador .gh-pf-title { font-size:.78rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#555; margin-bottom:12px; }
+        #tab-gerador .gh-pf-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        #tab-gerador .gh-pf-field { display:flex; flex-direction:column; gap:4px; }
+        #tab-gerador .gh-pf-field label { font-size:.65rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999; }
+        #tab-gerador .gh-pf-stores { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+        #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
+        #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+        #tab-gerador .gh-field-sm { border:1px solid #ddd; border-radius:5px; padding:6px 9px; font-size:.82rem; font-family:inherit; outline:none; background:#fff; color:#111; width:100%; box-sizing:border-box; }
+        #tab-gerador .gh-field-sm:focus { border-color:#111; }
+        #tab-gerador .gh-pattern-panel { margin:40px auto 80px; max-width:680px; width:calc(100% - 40px); border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:visible; box-sizing:border-box; }
+        #tab-gerador .gh-pt-header { padding:12px 16px 10px; border-bottom:1px solid #f0f0f0; background:#fafafa; }
+        #tab-gerador .gh-pt-title { font-size:.58rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
+        #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; align-items:center; }
+        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:3px 10px; font-size:.62rem; font-weight:700; color:#555; }
+        #tab-gerador .gh-pt-badge-dom { background:#e8f0fe; border-color:#c5d8fa; color:#1a4a9a; }
+        #tab-gerador .gh-pt-badge-key { background:#fff8e0; border-color:#f0d080; color:#8a6000; font-family:monospace; }
+        #tab-gerador .gh-pt-hint { font-size:.65rem; color:#bbb; font-style:italic; }
+        #tab-gerador .gh-pt-no-scenario { margin:14px 16px; padding:10px 14px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.75rem; color:#a04000; }
+        #tab-gerador .gh-pt-table-wrap { overflow:hidden; padding:0; }
+        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; table-layout:auto; }
+        #tab-gerador .gh-pt-table thead tr { background:#f7f7f7; }
+        #tab-gerador .gh-pt-table th { padding:4px 3px; font-size:.48rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:6px !important; }
+        #tab-gerador .gh-pt-num { font-size:.55rem; font-weight:700; color:#ccc; padding:0 6px; text-align:left; font-family:monospace; }
+        #tab-gerador .gh-pt-cell { padding:5px 3px; text-align:center; border-right:1px solid #f5f5f5; font-size:.55rem; font-weight:600; white-space:nowrap; }
+        #tab-gerador .gh-pt-work  { color:#d5d5d5; }
+        #tab-gerador .gh-pt-folga { color:#c0392b; font-style:italic; background:#fff9f9; }
+        #tab-gerador .gh-pt-table tbody tr { border-bottom:1px solid #f5f5f5; transition:background .12s; }
+        #tab-gerador .gh-pt-table tbody tr:last-child { border-bottom:none; }
+        #tab-gerador .gh-pt-row { cursor:default; }
+        #tab-gerador .gh-pt-row-used { background:#f9f9f9 !important; }
+        #tab-gerador .gh-pt-row-used .gh-pt-cell { color:#d0d0d0 !important; background:#f9f9f9 !important; }
+        #tab-gerador .gh-pt-row-used .gh-pt-num { color:#ddd !important; }
+        #tab-gerador .gh-pt-row-pick { cursor:pointer !important; outline:2px dashed #f0a030; outline-offset:-2px; }
+        #tab-gerador .gh-pt-row-pick:hover { background:#fffbf2 !important; }
+        #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff3d0 !important; color:#b07000 !important; }
+        #tab-gerador .gh-pt-assigned-cell { padding:4px 6px; text-align:left; }
+        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:3px; font-size:.55rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:10px; padding:2px 6px; white-space:nowrap; }
+        #tab-gerador .gh-pt-clear-row { background:none; border:none; cursor:pointer; font-size:.6rem; color:#bbb; padding:0 2px; line-height:1; margin-left:3px; opacity:.6; transition:opacity .15s; vertical-align:middle; }
+        #tab-gerador .gh-pt-clear-row:hover { opacity:1; color:#c0392b; }
+        #tab-gerador .gh-pt-footer { padding:10px 16px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
+        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:4px 0 0 0; line-height:1; margin-top:6px; display:flex; align-items:center; justify-content:center; width:100%; }
+        #tab-gerador .gh-pt-assign-trigger-dot { width:10px; height:10px; border-radius:50%; background:#999; display:inline-block; transition:background .15s, transform .15s; box-shadow:0 0 0 4px rgba(150,150,150,.22); }
+        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#555; box-shadow:0 0 0 6px rgba(100,100,100,.28); transform:scale(1.2); }
+        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#444; box-shadow:0 0 0 6px rgba(80,80,80,.3); }
+        #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }
+        #tab-gerador .gh-dom-trab-label { display:flex; align-items:center; gap:10px; flex:1; }
+        #tab-gerador .gh-dom-trab-icon { font-size:1.2rem; flex-shrink:0; }
+        #tab-gerador .gh-dom-trab-title { font-size:.82rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
+        #tab-gerador .gh-dom-trab-hint { font-size:.7rem; color:#4a6a9c; }
+        #tab-gerador .gh-dom-trab-inp { width:70px !important; text-align:center; font-size:1.1rem !important; font-weight:700 !important; padding:8px 10px !important; border-radius:7px !important; flex-shrink:0; }
+      `;
+      document.head.appendChild(style);
+    }
+
+    if (!document.getElementById('gh-container')) {
+      panel.innerHTML = `<div id="gh-container"></div>`;
+    }
+
+    if (!document.getElementById('gh-confirm-modal')) {
+      const cm = document.createElement('div');
+      cm.id = 'gh-confirm-modal';
+      cm.innerHTML = `<div class="gh-cm-box"><div class="gh-cm-msg" id="gh-cm-msg"></div><div class="gh-cm-btns"><button class="gh-cm-cancel" id="gh-cm-cancel">Cancelar</button><button class="gh-cm-ok" id="gh-cm-ok">Eliminar</button></div></div>`;
+      document.body.appendChild(cm);
+      cm.addEventListener('click', e => { if (e.target === cm) closeConfirmModal(); });
+      document.getElementById('gh-cm-cancel').addEventListener('click', closeConfirmModal);
+    }
+
+    if (!document.getElementById('gh-modal')) {
+      const modalEl = document.createElement('div');
+      modalEl.id = 'gh-modal';
+      modalEl.innerHTML = `
+        <div class="gh-modal">
+          <div class="gh-modal-hdr">
+            <div class="gh-modal-ttl" id="gh-me-ttl">Editar</div>
+            <button class="gh-modal-x" id="gh-modal-x">✕</button>
+          </div>
+          <div class="gh-modal-bdy">
+            <select id="gh-me-type" style="display:none">
+              <option value="work">Trabalho</option>
+              <option value="folga">FOLGA</option>
+              <option value="ferias">FÉRIAS</option>
+              <option value="baixa">Licença</option>
+            </select>
+            <select id="gh-me-shift" style="display:none">
+              <option value="10:00-13:00|14:00-19:00">[A]</option>
+              <option value="10:00-14:00|15:00-19:00">[B]</option>
+              <option value="10:00-15:00|16:00-19:00">[C]</option>
+              <option value="09:00-12:00|13:00-18:00">[D]</option>
+              <option value="11:00-15:00|16:00-20:00">[E]</option>
+              <option value="09:00-13:00|19:00-23:00">[F]</option>
+              <option value="10:00-13:00|APOIO|15:00-19:00">[APOIO]</option>
+            </select>
+            <select id="gh-me-store" style="display:none"></select>
+            <div class="gh-form-grp">
+              <div class="gh-btn-group" id="gh-me-type-btns">
+                <button class="gh-pill gh-pill-tipo" data-val="work">Trabalho</button>
+                <button class="gh-pill gh-pill-tipo" data-val="folga">Folga</button>
+                <button class="gh-pill gh-pill-tipo" data-val="ferias">Férias</button>
+                <button class="gh-pill gh-pill-tipo" data-val="baixa">Licença</button>
+              </div>
+            </div>
+            <div id="gh-me-work">
+              <div class="gh-form-grp">
+                <div class="gh-btn-group gh-btn-group-shifts" id="gh-me-shift-btns">
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00">10:00 – 13:00<br>14:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00">10:00 – 14:00<br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00">10:00 – 15:00<br>16:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio</span><br>15:00 – 19:00</button>
+                </div>
+                <div id="gh-apoio-store-wrap" style="display:none;margin-top:12px;">
+                  <div style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#e67e22;margin-bottom:8px;">Tienda de apoio (14:00–15:00)</div>
+                  <select id="gh-apoio-store" class="gh-ab-sel"></select>
+                </div>
+              </div>
+              <div class="gh-form-grp gh-form-grp-last">
+                <div class="gh-btn-group gh-btn-group-stores" id="gh-me-store-btns"></div>
+              </div>
+            </div>
+            <div class="gh-conf-note" id="gh-me-conf" style="display:none"></div>
+          </div>
+        </div>`;
+      document.body.appendChild(modalEl);
+
+      document.getElementById('gh-modal-x').addEventListener('click', closeModal);
+      document.getElementById('gh-me-type').addEventListener('change', meTypeChange);
+      modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
+      document.getElementById('gh-me-type-btns').addEventListener('click', e => {
+        const btn = e.target.closest('.gh-pill[data-val]');
+        if (!btn) return;
+        document.getElementById('gh-me-type').value = btn.dataset.val;
+        ghSyncPillGroup('gh-me-type-btns', btn.dataset.val);
+        meTypeChange();
+        if (btn.dataset.val !== 'work') applyEdit();
+      });
+      document.getElementById('gh-me-shift-btns').addEventListener('click', e => {
+        const btn = e.target.closest('.gh-pill[data-val]');
+        if (!btn) return;
+        document.getElementById('gh-me-shift').value = btn.dataset.val;
+        ghSyncPillGroup('gh-me-shift-btns', btn.dataset.val);
+        const wrap = document.getElementById('gh-apoio-store-wrap');
+        if (wrap) wrap.style.display = btn.dataset.val.includes('APOIO') ? 'block' : 'none';
+        if (!btn.dataset.val.includes('APOIO') && document.getElementById('gh-me-store').value) applyEdit();
+      });
+      document.getElementById('gh-me-store-btns').addEventListener('click', e => {
+        const btn = e.target.closest('.gh-pill[data-val]');
+        if (!btn) return;
+        document.getElementById('gh-me-store').value = btn.dataset.val;
+        ghSyncPillGroup('gh-me-store-btns', btn.dataset.val);
+        applyEdit();
+      });
+    }
+
+    loadKnowledgeBase().then(async () => {
+      if (window._ghLoadPortoWeek) {
+        const weekISO = window._ghLoadPortoWeek;
+        window._ghLoadPortoWeek = null;
+        await loadPortoWeekForEdit(weekISO);
+      } else {
+        renderWiz();
+      }
+    }).catch(err => {
+      console.error('Failed to load knowledge base:', err);
+      renderWiz();
+    });
+  };
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.tab-btn, .drawer-tab-btn');
+    if (!btn) return;
+    if (e.target.closest('.adm-mod-card')) return;
+    if (btn.dataset.tab === 'gerador') {
+      window.initGeradorHorarios?.();
+    } else {
+      cleanupGeradorLayout();
+    }
+  }, true);
+
+})();

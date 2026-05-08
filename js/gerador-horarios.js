@@ -108,6 +108,7 @@
   const SH_D = '09:00-12:00|13:00-18:00';
   const SH_E = '11:00-15:00|16:00-20:00';
   const SH_F = '09:00-13:00|19:00-23:00';
+  const SH_G = '11:00-14:00|15:00-20:00';
 
   const SH_DEFAULT = SH_B;
   const SH_ALT     = SH_A;

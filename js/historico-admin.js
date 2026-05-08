@@ -7,11 +7,13 @@
 
   var LOJAS = ['MAXX','MEZKA AVENIDA','MEZKA FUNCHAL','MEZKA MERCADO','PARFOIS ARCADAS SAO FRANCISCO','PARFOIS MADEIRA SHOPPING','SHANA'];
   var LOJA_LABELS = {'MAXX':'Maxx','MEZKA AVENIDA':'Mezka Avenida','MEZKA FUNCHAL':'Mezka Funchal','MEZKA MERCADO':'Mezka Mercado','PARFOIS ARCADAS SAO FRANCISCO':'Parfois Arcadas','PARFOIS MADEIRA SHOPPING':'Madeira Shopping','SHANA':'Shana'};
-  var ZONA_PARFOIS = ['PARFOIS ARCADAS SAO FRANCISCO','PARFOIS MADEIRA SHOPPING'];
-  var ZONA_MEZKA   = ['MEZKA FUNCHAL','MEZKA MERCADO','MEZKA AVENIDA','SHANA','MAXX'];
-  var ZONA_MEZKAF  = ['MEZKA FUNCHAL'];
-  var MESES_PT     = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  var DIAS_PT      = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  var ZONA_PARFOIS  = ['PARFOIS ARCADAS SAO FRANCISCO','PARFOIS MADEIRA SHOPPING'];
+  var ZONA_PRIMAVERA= ['MEZKA FUNCHAL','MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
+  var ZONA_MEZKAPS  = ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
+  var ZONA_MEZKAFNC = ['MEZKA FUNCHAL'];
+  var ZONA_DOMINGO  = ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
+  var MESES_PT      = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var DIAS_PT       = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
   var _activeTab       = 'vendas';
   var _activePeriodBtn = null;
@@ -41,24 +43,40 @@
   function _period90()  { var t=_yesterday(),f=new Date(t); f.setDate(t.getDate()-89); return {from:_dateToStr(f),to:_dateToStr(t)}; }
   function _periodMes() { var t=_yesterday(),f=new Date(t.getFullYear(),t.getMonth(),1); return {from:_dateToStr(f),to:_dateToStr(t)}; }
   function _periodAno() { var t=_yesterday(); return {from:t.getFullYear()+'-01-01',to:_dateToStr(t)}; }
+  function _periodTotal(rows) {
+    // Rango completo del histórico
+    var dates=rows.map(function(r){return r.data;}).filter(Boolean).sort();
+    if(!dates.length) { var y=_yesterdayStr(); return {from:y,to:y}; }
+    return {from:dates[0],to:dates[dates.length-1]};
+  }
 
+  // Construye comparaciones vs TODOS los años donde haya datos equivalentes (mismo patrón DOW)
   function _buildComparisons(from, to, rows) {
     var fromD=_strToDate(from), toD=_strToDate(to);
     var nDays=Math.round((toD-fromD)/86400000)+1;
     var dowPattern=[];
     for(var i=0;i<nDays;i++){var d=new Date(fromD);d.setDate(fromD.getDate()+i);dowPattern.push(d.getDay());}
+
+    // Determinar todos los años con datos disponibles
+    var yearsWithData={};
+    rows.forEach(function(r){if((parseFloat(r.montante)||0)>0){yearsWithData[r.data.substring(0,4)]=true;}});
+    var currentYear=fromD.getFullYear();
     var comps=[];
-    [52,104,156,208].forEach(function(w){
-      var cFromD=new Date(fromD); cFromD.setDate(fromD.getDate()-w*7);
+
+    // Buscar hasta 10 años atrás en incrementos de 52 semanas
+    for(var w=52;w<=520;w+=52){
+      var cFromD=new Date(fromD); cFromD.setDate(fromD.getDate()-w);
       var cToD=new Date(cFromD); cToD.setDate(cFromD.getDate()+nDays-1);
       var cFrom=_dateToStr(cFromD),cTo=_dateToStr(cToD);
+      var cYear=cFromD.getFullYear();
+      if(!yearsWithData[String(cYear)]) continue;
       var cDow=[];
-      for(var i=0;i<nDays;i++){var d=new Date(cFromD);d.setDate(cFromD.getDate()+i);cDow.push(d.getDay());}
-      if(!cDow.every(function(d,i){return d===dowPattern[i];})) return;
-      if(!rows.some(function(r){return r.data>=cFrom&&r.data<=cTo&&(parseFloat(r.montante)||0)>0;})) return;
-      comps.push({from:cFrom,to:cTo,label:cFromD.getFullYear()+''});
-    });
-    return comps.slice(0,2);
+      for(var j=0;j<nDays;j++){var dd=new Date(cFromD);dd.setDate(cFromD.getDate()+j);cDow.push(dd.getDay());}
+      if(!cDow.every(function(dv,ii){return dv===dowPattern[ii];})) continue;
+      if(!rows.some(function(r){return r.data>=cFrom&&r.data<=cTo&&(parseFloat(r.montante)||0)>0;})) continue;
+      comps.push({from:cFrom,to:cTo,label:String(cYear)});
+    }
+    return comps;
   }
 
   function _filterByZone(rows) {
@@ -158,9 +176,8 @@
   function _getContent() { return document.getElementById('hadm-content'); }
 
   function _render() {
-    if(_activeTab==='vendas')     _renderVendas();
-    if(_activeTab==='estacional') _renderEstacional();
-    if(_activeTab==='carregar')   _renderCarregar();
+    if(_activeTab==='vendas')   _renderVendas();
+    if(_activeTab==='carregar') _renderCarregar();
   }
 
   // ════════════════════════════════════════════════════════════
@@ -169,8 +186,23 @@
   function _renderVendas() {
     var c=_getContent(); if(!c)return;
     c.innerHTML=''; _setupContent(c);
-    var f=_getFilters();
+
+    // Modo Domingo Ps: especial — ignora filtro de período normal
+    if(_activeZoneBtn==='hadm-btn-domingo') {
+      _renderDomingoPs(c);
+      return;
+    }
+
     var rows=_filterByZone(_allRows);
+    var isTotal=(_activePeriodBtn==='hadm-btn-total');
+    var f;
+    if(isTotal){
+      f=_periodTotal(_allRows); // para el header usar rango completo
+    } else {
+      f=_getFilters();
+    }
+
+    // Para el header: ventas del período seleccionado (zona filtrada)
     var periodRows=rows.filter(function(r){return r.data>=f.from&&r.data<=f.to;});
     var periodTotal=periodRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     var nDays=Math.round((_strToDate(f.to)-_strToDate(f.from))/86400000)+1;
@@ -181,7 +213,7 @@
     hdr.style.setProperty('background','#1a1a1a','important');
     var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
     hLbl.style.setProperty('color','#888888','important');
-    hLbl.textContent=_fmtDate(f.from)+' → '+_fmtDate(f.to)+' ('+nDays+' dias)';
+    hLbl.textContent=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+' ('+nDays+' dias)');
     hdr.appendChild(hLbl);
     var hVal=_el('div','font-size:2rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px;');
     hVal.style.setProperty('color','#ffffff','important');
@@ -189,10 +221,10 @@
     hdr.appendChild(hVal);
     var hSub=_el('div','font-size:.72rem;');
     hSub.style.setProperty('color','#aaaaaa','important');
-    hSub.textContent='Média diária: '+_fmtEur(periodTotal/nDays)+' · '+periodRows.length+' registos';
+    hSub.textContent=(isTotal?periodRows.length+' registos':'Média diária: '+_fmtEur(periodTotal/nDays)+' · '+periodRows.length+' registos');
     hdr.appendChild(hSub);
 
-    if(comps.length){
+    if(!isTotal&&comps.length){
       var cRow=_el('div','display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
       comps.forEach(function(comp){
         var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
@@ -221,14 +253,17 @@
     }
     c.appendChild(hdr);
 
-    // Árbol
+    // Árbol — solo muestra registros del período activo (excepto Total que muestra todo)
     var treeLabel=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
     treeLabel.style.setProperty('color','#999999','important');
     treeLabel.textContent='DETALHE POR LOJA · ANO · MÊS · DIA — clique para expandir';
     c.appendChild(treeLabel);
 
+    // Árbol usa filas del período (para Total, usa todas las filas de la zona)
+    var treeRows=isTotal?rows:rows.filter(function(r){return r.data>=f.from&&r.data<=f.to;});
+
     var byLoja={};
-    rows.forEach(function(r){
+    treeRows.forEach(function(r){
       if(!byLoja[r.loja]) byLoja[r.loja]={};
       var yr=r.data.substring(0,4);
       if(!byLoja[r.loja][yr]) byLoja[r.loja][yr]={};
@@ -410,160 +445,186 @@
     });
   }
 
+  // ════════════════════════════════════════════════════════════
+  //  MODO DOMINGO PS
+  // ════════════════════════════════════════════════════════════
+  function _renderDomingoPs(c) {
+    var allDomRows=_allRows.filter(function(r){
+      return ZONA_DOMINGO.indexOf(r.loja)>=0 && _strToDate(r.data).getDay()===0 && (parseFloat(r.montante)||0)>0;
+    });
+
+    // Agrupar por año
+    var byYear={};
+    allDomRows.forEach(function(r){
+      var yr=r.data.substring(0,4);
+      if(!byYear[yr])byYear[yr]=[];
+      byYear[yr].push(r);
+    });
+    var years=Object.keys(byYear).sort(function(a,b){return b-a;});
+    var currentYear=new Date().getFullYear().toString();
+    var currentYearRows=byYear[currentYear]||[];
+    var currentTotal=currentYearRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+    var currentCount=currentYearRows.length;
+
+    // Header negro
+    var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;');
+    hdr.style.setProperty('background','#1a1a1a','important');
+    var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
+    hLbl.style.setProperty('color','#888888','important');
+    hLbl.textContent='DOMINGOS '+currentYear+' — MEZKA PS (Avenida · Mercado · Shana · Maxx)';
+    hdr.appendChild(hLbl);
+    var hVal=_el('div','font-size:2rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px;');
+    hVal.style.setProperty('color','#ffffff','important');
+    hVal.textContent=_fmtEur(currentTotal);
+    hdr.appendChild(hVal);
+    var hSub=_el('div','font-size:.72rem;');
+    hSub.style.setProperty('color','#aaaaaa','important');
+    hSub.textContent=currentCount+' domingos registados · média: '+_fmtEur(currentCount?currentTotal/currentCount:0)+'/domingo';
+    hdr.appendChild(hSub);
+
+    // Comparações com anos anteriores
+    var prevYears=years.filter(function(y){return y!==currentYear;});
+    if(prevYears.length){
+      var cRow=_el('div','display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
+      prevYears.forEach(function(yr){
+        var yrRows=byYear[yr];
+        var yrTotal=yrRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        var yrCount=yrRows.length;
+        // Comparar médias por domingo para que sea justo aunque haya distinto nº de domingos
+        var avgCur=currentCount?currentTotal/currentCount:0;
+        var avgPrev=yrCount?yrTotal/yrCount:0;
+        var diff=avgPrev>0?(avgCur-avgPrev)/avgPrev*100:null;
+        var cBox=_el('div','');
+        var cLbl=_el('div','font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px;');
+        cLbl.style.setProperty('color','#666666','important');
+        cLbl.textContent='vs '+yr+' ('+yrCount+' dom.)';
+        cBox.appendChild(cLbl);
+        var cLine=_el('div','display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;');
+        var cVal=_el('span','font-size:.88rem;font-weight:800;');
+        cVal.style.setProperty('color','#cccccc','important');
+        cVal.textContent=_fmtEur(yrTotal);
+        cLine.appendChild(cVal);
+        var cAvg=_el('span','font-size:.72rem;');
+        cAvg.style.setProperty('color','#777777','important');
+        cAvg.textContent='('+_fmtEur(avgPrev)+'/dom)';
+        cLine.appendChild(cAvg);
+        if(diff!==null){
+          var cD=_el('span','font-size:.78rem;font-weight:800;');
+          cD.style.setProperty('color',diff>=0?'#4caf82':'#e05a5a','important');
+          cD.textContent=(diff>=0?'↑ +':'↓ ')+diff.toFixed(1)+'% média/dom';
+          cLine.appendChild(cD);
+        }
+        cBox.appendChild(cLine);
+        cRow.appendChild(cBox);
+      });
+      hdr.appendChild(cRow);
+    }
+    c.appendChild(hdr);
+
+    // Detalhe: cada año con sus domingos
+    var treeLabel=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
+    treeLabel.style.setProperty('color','#999999','important');
+    treeLabel.textContent='DETALHE POR ANO — clique para expandir';
+    c.appendChild(treeLabel);
+
+    years.forEach(function(yr){
+      var yrRows=byYear[yr].slice().sort(function(a,b){return a.data>b.data?-1:1;});
+      var yrTotal=yrRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+      var yrKey='DOM:Y:'+yr;
+      var yrOpen=!!_expanded[yrKey];
+
+      var yrRow=_el('div','border-radius:10px;padding:13px 16px;margin-bottom:8px;cursor:pointer;border:1px solid #e0e0e0;user-select:none;');
+      yrRow.style.setProperty('background','#f5f5f5','important');
+      yrRow.addEventListener('mouseenter',function(){this.style.setProperty('background','#ebebeb','important');});
+      yrRow.addEventListener('mouseleave',function(){this.style.setProperty('background','#f5f5f5','important');});
+      var yrHdr=_el('div','display:flex;align-items:center;justify-content:space-between;');
+      var yrNom=_el('span','font-size:.95rem;font-weight:800;');
+      yrNom.style.setProperty('color','#111111','important');
+      yrNom.textContent=(yrOpen?'▼ ':'▶ ')+yr+(yr===currentYear?' ★':'');
+      var yrSum=_el('span','font-size:.95rem;font-weight:800;');
+      yrSum.style.setProperty('color','#111111','important');
+      yrSum.textContent=_fmtEur(yrTotal)+' ('+yrRows.length+' dom.)';
+      yrHdr.appendChild(yrNom); yrHdr.appendChild(yrSum);
+      yrRow.appendChild(yrHdr);
+      c.appendChild(yrRow);
+
+      var domCont=_el('div','');
+      domCont.style.display=yrOpen?'block':'none';
+      c.appendChild(domCont);
+
+      yrRow.addEventListener('click',function(){
+        _expanded[yrKey]=!_expanded[yrKey];
+        var o=_expanded[yrKey];
+        yrNom.textContent=(o?'▼ ':'▶ ')+yr+(yr===currentYear?' ★':'');
+        domCont.style.display=o?'block':'none';
+      });
+
+      // Agrupar por loja dentro del año
+      var byLojaD={};
+      yrRows.forEach(function(r){
+        if(!byLojaD[r.loja])byLojaD[r.loja]=[];
+        byLojaD[r.loja].push(r);
+      });
+      ZONA_DOMINGO.forEach(function(loja){
+        if(!byLojaD[loja])return;
+        var lRows=byLojaD[loja].slice().sort(function(a,b){return a.data>b.data?-1:1;});
+        var lTotal=lRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        var lKey=yrKey+':L:'+loja;
+        var lOpen=!!_expanded[lKey];
+        var lLabel=LOJA_LABELS[loja]||loja;
+
+        var lRow=_el('div','border-radius:8px;padding:9px 16px 9px 28px;margin-bottom:3px;cursor:pointer;border:1px solid #eeeeee;user-select:none;');
+        lRow.style.setProperty('background','#ffffff','important');
+        lRow.addEventListener('mouseenter',function(){this.style.setProperty('background','#f8f8f8','important');});
+        lRow.addEventListener('mouseleave',function(){this.style.setProperty('background','#ffffff','important');});
+        var lHdr=_el('div','display:flex;align-items:center;justify-content:space-between;');
+        var lNom=_el('span','font-size:.85rem;font-weight:700;');
+        lNom.style.setProperty('color','#222222','important');
+        lNom.textContent=(lOpen?'▼ ':'▶ ')+lLabel;
+        var lSum=_el('span','font-size:.85rem;font-weight:700;');
+        lSum.style.setProperty('color','#222222','important');
+        lSum.textContent=_fmtEur(lTotal);
+        lHdr.appendChild(lNom); lHdr.appendChild(lSum);
+        lRow.appendChild(lHdr);
+        domCont.appendChild(lRow);
+
+        var lDaysCont=_el('div','');
+        lDaysCont.style.display=lOpen?'block':'none';
+        domCont.appendChild(lDaysCont);
+
+        lRow.addEventListener('click',function(e){
+          e.stopPropagation();
+          _expanded[lKey]=!_expanded[lKey];
+          var o=_expanded[lKey];
+          lNom.textContent=(o?'▼ ':'▶ ')+lLabel;
+          lDaysCont.style.display=o?'block':'none';
+        });
+
+        lRows.forEach(function(r){
+          var dayVal=parseFloat(r.montante)||0;
+          var dayRow=_el('div','display:flex;align-items:center;justify-content:space-between;padding:5px 16px 5px 44px;border-bottom:1px solid #f5f5f5;');
+          dayRow.style.setProperty('background','#ffffff','important');
+          var dayL=_el('div','display:flex;align-items:center;gap:10px;');
+          var dayD=_el('span','font-size:.75rem;font-weight:600;width:80px;');
+          dayD.style.setProperty('color','#333333','important');
+          dayD.textContent=_fmtDate(r.data);
+          var dayDow=_el('span','font-size:.68rem;width:28px;');
+          dayDow.style.setProperty('color','#4a7c59','important');
+          dayDow.textContent='Dom';
+          dayL.appendChild(dayD); dayL.appendChild(dayDow);
+          var dayA=_el('span','font-size:.78rem;font-weight:700;');
+          dayA.style.setProperty('color',dayVal===0?'#cccccc':'#111111','important');
+          dayA.textContent=_fmtEur(dayVal);
+          dayRow.appendChild(dayL); dayRow.appendChild(dayA);
+          lDaysCont.appendChild(dayRow);
+        });
+      });
+    });
+  }
+
   function _sumObj(obj){
     if(Array.isArray(obj)) return obj.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     return Object.keys(obj).reduce(function(s,k){return s+_sumObj(obj[k]);},0);
-  }
-
-  // ════════════════════════════════════════════════════════════
-  //  TAB ESTACIONAL
-  // ════════════════════════════════════════════════════════════
-  function _renderEstacional(){
-    var c=_getContent(); if(!c)return;
-    c.innerHTML=''; _setupContent(c);
-    var rows=_filterByZone(_allRows);
-    if(!rows.length){var e=_el('div','padding:40px;text-align:center;font-size:.85rem;');e.style.setProperty('color','#666666','important');e.textContent='Sem dados.';c.appendChild(e);return;}
-
-    var byMonth=new Array(12).fill(0),cntMonth=new Array(12).fill(0);
-    rows.forEach(function(r){if((parseFloat(r.montante)||0)===0)return;var m=_strToDate(r.data).getMonth();byMonth[m]+=parseFloat(r.montante);cntMonth[m]++;});
-    var avgMonth=byMonth.map(function(v,i){return cntMonth[i]?v/cntMonth[i]:0;});
-
-    var byDow=new Array(7).fill(0),cntDow=new Array(7).fill(0);
-    rows.forEach(function(r){if((parseFloat(r.montante)||0)===0)return;var d=_strToDate(r.data).getDay();byDow[d]+=parseFloat(r.montante);cntDow[d]++;});
-    var avgDow=byDow.map(function(v,i){return cntDow[i]?v/cntDow[i]:0;});
-
-    var byYear={};
-    rows.forEach(function(r){var yr=r.data.substring(0,4);if(!byYear[yr])byYear[yr]=0;byYear[yr]+=parseFloat(r.montante)||0;});
-    var years=Object.keys(byYear).sort();
-
-    var yest=_yesterdayStr();
-    var d90=new Date(_strToDate(yest));d90.setDate(d90.getDate()-89);
-    var d180=new Date(d90);d180.setDate(d90.getDate()-90);
-    var d90s=_dateToStr(d90),d180s=_dateToStr(d180);
-    var last90=rows.filter(function(r){return r.data>=d90s&&r.data<=yest&&(parseFloat(r.montante)||0)>0;});
-    var prev90=rows.filter(function(r){return r.data>=d180s&&r.data<d90s&&(parseFloat(r.montante)||0)>0;});
-    var avg90=last90.length?last90.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0)/last90.length:0;
-    var avgP90=prev90.length?prev90.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0)/prev90.length:0;
-    var tend90=avgP90>0?(avg90-avgP90)/avgP90*100:null;
-
-    // Señales
-    var sig=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;');
-    sig.style.setProperty('background','#fafafa','important');
-    var sigT=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px;');
-    sigT.style.setProperty('color','#888888','important');sigT.textContent='SINAIS DO NEGÓCIO';sig.appendChild(sigT);
-    var grid=_el('div','display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;');
-
-    function _sc(icon,lbl,val,sub,col){
-      var card=_el('div','border-radius:9px;padding:12px 14px;border:1px solid #e8e8e8;');
-      card.style.setProperty('background','#ffffff','important');
-      var i=_el('div','font-size:1.1rem;margin-bottom:3px;');i.textContent=icon;card.appendChild(i);
-      var l=_el('div','font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px;');
-      l.style.setProperty('color','#888888','important');l.textContent=lbl;card.appendChild(l);
-      var v=_el('div','font-size:.9rem;font-weight:800;');
-      v.style.setProperty('color',col||'#111111','important');v.textContent=val;card.appendChild(v);
-      if(sub){var s=_el('div','font-size:.65rem;margin-top:2px;');s.style.setProperty('color','#888888','important');s.textContent=sub;card.appendChild(s);}
-      return card;
-    }
-
-    var bestM=avgMonth.indexOf(Math.max.apply(null,avgMonth));
-    var validM=avgMonth.filter(function(v){return v>0;});
-    var worstM=avgMonth.indexOf(Math.min.apply(null,validM.length?validM:[0]));
-    grid.appendChild(_sc('📅','Melhor mês histórico',MESES_PT[bestM],_fmtEur(avgMonth[bestM])+'/dia em média','#2a6a40'));
-    grid.appendChild(_sc('📉','Mês mais fraco',MESES_PT[worstM],_fmtEur(avgMonth[worstM])+'/dia em média','#a03020'));
-    var bestD=avgDow.indexOf(Math.max.apply(null,avgDow));
-    var validD=avgDow.filter(function(v){return v>0;});
-    var worstD=avgDow.indexOf(Math.min.apply(null,validD.length?validD:[0]));
-    grid.appendChild(_sc('📆','Melhor dia',DIAS_PT[bestD],_fmtEur(avgDow[bestD])+'/dia'));
-    grid.appendChild(_sc('😴','Dia mais fraco',DIAS_PT[worstD],_fmtEur(avgDow[worstD])+'/dia','#a03020'));
-    if(tend90!==null){
-      var tCol=tend90>3?'#2a6a40':tend90<-3?'#a03020':'#555555';
-      var tIco=tend90>3?'📈':tend90<-3?'📉':'➡️';
-      var tLbl=tend90>3?'acelerando':tend90<-3?'a desacelerar':'estável';
-      grid.appendChild(_sc(tIco,'Tendência 90 dias',tLbl,(tend90>=0?'+':'')+tend90.toFixed(1)+'% vs 90d anteriores',tCol));
-    }
-    var decAvg=avgMonth[11],totAvg=avgMonth.reduce(function(s,v){return s+v;},0)/12;
-    if(decAvg>0&&totAvg>0){
-      var dMult=decAvg/totAvg;
-      grid.appendChild(_sc('🎄','Dezembro vs média',dMult.toFixed(1)+'x acima da média',_fmtEur(decAvg)+'/dia','#2a6a40'));
-    }
-    sig.appendChild(grid);c.appendChild(sig);
-
-    // Evolución anual
-    var yT=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
-    yT.style.setProperty('color','#999999','important');yT.textContent='EVOLUÇÃO ANUAL';c.appendChild(yT);
-    var yBox=_el('div','border-radius:12px;padding:14px 20px;margin-bottom:20px;border:1px solid #e0e0e0;');
-    yBox.style.setProperty('background','#fafafa','important');
-    var maxYr=Math.max.apply(null,years.map(function(y){return byYear[y];}))||1;
-    var prevYrV=null;
-    years.forEach(function(yr){
-      var v=byYear[yr],pct=v/maxYr*100;
-      var row=_el('div','display:flex;align-items:center;gap:12px;margin-bottom:10px;');
-      var yL=_el('span','font-size:.78rem;font-weight:700;width:40px;flex-shrink:0;');
-      yL.style.setProperty('color','#333333','important');yL.textContent=yr;
-      var bW=_el('div','flex:1;border-radius:5px;overflow:hidden;height:12px;');
-      bW.style.setProperty('background','#e8e8e8','important');
-      var bF=_el('div','height:100%;border-radius:5px;');
-      bF.style.setProperty('width',pct.toFixed(1)+'%','important');
-      bF.style.setProperty('background','linear-gradient(90deg,#4a7aaa,#6aacdd)','important');
-      bW.appendChild(bF);
-      var vL=_el('span','font-size:.78rem;font-weight:700;width:100px;text-align:right;flex-shrink:0;');
-      vL.style.setProperty('color','#111111','important');vL.textContent=_fmtEur(v);
-      row.appendChild(yL);row.appendChild(bW);row.appendChild(vL);
-      if(prevYrV!==null){
-        var yD=(v-prevYrV)/prevYrV*100;
-        var yB=_el('span','font-size:.65rem;font-weight:700;width:55px;text-align:right;flex-shrink:0;');
-        yB.style.setProperty('color',yD>=0?'#2a6a40':'#a03020','important');
-        yB.textContent=(yD>=0?'+':'')+yD.toFixed(1)+'%';
-        row.appendChild(yB);
-      }
-      prevYrV=v;yBox.appendChild(row);
-    });
-    c.appendChild(yBox);
-
-    // Mapa calor
-    var hT=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
-    hT.style.setProperty('color','#999999','important');hT.textContent='MAPA DE CALOR — MÉDIA DIÁRIA POR MÊS × ANO';c.appendChild(hT);
-    var hBox=_el('div','border-radius:12px;padding:14px 20px;margin-bottom:20px;border:1px solid #e0e0e0;overflow-x:auto;');
-    hBox.style.setProperty('background','#fafafa','important');
-    var heatData={};
-    rows.forEach(function(r){
-      var yr=r.data.substring(0,4),mo=parseInt(r.data.substring(5,7))-1;
-      if(!heatData[yr]) heatData[yr]=new Array(12).fill(null).map(function(){return{sum:0,cnt:0};});
-      if((parseFloat(r.montante)||0)>0){heatData[yr][mo].sum+=parseFloat(r.montante);heatData[yr][mo].cnt++;}
-    });
-    var hYrs=Object.keys(heatData).sort();
-    var allV=[];hYrs.forEach(function(yr){heatData[yr].forEach(function(m){if(m.cnt>0)allV.push(m.sum/m.cnt);});});
-    var hMin=allV.length?Math.min.apply(null,allV):0,hMax=allV.length?Math.max.apply(null,allV):1;
-    var tbl=document.createElement('table');tbl.setAttribute('style','border-collapse:collapse;font-size:.7rem;min-width:600px;');
-    var thead=document.createElement('thead'),htr=document.createElement('tr');
-    ['',...MESES_PT.map(function(m){return m.substring(0,3);})].forEach(function(h,i){
-      var th=document.createElement('th');th.textContent=h;
-      th.setAttribute('style','padding:4px 6px;text-align:'+(i===0?'left':'center')+';font-weight:700;');
-      th.style.setProperty('color','#555555','important');htr.appendChild(th);
-    });
-    thead.appendChild(htr);tbl.appendChild(thead);
-    var tbody=document.createElement('tbody');
-    hYrs.forEach(function(yr){
-      var tr=document.createElement('tr');
-      var tdY=document.createElement('td');tdY.textContent=yr;
-      tdY.setAttribute('style','padding:4px 8px;font-weight:700;');
-      tdY.style.setProperty('color','#333333','important');tr.appendChild(tdY);
-      heatData[yr].forEach(function(m){
-        var td=document.createElement('td');td.setAttribute('style','padding:3px 4px;text-align:center;border-radius:4px;');
-        if(m.cnt>0){
-          var avg=m.sum/m.cnt,intensity=(avg-hMin)/(hMax-hMin||1);
-          var rr=Math.round(255-(255-42)*intensity),gg=Math.round(255-(255-122)*intensity),bb=Math.round(255-(255-90)*intensity);
-          td.style.setProperty('background','rgb('+rr+','+gg+','+bb+')','important');
-          td.style.setProperty('color',intensity>0.5?'#ffffff':'#111111','important');
-          td.textContent=Math.round(avg);
-        } else {
-          td.style.setProperty('background','#f0f0f0','important');td.style.setProperty('color','#cccccc','important');td.textContent='—';
-        }
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-    tbl.appendChild(tbody);hBox.appendChild(tbl);c.appendChild(hBox);
   }
 
   // ════════════════════════════════════════════════════════════
@@ -655,23 +716,142 @@
     document.head.appendChild(s);
   }
 
+  // IDs de todos los botones de período y zona
+  var _PERIOD_BTNS = ['hadm-btn-7','hadm-btn-30','hadm-btn-90','hadm-btn-mes','hadm-btn-ano','hadm-btn-total'];
+  var _ZONE_BTNS   = ['hadm-btn-parfois','hadm-btn-primavera','hadm-btn-mezkaps','hadm-btn-mezkafnc','hadm-btn-domingo'];
+
   function _applyBtnStyles(){
-    ['hadm-btn-7','hadm-btn-30','hadm-btn-90','hadm-btn-mes','hadm-btn-ano'].forEach(function(id){var el=document.getElementById(id);if(el)el.setAttribute('style',id===_activePeriodBtn?S.pillAct:S.pill);});
-    ['hadm-btn-parfois','hadm-btn-mezka','hadm-btn-mezkaf'].forEach(function(id){var el=document.getElementById(id);if(el)el.setAttribute('style',id===_activeZoneBtn?S.pillAct:S.pill);});
-    ['hadm-tab-vendas','hadm-tab-estacional','hadm-tab-carregar'].forEach(function(id){var el=document.getElementById(id);if(!el)return;var tab=id.replace('hadm-tab-','');el.setAttribute('style',tab===_activeTab?S.tabAct:S.tab);});
+    _PERIOD_BTNS.forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) el.setAttribute('style',id===_activePeriodBtn?S.pillAct:S.pill);
+    });
+    _ZONE_BTNS.forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) el.setAttribute('style',id===_activeZoneBtn?S.pillAct:S.pill);
+    });
+    ['hadm-tab-vendas','hadm-tab-carregar'].forEach(function(id){
+      var el=document.getElementById(id);if(!el)return;
+      var tab=id.replace('hadm-tab-','');
+      el.setAttribute('style',tab===_activeTab?S.tabAct:S.tab);
+    });
   }
 
   setTimeout(function(){
-    ['vendas','estacional','carregar'].forEach(function(tab){var btn=document.getElementById('hadm-tab-'+tab);if(!btn)return;btn.addEventListener('click',function(){_activeTab=tab;_applyBtnStyles();_render();});});
-    var periods={'hadm-btn-7':_period7,'hadm-btn-30':_period30,'hadm-btn-90':_period90,'hadm-btn-mes':_periodMes,'hadm-btn-ano':_periodAno};
-    Object.keys(periods).forEach(function(id){var btn=document.getElementById(id);if(!btn)return;btn.addEventListener('click',function(){var p=periods[id]();var fEl=document.getElementById('hadm-from'),tEl=document.getElementById('hadm-to');if(fEl)fEl.value=p.from;if(tEl)tEl.value=p.to;_activePeriodBtn=id;_activeZoneBtn=null;_applyBtnStyles();_render();});});
-    var zBtns={'hadm-btn-parfois':ZONA_PARFOIS,'hadm-btn-mezka':ZONA_MEZKA,'hadm-btn-mezkaf':ZONA_MEZKAF};
-    function _applyZone(lojas,btnId){var lojaEl=document.getElementById('hadm-loja');if(lojaEl){lojaEl.value='';lojaEl.dataset.zone=JSON.stringify(lojas);}    _activeZoneBtn=btnId;_activePeriodBtn=null;_applyBtnStyles();_render();}
-    Object.keys(zBtns).forEach(function(id){var btn=document.getElementById(id);if(!btn)return;btn.addEventListener('click',function(){_applyZone(zBtns[id],id);});});
+    // Tabs — solo vendas y carregar (estacional eliminado)
+    ['vendas','carregar'].forEach(function(tab){
+      var btn=document.getElementById('hadm-tab-'+tab);
+      if(!btn)return;
+      btn.addEventListener('click',function(){_activeTab=tab;_applyBtnStyles();_render();});
+    });
+
+    // Botones de período — mantienen zona activa
+    var periods={
+      'hadm-btn-7':   _period7,
+      'hadm-btn-30':  _period30,
+      'hadm-btn-90':  _period90,
+      'hadm-btn-mes': _periodMes,
+      'hadm-btn-ano': _periodAno
+    };
+    Object.keys(periods).forEach(function(id){
+      var btn=document.getElementById(id);if(!btn)return;
+      btn.addEventListener('click',function(){
+        var p=periods[id]();
+        var fEl=document.getElementById('hadm-from'),tEl=document.getElementById('hadm-to');
+        if(fEl)fEl.value=p.from;
+        if(tEl)tEl.value=p.to;
+        _activePeriodBtn=id;
+        // Zona se mantiene — NO se resetea
+        _applyBtnStyles();
+        _render();
+      });
+    });
+
+    // Botón Total — todo el histórico
+    var btnTotal=document.getElementById('hadm-btn-total');
+    if(btnTotal){
+      btnTotal.addEventListener('click',function(){
+        var pt=_periodTotal(_allRows);
+        var fEl=document.getElementById('hadm-from'),tEl=document.getElementById('hadm-to');
+        if(fEl)fEl.value=pt.from;
+        if(tEl)tEl.value=pt.to;
+        _activePeriodBtn='hadm-btn-total';
+        // Zona se mantiene
+        _applyBtnStyles();
+        _render();
+      });
+    }
+
+    // Botones de zona — mantienen período activo
+    var zBtns={
+      'hadm-btn-parfois':   ZONA_PARFOIS,
+      'hadm-btn-primavera': ZONA_PRIMAVERA,
+      'hadm-btn-mezkaps':   ZONA_MEZKAPS,
+      'hadm-btn-mezkafnc':  ZONA_MEZKAFNC
+    };
+    function _applyZone(lojas,btnId){
+      var lojaEl=document.getElementById('hadm-loja');
+      if(lojaEl){lojaEl.value='';lojaEl.dataset.zone=JSON.stringify(lojas);}
+      _activeZoneBtn=btnId;
+      // Período se mantiene — NO se resetea
+      _applyBtnStyles();
+      _render();
+    }
+    Object.keys(zBtns).forEach(function(id){
+      var btn=document.getElementById(id);if(!btn)return;
+      btn.addEventListener('click',function(){
+        // Si ya está activo, deseleccionar (toggle)
+        if(_activeZoneBtn===id){
+          var lojaEl=document.getElementById('hadm-loja');
+          if(lojaEl){lojaEl.value='';delete lojaEl.dataset.zone;}
+          _activeZoneBtn=null;
+          _applyBtnStyles();
+          _render();
+        } else {
+          _applyZone(zBtns[id],id);
+        }
+      });
+    });
+
+    // Botón Domingo Ps — especial, no usa filtro de período
+    var btnDomingo=document.getElementById('hadm-btn-domingo');
+    if(btnDomingo){
+      btnDomingo.addEventListener('click',function(){
+        if(_activeZoneBtn==='hadm-btn-domingo'){
+          // Toggle off
+          _activeZoneBtn=null;
+          var lojaEl=document.getElementById('hadm-loja');
+          if(lojaEl){lojaEl.value='';delete lojaEl.dataset.zone;}
+          _applyBtnStyles();
+          _render();
+        } else {
+          _activeZoneBtn='hadm-btn-domingo';
+          var lojaEl=document.getElementById('hadm-loja');
+          if(lojaEl){lojaEl.value='';delete lojaEl.dataset.zone;}
+          _applyBtnStyles();
+          _render();
+        }
+      });
+    }
+
+    // Botón buscar manual
     var buscar=document.getElementById('hadm-buscar-btn');
-    if(buscar)buscar.addEventListener('click',function(){var lojaEl=document.getElementById('hadm-loja');if(lojaEl)delete lojaEl.dataset.zone;_activePeriodBtn=null;_activeZoneBtn=null;_applyBtnStyles();_render();});
+    if(buscar)buscar.addEventListener('click',function(){
+      var lojaEl=document.getElementById('hadm-loja');
+      if(lojaEl)delete lojaEl.dataset.zone;
+      _activePeriodBtn=null;
+      _activeZoneBtn=null;
+      _applyBtnStyles();
+      _render();
+    });
+
     var lojaEl=document.getElementById('hadm-loja');
-    if(lojaEl)lojaEl.addEventListener('change',function(){delete lojaEl.dataset.zone;_activePeriodBtn=null;_activeZoneBtn=null;_applyBtnStyles();});
+    if(lojaEl)lojaEl.addEventListener('change',function(){
+      delete lojaEl.dataset.zone;
+      _activePeriodBtn=null;
+      _activeZoneBtn=null;
+      _applyBtnStyles();
+    });
+
     _applyBtnStyles();
   },0);
 

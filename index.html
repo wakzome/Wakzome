@@ -1105,6 +1105,7 @@ td, th { border-radius:10px; margin:2px; }
 #admin-app.module-open #adm-dashboard { display: none !important; }
 #admin-app:not(.module-open) .tab-panel { display: none !important; }
 #admin-app:not(.module-open) #adm-module-bar { display: none !important; }
+#admin-app.module-open #adm-module-bar { display: flex !important; }
 #admin-app.module-open #admin-header { display: none; }
 
 /* Dashboard container */
@@ -1399,6 +1400,7 @@ td, th { border-radius:10px; margin:2px; }
   }
   /* Back bar sticks to top of the scrolling admin-app */
   #admin-app.module-open #adm-module-bar {
+    display: flex !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 101;
@@ -4489,6 +4491,8 @@ td                   { font-size: .96rem !important; }
     adminApp.classList.add('module-open');
     adminApp.scrollTop = 0;
     if (barTitle) barTitle.textContent = MODULE_LABELS[tab] || tab;
+    var moduleBar = document.getElementById('adm-module-bar');
+    if (moduleBar) moduleBar.style.display = 'flex';
 
     // Forzar reflow en móvil para que el navegador recalcule el scroll
     // tras la inyección dinámica de contenido
@@ -4537,6 +4541,10 @@ td                   { font-size: .96rem !important; }
     document.body.classList.remove('no-glow');
     // Reset tab panels
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+
+    // Hide module bar explicitly
+    var moduleBar = document.getElementById('adm-module-bar');
+    if (moduleBar) moduleBar.style.display = '';
 
     // Hide ventas admin panel
     var vPanel = document.getElementById('adm-ventas-panel');

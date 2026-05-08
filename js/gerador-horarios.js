@@ -1861,7 +1861,7 @@
               content = `<span class="gh-sh-line" style="color:#e67e22;font-weight:700;">⚡ ${S._apoioShifts[p.id][day].shift}</span>`;
             } else if (c2.store === st.id) {
               const soft = p.softAvoid?.some(oid => S.schedule[oid]?.[day]?.type === 'work' && S.schedule[oid]?.[day]?.store === st.id);
-              const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f' };
+              const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f' , '11:00-14:00|15:00-20:00': 'c-shift-g' };
               cls = soft ? 'c-soft' : (shiftColorMap[c2.shift] || 'c-shift-b');
               content = c2.shift ? c2.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('') : `<span class="gh-sh-line">—</span>`;
             } else {
@@ -2819,6 +2819,7 @@
         #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#fce4ec; border-color:#f48fb1; }
         #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#f3e5f5; border-color:#ce93d8; }
         #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e8eaf6; border-color:#9fa8da; }
+        #gh-modal .gh-pill-shift[data-val="11:00-14:00|15:00-20:00"] { background:#e8eaf6; border-color:#ce93d8; }
         #gh-modal .gh-pill-shift.gh-pill-apoio { background:#fff3e0; border-color:#e67e22; }
         #gh-modal .gh-pill-shift.gh-pill-apoio.active { background:#e67e22 !important; border-color:#e67e22 !important; color:#fff !important; }
         #gh-modal .gh-pill-shift.active, #gh-modal .gh-pill-shift[data-val].active { background:#111 !important; border-color:#111 !important; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
@@ -2971,6 +2972,7 @@
               <option value="09:00-12:00|13:00-18:00">[D]</option>
               <option value="11:00-15:00|16:00-20:00">[E]</option>
               <option value="09:00-13:00|19:00-23:00">[F]</option>
+              <option value="11:00-14:00|15:00-20:00">[G]</option>
               <option value="10:00-13:00|APOIO|15:00-19:00">[APOIO]</option>
             </select>
             <select id="gh-me-store" style="display:none"></select>
@@ -2991,6 +2993,7 @@
                   <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-14:00|15:00-20:00">11:00 – 14:00<br>15:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio</span><br>15:00 – 19:00</button>
                 </div>
                 <div id="gh-apoio-store-wrap" style="display:none;margin-top:12px;">

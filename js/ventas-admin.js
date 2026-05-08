@@ -173,28 +173,6 @@
     var zoneFilter  = (tiendaEl && tiendaEl.dataset.zoneFilter)  ? JSON.parse(tiendaEl.dataset.zoneFilter) : null;
     var sundayFilter = (tiendaEl && tiendaEl.dataset.sundayFilter === 'true');
 
-    // Período de comparación
-    var cmp = _calcCmpPeriod(fromDate, toDate);
-
-    // Resultado acumulador para las dos consultas paralelas
-    var results = { main: null, prev: null };
-
-    function _tryRender() {
-      if (results.main === null || results.prev === null) return;
-      var mainData = results.main;
-      var prevData = results.prev;
-      if (sundayFilter) {
-        mainData = mainData.filter(function (r) { return new Date(r.fecha + 'T00:00:00').getDay() === 0; });
-        prevData = prevData.filter(function (r) { return new Date(r.fecha + 'T00:00:00').getDay() === 0; });
-      }
-      _render(mainData, prevData, container, {
-        from: fromDate, to: toDate,
-        cmpFrom: cmp.from, cmpTo: cmp.to,
-        filterStore: filterStore,
-        zoneFilter: zoneFilter
-      });
-    }
-
     // Consulta principal
     var q = sbAdmin.from('ventas_diarias').select('*')
       .gte('fecha', fromDate).lte('fecha', toDate)
@@ -209,31 +187,22 @@
         container.innerHTML = '<div style="padding:20px;color:#c03000;font-size:.85rem;">⚠ Erro: ' + res.error.message + '</div>';
         return;
       }
-      results.main = res.data || [];
-      _tryRender();
+      var mainData = res.data || [];
+      if (sundayFilter) {
+        mainData = mainData.filter(function (r) { return new Date(r.fecha + 'T00:00:00').getDay() === 0; });
+      }
+      _render(mainData, container, {
+        from: fromDate, to: toDate,
+        filterStore: filterStore,
+        zoneFilter: zoneFilter
+      });
     }).catch(function () {
       container.innerHTML = '<div style="padding:20px;color:#c03000;font-size:.85rem;">⚠ Erro de ligação</div>';
-    });
-
-    // Consulta comparativa (mismo filtro de tienda)
-    var q2 = sbAdmin.from('ventas_diarias').select('*')
-      .gte('fecha', cmp.from).lte('fecha', cmp.to);
-    if (filterStore) {
-      q2 = q2.eq('tienda', filterStore);
-    } else if (zoneFilter) {
-      q2 = q2.in('tienda', zoneFilter);
-    }
-    q2.then(function (res) {
-      results.prev = res.error ? [] : (res.data || []);
-      _tryRender();
-    }).catch(function () {
-      results.prev = [];
-      _tryRender();
     });
   }
 
   // ── Render ──
-  function _render(rows, prevRows, container, meta) {
+  function _render(rows, container, meta) {
     container.innerHTML = '';
     container.style.setProperty('overflow',   'visible',       'important');
     container.style.setProperty('height',     'auto',          'important');
@@ -296,20 +265,8 @@
       storeTotals[t] = byStore[t].reduce(function (s, r) { return s + (parseFloat(r.total) || 0); }, 0);
     });
 
-    // ── Agrupar datos comparativos ──
-    var prevByStore = {};
-    prevRows.forEach(function (r) {
-      if (!prevByStore[r.tienda]) prevByStore[r.tienda] = [];
-      prevByStore[r.tienda].push(r);
-    });
-    var prevStoreTotals = {};
-    Object.keys(prevByStore).forEach(function (t) {
-      prevStoreTotals[t] = prevByStore[t].reduce(function (s, r) { return s + (parseFloat(r.total) || 0); }, 0);
-    });
-
     // ── Gran total ──
-    var gt      = { numerario: 0, mb: 0, visa: 0, voucher: 0, total: 0 };
-    var prevGt  = prevRows.reduce(function (s, r) { return s + (parseFloat(r.total) || 0); }, 0);
+    var gt = { numerario: 0, mb: 0, visa: 0, voucher: 0, total: 0 };
     storeOrder.forEach(function (t) {
       byStore[t].forEach(function (r) {
         gt.numerario += parseFloat(r.numerario) || 0;
@@ -378,24 +335,15 @@
     grandLabel.textContent = 'TOTAL GERAL';
     grand.appendChild(grandLabel);
 
-    // Subtítulo: período de comparación
-    var cmpSubtitle = document.createElement('div');
-    cmpSubtitle.style.cssText = 'font-size:.67rem;margin-bottom:10px;';
-    cmpSubtitle.style.setProperty('color', 'rgba(255,255,255,0.45)', 'important');
-    cmpSubtitle.textContent = prevRows.length
-      ? 'vs ' + _fmtDate(meta.cmpFrom) + ' – ' + _fmtDate(meta.cmpTo)
-      : 'sin datos comparativos';
-    grand.appendChild(cmpSubtitle);
-
     var grandGrid = document.createElement('div');
     grandGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;';
 
     [
-      { v: gt.numerario, l: 'Numerário', big: false, showCmp: false },
-      { v: gt.mb,        l: 'MB',        big: false, showCmp: false },
-      { v: gt.visa,      l: 'Visa',      big: false, showCmp: false },
-      { v: gt.voucher,   l: 'Voucher',   big: false, showCmp: false },
-      { v: gt.total,     l: 'Total',     big: true,  showCmp: true  }
+      { v: gt.numerario, l: 'Numerário', big: false },
+      { v: gt.mb,        l: 'MB',        big: false },
+      { v: gt.visa,      l: 'Visa',      big: false },
+      { v: gt.voucher,   l: 'Voucher',   big: false },
+      { v: gt.total,     l: 'Total',     big: true  }
     ].forEach(function (item) {
       var col = document.createElement('div');
       col.style.cssText = 'display:flex;flex-direction:column;gap:2px;min-width:80px;';
@@ -412,17 +360,6 @@
 
       col.appendChild(val);
       col.appendChild(lbl);
-
-      // Badge % comparativo solo en Total
-      if (item.showCmp && prevGt > 0) {
-        var pct  = ((gt.total - prevGt) / prevGt) * 100;
-        var isUp = pct >= 0;
-        var badge = document.createElement('span');
-        badge.style.cssText = 'font-size:.7rem;font-weight:800;margin-top:4px;display:block;';
-        badge.style.setProperty('color', isUp ? '#6dcf95' : '#ff7070', 'important');
-        badge.textContent = (isUp ? '↑ +' : '↓ ') + pct.toFixed(1) + '%';
-        col.appendChild(badge);
-      }
 
       grandGrid.appendChild(col);
     });
@@ -446,13 +383,12 @@
         sub.total     += parseFloat(r.total)     || 0;
       });
 
-      var prevSub = prevStoreTotals[tienda] || 0;
       var barPct  = maxTotal > 0 ? (sub.total / maxTotal * 100) : 0;
 
       var section = document.createElement('div');
       section.setAttribute('style', 'margin-bottom:28px;');
 
-      // ── Título: medalla ranking + nombre + barra + badge % ──
+      // ── Título: medalla ranking + nombre + barra ──
       var titleRow = document.createElement('div');
       titleRow.setAttribute('style',
         'display:flex;align-items:center;gap:10px;' +
@@ -467,19 +403,6 @@
       titleText.textContent = label.toUpperCase();
 
       titleRow.appendChild(titleText);
-
-      // Badge % comparativo de la tienda
-      if (prevSub > 0) {
-        var sPct  = ((sub.total - prevSub) / prevSub * 100);
-        var sUp   = sPct >= 0;
-        var sBadge = document.createElement('span');
-        sBadge.setAttribute('style',
-          'font-size:.68rem;font-weight:800;white-space:nowrap;flex-shrink:0;' +
-          'color:' + (sUp ? '#4caf82' : '#e05a5a') + ';'
-        );
-        sBadge.textContent = (sUp ? '↑ +' : '↓ ') + sPct.toFixed(1) + '%';
-        titleRow.appendChild(sBadge);
-      }
 
       section.appendChild(titleRow);
 
@@ -651,37 +574,6 @@
   }
   function _esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // ── Calcular período de comparación ──
-  // La comparación siempre es justa: se comparan los mismos días transcurridos.
-  // Ej: si hoy es miércoles y el período es lun-dom, compara lun-mié de la semana pasada.
-  // Ej: si estamos a día 12 del mes, compara días 1-12 del mes pasado.
-  function _calcCmpPeriod(fromDate, toDate) {
-    var today  = _todayStr();
-    var fromD  = new Date(fromDate + 'T00:00:00');
-    var toD    = new Date(toDate   + 'T00:00:00');
-    var todayD = new Date(today    + 'T00:00:00');
-
-    var periodLen = Math.round((toD - fromD) / 86400000) + 1;
-
-    // Días transcurridos desde inicio del período hasta hoy (mínimo 1, máximo = periodo completo)
-    var elapsed = Math.min(
-      Math.max(Math.round((todayD - fromD) / 86400000) + 1, 1),
-      periodLen
-    );
-
-    // Período anterior: misma longitud, terminando el día antes del inicio actual
-    var cmpToD   = new Date(fromD);
-    cmpToD.setDate(fromD.getDate() - 1);
-    var cmpFromD = new Date(cmpToD);
-    cmpFromD.setDate(cmpToD.getDate() - periodLen + 1);
-
-    // Cap: solo los días equivalentes transcurridos
-    var cmpEndD = new Date(cmpFromD);
-    cmpEndD.setDate(cmpFromD.getDate() + elapsed - 1);
-
-    return { from: _dateToStr(cmpFromD), to: _dateToStr(cmpEndD) };
   }
 
   // ── Helpers período ──

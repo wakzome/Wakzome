@@ -92,12 +92,7 @@
       adminApp.style.setProperty('overflow','hidden','important');
       adminApp.style.setProperty('height','100vh','important');
       adminApp.style.setProperty('padding','0','important');
-      adminApp.style.setProperty('position','fixed','important');
-      adminApp.style.setProperty('top','0','important');
-      adminApp.style.setProperty('left','0','important');
-      adminApp.style.setProperty('right','0','important');
-      adminApp.style.setProperty('bottom','0','important');
-      adminApp.style.setProperty('z-index','999','important');
+      /* position:fixed removido — causava invasão do layout */
     }
     if(moduleBar){moduleBar.style.setProperty('display','flex','important');moduleBar.style.setProperty('flex-shrink','0','important');moduleBar.style.setProperty('width','100%','important');}
     if(panel){
@@ -132,9 +127,30 @@
   function _loadAll() {
     var c=_getContent();
     if(c){c.innerHTML='<div style="padding:30px;font-size:.85rem;color:#666 !important;">a carregar dados históricos…</div>';_setupContent(c);}
-    sbAdmin.from('ventas_historicas').select('*').order('data',{ascending:true})
-      .then(function(res){_allRows=(res.error||!res.data)?[]:res.data;_render();})
-      .catch(function(){_allRows=[];_render();});
+    _allRows=[];
+    _loadPage(0);
+  }
+
+  function _loadPage(offset) {
+    var PAGE=1000;
+    var c=_getContent();
+    sbAdmin.from('ventas_historicas').select('*').order('data',{ascending:true}).range(offset,offset+PAGE-1)
+      .then(function(res){
+        if(res.error){_render();return;}
+        var rows=res.data||[];
+        _allRows=_allRows.concat(rows);
+        if(c){
+          var loaded=_allRows.length;
+          c.innerHTML='<div style="padding:30px;font-size:.85rem;color:#666 !important;">a carregar… '+loaded+' registos</div>';
+          _setupContent(c);
+        }
+        if(rows.length===PAGE){
+          _loadPage(offset+PAGE);
+        } else {
+          _render();
+        }
+      })
+      .catch(function(){_render();});
   }
 
   function _hadmLoadData() { _render(); }
@@ -625,7 +641,7 @@
   }
 
   function _el(tag,css,bg){var el=document.createElement(tag);if(css)el.setAttribute('style',css);if(bg)el.style.setProperty('background',bg,'important');return el;}
-  function _setupContent(c){c.style.setProperty('background','#ffffff','important');c.style.setProperty('padding','16px 24px 80px','important');c.style.setProperty('width','100%','important');c.style.setProperty('box-sizing','border-box','important');}
+  function _setupContent(c){c.style.setProperty('background','#ffffff','important');c.style.setProperty('padding','16px 24px 80px','important');c.style.setProperty('width','100%','important');c.style.setProperty('max-width','900px','important');c.style.setProperty('margin-left','auto','important');c.style.setProperty('margin-right','auto','important');c.style.setProperty('box-sizing','border-box','important');}
 
   function _injectStyles(){
     if(document.getElementById('hadm-styles'))return;

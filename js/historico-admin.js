@@ -43,6 +43,10 @@
   function _period90()  { var t=_yesterday(),f=new Date(t); f.setDate(t.getDate()-89); return {from:_dateToStr(f),to:_dateToStr(t)}; }
   function _periodMes() { var t=_yesterday(),f=new Date(t.getFullYear(),t.getMonth(),1); return {from:_dateToStr(f),to:_dateToStr(t)}; }
   function _periodAno() { var t=_yesterday(); return {from:t.getFullYear()+'-01-01',to:_dateToStr(t)}; }
+  function _periodQ1()  { var y=_yesterday().getFullYear(); return {from:y+'-01-01',to:y+'-03-31'}; }
+  function _periodQ2()  { var y=_yesterday().getFullYear(); return {from:y+'-04-01',to:y+'-06-30'}; }
+  function _periodQ3()  { var y=_yesterday().getFullYear(); return {from:y+'-07-01',to:y+'-09-30'}; }
+  function _periodQ4()  { var y=_yesterday().getFullYear(); return {from:y+'-10-01',to:y+'-12-31'}; }
   function _periodTotal(rows) {
     // Rango completo del histórico
     var dates=rows.map(function(r){return r.data;}).filter(Boolean).sort();
@@ -763,7 +767,7 @@
   }
 
   // IDs de todos los botones de período y zona
-  var _PERIOD_BTNS = ['hadm-btn-7','hadm-btn-30','hadm-btn-90','hadm-btn-mes','hadm-btn-ano','hadm-btn-total'];
+  var _PERIOD_BTNS = ['hadm-btn-7','hadm-btn-30','hadm-btn-90','hadm-btn-mes','hadm-btn-ano','hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4','hadm-btn-total'];
   var _ZONE_BTNS   = ['hadm-btn-parfois','hadm-btn-primavera','hadm-btn-mezkaps','hadm-btn-mezkafnc','hadm-btn-domingo'];
 
   function _applyBtnStyles(){
@@ -796,7 +800,11 @@
       'hadm-btn-30':  _period30,
       'hadm-btn-90':  _period90,
       'hadm-btn-mes': _periodMes,
-      'hadm-btn-ano': _periodAno
+      'hadm-btn-ano': _periodAno,
+      'hadm-btn-q1':  _periodQ1,
+      'hadm-btn-q2':  _periodQ2,
+      'hadm-btn-q3':  _periodQ3,
+      'hadm-btn-q4':  _periodQ4
     };
     Object.keys(periods).forEach(function(id){
       var btn=document.getElementById(id);if(!btn)return;

@@ -608,22 +608,18 @@ body {
   background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%);
 }
 @media (max-width: 768px) {
-  #adm-historico-panel .hadm-row:has(#hadm-from) {
-    flex-wrap: nowrap;
-    align-items: flex-end;
-    gap: 6px;
+  .hadm-row-dates {
+    flex-wrap: nowrap !important;
   }
-  #adm-historico-panel .hadm-filter-group:has(#hadm-from),
-  #adm-historico-panel .hadm-filter-group:has(#hadm-to) {
+  .hadm-date-group {
     flex: 1;
     min-width: 0;
   }
-  #adm-historico-panel .hadm-filter-group:has(#hadm-from) input[type="date"],
-  #adm-historico-panel .hadm-filter-group:has(#hadm-to) input[type="date"] {
+  .hadm-date-group input[type="date"] {
     width: 100%;
-    padding: 6px 6px;
-    font-size: .75rem;
     box-sizing: border-box;
+    font-size: .82rem;
+    padding: 7px 8px;
   }
 }
 /* ── FIN HISTÓRICO ADMIN ── */
@@ -3784,15 +3780,17 @@ td                   { font-size: .96rem !important; }
         <button id="hadm-btn-mezkafnc">Mezka Fnc</button>
         <button id="hadm-btn-domingo">Domingo Ps</button>
       </div>
-      <div class="hadm-row">
-        <div class="hadm-filter-group">
+      <div class="hadm-row hadm-row-dates">
+        <div class="hadm-filter-group hadm-date-group">
           <label>De</label>
           <input type="date" id="hadm-from">
         </div>
-        <div class="hadm-filter-group">
+        <div class="hadm-filter-group hadm-date-group">
           <label>Até</label>
           <input type="date" id="hadm-to">
         </div>
+      </div>
+      <div class="hadm-row">
         <div class="hadm-filter-group">
           <label>Loja</label>
           <select id="hadm-loja">

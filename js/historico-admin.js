@@ -678,77 +678,449 @@
   }
 
   // ════════════════════════════════════════════════════════════
-  //  TAB CARREGAR
+  //  TAB CARREGAR — módulo de carga diaria
   // ════════════════════════════════════════════════════════════
+
+  // Tiendas Primavera (facturação - devoluções) vs ICG (total directo)
+  var LOJAS_PRIMAVERA = ['MEZKA FUNCHAL','MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
+
+  // Estado de la carga diaria: { loja: { fat, dev, status } }
+  var _cargaEstado = {};
+
   function _renderCarregar(){
     var c=_getContent();if(!c)return;
     c.innerHTML='';_setupContent(c);
+
+    // ── Título
     var ttl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:16px;');
-    ttl.style.setProperty('color','#888888','important');ttl.textContent='REGISTAR VENDA HISTÓRICA';c.appendChild(ttl);
-    var form=_el('div','border-radius:12px;padding:20px;margin-bottom:22px;border:1px solid #e0e0e0;');
-    form.style.setProperty('background','#fafafa','important');
-    function _fR(lbl,inp){var row=_el('div','margin-bottom:14px;');var label=_el('label','display:block;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;');label.style.setProperty('color','#666666','important');label.textContent=lbl;row.appendChild(label);row.appendChild(inp);return row;}
-    var iS='width:100%;box-sizing:border-box;padding:10px 14px;font-size:.88rem;font-weight:600;font-family:MontserratLight,sans-serif;border:1.5px solid #cccccc;border-radius:9px;outline:none;';
-    var inpD=_el('input',iS);inpD.type='date';inpD.id='hadm-inp-data';inpD.value=_yesterdayStr();
-    inpD.style.setProperty('background','#ffffff','important');inpD.style.setProperty('color','#111111','important');
-    form.appendChild(_fR('Data',inpD));
-    var inpL=document.createElement('select');inpL.id='hadm-inp-loja';inpL.setAttribute('style',iS);
-    inpL.style.setProperty('background','#ffffff','important');inpL.style.setProperty('color','#111111','important');
-    var op0=document.createElement('option');op0.value='';op0.textContent='Selecionar loja…';inpL.appendChild(op0);
-    LOJAS.forEach(function(l){var o=document.createElement('option');o.value=l;o.textContent=LOJA_LABELS[l]||l;inpL.appendChild(o);});
-    form.appendChild(_fR('Loja',inpL));
-    var inpM=_el('input',iS);inpM.type='number';inpM.id='hadm-inp-montante';inpM.placeholder='0.00';inpM.step='0.01';inpM.min='0';
-    inpM.style.setProperty('background','#ffffff','important');inpM.style.setProperty('color','#111111','important');
-    form.appendChild(_fR('Montante (€)',inpM));
-    var fb=_el('div','font-size:.78rem;font-weight:700;min-height:20px;margin-bottom:12px;');fb.id='hadm-feedback';form.appendChild(fb);
-    var btn=_el('div','display:inline-block;padding:12px 28px;border-radius:10px;font-size:.88rem;font-weight:800;cursor:pointer;text-align:center;font-family:MontserratLight,sans-serif;');
-    btn.style.setProperty('background','#1a1a1a','important');btn.style.setProperty('color','#ffffff','important');btn.textContent='Guardar em Supabase';
-    btn.addEventListener('click',function(){
-      var d=(document.getElementById('hadm-inp-data')||{}).value;
-      var l=(document.getElementById('hadm-inp-loja')||{}).value;
-      var m=(document.getElementById('hadm-inp-montante')||{}).value;
-      var fbEl=document.getElementById('hadm-feedback');
-      if(!d||!l||m===''){if(fbEl){fbEl.textContent='⚠ Preencha todos os campos.';fbEl.style.setProperty('color','#a03020','important');}return;}
-      btn.style.opacity='.5';btn.style.pointerEvents='none';
-      if(fbEl){fbEl.textContent='A guardar…';fbEl.style.setProperty('color','#666666','important');}
-      sbAdmin.from('ventas_historicas').upsert({loja:l,data:d,montante:parseFloat(m)},{onConflict:'loja,data'})
+    ttl.style.setProperty('color','#888888','important');
+    ttl.textContent='CARGA DIÁRIA DE VENDAS';
+    c.appendChild(ttl);
+
+    // ── Selector de fecha (sin valor por defecto — obliga a elegir conscientemente)
+    var dateWrap=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:18px;border:1px solid #e0e0e0;display:flex;align-items:center;gap:16px;flex-wrap:wrap;');
+    dateWrap.style.setProperty('background','#fafafa','important');
+    var dateLbl=_el('span','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;');
+    dateLbl.style.setProperty('color','#888888','important');
+    dateLbl.textContent='DATA';
+    var iS='padding:9px 14px;font-size:.88rem;font-weight:700;font-family:MontserratLight,sans-serif;border:1.5px solid #cccccc;border-radius:9px;outline:none;box-sizing:border-box;';
+    var inpData=_el('input',iS);
+    inpData.type='date';
+    inpData.id='hadm-carga-data';
+    inpData.style.setProperty('background','#ffffff','important');
+    inpData.style.setProperty('color','#111111','important');
+    // Sin value por defecto — el usuario debe seleccionarlo
+    dateWrap.appendChild(dateLbl);
+    dateWrap.appendChild(inpData);
+
+    // Hint
+    var dateHint=_el('span','font-size:.7rem;');
+    dateHint.style.setProperty('color','#aaaaaa','important');
+    dateHint.textContent='Selecione a data antes de registar';
+    dateWrap.appendChild(dateHint);
+    c.appendChild(dateWrap);
+
+    // Cuando cambia la fecha: cargar valores existentes de Supabase
+    inpData.addEventListener('change',function(){
+      var d=inpData.value;
+      if(!d) return;
+      dateHint.textContent='A carregar valores existentes…';
+      dateHint.style.setProperty('color','#aaaaaa','important');
+      sbAdmin.from('ventas_historicas').select('*').eq('data',d)
         .then(function(res){
-          btn.style.opacity='1';btn.style.pointerEvents='';
-          if(res.error){if(fbEl){fbEl.textContent='✗ '+res.error.message;fbEl.style.setProperty('color','#a03020','important');}}
-          else{
-            if(fbEl){fbEl.textContent='✓ Guardado: '+(LOJA_LABELS[l]||l)+' · '+_fmtDate(d)+' · '+_fmtEur(parseFloat(m));fbEl.style.setProperty('color','#2a6a40','important');}
-            if(document.getElementById('hadm-inp-data'))document.getElementById('hadm-inp-data').value=_yesterdayStr();
-            if(document.getElementById('hadm-inp-loja'))document.getElementById('hadm-inp-loja').value='';
-            if(document.getElementById('hadm-inp-montante'))document.getElementById('hadm-inp-montante').value='';
-            _allRows=_allRows.filter(function(r){return!(r.loja===l&&r.data===d);});
-            _allRows.push({loja:l,data:d,montante:parseFloat(m)});
-            _loadRecentes();
-          }
-        }).catch(function(){btn.style.opacity='1';btn.style.pointerEvents='';if(fbEl){fbEl.textContent='✗ Erro de ligação.';fbEl.style.setProperty('color','#a03020','important');}});
+          var rows=res.data||[];
+          // Precargar estado con valores existentes
+          LOJAS.forEach(function(loja){
+            var r=rows.find(function(x){return x.loja===loja;});
+            var esPrimavera=LOJAS_PRIMAVERA.indexOf(loja)>=0;
+            if(r){
+              if(esPrimavera){
+                // Guardamos neto en fat, dev=0 (no tenemos el desglose original)
+                _cargaEstado[loja]={fat:parseFloat(r.montante)||0,dev:0,status:'saved'};
+              } else {
+                _cargaEstado[loja]={total:parseFloat(r.montante)||0,status:'saved'};
+              }
+            } else {
+              if(esPrimavera){
+                _cargaEstado[loja]={fat:0,dev:0,status:'pending'};
+              } else {
+                _cargaEstado[loja]={total:0,status:'pending'};
+              }
+            }
+          });
+          _refreshLojaCards(d);
+          dateHint.textContent=rows.length>0?(rows.length+' loja(s) já registadas para esta data'):'Nenhum registo existente — preencha abaixo';
+          dateHint.style.setProperty('color',rows.length>0?'#4a7c59':'#aaaaaa','important');
+        }).catch(function(){
+          dateHint.textContent='Erro ao carregar valores existentes';
+          dateHint.style.setProperty('color','#a03020','important');
+        });
     });
-    form.appendChild(btn);c.appendChild(form);
-    var rT=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
-    rT.style.setProperty('color','#888888','important');rT.textContent='ÚLTIMOS REGISTOS INSERIDOS';c.appendChild(rT);
+
+    // ── Grid de tiendas
+    var grid=_el('div','display:flex;flex-direction:column;gap:10px;margin-bottom:24px;');
+    grid.id='hadm-carga-grid';
+    c.appendChild(grid);
+
+    // Inicializar estado vacío
+    LOJAS.forEach(function(loja){
+      var esPrimavera=LOJAS_PRIMAVERA.indexOf(loja)>=0;
+      _cargaEstado[loja]=esPrimavera?{fat:0,dev:0,status:'pending'}:{total:0,status:'pending'};
+    });
+    _renderLojaCards(grid);
+
+    // ── Tabla recientes
+    var rT=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;margin-top:8px;');
+    rT.style.setProperty('color','#888888','important');
+    rT.textContent='ÚLTIMA SEMANA';
+    c.appendChild(rT);
     var rBox=_el('div','');rBox.id='hadm-recentes';c.appendChild(rBox);
     _loadRecentes();
+  }
+
+  function _renderLojaCards(grid){
+    grid.innerHTML='';
+    LOJAS.forEach(function(loja){
+      var label=LOJA_LABELS[loja]||loja;
+      var esPrimavera=LOJAS_PRIMAVERA.indexOf(loja)>=0;
+      var estado=_cargaEstado[loja]||{};
+      var status=estado.status||'pending';
+
+      // Card
+      var card=_el('div','border-radius:12px;padding:14px 16px;border:1.5px solid;');
+      var borderColor=status==='saved'?'#4a7c59':status==='error'?'#e05a5a':'#e0e0e0';
+      card.style.setProperty('border-color',borderColor,'important');
+      card.style.setProperty('background',status==='saved'?'#f6fbf8':'#fafafa','important');
+
+      // Cabecera de card
+      var cardHdr=_el('div','display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;');
+      var cardNom=_el('span','font-size:.88rem;font-weight:800;');
+      cardNom.style.setProperty('color','#111111','important');
+      cardNom.textContent=label;
+
+      // Indicador estado
+      var statusDot=_el('span','font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:20px;');
+      if(status==='saved'){
+        statusDot.textContent='✓ guardado';
+        statusDot.style.setProperty('background','#e6f4ed','important');
+        statusDot.style.setProperty('color','#2a6a40','important');
+      } else if(status==='saving'){
+        statusDot.textContent='↑ guardando…';
+        statusDot.style.setProperty('background','#fff8e6','important');
+        statusDot.style.setProperty('color','#8a6000','important');
+      } else if(status==='error'){
+        statusDot.textContent='✗ erro';
+        statusDot.style.setProperty('background','#fdecea','important');
+        statusDot.style.setProperty('color','#a03020','important');
+      } else {
+        statusDot.textContent='pendente';
+        statusDot.style.setProperty('background','#f0f0f0','important');
+        statusDot.style.setProperty('color','#888888','important');
+      }
+      cardHdr.appendChild(cardNom);
+      cardHdr.appendChild(statusDot);
+      card.appendChild(cardHdr);
+
+      var iSCard='width:100%;box-sizing:border-box;padding:8px 12px;font-size:.88rem;font-weight:700;font-family:MontserratLight,sans-serif;border:1.5px solid #dddddd;border-radius:8px;outline:none;';
+
+      if(esPrimavera){
+        // Dos campos: Facturação y Devoluções → neto calculado
+        var row2=_el('div','display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;');
+
+        var fFat=_el('div','flex:1;min-width:120px;');
+        var lFat=_el('label','display:block;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;');
+        lFat.style.setProperty('color','#666666','important');
+        lFat.textContent='Facturação (€)';
+        var inpFat=_el('input',iSCard);
+        inpFat.type='number';inpFat.step='0.01';inpFat.min='0';inpFat.placeholder='0.00';
+        inpFat.value=estado.fat||'';
+        inpFat.style.setProperty('background','#ffffff','important');
+        inpFat.style.setProperty('color','#111111','important');
+        fFat.appendChild(lFat);fFat.appendChild(inpFat);
+
+        var fDev=_el('div','flex:1;min-width:120px;');
+        var lDev=_el('label','display:block;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;');
+        lDev.style.setProperty('color','#666666','important');
+        lDev.textContent='Devoluções (€)';
+        var inpDev=_el('input',iSCard);
+        inpDev.type='number';inpDev.step='0.01';inpDev.min='0';inpDev.placeholder='0.00';
+        inpDev.value=estado.dev||'';
+        inpDev.style.setProperty('background','#ffffff','important');
+        inpDev.style.setProperty('color','#111111','important');
+        fDev.appendChild(lDev);fDev.appendChild(inpDev);
+
+        // Neto display
+        var fNeto=_el('div','flex:1;min-width:100px;');
+        var lNeto=_el('label','display:block;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;');
+        lNeto.style.setProperty('color','#4a7c59','important');
+        lNeto.textContent='Neto';
+        var netoVal=_el('div','font-size:.95rem;font-weight:900;padding:8px 0;');
+        netoVal.style.setProperty('color','#111111','important');
+        function _updateNeto(){
+          var fat=parseFloat(inpFat.value)||0;
+          var dev=parseFloat(inpDev.value)||0;
+          var neto=Math.max(0,fat-dev);
+          netoVal.textContent=_fmtEur(neto);
+          _cargaEstado[loja].fat=fat;
+          _cargaEstado[loja].dev=dev;
+        }
+        _updateNeto();
+        inpFat.addEventListener('input',_updateNeto);
+        inpDev.addEventListener('input',_updateNeto);
+        fNeto.appendChild(lNeto);fNeto.appendChild(netoVal);
+
+        row2.appendChild(fFat);row2.appendChild(fDev);row2.appendChild(fNeto);
+        card.appendChild(row2);
+
+        // Botón guardar de esta tienda
+        var btnCard=_mkSaveBtn(loja,statusDot,card,function(){
+          var d=document.getElementById('hadm-carga-data')?document.getElementById('hadm-carga-data').value:'';
+          if(!d){_flashNeedDate(statusDot);return;}
+          var fat=parseFloat(inpFat.value)||0;
+          var dev=parseFloat(inpDev.value)||0;
+          var neto=Math.max(0,fat-dev);
+          _cargaEstado[loja].fat=fat;
+          _cargaEstado[loja].dev=dev;
+          return {loja:loja,data:d,montante:neto};
+        });
+        card.appendChild(btnCard);
+
+      } else {
+        // ICG: un solo campo total
+        var rowT=_el('div','display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;');
+        var fTot=_el('div','flex:1;min-width:140px;');
+        var lTot=_el('label','display:block;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;');
+        lTot.style.setProperty('color','#666666','important');
+        lTot.textContent='Total (€)';
+        var inpTot=_el('input',iSCard);
+        inpTot.type='number';inpTot.step='0.01';inpTot.min='0';inpTot.placeholder='0.00';
+        inpTot.value=estado.total||'';
+        inpTot.style.setProperty('background','#ffffff','important');
+        inpTot.style.setProperty('color','#111111','important');
+        inpTot.addEventListener('input',function(){_cargaEstado[loja].total=parseFloat(inpTot.value)||0;});
+        fTot.appendChild(lTot);fTot.appendChild(inpTot);
+        rowT.appendChild(fTot);
+        card.appendChild(rowT);
+
+        var btnCard=_mkSaveBtn(loja,statusDot,card,function(){
+          var d=document.getElementById('hadm-carga-data')?document.getElementById('hadm-carga-data').value:'';
+          if(!d){_flashNeedDate(statusDot);return;}
+          var tot=parseFloat(inpTot.value)||0;
+          _cargaEstado[loja].total=tot;
+          return {loja:loja,data:d,montante:tot};
+        });
+        card.appendChild(btnCard);
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  function _refreshLojaCards(d){
+    // Re-renderiza los cards con los valores precargados
+    var grid=document.getElementById('hadm-carga-grid');
+    if(grid) _renderLojaCards(grid);
+  }
+
+  function _mkSaveBtn(loja,statusDot,card,getPayload){
+    var btn=_el('div','display:inline-block;margin-top:10px;padding:8px 20px;border-radius:8px;font-size:.78rem;font-weight:800;cursor:pointer;font-family:MontserratLight,sans-serif;');
+    btn.style.setProperty('background','#1a1a1a','important');
+    btn.style.setProperty('color','#ffffff','important');
+    btn.textContent='Guardar';
+    btn.addEventListener('click',function(){
+      var payload=getPayload();
+      if(!payload) return;
+      // Actualizar estado visual
+      _cargaEstado[loja].status='saving';
+      statusDot.textContent='↑ guardando…';
+      statusDot.style.setProperty('background','#fff8e6','important');
+      statusDot.style.setProperty('color','#8a6000','important');
+      card.style.setProperty('border-color','#ccaa00','important');
+      btn.style.opacity='.5';btn.style.pointerEvents='none';
+
+      sbAdmin.from('ventas_historicas').upsert(payload,{onConflict:'loja,data'})
+        .then(function(res){
+          btn.style.opacity='1';btn.style.pointerEvents='';
+          if(res.error){
+            _cargaEstado[loja].status='error';
+            statusDot.textContent='✗ erro';
+            statusDot.style.setProperty('background','#fdecea','important');
+            statusDot.style.setProperty('color','#a03020','important');
+            card.style.setProperty('border-color','#e05a5a','important');
+            card.style.setProperty('background','#fafafa','important');
+          } else {
+            _cargaEstado[loja].status='saved';
+            statusDot.textContent='✓ guardado';
+            statusDot.style.setProperty('background','#e6f4ed','important');
+            statusDot.style.setProperty('color','#2a6a40','important');
+            card.style.setProperty('border-color','#4a7c59','important');
+            card.style.setProperty('background','#f6fbf8','important');
+            // Actualizar _allRows en memoria
+            _allRows=_allRows.filter(function(r){return!(r.loja===payload.loja&&r.data===payload.data);});
+            _allRows.push(payload);
+            _loadRecentes();
+          }
+        }).catch(function(){
+          btn.style.opacity='1';btn.style.pointerEvents='';
+          _cargaEstado[loja].status='error';
+          statusDot.textContent='✗ erro ligação';
+          statusDot.style.setProperty('background','#fdecea','important');
+          statusDot.style.setProperty('color','#a03020','important');
+          card.style.setProperty('border-color','#e05a5a','important');
+        });
+    });
+    return btn;
+  }
+
+  function _flashNeedDate(statusDot){
+    statusDot.textContent='⚠ selecione a data';
+    statusDot.style.setProperty('background','#fff3cd','important');
+    statusDot.style.setProperty('color','#856404','important');
+    var inpData=document.getElementById('hadm-carga-data');
+    if(inpData){inpData.style.setProperty('border-color','#ccaa00','important');setTimeout(function(){inpData.style.setProperty('border-color','#cccccc','important');},2000);}
+    setTimeout(function(){
+      var e=_cargaEstado[statusDot._loja];
+      statusDot.textContent=e&&e.status==='saved'?'✓ guardado':'pendente';
+    },2000);
   }
 
   function _loadRecentes(){
     var box=document.getElementById('hadm-recentes');if(!box)return;
     box.innerHTML='<div style="font-size:.8rem;padding:8px 0;color:#666 !important;">a carregar…</div>';
-    sbAdmin.from('ventas_historicas').select('*').order('created_at',{ascending:false}).limit(15)
+    // Última semana: 7 días × 7 tiendas = hasta 49 registros, ordenados por fecha desc
+    var semanaAtras=_dateToStr(new Date(new Date().setDate(new Date().getDate()-7)));
+    sbAdmin.from('ventas_historicas').select('*')
+      .gte('data', semanaAtras)
+      .order('data',{ascending:false})
+      .order('loja',{ascending:true})
       .then(function(res){
         box.innerHTML='';
-        if(res.error||!res.data||!res.data.length){var e=_el('div','font-size:.8rem;padding:8px 0;');e.style.setProperty('color','#666666','important');e.textContent='Sem registos recentes.';box.appendChild(e);return;}
-        var tw=_el('div','overflow-x:auto;border-radius:10px;border:1px solid #e0e0e0;');
-        var t=document.createElement('table');t.setAttribute('style','width:100%;border-collapse:collapse;font-size:.78rem;');
-        var thead=document.createElement('thead'),htr=document.createElement('tr');
-        ['Data','Loja','Montante'].forEach(function(h){var th=document.createElement('th');th.textContent=h;th.setAttribute('style','padding:7px 12px;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:left;border-bottom:1.5px solid #e0e0e0;');th.style.setProperty('color','#555555','important');th.style.setProperty('background','#f5f5f5','important');htr.appendChild(th);});
-        thead.appendChild(htr);t.appendChild(thead);
-        var tbody=document.createElement('tbody');
-        res.data.forEach(function(r,i){var tr=document.createElement('tr');var bg=i%2===0?'#ffffff':'#fafafa';[_fmtDate(r.data),LOJA_LABELS[r.loja]||r.loja,_fmtEur(r.montante)].forEach(function(v,ci){var td=document.createElement('td');td.textContent=v;td.setAttribute('style','padding:7px 12px;border-bottom:1px solid #eeeeee;white-space:nowrap;'+(ci===2?'font-weight:800;text-align:right;':''));td.style.setProperty('background',bg,'important');td.style.setProperty('color','#111111','important');tr.appendChild(td);});tbody.appendChild(tr);});
-        t.appendChild(tbody);tw.appendChild(t);box.appendChild(tw);
-      }).catch(function(){});
+        if(res.error||!res.data||!res.data.length){
+          var e=_el('div','font-size:.8rem;padding:8px 0;');
+          e.style.setProperty('color','#666666','important');
+          e.textContent='Sem registos na última semana.';
+          box.appendChild(e);return;
+        }
+        // Agrupar por fecha
+        var byDate={};
+        var dateOrder=[];
+        res.data.forEach(function(r){
+          if(!byDate[r.data]){byDate[r.data]=[];dateOrder.push(r.data);}
+          byDate[r.data].push(r);
+        });
+        // Fechas únicas ordenadas desc
+        var dates=[...new Set(dateOrder)].sort(function(a,b){return b>a?1:-1;});
+        dates.forEach(function(date){
+          // Cabecera de fecha
+          var dHdr=_el('div','font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;padding:8px 0 4px;border-top:2px solid #e0e0e0;margin-top:8px;');
+          dHdr.style.setProperty('color','#555555','important');
+          dHdr.textContent=_fmtDate(date)+' · '+_dowStr(date);
+          box.appendChild(dHdr);
+
+          var tw=_el('div','overflow-x:auto;border-radius:10px;border:1px solid #e0e0e0;margin-bottom:4px;');
+          var t=document.createElement('table');
+          t.setAttribute('style','width:100%;border-collapse:collapse;font-size:.78rem;');
+
+          var thead=document.createElement('thead'),htr=document.createElement('tr');
+          ['Loja','Montante',''].forEach(function(h){
+            var th=document.createElement('th');
+            th.textContent=h;
+            th.setAttribute('style','padding:6px 10px;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:left;border-bottom:1.5px solid #e0e0e0;');
+            th.style.setProperty('color','#555555','important');
+            th.style.setProperty('background','#f5f5f5','important');
+            htr.appendChild(th);
+          });
+          thead.appendChild(htr);t.appendChild(thead);
+
+          var tbody=document.createElement('tbody');
+          byDate[date].forEach(function(r,i){
+            var tr=document.createElement('tr');
+            var bg=i%2===0?'#ffffff':'#fafafa';
+
+            // Loja
+            var tdL=document.createElement('td');
+            tdL.textContent=LOJA_LABELS[r.loja]||r.loja;
+            tdL.setAttribute('style','padding:6px 10px;border-bottom:1px solid #eeeeee;white-space:nowrap;');
+            tdL.style.setProperty('background',bg,'important');
+            tdL.style.setProperty('color','#111111','important');
+
+            // Montante (editable inline)
+            var tdM=document.createElement('td');
+            tdM.setAttribute('style','padding:6px 10px;border-bottom:1px solid #eeeeee;white-space:nowrap;font-weight:800;text-align:right;');
+            tdM.style.setProperty('background',bg,'important');
+            tdM.style.setProperty('color','#111111','important');
+            var valSpan=document.createElement('span');
+            valSpan.textContent=_fmtEur(r.montante);
+            tdM.appendChild(valSpan);
+
+            // Lápiz — edición inline
+            var tdAct=document.createElement('td');
+            tdAct.setAttribute('style','padding:6px 10px;border-bottom:1px solid #eeeeee;text-align:center;width:36px;');
+            tdAct.style.setProperty('background',bg,'important');
+            var pencil=document.createElement('span');
+            pencil.textContent='✏️';
+            pencil.setAttribute('style','cursor:pointer;font-size:.85rem;opacity:.6;');
+            pencil.addEventListener('mouseenter',function(){pencil.style.opacity='1';});
+            pencil.addEventListener('mouseleave',function(){if(!pencil._editing)pencil.style.opacity='.6';});
+            pencil.addEventListener('click',function(){
+              if(pencil._editing) return;
+              pencil._editing=true;pencil.style.opacity='1';
+              // Reemplazar span por input
+              var inp=document.createElement('input');
+              inp.type='number';inp.step='0.01';inp.min='0';
+              inp.value=parseFloat(r.montante)||0;
+              inp.setAttribute('style','width:90px;padding:4px 6px;font-size:.82rem;font-weight:700;border:1.5px solid #4a7c59;border-radius:6px;outline:none;font-family:MontserratLight,sans-serif;text-align:right;');
+              inp.style.setProperty('background','#ffffff','important');
+              inp.style.setProperty('color','#111111','important');
+              tdM.innerHTML='';tdM.appendChild(inp);inp.focus();inp.select();
+
+              // Botones ✓ ✗
+              var ok=document.createElement('span');ok.textContent='✓';
+              ok.setAttribute('style','cursor:pointer;color:#2a6a40;font-weight:900;font-size:1rem;margin-left:4px;');
+              var cancel=document.createElement('span');cancel.textContent='✗';
+              cancel.setAttribute('style','cursor:pointer;color:#a03020;font-weight:900;font-size:1rem;margin-left:4px;');
+              tdAct.innerHTML='';tdAct.appendChild(ok);tdAct.appendChild(cancel);
+
+              ok.addEventListener('click',function(){
+                var newVal=parseFloat(inp.value)||0;
+                ok.textContent='…';ok.style.pointerEvents='none';
+                sbAdmin.from('ventas_historicas').upsert({loja:r.loja,data:r.data,montante:newVal},{onConflict:'loja,data'})
+                  .then(function(res2){
+                    if(res2.error){
+                      tdM.innerHTML='';valSpan.textContent=_fmtEur(r.montante);tdM.appendChild(valSpan);
+                      tdAct.innerHTML='';tdAct.appendChild(pencil);pencil._editing=false;pencil.style.opacity='.6';
+                    } else {
+                      r.montante=newVal;
+                      tdM.innerHTML='';valSpan.textContent=_fmtEur(newVal);tdM.appendChild(valSpan);
+                      tdAct.innerHTML='';tdAct.appendChild(pencil);pencil._editing=false;pencil.style.opacity='.6';
+                      // Actualizar memoria
+                      _allRows=_allRows.filter(function(x){return!(x.loja===r.loja&&x.data===r.data);});
+                      _allRows.push({loja:r.loja,data:r.data,montante:newVal});
+                    }
+                  }).catch(function(){
+                    tdM.innerHTML='';valSpan.textContent=_fmtEur(r.montante);tdM.appendChild(valSpan);
+                    tdAct.innerHTML='';tdAct.appendChild(pencil);pencil._editing=false;pencil.style.opacity='.6';
+                  });
+              });
+              cancel.addEventListener('click',function(){
+                tdM.innerHTML='';valSpan.textContent=_fmtEur(r.montante);tdM.appendChild(valSpan);
+                tdAct.innerHTML='';tdAct.appendChild(pencil);pencil._editing=false;pencil.style.opacity='.6';
+              });
+            });
+            tdAct.appendChild(pencil);
+
+            tr.appendChild(tdL);tr.appendChild(tdM);tr.appendChild(tdAct);
+            tbody.appendChild(tr);
+          });
+          t.appendChild(tbody);tw.appendChild(t);box.appendChild(tw);
+        });
+      }).catch(function(){
+        box.innerHTML='';
+        var e=_el('div','font-size:.8rem;padding:8px 0;');
+        e.style.setProperty('color','#a03020','important');
+        e.textContent='Erro ao carregar registos.';
+        box.appendChild(e);
+      });
   }
 
   function _el(tag,css,bg){var el=document.createElement(tag);if(css)el.setAttribute('style',css);if(bg)el.style.setProperty('background',bg,'important');return el;}

@@ -79,6 +79,31 @@
     return comps;
   }
 
+  // Modo comparación exacta (mismo número de día, sin ajuste DOW)
+  var _equalDates = false;
+
+  function _buildComparisonsExact(from, to, rows) {
+    var fromD=_strToDate(from), toD=_strToDate(to);
+    var nDays=Math.round((toD-fromD)/86400000)+1;
+    var fromMD=from.substring(5); // MM-DD
+    var toMD=to.substring(5);
+    var yearsWithData={};
+    rows.forEach(function(r){if((parseFloat(r.montante)||0)>0){yearsWithData[r.data.substring(0,4)]=true;}});
+    var currentYear=fromD.getFullYear();
+    var comps=[];
+    var years=Object.keys(yearsWithData).map(Number).sort(function(a,b){return b-a;});
+    years.forEach(function(yr){
+      if(yr>=currentYear) return;
+      var cFrom=yr+'-'+fromMD;
+      var cTo=yr+'-'+toMD;
+      // Si el rango cruza año (e.g. dic→ene) ajustar toYear
+      if(toMD<fromMD){ cTo=(yr+1)+'-'+toMD; }
+      if(!rows.some(function(r){return r.data>=cFrom&&r.data<=cTo&&(parseFloat(r.montante)||0)>0;})) return;
+      comps.push({from:cFrom,to:cTo,label:String(yr)});
+    });
+    return comps;
+  }
+
   function _filterByZone(rows) {
     var lojaEl=document.getElementById('hadm-loja');
     var loja=lojaEl?lojaEl.value:'';
@@ -206,14 +231,36 @@
     var periodRows=rows.filter(function(r){return r.data>=f.from&&r.data<=f.to;});
     var periodTotal=periodRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     var nDays=Math.round((_strToDate(f.to)-_strToDate(f.from))/86400000)+1;
-    var comps=_buildComparisons(f.from,f.to,rows);
+    var comps=_equalDates?_buildComparisonsExact(f.from,f.to,rows):_buildComparisons(f.from,f.to,rows);
 
     // Header resumen
-    var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;');
+    var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;position:relative;');
     hdr.style.setProperty('background','#1a1a1a','important');
-    var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
+
+    // Botón = (toggle modo exacto)
+    if(!isTotal){
+      var eqBtn=_el('div','position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.85rem;font-weight:900;border:1.5px solid;transition:all .2s;user-select:none;');
+      eqBtn.title=_equalDates?'Modo: mesmas datas exactas':'Modo: mesmo dia de semana';
+      eqBtn.style.setProperty('background',_equalDates?'#4a7c59':'transparent','important');
+      eqBtn.style.setProperty('color',_equalDates?'#ffffff':'#666666','important');
+      eqBtn.style.setProperty('border-color',_equalDates?'#4a7c59':'#444444','important');
+      eqBtn.textContent='=';
+      eqBtn.addEventListener('mouseenter',function(){
+        if(!_equalDates){eqBtn.style.setProperty('border-color','#888888','important');eqBtn.style.setProperty('color','#aaaaaa','important');}
+      });
+      eqBtn.addEventListener('mouseleave',function(){
+        if(!_equalDates){eqBtn.style.setProperty('border-color','#444444','important');eqBtn.style.setProperty('color','#666666','important');}
+      });
+      eqBtn.addEventListener('click',function(){
+        _equalDates=!_equalDates;
+        _render();
+      });
+      hdr.appendChild(eqBtn);
+    }
+
+    var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;padding-right:36px;');
     hLbl.style.setProperty('color','#888888','important');
-    hLbl.textContent=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+' ('+nDays+' dias)');
+    hLbl.textContent=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+' ('+nDays+' dias)'+((_equalDates)?' · datas exactas':''));
     hdr.appendChild(hLbl);
     var hVal=_el('div','font-size:2rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px;');
     hVal.style.setProperty('color','#ffffff','important');
@@ -225,17 +272,24 @@
     hdr.appendChild(hSub);
 
     if(!isTotal&&comps.length){
-      var cRow=_el('div','display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
+      var cRow=_el('div','display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
       comps.forEach(function(comp){
         var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
         var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
         var diff=cTotal>0?(periodTotal-cTotal)/cTotal*100:null;
-        var cBox=_el('div','');
-        var cLbl=_el('div','font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px;');
-        cLbl.style.setProperty('color','#666666','important');
-        cLbl.textContent='vs '+comp.label+' ('+_fmtDate(comp.from)+'→'+_fmtDate(comp.to)+')';
-        cBox.appendChild(cLbl);
-        var cLine=_el('div','display:flex;align-items:baseline;gap:8px;');
+        var cBox=_el('div','min-width:120px;');
+        // Año — línea destacada encima
+        var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
+        cYear.style.setProperty('color','#aaaaaa','important');
+        cYear.textContent='vs '+comp.label;
+        cBox.appendChild(cYear);
+        // Fechas — línea pequeña debajo del año
+        var cDates=_el('div','font-size:.56rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px;');
+        cDates.style.setProperty('color','#555555','important');
+        cDates.textContent=_fmtDate(comp.from)+'→'+_fmtDate(comp.to);
+        cBox.appendChild(cDates);
+        // Valor + %
+        var cLine=_el('div','display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;');
         var cVal=_el('span','font-size:.88rem;font-weight:800;');
         cVal.style.setProperty('color','#cccccc','important');
         cVal.textContent=_fmtEur(cTotal);

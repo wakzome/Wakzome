@@ -1265,22 +1265,17 @@
         });
         btnRow.appendChild(fixBtn);
 
-        // Botón Ver cálculos
+        // Botón Ver cálculos — abre modal flotante
         var calcBtn=_el('div','padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #aaaaaa;font-family:MontserratLight,sans-serif;');
         calcBtn.style.setProperty('background','transparent','important');
         calcBtn.style.setProperty('color','#666666','important');
         calcBtn.textContent='🔍 Ver cálculos';
-        var calcPanel=_renderTrazabilidad(proj);
-        calcPanel.style.display='none';
-        var calcOpen=false;
-        calcBtn.addEventListener('click',function(){
-          calcOpen=!calcOpen;
-          calcPanel.style.display=calcOpen?'block':'none';
-          calcBtn.textContent=calcOpen?'🔍 Ocultar cálculos':'🔍 Ver cálculos';
+        calcBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          _openTrazaModal(proj, p.label);
         });
         btnRow.appendChild(calcBtn);
         card.appendChild(btnRow);
-        card.appendChild(calcPanel);
       }
 
       grid.appendChild(card);
@@ -1365,6 +1360,29 @@
       alertasWrap.appendChild(ok);
     }
     c.appendChild(alertasWrap);
+  }
+
+  // ── Modal flotante de trazabilidad
+  function _openTrazaModal(proj, label){
+    var overlay=document.getElementById('hadm-traza-overlay');
+    var body=document.getElementById('hadm-traza-body');
+    if(!overlay||!body) return;
+    body.innerHTML='';
+    // Título del modal
+    var mTtl=_el('div','font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:16px;padding-right:32px;');
+    mTtl.style.setProperty('color','#1a1a1a','important');
+    mTtl.textContent='CÁLCULOS — '+label;
+    body.appendChild(mTtl);
+    var panel=_renderTrazabilidad(proj);
+    body.appendChild(panel);
+    overlay.classList.add('active');
+    document.body.style.overflow='hidden';
+  }
+
+  function _closeTrazaModal(){
+    var overlay=document.getElementById('hadm-traza-overlay');
+    if(overlay) overlay.classList.remove('active');
+    document.body.style.overflow='';
   }
 
   // ── Panel de trazabilidad de cálculos
@@ -2531,6 +2549,17 @@
   }
 
   setTimeout(function(){
+    // ── Modal de trazabilidad — cerrar
+    var trazaClose=document.getElementById('hadm-traza-close');
+    var trazaOverlay=document.getElementById('hadm-traza-overlay');
+    if(trazaClose) trazaClose.addEventListener('click',_closeTrazaModal);
+    if(trazaOverlay) trazaOverlay.addEventListener('click',function(e){
+      if(e.target===trazaOverlay) _closeTrazaModal();
+    });
+    document.addEventListener('keydown',function(e){
+      if(e.key==='Escape') _closeTrazaModal();
+    });
+
     // Tabs — solo vendas y carregar (estacional eliminado)
     ['vendas','carregar','proyeccion'].forEach(function(tab){
       var btn=document.getElementById('hadm-tab-'+tab);

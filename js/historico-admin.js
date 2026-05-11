@@ -739,9 +739,7 @@
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
 
   // Calcula proyección con trazabilidad completa para panel de cálculos
-  // maxxOpts: opcional { desde: 'YYYY-MM-DD', domingos: bool }
-  // Si se pasa, añade contribución futura de Maxx a la proyección del trimestre
-  function _calcProjection(rows, from, to, today, maxxOpts) {
+  function _calcProjection(rows, from, to, today) {
     var fromD=_strToDate(from), toD=_strToDate(to);
     var todayD=_strToDate(today||_todayStr());
     var totalDays=Math.round((toD-fromD)/86400000)+1;
@@ -757,35 +755,18 @@
     var currentYrStr=fromD.getFullYear().toString();
     // Offset in days from period start to today — used to find equivalent cutoff in each historical year
     var doneOffset=doneDays-1; // 0-based: 0 = first day of period
-
-    // ── ASYMMETRIC STORE FIX ──────────────────────────────────────────────────
-    // Detect which stores have sales data in the CURRENT period (from → today).
-    // Stores that are closed this period (no current data) must also be excluded
-    // from historical totals — otherwise the historical denominator is inflated
-    // by a store that doesn't contribute to realAcum, making the ratio artificially
-    // low and the projection artificially high.
-    var activeStoresCurrentPeriod={};
-    rows.forEach(function(r){
-      if(r.data>=from&&r.data<=today&&(parseFloat(r.montante)||0)>0){
-        activeStoresCurrentPeriod[r.loja]=true;
-      }
-    });
-    // ─────────────────────────────────────────────────────────────────────────
-
     var yearsData={};
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
       if(yr===currentYrStr) return; // excluir año actual — no es base histórica
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
       if((parseFloat(r.montante)||0)<=0) return;
-      if(!activeStoresCurrentPeriod[r.loja]) return; // excluir tiendas sin datos en período actual
       if(!yearsData[yr]) yearsData[yr]={done:0,total:0};
     });
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
       if(yr===currentYrStr) return; // excluir año actual
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0||!yearsData[yr]) return;
-      if(!activeStoresCurrentPeriod[r.loja]) return; // misma exclusión de tiendas cerradas
       var val=parseFloat(r.montante)||0;
       var yrFrom=yr+'-'+fromMD, yrTo=yr+'-'+toMD;
       if(r.data>=yrFrom&&r.data<=yrTo){
@@ -825,7 +806,31 @@
     } else {
       pctHistorico=pctDone/100;
     }
+    var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum/(pctDone/100);
+    var anosExcluidos=Object.keys(yearsData).filter(function(yr){return !ratiosByYear[yr];});
 
+    return {
+      realAcum:realAcum,
+      valorProjetado:valorProjetado,
+      pctDone:pctDone,
+      pctHistorico:pctHistorico*100,
+      diasRestantes:totalDays-doneDays,
+      totalDays:totalDays,
+      doneDays:doneDays,
+      anosBase:Object.keys(ratiosByYear),
+      // Trazabilidad completa
+      traza:{
+        from:from, to:to, today:today,
+        totalDays:totalDays, doneDays:doneDays,
+        pctLineal:pctDone,
+        pctHistoricoUsado:pctHistorico*100,
+        realAcum:realAcum,
+        valorProjetado:valorProjetado,
+        ratiosByYear:ratiosByYear,
+        anosExcluidosCovid:ANOS_EXCLUIDOS,
+        anosExcluidosSinDatos:anosExcluidos,
+        formula:'Proyectado = Real acumulado ÷ % histórico completado'
+      }
     };
   }
 

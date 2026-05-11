@@ -608,18 +608,28 @@ body {
   background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%);
 }
 @media (max-width: 768px) {
+  /* De + Até en la misma línea, Loja + pesquisar debajo */
   .hadm-row-dates {
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
   }
   .hadm-date-group {
     flex: 1;
-    min-width: 0;
+    min-width: 120px;
   }
   .hadm-date-group input[type="date"] {
     width: 100%;
     box-sizing: border-box;
     font-size: .82rem;
     padding: 7px 8px;
+  }
+  /* Loja y pesquisar ocupan la segunda línea completa */
+  .hadm-row-dates .hadm-filter-group:not(.hadm-date-group) {
+    flex: 1;
+    min-width: 140px;
+  }
+  .hadm-row-dates .hadm-buscar-btn {
+    align-self: flex-end;
   }
 }
 

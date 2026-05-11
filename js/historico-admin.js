@@ -738,19 +738,8 @@
 
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  _calcProjection — motor de proyección con soporte asimétrico de tiendas
-  //
-  //  maxxOpts (opcional): { loja: 'MAXX', aberturaData: 'YYYY-MM-DD' }
-  //    Cuando se pasa, el histórico se construye en DOS TRAMOS:
-  //      Tramo A [from .. aberturaData-1]: excluye Maxx de historical rows
-  //      Tramo B [aberturaData .. to]:     incluye Maxx normalmente
-  //    Esto limpia el denominador histórico para trimestres donde Maxx
-  //    estuvo cerrada parte del período actual pero no en años anteriores.
-  //    Para el futuro (días restantes tras today), se añade la contribución
-  //    esperada de Maxx basada en su media histórica mensual.
-  // ─────────────────────────────────────────────────────────────────────────
-  function _calcProjection(rows, from, to, today, maxxOpts) {
+  // Calcula proyección con trazabilidad completa para panel de cálculos
+  function _calcProjection(rows, from, to, today) {
     var fromD=_strToDate(from), toD=_strToDate(to);
     var todayD=_strToDate(today||_todayStr());
     var totalDays=Math.round((toD-fromD)/86400000)+1;
@@ -762,59 +751,35 @@
       .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     if(realAcum<=0) return null;
 
-    var fromMD=from.substring(5), toMD=to.substring(5);
+    var fromMD=from.substring(5), toMD=to.substring(5), todayMD=today.substring(5);
     var currentYrStr=fromD.getFullYear().toString();
-    var doneOffset=doneDays-1; // 0-based days elapsed from period start
-
-    // ── Determinar si hay corrección Maxx activa
-    var maxxLoja = maxxOpts && maxxOpts.loja ? maxxOpts.loja : 'MAXX';
-    var maxxAberturaData = maxxOpts && maxxOpts.aberturaData ? maxxOpts.aberturaData : null;
-    // aberturaData sólo aplica si cae dentro del período y es posterior a from
-    if(maxxAberturaData && (maxxAberturaData<=from || maxxAberturaData>to)) maxxAberturaData=null;
-    // aberturaData debe ser futura respecto a today (parte del período ya pasada sin Maxx)
-    // Si Maxx ya abrió antes de today, la parte histórica ya se limpió automáticamente
-    // Sólo nos interesa si abre en el futuro del período actual
-    var maxxAberturaEsFutura = maxxAberturaData && maxxAberturaData>today;
-
-    // ── Construir yearsData con histórico limpio
+    // Offset in days from period start to today — used to find equivalent cutoff in each historical year
+    var doneOffset=doneDays-1; // 0-based: 0 = first day of period
     var yearsData={};
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
-      if(yr===currentYrStr) return;
+      if(yr===currentYrStr) return; // excluir año actual — no es base histórica
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
       if((parseFloat(r.montante)||0)<=0) return;
       if(!yearsData[yr]) yearsData[yr]={done:0,total:0};
     });
-
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
-      if(yr===currentYrStr) return;
+      if(yr===currentYrStr) return; // excluir año actual
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0||!yearsData[yr]) return;
       var val=parseFloat(r.montante)||0;
       var yrFrom=yr+'-'+fromMD, yrTo=yr+'-'+toMD;
-      if(r.data<yrFrom||r.data>yrTo) return;
-
-      // ── Lógica de exclusión por tramos cuando maxxAberturaData activo
-      if(maxxAberturaData && r.loja===maxxLoja) {
-        // Calcular el equivalente de aberturaData en este año histórico:
-        // mismos días transcurridos desde el inicio del período
+      if(r.data>=yrFrom&&r.data<=yrTo){
+        yearsData[yr].total+=val;
+        // Equivalent cutoff: same number of days elapsed from the period start in that year
         var yrFromD=_strToDate(yrFrom);
-        var aberturaOffset=Math.round((_strToDate(maxxAberturaData)-fromD)/86400000); // días desde inicio período
-        var yrAberturaD=new Date(yrFromD.getTime()+aberturaOffset*86400000);
-        var yrAbertura=_dateToStr(yrAberturaD);
-        // Solo incluir Maxx en el tramo B (desde apertura en adelante)
-        if(r.data<yrAbertura) return; // excluir del tramo A
+        var yrCutD=new Date(yrFromD.getTime()+doneOffset*86400000);
+        var yrCut=_dateToStr(yrCutD);
+        if(r.data<=yrCut) yearsData[yr].done+=val;
       }
-
-      yearsData[yr].total+=val;
-      // Equivalent cutoff
-      var yrFromD2=_strToDate(yrFrom);
-      var yrCutD=new Date(yrFromD2.getTime()+doneOffset*86400000);
-      var yrCut=_dateToStr(yrCutD);
-      if(r.data<=yrCut) yearsData[yr].done+=val;
     });
 
-    // ── Ratios históricos ponderados
+    // Trazabilidad: ratio por año
     var ratiosByYear={};
     var ratios=[];
     Object.keys(yearsData).sort().forEach(function(yr){
@@ -827,12 +792,13 @@
     });
 
     // Recency-weighted mean: most recent year gets weight 1, each older year weight *= 0.65
+    // Prevents structurally older years from dominating when the current business has changed
     var pctHistorico;
     if(ratios.length>0){
-      var sortedYrs=Object.keys(ratiosByYear).sort(function(a,b){return b-a;});
+      var sortedYrs=Object.keys(ratiosByYear).sort(function(a,b){return b-a;}); // newest first
       var wSum=0,wRatioSum=0;
       sortedYrs.forEach(function(yr,i){
-        var w=Math.pow(0.65,i);
+        var w=Math.pow(0.65,i); // 1, 0.65, 0.42, 0.27...
         wSum+=w;
         wRatioSum+=w*ratiosByYear[yr].ratio;
       });
@@ -840,68 +806,19 @@
     } else {
       pctHistorico=pctDone/100;
     }
-
-    // ── Proyección base (usando histórico limpio)
-    var valorProjetadoBase=pctHistorico>0?realAcum/pctHistorico:realAcum/(pctDone/100);
-
-    // ── Contribución futura de Maxx (si abre en el futuro del período)
-    var maxxContribFuturo=0;
-    var maxxDetalleFuturo=[];
-    if(maxxAberturaEsFutura) {
-      // Calcular media histórica de Maxx por mes (sin COVID, sin año actual)
-      var maxxHistByMes={};
-      for(var m=1;m<=12;m++) maxxHistByMes[m]={sum:0,dias:0};
-      _allRows.forEach(function(r){
-        if(r.loja!==maxxLoja) return;
-        var yr=r.data.substring(0,4);
-        if(yr===currentYrStr||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
-        var val=parseFloat(r.montante)||0;
-        if(val>0){
-          var mes=parseInt(r.data.substring(5,7));
-          maxxHistByMes[mes].sum+=val;
-          maxxHistByMes[mes].dias++;
-        }
-      });
-      // Días futuros de Maxx desde su apertura hasta fin del período
-      var maxxStart=_strToDate(maxxAberturaData);
-      var maxxEnd=toD;
-      var dIter=new Date(maxxStart);
-      var diasPorMes={};
-      while(dIter<=maxxEnd){
-        var mes=dIter.getMonth()+1;
-        diasPorMes[mes]=(diasPorMes[mes]||0)+1;
-        dIter.setDate(dIter.getDate()+1);
-      }
-      Object.keys(diasPorMes).sort().forEach(function(mes){
-        var mh=maxxHistByMes[parseInt(mes)];
-        var mediaDia=mh.dias>0?mh.sum/mh.dias:0;
-        var contrib=diasPorMes[mes]*mediaDia;
-        maxxContribFuturo+=contrib;
-        maxxDetalleFuturo.push({
-          mes:parseInt(mes),
-          n:diasPorMes[mes],
-          media:mediaDia,
-          total:contrib
-        });
-      });
-    }
-
-    var valorProjetado=valorProjetadoBase+maxxContribFuturo;
+    var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum/(pctDone/100);
     var anosExcluidos=Object.keys(yearsData).filter(function(yr){return !ratiosByYear[yr];});
 
     return {
       realAcum:realAcum,
       valorProjetado:valorProjetado,
-      valorProjetadoBase:valorProjetadoBase,
-      maxxContribFuturo:maxxContribFuturo,
-      maxxDetalleFuturo:maxxDetalleFuturo,
-      maxxAberturaData:maxxAberturaData,
       pctDone:pctDone,
       pctHistorico:pctHistorico*100,
       diasRestantes:totalDays-doneDays,
       totalDays:totalDays,
       doneDays:doneDays,
       anosBase:Object.keys(ratiosByYear),
+      // Trazabilidad completa
       traza:{
         from:from, to:to, today:today,
         totalDays:totalDays, doneDays:doneDays,
@@ -912,9 +829,7 @@
         ratiosByYear:ratiosByYear,
         anosExcluidosCovid:ANOS_EXCLUIDOS,
         anosExcluidosSinDatos:anosExcluidos,
-        maxxAberturaData:maxxAberturaData,
-        maxxContribFuturo:maxxContribFuturo,
-        formula:'Proyectado = (Real acumulado ÷ % histórico limpo)'+(maxxContribFuturo>0?' + Maxx futuro':'')
+        formula:'Proyectado = Real acumulado ÷ % histórico completado'
       }
     };
   }
@@ -1216,9 +1131,6 @@
   var _proyTab='general'; // 'general' | 'domingos' | 'diagnostico'
   var _proyZona='TODAS';  // zona activa en proyección
   var _proySimulacion={}; // { loja: pctReduccion } para simulador
-  // Fecha de reapertura de Maxx por trimestre (para corrección asimétrica)
-  // Formato: { 'Q2': 'YYYY-MM-DD', 'Q3': 'YYYY-MM-DD', ... }
-  var _qCardMaxxDesde={};
 
   function _renderProyeccion(){
     var c=_getContent();if(!c)return;
@@ -1286,9 +1198,6 @@
       {id:'ANO',label:'Ano '+currentYear,from:currentYear+'-01-01',to:currentYear+'-12-31'}
     ];
 
-    // Determinar si la zona activa incluye Maxx (solo mostrar control si aplica)
-    var zonaTemMaxx = zonaActiva.lojas.indexOf('MAXX')>=0;
-
     // Grid de cards
     var grid=_el('div','display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px;');
     periods.forEach(function(p){
@@ -1297,17 +1206,7 @@
       var isClosed=today>p.to;
       var isActive=today>=p.from&&today<=p.to;
       var isFuture=today<p.from;
-
-      // ── Determinar maxxOpts para este período
-      // Solo trimestres (no ANO) donde la zona incluye Maxx y hay fecha configurada
-      var maxxOpts=null;
-      var maxxDesdeAtivo=null;
-      if(p.id!=='ANO' && zonaTemMaxx && _qCardMaxxDesde[p.id]) {
-        maxxDesdeAtivo=_qCardMaxxDesde[p.id];
-        maxxOpts={loja:'MAXX', aberturaData:maxxDesdeAtivo};
-      }
-
-      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,today,maxxOpts):null;
+      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,today):null;
 
       var card=_el('div','border-radius:12px;padding:14px 16px;border:1.5px solid;');
       var bc=isClosed?'#e0e0e0':isActive?'#4a7c59':'#555555';
@@ -1353,66 +1252,13 @@
         }
         card.appendChild(projLine);
 
-        // Desglose Maxx futuro si activo
-        if(proj.maxxContribFuturo>0){
-          var maxxLine=_el('div','font-size:.62rem;margin-top:2px;padding:4px 8px;border-radius:6px;');
-          maxxLine.style.setProperty('background','#f0faf4','important');
-          maxxLine.style.setProperty('color','#2a6a40','important');
-          maxxLine.textContent='+ '+_fmtEur(proj.maxxContribFuturo)+' Maxx (desde '+_fmtDate(proj.maxxAberturaData)+')';
-          card.appendChild(maxxLine);
-        }
-
         // Base histórica
         if(proj.anosBase&&proj.anosBase.length){
           var baseLbl=_el('div','font-size:.58rem;margin-top:3px;');
           baseLbl.style.setProperty('color','#bbbbbb','important');
-          var baseNote=maxxDesdeAtivo?' · hist. limpo (sem Maxx antes de '+_fmtDate(maxxDesdeAtivo)+')':'';
-          baseLbl.textContent='Base: '+proj.anosBase.join(', ')+baseNote;
+          baseLbl.textContent='Base: '+proj.anosBase.join(', ');
           card.appendChild(baseLbl);
         }
-      }
-
-      // ── Control inline Maxx: visible en trimestres no cerrados donde zona tiene Maxx
-      if(!isClosed && p.id!=='ANO' && zonaTemMaxx){
-        var maxxCtrl=_el('div','display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed #d0e8d8;flex-wrap:wrap;');
-        var maxxCtrlLbl=_el('span','font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;');
-        maxxCtrlLbl.style.setProperty('color','#4a7c59','important');
-        maxxCtrlLbl.textContent='Maxx desde:';
-        maxxCtrl.appendChild(maxxCtrlLbl);
-
-        var maxxInp=_el('input','font-size:.68rem;font-weight:700;border:1px solid #c8e6c9;border-radius:6px;padding:3px 7px;font-family:MontserratLight,sans-serif;outline:none;width:120px;');
-        maxxInp.type='date';
-        maxxInp.value=_qCardMaxxDesde[p.id]||'';
-        maxxInp.min=p.from; maxxInp.max=p.to;
-        maxxInp.title='Define a data de reabertura da Maxx para corrigir o histórico assimétrico';
-        maxxInp.style.setProperty('background','#f6fbf4','important');
-        maxxInp.style.setProperty('color','#2a6a40','important');
-        maxxInp.style.setProperty('border-color','#c8e6c9','important');
-        maxxCtrl.appendChild(maxxInp);
-
-        if(_qCardMaxxDesde[p.id]){
-          var maxxClear=_el('span','font-size:.65rem;cursor:pointer;padding:2px 6px;border-radius:4px;');
-          maxxClear.style.setProperty('background','#fdecea','important');
-          maxxClear.style.setProperty('color','#a03020','important');
-          maxxClear.textContent='✕';
-          maxxClear.title='Remover correcção Maxx';
-          maxxClear.addEventListener('click',function(e){
-            e.stopPropagation();
-            delete _qCardMaxxDesde[p.id];
-            _renderProyGeneral(c.parentNode||c,today); // re-render
-          });
-          maxxCtrl.appendChild(maxxClear);
-        }
-
-        (function(pid,inp){
-          inp.addEventListener('change',function(){
-            if(inp.value){_qCardMaxxDesde[pid]=inp.value;}
-            else{delete _qCardMaxxDesde[pid];}
-            _renderProyGeneral(c.parentNode||c,today);
-          });
-        })(p.id, maxxInp);
-
-        card.appendChild(maxxCtrl);
       }
 
       // Comparación con año anterior

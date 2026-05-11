@@ -752,15 +752,18 @@
     if(realAcum<=0) return null;
 
     var fromMD=from.substring(5), toMD=to.substring(5), todayMD=today.substring(5);
+    var currentYrStr=fromD.getFullYear().toString();
     var yearsData={};
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
+      if(yr===currentYrStr) return; // excluir año actual — no es base histórica
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
       if((parseFloat(r.montante)||0)<=0) return;
       if(!yearsData[yr]) yearsData[yr]={done:0,total:0};
     });
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
+      if(yr===currentYrStr) return; // excluir año actual
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0||!yearsData[yr]) return;
       var md=r.data.substring(5);
       var val=parseFloat(r.montante)||0;
@@ -890,7 +893,7 @@
     // Total domingos del año
     var d2=new Date(currentYear,0,1),ye=new Date(currentYear,11,31),totalDomAnio=0;
     while(d2<=ye){if(d2.getDay()===0)totalDomAnio++;d2.setDate(d2.getDate()+1);}
-    var domRestantes=Object.values?Object.keys(domRestantesPorMes).reduce(function(s,k){return s+domRestantesPorMes[k];},0):0;
+    var domRestantes=Object.keys(domRestantesPorMes).reduce(function(s,k){return s+(domRestantesPorMes[k]||0);},0);
 
     return {
       domReales:domReales, totalReal:totalReal, mediaActual:mediaActual,
@@ -1810,86 +1813,6 @@
     });
 
     _calcSimResult();
-  }
-
-  // ── Proyección Domingos Ps
-  function _renderProyDomingos(c,today){
-    var proj=_calcProjectionDomingos(_allRows,today);
-    var currentYear=_strToDate(today).getFullYear();
-
-    var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;position:relative;');
-    hdr.style.setProperty('background','#1a1a1a','important');
-    var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
-    hLbl.style.setProperty('color','#888888','important');
-    hLbl.textContent='PROJECÇÃO DOMINGOS '+currentYear+' — MEZKA PS';
-    hdr.appendChild(hLbl);
-
-    if(!proj){
-      var noData=_el('div','font-size:.82rem;');noData.style.setProperty('color','#aaaaaa','important');noData.textContent='Sem dados suficientes para projectar.';hdr.appendChild(noData);
-    } else {
-      var hVal=_el('div','font-size:2rem;font-weight:900;letter-spacing:-.02em;margin-bottom:2px;');
-      hVal.style.setProperty('color','#ffffff','important');
-      hVal.textContent=_fmtEur(proj.totalReal);
-      hdr.appendChild(hVal);
-      var hSub=_el('div','font-size:.72rem;margin-bottom:10px;');
-      hSub.style.setProperty('color','#aaaaaa','important');
-      hSub.textContent=proj.domReales+' domingos reais · média actual: '+_fmtEur(proj.mediaActual)+'/dom';
-      hdr.appendChild(hSub);
-
-      // Proyección
-      var projSec=_el('div','padding-top:10px;border-top:1px solid #333333;');
-      var projLbl=_el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;');
-      projLbl.style.setProperty('color','#4a7c59','important');
-      projLbl.textContent='PROJECÇÃO FIM DO ANO';
-      projSec.appendChild(projLbl);
-      var projRow=_el('div','display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;');
-      var projVal=_el('span','font-size:1.3rem;font-weight:900;');
-      projVal.style.setProperty('color','#4caf82','important');
-      projVal.textContent=_fmtEur(proj.totalProyectado);
-      projRow.appendChild(projVal);
-      var projExtra=_el('span','font-size:.72rem;');
-      projExtra.style.setProperty('color','#888888','important');
-      projExtra.textContent='+'+_fmtEur(proj.proyFuturo)+' nos '+proj.domRestantes+' dom. restantes';
-      projRow.appendChild(projExtra);
-      projSec.appendChild(projRow);
-      var projBase=_el('div','font-size:.62rem;margin-top:4px;');
-      projBase.style.setProperty('color','#666666','important');
-      projBase.textContent='Média ponderada: '+_fmtEur(proj.mediaPonderada)+'/dom (60% actual + 40% histórica: '+_fmtEur(proj.mediaHistorica)+')';
-      projSec.appendChild(projBase);
-      hdr.appendChild(projSec);
-    }
-    c.appendChild(hdr);
-
-    // Botón fijar proyección domingos
-    if(proj){
-      var fixBtn=_el('div','padding:8px 20px;border-radius:10px;font-size:.78rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #4a7c59;margin-bottom:16px;font-family:MontserratLight,sans-serif;display:inline-block;');
-      fixBtn.style.setProperty('background','transparent','important');
-      fixBtn.style.setProperty('color','#4a7c59','important');
-      fixBtn.textContent='📌 Fixar Projecção Domingos';
-      fixBtn.addEventListener('click',function(){
-        var nota=window.prompt('Nota opcional:','');
-        if(nota===null) return;
-        fixBtn.textContent='A guardar…';fixBtn.style.opacity='.6';fixBtn.style.pointerEvents='none';
-        var payload={
-          periodo_tipo:'DOMINGOS_ANO',periodo_ano:currentYear,zona:'MEZKA_PS',
-          fecha_fijacion:today,dias_completados:proj.domReales,dias_totales:proj.totalDomAnio,
-          pct_completado:parseFloat((proj.domReales/proj.totalDomAnio*100).toFixed(2)),
-          valor_real_acumulado:parseFloat(proj.totalReal.toFixed(2)),
-          valor_proyectado:parseFloat(proj.totalProyectado.toFixed(2)),
-          valor_base_historica:parseFloat(proj.mediaHistorica.toFixed(2)),
-          anos_base_usados:null,nota:nota||null
-        };
-        sbAdmin.from('proyecciones_guardadas').upsert(payload,{onConflict:'periodo_tipo,periodo_ano,zona,fecha_fijacion'})
-          .then(function(res){
-            if(res.error){fixBtn.textContent='✗ Erro';fixBtn.style.opacity='1';fixBtn.style.pointerEvents='';}
-            else{fixBtn.textContent='✓ Fixado!';fixBtn.style.setProperty('background','#4a7c59','important');fixBtn.style.setProperty('color','#fff','important');fixBtn.style.opacity='1';}
-          }).catch(function(){fixBtn.textContent='✗ Erro';fixBtn.style.opacity='1';fixBtn.style.pointerEvents='';});
-      });
-      c.appendChild(fixBtn);
-    }
-
-    // Proyecciones fijadas domingos
-    _renderProyFijadas(c,currentYear,'MEZKA_PS');
   }
 
   // ── Diagnóstico histórico

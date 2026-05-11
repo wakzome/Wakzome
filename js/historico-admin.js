@@ -738,8 +738,7 @@
 
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
 
-  // Calcula proyección de un período usando tasa de realización histórica ponderada
-  // rows: datos filtrados por zona, from/to: rango completo del período, today: fecha actual
+  // Calcula proyección con trazabilidad completa para panel de cálculos
   function _calcProjection(rows, from, to, today) {
     var fromD=_strToDate(from), toD=_strToDate(to);
     var todayD=_strToDate(today||_todayStr());
@@ -748,13 +747,10 @@
     if(doneDays<=0||doneDays>=totalDays) return null;
     var pctDone=doneDays/totalDays*100;
 
-    // Valor real acumulado hasta hoy
     var realAcum=rows.filter(function(r){return r.data>=from&&r.data<=today;})
       .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     if(realAcum<=0) return null;
 
-    // Calcular peso histórico: qué % del período completo representan los días transcurridos
-    // usando años con datos disponibles (excluyendo COVID)
     var fromMD=from.substring(5), toMD=to.substring(5), todayMD=today.substring(5);
     var yearsData={};
     rows.forEach(function(r){
@@ -773,13 +769,22 @@
         if(md<=todayMD) yearsData[yr].done+=val;
       }
     });
+
+    // Trazabilidad: ratio por año
+    var ratiosByYear={};
     var ratios=[];
-    Object.keys(yearsData).forEach(function(yr){
+    Object.keys(yearsData).sort().forEach(function(yr){
       var d=yearsData[yr];
-      if(d.total>0&&d.done>0) ratios.push(d.done/d.total);
+      if(d.total>0&&d.done>0){
+        var ratio=d.done/d.total;
+        ratiosByYear[yr]={done:d.done,total:d.total,ratio:ratio,pct:ratio*100};
+        ratios.push(ratio);
+      }
     });
+
     var pctHistorico=ratios.length>0?(ratios.reduce(function(s,v){return s+v;},0)/ratios.length):pctDone/100;
     var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum/(pctDone/100);
+    var anosExcluidos=Object.keys(yearsData).filter(function(yr){return !ratiosByYear[yr];});
 
     return {
       realAcum:realAcum,
@@ -789,7 +794,20 @@
       diasRestantes:totalDays-doneDays,
       totalDays:totalDays,
       doneDays:doneDays,
-      anosBase:Object.keys(yearsData).filter(function(yr){return yearsData[yr].total>0;})
+      anosBase:Object.keys(ratiosByYear),
+      // Trazabilidad completa
+      traza:{
+        from:from, to:to, today:today,
+        totalDays:totalDays, doneDays:doneDays,
+        pctLineal:pctDone,
+        pctHistoricoUsado:pctHistorico*100,
+        realAcum:realAcum,
+        valorProjetado:valorProjetado,
+        ratiosByYear:ratiosByYear,
+        anosExcluidosCovid:ANOS_EXCLUIDOS,
+        anosExcluidosSinDatos:anosExcluidos,
+        formula:'Proyectado = Real acumulado ÷ % histórico completado'
+      }
     };
   }
 
@@ -1236,14 +1254,33 @@
 
       // Botón fijar proyección (solo si está en curso)
       if(isActive&&proj){
-        var fixBtn=_el('div','margin-top:10px;padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #4a7c59;font-family:MontserratLight,sans-serif;');
+        var btnRow=_el('div','display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;');
+
+        var fixBtn=_el('div','padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #4a7c59;font-family:MontserratLight,sans-serif;');
         fixBtn.style.setProperty('background','transparent','important');
         fixBtn.style.setProperty('color','#4a7c59','important');
         fixBtn.textContent='📌 Fixar Projecção';
         fixBtn.addEventListener('click',function(){
           _guardarProyeccion(p,proj,_proyZona,rows,fixBtn);
         });
-        card.appendChild(fixBtn);
+        btnRow.appendChild(fixBtn);
+
+        // Botón Ver cálculos
+        var calcBtn=_el('div','padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #aaaaaa;font-family:MontserratLight,sans-serif;');
+        calcBtn.style.setProperty('background','transparent','important');
+        calcBtn.style.setProperty('color','#666666','important');
+        calcBtn.textContent='🔍 Ver cálculos';
+        var calcPanel=_renderTrazabilidad(proj);
+        calcPanel.style.display='none';
+        var calcOpen=false;
+        calcBtn.addEventListener('click',function(){
+          calcOpen=!calcOpen;
+          calcPanel.style.display=calcOpen?'block':'none';
+          calcBtn.textContent=calcOpen?'🔍 Ocultar cálculos':'🔍 Ver cálculos';
+        });
+        btnRow.appendChild(calcBtn);
+        card.appendChild(btnRow);
+        card.appendChild(calcPanel);
       }
 
       grid.appendChild(card);
@@ -1328,6 +1365,74 @@
       alertasWrap.appendChild(ok);
     }
     c.appendChild(alertasWrap);
+  }
+
+  // ── Panel de trazabilidad de cálculos
+  function _renderTrazabilidad(proj){
+    var panel=_el('div','border-radius:10px;padding:14px;margin-top:10px;border:1px solid #e8e8e8;');
+    panel.style.setProperty('background','#f8f8f8','important');
+
+    var t=proj.traza;
+    if(!t){
+      var nd=_el('div','font-size:.72rem;');nd.style.setProperty('color','#aaaaaa','important');
+      nd.textContent='Sem dados de trazabilidade.';panel.appendChild(nd);return panel;
+    }
+
+    // Título
+    var ttl=_el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;');
+    ttl.style.setProperty('color','#4a7c59','important');
+    ttl.textContent='COMO SE CALCULOU ESTA PROJECÇÃO';
+    panel.appendChild(ttl);
+
+    // Paso 1: datos del período
+    function _step(num,title,content){
+      var s=_el('div','margin-bottom:10px;padding:10px;border-radius:8px;border-left:3px solid #4a7c59;');
+      s.style.setProperty('background','#ffffff','important');
+      var sh=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;');
+      sh.style.setProperty('color','#4a7c59','important');
+      sh.textContent='PASSO '+num+' — '+title;
+      s.appendChild(sh);
+      var sc=_el('div','font-size:.72rem;line-height:1.6;');
+      sc.style.setProperty('color','#333333','important');
+      sc.innerHTML=content;
+      s.appendChild(sc);
+      return s;
+    }
+
+    panel.appendChild(_step(1,'PERÍODO E DADOS REAIS',
+      'Período: <b>'+_fmtDate(t.from)+'</b> → <b>'+_fmtDate(t.to)+'</b> ('+t.totalDays+' dias totais)<br>'+
+      'Até hoje ('+_fmtDate(t.today)+'): <b>'+t.doneDays+' dias</b> completados<br>'+
+      'Vendas reais acumuladas: <b>'+_fmtEur(t.realAcum)+'</b>'
+    ));
+
+    panel.appendChild(_step(2,'% COMPLETADO',
+      'Linear (dias passados ÷ dias totais): <b>'+t.pctLineal.toFixed(1)+'%</b><br>'+
+      'Histórico ponderado (média dos anos base): <b>'+t.pctHistoricoUsado.toFixed(1)+'%</b><br>'+
+      '<small style="color:#888">O % histórico reflecte o peso real destes dias no período — a estacionalidade</small>'
+    ));
+
+    // Paso 3: ratio por año
+    var anosStr='';
+    var anosKeys=Object.keys(t.ratiosByYear).sort();
+    anosKeys.forEach(function(yr){
+      var d=t.ratiosByYear[yr];
+      anosStr+='<b>'+yr+'</b>: '+_fmtEur(d.done)+' de '+_fmtEur(d.total)+' = <b>'+d.pct.toFixed(1)+'%</b><br>';
+    });
+    if(t.anosExcluidosCovid&&t.anosExcluidosCovid.length){
+      anosStr+='<span style="color:#aaa">Excluídos COVID: '+t.anosExcluidosCovid.join(', ')+'</span><br>';
+    }
+    if(t.anosExcluidosSinDatos&&t.anosExcluidosSinDatos.length){
+      anosStr+='<span style="color:#aaa">Sem dados suficientes: '+t.anosExcluidosSinDatos.join(', ')+'</span>';
+    }
+    panel.appendChild(_step(3,'TAXA DE REALIZAÇÃO POR ANO',anosStr||'Sem anos base disponíveis.'));
+
+    panel.appendChild(_step(4,'FÓRMULA E RESULTADO',
+      t.formula+'<br>'+
+      '<b>'+_fmtEur(t.realAcum)+'</b> ÷ <b>'+t.pctHistoricoUsado.toFixed(1)+'%</b> = <b style="color:#2a6a40">'+_fmtEur(t.valorProjetado)+'</b><br>'+
+      '<small style="color:#888">Se usasse % linear: '+_fmtEur(t.realAcum/(t.pctLineal/100))+'</small>'
+    ));
+
+    return panel;
   }
 
   function _guardarProyeccion(period,proj,zona,rows,btn){
@@ -1420,98 +1525,273 @@
       }).catch(function(){box.textContent='Erro ao carregar projecções.';});
   }
 
+  // Estado del simulador Maxx
+  var _simMaxxActiva=false;
+  var _simMaxxDesde='';
+  var _simMaxxHasta='';
+  var _simMaxxDomingos=false;
+
   function _renderSimulador(c,rows,today,currentYear,zonaActiva){
     var ttl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
     ttl.style.setProperty('color','#888888','important');
-    ttl.textContent='🔮 SIMULADOR — E SE…';
+    ttl.textContent='🔮 SIMULADOR — E SE MAXX ABRISSE?';
     c.appendChild(ttl);
 
     var simWrap=_el('div','border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:20px;');
     simWrap.style.setProperty('background','#fafafa','important');
 
-    var simDesc=_el('div','font-size:.72rem;margin-bottom:12px;');
+    var simDesc=_el('div','font-size:.72rem;margin-bottom:14px;');
     simDesc.style.setProperty('color','#888888','important');
-    simDesc.textContent='Ajuste o contributo de cada loja para ver o impacto na projecção anual:';
+    simDesc.textContent='Define o período de abertura da Maxx para ver o impacto na projecção anual. As demais lojas contribuem sempre.';
     simWrap.appendChild(simDesc);
 
-    var lojas=zonaActiva.lojas;
-    var sliders={};
+    // Toggle Maxx
+    var toggleRow=_el('div','display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;');
+    var toggleBtn=_el('div','padding:7px 20px;border-radius:20px;font-size:.78rem;font-weight:800;cursor:pointer;border:1.5px solid;font-family:MontserratLight,sans-serif;');
+    toggleBtn.style.setProperty('background',_simMaxxActiva?'#4a7c59':'#2a2a2a','important');
+    toggleBtn.style.setProperty('color','#ffffff','important');
+    toggleBtn.style.setProperty('border-color',_simMaxxActiva?'#4a7c59':'#555','important');
+    toggleBtn.textContent=_simMaxxActiva?'✓ Maxx incluída':'Maxx fechada';
 
-    lojas.forEach(function(loja){
-      var label=LOJA_LABELS[loja]||loja;
-      var pct=_proySimulacion[loja]!==undefined?_proySimulacion[loja]:100;
-      var row=_el('div','display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;');
-      var lLbl=_el('span','font-size:.78rem;font-weight:700;min-width:110px;');
-      lLbl.style.setProperty('color','#333333','important');
-      lLbl.textContent=label;
-      var lSlider=document.createElement('input');
-      lSlider.type='range';lSlider.min='0';lSlider.max='150';lSlider.step='5';lSlider.value=pct;
-      lSlider.setAttribute('style','flex:1;min-width:100px;accent-color:#4a7c59;');
-      var lPct=_el('span','font-size:.78rem;font-weight:800;min-width:40px;text-align:right;');
-      lPct.style.setProperty('color','#4a7c59','important');
-      lPct.textContent=pct+'%';
-      lSlider.addEventListener('input',function(){
-        _proySimulacion[loja]=parseInt(lSlider.value);
-        lPct.textContent=lSlider.value+'%';
-        _updateSimResult();
-      });
-      sliders[loja]=lSlider;
-      row.appendChild(lLbl);row.appendChild(lSlider);row.appendChild(lPct);
-      simWrap.appendChild(row);
-    });
+    var iS='padding:7px 10px;font-size:.78rem;font-weight:700;border:1.5px solid #cccccc;border-radius:8px;font-family:MontserratLight,sans-serif;outline:none;';
+    var inpDesde=_el('input',iS);
+    inpDesde.type='date';inpDesde.value=_simMaxxDesde||'';
+    inpDesde.style.setProperty('background','#ffffff','important');
+    inpDesde.style.setProperty('color','#111111','important');
+    var lDesde=_el('span','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;');
+    lDesde.style.setProperty('color','#888888','important');lDesde.textContent='de';
+    var inpHasta=_el('input',iS);
+    inpHasta.type='date';inpHasta.value=_simMaxxHasta||'';
+    inpHasta.style.setProperty('background','#ffffff','important');
+    inpHasta.style.setProperty('color','#111111','important');
+    var lHasta=_el('span','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;');
+    lHasta.style.setProperty('color','#888888','important');lHasta.textContent='até';
 
-    var simResult=_el('div','border-radius:10px;padding:12px 16px;margin-top:10px;border:1.5px solid #4a7c59;');
-    simResult.style.setProperty('background','#f1f8f4','important');
+    // Toggle domingos Maxx
+    var domToggle=_el('div','padding:5px 12px;border-radius:14px;font-size:.7rem;font-weight:800;cursor:pointer;border:1.5px solid;font-family:MontserratLight,sans-serif;');
+    domToggle.style.setProperty('background',_simMaxxDomingos?'#4a7c59':'#2a2a2a','important');
+    domToggle.style.setProperty('color','#ffffff','important');
+    domToggle.style.setProperty('border-color',_simMaxxDomingos?'#4a7c59':'#555','important');
+    domToggle.textContent=_simMaxxDomingos?'Dom ✓':'+ Domingos';
+
+    toggleRow.appendChild(toggleBtn);
+    toggleRow.appendChild(lDesde);toggleRow.appendChild(inpDesde);
+    toggleRow.appendChild(lHasta);toggleRow.appendChild(inpHasta);
+    toggleRow.appendChild(domToggle);
+    simWrap.appendChild(toggleRow);
+
+    // Resultado
+    var simResult=_el('div','border-radius:10px;padding:12px 16px;border:1.5px solid #e0e0e0;');
+    simResult.style.setProperty('background','#ffffff','important');
     simWrap.appendChild(simResult);
     c.appendChild(simWrap);
 
-    function _updateSimResult(){
-      // Proyección base del año
-      var baseProj=_calcProjection(rows,currentYear+'-01-01',currentYear+'-12-31',today);
-      var baseVal=baseProj?baseProj.valorProjetado:rows.filter(function(r){return r.data.substring(0,4)===String(currentYear);})
-        .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-
-      // Proyección ajustada: aplicar % de simulación por loja
-      var simRows=_allRows.filter(function(r){
-        if(zonaActiva.lojas.indexOf(r.loja)<0) return false;
-        var pct=_proySimulacion[r.loja]!==undefined?_proySimulacion[r.loja]:100;
-        return pct>0;
-      });
-      var simProj=_calcProjection(simRows,currentYear+'-01-01',currentYear+'-12-31',today);
-      // Ajustar con factor de cada loja
-      var factor=0,totalW=0;
-      zonaActiva.lojas.forEach(function(loja){
-        var lojaTotal=rows.filter(function(r){return r.loja===loja&&r.data.substring(0,4)===String(currentYear);})
-          .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var pct=_proySimulacion[loja]!==undefined?_proySimulacion[loja]/100:1;
-        factor+=lojaTotal*pct;
-        totalW+=lojaTotal;
-      });
-      var ajuste=totalW>0?factor/totalW:1;
-      var simVal=baseVal*ajuste;
-      var diff=baseVal>0?(simVal-baseVal)/baseVal*100:0;
-
+    function _calcSimResult(){
       simResult.innerHTML='';
-      var sLbl=_el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;');
-      sLbl.style.setProperty('color','#4a7c59','important');
+
+      // Proyección base sin Maxx (tiendas que sí tienen datos en 2026)
+      var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
+      var baseProj=_calcProjection(rowsSinMaxx,currentYear+'-01-01',currentYear+'-12-31',today);
+      var baseSinMaxx=baseProj?baseProj.valorProjetado:rowsSinMaxx.filter(function(r){
+        return r.data.substring(0,4)===String(currentYear);
+      }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+
+      var maxxContrib=0;
+      var maxxDetalle=[];
+
+      if(_simMaxxActiva&&_simMaxxDesde&&_simMaxxHasta&&_simMaxxDesde<=_simMaxxHasta){
+        var desde=_simMaxxDesde,hasta=_simMaxxHasta;
+        // Días futuros de Maxx en el rango (que aún no han ocurrido)
+        var dCur=new Date(Math.max(_strToDate(today).getTime(),_strToDate(desde).getTime()));
+        dCur.setDate(dCur.getDate()+1);
+        var dEnd=_strToDate(hasta);
+
+        // Media histórica de Maxx por mes (lun-sab, sin COVID, sin 2026)
+        var maxxHistByMes={};
+        for(var m=1;m<=12;m++) maxxHistByMes[m]={sum:0,dias:0};
+        _allRows.forEach(function(r){
+          if(r.loja!=='MAXX') return;
+          var yr=r.data.substring(0,4);
+          if(yr===String(currentYear)||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
+          var dow=_strToDate(r.data).getDay();
+          if(dow===0) return; // domingos separado
+          var mes=parseInt(r.data.substring(5,7));
+          var val=parseFloat(r.montante)||0;
+          if(val>0){maxxHistByMes[mes].sum+=val;maxxHistByMes[mes].dias++;}
+        });
+
+        // Proyección días normales mes a mes
+        var dIter=new Date(dCur);
+        var diasPorMes={};
+        while(dIter<=dEnd){
+          var dow=dIter.getDay();
+          if(dow!==0){ // lun-sab
+            var mes=dIter.getMonth()+1;
+            diasPorMes[mes]=(diasPorMes[mes]||0)+1;
+          }
+          dIter.setDate(dIter.getDate()+1);
+        }
+        Object.keys(diasPorMes).sort().forEach(function(mes){
+          var mh=maxxHistByMes[parseInt(mes)];
+          var mediaDia=mh.dias>0?mh.sum/mh.dias:0;
+          var contrib=diasPorMes[mes]*mediaDia;
+          maxxContrib+=contrib;
+          maxxDetalle.push({
+            mes:parseInt(mes),tipo:'dias normais',
+            n:diasPorMes[mes],media:mediaDia,total:contrib
+          });
+        });
+
+        // Proyección domingos si activados
+        if(_simMaxxDomingos){
+          // Ratio domingo/semana de Avenida+Mercado+Shana en 2026
+          var refLojas=['MEZKA AVENIDA','MEZKA MERCADO','SHANA'];
+          var ratiosByMes={};
+          for(var m=1;m<=12;m++){
+            var domSum=0,domN=0,semSum=0,semN=0;
+            _allRows.forEach(function(r){
+              if(refLojas.indexOf(r.loja)<0) return;
+              if(r.data.substring(0,4)!==String(currentYear)) return;
+              if(parseInt(r.data.substring(5,7))!==m) return;
+              var dow=_strToDate(r.data).getDay();
+              var val=parseFloat(r.montante)||0;
+              if(dow===0){domSum+=val;domN++;}
+              else{semSum+=val;semN++;}
+            });
+            var mediaSem=semN>0?semSum/semN:0;
+            var mediaDom=domN>0?domSum/domN:0;
+            ratiosByMes[m]=mediaSem>0?mediaDom/mediaSem:0.9;
+          }
+          // Media histórica Maxx por mes (lun-sab) × ratio domingo
+          var domIter=new Date(dCur);
+          var domPorMes={};
+          while(domIter<=dEnd){
+            if(domIter.getDay()===0){
+              var mes=domIter.getMonth()+1;
+              domPorMes[mes]=(domPorMes[mes]||0)+1;
+            }
+            domIter.setDate(domIter.getDate()+1);
+          }
+          Object.keys(domPorMes).sort().forEach(function(mes){
+            var mh=maxxHistByMes[parseInt(mes)];
+            var mediaDia=mh.dias>0?mh.sum/mh.dias:0;
+            var ratio=ratiosByMes[parseInt(mes)]||0.9;
+            var mediaDom=mediaDia*ratio;
+            var contrib=domPorMes[mes]*mediaDom;
+            maxxContrib+=contrib;
+            maxxDetalle.push({
+              mes:parseInt(mes),tipo:'domingos',
+              n:domPorMes[mes],media:mediaDom,total:contrib,ratio:ratio
+            });
+          });
+        }
+      }
+
+      var totalComMaxx=baseSinMaxx+maxxContrib;
+
+      // Render resultado
+      var sLbl=_el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;');
+      sLbl.style.setProperty('color','#888888','important');
       sLbl.textContent='RESULTADO DA SIMULAÇÃO — ANO '+currentYear;
       simResult.appendChild(sLbl);
-      var sRow=_el('div','display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;');
+
+      var sRow=_el('div','display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:10px;');
       var sBase=_el('div','');
-      var sBaseLbl=_el('div','font-size:.58rem;');sBaseLbl.style.setProperty('color','#aaaaaa','important');sBaseLbl.textContent='Projecção base';
-      var sBaseVal=_el('div','font-size:.95rem;font-weight:800;');sBaseVal.style.setProperty('color','#888888','important');sBaseVal.textContent=_fmtEur(baseVal);
+      var sBaseLbl=_el('div','font-size:.58rem;');sBaseLbl.style.setProperty('color','#aaaaaa','important');
+      sBaseLbl.textContent='Sem Maxx';
+      var sBaseVal=_el('div','font-size:.95rem;font-weight:800;');
+      sBaseVal.style.setProperty('color','#888888','important');
+      sBaseVal.textContent=_fmtEur(baseSinMaxx);
       sBase.appendChild(sBaseLbl);sBase.appendChild(sBaseVal);
-      var sSim=_el('div','');
-      var sSimLbl=_el('div','font-size:.58rem;');sSimLbl.style.setProperty('color','#4a7c59','important');sSimLbl.textContent='Com simulação';
-      var sSimVal=_el('div','font-size:1.3rem;font-weight:900;');sSimVal.style.setProperty('color','#111111','important');sSimVal.textContent=_fmtEur(simVal);
-      sSim.appendChild(sSimLbl);sSim.appendChild(sSimVal);
-      var sDiff=_el('div','font-size:.88rem;font-weight:800;align-self:center;');
-      sDiff.style.setProperty('color',diff>=0?'#2a6a40':'#a03020','important');
-      sDiff.textContent=(diff>=0?'↑ +':'↓ ')+diff.toFixed(1)+'%';
-      sRow.appendChild(sBase);sRow.appendChild(sSim);sRow.appendChild(sDiff);
+      sRow.appendChild(sBase);
+
+      if(_simMaxxActiva&&maxxContrib>0){
+        var sMaxx=_el('div','');
+        var sMaxxLbl=_el('div','font-size:.58rem;');sMaxxLbl.style.setProperty('color','#4a7c59','important');
+        sMaxxLbl.textContent='Contributo Maxx';
+        var sMaxxVal=_el('div','font-size:.95rem;font-weight:800;');
+        sMaxxVal.style.setProperty('color','#4a7c59','important');
+        sMaxxVal.textContent='+'+_fmtEur(maxxContrib);
+        sMaxx.appendChild(sMaxxLbl);sMaxx.appendChild(sMaxxVal);
+        sRow.appendChild(sMaxx);
+
+        var sTotal=_el('div','');
+        var sTotalLbl=_el('div','font-size:.58rem;');sTotalLbl.style.setProperty('color','#2a6a40','important');
+        sTotalLbl.textContent='Total com Maxx';
+        var sTotalVal=_el('div','font-size:1.3rem;font-weight:900;');
+        sTotalVal.style.setProperty('color','#111111','important');
+        sTotalVal.textContent=_fmtEur(totalComMaxx);
+        sTotal.appendChild(sTotalLbl);sTotal.appendChild(sTotalVal);
+        sRow.appendChild(sTotal);
+      } else {
+        var sTotalVal2=_el('div','font-size:1.3rem;font-weight:900;');
+        sTotalVal2.style.setProperty('color','#111111','important');
+        sTotalVal2.textContent=_fmtEur(baseSinMaxx);
+        sRow.appendChild(sTotalVal2);
+      }
       simResult.appendChild(sRow);
+
+      // Desglose Maxx mes a mes
+      if(maxxDetalle.length){
+        var dttl=_el('div','font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;');
+        dttl.style.setProperty('color','#4a7c59','important');
+        dttl.textContent='DESGLOSE MAXX';
+        simResult.appendChild(dttl);
+        var dGrid=_el('div','display:flex;gap:6px;flex-wrap:wrap;');
+        maxxDetalle.forEach(function(d){
+          var dBox=_el('div','border-radius:8px;padding:6px 10px;min-width:90px;');
+          dBox.style.setProperty('background','#f0f8f4','important');
+          dBox.style.setProperty('border','1px solid #c8e6c9','important');
+          var dNom=_el('div','font-size:.58rem;font-weight:800;');
+          dNom.style.setProperty('color','#4a7c59','important');
+          dNom.textContent=MESES_PT[d.mes-1].substring(0,3)+' · '+d.tipo;
+          dBox.appendChild(dNom);
+          var dN=_el('div','font-size:.62rem;');
+          dN.style.setProperty('color','#888888','important');
+          dN.textContent=d.n+(d.tipo==='domingos'?' dom':' dias')+' · '+_fmtEur(d.media)+'/dia';
+          dBox.appendChild(dN);
+          var dT=_el('div','font-size:.82rem;font-weight:800;');
+          dT.style.setProperty('color','#111111','important');
+          dT.textContent=_fmtEur(d.total);
+          dBox.appendChild(dT);
+          if(d.ratio!==undefined){
+            var dR=_el('div','font-size:.55rem;');
+            dR.style.setProperty('color','#aaaaaa','important');
+            dR.textContent='ratio dom/sem: '+(d.ratio*100).toFixed(0)+'%';
+            dBox.appendChild(dR);
+          }
+          dGrid.appendChild(dBox);
+        });
+        simResult.appendChild(dGrid);
+      }
+
+      if(!_simMaxxActiva||(maxxContrib===0&&_simMaxxActiva)){
+        var hint=_el('div','font-size:.7rem;margin-top:6px;');
+        hint.style.setProperty('color','#aaaaaa','important');
+        hint.textContent=_simMaxxActiva?'Define as datas de abertura da Maxx para calcular o seu contributo.':'Activa a Maxx e define as datas para simular o seu impacto.';
+        simResult.appendChild(hint);
+      }
     }
-    _updateSimResult();
+
+    // Event listeners
+    toggleBtn.addEventListener('click',function(){
+      _simMaxxActiva=!_simMaxxActiva;
+      _calcSimResult();
+      toggleBtn.style.setProperty('background',_simMaxxActiva?'#4a7c59':'#2a2a2a','important');
+      toggleBtn.style.setProperty('border-color',_simMaxxActiva?'#4a7c59':'#555','important');
+      toggleBtn.textContent=_simMaxxActiva?'✓ Maxx incluída':'Maxx fechada';
+    });
+    inpDesde.addEventListener('change',function(){_simMaxxDesde=inpDesde.value;_calcSimResult();});
+    inpHasta.addEventListener('change',function(){_simMaxxHasta=inpHasta.value;_calcSimResult();});
+    domToggle.addEventListener('click',function(){
+      _simMaxxDomingos=!_simMaxxDomingos;
+      domToggle.style.setProperty('background',_simMaxxDomingos?'#4a7c59':'#2a2a2a','important');
+      domToggle.style.setProperty('border-color',_simMaxxDomingos?'#4a7c59':'#555','important');
+      domToggle.textContent=_simMaxxDomingos?'Dom ✓':'+ Domingos';
+      _calcSimResult();
+    });
+
+    _calcSimResult();
   }
 
   // ── Proyección Domingos Ps

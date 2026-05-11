@@ -753,6 +753,8 @@
 
     var fromMD=from.substring(5), toMD=to.substring(5), todayMD=today.substring(5);
     var currentYrStr=fromD.getFullYear().toString();
+    // Offset in days from period start to today — used to find equivalent cutoff in each historical year
+    var doneOffset=doneDays-1; // 0-based: 0 = first day of period
     var yearsData={};
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
@@ -765,11 +767,15 @@
       var yr=r.data.substring(0,4);
       if(yr===currentYrStr) return; // excluir año actual
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0||!yearsData[yr]) return;
-      var md=r.data.substring(5);
       var val=parseFloat(r.montante)||0;
-      if(r.data>=yr+'-'+fromMD&&r.data<=yr+'-'+toMD){
+      var yrFrom=yr+'-'+fromMD, yrTo=yr+'-'+toMD;
+      if(r.data>=yrFrom&&r.data<=yrTo){
         yearsData[yr].total+=val;
-        if(md<=todayMD) yearsData[yr].done+=val;
+        // Equivalent cutoff: same number of days elapsed from the period start in that year
+        var yrFromD=_strToDate(yrFrom);
+        var yrCutD=new Date(yrFromD.getTime()+doneOffset*86400000);
+        var yrCut=_dateToStr(yrCutD);
+        if(r.data<=yrCut) yearsData[yr].done+=val;
       }
     });
 
@@ -785,7 +791,21 @@
       }
     });
 
-    var pctHistorico=ratios.length>0?(ratios.reduce(function(s,v){return s+v;},0)/ratios.length):pctDone/100;
+    // Recency-weighted mean: most recent year gets weight 1, each older year weight *= 0.65
+    // Prevents structurally older years from dominating when the current business has changed
+    var pctHistorico;
+    if(ratios.length>0){
+      var sortedYrs=Object.keys(ratiosByYear).sort(function(a,b){return b-a;}); // newest first
+      var wSum=0,wRatioSum=0;
+      sortedYrs.forEach(function(yr,i){
+        var w=Math.pow(0.65,i); // 1, 0.65, 0.42, 0.27...
+        wSum+=w;
+        wRatioSum+=w*ratiosByYear[yr].ratio;
+      });
+      pctHistorico=wSum>0?wRatioSum/wSum:pctDone/100;
+    } else {
+      pctHistorico=pctDone/100;
+    }
     var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum/(pctDone/100);
     var anosExcluidos=Object.keys(yearsData).filter(function(yr){return !ratiosByYear[yr];});
 
@@ -1202,7 +1222,7 @@
         var pctSpan=_el('span','font-size:.58rem;padding:2px 7px;border-radius:10px;');
         pctSpan.style.setProperty('background','#e6f4ed','important');
         pctSpan.style.setProperty('color','#2a6a40','important');
-        pctSpan.textContent=proj.pctDone.toFixed(0)+'% completo';
+        pctSpan.textContent=proj.pctHistorico.toFixed(0)+'% hist · '+proj.pctDone.toFixed(0)+'% linear';
         cLbl.appendChild(pctSpan);
       }
       card.appendChild(cLbl);

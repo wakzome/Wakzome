@@ -739,7 +739,10 @@
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
 
   // Calcula proyección con trazabilidad completa para panel de cálculos
-  function _calcProjection(rows, from, to, today) {
+  // maxxDesde: fecha ISO desde la cual Maxx estará activa (opcional)
+  // Cuando se pasa, el histórico excluye Maxx en los días donde no estaba activa este año,
+  // y suma la contribución esperada de Maxx a partir de esa fecha.
+  function _calcProjection(rows, from, to, today, maxxDesde) {
     var fromD=_strToDate(from), toD=_strToDate(to);
     var todayD=_strToDate(today||_todayStr());
     var totalDays=Math.round((toD-fromD)/86400000)+1;
@@ -747,36 +750,72 @@
     if(doneDays<=0||doneDays>=totalDays) return null;
     var pctDone=doneDays/totalDays*100;
 
-    var realAcum=rows.filter(function(r){return r.data>=from&&r.data<=today;})
+    // Filas sin Maxx (para el acumulado real limpio cuando Maxx no ha abierto)
+    var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
+    var realAcum=rowsSinMaxx.filter(function(r){return r.data>=from&&r.data<=today;})
       .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+    // Si Maxx ya tiene datos reales este año en el período, incluirlos
+    var maxxRealAcum=rows.filter(function(r){
+      return r.loja==='MAXX'&&r.data>=from&&r.data<=today;
+    }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+    realAcum+=maxxRealAcum;
+
     if(realAcum<=0) return null;
 
-    var fromMD=from.substring(5), toMD=to.substring(5), todayMD=today.substring(5);
+    var fromMD=from.substring(5), toMD=to.substring(5);
     var currentYrStr=fromD.getFullYear().toString();
-    // Offset in days from period start to today — used to find equivalent cutoff in each historical year
-    var doneOffset=doneDays-1; // 0-based: 0 = first day of period
+    var doneOffset=doneDays-1;
+
+    // ── Construir histórico comparable: excluir Maxx de los días que en 2026 no ha abierto
+    // Maxx no abierta en el período actual hasta maxxDesde (o hasta fin si no se define)
+    // Para cada año histórico, excluimos los registros de Maxx en los días equivalentes
+    // donde Maxx no está activa este año.
+    var maxxCierraMD=today.substring(5); // hasta hoy Maxx no aporta (si no ha abierto)
+    var maxxAbreHistMD=maxxDesde?maxxDesde.substring(5):null;
+
     var yearsData={};
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
-      if(yr===currentYrStr) return; // excluir año actual — no es base histórica
+      if(yr===currentYrStr) return;
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
-      if((parseFloat(r.montante)||0)<=0) return;
+      var val=parseFloat(r.montante)||0;
+      if(val<=0) return;
+      // Si es Maxx y Maxx no está activa en el período actual hasta hoy → excluir de "done"
+      // pero incluir en "total" solo desde maxxDesde en adelante
       if(!yearsData[yr]) yearsData[yr]={done:0,total:0};
     });
+
     rows.forEach(function(r){
       var yr=r.data.substring(0,4);
-      if(yr===currentYrStr) return; // excluir año actual
+      if(yr===currentYrStr) return;
       if(ANOS_EXCLUIDOS.indexOf(yr)>=0||!yearsData[yr]) return;
       var val=parseFloat(r.montante)||0;
       var yrFrom=yr+'-'+fromMD, yrTo=yr+'-'+toMD;
-      if(r.data>=yrFrom&&r.data<=yrTo){
+      if(r.data<yrFrom||r.data>yrTo) return;
+      var md=r.data.substring(5);
+      var isMaxx=r.loja==='MAXX';
+
+      // Para Maxx: solo incluir en total desde maxxDesde (si definido)
+      // Si no hay maxxDesde, excluimos Maxx del histórico completamente (igual que este año)
+      if(isMaxx){
+        if(!maxxAbreHistMD) return; // sin maxxDesde: excluir Maxx del histórico
+        if(md<maxxAbreHistMD) return; // antes de maxxDesde: excluir
+        // desde maxxDesde en adelante: incluir en total
         yearsData[yr].total+=val;
-        // Equivalent cutoff: same number of days elapsed from the period start in that year
+        // Para "done": Maxx solo cuenta si está dentro del tramo completado
         var yrFromD=_strToDate(yrFrom);
         var yrCutD=new Date(yrFromD.getTime()+doneOffset*86400000);
         var yrCut=_dateToStr(yrCutD);
         if(r.data<=yrCut) yearsData[yr].done+=val;
+        return;
       }
+
+      // Tiendas normales: siempre incluir
+      yearsData[yr].total+=val;
+      var yrFromD=_strToDate(yrFrom);
+      var yrCutD=new Date(yrFromD.getTime()+doneOffset*86400000);
+      var yrCut=_dateToStr(yrCutD);
+      if(r.data<=yrCut) yearsData[yr].done+=val;
     });
 
     // Trazabilidad: ratio por año
@@ -791,14 +830,13 @@
       }
     });
 
-    // Recency-weighted mean: most recent year gets weight 1, each older year weight *= 0.65
-    // Prevents structurally older years from dominating when the current business has changed
+    // Recency-weighted mean
     var pctHistorico;
     if(ratios.length>0){
-      var sortedYrs=Object.keys(ratiosByYear).sort(function(a,b){return b-a;}); // newest first
+      var sortedYrs=Object.keys(ratiosByYear).sort(function(a,b){return b-a;});
       var wSum=0,wRatioSum=0;
       sortedYrs.forEach(function(yr,i){
-        var w=Math.pow(0.65,i); // 1, 0.65, 0.42, 0.27...
+        var w=Math.pow(0.65,i);
         wSum+=w;
         wRatioSum+=w*ratiosByYear[yr].ratio;
       });
@@ -806,7 +844,46 @@
     } else {
       pctHistorico=pctDone/100;
     }
+
+    // Proyección base (sin Maxx futura)
     var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum/(pctDone/100);
+
+    // ── Contribución futura de Maxx desde maxxDesde hasta fin del período
+    var maxxContribFutura=0;
+    var maxxDetalleFuturo=[];
+    if(maxxDesde&&maxxDesde>today&&maxxDesde<=to){
+      // Media histórica de Maxx por mes (lun-sab, sin año actual, sin COVID)
+      var maxxHistByMes={};
+      for(var m=1;m<=12;m++) maxxHistByMes[m]={sum:0,dias:0};
+      _allRows.forEach(function(r){
+        if(r.loja!=='MAXX') return;
+        var yr=r.data.substring(0,4);
+        if(yr===currentYrStr||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
+        var val=parseFloat(r.montante)||0;
+        if(val<=0) return;
+        var mes=parseInt(r.data.substring(5,7));
+        maxxHistByMes[mes].sum+=val;
+        maxxHistByMes[mes].dias++;
+      });
+      // Días de Maxx desde maxxDesde hasta fin del período
+      var dIter=_strToDate(maxxDesde);
+      var dEnd=toD;
+      var diasPorMes={};
+      while(dIter<=dEnd){
+        var mes=dIter.getMonth()+1;
+        diasPorMes[mes]=(diasPorMes[mes]||0)+1;
+        dIter.setDate(dIter.getDate()+1);
+      }
+      Object.keys(diasPorMes).sort().forEach(function(mes){
+        var mh=maxxHistByMes[parseInt(mes)];
+        var mediaDia=mh.dias>0?mh.sum/mh.dias:0;
+        var contrib=diasPorMes[mes]*mediaDia;
+        maxxContribFutura+=contrib;
+        maxxDetalleFuturo.push({mes:parseInt(mes),nDias:diasPorMes[mes],media:mediaDia,total:contrib});
+      });
+      valorProjetado+=maxxContribFutura;
+    }
+
     var anosExcluidos=Object.keys(yearsData).filter(function(yr){return !ratiosByYear[yr];});
 
     return {
@@ -818,7 +895,8 @@
       totalDays:totalDays,
       doneDays:doneDays,
       anosBase:Object.keys(ratiosByYear),
-      // Trazabilidad completa
+      maxxContribFutura:maxxContribFutura,
+      maxxDetalleFuturo:maxxDetalleFuturo,
       traza:{
         from:from, to:to, today:today,
         totalDays:totalDays, doneDays:doneDays,
@@ -829,7 +907,10 @@
         ratiosByYear:ratiosByYear,
         anosExcluidosCovid:ANOS_EXCLUIDOS,
         anosExcluidosSinDatos:anosExcluidos,
-        formula:'Proyectado = Real acumulado ÷ % histórico completado'
+        maxxDesde:maxxDesde||null,
+        maxxContribFutura:maxxContribFutura,
+        maxxDetalleFuturo:maxxDetalleFuturo,
+        formula:'Proyectado = (Real acumulado ÷ % histórico)' + (maxxContribFutura>0?' + Maxx desde '+_fmtDate(maxxDesde):'')
       }
     };
   }
@@ -1128,9 +1209,10 @@
   //  TAB PROYECCIÓN
   // ════════════════════════════════════════════════════════════
 
-  var _proyTab='general'; // 'general' | 'domingos' | 'diagnostico'
-  var _proyZona='TODAS';  // zona activa en proyección
-  var _proySimulacion={}; // { loja: pctReduccion } para simulador
+  var _proyTab='general';
+  var _proyZona='TODAS';
+  var _proySimulacion={};
+  var _maxxDesdeQ={}; // { 'Q2': '2026-06-01', ... } — fecha de apertura Maxx por trimestre
 
   function _renderProyeccion(){
     var c=_getContent();if(!c)return;
@@ -1206,7 +1288,8 @@
       var isClosed=today>p.to;
       var isActive=today>=p.from&&today<=p.to;
       var isFuture=today<p.from;
-      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,today):null;
+      var maxxDesde=_maxxDesdeQ[p.id]||null;
+      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,today,maxxDesde):null;
 
       var card=_el('div','border-radius:12px;padding:14px 16px;border:1.5px solid;');
       var bc=isClosed?'#e0e0e0':isActive?'#4a7c59':'#555555';
@@ -1273,6 +1356,46 @@
         diffLine.style.setProperty('color',diff>=0?'#2a6a40':'#a03020','important');
         diffLine.textContent=(diff>=0?'↑ +':'↓ ')+diff.toFixed(1)+'% vs '+(currentYear-1)+' ('+_fmtEur(prevTotal)+')';
         card.appendChild(diffLine);
+      }
+
+      // ── Control Maxx (solo en card activo, si Maxx está en la zona)
+      if(isActive&&zonaActiva.lojas.indexOf('MAXX')>=0){
+        var maxxWrap=_el('div','display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;padding:8px 10px;border-radius:8px;border:1px solid #e0e0e0;');
+        maxxWrap.style.setProperty('background','#f8f8f8','important');
+        var maxxLbl=_el('span','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;');
+        maxxLbl.style.setProperty('color','#888888','important');
+        maxxLbl.textContent='Maxx abre:';
+        var iS='padding:4px 8px;font-size:.75rem;font-weight:700;border:1.5px solid #cccccc;border-radius:7px;font-family:MontserratLight,sans-serif;outline:none;';
+        var maxxInp=_el('input',iS);
+        maxxInp.type='date';
+        maxxInp.value=maxxDesde||'';
+        maxxInp.min=today;
+        maxxInp.max=p.to;
+        maxxInp.style.setProperty('background','#ffffff','important');
+        maxxInp.style.setProperty('color','#111111','important');
+        var maxxClear=_el('span','font-size:.68rem;cursor:pointer;padding:3px 8px;border-radius:6px;');
+        maxxClear.style.setProperty('color','#a03020','important');
+        maxxClear.textContent='✕ retirar';
+        maxxClear.style.display=maxxDesde?'inline':'none';
+        // Nota de contribución Maxx si está activa
+        var maxxNota=_el('span','font-size:.62rem;font-weight:700;');
+        maxxNota.style.setProperty('color','#4a7c59','important');
+        if(proj&&proj.maxxContribFutura>0){
+          maxxNota.textContent='+'+_fmtEur(proj.maxxContribFutura)+' estimado';
+        }
+        maxxInp.addEventListener('change',function(){
+          _maxxDesdeQ[p.id]=maxxInp.value||null;
+          _renderProyeccion();
+        });
+        maxxClear.addEventListener('click',function(){
+          _maxxDesdeQ[p.id]=null;
+          _renderProyeccion();
+        });
+        maxxWrap.appendChild(maxxLbl);
+        maxxWrap.appendChild(maxxInp);
+        if(maxxDesde){maxxWrap.appendChild(maxxClear);}
+        if(proj&&proj.maxxContribFutura>0){maxxWrap.appendChild(maxxNota);}
+        card.appendChild(maxxWrap);
       }
 
       // Botón fijar proyección (solo si está en curso)
@@ -1469,7 +1592,9 @@
 
     panel.appendChild(_step(4,'FÓRMULA E RESULTADO',
       t.formula+'<br>'+
-      '<b>'+_fmtEur(t.realAcum)+'</b> ÷ <b>'+t.pctHistoricoUsado.toFixed(1)+'%</b> = <b style="color:#2a6a40">'+_fmtEur(t.valorProjetado)+'</b><br>'+
+      '<b>'+_fmtEur(t.realAcum)+'</b> ÷ <b>'+t.pctHistoricoUsado.toFixed(1)+'%</b> = <b>'+_fmtEur(t.realAcum/(t.pctHistoricoUsado/100))+'</b>'+
+      (t.maxxContribFutura>0?'<br>+ Maxx ('+_fmtDate(t.maxxDesde)+'→fim período): <b style="color:#2a6a40">+'+_fmtEur(t.maxxContribFutura)+'</b>':'')+'<br>'+
+      '= <b style="color:#2a6a40">'+_fmtEur(t.valorProjetado)+'</b><br>'+
       '<small style="color:#888">Se usasse % linear: '+_fmtEur(t.realAcum/(t.pctLineal/100))+'</small>'
     ));
 

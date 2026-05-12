@@ -3945,34 +3945,45 @@
     panel.style.cssText = [
       'position:fixed',
       'top:' + (rect.bottom + 6) + 'px',
-      'left:' + Math.min(rect.left, window.innerWidth - 390) + 'px',
+      'left:' + Math.min(rect.left, window.innerWidth - 580) + 'px',
       'z-index:99998',
       'background:#fff',
       'border:1px solid #e0e0e0',
       'border-radius:12px',
       'box-shadow:0 8px 30px rgba(0,0,0,.14)',
       "font-family:'MontserratLight',sans-serif",
-      'min-width:280px',
-      'max-width:380px',
-      'max-height:420px',
-      'overflow-y:auto'
+      'min-width:340px',
+      'max-width:560px',
+      'width:560px',
+      'max-height:600px',
+      'display:flex',
+      'flex-direction:column',
+      'overflow:hidden'
     ].join(';');
 
     var dns = Object.values(tamDeliveryNotes);
     if (!dns.length) {
       panel.innerHTML = '<div style="padding:18px 16px;font-size:.82rem;color:#000;opacity:.5;font-weight:700;">Nenhuma DN carregada.</div>';
     } else {
-      var hdr = '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
-        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;">' +
-        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>';
+      var hdrHtml =
+        '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
+        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
+        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>' +
+        '<div style="padding:8px 14px 6px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
+          '<input id="tam-dn-filter-inp" type="text" placeholder="🔍 filtrar por código ZY…" autocomplete="off" spellcheck="false" style="' +
+            'width:100%;box-sizing:border-box;padding:6px 10px;font-size:.78rem;' +
+            "font-family:'MontserratLight',sans-serif;border:1px solid #e0e0e0;" +
+            'border-radius:7px;outline:none;background:#fafafa;color:#000;transition:border-color .15s;">' +
+        '</div>' +
+        '<div id="tam-dn-list-rows" style="overflow-y:auto;flex:1;">';
 
-      var rows = dns.map(function(dn) {
-        var hasPhoto  = !!(dn.lastPhotoDistrib && dn.lastPhotoDistrib.length);
-        var confirmed = dn.distribConfirmed ? ' ✓' : '';
-        var clr       = dn.distribConfirmed ? '#4A7C6F' : '#000';
+      var rowsHtml = dns.map(function(dn) {
+        var hasPhoto   = !!(dn.lastPhotoDistrib && dn.lastPhotoDistrib.length);
+        var confirmed  = dn.distribConfirmed ? ' ✓' : '';
+        var clr        = dn.distribConfirmed ? '#4A7C6F' : '#000';
         var isUserConf = dn.lastPhotoConf === 'user_confirmed';
-        var btnLabel  = hasPhoto ? (isUserConf ? '✓ ver confirmado' : '?? ver resultado') : '';
-        var photoBtn  = hasPhoto
+        var btnLabel   = hasPhoto ? (isUserConf ? '✓ ver confirmado' : '?? ver resultado') : '';
+        var photoBtn   = hasPhoto
           ? '<button class="tam-dn-replay-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
               'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
               'border:1px solid ' + (isUserConf ? '#4A7C6F' : '#ccc') + ';border-radius:6px;background:transparent;' +
@@ -3985,7 +3996,7 @@
           'border:1px solid #ccc;border-radius:6px;background:transparent;' +
           "color:#000;font-family:'MontserratLight',sans-serif;" +
           'transition:all .12s;white-space:nowrap;flex-shrink:0;">✏ distribuir</button>';
-        return '<div style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
+        return '<div class="tam-dn-row-item" data-zy="' + tamEsc(dn.zyCode) + '" style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
               tamEsc(dn.zyCode) + confirmed +
@@ -3999,10 +4010,26 @@
           distribBtn +
         '</div>';
       }).join('');
-      panel.innerHTML = hdr + rows;
+
+      panel.innerHTML = hdrHtml + rowsHtml + '</div>';
     }
 
     document.body.appendChild(panel);
+
+    /* Filtro en tiempo real */
+    var filterInp = panel.querySelector('#tam-dn-filter-inp');
+    if (filterInp) {
+      filterInp.addEventListener('input', function() {
+        var q = filterInp.value.trim().toLowerCase();
+        panel.querySelectorAll('.tam-dn-row-item').forEach(function(row) {
+          var zy = (row.getAttribute('data-zy') || '').toLowerCase();
+          row.style.display = (!q || zy.indexOf(q) >= 0) ? 'flex' : 'none';
+        });
+      });
+      filterInp.addEventListener('click', function(e){ e.stopPropagation(); });
+      /* Focus automático al abrir */
+      setTimeout(function(){ filterInp.focus(); }, 60);
+    }
 
     panel.querySelectorAll('.tam-dn-replay-btn').forEach(function(btn) {
       btn.addEventListener('mouseenter', function(){ btn.style.background='#f5f5f5'; });
@@ -5768,13 +5795,14 @@
       return;
     }
 
-    // Se transporte = 0 → mostra alerta com botão
+    // Se transporte = 0 → mostra alerta com botão PDF + input manual
     if (!tamDetectMissingShipping(r)) return;
 
     var alertEl = document.createElement('div');
     alertEl.className = 'tam-freight-alert';
 
-    var fileInputId = 'tam-freight-input-' + invIdx;
+    var fileInputId   = 'tam-freight-input-' + invIdx;
+    var manualInputId = 'tam-freight-manual-' + invIdx;
     alertEl.innerHTML =
       '<span class="tam-freight-icon">🚚</span>' +
       '<span class="tam-freight-msg">Transporte não detetado na fatura · ' +
@@ -5782,10 +5810,26 @@
       '<label class="tam-freight-btn" for="' + fileInputId + '">' +
         '📎 Carregar fatura de transporte' +
         '<input type="file" id="' + fileInputId + '" accept="application/pdf" style="display:none">' +
-      '</label>';
+      '</label>' +
+      '<span class="tam-freight-sep" style="font-size:.72rem;color:#999;white-space:nowrap;">ou</span>' +
+      '<div class="tam-freight-manual-wrap" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">' +
+        '<input type="text" id="' + manualInputId + '" placeholder="ex: 175,00" inputmode="decimal" autocomplete="off" style="' +
+          'width:90px;padding:5px 8px;font-size:.78rem;font-weight:700;' +
+          "font-family:'MontserratLight',sans-serif;border:1px solid #e0e0e0;" +
+          'border-radius:7px;outline:none;background:#fff;color:#000;' +
+          'transition:border-color .15s;text-align:right;">' +
+        '<span style="font-size:.78rem;font-weight:700;color:#555;flex-shrink:0;">€</span>' +
+        '<button class="tam-freight-manual-btn" data-inv="' + invIdx + '" style="' +
+          'padding:5px 13px;font-size:.75rem;font-weight:700;cursor:pointer;' +
+          "font-family:'MontserratLight',sans-serif;border:1px solid #4A7C6F;" +
+          'border-radius:7px;background:transparent;color:#4A7C6F;' +
+          'transition:all .14s;white-space:nowrap;">✓ aplicar</button>' +
+        '<span class="tam-freight-manual-err" style="font-size:.72rem;color:#c00;display:none;white-space:nowrap;"></span>' +
+      '</div>';
 
     containerEl.appendChild(alertEl);
 
+    /* ── Listener: carregar PDF de transporte ── */
     alertEl.querySelector('#' + fileInputId).addEventListener('change', async function(e){
       var file = e.target.files[0];
       if (!file) return;
@@ -5809,18 +5853,50 @@
           if (btn) btn.textContent = '📎 Carregar fatura de transporte';
           return;
         }
-
-        // Se temos pkgs na fatura de frete, verificar consistência com shipPkgs da fatura principal
         var pkgs = freight.pkgs || r.shipPkgs || 0;
         tamApplyExternalShipping(invIdx, freight.cost, pkgs, file.name);
       } catch(err) {
         console.error('TAM freight parse error', err);
         if (btn) {
-          btn.innerHTML =
-            '<span style="color:#c00">⚠ Erro: ' + tamEsc(err.message) + '</span>';
+          btn.innerHTML = '<span style="color:#c00">⚠ Erro: ' + tamEsc(err.message) + '</span>';
         }
       }
     });
+
+    /* ── Listener: valor manual ── */
+    var manualInp = alertEl.querySelector('#' + manualInputId);
+    var manualErr = alertEl.querySelector('.tam-freight-manual-err');
+    var manualBtn = alertEl.querySelector('.tam-freight-manual-btn');
+
+    /* focus/blur styles */
+    manualInp.addEventListener('focus', function(){ manualInp.style.borderColor = '#4A7C6F'; });
+    manualInp.addEventListener('blur',  function(){ manualInp.style.borderColor = '#e0e0e0'; });
+
+    /* Enter key triggers apply */
+    manualInp.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); manualBtn.click(); }
+    });
+
+    manualBtn.addEventListener('click', function(){
+      manualErr.style.display = 'none';
+      var raw  = manualInp.value.trim();
+      if (!raw) {
+        manualErr.textContent = 'introduz um valor';
+        manualErr.style.display = 'inline';
+        return;
+      }
+      var cost = tamParseEU(raw);
+      if (isNaN(cost) || cost <= 0) {
+        manualErr.textContent = 'valor inválido';
+        manualErr.style.display = 'inline';
+        manualInp.style.borderColor = '#c00';
+        return;
+      }
+      tamApplyExternalShipping(invIdx, cost, r.shipPkgs || 0, 'manual');
+    });
+
+    manualBtn.addEventListener('mouseenter', function(){ manualBtn.style.background='rgba(74,124,111,.1)'; });
+    manualBtn.addEventListener('mouseleave', function(){ manualBtn.style.background='transparent'; });
   }
 
   /* Remove o transporte externo e repõe shipping = 0 */

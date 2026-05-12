@@ -3909,10 +3909,12 @@
   }
 
   function tamShowDNBarButtons() {
-    var loadBtn = document.getElementById('tam-dn-load-bar-btn');
-    var camBtn  = document.getElementById('tam-dn-cam-bar-btn');
-    if (loadBtn) loadBtn.style.display = 'inline-flex';
-    if (camBtn)  camBtn.style.display  = 'inline-flex';
+    var loadBtn  = document.getElementById('tam-dn-load-bar-btn');
+    var camBtn   = document.getElementById('tam-dn-cam-bar-btn');
+    var excelBtn = document.getElementById('tam-dn-excel-bar-btn');
+    if (loadBtn)  loadBtn.style.display  = 'inline-flex';
+    if (camBtn)   camBtn.style.display   = 'inline-flex';
+    if (excelBtn) excelBtn.style.display = 'inline-flex';
     tamUpdateDNCount();
   }
 
@@ -3977,8 +3979,13 @@
               'color:' + (isUserConf ? '#4A7C6F' : '#000') + ";font-family:'MontserratLight',sans-serif;" +
               'transition:all .12s;white-space:nowrap;flex-shrink:0;">' +
               btnLabel + '</button>'
-          : '<span style="font-size:.65rem;color:#000;opacity:.3;font-weight:600;white-space:nowrap;">sem foto</span>';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
+          : '';
+        var distribBtn = '<button class="tam-dn-distrib-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
+          'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
+          'border:1px solid #ccc;border-radius:6px;background:transparent;' +
+          "color:#000;font-family:'MontserratLight',sans-serif;" +
+          'transition:all .12s;white-space:nowrap;flex-shrink:0;">✏ distribuir</button>';
+        return '<div style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
               tamEsc(dn.zyCode) + confirmed +
@@ -3989,6 +3996,7 @@
             '</div>' +
           '</div>' +
           photoBtn +
+          distribBtn +
         '</div>';
       }).join('');
       panel.innerHTML = hdr + rows;
@@ -4009,12 +4017,130 @@
       });
     });
 
+    panel.querySelectorAll('.tam-dn-distrib-btn').forEach(function(btn) {
+      btn.addEventListener('mouseenter', function(){ btn.style.background='#f5f5f5'; });
+      btn.addEventListener('mouseleave', function(){ btn.style.background='transparent'; });
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var zy = btn.getAttribute('data-zy');
+        var dn = tamDeliveryNotes[zy];
+        if (!dn) return;
+        panel.remove();
+        tamShowDNDistribModal(dn, null, null, false);
+      });
+    });
+
     function onOutside(e) {
       if (!panel.contains(e.target) && e.target !== el) {
         panel.remove(); document.removeEventListener('click', onOutside);
       }
     }
     setTimeout(function(){ document.addEventListener('click', onOutside); }, 50);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     DN EXCEL IMPORT — carga un .xlsx con columnas: Delivery Note | referencia | Qty
+     Agrupa por zyCode + ref (suma qty por EAN), crea entradas en tamDeliveryNotes
+     con la misma estructura que tamParseDNFromItems: { zyCode, refs, fileName, gesamtPcs }
+     No sobreescribe una DN existente (cargada por PDF) si ya tiene refs.
+  ══════════════════════════════════════════════════════════════ */
+  async function tamHandleDNExcelFile(file) {
+    try {
+      /* SheetJS is available as XLSX in this environment */
+      if (typeof XLSX === 'undefined') {
+        console.warn('TAM DN Excel: SheetJS (XLSX) not available');
+        tamShowDNError('SheetJS não disponível — não é possível ler Excel.');
+        return;
+      }
+      var buf  = await file.arrayBuffer();
+      var wb   = XLSX.read(buf, { type: 'array' });
+      var ws   = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      if (!rows.length) {
+        tamShowDNError('Excel vazio ou sem dados.');
+        return;
+      }
+
+      /* Detect header row — find the row that contains "Delivery Note" or "ZY-" pattern.
+         Accepts first row as header if it contains text, otherwise uses row 0. */
+      var dataStart = 0;
+      var COL_ZY = 0, COL_REF = 1, COL_QTY = 2;
+
+      /* Try to auto-detect columns from header row */
+      var hdr = rows[0].map(function(c){ return String(c).trim().toLowerCase(); });
+      var foundHeader = false;
+      hdr.forEach(function(h, i) {
+        if (/delivery.?note|zy.?code|lieferschein/i.test(h)) { COL_ZY = i; foundHeader = true; }
+        if (/ref|artikel|reference/i.test(h))                 { COL_REF = i; }
+        if (/qty|menge|quantity|anzahl/i.test(h))             { COL_QTY = i; }
+      });
+      if (foundHeader) dataStart = 1;
+
+      /* Accumulate: { zyCode: { refCode: totalQty } } */
+      var accumulator = {};   /* { zyCode: { ref: qty } } */
+      var refOrder    = {};   /* { zyCode: [ref, ...] } — preserves first-seen order */
+
+      for (var ri = dataStart; ri < rows.length; ri++) {
+        var row = rows[ri];
+        var zyRaw  = String(row[COL_ZY]  || '').trim();
+        var refRaw = String(row[COL_REF] || '').trim();
+        var qtyRaw = row[COL_QTY];
+
+        /* zyCode must match ZY-XXXXXXXX pattern */
+        var zyMatch = zyRaw.match(/ZY-\d{8}/);
+        if (!zyMatch) continue;
+        var zyCode = zyMatch[0];
+
+        if (!refRaw) continue;
+
+        var qty = parseInt(qtyRaw);
+        if (isNaN(qty) || qty < 1) continue;
+
+        if (!accumulator[zyCode]) {
+          accumulator[zyCode] = {};
+          refOrder[zyCode]    = [];
+        }
+        if (!accumulator[zyCode].hasOwnProperty(refRaw)) {
+          accumulator[zyCode][refRaw] = 0;
+          refOrder[zyCode].push(refRaw);
+        }
+        accumulator[zyCode][refRaw] += qty;
+      }
+
+      var count = 0;
+      Object.keys(accumulator).forEach(function(zyCode) {
+        /* Do not overwrite a DN that was loaded from PDF (has refs already) */
+        if (tamDeliveryNotes[zyCode] && tamDeliveryNotes[zyCode].refs && tamDeliveryNotes[zyCode].refs.length) {
+          console.log('TAM DN Excel: skipping', zyCode, '— already loaded from PDF');
+          return;
+        }
+        var refs = refOrder[zyCode]
+          .map(function(ref){ return { ref: ref, qty: accumulator[zyCode][ref] }; })
+          .filter(function(r){ return r.qty > 0; });
+        if (!refs.length) return;
+        var gesamtPcs = refs.reduce(function(s, r){ return s + r.qty; }, 0);
+        tamDeliveryNotes[zyCode] = {
+          zyCode:     zyCode,
+          refs:       refs,
+          fileName:   file.name,
+          gesamtPcs:  gesamtPcs,
+          fromExcel:  true
+        };
+        count++;
+      });
+
+      console.log('TAM DN Excel: imported', count, 'DNs from', file.name);
+      tamRebuildDNMap();
+      tamUpdateDNCount();
+      tamScheduleSave();
+      tamRenderDNVerification();
+      tamRenderAll();
+
+    } catch(e) {
+      console.error('TAM DN Excel error', e);
+      tamShowDNError('Erro ao ler Excel: ' + e.message);
+    }
   }
 
   async function tamHandleDeliveryNoteFiles(files) {
@@ -6704,9 +6830,13 @@
         '</div>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾</button>' +
         '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">📋</button>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes" style="display:none">' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF" style="display:none">' +
           '\ud83d\udce6' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
+        '</label>' +
+        '<label class="tam-session-btn" id="tam-dn-excel-bar-btn" for="tam-dn-excel-input" title="delivery notes Excel" style="display:none">' +
+          '\ud83d\udcc5' +
+          '<input type="file" id="tam-dn-excel-input" accept=".xlsx,.xls" style="display:none">' +
         '</label>' +
         '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
@@ -6768,6 +6898,8 @@
         if (dnLoadBtn) dnLoadBtn.style.display = 'none';
         var dnCamBtn = document.getElementById('tam-dn-cam-bar-btn');
         if (dnCamBtn) dnCamBtn.style.display = 'none';
+        var dnExcelBtn = document.getElementById('tam-dn-excel-bar-btn');
+        if (dnExcelBtn) dnExcelBtn.style.display = 'none';
         var guiaBarBtnClose = document.getElementById('tam-guia-bar-btn');
         if (guiaBarBtnClose) guiaBarBtnClose.style.display = 'none';
         var dnCount = document.getElementById('tam-dn-count');
@@ -6885,6 +7017,12 @@
       if (dnBarI) dnBarI.addEventListener('change', function(e){
         var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
         if (files.length) tamHandleDeliveryNoteFiles(files);
+        e.target.value = '';
+      });
+      var dnBarX = bar.querySelector('#tam-dn-excel-input');
+      if (dnBarX) dnBarX.addEventListener('change', function(e){
+        var file = e.target.files[0];
+        if (file) tamHandleDNExcelFile(file);
         e.target.value = '';
       });
       var dnBarC = bar.querySelector('#tam-dn-cam-input');

@@ -1516,52 +1516,84 @@
     lojas.forEach(function(loja){
       var lojaRows=rows.filter(function(r){return r.loja===loja;});
       // Calcular ritmo histórico medio para este punto del año (días 1-N del año)
-      var dayOfYear=Math.round((_strToDate(today)-_strToDate(today.substring(0,4)+'-01-01'))/86400000)+1;
+      var periodoInicio=today.substring(0,4)+'-01-01';
+      var dayOfYear=Math.round((_strToDate(today)-_strToDate(periodoInicio))/86400000)+1;
       var historicos=[];
+      var anosUsados=[];
       for(var yr=2017;yr<currentYear;yr++){
         if(ANOS_EXCLUIDOS.indexOf(String(yr))>=0) continue;
         var yrStart=String(yr)+'-01-01';
-        var yrCut=_dateToStr(new Date(String(yr)+'-01-01T00:00:00'));
         var cutD=new Date(yr,0,1);cutD.setDate(cutD.getDate()+dayOfYear-1);
         var yrCutStr=_dateToStr(cutD);
         var yrSum=lojaRows.filter(function(r){return r.data>=yrStart&&r.data<=yrCutStr;})
           .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        if(yrSum>0) historicos.push(yrSum);
+        if(yrSum>0){historicos.push(yrSum);anosUsados.push(String(yr));}
       }
       if(historicos.length<2) return;
       var mediaHist=historicos.reduce(function(s,v){return s+v;},0)/historicos.length;
-      var realActual=lojaRows.filter(function(r){return r.data>=today.substring(0,4)+'-01-01'&&r.data<=today;})
+      var realActual=lojaRows.filter(function(r){return r.data>=periodoInicio&&r.data<=today;})
         .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
       if(mediaHist<=0) return;
       var ritmo=realActual/mediaHist*100;
       var diff=ritmo-100;
       if(Math.abs(diff)<10) return; // solo mostrar si hay desviación significativa
 
+      // Último ano com dados para comparação directa
+      var anoAnterior=String(currentYear-1);
+      var yrAntStart=anoAnterior+'-01-01';
+      var cutDAnt=new Date(parseInt(anoAnterior),0,1);cutDAnt.setDate(cutDAnt.getDate()+dayOfYear-1);
+      var yrAntCutStr=_dateToStr(cutDAnt);
+      var realAnterior=lojaRows.filter(function(r){return r.data>=yrAntStart&&r.data<=yrAntCutStr;})
+        .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+      var diffVsAnterior=realAnterior>0?(realActual-realAnterior)/realAnterior*100:null;
+
       anyAlert=true;
-      var card=_el('div','border-radius:10px;padding:10px 14px;border:1.5px solid;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;');
+      var card=_el('div','border-radius:10px;padding:10px 14px;border:1.5px solid;display:flex;flex-direction:column;gap:6px;');
       card.style.setProperty('border-color',diff<0?'#f5c6c6':'#c8e6c9','important');
       card.style.setProperty('background',diff<0?'#fff8f8':'#f6fbf4','important');
-      var aLeft=_el('div','');
+
+      // Linha 1: nome + percentagem
+      var aRow1=_el('div','display:flex;align-items:center;justify-content:space-between;');
       var aLoja=_el('div','font-size:.82rem;font-weight:800;');
       aLoja.style.setProperty('color','#111111','important');
       aLoja.textContent=LOJA_LABELS[loja]||loja;
-      aLeft.appendChild(aLoja);
-      var aSub=_el('div','font-size:.62rem;');
-      aSub.style.setProperty('color','#888888','important');
-      aSub.textContent='Real: '+_fmtEur(realActual)+' · Média hist.: '+_fmtEur(mediaHist);
-      aLeft.appendChild(aSub);
-      card.appendChild(aLeft);
-      var aRight=_el('div','text-align:right;');
+      aRow1.appendChild(aLoja);
       var aPct=_el('div','font-size:1rem;font-weight:900;');
       aPct.style.setProperty('color',diff<0?'#a03020':'#2a6a40','important');
       aPct.textContent=(diff>=0?'+':'')+diff.toFixed(1)+'%';
-      aRight.appendChild(aPct);
-      var aImp=_el('div','font-size:.62rem;');
+      aRow1.appendChild(aPct);
+      card.appendChild(aRow1);
+
+      // Linha 2: período e base de comparação
+      var aRow2=_el('div','display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;');
+      var aPeriodo=_el('div','font-size:.6rem;');
+      aPeriodo.style.setProperty('color','#888888','important');
+      aPeriodo.textContent='Período: 01/01→'+_fmtDate(today)+' ('+dayOfYear+' dias) · Base: média de '+anosUsados.length+' anos ('+anosUsados.join(', ')+')';
+      aRow2.appendChild(aPeriodo);
+      card.appendChild(aRow2);
+
+      // Linha 3: valores reais vs média histórica + vs ano anterior
+      var aRow3=_el('div','display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;');
+      var aVals=_el('div','font-size:.62rem;');
+      aVals.style.setProperty('color','#888888','important');
+      aVals.textContent='Real: '+_fmtEur(realActual)+' · Média hist.: '+_fmtEur(mediaHist);
+      aRow3.appendChild(aVals);
+      var aImpDiv=_el('div','display:flex;flex-direction:column;align-items:flex-end;gap:1px;');
+      var aImp=_el('div','font-size:.62rem;font-weight:700;');
       aImp.style.setProperty('color','#888888','important');
       var impacto=(realActual-mediaHist);
-      aImp.textContent=(impacto>=0?'+':'')+_fmtEur(impacto)+' vs histórico';
-      aRight.appendChild(aImp);
-      card.appendChild(aRight);
+      aImp.textContent=(impacto>=0?'+':'')+_fmtEur(impacto)+' vs média hist.';
+      aImpDiv.appendChild(aImp);
+      if(diffVsAnterior!==null){
+        var aAnt=_el('div','font-size:.6rem;');
+        aAnt.style.setProperty('color',diffVsAnterior<0?'#c0392b':'#2a6a40','important');
+        var impVsAnt=realActual-realAnterior;
+        aAnt.textContent=(diffVsAnterior>=0?'+':'')+diffVsAnterior.toFixed(1)+'% vs '+anoAnterior+' ('+(impVsAnt>=0?'+':'')+_fmtEur(impVsAnt)+')';
+        aImpDiv.appendChild(aAnt);
+      }
+      aRow3.appendChild(aImpDiv);
+      card.appendChild(aRow3);
+
       alertasWrap.appendChild(card);
     });
 

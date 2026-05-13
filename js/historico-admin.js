@@ -395,14 +395,33 @@
       lojaRow.style.setProperty('background','#f5f5f5','important');
       lojaRow.addEventListener('mouseenter',function(){this.style.setProperty('background','#ebebeb','important');});
       lojaRow.addEventListener('mouseleave',function(){this.style.setProperty('background','#f5f5f5','important');});
-      var lojaHdr=_el('div','display:flex;align-items:center;justify-content:space-between;');
+      var lojaHdr=_el('div','display:flex;align-items:center;justify-content:space-between;gap:8px;');
       var lojaNom=_el('span','font-size:.95rem;font-weight:800;');
       lojaNom.style.setProperty('color','#111111','important');
       lojaNom.textContent=(lojaOpen?'▼ ':'▶ ')+lojaLabel;
+      var lojaRight=_el('div','display:flex;align-items:center;gap:8px;');
+      // Badge % vs año anterior: busca mismo período del año anterior en _allRows
+      if(!isTotal&&f.from&&f.to){
+        var prevFrom=String(parseInt(f.from.substring(0,4))-1)+f.from.substring(4);
+        var prevTo=String(parseInt(f.to.substring(0,4))-1)+f.to.substring(4);
+        var prevYrLabel=String(parseInt(f.from.substring(0,4))-1);
+        var prevLojaTotal=_allRows.filter(function(r){
+          return r.loja===loja&&r.data>=prevFrom&&r.data<=prevTo;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        if(prevLojaTotal>0){
+          var lojaDiff=(lojaTotal-prevLojaTotal)/prevLojaTotal*100;
+          var lojaB=_el('span','font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;');
+          lojaB.style.setProperty('background',lojaDiff>=0?'#e6f4ed':'#fdecea','important');
+          lojaB.style.setProperty('color',lojaDiff>=0?'#2a6a40':'#a03020','important');
+          lojaB.textContent=(lojaDiff>=0?'↑ +':'↓ ')+lojaDiff.toFixed(1)+'% vs '+prevYrLabel;
+          lojaRight.appendChild(lojaB);
+        }
+      }
       var lojaSum=_el('span','font-size:.95rem;font-weight:800;');
       lojaSum.style.setProperty('color','#111111','important');
       lojaSum.textContent=_fmtEur(lojaTotal);
-      lojaHdr.appendChild(lojaNom); lojaHdr.appendChild(lojaSum);
+      lojaRight.appendChild(lojaSum);
+      lojaHdr.appendChild(lojaNom); lojaHdr.appendChild(lojaRight);
       lojaRow.appendChild(lojaHdr);
       c.appendChild(lojaRow);
 

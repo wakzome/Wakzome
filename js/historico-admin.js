@@ -957,7 +957,57 @@
       mediaByMes[m] = nd > 0 ? d2025.sum / nd : null;
     }
 
-    // Ratio estacional días normales del año actual por mes
+    // Factor de crecimiento 2026 vs 2025 calculado por tienda
+    // ponderado por el peso real de cada tienda en los domingos de 2025
+    // Usando todos los datos disponibles de 2026 vs mismo período de 2025
+    var periodoHasta = today; // hasta hoy en ambos años
+    var periodoDesde2026 = yrStr + '-01-01';
+    var periodoDesde2025 = '2025-01-01';
+    var periodoHasta2025 = '2025-' + today.substring(5); // mismo mes/día en 2025
+
+    var factorPorLoja = {};
+    lojasActivas.forEach(function(loja){
+      var tot2026 = allRows.filter(function(r){
+        return r.loja===loja && r.data>=periodoDesde2026 && r.data<=periodoHasta;
+      }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+      var tot2025 = allRows.filter(function(r){
+        return r.loja===loja && r.data>=periodoDesde2025 && r.data<=periodoHasta2025;
+      }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+      factorPorLoja[loja] = (tot2025>0 && tot2026>0) ? tot2026/tot2025 : null;
+    });
+
+    // Peso de cada tienda en domingos de 2025
+    var totalDom2025 = 0;
+    var pesoPorLoja = {};
+    lojasActivas.forEach(function(loja){
+      var s = allRows.filter(function(r){
+        return r.loja===loja && r.data.substring(0,4)==='2025' && _strToDate(r.data).getDay()===0;
+      }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+      pesoPorLoja[loja] = s;
+      totalDom2025 += s;
+    });
+
+    // Factor ponderado final
+    var factorCrecimiento = 1;
+    if(totalDom2025 > 0){
+      var fSum = 0, fW = 0;
+      lojasActivas.forEach(function(loja){
+        var f = factorPorLoja[loja];
+        if(f===null) return;
+        var w = pesoPorLoja[loja]/totalDom2025;
+        fSum += f*w; fW += w;
+      });
+      if(fW > 0){
+        factorCrecimiento = fSum/fW;
+        // Limitar entre 0.85 y 1.5
+        factorCrecimiento = Math.max(0.85, Math.min(1.5, factorCrecimiento));
+      }
+    }
+
+    // Aplicar factor a los meses con referencia 2025
+    for(var m=1; m<=12; m++){
+      if(mediaByMes[m] !== null) mediaByMes[m] = mediaByMes[m] * factorCrecimiento;
+    }
     // Para proyectar meses sin histórico dominical comparable
     var mediaSemanalByMes = {};
     allRows.forEach(function(r){

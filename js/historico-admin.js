@@ -2300,36 +2300,19 @@
         }
       });
 
-      // Proyección año actual — usando ratio histórico de realización
-      // (mismo método que _calcProjection: real acumulado ÷ % histórico completado)
+      // Proyección año actual — usando exactamente el mismo motor que las cards de Q/Año
       var projAnual=null;
       if(diagActual&&diagActual.total>0){
-        // Calcular % histórico que representa enero-hasta hoy en el año completo
-        var ratios=[];
-        diagHist.forEach(function(d){
-          if(parseInt(d.yr)>=currentYear||ANOS_EXCLUIDOS.indexOf(d.yr)>=0) return;
-          var lojaRows=_allRows.filter(function(r){return r.loja===loja;});
-          var fromAnt=d.yr+'-01-01';
-          var toAntCut=d.yr+'-'+todayMD;
-          var toAntFull=d.yr+'-12-31';
-          var parcial=lojaRows.filter(function(r){return r.data>=fromAnt&&r.data<=toAntCut;})
-            .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-          var anual=lojaRows.filter(function(r){return r.data>=fromAnt&&r.data<=toAntFull;})
-            .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-          if(anual>0&&parcial>0) ratios.push(parcial/anual);
-        });
-        if(ratios.length>0){
-          // Media ponderada por recencia
-          ratios.reverse();
-          var wS=0,wR=0;
-          ratios.forEach(function(r,i){var w=Math.pow(0.65,i);wS+=w;wR+=w*r;});
-          var pctHist=wR/wS;
-          if(pctHist>0) projAnual=diagActual.total/pctHist;
-        }
-        // Fallback: si no hay histórico suficiente, usar media diaria × días del año
-        if(!projAnual&&diagActual.mediaDia>0){
-          var diasRestAno=Math.round((_strToDate(String(currentYear)+'-12-31')-_strToDate(today))/86400000);
-          projAnual=diagActual.total+diasRestAno*diagActual.mediaDia;
+        var lojaRowsProj=_allRows.filter(function(r){return r.loja===loja;});
+        var projResult=_calcProjection(
+          lojaRowsProj,
+          String(currentYear)+'-01-01',
+          String(currentYear)+'-12-31',
+          today,
+          null
+        );
+        if(projResult&&projResult.valorProjetado>0){
+          projAnual=projResult.valorProjetado;
         }
       }
 

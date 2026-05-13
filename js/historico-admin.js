@@ -807,7 +807,7 @@
       if(d.total>0&&d.done>0){
         var ratio=d.done/d.total;
         ratiosByYear[yr]={done:d.done,total:d.total,ratio:ratio,pct:ratio*100};
-        var w=Math.pow(0.65,i);
+        var w=Math.pow(0.45,i);
         wSum+=w; wRatioSum+=w*ratio;
       }
     });
@@ -856,7 +856,7 @@
           var ad=mData[yr];
           var mediaDiaAno=ad.dias>0?ad.sum/ad.dias:0;
           if(mediaDiaAno>0){
-            var w=Math.pow(0.65,i);
+            var w=Math.pow(0.45,i);
             yw+=w; ywSum+=w*mediaDiaAno;
           }
         });

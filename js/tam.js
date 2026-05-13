@@ -1621,12 +1621,12 @@
       '</div>';
 
     var isIpad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (isIpad && tamCollapseState['distrib'] === undefined) {
+    if (tamCollapseState['distrib'] === undefined) {
       tamCollapseState['distrib'] = true;
     }
     var distribCollapsed = !!tamCollapseState['distrib'];
     area.innerHTML =
-      '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
+      '<div class="tam-rec-divider"><span>Distribui\u00e7\u00e3o Manual Geral</span></div>' +
       '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
         '<div class="tam-rec-area-title">' +
           '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" title="expandir / minimizar" style="margin-right:8px;">' +
@@ -6241,6 +6241,7 @@
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
       '.tam-inv-toggle-btn:hover { color:#000; }',
+      '#tam-rec-toggle-btn { font-size:1.05rem; color:#999; }',
       /* iPad: bigger toggle button */
       '@media (pointer:coarse) and (min-width:768px) {',
       '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#555; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',

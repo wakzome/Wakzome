@@ -925,31 +925,99 @@
     var totalReal=domDates.reduce(function(s,d){return s+domFechas[d];},0);
     var mediaActual=domReales>0?totalReal/domReales:0;
 
-    // Media histórica POR MES para domingos (sin COVID, años anteriores, lojas activas)
-    // histByMes[mes] = { sum, count } — media de todos los años disponibles para ese mes
+    // ── Media histórica POR MES — con corrección de horario y ponderación correcta
+    //
+    // Reglas:
+    // - Solo usar años donde ese mes específico tuvo domingos
+    // - 2025: día completo → usar tal cual (referencia principal)
+    // - 2017-2024: medio turno en julio/agosto → aplicar factor de corrección
+    // - Meses sin ningún histórico (ej: abril, mayo) → NO usar histórico, solo tendencia actual
+    // - Factor de corrección medio turno→día completo: calculado como ratio
+    //   entre media de días normales de semana del mismo mes en 2025 vs años anteriores
+
+    // Definir qué años/meses son de medio turno
+    var MEDIO_TURNO_POR_ANO = {
+      '2017': [8],        // agosto
+      '2018': [7,8],      // julio, agosto
+      '2019': [7,8],
+      '2020': [8],
+      '2021': [8],
+      '2022': [8],
+      '2023': [8],
+      '2024': [8]
+      // 2025 en adelante: día completo
+    };
+
+    // Calcular factor de corrección medio turno→día completo por mes
+    // Usando ratio de ventas de días normales de semana: 2025 vs años anteriores
+    // Si 2025 tiene datos de días normales en ese mes, y el año anterior también,
+    // el ratio es 2025/anterior para ese mes
+    function _factorCorreccion(mes, yrAnterior) {
+      var mediaSemanal2025 = 0, count2025 = 0;
+      var mediaSemanalAnterior = 0, countAnterior = 0;
+      allRows.forEach(function(r){
+        var rMes = parseInt(r.data.substring(5,7));
+        if(rMes !== mes) return;
+        if(lojasActivas.indexOf(r.loja) < 0) return;
+        var dow = _strToDate(r.data).getDay();
+        if(dow === 0 || dow === 6) return; // solo lun-vie
+        var val = parseFloat(r.montante)||0;
+        if(val <= 0) return;
+        var yr = r.data.substring(0,4);
+        if(yr === '2025'){mediaSemanal2025 += val; count2025++;}
+        if(yr === yrAnterior){mediaSemanalAnterior += val; countAnterior++;}
+      });
+      var m2025 = count2025 > 0 ? mediaSemanal2025/count2025 : 0;
+      var mAnt  = countAnterior > 0 ? mediaSemanalAnterior/countAnterior : 0;
+      if(m2025 > 0 && mAnt > 0) return m2025/mAnt;
+      return 1.5; // fallback conservador si no hay datos suficientes
+    }
+
+    // Construir histByMes — solo años con domingos en ese mes
     var histByMes={};
-    for(var m=1;m<=12;m++) histByMes[m]={sum:0,count:0,years:{}};
+    for(var m=1;m<=12;m++) histByMes[m]={years:{}};
     allRows.forEach(function(r){
       var yr=r.data.substring(0,4);
       if(yr===yrStr||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
       if(lojasActivas.indexOf(r.loja)<0||_strToDate(r.data).getDay()!==0) return;
       var mes=parseInt(r.data.substring(5,7));
       var val=parseFloat(r.montante)||0;
-      // Agrupar por fecha para contar domingos únicos por año/mes
+      if(val<=0) return;
       if(!histByMes[mes].years[yr]) histByMes[mes].years[yr]={sum:0,dates:{}};
       histByMes[mes].years[yr].dates[r.data]=true;
       histByMes[mes].years[yr].sum+=val;
     });
-    // Calcular media por mes sobre los años disponibles
+
+    // Calcular media corregida por mes
+    // Solo meses con histórico real. Aplicar corrección de medio turno donde corresponda.
     var mediaByMes={};
     for(var m=1;m<=12;m++){
       var yrs=Object.keys(histByMes[m].years);
-      if(!yrs.length){mediaByMes[m]=null;continue;}
-      var mediaYrs=yrs.map(function(yr){
+      if(!yrs.length){mediaByMes[m]=null;continue;} // sin histórico → null
+
+      // Ordenar años de más reciente a más antiguo
+      yrs.sort(function(a,b){return b-a;});
+
+      var wSum=0, wMediaSum=0;
+      yrs.forEach(function(yr,i){
         var nd=Object.keys(histByMes[m].years[yr].dates).length;
-        return nd>0?histByMes[m].years[yr].sum/nd:0;
-      }).filter(function(v){return v>0;});
-      mediaByMes[m]=mediaYrs.length>0?(mediaYrs.reduce(function(s,v){return s+v;},0)/mediaYrs.length):null;
+        if(nd<=0) return;
+        var mediaAnno=histByMes[m].years[yr].sum/nd;
+
+        // Aplicar corrección de horario si es medio turno
+        var esMedioTurno = MEDIO_TURNO_POR_ANO[yr] && MEDIO_TURNO_POR_ANO[yr].indexOf(m)>=0;
+        if(esMedioTurno){
+          var factor = _factorCorreccion(m, yr);
+          mediaAnno = mediaAnno * factor;
+        }
+
+        // Peso por recencia: año más reciente pesa más
+        var w = Math.pow(0.6, i);
+        wSum += w;
+        wMediaSum += w * mediaAnno;
+      });
+
+      mediaByMes[m] = wSum > 0 ? wMediaSum/wSum : null;
     }
 
     // Domingos restantes en el año — mes a mes hasta mesFin
@@ -967,15 +1035,54 @@
     }
 
     // Proyección futura mes a mes
-    // Para cada mes: media ponderada 60% actual + 40% histórica del mes
-    // Si no hay histórico del mes → usar mediaActual
+    // - Si hay histórico corregido para ese mes: ponderar 50% tendencia actual + 50% histórico
+    // - Si NO hay histórico (ej: abril, mayo): usar solo tendencia actual de 2026
+    //   pero ajustada por la ratio estacional de días normales de ese mes vs la media actual
     var proyFuturoPorMes={};
     var proyFuturo=0;
+
+    // Ratio estacional de días normales por mes (para ajustar meses sin histórico dominical)
+    function _ratioEstacionalMes(mes){
+      var mediaActualMeses = {};
+      allRows.forEach(function(r){
+        var yr=r.data.substring(0,4);
+        if(yr!==yrStr) return;
+        if(lojasActivas.indexOf(r.loja)<0) return;
+        var dow=_strToDate(r.data).getDay();
+        if(dow===0||dow===6) return;
+        var val=parseFloat(r.montante)||0;
+        if(val<=0) return;
+        var rMes=parseInt(r.data.substring(5,7));
+        if(!mediaActualMeses[rMes]){mediaActualMeses[rMes]={sum:0,n:0};}
+        mediaActualMeses[rMes].sum+=val;
+        mediaActualMeses[rMes].n++;
+      });
+      var totalMeses=Object.keys(mediaActualMeses);
+      if(!totalMeses.length) return 1;
+      var mediaGlobal=totalMeses.reduce(function(s,m){return s+(mediaActualMeses[m].sum/mediaActualMeses[m].n);},0)/totalMeses.length;
+      if(!mediaActualMeses[mes]||mediaActualMeses[mes].n===0) return 1;
+      var mediaMes=mediaActualMeses[mes].sum/mediaActualMeses[mes].n;
+      return mediaGlobal>0?mediaMes/mediaGlobal:1;
+    }
+
     Object.keys(domRestantesPorMes).forEach(function(mes){
       var nDom=domRestantesPorMes[mes];
       var histMes=mediaByMes[parseInt(mes)];
-      var mediaMes=histMes!=null?(mediaActual*0.6+histMes*0.4):mediaActual;
-      proyFuturoPorMes[mes]={nDom:nDom,media:mediaMes,total:nDom*mediaMes,hist:histMes};
+      var mediaMes;
+      var nota='';
+
+      if(histMes!=null){
+        // Hay histórico corregido: ponderar con tendencia actual
+        mediaMes=mediaActual*0.5+histMes*0.5;
+        nota='hist+actual';
+      } else {
+        // Sin histórico dominical para este mes: usar tendencia actual ajustada estacionalmente
+        var ratio=_ratioEstacionalMes(parseInt(mes));
+        mediaMes=mediaActual*ratio;
+        nota='só tendência '+currentYear;
+      }
+
+      proyFuturoPorMes[mes]={nDom:nDom,media:mediaMes,total:nDom*mediaMes,hist:histMes,nota:nota};
       proyFuturo+=nDom*mediaMes;
     });
     var totalProyectado=totalReal+proyFuturo;

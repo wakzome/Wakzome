@@ -926,67 +926,90 @@
     var mediaActual=domReales>0?totalReal/domReales:0;
 
     // ── Media histórica POR MES
-    // Regla simple y correcta:
-    // - Para meses donde 2025 tuvo domingos (jun/jul/ago): usar 2025 directamente al 100%
-    //   Es el único año comparable (día completo, mismas tiendas)
-    // - Para meses sin histórico comparable (abr/may): usar tendencia real de 2026
-    //   ajustada por ratio estacional de días normales del año actual
+    // - Para meses donde 2025 tuvo domingos (jun/jul/ago): usar 2025 directamente
+    //   ajustado por el factor de crecimiento real de 2026 vs 2025 en días normales
+    // - Para meses sin histórico (abr/may): tendencia real de 2026 ajustada estacionalmente
 
-    var ANO_REFERENCIA = '2025'; // único año con día completo y mismas tiendas
+    var ANO_REFERENCIA = '2025';
 
-    // Media por domingo de 2025, por mes, por las tiendas activas
-    var media2025ByMes = {};
+    // Factor de crecimiento 2026 vs 2025 en días normales de semana (lun-vie)
+    // Calculado sobre los meses disponibles en 2026
+    var sem2026={sum:0,n:0}, sem2025={sum:0,n:0};
     allRows.forEach(function(r){
-      var yr = r.data.substring(0,4);
-      if(yr !== ANO_REFERENCIA) return;
-      if(lojasActivas.indexOf(r.loja) < 0) return;
-      if(_strToDate(r.data).getDay() !== 0) return;
-      var val = parseFloat(r.montante)||0;
-      if(val <= 0) return;
-      var mes = parseInt(r.data.substring(5,7));
-      if(!media2025ByMes[mes]) media2025ByMes[mes] = {sum:0, dates:{}};
-      media2025ByMes[mes].dates[r.data] = true;
-      media2025ByMes[mes].sum += val;
+      if(lojasActivas.indexOf(r.loja)<0) return;
+      var dow=_strToDate(r.data).getDay();
+      if(dow===0||dow===6) return;
+      var val=parseFloat(r.montante)||0;
+      if(val<=0) return;
+      var yr=r.data.substring(0,4);
+      var mes=parseInt(r.data.substring(5,7));
+      // Solo meses disponibles en 2026 para comparación justa
+      var meses2026=[];
+      allRows.forEach(function(r2){
+        if(r2.data.substring(0,4)===yrStr&&lojasActivas.indexOf(r2.loja)>=0){
+          var m2=parseInt(r2.data.substring(5,7));
+          if(meses2026.indexOf(m2)<0) meses2026.push(m2);
+        }
+      });
+      if(meses2026.indexOf(mes)<0) return;
+      if(yr===yrStr){sem2026.sum+=val;sem2026.n++;}
+      if(yr===ANO_REFERENCIA){sem2025.sum+=val;sem2025.n++;}
     });
-    // Convertir a media por domingo
-    var mediaByMes = {};
-    for(var m=1; m<=12; m++){
-      var d2025 = media2025ByMes[m];
-      if(!d2025) { mediaByMes[m] = null; continue; }
-      var nd = Object.keys(d2025.dates).length;
-      mediaByMes[m] = nd > 0 ? d2025.sum / nd : null;
+    var factorCrecimiento=(sem2025.n>0&&sem2026.n>0)
+      ?(sem2026.sum/sem2026.n)/(sem2025.sum/sem2025.n)
+      :1;
+    // Limitar el factor a un rango razonable (0.7 - 1.5)
+    factorCrecimiento=Math.max(0.7,Math.min(1.5,factorCrecimiento));
+
+    // Media por domingo de 2025 por mes — referencia base
+    var media2025ByMes={};
+    allRows.forEach(function(r){
+      if(r.data.substring(0,4)!==ANO_REFERENCIA) return;
+      if(lojasActivas.indexOf(r.loja)<0) return;
+      if(_strToDate(r.data).getDay()!==0) return;
+      var val=parseFloat(r.montante)||0;
+      if(val<=0) return;
+      var mes=parseInt(r.data.substring(5,7));
+      if(!media2025ByMes[mes]) media2025ByMes[mes]={sum:0,dates:{}};
+      media2025ByMes[mes].dates[r.data]=true;
+      media2025ByMes[mes].sum+=val;
+    });
+    var mediaByMes={};
+    for(var m=1;m<=12;m++){
+      var d2025=media2025ByMes[m];
+      if(!d2025){mediaByMes[m]=null;continue;}
+      var nd=Object.keys(d2025.dates).length;
+      // Aplicar factor de crecimiento real de 2026 vs 2025
+      mediaByMes[m]=nd>0?(d2025.sum/nd)*factorCrecimiento:null;
     }
 
     // Ratio estacional días normales del año actual por mes
-    // Para proyectar meses sin histórico dominical comparable
-    var mediaSemanalByMes = {};
+    var mediaSemanalByMes={};
     allRows.forEach(function(r){
-      if(r.data.substring(0,4) !== yrStr) return;
-      if(lojasActivas.indexOf(r.loja) < 0) return;
-      var dow = _strToDate(r.data).getDay();
-      if(dow === 0 || dow === 6) return;
-      var val = parseFloat(r.montante)||0;
-      if(val <= 0) return;
-      var mes = parseInt(r.data.substring(5,7));
-      if(!mediaSemanalByMes[mes]) mediaSemanalByMes[mes] = {sum:0,n:0};
-      mediaSemanalByMes[mes].sum += val;
+      if(r.data.substring(0,4)!==yrStr) return;
+      if(lojasActivas.indexOf(r.loja)<0) return;
+      var dow=_strToDate(r.data).getDay();
+      if(dow===0||dow===6) return;
+      var val=parseFloat(r.montante)||0;
+      if(val<=0) return;
+      var mes=parseInt(r.data.substring(5,7));
+      if(!mediaSemanalByMes[mes]) mediaSemanalByMes[mes]={sum:0,n:0};
+      mediaSemanalByMes[mes].sum+=val;
       mediaSemanalByMes[mes].n++;
     });
-    var mesesConDatos = Object.keys(mediaSemanalByMes);
-    var mediaSemanalGlobal = mesesConDatos.length > 0
-      ? mesesConDatos.reduce(function(s,m){ return s + mediaSemanalByMes[m].sum/mediaSemanalByMes[m].n; }, 0) / mesesConDatos.length
-      : 1;
+    var mesesConDatos=Object.keys(mediaSemanalByMes);
+    var mediaSemanalGlobal=mesesConDatos.length>0
+      ?mesesConDatos.reduce(function(s,m){return s+mediaSemanalByMes[m].sum/mediaSemanalByMes[m].n;},0)/mesesConDatos.length
+      :1;
 
     // Domingos restantes mes a mes hasta mesFin
-    var d=new Date(todayD); d.setDate(d.getDate()+1);
+    var d=new Date(todayD);d.setDate(d.getDate()+1);
     var yearEnd=new Date(currentYear,11,31);
     var domRestantesPorMes={};
     while(d<=yearEnd){
       if(d.getDay()===0){
         var mes=d.getMonth()+1;
-        if(mes<=mesFin){
-          domRestantesPorMes[mes]=(domRestantesPorMes[mes]||0)+1;
-        }
+        if(mes<=mesFin) domRestantesPorMes[mes]=(domRestantesPorMes[mes]||0)+1;
       }
       d.setDate(d.getDate()+1);
     }
@@ -995,26 +1018,22 @@
     var proyFuturoPorMes={};
     var proyFuturo=0;
     Object.keys(domRestantesPorMes).forEach(function(mes){
-      var nDom = domRestantesPorMes[mes];
-      var histMes = mediaByMes[parseInt(mes)]; // media real de 2025 para ese mes
-      var mediaMes, nota;
-
-      if(histMes != null){
-        // 2025 tuvo domingos en este mes → usar directamente como referencia
-        mediaMes = histMes;
-        nota = '2025';
+      var nDom=domRestantesPorMes[mes];
+      var histMes=mediaByMes[parseInt(mes)];
+      var mediaMes,nota;
+      if(histMes!=null){
+        // 2025 tuvo domingos → usar directamente ajustado por crecimiento real
+        mediaMes=histMes;
+        nota='2025 × '+factorCrecimiento.toFixed(2);
       } else {
-        // Sin histórico comparable → tendencia real 2026 ajustada por estacionalidad
-        var mSem = mediaSemanalByMes[parseInt(mes)];
-        var ratioMes = (mSem && mSem.n > 0 && mediaSemanalGlobal > 0)
-          ? (mSem.sum/mSem.n) / mediaSemanalGlobal
-          : 1;
-        mediaMes = mediaActual * ratioMes;
-        nota = 'tendência '+yrStr;
+        // Sin histórico → tendencia real 2026 ajustada estacionalmente
+        var mSem=mediaSemanalByMes[parseInt(mes)];
+        var ratioMes=(mSem&&mSem.n>0&&mediaSemanalGlobal>0)?(mSem.sum/mSem.n)/mediaSemanalGlobal:1;
+        mediaMes=mediaActual*ratioMes;
+        nota='tendência '+yrStr;
       }
-
-      proyFuturoPorMes[mes] = {nDom:nDom, media:mediaMes, total:nDom*mediaMes, hist:histMes, nota:nota};
-      proyFuturo += nDom * mediaMes;
+      proyFuturoPorMes[mes]={nDom:nDom,media:mediaMes,total:nDom*mediaMes,hist:histMes,nota:nota};
+      proyFuturo+=nDom*mediaMes;
     });
     var totalProyectado=totalReal+proyFuturo;
 

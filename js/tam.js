@@ -4671,6 +4671,41 @@
     setTimeout(function(){ t.classList.remove('tam-dn-toast-show'); setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 400); }, 3500);
   }
 
+  function tamShowDNWarnBanner(modal, dist, exp) {
+    /* Remove any existing banner first */
+    var existing = modal.querySelector('#tam-dn-warn-banner');
+    if (existing) existing.parentNode.removeChild(existing);
+    var footer = modal.querySelector('#tam-dn-footer');
+    if (!footer) return;
+    var banner = document.createElement('div');
+    banner.id = 'tam-dn-warn-banner';
+    banner.innerHTML =
+      '<div class="tam-dn-wb-icon">\u26a0</div>' +
+      '<div class="tam-dn-wb-msg">' +
+        '<span class="tam-dn-wb-nums">' + dist + ' \u2260 ' + exp + ' pcs</span>' +
+        '<span class="tam-dn-wb-text">O total distribu\u00eddo n\u00e3o coincide com a DN. Confirmas mesmo assim?</span>' +
+      '</div>' +
+      '<div class="tam-dn-wb-btns">' +
+        '<button class="tam-dn-wb-fix">corrigir</button>' +
+        '<button class="tam-dn-wb-go">confirmar mesmo assim \u2192</button>' +
+      '</div>';
+    footer.parentNode.insertBefore(banner, footer);
+    requestAnimationFrame(function(){ banner.classList.add('tam-dn-wb-visible'); });
+    banner.querySelector('.tam-dn-wb-fix').addEventListener('click', function() {
+      banner.classList.remove('tam-dn-wb-visible');
+      setTimeout(function(){ if (banner.parentNode) banner.parentNode.removeChild(banner); }, 280);
+    });
+    banner.querySelector('.tam-dn-wb-go').addEventListener('click', function() {
+      modal._distribWarnAck = true;
+      banner.classList.remove('tam-dn-wb-visible');
+      setTimeout(function(){
+        if (banner.parentNode) banner.parentNode.removeChild(banner);
+        var confirmBtn = modal.querySelector('#tam-dn-confirm-btn');
+        if (confirmBtn) confirmBtn.click();
+      }, 220);
+    });
+  }
+
   function tamShowDNDistribModal(dn, motorDDistrib, motorDConf, fromPhoto) {
     var old = document.getElementById('tam-dn-modal');
     if (old) old.parentNode.removeChild(old);
@@ -4981,8 +5016,11 @@
         _dnDist += (_f?(parseInt(_f.value)||0):0)+(_p?(parseInt(_p.value)||0):0);
       });
       if (_dnExp > 0 && _dnDist !== _dnExp) {
-        if (!confirm('\u26a0 ATEN\u00c7\u00c3O\n\nO total distribuído é ' + _dnDist +
-          ' pcs mas esta DN tem ' + _dnExp + ' pcs.\n\nConfirmas mesmo assim?')) return;
+        if (!modal._distribWarnAck) {
+          tamShowDNWarnBanner(modal, _dnDist, _dnExp);
+          return;
+        }
+        delete modal._distribWarnAck;
       }
 
       // Always repair invIdx first — fixes legacy sessions where boxes lack invIdx
@@ -6736,6 +6774,19 @@
       '#tam-dn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:#fff; color:#000; border:1.5px solid #000; padding:10px 20px; border-radius:10px; font-size:.84rem; font-family:\'MontserratLight\',sans-serif; opacity:0; transition:opacity .3s,transform .3s; z-index:20000; pointer-events:none; font-weight:700; box-shadow:0 4px 20px rgba(0,0,0,.15); }',
       '#tam-dn-toast.tam-dn-toast-show { opacity:1; transform:translateX(-50%) translateY(0); }',
       '.tam-dn-loading { opacity:.7; }',
+
+      /* ── Distribution mismatch warning banner ── */
+      '#tam-dn-warn-banner { display:flex; align-items:center; gap:12px; padding:11px 20px; background:#FEF6EC; border-top:2px solid #E8A44A; border-bottom:1px solid #F0D9B5; flex-shrink:0; opacity:0; transform:translateY(6px); transition:opacity .25s ease,transform .25s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-dn-warn-banner.tam-dn-wb-visible { opacity:1; transform:translateY(0); }',
+      '.tam-dn-wb-icon { font-size:1.2rem; color:#C47A1E; flex-shrink:0; line-height:1; }',
+      '.tam-dn-wb-msg { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }',
+      '.tam-dn-wb-nums { font-size:.92rem; font-weight:700; color:#9B4D4D; letter-spacing:.01em; }',
+      '.tam-dn-wb-text { font-size:.7rem; color:#7A5530; font-weight:600; }',
+      '.tam-dn-wb-btns { display:flex; gap:8px; flex-shrink:0; }',
+      '.tam-dn-wb-fix { padding:5px 13px; border-radius:7px; border:1.5px solid #ccc; background:transparent; color:#555; font-size:.74rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,border-color .12s; text-transform:lowercase; }',
+      '.tam-dn-wb-fix:hover { background:#f0f0f0; border-color:#999; }',
+      '.tam-dn-wb-go { padding:5px 13px; border-radius:7px; border:1.5px solid #C47A1E; background:transparent; color:#C47A1E; font-size:.74rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,color .12s; text-transform:lowercase; white-space:nowrap; }',
+      '.tam-dn-wb-go:hover { background:rgba(196,122,30,.12); }',
 
       /* ── Motor D (proc style) ── */
       '#tam-motord-spin { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(16px); background:#fff; color:#000; border:1.5px solid #000; padding:9px 20px; border-radius:12px; font-size:.82rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:20001; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,.15); }',

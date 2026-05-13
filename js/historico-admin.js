@@ -1195,7 +1195,41 @@
   var _proyTab='general';
   var _proyZona='TODAS';
   var _proySimulacion={};
-  var _maxxDesdeQ={}; // { 'Q2': '2026-06-01', ... } — fecha de apertura Maxx por trimestre
+
+  // Configuración global de Maxx — persiste en Supabase (tabla configuracion_maxx)
+  var _maxxConfig={loaded:false,inicio:null,fin:null};
+
+  function _loadMaxxConfig(callback){
+    if(_maxxConfig.loaded){if(callback)callback();return;}
+    var currentYear=new Date().getFullYear();
+    sbAdmin.from('configuracion_maxx').select('*').eq('ano',currentYear).limit(1)
+      .then(function(res){
+        var r=res.data&&res.data[0];
+        if(r){_maxxConfig.inicio=r.fecha_inicio;_maxxConfig.fin=r.fecha_fin;}
+        _maxxConfig.loaded=true;
+        if(callback)callback();
+      }).catch(function(){_maxxConfig.loaded=true;if(callback)callback();});
+  }
+
+  function _saveMaxxConfig(inicio,fin,callback){
+    var currentYear=new Date().getFullYear();
+    var payload={ano:currentYear,fecha_inicio:inicio,fecha_fin:fin,updated_at:new Date().toISOString()};
+    sbAdmin.from('configuracion_maxx').upsert(payload,{onConflict:'ano'})
+      .then(function(res){
+        if(!res.error){_maxxConfig.inicio=inicio;_maxxConfig.fin=fin;}
+        if(callback)callback(res.error);
+      }).catch(function(e){if(callback)callback(e);});
+  }
+
+  // Calcula intersección de la config de Maxx con un período dado
+  function _maxxRangoParaPeriodo(pFrom,pTo){
+    var inicio=_maxxConfig.inicio,fin=_maxxConfig.fin;
+    if(!inicio||!fin) return null;
+    var desde=inicio>pFrom?inicio:pFrom;
+    var hasta=fin<pTo?fin:pTo;
+    if(desde>hasta) return null;
+    return {desde:desde,hasta:hasta};
+  }
 
   function _renderProyeccion(){
     var c=_getContent();if(!c)return;
@@ -1230,186 +1264,15 @@
   function _renderProyGeneral(c,today){
     var currentYear=_strToDate(today).getFullYear();
 
-    // Selector de zona
-    var zonaWrap=_el('div','display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;justify-content:center;');
-    var zonas=[
-      {k:'TODAS',l:'Todas',lojas:LOJAS},
-      {k:'PARFOIS',l:'Parfois',lojas:ZONA_PARFOIS},
-      {k:'PRIMAVERA',l:'Primavera',lojas:ZONA_PRIMAVERA},
-      {k:'MEZKA_PS',l:'Mezka Ps',lojas:ZONA_MEZKAPS},
-      {k:'MEZKA_FNC',l:'Mezka Fnc',lojas:ZONA_MEZKAFNC}
-    ];
-    zonas.forEach(function(z){
-      var btn=_el('div','padding:5px 14px;border-radius:16px;font-size:.72rem;font-weight:800;cursor:pointer;border:1.5px solid;font-family:MontserratLight,sans-serif;');
-      var isAct=_proyZona===z.k;
-      btn.style.setProperty('background',isAct?'#4a7c59':'#2a2a2a','important');
-      btn.style.setProperty('color','#ffffff','important');
-      btn.style.setProperty('border-color',isAct?'#4a7c59':'#555','important');
-      btn.textContent=z.l;
-      btn.addEventListener('click',function(){_proyZona=z.k;_renderProyeccion();});
-      zonaWrap.appendChild(btn);
-    });
-    c.appendChild(zonaWrap);
-
-    var zonaActiva=zonas.find(function(z){return z.k===_proyZona;})||zonas[0];
-    var rows=_allRows.filter(function(r){return zonaActiva.lojas.indexOf(r.loja)>=0;});
-
-    // Cards Q1-Q4 + Año
-    var periods=[
-      {id:'Q1',label:'Q1',from:currentYear+'-01-01',to:currentYear+'-03-31'},
-      {id:'Q2',label:'Q2',from:currentYear+'-04-01',to:currentYear+'-06-30'},
-      {id:'Q3',label:'Q3',from:currentYear+'-07-01',to:currentYear+'-09-30'},
-      {id:'Q4',label:'Q4',from:currentYear+'-10-01',to:currentYear+'-12-31'},
-      {id:'ANO',label:'Ano '+currentYear,from:currentYear+'-01-01',to:currentYear+'-12-31'}
-    ];
-
-    // Grid de cards
-    var grid=_el('div','display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px;');
-    periods.forEach(function(p){
-      var realRows=rows.filter(function(r){return r.data>=p.from&&r.data<=p.to;});
-      var realTotal=realRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-      var isClosed=today>p.to;
-      var isActive=today>=p.from&&today<=p.to;
-      var isFuture=today<p.from;
-      var maxxDesde=_maxxDesdeQ[p.id]||null;
-      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,today,maxxDesde):null;
-
-      var card=_el('div','border-radius:12px;padding:14px 16px;border:1.5px solid;');
-      var bc=isClosed?'#e0e0e0':isActive?'#4a7c59':'#555555';
-      card.style.setProperty('border-color',bc,'important');
-      card.style.setProperty('background',isClosed?'#fafafa':isActive?'#f1f8f4':'#f5f5f5','important');
-
-      // Label
-      var cLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;');
-      cLbl.style.setProperty('color',isActive?'#4a7c59':'#888888','important');
-      var lSpan=document.createElement('span');lSpan.textContent=p.label+(isClosed?' · Fechado':isActive?' · Em curso':' · Futuro');
-      cLbl.appendChild(lSpan);
-      if(isActive&&proj){
-        var pctSpan=_el('span','font-size:.58rem;padding:2px 7px;border-radius:10px;');
-        pctSpan.style.setProperty('background','#e6f4ed','important');
-        pctSpan.style.setProperty('color','#2a6a40','important');
-        pctSpan.textContent=proj.pctHistorico.toFixed(0)+'% hist · '+proj.pctDone.toFixed(0)+'% linear';
-        cLbl.appendChild(pctSpan);
-      }
-      card.appendChild(cLbl);
-
-      // Valor real
-      var cVal=_el('div','font-size:1.4rem;font-weight:900;letter-spacing:-.02em;');
-      cVal.style.setProperty('color','#111111','important');
-      cVal.textContent=_fmtEur(realTotal);
-      card.appendChild(cVal);
-
-      // Proyección (si aplica)
-      if(!isClosed&&proj){
-        var projLine=_el('div','display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap;');
-        var projLbl=_el('span','font-size:.62rem;font-weight:700;');
-        projLbl.style.setProperty('color','#888888','important');
-        projLbl.textContent=isFuture?'Estimativa:':'Projecção:';
-        projLine.appendChild(projLbl);
-        var projVal=_el('span','font-size:.95rem;font-weight:800;');
-        projVal.style.setProperty('color',isActive?'#2a6a40':'#555555','important');
-        projVal.textContent=_fmtEur(proj.valorProjetado);
-        projLine.appendChild(projVal);
-        if(isActive){
-          var projSub=_el('span','font-size:.62rem;');
-          projSub.style.setProperty('color','#aaaaaa','important');
-          projSub.textContent='('+proj.diasRestantes+' dias restantes)';
-          projLine.appendChild(projSub);
-        }
-        card.appendChild(projLine);
-
-        // Base histórica
-        if(proj.anosBase&&proj.anosBase.length){
-          var baseLbl=_el('div','font-size:.58rem;margin-top:3px;');
-          baseLbl.style.setProperty('color','#bbbbbb','important');
-          baseLbl.textContent='Base: '+proj.anosBase.join(', ');
-          card.appendChild(baseLbl);
-        }
-      }
-
-      // Comparación con año anterior
-      var prevFrom=String(currentYear-1)+p.from.substring(4);
-      var prevTo=String(currentYear-1)+p.to.substring(4);
-      var prevRows=rows.filter(function(r){return r.data>=prevFrom&&r.data<=prevTo;});
-      var prevTotal=prevRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-      if(prevTotal>0){
-        var compareVal=isClosed?realTotal:(proj?proj.valorProjetado:realTotal);
-        var diff=(compareVal-prevTotal)/prevTotal*100;
-        var diffLine=_el('div','font-size:.68rem;font-weight:700;margin-top:6px;padding-top:6px;border-top:1px solid #e0e0e0;');
-        diffLine.style.setProperty('color',diff>=0?'#2a6a40':'#a03020','important');
-        diffLine.textContent=(diff>=0?'↑ +':'↓ ')+diff.toFixed(1)+'% vs '+(currentYear-1)+' ('+_fmtEur(prevTotal)+')';
-        card.appendChild(diffLine);
-      }
-
-      // ── Control Maxx (solo en card activo, si Maxx está en la zona)
-      if(isActive&&zonaActiva.lojas.indexOf('MAXX')>=0){
-        var maxxWrap=_el('div','display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;padding:8px 10px;border-radius:8px;border:1px solid #e0e0e0;');
-        maxxWrap.style.setProperty('background','#f8f8f8','important');
-        var maxxLbl=_el('span','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;');
-        maxxLbl.style.setProperty('color','#888888','important');
-        maxxLbl.textContent='Maxx abre:';
-        var iS='padding:4px 8px;font-size:.75rem;font-weight:700;border:1.5px solid #cccccc;border-radius:7px;font-family:MontserratLight,sans-serif;outline:none;';
-        var maxxInp=_el('input',iS);
-        maxxInp.type='date';
-        maxxInp.value=maxxDesde||'';
-        maxxInp.min=today;
-        maxxInp.max=p.to;
-        maxxInp.style.setProperty('background','#ffffff','important');
-        maxxInp.style.setProperty('color','#111111','important');
-        var maxxClear=_el('span','font-size:.68rem;cursor:pointer;padding:3px 8px;border-radius:6px;');
-        maxxClear.style.setProperty('color','#a03020','important');
-        maxxClear.textContent='✕ retirar';
-        maxxClear.style.display=maxxDesde?'inline':'none';
-        // Nota de contribución Maxx si está activa
-        var maxxNota=_el('span','font-size:.62rem;font-weight:700;');
-        maxxNota.style.setProperty('color','#4a7c59','important');
-        if(proj&&proj.maxxContribFutura>0){
-          maxxNota.textContent='+'+_fmtEur(proj.maxxContribFutura)+' estimado';
-        }
-        maxxInp.addEventListener('change',function(){
-          _maxxDesdeQ[p.id]=maxxInp.value||null;
-          _renderProyeccion();
-        });
-        maxxClear.addEventListener('click',function(){
-          _maxxDesdeQ[p.id]=null;
-          _renderProyeccion();
-        });
-        maxxWrap.appendChild(maxxLbl);
-        maxxWrap.appendChild(maxxInp);
-        if(maxxDesde){maxxWrap.appendChild(maxxClear);}
-        if(proj&&proj.maxxContribFutura>0){maxxWrap.appendChild(maxxNota);}
-        card.appendChild(maxxWrap);
-      }
-
-      // Botón fijar proyección (solo si está en curso)
-      if(isActive&&proj){
-        var btnRow=_el('div','display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;');
-
-        var fixBtn=_el('div','padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #4a7c59;font-family:MontserratLight,sans-serif;');
-        fixBtn.style.setProperty('background','transparent','important');
-        fixBtn.style.setProperty('color','#4a7c59','important');
-        fixBtn.textContent='📌 Fixar Projecção';
-        fixBtn.addEventListener('click',function(){
-          _guardarProyeccion(p,proj,_proyZona,rows,fixBtn);
-        });
-        btnRow.appendChild(fixBtn);
-
-        // Botón Ver cálculos — abre modal flotante
-        var calcBtn=_el('div','padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:800;cursor:pointer;text-align:center;border:1.5px solid #aaaaaa;font-family:MontserratLight,sans-serif;');
-        calcBtn.style.setProperty('background','transparent','important');
-        calcBtn.style.setProperty('color','#666666','important');
-        calcBtn.textContent='🔍 Ver cálculos';
-        calcBtn.addEventListener('click',function(e){
-          e.stopPropagation();
-          _openTrazaModal(proj, p.label);
-        });
-        btnRow.appendChild(calcBtn);
-        card.appendChild(btnRow);
-      }
-
-      grid.appendChild(card);
-    });
-    c.appendChild(grid);
+    // Cargar config Maxx si no está en memoria, luego renderizar
+    if(!_maxxConfig.loaded){
+      var loadMsg=_el('div','font-size:.78rem;padding:20px;text-align:center;');
+      loadMsg.style.setProperty('color','#aaaaaa','important');
+      loadMsg.textContent='A carregar configuração…';
+      c.appendChild(loadMsg);
+      _loadMaxxConfig(function(){_renderProyeccion();});
+      return;
+    }
 
     // ── Alertas tienda a tienda
     _renderAlertas(c,rows,today,currentYear,zonaActiva.lojas);
@@ -1514,72 +1377,87 @@
     document.body.style.overflow='';
   }
 
-  // ── Panel de trazabilidad de cálculos
+  // ── Narrativa analítica — reemplaza los pasos técnicos
   function _renderTrazabilidad(proj){
-    var panel=_el('div','border-radius:10px;padding:14px;margin-top:10px;border:1px solid #e8e8e8;');
-    panel.style.setProperty('background','#f8f8f8','important');
-
+    var panel=_el('div','');
     var t=proj.traza;
     if(!t){
       var nd=_el('div','font-size:.72rem;');nd.style.setProperty('color','#aaaaaa','important');
-      nd.textContent='Sem dados de trazabilidade.';panel.appendChild(nd);return panel;
+      nd.textContent='Sem dados de análise.';panel.appendChild(nd);return panel;
     }
 
-    // Título
-    var ttl=_el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;');
-    ttl.style.setProperty('color','#4a7c59','important');
-    ttl.textContent='COMO SE CALCULOU ESTA PROJECÇÃO';
-    panel.appendChild(ttl);
-
-    // Paso 1: datos del período
-    function _step(num,title,content){
-      var s=_el('div','margin-bottom:10px;padding:10px;border-radius:8px;border-left:3px solid #4a7c59;');
-      s.style.setProperty('background','#ffffff','important');
-      var sh=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;');
-      sh.style.setProperty('color','#4a7c59','important');
-      sh.textContent='PASSO '+num+' — '+title;
-      s.appendChild(sh);
-      var sc=_el('div','font-size:.72rem;line-height:1.6;');
-      sc.style.setProperty('color','#333333','important');
-      sc.innerHTML=content;
-      s.appendChild(sc);
-      return s;
+    function _bloco(titulo,cor,conteudo){
+      var b=_el('div','margin-bottom:14px;padding:14px 16px;border-radius:10px;border-left:3px solid '+cor+';');
+      b.style.setProperty('background','#f9f9f9','important');
+      var bT=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;');
+      bT.style.setProperty('color',cor,'important');bT.textContent=titulo;b.appendChild(bT);
+      var bC=_el('div','font-size:.78rem;line-height:1.7;');
+      bC.style.setProperty('color','#333333','important');bC.innerHTML=conteudo;b.appendChild(bC);
+      return b;
     }
 
-    panel.appendChild(_step(1,'PERÍODO E DADOS REAIS',
-      'Período: <b>'+_fmtDate(t.from)+'</b> → <b>'+_fmtDate(t.to)+'</b> ('+t.totalDays+' dias totais)<br>'+
-      'Até hoje ('+_fmtDate(t.today)+'): <b>'+t.doneDays+' dias</b> completados<br>'+
-      'Vendas reais acumuladas: <b>'+_fmtEur(t.realAcum)+'</b>'
-    ));
+    // ── Bloco 1: Situação actual
+    var diasRestantes=t.totalDays-t.doneDays;
+    var pesoRestante=100-t.pctHistoricoUsado;
+    var ritmoAdj=t.pctHistoricoUsado>t.pctLineal?'concentrado nos dias que faltam':'mais forte nos dias já passados';
+    var b1='Estamos no dia <b>'+t.doneDays+'</b> de <b>'+t.totalDays+'</b> do período (<b>'+_fmtDate(t.from)+'→'+_fmtDate(t.to)+'</b>). ';
+    b1+='Foram facturados <b>'+_fmtEur(t.realAcum)+'</b> até '+_fmtDate(t.today)+'. ';
+    b1+='Restam <b>'+diasRestantes+' dias</b>, que historicamente representam <b>'+pesoRestante.toFixed(1)+'%</b> do total do período — ';
+    b1+='ou seja, o peso dos dias que faltam é <b>'+ritmoAdj+'</b> em relação à parte já decorrida.';
+    if(t.maxxContribFutura>0){
+      b1+=' A Maxx iniciará actividade a partir de <b>'+_fmtDate(t.maxxDesde)+'</b>, contribuindo com uma estimativa de <b>+'+_fmtEur(t.maxxContribFutura)+'</b> adicionais.';
+    }
+    panel.appendChild(_bloco('SITUAÇÃO ACTUAL','#4a7c59',b1));
 
-    panel.appendChild(_step(2,'% COMPLETADO',
-      'Linear (dias passados ÷ dias totais): <b>'+t.pctLineal.toFixed(1)+'%</b><br>'+
-      'Histórico ponderado (média dos anos base): <b>'+t.pctHistoricoUsado.toFixed(1)+'%</b><br>'+
-      '<small style="color:#888">O % histórico reflecte o peso real destes dias no período — a estacionalidade</small>'
-    ));
-
-    // Paso 3: ratio por año
-    var anosStr='';
+    // ── Bloco 2: O que diz a história
     var anosKeys=Object.keys(t.ratiosByYear).sort();
-    anosKeys.forEach(function(yr){
-      var d=t.ratiosByYear[yr];
-      anosStr+='<b>'+yr+'</b>: '+_fmtEur(d.done)+' de '+_fmtEur(d.total)+' = <b>'+d.pct.toFixed(1)+'%</b><br>';
-    });
+    var totais=anosKeys.map(function(yr){return t.ratiosByYear[yr].total;});
+    var minTotal=Math.min.apply(null,totais),maxTotal=Math.max.apply(null,totais);
+    var minAno=anosKeys[totais.indexOf(minTotal)],maxAno=anosKeys[totais.indexOf(maxTotal)];
+    var anosRecentes=anosKeys.slice(-2);
+    var b2='Em <b>'+anosKeys.length+' anos comparáveis</b> ('+anosKeys.join(', ')+'), o período completo oscilou entre <b>'+_fmtEur(minTotal)+'</b> ('+minAno+') e <b>'+_fmtEur(maxTotal)+'</b> ('+maxAno+'). ';
+    if(anosRecentes.length>=2){
+      var t1=t.ratiosByYear[anosRecentes[0]].total,t2=t.ratiosByYear[anosRecentes[1]].total;
+      var tendencia=t2>t1?'crescente':'decrescente';
+      b2+='A tendência dos últimos dois anos é <b>'+tendencia+'</b>: '+anosRecentes[0]+' fechou em <b>'+_fmtEur(t1)+'</b> e '+anosRecentes[1]+' em <b>'+_fmtEur(t2)+'</b>. ';
+    }
+    // Dispersão dos ratios
+    var ratios=anosKeys.map(function(yr){return t.ratiosByYear[yr].pct;});
+    var minR=Math.min.apply(null,ratios),maxR=Math.max.apply(null,ratios);
+    b2+='O peso histórico dos dias já decorridos variou entre <b>'+minR.toFixed(1)+'%</b> e <b>'+maxR.toFixed(1)+'%</b> — uma amplitude de '+(maxR-minR).toFixed(1)+' pontos percentuais. ';
     if(t.anosExcluidosCovid&&t.anosExcluidosCovid.length){
-      anosStr+='<span style="color:#aaa">Excluídos COVID: '+t.anosExcluidosCovid.join(', ')+'</span><br>';
+      b2+='Os anos '+t.anosExcluidosCovid.join(' e ')+' foram excluídos por distorção atípica (COVID-19).';
     }
-    if(t.anosExcluidosSinDatos&&t.anosExcluidosSinDatos.length){
-      anosStr+='<span style="color:#aaa">Sem dados suficientes: '+t.anosExcluidosSinDatos.join(', ')+'</span>';
-    }
-    panel.appendChild(_step(3,'TAXA DE REALIZAÇÃO POR ANO',anosStr||'Sem anos base disponíveis.'));
+    panel.appendChild(_bloco('O QUE DIZ A HISTÓRIA','#2563a8',b2));
 
-    panel.appendChild(_step(4,'FÓRMULA E RESULTADO',
-      t.formula+'<br>'+
-      '<b>'+_fmtEur(t.realAcum)+'</b> ÷ <b>'+t.pctHistoricoUsado.toFixed(1)+'%</b> = <b>'+_fmtEur(t.realAcum/(t.pctHistoricoUsado/100))+'</b>'+
-      (t.maxxContribFutura>0?'<br>+ Maxx ('+_fmtDate(t.maxxDesde)+'→fim período): <b style="color:#2a6a40">+'+_fmtEur(t.maxxContribFutura)+'</b>':'')+'<br>'+
-      '= <b style="color:#2a6a40">'+_fmtEur(t.valorProjetado)+'</b><br>'+
-      '<small style="color:#888">Se usasse % linear: '+_fmtEur(t.realAcum/(t.pctLineal/100))+'</small>'
-    ));
+    // ── Bloco 3: Veredicto e análise crítica
+    var pctUsado=t.pctHistoricoUsado;
+    var projBase=t.realAcum/(pctUsado/100);
+    var projFinal=t.valorProjetado;
+    // Identificar mes crítico (el que más pesa en el período restante — simplificado)
+    var b3='Com base no ritmo actual e no peso histórico ponderado, a projecção para o período completo é de <b>'+_fmtEur(projFinal)+'</b>. ';
+    // Comparar con la media histórica
+    var mediaHist=totais.reduce(function(s,v){return s+v;},0)/totais.length;
+    var diffMedia=(projFinal-mediaHist)/mediaHist*100;
+    b3+='Este valor situa-se <b>'+(Math.abs(diffMedia)<5?'próximo da média histórica ('+(diffMedia>=0?'+':'')+diffMedia.toFixed(1)+'%)':'('+Math.abs(diffMedia).toFixed(1)+'% '+(diffMedia>=0?'acima':'abaixo')+' da média histórica de '+_fmtEur(mediaHist)+')')+'</b>. ';
+    // Comparar con el año más reciente
+    if(anosRecentes.length>0){
+      var ultAno=anosRecentes[anosRecentes.length-1];
+      var ultTotal=t.ratiosByYear[ultAno].total;
+      var diffUlt=(projFinal-ultTotal)/ultTotal*100;
+      b3+='Comparando com '+ultAno+' ('+_fmtEur(ultTotal)+'): a projecção representa '+(diffUlt>=0?'<b style="color:#2a6a40">+'+diffUlt.toFixed(1)+'%</b>':'<b style="color:#a03020">'+diffUlt.toFixed(1)+'%</b>')+'. ';
+    }
+    // Factor crítico
+    if(pesoRestante>60){
+      b3+='<br><br>⚠ <b>Factor crítico:</b> '+pesoRestante.toFixed(0)+'% da facturação esperada ainda está por realizar. O resultado final depende fortemente do comportamento dos dias que faltam.';
+    } else if(pesoRestante<30){
+      b3+='<br><br>✓ <b>Nota:</b> Mais de '+t.pctHistoricoUsado.toFixed(0)+'% do período já está realizado. A projecção tem um grau de fiabilidade mais elevado.';
+    }
+    if(t.maxxContribFutura>0){
+      var pctMaxx=t.maxxContribFutura/projFinal*100;
+      b3+='<br>↳ A contribuição da Maxx representa <b>'+pctMaxx.toFixed(1)+'%</b> do total projectado.';
+    }
+    panel.appendChild(_bloco('VEREDICTO','#1a1a1a',b3));
 
     return panel;
   }

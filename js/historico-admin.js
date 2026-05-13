@@ -851,19 +851,22 @@
         }
         // Media por día abierto ponderada por recencia entre años
         var anosYrs=Object.keys(mData).sort(function(a,b){return b-a;});
-        var yw=0,ywSum=0;
+        var yw=0,ywSum=0,ywDias=0,ywDiasSum=0;
         anosYrs.forEach(function(yr,i){
           var ad=mData[yr];
           var mediaDiaAno=ad.dias>0?ad.sum/ad.dias:0;
           if(mediaDiaAno>0){
             var w=Math.pow(0.45,i);
             yw+=w; ywSum+=w*mediaDiaAno;
+            ywDias+=w; ywDiasSum+=w*ad.dias;
           }
         });
         var mediaDia=yw>0?ywSum/yw:0;
-        var contrib=nDias*mediaDia;
+        // Dias abertos esperados = media ponderada historica (nao dias de calendario)
+        var diasAbiertosEsperados=ywDias>0?Math.round(ywDiasSum/ywDias):nDias;
+        var contrib=diasAbiertosEsperados*mediaDia;
         maxxContribFutura+=contrib;
-        maxxDetalleFuturo.push({mes:parseInt(mes),nDias:nDias,media:mediaDia,total:contrib,anos:anosYrs.length});
+        maxxDetalleFuturo.push({mes:parseInt(mes),nDias:nDias,diasAbertos:diasAbiertosEsperados,media:mediaDia,total:contrib,anos:anosYrs.length});
       });
       valorProjetado+=maxxContribFutura;
     }

@@ -957,39 +957,6 @@
       mediaByMes[m] = nd > 0 ? d2025.sum / nd : null;
     }
 
-    // Factor de crecimiento 2026 vs 2025 en días normales de semana
-    // Solo sobre los meses que ya tienen datos en 2026
-    var meses2026 = {};
-    allRows.forEach(function(r){
-      if(r.data.substring(0,4) !== yrStr) return;
-      if(lojasActivas.indexOf(r.loja) < 0) return;
-      if((parseFloat(r.montante)||0) <= 0) return;
-      meses2026[parseInt(r.data.substring(5,7))] = true;
-    });
-    var sem26={s:0,n:0}, sem25ref={s:0,n:0};
-    allRows.forEach(function(r){
-      var mes = parseInt(r.data.substring(5,7));
-      if(!meses2026[mes]) return;
-      if(lojasActivas.indexOf(r.loja) < 0) return;
-      var dow = _strToDate(r.data).getDay();
-      if(dow === 0 || dow === 6) return;
-      var val = parseFloat(r.montante)||0;
-      if(val <= 0) return;
-      var yr = r.data.substring(0,4);
-      if(yr === yrStr)       { sem26.s += val; sem26.n++; }
-      if(yr === ANO_REFERENCIA) { sem25ref.s += val; sem25ref.n++; }
-    });
-    var factorCrecimiento = 1;
-    if(sem26.n > 0 && sem25ref.n > 0){
-      factorCrecimiento = (sem26.s/sem26.n) / (sem25ref.s/sem25ref.n);
-      // Limitar a rango razonable
-      factorCrecimiento = Math.max(0.8, Math.min(1.4, factorCrecimiento));
-    }
-    // Aplicar factor a los meses con referencia 2025
-    for(var m=1; m<=12; m++){
-      if(mediaByMes[m] !== null) mediaByMes[m] = mediaByMes[m] * factorCrecimiento;
-    }
-
     // Ratio estacional días normales del año actual por mes
     // Para proyectar meses sin histórico dominical comparable
     var mediaSemanalByMes = {};

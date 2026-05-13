@@ -2163,29 +2163,56 @@
 
   // ── Diagnóstico histórico
   function _renderProyDiagnostico(c){
-    var ttl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
-    ttl.style.setProperty('color','#888888','important');
-    ttl.textContent='DIAGNÓSTICO HISTÓRICO POR LOJA';
-    c.appendChild(ttl);
-    var desc=_el('div','font-size:.72rem;margin-bottom:16px;');
-    desc.style.setProperty('color','#aaaaaa','important');
-    desc.textContent='Rendimento por dia aberto · Inflexões · Custo de oportunidade · Share de Porto Santo';
-    c.appendChild(desc);
+    var today=_todayStr();
+    var currentYear=parseInt(today.substring(0,4));
+    var todayMD=today.substring(5); // MM-DD
 
-    // Share de mercado Porto Santo
+    // Contexto histórico — eventos operativos relevantes para la narrativa
+    // No contiene datos financieros, solo hechos operativos genéricos
+    var CONTEXTO_LOJAS={
+      'MEZKA AVENIDA':{
+        grupo:'porto_santo',
+        eventos:{
+          '2018':'abertura de nova loja no mesmo mercado geográfico',
+          '2019':'reforço de produto e mix comercial'
+        }
+      },
+      'MEZKA MERCADO':{
+        grupo:'porto_santo',
+        eventos:{
+          '2018':'primeiro ano de operação'
+        }
+      },
+      'MAXX':{
+        grupo:'porto_santo',
+        eventos:{
+          '2019':'alteração de mix de produto',
+          '2023':'redução progressiva de dias de abertura',
+          '2025':'experiência de abertura aos domingos'
+        }
+      },
+      'SHANA':{grupo:'porto_santo',eventos:{}},
+      'MEZKA FUNCHAL':{grupo:'funchal',eventos:{}},
+      'PARFOIS ARCADAS SAO FRANCISCO':{grupo:'funchal',eventos:{}},
+      'PARFOIS MADEIRA SHOPPING':{grupo:'funchal',eventos:{}}
+    };
+
+    var ttl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:16px;');
+    ttl.style.setProperty('color','#888888','important');
+    ttl.textContent='DIAGNÓSTICO POR LOJA';
+    c.appendChild(ttl);
+
+    // Share de mercado Porto Santo — mantener la tabla (es útil y visual)
     var portoLojas=['MAXX','MEZKA AVENIDA','MEZKA MERCADO','SHANA'];
-    var portoSection=_el('div','border-radius:12px;padding:14px 16px;border:1px solid #e0e0e0;margin-bottom:16px;');
+    var portoSection=_el('div','border-radius:12px;padding:14px 16px;border:1px solid #e0e0e0;margin-bottom:20px;');
     portoSection.style.setProperty('background','#fafafa','important');
     var psTtl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;');
     psTtl.style.setProperty('color','#888888','important');
     psTtl.textContent='SHARE DE MERCADO — PORTO SANTO';
     portoSection.appendChild(psTtl);
-
-    // Años disponibles
     var yearsAll={};
     _allRows.forEach(function(r){yearsAll[r.data.substring(0,4)]=true;});
     var yearsList=Object.keys(yearsAll).sort();
-
     var tw=_el('div','overflow-x:auto;');
     var t=document.createElement('table');
     t.setAttribute('style','width:100%;border-collapse:collapse;font-size:.72rem;');
@@ -2198,7 +2225,6 @@
       htr.appendChild(th);
     });
     thead.appendChild(htr);t.appendChild(thead);
-
     var tbody=document.createElement('tbody');
     portoLojas.forEach(function(loja,li){
       var tr=document.createElement('tr');
@@ -2228,40 +2254,79 @@
     t.appendChild(tbody);tw.appendChild(t);portoSection.appendChild(tw);
     c.appendChild(portoSection);
 
-    // Diagnóstico individual por tienda
+    // ── Narrativa por tienda
     LOJAS.forEach(function(loja){
       var diag=_calcDiagnostico(loja,_allRows);
       if(!diag.length) return;
       var label=LOJA_LABELS[loja]||loja;
+      var ctx=CONTEXTO_LOJAS[loja]||{eventos:{}};
 
-      var sec=_el('div','border-radius:12px;padding:14px 16px;border:1px solid #e0e0e0;margin-bottom:12px;');
+      // Datos históricos — excluir año actual para análisis histórico
+      var diagHist=diag.filter(function(d){return parseInt(d.yr)<currentYear;});
+      var diagActual=diag.find(function(d){return parseInt(d.yr)===currentYear;});
+
+      // Calcular estadísticas históricas
+      var totaisHist=diagHist.map(function(d){return d.total;}).filter(function(v){return v>0;});
+      var mediasDia=diagHist.map(function(d){return d.mediaDia;}).filter(function(v){return v>0;});
+      var anoMax=diagHist.reduce(function(best,d){return d.total>best.total?d:best;},{total:0,yr:'—'});
+      var anoMin=diagHist.filter(function(d){return d.total>0;}).reduce(function(worst,d){return d.total<worst.total?d:worst;},{total:Infinity,yr:'—'});
+      var ultimos3=diagHist.slice(-3);
+      var tendencia3='estável';
+      if(ultimos3.length>=2){
+        var soma=0;
+        for(var i=1;i<ultimos3.length;i++){
+          if(ultimos3[i-1].total>0) soma+=(ultimos3[i].total-ultimos3[i-1].total)/ultimos3[i-1].total;
+        }
+        var mediaTend=soma/(ultimos3.length-1);
+        if(mediaTend>0.05) tendencia3='crescente';
+        else if(mediaTend<-0.05) tendencia3='decrescente';
+      }
+
+      // 2026 vs mesmo período anos anteriores
+      var periodoAtual2026From=String(currentYear)+'-01-01';
+      var periodoAtual2026To=today;
+      var comparacoes2026=[];
+      diagHist.slice(-4).reverse().forEach(function(d){
+        var yrAnterior=d.yr;
+        var fromAnt=yrAnterior+'-01-01';
+        var toAnt=yrAnterior+'-'+todayMD;
+        var totalAnt=_allRows.filter(function(r){
+          return r.loja===loja&&r.data>=fromAnt&&r.data<=toAnt;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        if(totalAnt>0&&diagActual){
+          var diff=(diagActual.total-totalAnt)/totalAnt*100;
+          comparacoes2026.push({yr:yrAnterior,total:totalAnt,diff:diff});
+        }
+      });
+
+      // Proyección año actual basada en ritmo actual
+      var projAnual=null;
+      if(diagActual&&diagActual.mediaDia>0){
+        // Días restantes del año
+        var diasRestAno=Math.round((_strToDate(String(currentYear)+'-12-31')-_strToDate(today))/86400000);
+        projAnual=diagActual.total+diasRestAno*diagActual.mediaDia;
+      }
+
+      // Card por tienda
+      var sec=_el('div','border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:14px;');
       sec.style.setProperty('background','#fafafa','important');
 
-      var secHdr=_el('div','display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;');
-      var secLbl=_el('span','font-size:.88rem;font-weight:800;');
+      // Header clickable
+      var secHdr=_el('div','display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:8px;');
+      var secLbl=_el('span','font-size:.95rem;font-weight:800;');
       secLbl.style.setProperty('color','#111111','important');
       secLbl.textContent='▶ '+label;
-      var inflexiones=diag.filter(function(d){return d.inflexion;}).length;
-      var costeTotal=diag.reduce(function(s,d){return s+(d.costeOportunidad||0);},0);
-      var secMeta=_el('div','display:flex;gap:8px;align-items:center;flex-wrap:wrap;');
-      if(inflexiones>0){
-        var infBadge=_el('span','font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:10px;');
-        infBadge.style.setProperty('background','#fff3cd','important');
-        infBadge.style.setProperty('color','#856404','important');
-        infBadge.textContent=inflexiones+' inflexão'+(inflexiones>1?'ões':'');
-        secMeta.appendChild(infBadge);
-      }
-      if(costeTotal>0){
-        var costBadge=_el('span','font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:10px;');
-        costBadge.style.setProperty('background','#fdecea','important');
-        costBadge.style.setProperty('color','#a03020','important');
-        costBadge.textContent='-'+_fmtEur(costeTotal)+' oportunidade';
-        secMeta.appendChild(costBadge);
-      }
-      secHdr.appendChild(secLbl);secHdr.appendChild(secMeta);
+
+      // Badge de tendencia
+      var tBadge=_el('span','font-size:.62rem;font-weight:700;padding:2px 10px;border-radius:10px;');
+      var tColor=tendencia3==='crescente'?{bg:'#e6f4ed',c:'#2a6a40'}:tendencia3==='decrescente'?{bg:'#fdecea',c:'#a03020'}:{bg:'#f0f0f0',c:'#666'};
+      tBadge.style.setProperty('background',tColor.bg,'important');
+      tBadge.style.setProperty('color',tColor.c,'important');
+      tBadge.textContent=tendencia3==='crescente'?'↑ tendência crescente':tendencia3==='decrescente'?'↓ tendência decrescente':'→ estável';
+      secHdr.appendChild(secLbl);secHdr.appendChild(tBadge);
       sec.appendChild(secHdr);
 
-      var secBody=_el('div','');
+      var secBody=_el('div','margin-top:14px;');
       secBody.style.display='none';
       var open=false;
       secHdr.addEventListener('click',function(){
@@ -2270,60 +2335,76 @@
         secBody.style.display=open?'block':'none';
       });
 
-      // Tabla de diagnóstico
-      var dtw=_el('div','overflow-x:auto;');
-      var dt=document.createElement('table');
-      dt.setAttribute('style','width:100%;border-collapse:collapse;font-size:.7rem;');
-      var dth=document.createElement('thead'),dhtr=document.createElement('tr');
-      ['Ano','Total','Dias Ab.','Média/Dia','Δ Total','Δ Média','Δ Dias','Custo Op.'].forEach(function(h){
-        var th=document.createElement('th');th.textContent=h;
-        th.setAttribute('style','padding:5px 8px;font-size:.58rem;font-weight:800;text-transform:uppercase;text-align:right;border-bottom:1.5px solid #e0e0e0;white-space:nowrap;');
-        th.style.setProperty('color','#555555','important');th.style.setProperty('background','#f0f0f0','important');
-        if(h==='Ano'){th.style.textAlign='left';}
-        dhtr.appendChild(th);
-      });
-      dth.appendChild(dhtr);dt.appendChild(dth);
-      var dtbody=document.createElement('tbody');
-      diag.slice().reverse().forEach(function(d,i){
-        var tr=document.createElement('tr');
-        var bg=i%2===0?'#ffffff':'#fafafa';
-        var cells=[
-          {v:d.yr,align:'left',bold:true,color:'#111111'},
-          {v:_fmtEur(d.total),align:'right',color:'#111111',bold:true},
-          {v:d.diasAbiertos,align:'right',color:'#555555'},
-          {v:_fmtEur(d.mediaDia),align:'right',color:'#333333',bold:true},
-          {v:d.diffTotal!=null?(d.diffTotal>=0?'↑ +':'↓ ')+d.diffTotal.toFixed(1)+'%':'—',align:'right',color:d.diffTotal>0?'#2a6a40':d.diffTotal<0?'#a03020':'#888'},
-          {v:d.diffMedia!=null?(d.diffMedia>=0?'↑ +':'↓ ')+d.diffMedia.toFixed(1)+'%':'—',align:'right',color:d.diffMedia>0?'#2a6a40':d.diffMedia<0?'#a03020':'#888'},
-          {v:d.diffDias!=null?(d.diffDias>=0?'+':'')+d.diffDias:'—',align:'right',color:d.diffDias<0?'#a03020':d.diffDias>0?'#2a6a40':'#888'},
-          {v:d.costeOportunidad?'-'+_fmtEur(d.costeOportunidad):'—',align:'right',color:d.costeOportunidad?'#a03020':'#888'}
-        ];
-        cells.forEach(function(cell){
-          var td=document.createElement('td');td.textContent=cell.v;
-          td.setAttribute('style','padding:5px 8px;border-bottom:1px solid #eeeeee;text-align:'+cell.align+';white-space:nowrap;'+(cell.bold?'font-weight:800;':''));
-          td.style.setProperty('background',bg,'important');
-          td.style.setProperty('color',cell.color||'#111111','important');
-          if(d.inflexion&&cell.align==='left'){td.style.setProperty('background','#fffbea','important');}
-          tr.appendChild(td);
-        });
-        dtbody.appendChild(tr);
-      });
-      dt.appendChild(dtbody);dtw.appendChild(dt);secBody.appendChild(dtw);
-
-      // Leyenda inflexiones
-      var infRows=diag.filter(function(d){return d.inflexion;});
-      if(infRows.length){
-        var infLbl=_el('div','font-size:.62rem;margin-top:8px;padding:8px;border-radius:8px;');
-        infLbl.style.setProperty('background','#fffbea','important');
-        infLbl.style.setProperty('color','#856404','important');
-        infLbl.textContent='⚠ Inflexões detectadas: '+infRows.map(function(d){return d.yr+' ('+d.diffTotal.toFixed(1)+'%)';}).join(' · ');
-        secBody.appendChild(infLbl);
+      function _bloco(cor,titulo,html){
+        var b=_el('div','margin-bottom:12px;padding:12px 14px;border-radius:9px;border-left:3px solid '+cor+';');
+        b.style.setProperty('background','#ffffff','important');
+        var bT=_el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;');
+        bT.style.setProperty('color',cor,'important');bT.textContent=titulo;b.appendChild(bT);
+        var bC=_el('div','font-size:.78rem;line-height:1.75;');
+        bC.style.setProperty('color','#333333','important');bC.innerHTML=html;b.appendChild(bC);
+        return b;
       }
-      if(costeTotal>0){
-        var costLbl=_el('div','font-size:.62rem;margin-top:6px;padding:8px;border-radius:8px;');
-        costLbl.style.setProperty('background','#fdecea','important');
-        costLbl.style.setProperty('color','#a03020','important');
-        costLbl.textContent='💸 Custo de oportunidade total estimado: '+_fmtEur(costeTotal)+' (dias não abertos vs média do próprio período)';
-        secBody.appendChild(costLbl);
+
+      // ── Bloco 1: A história
+      var h1='';
+      if(anoMax.yr!=='—'&&totaisHist.length>0){
+        h1+='O melhor resultado histórico foi <b>'+_fmtEur(anoMax.total)+'</b> em <b>'+anoMax.yr+'</b>';
+        if(anoMin.yr!=='—'&&anoMin.yr!==anoMax.yr){
+          h1+=', e o mais fraco <b>'+_fmtEur(anoMin.total)+'</b> em <b>'+anoMin.yr+'</b>';
+        }
+        h1+='. ';
+      }
+      // Mencionar eventos del contexto
+      var eventosKeys=Object.keys(ctx.eventos||{}).sort();
+      eventosKeys.forEach(function(yrEvt){
+        var dEvt=diagHist.find(function(d){return d.yr===yrEvt;});
+        var dPrev=diagHist.find(function(d){return parseInt(d.yr)===parseInt(yrEvt)-1;});
+        if(dEvt){
+          h1+='Em <b>'+yrEvt+'</b> ocorreu '+ctx.eventos[yrEvt];
+          if(dEvt.diffTotal!==null){
+            h1+=', com um impacto de '+(dEvt.diffTotal>=0?'<b style="color:#2a6a40">+':'<b style="color:#a03020">')+dEvt.diffTotal.toFixed(1)+'%</b> face ao ano anterior';
+          }
+          h1+='. ';
+        }
+      });
+      // Tendencia últimos años
+      if(ultimos3.length>=2){
+        var ult=ultimos3[ultimos3.length-1];
+        var penult=ultimos3[ultimos3.length-2];
+        h1+='Nos últimos anos a tendência é <b>'+tendencia3+'</b>: '+penult.yr+' fechou em <b>'+_fmtEur(penult.total)+'</b> e '+ult.yr+' em <b>'+_fmtEur(ult.total)+'</b>.';
+      }
+      secBody.appendChild(_bloco('#2563a8','A HISTÓRIA',h1||'Sem dados históricos suficientes.'));
+
+      // ── Bloco 2: 2026 em contexto real
+      if(diagActual){
+        var h2='Com <b>'+diagActual.diasAbiertos+' dias abertos</b> até '+_fmtDate(today)+', a loja acumula <b>'+_fmtEur(diagActual.total)+'</b> a uma média de <b>'+_fmtEur(diagActual.mediaDia)+'/dia</b>. ';
+        if(comparacoes2026.length>0){
+          h2+='Comparando o mesmo período (até '+_fmtDate(today.substring(0,4)+'-'+todayMD)+') com anos anteriores: ';
+          comparacoes2026.forEach(function(cmp){
+            h2+='vs <b>'+cmp.yr+'</b> ('+_fmtEur(cmp.total)+'): '+(cmp.diff>=0?'<b style="color:#2a6a40">+':'<b style="color:#a03020">')+cmp.diff.toFixed(1)+'%</b>; ';
+          });
+        }
+        if(projAnual){
+          h2+='<br>Se mantiver este ritmo, o ano pode fechar em <b>'+_fmtEur(projAnual)+'</b>.';
+          var refAno=diagHist[diagHist.length-1];
+          if(refAno&&refAno.total>0){
+            var diffProj=(projAnual-refAno.total)/refAno.total*100;
+            h2+=' Isso representaria '+(diffProj>=0?'<b style="color:#2a6a40">+':'<b style="color:#a03020">')+diffProj.toFixed(1)+'%</b> face a '+refAno.yr+'.';
+          }
+        }
+        secBody.appendChild(_bloco('#4a7c59','2026 — SITUAÇÃO ACTUAL',h2));
+      }
+
+      // ── Bloco 3: Cenários
+      if(diagActual&&projAnual&&diagHist.length>=2){
+        var pesimista=Math.min.apply(null,totaisHist.filter(function(v){return v>0;}));
+        var otimista=Math.max.apply(null,totaisHist);
+        var anoPes=diagHist.find(function(d){return d.total===pesimista;});
+        var anoOtm=diagHist.find(function(d){return d.total===otimista;});
+        var h3='<b>Cenário base</b> (ritmo actual): <b>'+_fmtEur(projAnual)+'</b><br>';
+        h3+='<b>Cenário optimista</b> (replica '+anoOtm.yr+'): <b>'+_fmtEur(otimista)+'</b><br>';
+        h3+='<b>Cenário pessimista</b> (replica '+(anoPes?anoPes.yr:'—')+'): <b>'+_fmtEur(pesimista)+'</b>';
+        secBody.appendChild(_bloco('#1a1a1a','CENÁRIOS',h3));
       }
 
       sec.appendChild(secBody);

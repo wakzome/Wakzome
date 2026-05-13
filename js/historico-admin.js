@@ -339,8 +339,11 @@
     // ── Banner de proyección para trimestres incompletos
     if(['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0){
       var today=_todayStr();
+      // Usar último dia com dados reais — se hoje ainda não foi carregado, usa ontem
+      var effectiveTodayVendas=_lastCompleteDay(zonaLojas);
+      if(effectiveTodayVendas>today) effectiveTodayVendas=today;
       if(today<=f.to){
-        var proj=_calcProjection(rows,f.from,f.to,today);
+        var proj=_calcProjection(rows,f.from,f.to,effectiveTodayVendas);
         if(proj){
           var bannerProy=_el('div','border-radius:10px;padding:10px 16px;margin-bottom:16px;border:1px solid #c8e6c9;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;');
           bannerProy.style.setProperty('background','#f1f8f4','important');
@@ -1302,6 +1305,13 @@
     var rows=_allRows.filter(function(r){return zonaActiva.lojas.indexOf(r.loja)>=0;});
     var maxxNaZona=zonaActiva.lojas.indexOf('MAXX')>=0;
 
+    // Usar o último dia com dados completos para a zona activa.
+    // Se hoje ainda não tem dados carregados, a projecção usa ontem (ou o último
+    // dia completo), evitando contar dias sem facturação no denominador histórico.
+    var effectiveToday=_lastCompleteDay(zonaActiva.lojas);
+    // Nunca ultrapassar o dia de hoje real (segurança)
+    if(effectiveToday>today) effectiveToday=today;
+
     // ── Panel global de configuração Maxx
     if(maxxNaZona){
       var maxxPanel=_el('div','border-radius:12px;padding:14px 18px;margin-bottom:16px;border:1.5px solid;');
@@ -1396,7 +1406,7 @@
       var isFuture=today<p.from;
       var maxxRango=maxxNaZona?_maxxRangoParaPeriodo(p.from,p.to):null;
       var maxxDesde=maxxRango?maxxRango.desde:null;
-      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,today,maxxDesde):null;
+      var proj=(!isClosed)?_calcProjection(rows,p.from,p.to,effectiveToday,maxxDesde):null;
 
       var card=_el('div','border-radius:12px;padding:14px 16px;border:1.5px solid;');
       var bc=isClosed?'#e0e0e0':isActive?'#4a7c59':'#555555';
@@ -1485,13 +1495,13 @@
     c.appendChild(grid);
 
     // ── Alertas tienda a tienda
-    _renderAlertas(c,rows,today,currentYear,zonaActiva.lojas);
+    _renderAlertas(c,rows,effectiveToday,currentYear,zonaActiva.lojas);
 
     // ── Proyecciones fijadas guardadas
     _renderProyFijadas(c,currentYear,_proyZona);
 
     // ── Simulador
-    _renderSimulador(c,rows,today,currentYear,zonaActiva);
+    _renderSimulador(c,rows,effectiveToday,currentYear,zonaActiva);
   }
 
   function _renderAlertas(c,rows,today,currentYear,lojas){

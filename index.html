@@ -1085,6 +1085,79 @@ body {
 /* Gradiente card grupo en el dashboard */
 .adm-mod-card[data-module="horarios-group"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
 
+/* ─── VENDAS GROUP OVERLAY ─── */
+#vendas-overlay {
+  display: none; position: fixed; inset: 0;
+  background: #fff; z-index: 210;
+  flex-direction: column; opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
+}
+#vendas-overlay.open { display: flex; }
+#vendas-overlay.visible { opacity: 1; }
+#vendas-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#vendas-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+#vendas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
+#vendas-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#vendas-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center;
+  padding: 40px 16px 60px;
+  font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+#vendas-sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 500px;
+}
+#vendas-sub-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+#vendas-sub-header .vsub-brand {
+  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
+  font-weight: 100;
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  color: #000;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+#vendas-sub-header .vsub-tagline {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #000;
+  opacity: .45;
+}
+@media (max-width: 600px) {
+  #vendas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+/* Gradientes sub-cards vendas */
+#vendas-sub-grid .adm-mod-card[data-vendas-module="ventas"]::before   { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
+#vendas-sub-grid .adm-mod-card[data-vendas-module="historico"]::before { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
+/* Gradiente card grupo en el dashboard */
+.adm-mod-card[data-module="vendas-group"]::before { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
+
 /* ─── INDEX: tablas de horarios ─── */
 /* summary-wrap: kept in DOM for JS but NEVER shown */
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
@@ -3550,7 +3623,7 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-mod-card" data-module="ventas" style="animation-delay:0.18s">
+      <div class="adm-mod-card" data-module="vendas-group" style="animation-delay:0.18s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
@@ -3561,21 +3634,7 @@ td                   { font-size: .96rem !important; }
         </span>
         <div>
           <div class="adm-mod-name">VENDAS</div>
-          <div class="adm-mod-desc">vendas declaradas por loja</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      <div class="adm-mod-card" data-module="historico" style="animation-delay:0.22s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
-              stroke="rgba(255,255,255,0.85)" stroke-width="1.4"
-              stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">HISTÓRICO</div>
-          <div class="adm-mod-desc">análise de vendas históricas</div>
+          <div class="adm-mod-desc">vendas declaradas · histórico</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
@@ -4233,7 +4292,56 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- MODAL recibos -->
+<div id="vendas-overlay">
+  <div id="vendas-overlay-bar">
+    <button id="vendas-overlay-back">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="vendas-overlay-title">vendas</span>
+  </div>
+  <div id="vendas-overlay-content">
+    <div id="vendas-sub-header">
+      <div class="vsub-brand">VENDAS</div>
+      <div class="vsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="vendas-sub-grid">
+      <!-- VENDAS DECLARADAS -->
+      <div class="adm-mod-card" data-vendas-module="ventas" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">VENDAS DECLARADAS</div>
+          <div class="adm-mod-desc">vendas declaradas por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <!-- HISTÓRICO -->
+      <div class="adm-mod-card" data-vendas-module="historico" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+              stroke="rgba(255,255,255,0.85)" stroke-width="1.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HISTÓRICO</div>
+          <div class="adm-mod-desc">análise de vendas históricas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="r-modal-overlay">
   <div id="r-modal-box">
     <div class="modal-title">sem senha no csv</div>
@@ -4580,6 +4688,9 @@ td                   { font-size: .96rem !important; }
     // Intercept horarios-group → open horarios sub-overlay
     if (tab === 'horarios-group') { openHorariosOverlay(); return; }
 
+    // Intercept vendas-group → open vendas sub-overlay
+    if (tab === 'vendas-group') { openVendasOverlay(); return; }
+
     // Intercept ventas → open admin ventas panel
     if (tab === 'ventas') {
       var adminApp = document.getElementById('admin-app');
@@ -4762,6 +4873,30 @@ td                   { font-size: .96rem !important; }
     setTimeout(function () { ov.classList.remove('open'); }, 460);
   }
 
+  function openVendasOverlay() {
+    var ov = document.getElementById('vendas-overlay');
+    if (!ov) return;
+    ov.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        ov.classList.add('visible');
+        ov.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+          c.style.animation = 'none';
+          c.offsetWidth;
+          c.style.animation = '';
+          c.style.animationDelay = (0.05 + i * 0.07) + 's';
+        });
+      });
+    });
+  }
+
+  function closeVendasOverlay() {
+    var ov = document.getElementById('vendas-overlay');
+    if (!ov) return;
+    ov.classList.remove('visible');
+    setTimeout(function () { ov.classList.remove('open'); }, 460);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // Main dashboard card clicks
     document.querySelectorAll('.adm-mod-card').forEach(function (card) {
@@ -4792,6 +4927,16 @@ td                   { font-size: .96rem !important; }
       });
     });
 
+    // Sub-cards inside vendas overlay
+    document.querySelectorAll('[data-vendas-module]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.vendasModule;
+        if (!mod) return;
+        closeVendasOverlay();
+        setTimeout(function () { openModule(mod); }, 200);
+      });
+    });
+
     // Back button in faturas overlay → close overlay (back to dashboard)
     var fatBack = document.getElementById('faturas-overlay-back');
     if (fatBack) fatBack.addEventListener('click', closeFaturasOverlay);
@@ -4799,6 +4944,10 @@ td                   { font-size: .96rem !important; }
     // Back button in horarios overlay
     var horBack = document.getElementById('horarios-overlay-back');
     if (horBack) horBack.addEventListener('click', closeHorariosOverlay);
+
+    // Back button in vendas overlay
+    var venBack = document.getElementById('vendas-overlay-back');
+    if (venBack) venBack.addEventListener('click', closeVendasOverlay);
 
     // Back button
     var backBtn = document.getElementById('adm-back-btn');
@@ -5242,7 +5391,8 @@ td                   { font-size: .96rem !important; }
       { id: 'etiquetas-overlay',     close: function () { if (typeof closeEtiquetasOverlay === 'function') closeEtiquetasOverlay(); } },
       { id: 'ventas-overlay',        close: function () { if (typeof closeVentasOverlay === 'function') closeVentasOverlay(); } },
       { id: 'horarios-overlay',      close: function () { var btn = document.getElementById('horarios-overlay-back'); if (btn) btn.click(); } },
-      { id: 'faturas-overlay',       close: function () { var btn = document.getElementById('faturas-overlay-back'); if (btn) btn.click(); } }
+      { id: 'faturas-overlay',       close: function () { var btn = document.getElementById('faturas-overlay-back'); if (btn) btn.click(); } },
+      { id: 'vendas-overlay',        close: function () { var btn = document.getElementById('vendas-overlay-back'); if (btn) btn.click(); } }
     ];
 
     for (var i = 0; i < overlays.length; i++) {

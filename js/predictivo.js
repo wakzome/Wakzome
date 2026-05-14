@@ -571,6 +571,7 @@ function _predWorkWithParsed(parsed, nextEvento) {
   predAllData = []; predAllSeqs = [];
   allSeqsData=[]; predDataAll=[]; tableDataAll=[]; seqMem=[];
   blk5_AY={}; blk5_pos={}; blk2_AY={}; blk2_pos={}; blk7_AY={}; blk7_pos={};
+  dynRankFreq={}; dynRankConteo={};
 
   const suffixes = ['','b','c','d','e','f','g'];
   const nums     = ['1','2','3','4','5','6','7'];
@@ -645,7 +646,7 @@ function _predWorkWithParsed(parsed, nextEvento) {
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);}
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);updateDynRankHist(rowNums);}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -1386,6 +1387,116 @@ function filtrarCandidatosPorLetra(candidates, si) {
     return l && letrasOk.has(l);
   });
 }
+// ── RANKING DINÁMICO POR FRECUENCIA (S1-S5 global) ───────────────────────────
+// dynRankFreq[n] = frecuencia acumulada del número n en S1-S5 (hasta cada evento)
+// dynRankConteo[cnt][letra] = cuántas veces el código de 5 letras tuvo 'cnt' de esa letra
+// dynRankHist = historial de conteos por letra para calcular permitidos
+let dynRankFreq = {};          // { numero: frecuencia } acumulada globalmente S1-S5
+let dynRankConteo = {};        // { 'A': {0:n,1:n,...}, 'B':..., ... }
+const DYN_LETRAS = ['A','B','C','D','E'];
+
+// Construye el ranking dinámico hasta (sin incluir) el evento actual
+// Devuelve array de 50 posiciones: rankMap[numero] = letra
+function buildDynamicRanking(freqSnapshot) {
+  // Ordenar números 1-50 por frecuencia desc, desempate asc
+  const nums = [];
+  for(let n = 1; n <= 50; n++) nums.push({n, f: freqSnapshot[n] || 0});
+  nums.sort((a, b) => b.f - a.f || a.n - b.n);
+  const rankMap = {};
+  for(let i = 0; i < 50; i++) {
+    const letra = DYN_LETRAS[Math.floor(i / 10)];
+    rankMap[nums[i].n] = letra;
+  }
+  return rankMap;
+}
+
+// Acumula frecuencias de S1-S5 y registra el conteo de letras del código
+function updateDynRankHist(seqNums) {
+  if(seqNums.length < 7 || seqNums.some(n => !n || n <= 0)) return;
+  // Antes de acumular: calcular el ranking ACTUAL (antes de este evento)
+  const rankMap = buildDynamicRanking(dynRankFreq);
+  // Obtener código de 5 letras para S1-S5 con el ranking actual
+  const codLetras = seqNums.slice(0, 5).map(n => rankMap[n] || null);
+  if(codLetras.some(l => !l)) {
+    // Si algún número no está en ranking (primera vez), acumular frecuencia y salir
+    for(let si = 0; si < 5; si++) {
+      const n = seqNums[si];
+      dynRankFreq[n] = (dynRankFreq[n] || 0) + 1;
+    }
+    return;
+  }
+  // Contar cuántas veces aparece cada letra en el código de 5
+  const conteoEnCodigo = {};
+  DYN_LETRAS.forEach(l => conteoEnCodigo[l] = 0);
+  codLetras.forEach(l => { if(l) conteoEnCodigo[l]++; });
+  // Acumular en dynRankConteo
+  DYN_LETRAS.forEach(l => {
+    if(!dynRankConteo[l]) dynRankConteo[l] = {};
+    const cnt = conteoEnCodigo[l];
+    dynRankConteo[l][cnt] = (dynRankConteo[l][cnt] || 0) + 1;
+  });
+  // Ahora acumular frecuencias para el ranking siguiente
+  for(let si = 0; si < 5; si++) {
+    const n = seqNums[si];
+    dynRankFreq[n] = (dynRankFreq[n] || 0) + 1;
+  }
+}
+
+// Determina qué conteos son permitidos para cada letra
+// Regla: de las 6 posibles cantidades (0-5), retener las más frecuentes
+// Mínimo eliminar 2, dejando 3 o 4 si la 4ta tiene masa significativa
+function calcDynRankAllowed() {
+  const allowed = {};
+  DYN_LETRAS.forEach(l => {
+    const dist = dynRankConteo[l] || {};
+    const total = Object.values(dist).reduce((s, v) => s + v, 0);
+    if(total < 30) { allowed[l] = [0,1,2,3,4,5]; return; }
+    // Construir array [{cnt, freq}] para 0-5
+    const entries = [];
+    for(let c = 0; c <= 5; c++) entries.push({cnt: c, freq: dist[c] || 0});
+    // Ordenar por frecuencia descendente
+    entries.sort((a, b) => b.freq - a.freq);
+    // Retener los más frecuentes cubriendo masa acumulada
+    // Mínimo 3 (eliminar 3 menos frecuentes), máximo 4
+    let acum = 0;
+    const sel = [];
+    for(const e of entries) {
+      acum += e.freq / total;
+      sel.push(e.cnt);
+      // Parar al cubrir ~75% de masa, con mínimo 3 y máximo 4
+      if(sel.length >= 3 && acum >= 0.75) break;
+      if(sel.length >= 4) break;
+    }
+    allowed[l] = sel.sort((a, b) => a - b);
+  });
+  return allowed;
+}
+
+// Filtro: elimina combinaciones de blk5 cuyo código de letras dinámico
+// tenga conteos no permitidos para alguna letra
+function filtrarPorRankingDinamico(blk5Results) {
+  if(!blk5Results.length) return blk5Results;
+  const total = Object.values(dynRankConteo['A'] || {}).reduce((s,v)=>s+v,0);
+  if(total < 30) return blk5Results; // sin historia suficiente
+  const rankMap = buildDynamicRanking(dynRankFreq);
+  const allowed = calcDynRankAllowed();
+  const filtered = blk5Results.filter(({nums}) => {
+    // Obtener letras del código dinámico para los 5 números
+    const codLetras = nums.map(n => rankMap[n] || null);
+    if(codLetras.some(l => !l)) return true; // si falta mapeo, no filtrar
+    // Contar ocurrencias de cada letra en el código
+    const conteo = {};
+    DYN_LETRAS.forEach(l => conteo[l] = 0);
+    codLetras.forEach(l => { if(l) conteo[l]++; });
+    // Verificar que todos los conteos estén en los permitidos
+    for(const l of DYN_LETRAS) {
+      if(!allowed[l].includes(conteo[l])) return false;
+    }
+    return true;
+  });
+  return filtered.length > 0 ? filtered : blk5Results;
+}
+
 let histSumsBlk5 = [];  // sum of S1-S5 numbers per row
 let histSumsBlk2 = [];  // sum of S6-S7 numbers per row
 let histSumsGlobal = []; // sum of all 7 per row
@@ -1591,11 +1702,12 @@ function analizarCombinaciones(allColProbs, totalRows) {
   // Filtros de patrón/conteo — precomputar umbrales una sola vez
   const {thresholds, boundsMaps} = precomputarFiltros();
   const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
+  const blk5FilteredDyn = filtrarPorRankingDinamico(blk5Filtered);
   const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
 
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
-  for(const b5 of blk5Filtered) {
+  for(const b5 of blk5FilteredDyn) {
     for(const b2 of blk2Filtered) {
       const allNums    = [...b5.nums, ...b2.nums];
       const globalSum  = b5.sum + b2.sum;
@@ -1617,7 +1729,10 @@ function analizarCombinaciones(allColProbs, totalRows) {
     candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
     evenBlk5, evenBlk2, evenGlobal,
     blk5Results, blk2Results, globalResults: globalFiltered,
-    boundsMaps
+    boundsMaps,
+    blk5FilteredDyn,
+    dynRankAllowed: calcDynRankAllowed(),
+    dynRankMapActual: buildDynamicRanking(dynRankFreq)
   };
 }
 
@@ -1638,7 +1753,8 @@ function renderCombinaciones(result, totalRows) {
 
   const {candNums, candCodes, boundsBlk5, boundsBlk2, boundsGlobal,
          evenBlk5, evenBlk2, evenGlobal,
-         blk5Results, blk2Results, globalResults, boundsMaps} = result;
+         blk5Results, blk2Results, globalResults, boundsMaps,
+         blk5FilteredDyn, dynRankAllowed, dynRankMapActual} = result;
 
   // Calcular letraInfo y abInfo antes de usarlos en la tabla
   const letraInfo = Array.from({length:7}, (_,si) => {
@@ -1716,6 +1832,53 @@ function renderCombinaciones(result, totalRows) {
   html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B/C) &nbsp;·&nbsp; ${c2Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
   html += `<div style="font-size:10px;color:#888;margin-bottom:4px;font-style:italic;">(A/B/C/D) &nbsp;·&nbsp; ${c3Info.map((l,i)=>`S${i+1}:<b>${String(l)}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
   html += `<div style="font-size:10px;color:#888;margin-bottom:10px;font-style:italic;">(A/B/C/D/E) &nbsp;·&nbsp; ${letraInfo.map((l,i)=>`S${i+1}:<b>${l||'?'}</b>`).join(' &nbsp;·&nbsp; ')}</div>`;
+
+  // ── PANEL RANKING DINÁMICO ────────────────────────────────────────────────
+  const dynTotal = Object.values(dynRankConteo['A'] || {}).reduce((s,v)=>s+v,0);
+  if(dynTotal >= 30 && dynRankAllowed) {
+    let dynHtml = '<div style="background:#f0f4ff;border:1px solid #c7d7f5;border-radius:8px;padding:10px 14px;margin-bottom:10px;">';
+    dynHtml += '<div style="font-size:11px;font-weight:700;color:#2c3e6b;margin-bottom:6px;border-bottom:1px solid #d0daf0;padding-bottom:4px;">📊 Ranking Dinámico (S1–S5 global) — Conteos permitidos por letra</div>';
+    dynHtml += `<div style="font-size:9px;color:#666;margin-bottom:6px;font-style:italic;">Basado en ${dynTotal} eventos históricos. Se muestran los conteos más frecuentes del código de 5 letras.</div>`;
+    // Tabla de conteos permitidos
+    dynHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">';
+    const colorMap = {A:'#d1e7dd',B:'#cfe2ff',C:'#fff3cd',D:'#f8d7da',E:'#e2d9f3'};
+    const colorTextMap = {A:'#0a3622',B:'#084298',C:'#664d03',D:'#721c24',E:'#4a235a'};
+    DYN_LETRAS.forEach(l => {
+      const permitidos = (dynRankAllowed[l] || []).join(', ');
+      const dist = dynRankConteo[l] || {};
+      const totalL = Object.values(dist).reduce((s,v)=>s+v,0);
+      let detalle = '';
+      for(let c=0;c<=5;c++) {
+        const f = dist[c] || 0;
+        const pct = totalL > 0 ? (f/totalL*100).toFixed(0) : 0;
+        const ok = (dynRankAllowed[l]||[]).includes(c);
+        detalle += `<span style="font-size:9px;padding:1px 4px;border-radius:3px;margin:1px;display:inline-block;background:${ok?colorMap[l]:'#eee'};color:${ok?colorTextMap[l]:'#aaa'};${ok?'':'text-decoration:line-through;'}">${c}(${pct}%)</span>`;
+      }
+      dynHtml += `<div style="background:#fff;border:1px solid ${colorMap[l]};border-radius:6px;padding:6px 10px;min-width:80px;">
+        <div style="font-size:11px;font-weight:700;color:${colorTextMap[l]};margin-bottom:3px;">Letra ${l}</div>
+        <div style="font-size:10px;color:#444;margin-bottom:3px;">OK: <b>${permitidos || '—'}</b></div>
+        <div>${detalle}</div>
+      </div>`;
+    });
+    dynHtml += '</div>';
+    // Ranking actual: qué números corresponden a cada letra
+    if(dynRankMapActual) {
+      dynHtml += '<div style="font-size:9px;color:#555;margin-bottom:4px;font-weight:600;">Ranking actual (último evento):</div>';
+      dynHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
+      DYN_LETRAS.forEach(l => {
+        const nums = [];
+        for(let n=1;n<=50;n++) if(dynRankMapActual[n]===l) nums.push(n);
+        dynHtml += `<div style="background:${colorMap[l]};color:${colorTextMap[l]};border-radius:4px;padding:3px 7px;font-size:9px;font-weight:600;">${l}: ${nums.join(', ')}</div>`;
+      });
+      dynHtml += '</div>';
+    }
+    // Estadística de reducción
+    const antes = blk5Results ? blk5Results.length : 0;
+    const despues = blk5FilteredDyn ? blk5FilteredDyn.length : 0;
+    dynHtml += `<div style="font-size:9px;color:#666;margin-top:6px;font-style:italic;">Combinaciones S1–S5: ${antes} → <b>${despues}</b> tras filtro dinámico (−${antes-despues})</div>`;
+    dynHtml += '</div>';
+    html += dynHtml;
+  }
 
   // ── PANEL DE DIAGNÓSTICO DE FILTROS ─────────────────────────────────────────
   const critLabels = {'AB':'(A/B)','C2':'(A/B/C)','C3':'(A/B/C/D)','ABCDE':'(A/B/C/D/E)'};

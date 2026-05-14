@@ -6978,21 +6978,12 @@
           '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>' +
-        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾</button>' +
-        '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">📋</button>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF" style="display:none">' +
-          '\ud83d\udce6' +
-          '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
-        '</label>' +
-        '<label class="tam-session-btn" id="tam-dn-excel-bar-btn" for="tam-dn-excel-input" title="delivery notes Excel" style="display:none">' +
-          '\ud83d\udcc5' +
-          '<input type="file" id="tam-dn-excel-input" accept=".xlsx,.xls" style="display:none">' +
-        '</label>' +
+        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>' +
+        '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 4v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></button>' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><text x="6" y="19" font-size="5.5" font-family="Arial" font-weight="700" fill="currentColor" stroke="none">PDF</text></svg><input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none"></label>' +
+        '<label class="tam-session-btn" id="tam-dn-excel-bar-btn" for="tam-dn-excel-input" title="delivery notes Excel" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg><input type="file" id="tam-dn-excel-input" accept=".xlsx,.xls" style="display:none"></label>' +
         '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
-        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
-          '\ud83d\udcf7' +
-          '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
-        '</label>';
+        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none"></label>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');

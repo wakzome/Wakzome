@@ -2300,20 +2300,24 @@
         }
       });
 
-      // Proyección año actual — usando exactamente el mismo motor que las cards de Q/Año
+      // Proyección año actual — aplicar el % de crecimiento vs año anterior
+      // al total del año anterior completo. Más honesto que ratios históricos
+      // contaminados por la nueva estructura de domingos.
       var projAnual=null;
-      if(diagActual&&diagActual.total>0){
-        var lojaRowsProj=_allRows.filter(function(r){return r.loja===loja;});
-        var projResult=_calcProjection(
-          lojaRowsProj,
-          String(currentYear)+'-01-01',
-          String(currentYear)+'-12-31',
-          today,
-          null
-        );
-        if(projResult&&projResult.valorProjetado>0){
-          projAnual=projResult.valorProjetado;
+      if(diagActual&&diagActual.total>0&&comparacoes2026.length>0){
+        // Usar la comparación vs el año anterior más reciente (comparacoes2026[0])
+        var cmpRecente=comparacoes2026[0];
+        var yrAnteriorCompleto=diagHist.find(function(d){return d.yr===cmpRecente.yr;});
+        if(yrAnteriorCompleto&&yrAnteriorCompleto.total>0&&cmpRecente.total>0){
+          var fatorCrescimento=diagActual.total/cmpRecente.total;
+          projAnual=yrAnteriorCompleto.total*fatorCrescimento;
         }
+      }
+      // Fallback: _calcProjection si no hay comparación disponible
+      if(!projAnual&&diagActual&&diagActual.total>0){
+        var lojaRowsProj=_allRows.filter(function(r){return r.loja===loja;});
+        var projResult=_calcProjection(lojaRowsProj,String(currentYear)+'-01-01',String(currentYear)+'-12-31',today,null);
+        if(projResult&&projResult.valorProjetado>0) projAnual=projResult.valorProjetado;
       }
 
       // Card por tienda

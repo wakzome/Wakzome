@@ -121,19 +121,23 @@
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
   const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
 
-  // ── 6 HORÁRIOS PERMITIDOS (Prompt §5) ──
+  // ── HORÁRIOS PERMITIDOS ──
   // A  10-13 / 14-19   (8h, intervalo 13h)
   // B  10-14 / 15-19   (8h, intervalo 14h)  ← default standard
   // C  10-15 / 16-19   (8h, intervalo 15h)
   // D  09-12 / 13-18   (8h, abertura 9h)
   // E  11-15 / 16-20   (8h, fecho 20h — pós-noite)
   // F  09-13 / 19-23   (8h, turno noite)
+  // G  09-13 / 14-18   (8h, abertura 9h, intervalo 13h)
+  // H  11-14 / 15-20   (8h, fecho 20h — pós-noite)
   const SH_A = '10:00-13:00|14:00-19:00';
   const SH_B = '10:00-14:00|15:00-19:00';
   const SH_C = '10:00-15:00|16:00-19:00';
   const SH_D = '09:00-12:00|13:00-18:00';
   const SH_E = '11:00-15:00|16:00-20:00';
   const SH_F = '09:00-13:00|19:00-23:00';
+  const SH_G = '09:00-13:00|14:00-18:00';
+  const SH_H = '11:00-14:00|15:00-20:00';
 
   // Aliases para compatibilidade com o código existente
   const SH_DEFAULT = SH_B;
@@ -2131,7 +2135,7 @@
               content = `<span class="gh-sh-line" style="color:#e67e22;font-weight:700;">⚡ ${S._apoioShifts[p.id][day].shift}</span>`;
             } else if (c2.store === st.id) {
               const soft = p.softAvoid?.some(oid => S.schedule[oid]?.[day]?.type === 'work' && S.schedule[oid]?.[day]?.store === st.id);
-              const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f' };
+              const shiftColorMap = { '10:00-13:00|14:00-19:00': 'c-shift-a', '10:00-14:00|15:00-19:00': 'c-shift-b', '10:00-15:00|16:00-19:00': 'c-shift-c', '09:00-12:00|13:00-18:00': 'c-shift-d', '11:00-15:00|16:00-20:00': 'c-shift-e', '09:00-13:00|19:00-23:00': 'c-shift-f', '09:00-13:00|14:00-18:00': 'c-shift-d', '11:00-14:00|15:00-20:00': 'c-shift-e' };
               cls = soft ? 'c-soft' : (shiftColorMap[c2.shift] || 'c-shift-b');
               content = c2.shift ? c2.shift.split('|').map(l => `<span class="gh-sh-line">${l}</span>`).join('') : `<span class="gh-sh-line">—</span>`;
             } else {
@@ -2883,7 +2887,15 @@
     function updateApoioWrap() {
       const shiftVal = document.getElementById('gh-me-shift')?.value || '';
       const wrap = document.getElementById('gh-apoio-store-wrap');
-      if (wrap) wrap.style.display = shiftVal.includes('APOIO') ? 'block' : 'none';
+      if (wrap) {
+        wrap.style.display = shiftVal.includes('APOIO') ? 'block' : 'none';
+        if (shiftVal.includes('APOIO')) {
+          const apoioMatch = shiftVal.match(/APOIO:(\d{2}:\d{2}-\d{2}:\d{2})/);
+          const apoioTime = apoioMatch ? apoioMatch[1] : '14:00-15:00';
+          const lbl = wrap.querySelector('div');
+          if (lbl) lbl.textContent = `Tienda de apoio (${apoioTime})`;
+        }
+      }
     }
     updateApoioWrap();
 
@@ -2934,7 +2946,7 @@
       const sid   = document.getElementById('gh-me-store').value;
       let shift = shiftRaw;
 
-      // Handle APOIO shift: assign 14:00-15:00 in support store, remove APOIO marker
+      // Handle APOIO shift: assign apoio slot in support store, remove APOIO marker
       if (shiftRaw.includes('APOIO')) {
         const apoioSid = document.getElementById('gh-apoio-store')?.value;
         if (!apoioSid) { alert('Selecione a tienda de apoio.'); return; }
@@ -2944,12 +2956,15 @@
         if (!S._storeOrder) S._storeOrder = {};
         if (!S._storeOrder[apoioSid]) S._storeOrder[apoioSid] = [];
         if (!S._storeOrder[apoioSid].includes(pid)) S._storeOrder[apoioSid].push(pid);
+        // Extract apoio time from value: |APOIO:HH:MM-HH:MM| or legacy |APOIO| = 14:00-15:00
+        const apoioMatch = shiftRaw.match(/APOIO:(\d{2}:\d{2}-\d{2}:\d{2})/);
+        const apoioSlot = apoioMatch ? apoioMatch[1] : '14:00-15:00';
         // Save apoio shift for that day in the support store
         if (!S._apoioShifts) S._apoioShifts = {};
         if (!S._apoioShifts[pid]) S._apoioShifts[pid] = {};
-        S._apoioShifts[pid][day] = { store: apoioSid, shift: '14:00-15:00' };
-        // Replace APOIO marker with actual shift parts
-        shift = shiftRaw.replace('|APOIO', '');
+        S._apoioShifts[pid][day] = { store: apoioSid, shift: apoioSlot };
+        // Remove APOIO marker (with or without time) to get the clean shift string
+        shift = shiftRaw.replace(/\|APOIO(?::[^|]+)?/, '');
       }
       const p = P(pid), ce = document.getElementById('gh-me-conf');
       const hard = PEOPLE.find(o => o.id !== pid && p?.hardAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);
@@ -3549,7 +3564,15 @@
               <option value="09:00-12:00|13:00-18:00">[D]</option>
               <option value="11:00-15:00|16:00-20:00">[E]</option>
               <option value="09:00-13:00|19:00-23:00">[F]</option>
-              <option value="10:00-13:00|APOIO|15:00-19:00">[APOIO]</option>
+              <option value="09:00-13:00|14:00-18:00">[G]</option>
+              <option value="11:00-14:00|15:00-20:00">[H]</option>
+              <option value="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">[APOIO_A13]</option>
+              <option value="10:00-13:00|APOIO|15:00-19:00">[APOIO_A14]</option>
+              <option value="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">[APOIO_B14]</option>
+              <option value="11:00-15:00|APOIO:14:00-15:00|16:00-20:00">[APOIO_E14]</option>
+              <option value="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">[APOIO_H13]</option>
+              <option value="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">[APOIO_D13]</option>
+              <option value="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">[APOIO_G14]</option>
             </select>
             <select id="gh-me-store" style="display:none"></select>
 
@@ -3570,10 +3593,18 @@
                   <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00">10:00 – 13:00<br>14:00 – 19:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00">10:00 – 14:00<br>15:00 – 19:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00">10:00 – 15:00<br>16:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-14:00|15:00-20:00">11:00 – 14:00<br>15:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|14:00-18:00">09:00 – 13:00<br>14:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio</span><br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">10:00 – 14:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-15:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 15:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">11:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>15:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>14:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>15:00 – 18:00</button>
                 </div>
                 <!-- APOIO store selector -->
                 <div id="gh-apoio-store-wrap" style="display:none;margin-top:12px;">
@@ -3612,10 +3643,20 @@
         if (!btn) return;
         document.getElementById('gh-me-shift').value = btn.dataset.val;
         ghSyncPillGroup('gh-me-shift-btns', btn.dataset.val);
-        // Show/hide apoio store selector
+        // Show/hide apoio store selector and update its label
         const wrap = document.getElementById('gh-apoio-store-wrap');
-        if (wrap) wrap.style.display = btn.dataset.val.includes('APOIO') ? 'block' : 'none';
-        if (!btn.dataset.val.includes('APOIO') && document.getElementById('gh-me-store').value) applyEdit();
+        const isApoio = btn.dataset.val.includes('APOIO');
+        if (wrap) {
+          wrap.style.display = isApoio ? 'block' : 'none';
+          if (isApoio) {
+            // Extract apoio time from value: |APOIO:HH:MM-HH:MM| or legacy |APOIO| = 14:00-15:00
+            const apoioMatch = btn.dataset.val.match(/APOIO:(\d{2}:\d{2}-\d{2}:\d{2})/);
+            const apoioTime = apoioMatch ? apoioMatch[1] : '14:00-15:00';
+            const lbl = wrap.querySelector('div');
+            if (lbl) lbl.textContent = `Tienda de apoio (${apoioTime})`;
+          }
+        }
+        if (!isApoio && document.getElementById('gh-me-store').value) applyEdit();
       });
       // LOJA pill buttons (dynamic)
       document.getElementById('gh-me-store-btns').addEventListener('click', e => {

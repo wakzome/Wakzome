@@ -3942,24 +3942,44 @@
     var rect = el ? el.getBoundingClientRect() : { left: 100, bottom: 60 };
     var panel = document.createElement('div');
     panel.id = 'tam-dn-list-panel';
-    panel.style.cssText = [
-      'position:fixed',
-      'top:' + (rect.bottom + 6) + 'px',
-      'left:' + Math.min(rect.left, window.innerWidth - 580) + 'px',
-      'z-index:99998',
-      'background:#fff',
-      'border:1px solid #e0e0e0',
-      'border-radius:12px',
-      'box-shadow:0 8px 30px rgba(0,0,0,.14)',
-      "font-family:'MontserratLight',sans-serif",
-      'min-width:340px',
-      'max-width:560px',
-      'width:560px',
-      'max-height:600px',
-      'display:flex',
-      'flex-direction:column',
-      'overflow:hidden'
-    ].join(';');
+    var isMobilePhone = window.innerWidth < 640;
+    if (isMobilePhone) {
+      panel.style.cssText = [
+        'position:fixed',
+        'top:' + Math.min(rect.bottom + 6, window.innerHeight - Math.round(window.innerHeight * 0.72)) + 'px',
+        'left:8px',
+        'right:8px',
+        'z-index:99998',
+        'background:#fff',
+        'border:1px solid #e0e0e0',
+        'border-radius:12px',
+        'box-shadow:0 8px 30px rgba(0,0,0,.14)',
+        "font-family:'MontserratLight',sans-serif",
+        'max-height:70vh',
+        'display:flex',
+        'flex-direction:column',
+        'overflow:hidden'
+      ].join(';');
+    } else {
+      panel.style.cssText = [
+        'position:fixed',
+        'top:' + (rect.bottom + 6) + 'px',
+        'left:' + Math.min(rect.left, window.innerWidth - 580) + 'px',
+        'z-index:99998',
+        'background:#fff',
+        'border:1px solid #e0e0e0',
+        'border-radius:12px',
+        'box-shadow:0 8px 30px rgba(0,0,0,.14)',
+        "font-family:'MontserratLight',sans-serif",
+        'min-width:340px',
+        'max-width:560px',
+        'width:560px',
+        'max-height:600px',
+        'display:flex',
+        'flex-direction:column',
+        'overflow:hidden'
+      ].join(';');
+    }
 
     var dns = Object.values(tamDeliveryNotes);
     if (!dns.length) {
@@ -4027,8 +4047,10 @@
         });
       });
       filterInp.addEventListener('click', function(e){ e.stopPropagation(); });
-      /* Focus automático al abrir */
-      setTimeout(function(){ filterInp.focus(); }, 60);
+      /* Focus automático al abrir — solo en desktop/iPad, no en móvil (evita teclado) */
+      if (!isMobilePhone) {
+        setTimeout(function(){ filterInp.focus(); }, 60);
+      }
     }
 
     panel.querySelectorAll('.tam-dn-replay-btn').forEach(function(btn) {

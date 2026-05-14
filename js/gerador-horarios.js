@@ -3571,7 +3571,7 @@
               <option value="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">[APOIO_A13]</option>
               <option value="10:00-13:00|APOIO|15:00-19:00">[APOIO_A14]</option>
               <option value="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">[APOIO_B14]</option>
-              <option value="11:00-15:00|APOIO:14:00-15:00|16:00-20:00">[APOIO_E14]</option>
+              <option value="11:00-14:00|APOIO:14:00-15:00|16:00-20:00">[APOIO_E14]</option>
               <option value="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">[APOIO_H13]</option>
               <option value="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">[APOIO_D13]</option>
               <option value="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">[APOIO_G14]</option>
@@ -3603,7 +3603,7 @@
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>15:00 – 19:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>15:00 – 19:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">10:00 – 14:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-15:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 15:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-14:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 14:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">11:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>15:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>14:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>15:00 – 18:00</button>

@@ -1819,6 +1819,7 @@
       _personStores: S._personStores,
       _storeOrder: S._storeOrder,
       _folgasDirigidas: S._folgasDirigidas,
+      _apoioShifts: S._apoioShifts || {},
     };
   }
 
@@ -1875,6 +1876,7 @@
     S._personStores = d._personStores || {};
     S._storeOrder = d._storeOrder || {};
     S._folgasDirigidas = d._folgasDirigidas || {};
+    S._apoioShifts = d._apoioShifts || {};
     await loadKnowledgeBase();
     await loadIncidencias();
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));

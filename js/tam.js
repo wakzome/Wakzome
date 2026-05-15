@@ -740,56 +740,75 @@
     ban.className  = '';
 
     if (tamInvoices.length === 1) {
-      var r0 = tamInvoices[0];
-      tamRenderInvoiceBanner(r0, ban);
-      ban.classList.add(r0.xv.fullyAgree ? 'ok' : 'err');
+      tamRenderSingleMeta(tamInvoices[0], meta);
+      tamRenderInvoiceBanner(tamInvoices[0], ban);
+      ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
 
+      // Quick distribution buttons for single invoice
       var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
-      var quickBtnsHtml = qd0
-        ? '<div class="tam-inv-quick-wrap">' +
-            '<span class="tam-inv-quick-active">' +
-              (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
-            '</span>' +
-            '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">&#x21a9; desfazer</button>' +
-          '</div>'
-        : '<div class="tam-inv-quick-wrap">' +
-            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%fnc</button>' +
-            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%pxo</button>' +
-            '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50/50</button>' +
-          '</div>';
-
-      meta.className = 'show';
-      meta.innerHTML =
-        '<button class="tam-inv-toggle-btn tam-single-toggle-btn" id="tam-single-toggle-btn" title="expandir / minimizar">' +
-          (tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;') +
-        '</button>' +
-        '<span class="tam-inv-num">' + tamEsc(r0.invoiceNo) + '</span>' +
-        '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' � ' +
-          r0.grouped.length + ' refs � ' + r0.totalPieces + ' un � ' + r0.shipPkgs + ' pac.</span>' +
-        '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' �</span>' +
-        quickBtnsHtml +
-        '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '">' +
-          (tamEditMode[0] ? '&#x2713; fechar edi��o' : '&#x2014; editar') +
-        '</button>' +
-        '<button class="tam-inv-stock-btn">&#x1f4e6; ingreso de stock</button>' +
-        '<button class="tam-inv-guia-btn">&#x1f4cb; gu�a</button>' +
-        '<button class="tam-inv-export-btn">&#x2b07; exportar</button>' +
-        '<button class="tam-inv-remove-btn" title="remover fatura">&#x2715;</button>';
-
-      meta.querySelector('#tam-single-toggle-btn').addEventListener('click', function(){
-        tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
-        tamApplyCollapseState();
-      });
-      meta.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn){
+      var singleQuick = document.createElement('div');
+      singleQuick.className = 'tam-inv-quick-wrap';
+      singleQuick.style.marginTop = '6px';
+      if (qd0) {
+        singleQuick.innerHTML =
+          '<span class="tam-inv-quick-active">' +
+            (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
+          '</span>' +
+          '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>';
+      } else {
+        singleQuick.innerHTML =
+          '<span class="tam-quick-label">distribuição rápida:</span>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%FNC</button>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%PXO</button>' +
+          '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50 / 50</button>';
+      }
+      singleQuick.querySelectorAll('[data-mode]').forEach(function(btn){
         btn.addEventListener('click', function(){
           tamQuickDistribInvoice(0, btn.getAttribute('data-mode'));
         });
       });
-      meta.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){ tamToggleEditMode(0); });
-      meta.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){ tamShowStockModal(0); });
-      meta.querySelector('.tam-inv-guia-btn').addEventListener('click', function(){ tamShowGuiaModal(0); });
-      meta.querySelector('.tam-inv-export-btn').addEventListener('click', function(){ tamExportInvoiceCSV(r0); });
-      meta.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
+      meta.appendChild(singleQuick);
+
+      var singleToggle = document.createElement('button');
+      singleToggle.className = 'tam-inv-toggle-btn tam-single-toggle-btn';
+      singleToggle.id = 'tam-single-toggle-btn';
+      singleToggle.title = 'expandir / minimizar';
+      singleToggle.innerHTML = tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;';
+      singleToggle.addEventListener('click', function(){
+        tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
+        tamApplyCollapseState();
+      });
+      meta.appendChild(singleToggle);
+
+      var singleEdit = document.createElement('button');
+      singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
+      singleEdit.textContent = tamEditMode[0] ? '✓ fechar edição' : '✏ editar tabela';
+      singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
+      meta.appendChild(singleEdit);
+      var singleRemove = document.createElement('button');
+      singleRemove.className = 'tam-inv-remove-btn';
+      singleRemove.title = 'remover fatura da sessão';
+      singleRemove.textContent = '✕ remover fatura';
+      singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
+      meta.appendChild(singleRemove);
+
+      var singleStock = document.createElement('button');
+      singleStock.className = 'tam-inv-stock-btn';
+      singleStock.textContent = '📦 ingreso de stock';
+      singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
+      meta.appendChild(singleStock);
+
+      var singleGuia = document.createElement('button');
+      singleGuia.className = 'tam-inv-guia-btn';
+      singleGuia.textContent = '📋 guía';
+      singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
+      meta.appendChild(singleGuia);
+
+      var singleExport = document.createElement('button');
+      singleExport.className = 'tam-inv-export-btn';
+      singleExport.textContent = '⬇ exportar';
+      singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
+      meta.appendChild(singleExport);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
       } else {
@@ -1602,12 +1621,12 @@
       '</div>';
 
     var isIpad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (tamCollapseState['distrib'] === undefined) {
+    if (isIpad && tamCollapseState['distrib'] === undefined) {
       tamCollapseState['distrib'] = true;
     }
     var distribCollapsed = !!tamCollapseState['distrib'];
     area.innerHTML =
-      '<div class="tam-rec-divider"><span>Distribui\u00e7\u00e3o Manual Geral</span></div>' +
+      '<div class="tam-rec-divider"><span>Distribuição</span></div>' +
       '<div class="tam-rec-area' + (distribCollapsed ? ' tam-rec-collapsed' : '') + '">' +
         '<div class="tam-rec-area-title">' +
           '<button class="tam-inv-toggle-btn" id="tam-rec-toggle-btn" title="expandir / minimizar" style="margin-right:8px;">' +
@@ -3890,12 +3909,10 @@
   }
 
   function tamShowDNBarButtons() {
-    var loadBtn  = document.getElementById('tam-dn-load-bar-btn');
-    var camBtn   = document.getElementById('tam-dn-cam-bar-btn');
-    var excelBtn = document.getElementById('tam-dn-excel-bar-btn');
-    if (loadBtn)  loadBtn.style.display  = 'inline-flex';
-    if (camBtn)   camBtn.style.display   = 'inline-flex';
-    if (excelBtn) excelBtn.style.display = 'inline-flex';
+    var loadBtn = document.getElementById('tam-dn-load-bar-btn');
+    var camBtn  = document.getElementById('tam-dn-cam-bar-btn');
+    if (loadBtn) loadBtn.style.display = 'inline-flex';
+    if (camBtn)  camBtn.style.display  = 'inline-flex';
     tamUpdateDNCount();
   }
 
@@ -3923,81 +3940,45 @@
     var rect = el ? el.getBoundingClientRect() : { left: 100, bottom: 60 };
     var panel = document.createElement('div');
     panel.id = 'tam-dn-list-panel';
-    var isMobilePhone = window.innerWidth < 640;
-    if (isMobilePhone) {
-      panel.style.cssText = [
-        'position:fixed',
-        'top:' + Math.min(rect.bottom + 6, window.innerHeight - Math.round(window.innerHeight * 0.72)) + 'px',
-        'left:8px',
-        'right:8px',
-        'z-index:99998',
-        'background:#fff',
-        'border:1px solid #e0e0e0',
-        'border-radius:12px',
-        'box-shadow:0 8px 30px rgba(0,0,0,.14)',
-        "font-family:'MontserratLight',sans-serif",
-        'max-height:70vh',
-        'display:flex',
-        'flex-direction:column',
-        'overflow:hidden'
-      ].join(';');
-    } else {
-      panel.style.cssText = [
-        'position:fixed',
-        'top:' + (rect.bottom + 6) + 'px',
-        'left:' + Math.min(rect.left, window.innerWidth - 580) + 'px',
-        'z-index:99998',
-        'background:#fff',
-        'border:1px solid #e0e0e0',
-        'border-radius:12px',
-        'box-shadow:0 8px 30px rgba(0,0,0,.14)',
-        "font-family:'MontserratLight',sans-serif",
-        'min-width:340px',
-        'max-width:560px',
-        'width:560px',
-        'max-height:600px',
-        'display:flex',
-        'flex-direction:column',
-        'overflow:hidden'
-      ].join(';');
-    }
+    panel.style.cssText = [
+      'position:fixed',
+      'top:' + (rect.bottom + 6) + 'px',
+      'left:' + Math.min(rect.left, window.innerWidth - 390) + 'px',
+      'z-index:99998',
+      'background:#fff',
+      'border:1px solid #e0e0e0',
+      'border-radius:12px',
+      'box-shadow:0 8px 30px rgba(0,0,0,.14)',
+      "font-family:'MontserratLight',sans-serif",
+      'min-width:280px',
+      'max-width:380px',
+      'max-height:420px',
+      'overflow-y:auto'
+    ].join(';');
 
     var dns = Object.values(tamDeliveryNotes);
     if (!dns.length) {
       panel.innerHTML = '<div style="padding:18px 16px;font-size:.82rem;color:#000;opacity:.5;font-weight:700;">Nenhuma DN carregada.</div>';
     } else {
-      var hdrHtml =
-        '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
-        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
-        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>' +
-        '<div style="padding:8px 14px 6px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
-          '<input id="tam-dn-filter-inp" type="text" placeholder="🔍 filtrar por código ZY…" autocomplete="off" spellcheck="false" style="' +
-            'width:100%;box-sizing:border-box;padding:6px 10px;font-size:.78rem;' +
-            "font-family:'MontserratLight',sans-serif;border:1px solid #e0e0e0;" +
-            'border-radius:7px;outline:none;background:#fafafa;color:#000;transition:border-color .15s;">' +
-        '</div>' +
-        '<div id="tam-dn-list-rows" style="overflow-y:auto;flex:1;">';
+      var hdr = '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
+        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;">' +
+        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>';
 
-      var rowsHtml = dns.map(function(dn) {
-        var hasPhoto   = !!(dn.lastPhotoDistrib && dn.lastPhotoDistrib.length);
-        var confirmed  = dn.distribConfirmed ? ' ✓' : '';
-        var clr        = dn.distribConfirmed ? '#4A7C6F' : '#000';
+      var rows = dns.map(function(dn) {
+        var hasPhoto  = !!(dn.lastPhotoDistrib && dn.lastPhotoDistrib.length);
+        var confirmed = dn.distribConfirmed ? ' ✓' : '';
+        var clr       = dn.distribConfirmed ? '#4A7C6F' : '#000';
         var isUserConf = dn.lastPhotoConf === 'user_confirmed';
-        var btnLabel   = hasPhoto ? (isUserConf ? '✓ ver confirmado' : '?? ver resultado') : '';
-        var photoBtn   = hasPhoto
+        var btnLabel  = hasPhoto ? (isUserConf ? '✓ ver confirmado' : '?? ver resultado') : '';
+        var photoBtn  = hasPhoto
           ? '<button class="tam-dn-replay-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
               'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
               'border:1px solid ' + (isUserConf ? '#4A7C6F' : '#ccc') + ';border-radius:6px;background:transparent;' +
               'color:' + (isUserConf ? '#4A7C6F' : '#000') + ";font-family:'MontserratLight',sans-serif;" +
               'transition:all .12s;white-space:nowrap;flex-shrink:0;">' +
               btnLabel + '</button>'
-          : '';
-        var distribBtn = '<button class="tam-dn-distrib-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
-          'padding:3px 10px;font-size:.68rem;font-weight:700;cursor:pointer;' +
-          'border:1px solid #ccc;border-radius:6px;background:transparent;' +
-          "color:#000;font-family:'MontserratLight',sans-serif;" +
-          'transition:all .12s;white-space:nowrap;flex-shrink:0;">✏ distribuir</button>';
-        return '<div class="tam-dn-row-item" data-zy="' + tamEsc(dn.zyCode) + '" style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
+          : '<span style="font-size:.65rem;color:#000;opacity:.3;font-weight:600;white-space:nowrap;">sem foto</span>';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
               tamEsc(dn.zyCode) + confirmed +
@@ -4008,31 +3989,12 @@
             '</div>' +
           '</div>' +
           photoBtn +
-          distribBtn +
         '</div>';
       }).join('');
-
-      panel.innerHTML = hdrHtml + rowsHtml + '</div>';
+      panel.innerHTML = hdr + rows;
     }
 
     document.body.appendChild(panel);
-
-    /* Filtro en tiempo real */
-    var filterInp = panel.querySelector('#tam-dn-filter-inp');
-    if (filterInp) {
-      filterInp.addEventListener('input', function() {
-        var q = filterInp.value.trim().toLowerCase();
-        panel.querySelectorAll('.tam-dn-row-item').forEach(function(row) {
-          var zy = (row.getAttribute('data-zy') || '').toLowerCase();
-          row.style.display = (!q || zy.indexOf(q) >= 0) ? 'flex' : 'none';
-        });
-      });
-      filterInp.addEventListener('click', function(e){ e.stopPropagation(); });
-      /* Focus automático al abrir — solo en desktop/iPad, no en móvil (evita teclado) */
-      if (!isMobilePhone) {
-        setTimeout(function(){ filterInp.focus(); }, 60);
-      }
-    }
 
     panel.querySelectorAll('.tam-dn-replay-btn').forEach(function(btn) {
       btn.addEventListener('mouseenter', function(){ btn.style.background='#f5f5f5'; });
@@ -4047,130 +4009,12 @@
       });
     });
 
-    panel.querySelectorAll('.tam-dn-distrib-btn').forEach(function(btn) {
-      btn.addEventListener('mouseenter', function(){ btn.style.background='#f5f5f5'; });
-      btn.addEventListener('mouseleave', function(){ btn.style.background='transparent'; });
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var zy = btn.getAttribute('data-zy');
-        var dn = tamDeliveryNotes[zy];
-        if (!dn) return;
-        panel.remove();
-        tamShowDNDistribModal(dn, null, null, false);
-      });
-    });
-
     function onOutside(e) {
       if (!panel.contains(e.target) && e.target !== el) {
         panel.remove(); document.removeEventListener('click', onOutside);
       }
     }
     setTimeout(function(){ document.addEventListener('click', onOutside); }, 50);
-  }
-
-  /* ══════════════════════════════════════════════════════════════
-     DN EXCEL IMPORT — carga un .xlsx con columnas: Delivery Note | referencia | Qty
-     Agrupa por zyCode + ref (suma qty por EAN), crea entradas en tamDeliveryNotes
-     con la misma estructura que tamParseDNFromItems: { zyCode, refs, fileName, gesamtPcs }
-     No sobreescribe una DN existente (cargada por PDF) si ya tiene refs.
-  ══════════════════════════════════════════════════════════════ */
-  async function tamHandleDNExcelFile(file) {
-    try {
-      /* SheetJS is available as XLSX in this environment */
-      if (typeof XLSX === 'undefined') {
-        console.warn('TAM DN Excel: SheetJS (XLSX) not available');
-        tamShowDNError('SheetJS não disponível — não é possível ler Excel.');
-        return;
-      }
-      var buf  = await file.arrayBuffer();
-      var wb   = XLSX.read(buf, { type: 'array' });
-      var ws   = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-
-      if (!rows.length) {
-        tamShowDNError('Excel vazio ou sem dados.');
-        return;
-      }
-
-      /* Detect header row — find the row that contains "Delivery Note" or "ZY-" pattern.
-         Accepts first row as header if it contains text, otherwise uses row 0. */
-      var dataStart = 0;
-      var COL_ZY = 0, COL_REF = 1, COL_QTY = 2;
-
-      /* Try to auto-detect columns from header row */
-      var hdr = rows[0].map(function(c){ return String(c).trim().toLowerCase(); });
-      var foundHeader = false;
-      hdr.forEach(function(h, i) {
-        if (/delivery.?note|zy.?code|lieferschein/i.test(h)) { COL_ZY = i; foundHeader = true; }
-        if (/ref|artikel|reference/i.test(h))                 { COL_REF = i; }
-        if (/qty|menge|quantity|anzahl/i.test(h))             { COL_QTY = i; }
-      });
-      if (foundHeader) dataStart = 1;
-
-      /* Accumulate: { zyCode: { refCode: totalQty } } */
-      var accumulator = {};   /* { zyCode: { ref: qty } } */
-      var refOrder    = {};   /* { zyCode: [ref, ...] } — preserves first-seen order */
-
-      for (var ri = dataStart; ri < rows.length; ri++) {
-        var row = rows[ri];
-        var zyRaw  = String(row[COL_ZY]  || '').trim();
-        var refRaw = String(row[COL_REF] || '').trim();
-        var qtyRaw = row[COL_QTY];
-
-        /* zyCode must match ZY-XXXXXXXX pattern */
-        var zyMatch = zyRaw.match(/ZY-\d{8}/);
-        if (!zyMatch) continue;
-        var zyCode = zyMatch[0];
-
-        if (!refRaw) continue;
-
-        var qty = parseInt(qtyRaw);
-        if (isNaN(qty) || qty < 1) continue;
-
-        if (!accumulator[zyCode]) {
-          accumulator[zyCode] = {};
-          refOrder[zyCode]    = [];
-        }
-        if (!accumulator[zyCode].hasOwnProperty(refRaw)) {
-          accumulator[zyCode][refRaw] = 0;
-          refOrder[zyCode].push(refRaw);
-        }
-        accumulator[zyCode][refRaw] += qty;
-      }
-
-      var count = 0;
-      Object.keys(accumulator).forEach(function(zyCode) {
-        /* Do not overwrite a DN that was loaded from PDF (has refs already) */
-        if (tamDeliveryNotes[zyCode] && tamDeliveryNotes[zyCode].refs && tamDeliveryNotes[zyCode].refs.length) {
-          console.log('TAM DN Excel: skipping', zyCode, '— already loaded from PDF');
-          return;
-        }
-        var refs = refOrder[zyCode]
-          .map(function(ref){ return { ref: ref, qty: accumulator[zyCode][ref] }; })
-          .filter(function(r){ return r.qty > 0; });
-        if (!refs.length) return;
-        var gesamtPcs = refs.reduce(function(s, r){ return s + r.qty; }, 0);
-        tamDeliveryNotes[zyCode] = {
-          zyCode:     zyCode,
-          refs:       refs,
-          fileName:   file.name,
-          gesamtPcs:  gesamtPcs,
-          fromExcel:  true
-        };
-        count++;
-      });
-
-      console.log('TAM DN Excel: imported', count, 'DNs from', file.name);
-      tamRebuildDNMap();
-      tamUpdateDNCount();
-      tamScheduleSave();
-      tamRenderDNVerification();
-      tamRenderAll();
-
-    } catch(e) {
-      console.error('TAM DN Excel error', e);
-      tamShowDNError('Erro ao ler Excel: ' + e.message);
-    }
   }
 
   async function tamHandleDeliveryNoteFiles(files) {
@@ -4674,41 +4518,6 @@
     setTimeout(function(){ t.classList.remove('tam-dn-toast-show'); setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 400); }, 3500);
   }
 
-  function tamShowDNWarnBanner(modal, dist, exp) {
-    /* Remove any existing banner first */
-    var existing = modal.querySelector('#tam-dn-warn-banner');
-    if (existing) existing.parentNode.removeChild(existing);
-    var footer = modal.querySelector('#tam-dn-footer');
-    if (!footer) return;
-    var banner = document.createElement('div');
-    banner.id = 'tam-dn-warn-banner';
-    banner.innerHTML =
-      '<div class="tam-dn-wb-icon">\u26a0</div>' +
-      '<div class="tam-dn-wb-msg">' +
-        '<span class="tam-dn-wb-nums">' + dist + ' \u2260 ' + exp + ' pcs</span>' +
-        '<span class="tam-dn-wb-text">O total distribu\u00eddo n\u00e3o coincide com a DN. Confirmas mesmo assim?</span>' +
-      '</div>' +
-      '<div class="tam-dn-wb-btns">' +
-        '<button class="tam-dn-wb-fix">corrigir</button>' +
-        '<button class="tam-dn-wb-go">confirmar mesmo assim \u2192</button>' +
-      '</div>';
-    footer.parentNode.insertBefore(banner, footer);
-    requestAnimationFrame(function(){ banner.classList.add('tam-dn-wb-visible'); });
-    banner.querySelector('.tam-dn-wb-fix').addEventListener('click', function() {
-      banner.classList.remove('tam-dn-wb-visible');
-      setTimeout(function(){ if (banner.parentNode) banner.parentNode.removeChild(banner); }, 280);
-    });
-    banner.querySelector('.tam-dn-wb-go').addEventListener('click', function() {
-      modal._distribWarnAck = true;
-      banner.classList.remove('tam-dn-wb-visible');
-      setTimeout(function(){
-        if (banner.parentNode) banner.parentNode.removeChild(banner);
-        var confirmBtn = modal.querySelector('#tam-dn-confirm-btn');
-        if (confirmBtn) confirmBtn.click();
-      }, 220);
-    });
-  }
-
   function tamShowDNDistribModal(dn, motorDDistrib, motorDConf, fromPhoto) {
     var old = document.getElementById('tam-dn-modal');
     if (old) old.parentNode.removeChild(old);
@@ -5019,11 +4828,8 @@
         _dnDist += (_f?(parseInt(_f.value)||0):0)+(_p?(parseInt(_p.value)||0):0);
       });
       if (_dnExp > 0 && _dnDist !== _dnExp) {
-        if (!modal._distribWarnAck) {
-          tamShowDNWarnBanner(modal, _dnDist, _dnExp);
-          return;
-        }
-        delete modal._distribWarnAck;
+        if (!confirm('\u26a0 ATEN\u00c7\u00c3O\n\nO total distribuído é ' + _dnDist +
+          ' pcs mas esta DN tem ' + _dnExp + ' pcs.\n\nConfirmas mesmo assim?')) return;
       }
 
       // Always repair invIdx first — fixes legacy sessions where boxes lack invIdx
@@ -5836,14 +5642,13 @@
       return;
     }
 
-    // Se transporte = 0 → mostra alerta com botão PDF + input manual
+    // Se transporte = 0 → mostra alerta com botão
     if (!tamDetectMissingShipping(r)) return;
 
     var alertEl = document.createElement('div');
     alertEl.className = 'tam-freight-alert';
 
-    var fileInputId   = 'tam-freight-input-' + invIdx;
-    var manualInputId = 'tam-freight-manual-' + invIdx;
+    var fileInputId = 'tam-freight-input-' + invIdx;
     alertEl.innerHTML =
       '<span class="tam-freight-icon">🚚</span>' +
       '<span class="tam-freight-msg">Transporte não detetado na fatura · ' +
@@ -5851,26 +5656,10 @@
       '<label class="tam-freight-btn" for="' + fileInputId + '">' +
         '📎 Carregar fatura de transporte' +
         '<input type="file" id="' + fileInputId + '" accept="application/pdf" style="display:none">' +
-      '</label>' +
-      '<span class="tam-freight-sep" style="font-size:.72rem;color:#999;white-space:nowrap;">ou</span>' +
-      '<div class="tam-freight-manual-wrap" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">' +
-        '<input type="text" id="' + manualInputId + '" placeholder="ex: 175,00" inputmode="decimal" autocomplete="off" style="' +
-          'width:90px;padding:5px 8px;font-size:.78rem;font-weight:700;' +
-          "font-family:'MontserratLight',sans-serif;border:1px solid #e0e0e0;" +
-          'border-radius:7px;outline:none;background:#fff;color:#000;' +
-          'transition:border-color .15s;text-align:right;">' +
-        '<span style="font-size:.78rem;font-weight:700;color:#555;flex-shrink:0;">€</span>' +
-        '<button class="tam-freight-manual-btn" data-inv="' + invIdx + '" style="' +
-          'padding:5px 13px;font-size:.75rem;font-weight:700;cursor:pointer;' +
-          "font-family:'MontserratLight',sans-serif;border:1px solid #4A7C6F;" +
-          'border-radius:7px;background:transparent;color:#4A7C6F;' +
-          'transition:all .14s;white-space:nowrap;">✓ aplicar</button>' +
-        '<span class="tam-freight-manual-err" style="font-size:.72rem;color:#c00;display:none;white-space:nowrap;"></span>' +
-      '</div>';
+      '</label>';
 
     containerEl.appendChild(alertEl);
 
-    /* ── Listener: carregar PDF de transporte ── */
     alertEl.querySelector('#' + fileInputId).addEventListener('change', async function(e){
       var file = e.target.files[0];
       if (!file) return;
@@ -5894,50 +5683,18 @@
           if (btn) btn.textContent = '📎 Carregar fatura de transporte';
           return;
         }
+
+        // Se temos pkgs na fatura de frete, verificar consistência com shipPkgs da fatura principal
         var pkgs = freight.pkgs || r.shipPkgs || 0;
         tamApplyExternalShipping(invIdx, freight.cost, pkgs, file.name);
       } catch(err) {
         console.error('TAM freight parse error', err);
         if (btn) {
-          btn.innerHTML = '<span style="color:#c00">⚠ Erro: ' + tamEsc(err.message) + '</span>';
+          btn.innerHTML =
+            '<span style="color:#c00">⚠ Erro: ' + tamEsc(err.message) + '</span>';
         }
       }
     });
-
-    /* ── Listener: valor manual ── */
-    var manualInp = alertEl.querySelector('#' + manualInputId);
-    var manualErr = alertEl.querySelector('.tam-freight-manual-err');
-    var manualBtn = alertEl.querySelector('.tam-freight-manual-btn');
-
-    /* focus/blur styles */
-    manualInp.addEventListener('focus', function(){ manualInp.style.borderColor = '#4A7C6F'; });
-    manualInp.addEventListener('blur',  function(){ manualInp.style.borderColor = '#e0e0e0'; });
-
-    /* Enter key triggers apply */
-    manualInp.addEventListener('keydown', function(e){
-      if (e.key === 'Enter') { e.preventDefault(); manualBtn.click(); }
-    });
-
-    manualBtn.addEventListener('click', function(){
-      manualErr.style.display = 'none';
-      var raw  = manualInp.value.trim();
-      if (!raw) {
-        manualErr.textContent = 'introduz um valor';
-        manualErr.style.display = 'inline';
-        return;
-      }
-      var cost = tamParseEU(raw);
-      if (isNaN(cost) || cost <= 0) {
-        manualErr.textContent = 'valor inválido';
-        manualErr.style.display = 'inline';
-        manualInp.style.borderColor = '#c00';
-        return;
-      }
-      tamApplyExternalShipping(invIdx, cost, r.shipPkgs || 0, 'manual');
-    });
-
-    manualBtn.addEventListener('mouseenter', function(){ manualBtn.style.background='rgba(74,124,111,.1)'; });
-    manualBtn.addEventListener('mouseleave', function(){ manualBtn.style.background='transparent'; });
   }
 
   /* Remove o transporte externo e repõe shipping = 0 */
@@ -6141,29 +5898,7 @@
     var s = document.createElement('style');
     s.id = 'tam-v9-styles';
     s.textContent = [
-      /* TAM MODULE STYLES - all base CSS lives here */
-      '#tab-tam { width:100%; overflow:visible; align-items:center; padding-bottom:40px; }',
-      '#tab-tam.active { display:flex!important; flex-direction:column; flex:1; overflow:hidden; }',
-      '#tab-tam.active.tam-loaded { flex:none!important; overflow:visible!important; }',
-      '#admin-app.tam-loaded { overflow-y:auto!important; overflow-x:hidden!important; }',
-      '#tam-upload-zone { display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:24px; width:100%; max-width:480px; }',
-      '#tam-upload-label { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; min-height:130px; border:2px dashed #ccc; border-radius:16px; cursor:pointer; transition:border-color .2s,background .2s; padding:20px; text-align:center; color:#000; font-size:.95rem; font-weight:600; }',
-      '#tam-upload-label:hover, #tam-upload-label.drag-over { border-color:#555; background:#f9f9f9; }',
-      '#tam-upload-label .upload-icon { font-size:2.2rem; margin-bottom:8px; }',
-      '#tam-file-input { display:none; }',
-      '#tam-file-name { font-size:.85rem; color:#000; font-weight:600; min-height:18px; }',
-      '#tam-status-msg { font-size:.9rem; font-weight:600; color:#000; min-height:20px; text-align:center; }',
-      '#tam-export-btn { display:none; margin-top:16px; padding:9px 28px; font-size:.88rem; font-weight:600; cursor:pointer; border:1px solid #555; border-radius:12px; background:#fff; font-family:\'MontserratLight\',sans-serif; transition:background .2s,color .2s; }',
-      '#tam-export-btn.show { display:inline-block!important; }',
-      '#tam-export-btn:hover { background:#555; color:#fff; }',
-      '#tam-invoice-meta { display:none!important; width:100%; max-width:960px; background:transparent!important; border:1px solid #e0e0e0!important; border-bottom:none!important; border-radius:12px 12px 0 0!important; padding:18px 24px!important; margin-bottom:0!important; flex-wrap:nowrap!important; gap:10px!important; align-items:center!important; box-sizing:border-box; font-size:.85rem; font-weight:700; color:#000; }',
-      '#tam-invoice-meta.show { display:flex!important; }',
-      '#tam-validation-banner { display:none!important; width:100%; max-width:960px; border:none!important; padding:8px 0 12px!important; margin-bottom:0!important; font-size:.75rem; font-weight:700; flex-wrap:wrap; gap:6px 24px; }',
-      '#tam-validation-banner.ok  { display:flex!important; color:#4A7C6F!important; background:transparent!important; }',
-      '#tam-validation-banner.err { display:flex!important; color:#9B4D4D!important; background:transparent!important; }',
-      '#tam-validation-banner .tam-vi { display:flex; flex-direction:column; gap:0; align-items:center; text-align:center; }',
-      '#tam-validation-banner .tam-vi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
-/* ── Freight alert — transporte não incluído ── */
+      /* ── Freight alert — transporte não incluído ── */
       '.tam-freight-alert { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; padding:8px 12px; background:#fff8e1; border:1.5px solid #ffc107; border-radius:9px; font-size:.8rem; color:#6d4c00; }',
       '.tam-freight-icon { font-size:1.1rem; }',
       '.tam-freight-msg { flex:1; min-width:180px; }',
@@ -6266,7 +6001,6 @@
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
       '.tam-inv-toggle-btn:hover { color:#000; }',
-      '#tam-rec-toggle-btn { font-size:1.05rem; color:#999; }',
       /* iPad: bigger toggle button */
       '@media (pointer:coarse) and (min-width:768px) {',
       '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#555; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',
@@ -6801,19 +6535,6 @@
       '#tam-dn-toast.tam-dn-toast-show { opacity:1; transform:translateX(-50%) translateY(0); }',
       '.tam-dn-loading { opacity:.7; }',
 
-      /* ── Distribution mismatch warning banner ── */
-      '#tam-dn-warn-banner { display:flex; align-items:center; gap:12px; padding:11px 20px; background:#FEF6EC; border-top:2px solid #E8A44A; border-bottom:1px solid #F0D9B5; flex-shrink:0; opacity:0; transform:translateY(6px); transition:opacity .25s ease,transform .25s ease; font-family:\'MontserratLight\',sans-serif; }',
-      '#tam-dn-warn-banner.tam-dn-wb-visible { opacity:1; transform:translateY(0); }',
-      '.tam-dn-wb-icon { font-size:1.2rem; color:#C47A1E; flex-shrink:0; line-height:1; }',
-      '.tam-dn-wb-msg { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }',
-      '.tam-dn-wb-nums { font-size:.92rem; font-weight:700; color:#9B4D4D; letter-spacing:.01em; }',
-      '.tam-dn-wb-text { font-size:.7rem; color:#7A5530; font-weight:600; }',
-      '.tam-dn-wb-btns { display:flex; gap:8px; flex-shrink:0; }',
-      '.tam-dn-wb-fix { padding:5px 13px; border-radius:7px; border:1.5px solid #ccc; background:transparent; color:#555; font-size:.74rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,border-color .12s; text-transform:lowercase; }',
-      '.tam-dn-wb-fix:hover { background:#f0f0f0; border-color:#999; }',
-      '.tam-dn-wb-go { padding:5px 13px; border-radius:7px; border:1.5px solid #C47A1E; background:transparent; color:#C47A1E; font-size:.74rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,color .12s; text-transform:lowercase; white-space:nowrap; }',
-      '.tam-dn-wb-go:hover { background:rgba(196,122,30,.12); }',
-
       /* ── Motor D (proc style) ── */
       '#tam-motord-spin { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(16px); background:#fff; color:#000; border:1.5px solid #000; padding:9px 20px; border-radius:12px; font-size:.82rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:20001; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,.15); }',
 
@@ -6983,13 +6704,9 @@
         '</div>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾</button>' +
         '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">📋</button>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF" style="display:none">' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes" style="display:none">' +
           '\ud83d\udce6' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
-        '</label>' +
-        '<label class="tam-session-btn" id="tam-dn-excel-bar-btn" for="tam-dn-excel-input" title="delivery notes Excel" style="display:none">' +
-          '\ud83d\udcc5' +
-          '<input type="file" id="tam-dn-excel-input" accept=".xlsx,.xls" style="display:none">' +
         '</label>' +
         '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
@@ -7051,8 +6768,6 @@
         if (dnLoadBtn) dnLoadBtn.style.display = 'none';
         var dnCamBtn = document.getElementById('tam-dn-cam-bar-btn');
         if (dnCamBtn) dnCamBtn.style.display = 'none';
-        var dnExcelBtn = document.getElementById('tam-dn-excel-bar-btn');
-        if (dnExcelBtn) dnExcelBtn.style.display = 'none';
         var guiaBarBtnClose = document.getElementById('tam-guia-bar-btn');
         if (guiaBarBtnClose) guiaBarBtnClose.style.display = 'none';
         var dnCount = document.getElementById('tam-dn-count');
@@ -7170,12 +6885,6 @@
       if (dnBarI) dnBarI.addEventListener('change', function(e){
         var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
         if (files.length) tamHandleDeliveryNoteFiles(files);
-        e.target.value = '';
-      });
-      var dnBarX = bar.querySelector('#tam-dn-excel-input');
-      if (dnBarX) dnBarX.addEventListener('change', function(e){
-        var file = e.target.files[0];
-        if (file) tamHandleDNExcelFile(file);
         e.target.value = '';
       });
       var dnBarC = bar.querySelector('#tam-dn-cam-input');

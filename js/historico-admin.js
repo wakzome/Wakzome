@@ -107,7 +107,7 @@
   }
 
   // Modo comparación exacta (mismo número de día, sin ajuste DOW)
-  var _equalDates = false;
+  var _equalDates = true;
 
   function _buildComparisonsExact(from, to, rows) {
     var fromD=_strToDate(from), toD=_strToDate(to);
@@ -167,10 +167,23 @@
       panel.style.setProperty('display','flex','important');
       panel.style.setProperty('flex','1','important');
       panel.style.setProperty('flex-direction','column','important');
-      panel.style.setProperty('overflow-y','auto','important');
-      panel.style.setProperty('overflow-x','hidden','important');
+      panel.style.setProperty('overflow','hidden','important');
       panel.style.setProperty('width','100%','important');
       panel.style.setProperty('height','0','important');
+      // Wrapper de scroll interno: envuelve filtros + contenido para que suban juntos
+      var sw=document.getElementById('hadm-scroll-wrapper');
+      if(!sw){
+        sw=document.createElement('div');
+        sw.id='hadm-scroll-wrapper';
+        while(panel.firstChild) sw.appendChild(panel.firstChild);
+        panel.appendChild(sw);
+      }
+      sw.style.setProperty('flex','1','important');
+      sw.style.setProperty('overflow-y','auto','important');
+      sw.style.setProperty('overflow-x','hidden','important');
+      sw.style.setProperty('-webkit-overflow-scrolling','touch','important');
+      sw.style.setProperty('width','100%','important');
+      sw.style.setProperty('height','0','important');
     }
     _injectStyles();
     _activeTab='vendas'; _activePeriodBtn='hadm-btn-30'; _activeZoneBtn=null; _expanded={};
@@ -186,7 +199,7 @@
     var dashboard=document.getElementById('adm-dashboard');
     var moduleBar=document.getElementById('adm-module-bar');
     var panel=document.getElementById('adm-historico-panel');
-    if(panel){panel.style.display='none';['flex','flex-direction','overflow-y','overflow-x','width','height'].forEach(function(p){panel.style.removeProperty(p);});}
+    if(panel){panel.style.display='none';['flex','flex-direction','overflow','overflow-y','overflow-x','width','height'].forEach(function(p){panel.style.removeProperty(p);});var sw=document.getElementById('hadm-scroll-wrapper');if(sw){['flex','overflow-y','overflow-x','-webkit-overflow-scrolling','width','height'].forEach(function(p){sw.style.removeProperty(p);});}}
     if(moduleBar){moduleBar.style.display='none';['flex-shrink','width'].forEach(function(p){moduleBar.style.removeProperty(p);});}
     if(dashboard) dashboard.style.display='';
     if(adminApp){adminApp.classList.remove('module-open');['display','flex-direction','overflow','height','padding','position','top','left','right','bottom','z-index'].forEach(function(p){adminApp.style.removeProperty(p);});}
@@ -229,6 +242,7 @@
     if(_activeTab==='vendas')     _renderVendas();
     if(_activeTab==='carregar')   _renderCarregar();
     if(_activeTab==='proyeccion') _renderProyeccion();
+    if(_activeTab==='premios')    _renderPremios();
   }
 
   // ════════════════════════════════════════════════════════════
@@ -2425,6 +2439,260 @@
     });
   }
 
+  // ════════════════════════════════════════════════════════════
+  //  TAB PREMIOS — Comparação justa 2025 vs 2026 por tienda/mês
+  // ════════════════════════════════════════════════════════════
+
+  // Estado de ventas nocturnas por tienda/mes: { 'LOJA:MM': valor }
+  var _premiosNocturno = {};
+
+  function _renderPremios() {
+    var c = _getContent(); if(!c) return;
+    c.innerHTML = ''; _setupContent(c);
+
+    var LOJAS_PREMIOS = ['MEZKA AVENIDA','MEZKA MERCADO','MAXX','SHANA'];
+    var today = _lastCompleteDay();
+    var currentYear = parseInt(today.substring(0,4));
+    var currentMonth = parseInt(today.substring(5,7));
+
+    // Título
+    var ttl = _el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
+    ttl.style.setProperty('color','#888888','important');
+    ttl.textContent = '🏆 PRÉMIOS — COMPARAÇÃO JUSTA 2025 vs 2026';
+    c.appendChild(ttl);
+
+    var sub = _el('div','font-size:.68rem;margin-bottom:20px;line-height:1.6;');
+    sub.style.setProperty('color','#aaaaaa','important');
+    sub.textContent = 'Compara apenas os dias em que cada loja esteve aberta nos dois anos. As vendas noturnas de Jun/Jul/Ago são subtraídas de 2026 para uma comparação justa.';
+    c.appendChild(sub);
+
+    // Por cada tienda
+    LOJAS_PREMIOS.forEach(function(loja) {
+      var label = LOJA_LABELS[loja] || loja;
+      var lojaRows = _allRows.filter(function(r){ return r.loja === loja; });
+
+      // Card contenedor por tienda
+      var card = _el('div','border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:20px;');
+      card.style.setProperty('background','#fafafa','important');
+
+      // Header tienda
+      var cardHdr = _el('div','font-size:.95rem;font-weight:800;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #e8e8e8;');
+      cardHdr.style.setProperty('color','#111111','important');
+      cardHdr.textContent = label;
+      card.appendChild(cardHdr);
+
+      // Tabla de meses
+      var tw = _el('div','overflow-x:auto;border-radius:9px;border:1px solid #e8e8e8;margin-bottom:14px;');
+      var t = document.createElement('table');
+      t.setAttribute('style','width:100%;border-collapse:collapse;font-size:.78rem;');
+
+      // Cabecera tabla
+      var thead = document.createElement('thead');
+      var htr = document.createElement('tr');
+      ['Mês','Dias 2025','Facturado 2025','Facturado 2026 ajust.','Diferença','Vendas noturnas'].forEach(function(h,hi) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        var align = hi === 0 ? 'left' : 'right';
+        th.setAttribute('style','padding:7px 10px;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:'+align+';border-bottom:1.5px solid #e0e0e0;white-space:nowrap;');
+        th.style.setProperty('color','#555555','important');
+        th.style.setProperty('background','#f0f0f0','important');
+        htr.appendChild(th);
+      });
+      thead.appendChild(htr);
+      t.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      var totalDiff = 0;
+      var totalBase = 0;
+      var totalAjust = 0;
+
+      for(var mo = 1; mo <= currentMonth; mo++) {
+        var moStr = _pad(mo);
+        var moName = MESES_PT[mo-1];
+        var isNocturnoMes = (mo >= 6 && mo <= 8);
+        var nocturnoKey = loja + ':' + moStr;
+        var nocturnoVal = parseFloat(_premiosNocturno[nocturnoKey]) || 0;
+
+        // Días con registro en 2025 para este mes/tienda
+        var dias2025 = lojaRows.filter(function(r){
+          return r.data.substring(0,4) === '2025' &&
+                 parseInt(r.data.substring(5,7)) === mo &&
+                 (parseFloat(r.montante)||0) > 0;
+        }).map(function(r){ return r.data.substring(8,10); }); // días del mes
+
+        var nDias2025 = dias2025.length;
+
+        // Total 2025 esos días
+        var total2025 = lojaRows.filter(function(r){
+          return r.data.substring(0,4) === '2025' &&
+                 parseInt(r.data.substring(5,7)) === mo &&
+                 (parseFloat(r.montante)||0) > 0;
+        }).reduce(function(s,r){ return s + (parseFloat(r.montante)||0); }, 0);
+
+        // 2026: solo los días de calendario equivalentes (mismo día del mes) que 2025 abrió
+        var total2026 = 0;
+        if(nDias2025 > 0) {
+          total2026 = lojaRows.filter(function(r){
+            if(r.data.substring(0,4) !== String(currentYear)) return false;
+            if(parseInt(r.data.substring(5,7)) !== mo) return false;
+            var diaDelMes = r.data.substring(8,10);
+            return dias2025.indexOf(diaDelMes) >= 0;
+          }).reduce(function(s,r){ return s + (parseFloat(r.montante)||0); }, 0);
+        }
+
+        // Ajuste: restar ventas nocturnas si aplica
+        var total2026Ajust = total2026 - nocturnoVal;
+        var diff = (nDias2025 > 0 || total2026 > 0) ? (total2026Ajust - total2025) : null;
+
+        // Acumulados para el total
+        if(nDias2025 > 0 || total2026 > 0) {
+          totalBase  += total2025;
+          totalAjust += total2026Ajust;
+          totalDiff  += (diff || 0);
+        }
+
+        // Solo mostrar meses con algún dato
+        var tr = document.createElement('tr');
+        var bg = mo % 2 === 0 ? '#ffffff' : '#fafafa';
+        var isFuture = mo > currentMonth;
+
+        // Mes
+        var tdMes = document.createElement('td');
+        tdMes.textContent = moName;
+        tdMes.setAttribute('style','padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:700;white-space:nowrap;text-align:left;');
+        tdMes.style.setProperty('background',bg,'important');
+        tdMes.style.setProperty('color','#111111','important');
+        tr.appendChild(tdMes);
+
+        // Días 2025
+        var tdDias = document.createElement('td');
+        tdDias.textContent = nDias2025 > 0 ? nDias2025 + ' dias' : '—';
+        tdDias.setAttribute('style','padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:right;white-space:nowrap;');
+        tdDias.style.setProperty('background',bg,'important');
+        tdDias.style.setProperty('color','#888888','important');
+        tr.appendChild(tdDias);
+
+        // Total 2025
+        var td25 = document.createElement('td');
+        td25.textContent = nDias2025 > 0 ? _fmtEur(total2025) : '—';
+        td25.setAttribute('style','padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;white-space:nowrap;');
+        td25.style.setProperty('background',bg,'important');
+        td25.style.setProperty('color','#333333','important');
+        tr.appendChild(td25);
+
+        // Total 2026 ajustado
+        var td26 = document.createElement('td');
+        td26.textContent = (nDias2025 > 0 || total2026 > 0) ? _fmtEur(total2026Ajust) : '—';
+        td26.setAttribute('style','padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;white-space:nowrap;');
+        td26.style.setProperty('background',bg,'important');
+        td26.style.setProperty('color','#111111','important');
+        tr.appendChild(td26);
+
+        // Diferença
+        var tdDiff = document.createElement('td');
+        if(diff !== null) {
+          tdDiff.textContent = (diff >= 0 ? '+' : '') + _fmtEur(diff);
+          tdDiff.style.setProperty('color', diff >= 0 ? '#2a6a40' : '#a03020','important');
+        } else {
+          tdDiff.textContent = '—';
+          tdDiff.style.setProperty('color','#cccccc','important');
+        }
+        tdDiff.setAttribute('style','padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;white-space:nowrap;');
+        tdDiff.style.setProperty('background',bg,'important');
+        tr.appendChild(tdDiff);
+
+        // Campo ventas nocturnas (solo jun/jul/ago)
+        var tdNoct = document.createElement('td');
+        tdNoct.setAttribute('style','padding:5px 8px;border-bottom:1px solid #f0f0f0;text-align:right;white-space:nowrap;');
+        tdNoct.style.setProperty('background',bg,'important');
+        if(isNocturnoMes) {
+          var inpNoct = document.createElement('input');
+          inpNoct.type = 'number';
+          inpNoct.step = '0.01';
+          inpNoct.min = '0';
+          inpNoct.placeholder = '0,00';
+          inpNoct.value = nocturnoVal > 0 ? nocturnoVal : '';
+          inpNoct.setAttribute('style','width:90px;padding:4px 7px;font-size:.75rem;font-weight:700;border:1.5px solid #e0e0e0;border-radius:6px;outline:none;text-align:right;font-family:MontserratLight,sans-serif;');
+          inpNoct.style.setProperty('background','#ffffff','important');
+          inpNoct.style.setProperty('color','#111111','important');
+          // Al cambiar el valor, guardar en estado y re-renderizar
+          inpNoct.addEventListener('change',function(){
+            var v = parseFloat(inpNoct.value) || 0;
+            _premiosNocturno[nocturnoKey] = v;
+            _renderPremios();
+          });
+          tdNoct.appendChild(inpNoct);
+        } else {
+          tdNoct.textContent = '—';
+          tdNoct.style.setProperty('color','#cccccc','important');
+        }
+        tr.appendChild(tdNoct);
+
+        tbody.appendChild(tr);
+      }
+
+      t.appendChild(tbody);
+
+      // Fila total
+      var tfoot = document.createElement('tfoot');
+      var ftr = document.createElement('tr');
+      ['TOTAL','','','','',''].forEach(function(v,fi){
+        var td = document.createElement('td');
+        if(fi === 0) {
+          td.textContent = 'TOTAL';
+          td.setAttribute('style','padding:8px 10px;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:left;border-top:2px solid #ddd;');
+          td.style.setProperty('background','#f5f5f5','important');
+          td.style.setProperty('color','#555555','important');
+        } else if(fi === 2) {
+          td.textContent = _fmtEur(totalBase);
+          td.setAttribute('style','padding:8px 10px;font-weight:800;text-align:right;border-top:2px solid #ddd;white-space:nowrap;');
+          td.style.setProperty('background','#f5f5f5','important');
+          td.style.setProperty('color','#333333','important');
+        } else if(fi === 3) {
+          td.textContent = _fmtEur(totalAjust);
+          td.setAttribute('style','padding:8px 10px;font-weight:800;text-align:right;border-top:2px solid #ddd;white-space:nowrap;');
+          td.style.setProperty('background','#f5f5f5','important');
+          td.style.setProperty('color','#111111','important');
+        } else if(fi === 4) {
+          td.textContent = (totalDiff >= 0 ? '+' : '') + _fmtEur(totalDiff);
+          td.setAttribute('style','padding:8px 10px;font-weight:900;text-align:right;border-top:2px solid #ddd;font-size:.88rem;white-space:nowrap;');
+          td.style.setProperty('background','#f5f5f5','important');
+          td.style.setProperty('color', totalDiff >= 0 ? '#2a6a40' : '#a03020','important');
+        } else {
+          td.setAttribute('style','padding:8px 10px;border-top:2px solid #ddd;');
+          td.style.setProperty('background','#f5f5f5','important');
+        }
+        ftr.appendChild(td);
+      });
+      tfoot.appendChild(ftr);
+      t.appendChild(tfoot);
+
+      tw.appendChild(t);
+      card.appendChild(tw);
+
+      // Nota explicativa de nocturno si aplica
+      var noctKeys = ['06','07','08'].filter(function(mm){
+        return (_premiosNocturno[loja+':'+mm]||0) > 0;
+      });
+      if(noctKeys.length > 0) {
+        var noctNota = _el('div','font-size:.65rem;margin-top:2px;');
+        noctNota.style.setProperty('color','#888888','important');
+        var noctTotal = noctKeys.reduce(function(s,mm){ return s + (parseFloat(_premiosNocturno[loja+':'+mm])||0); },0);
+        noctNota.textContent = '* Vendas noturnas subtraídas: ' + _fmtEur(noctTotal) + ' (Jun/Jul/Ago)';
+        card.appendChild(noctNota);
+      }
+
+      c.appendChild(card);
+    });
+
+    // Nota final
+    var nota = _el('div','font-size:.62rem;margin-top:4px;padding:12px 16px;border-radius:9px;border:1px solid #e8e8e8;line-height:1.7;');
+    nota.style.setProperty('background','#fafafa','important');
+    nota.style.setProperty('color','#888888','important');
+    nota.innerHTML = '<b style="color:#555555">Metodologia:</b> Para cada mês, conta-se os dias com registo em 2025 e compara-se apenas esses mesmos dias de calendário em 2026. As vendas noturnas (Jun/Jul/Ago) são introduzidas manualmente e subtraídas de 2026 para igualar a comparação.';
+    c.appendChild(nota);
+  }
+
   function _sumObj(obj){
     if(Array.isArray(obj)) return obj.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     return Object.keys(obj).reduce(function(s,k){return s+_sumObj(obj[k]);},0);
@@ -2904,7 +3172,7 @@
       var el=document.getElementById(id);
       if(el) el.setAttribute('style',id===_activeZoneBtn?S.pillAct:S.pill);
     });
-    ['hadm-tab-vendas','hadm-tab-carregar','hadm-tab-proyeccion'].forEach(function(id){
+    ['hadm-tab-vendas','hadm-tab-carregar','hadm-tab-proyeccion','hadm-tab-premios'].forEach(function(id){
       var el=document.getElementById(id);if(!el)return;
       var tab=id.replace('hadm-tab-','');
       el.setAttribute('style',tab===_activeTab?S.tabAct:S.tab);
@@ -2924,7 +3192,7 @@
     });
 
     // Tabs — solo vendas y carregar (estacional eliminado)
-    ['vendas','carregar','proyeccion'].forEach(function(tab){
+    ['vendas','carregar','proyeccion','premios'].forEach(function(tab){
       var btn=document.getElementById('hadm-tab-'+tab);
       if(!btn)return;
       btn.addEventListener('click',function(){_activeTab=tab;_applyBtnStyles();_render();});

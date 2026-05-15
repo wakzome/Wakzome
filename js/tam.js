@@ -740,75 +740,66 @@
     ban.className  = '';
 
     if (tamInvoices.length === 1) {
-      tamRenderSingleMeta(tamInvoices[0], meta);
-      tamRenderInvoiceBanner(tamInvoices[0], ban);
-      ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
+      var r0 = tamInvoices[0];
+      tamRenderInvoiceBanner(r0, ban);
+      ban.classList.add(r0.xv.fullyAgree ? 'ok' : 'err');
 
-      // Quick distribution buttons for single invoice
+      // Build header identical to multi-invoice block header
+      meta.className = 'tam-invoice-block-header tam-inv-color-0';
+      meta.style.cssText = '';
+
       var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
-      var singleQuick = document.createElement('div');
-      singleQuick.className = 'tam-inv-quick-wrap';
-      singleQuick.style.marginTop = '6px';
-      if (qd0) {
-        singleQuick.innerHTML =
-          '<span class="tam-inv-quick-active">' +
-            (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
-          '</span>' +
-          '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>';
-      } else {
-        singleQuick.innerHTML =
-          '<span class="tam-quick-label">distribuição rápida:</span>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%FNC</button>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%PXO</button>' +
-          '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50 / 50</button>';
-      }
-      singleQuick.querySelectorAll('[data-mode]').forEach(function(btn){
+      var quickBtnsHtml = qd0
+        ? '<div class="tam-inv-quick-wrap">' +
+            '<span class="tam-inv-quick-active">' +
+              (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
+            '</span>' +
+            '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>' +
+          '</div>'
+        : '<div class="tam-inv-quick-wrap">' +
+            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%FNC</button>' +
+            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%PXO</button>' +
+            '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50/50</button>' +
+          '</div>';
+
+      meta.innerHTML =
+        '<button class="tam-inv-toggle-btn tam-single-toggle-btn" id="tam-single-toggle-btn" title="expandir / minimizar">' +
+          (tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;') +
+        '</button>' +
+        '<span class="tam-inv-num">' + tamEsc(r0.invoiceNo) + '</span>' +
+        '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' · ' +
+          r0.grouped.length + ' refs · ' + r0.totalPieces + ' un · ' + r0.shipPkgs + ' pac.</span>' +
+        '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' €</span>' +
+        quickBtnsHtml +
+        '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '">' +
+          (tamEditMode[0] ? '✓ fechar edição' : '— editar') +
+        '</button>' +
+        '<button class="tam-inv-stock-btn">📦 ingreso de stock</button>' +
+        '<button class="tam-inv-guia-btn">📋 guía</button>' +
+        '<button class="tam-inv-export-btn">⬇ exportar</button>' +
+        '<button class="tam-inv-remove-btn" title="remover fatura da sessão">✕</button>';
+
+      // Toggle
+      meta.querySelector('.tam-single-toggle-btn').addEventListener('click', function(){
+        tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
+        tamApplyCollapseState();
+      });
+      // Quick distribution
+      meta.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn){
         btn.addEventListener('click', function(){
           tamQuickDistribInvoice(0, btn.getAttribute('data-mode'));
         });
       });
-      meta.appendChild(singleQuick);
-
-      var singleToggle = document.createElement('button');
-      singleToggle.className = 'tam-inv-toggle-btn tam-single-toggle-btn';
-      singleToggle.id = 'tam-single-toggle-btn';
-      singleToggle.title = 'expandir / minimizar';
-      singleToggle.innerHTML = tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;';
-      singleToggle.addEventListener('click', function(){
-        tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
-        tamApplyCollapseState();
-      });
-      meta.appendChild(singleToggle);
-
-      var singleEdit = document.createElement('button');
-      singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
-      singleEdit.textContent = tamEditMode[0] ? '✓ fechar edição' : '✏ editar tabela';
-      singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
-      meta.appendChild(singleEdit);
-      var singleRemove = document.createElement('button');
-      singleRemove.className = 'tam-inv-remove-btn';
-      singleRemove.title = 'remover fatura da sessão';
-      singleRemove.textContent = '✕ remover fatura';
-      singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
-      meta.appendChild(singleRemove);
-
-      var singleStock = document.createElement('button');
-      singleStock.className = 'tam-inv-stock-btn';
-      singleStock.textContent = '📦 ingreso de stock';
-      singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
-      meta.appendChild(singleStock);
-
-      var singleGuia = document.createElement('button');
-      singleGuia.className = 'tam-inv-guia-btn';
-      singleGuia.textContent = '📋 guía';
-      singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
-      meta.appendChild(singleGuia);
-
-      var singleExport = document.createElement('button');
-      singleExport.className = 'tam-inv-export-btn';
-      singleExport.textContent = '⬇ exportar';
-      singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
-      meta.appendChild(singleExport);
+      // Edit
+      meta.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){ tamToggleEditMode(0); });
+      // Stock
+      meta.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){ tamShowStockModal(0); });
+      // Guia
+      meta.querySelector('.tam-inv-guia-btn').addEventListener('click', function(){ tamShowGuiaModal(0); });
+      // Export
+      meta.querySelector('.tam-inv-export-btn').addEventListener('click', function(){ tamExportInvoiceCSV(r0); });
+      // Remove
+      meta.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
       } else {
@@ -6261,7 +6252,7 @@
       '.tam-session-btn:hover { background:#f0f0f0; border-color:#555; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
-      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; order:1; }',
+      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
       '.tam-inv-toggle-btn:hover { color:#000; }',
       '#tam-rec-toggle-btn { font-size:1.05rem; color:#999; }',
       /* iPad: bigger toggle button */
@@ -6305,9 +6296,9 @@
       /* Quick undo: red tint like proc */
       '.tam-invoice-block-header .tam-inv-quick-undo { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
       '.tam-invoice-block-header .tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.12)!important; }',
-      '.tam-inv-num { font-size:1.5rem; font-weight:800; color:#000!important; letter-spacing:.02em; order:1; }',
-      '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; flex:1; order:1; }',
-      '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; margin-left:auto; order:1; }',
+      '.tam-inv-num { font-size:1.5rem; font-weight:800; color:#000!important; letter-spacing:.02em; }',
+      '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; flex:1; }',
+      '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; margin-left:auto; }',
       '.tam-inv-table-wrap { overflow-x:auto; border:1px solid #e0e0e0; border-top:none; border-radius:0 0 12px 12px; }',
       '.tam-inv-separator { height:3px; background:#000; margin:40px 0; width:100%; max-width:960px; }',
       /* Validation banner inside block */
@@ -6547,7 +6538,7 @@
       '.tam-ref-over td strong { color:#9B4D4D!important; }',
 
       /* ── Per-invoice quick distribution buttons (proc style) ── */
-      '.tam-inv-quick-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; order:1; }',
+      '.tam-inv-quick-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }',
       '.tam-inv-quick-btn { padding:3px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.14s; white-space:nowrap; text-transform:lowercase; }',
       '.tam-inv-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-inv-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
@@ -6559,13 +6550,9 @@
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
       '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { padding:5px 13px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-inv-stock-btn { order:1; }',
-      '.tam-inv-guia-btn { order:2; }',
-      '.tam-inv-export-btn { order:2; }',
-      '.tam-invoice-block-header::after { content:""; flex-basis:100%; order:1; height:0; }',
 
       /* ── Edit mode button (proc style) ── */
-      '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; order:1; }',
+      '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-edit-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-inv-edit-btn.active { background:#4A7C6F; color:#fff; border-color:#4A7C6F; }',
       '.tam-inv-edit-btn.active:hover { background:#3a6b60; border-color:#3a6b60; }',
@@ -6588,7 +6575,7 @@
       '.tam-edit-cancel:hover { background:#f5f5f5; opacity:1; }',
 
       /* ── Remove button per invoice (proc style) ── */
-      '.tam-inv-remove-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; order:2; }',
+      '.tam-inv-remove-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-remove-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
 
             /* ── Stock modal (proc-or-modal system — identical to processamento.js) ── */

@@ -2498,22 +2498,10 @@
 
   // Obtiene la URL pública del bucket horarios
   function _premiosStorageUrl(filename) {
-    // sbAdmin._supabaseUrl está disponible globalmente
-    var base = (typeof sbAdmin !== 'undefined' && sbAdmin.storageUrl)
-      ? sbAdmin.storageUrl
-      : (typeof sbAdmin !== 'undefined' && sbAdmin.supabaseUrl)
-        ? sbAdmin.supabaseUrl
-        : '';
-    // Intentar extraer la URL base del proyecto desde supabase-js
-    if(!base && typeof sbAdmin !== 'undefined') {
-      try { base = sbAdmin.storage.url || ''; } catch(e){}
-    }
-    // Fallback: leer desde la variable global de config si existe
-    if(!base && typeof SUPABASE_URL !== 'undefined') base = SUPABASE_URL;
-    if(!base) return null;
-    // Normalizar — quitar /rest/v1 si viene de ahí
-    base = base.replace(/\/rest\/v1.*$/, '').replace(/\/$/, '');
-    return base + '/storage/v1/object/public/horarios/' + filename;
+    try {
+      var result = sbAdmin.storage.from('horarios').getPublicUrl(filename);
+      return (result && result.data && result.data.publicUrl) ? result.data.publicUrl : null;
+    } catch(e) { return null; }
   }
 
   // Calcula el número de semana para una fecha (lunes de la semana)
@@ -3009,24 +2997,25 @@
       for(var pmo=1; pmo<=lojaLastMonth; pmo++) {
         if(PREMIOS_MESES_ACTIVOS.indexOf(pmo) < 0) continue;
         if(!PREMIOS_MINIMO[loja]) continue;
-        // Recuperar diff de ese mes (necesitamos recalcular)
-        var pmoStr = _pad(pmo);
-        var pmoTo = (pmo === lojaLastMonth) ? lojaLastDay : (String(currentYear)+'-'+pmoStr+'-31');
-        var p2025 = lojaRows.filter(function(r){
-          return r.data.substring(0,4)==='2025' && parseInt(r.data.substring(5,7))===pmo;
-        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var p2026 = lojaRows.filter(function(r){
-          return r.data.substring(0,4)===String(currentYear) &&
-                 parseInt(r.data.substring(5,7))===pmo && r.data<=pmoTo;
-        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var pDom = lojaRows.filter(function(r){
-          return r.data.substring(0,4)===String(currentYear) &&
-                 parseInt(r.data.substring(5,7))===pmo && r.data<=pmoTo &&
-                 _strToDate(r.data).getDay()===0;
-        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var pNoct = parseFloat(_premiosNocturno[loja+':'+pmoStr])||0;
-        var pDiff = (p2025>0||p2026>0) ? (p2026-pDom-pNoct-p2025) : null;
-        premiosMesesActivos.push({mo:pmo, diff:pDiff});
+        (function(m) {
+          var pmoStr = _pad(m);
+          var pmoTo = (m === lojaLastMonth) ? lojaLastDay : (String(currentYear)+'-'+pmoStr+'-31');
+          var p2025 = lojaRows.filter(function(r){
+            return r.data.substring(0,4)==='2025' && parseInt(r.data.substring(5,7))===m;
+          }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+          var p2026 = lojaRows.filter(function(r){
+            return r.data.substring(0,4)===String(currentYear) &&
+                   parseInt(r.data.substring(5,7))===m && r.data<=pmoTo;
+          }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+          var pDom = lojaRows.filter(function(r){
+            return r.data.substring(0,4)===String(currentYear) &&
+                   parseInt(r.data.substring(5,7))===m && r.data<=pmoTo &&
+                   _strToDate(r.data).getDay()===0;
+          }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+          var pNoct = parseFloat(_premiosNocturno[loja+':'+pmoStr])||0;
+          var pDiff = (p2025>0||p2026>0) ? (p2026-pDom-pNoct-p2025) : null;
+          premiosMesesActivos.push({mo:m, diff:pDiff});
+        })(pmo);
       }
 
       if(premiosMesesActivos.length > 0) {

@@ -744,60 +744,51 @@
       tamRenderInvoiceBanner(r0, ban);
       ban.classList.add(r0.xv.fullyAgree ? 'ok' : 'err');
 
-      // Use same header structure as multi-invoice
-      meta.className = 'tam-invoice-block-header tam-inv-color-0 show';
-
       var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
       var quickBtnsHtml = qd0
         ? '<div class="tam-inv-quick-wrap">' +
             '<span class="tam-inv-quick-active">' +
               (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
             '</span>' +
-            '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>' +
+            '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">&#x21a9; desfazer</button>' +
           '</div>'
         : '<div class="tam-inv-quick-wrap">' +
-            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%FNC</button>' +
-            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%PXO</button>' +
+            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%fnc</button>' +
+            '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%pxo</button>' +
             '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50/50</button>' +
           '</div>';
 
+      meta.className = 'show';
       meta.innerHTML =
         '<button class="tam-inv-toggle-btn tam-single-toggle-btn" id="tam-single-toggle-btn" title="expandir / minimizar">' +
           (tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;') +
         '</button>' +
         '<span class="tam-inv-num">' + tamEsc(r0.invoiceNo) + '</span>' +
-        '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' · ' +
-          r0.grouped.length + ' refs · ' + r0.totalPieces + ' un · ' + r0.shipPkgs + ' pac.</span>' +
-        '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' €</span>' +
+        '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' &middot; ' +
+          r0.grouped.length + ' refs &middot; ' + r0.totalPieces + ' un &middot; ' + r0.shipPkgs + ' pac.</span>' +
+        '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' &euro;</span>' +
         quickBtnsHtml +
         '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '">' +
-          (tamEditMode[0] ? '✓ fechar edição' : '— editar') +
+          (tamEditMode[0] ? '&#x2713; fechar edi&#xe7;&#xe3;o' : '&#x2014; editar') +
         '</button>' +
-        '<button class="tam-inv-stock-btn">📦 ingreso de stock</button>' +
-        '<button class="tam-inv-guia-btn">📋 guía</button>' +
-        '<button class="tam-inv-export-btn">⬇ exportar</button>' +
-        '<button class="tam-inv-remove-btn" title="remover fatura da sessão">✕</button>';
+        '<button class="tam-inv-stock-btn">&#x1f4e6; ingreso de stock</button>' +
+        '<button class="tam-inv-guia-btn">&#x1f4cb; gu&#xed;a</button>' +
+        '<button class="tam-inv-export-btn">&#x2b07; exportar</button>' +
+        '<button class="tam-inv-remove-btn" title="remover fatura">&#x2715;</button>';
 
-      // Toggle
-      meta.querySelector('.tam-single-toggle-btn').addEventListener('click', function(){
+      meta.querySelector('#tam-single-toggle-btn').addEventListener('click', function(){
         tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
         tamApplyCollapseState();
       });
-      // Quick distribution
       meta.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn){
         btn.addEventListener('click', function(){
           tamQuickDistribInvoice(0, btn.getAttribute('data-mode'));
         });
       });
-      // Edit
       meta.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){ tamToggleEditMode(0); });
-      // Stock
       meta.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){ tamShowStockModal(0); });
-      // Guia
       meta.querySelector('.tam-inv-guia-btn').addEventListener('click', function(){ tamShowGuiaModal(0); });
-      // Export
       meta.querySelector('.tam-inv-export-btn').addEventListener('click', function(){ tamExportInvoiceCSV(r0); });
-      // Remove
       meta.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
@@ -6310,9 +6301,10 @@
       '.tam-inv-banner .tam-engine-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }',
 
       /* ── Meta banner (proc style) ── */
-      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:1px solid #e0e0e0; border-bottom:none; border-radius:12px 12px 0 0; padding:18px 24px; margin-bottom:0; font-size:.85rem; font-weight:700; color:#000; flex-wrap:nowrap; gap:10px; align-items:center; box-sizing:border-box; }',
+      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:none; padding:10px 0; margin-bottom:12px; font-size:.85rem; font-weight:700; color:#000; flex-wrap:wrap; gap:10px 20px; align-items:center; }',
       '#tam-invoice-meta.show { display:flex; }',
-      '#tam-invoice-meta.tam-invoice-block-header { display:flex!important; }',
+      '#tam-invoice-meta .tam-mi { display:flex; flex-direction:column; gap:1px; align-items:center; text-align:center; }',
+      '#tam-invoice-meta .tam-mi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
 
       /* ── Validation banner (proc style) ── */
       '#tam-validation-banner { display:none; width:100%; max-width:960px; border:none; padding:8px 0 12px; margin-bottom:0; font-size:.75rem; font-weight:700; flex-wrap:wrap; gap:6px 24px; }',
@@ -6922,8 +6914,8 @@
       '  .tam-invoice-block-header button:not(.tam-inv-toggle-btn) { font-size:.68rem!important; padding:3px 8px!important; }',
       '  .tam-inv-quick-wrap { flex-wrap:wrap; gap:3px; }',
       /* Invoice meta single (above table) */
-      '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; padding:14px 14px; }',
-      '  #tam-invoice-meta button { font-size:.68rem!important; padding:3px 8px!important; }',
+      '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; }',
+      '  #tam-invoice-meta button { font-size:.7rem!important; padding:5px 10px!important; }',
       /* Session bar */
       '  #tam-session-bar { flex-wrap:wrap; gap:6px; padding:8px 0; }',
       '  #tam-session-name { max-width:100%; min-width:0; flex:1 1 140px; font-size:.78rem; }',

@@ -2528,12 +2528,16 @@
   }
 
   // Carga un CSV desde Storage (con caché)
+  // Semanas < 17 usan datosfnc.csv; desde s17 usan porto_sN.csv
+  var _SEMANA_PORTO = 17; // primera semana con archivo independiente
+
   function _premiosLoadCSV(weekNum) {
-    var key = 'porto_s' + weekNum;
+    var filename = weekNum < _SEMANA_PORTO ? 'datosfnc.csv' : 'porto_s' + weekNum + '.csv';
+    var key = weekNum < _SEMANA_PORTO ? 'datosfnc' : 'porto_s' + weekNum;
     if(_premiosCSVCache.hasOwnProperty(key)) {
       return Promise.resolve(_premiosCSVCache[key]);
     }
-    var url = _premiosStorageUrl(key + '.csv');
+    var url = _premiosStorageUrl(filename);
     if(!url) return Promise.resolve(null);
     return fetch(url).then(function(r){
       if(!r.ok) { _premiosCSVCache[key]=null; return null; }

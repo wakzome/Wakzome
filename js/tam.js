@@ -744,10 +744,8 @@
       tamRenderInvoiceBanner(r0, ban);
       ban.classList.add(r0.xv.fullyAgree ? 'ok' : 'err');
 
-      // Neutralize the #tam-invoice-meta ID CSS by overriding with inline style,
-      // then apply the block-header class structure
+      // Use same header structure as multi-invoice
       meta.className = 'tam-invoice-block-header tam-inv-color-0';
-      meta.style.cssText = 'display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:10px!important;padding:18px 24px!important;background:transparent!important;border:1px solid #e0e0e0!important;border-bottom:none!important;border-radius:12px 12px 0 0!important;margin-bottom:0!important;width:100%!important;max-width:960px!important;box-sizing:border-box!important;overflow-x:auto!important;';
 
       var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
       var quickBtnsHtml = qd0

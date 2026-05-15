@@ -6311,10 +6311,9 @@
       '.tam-inv-banner .tam-engine-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }',
 
       /* ── Meta banner (proc style) ── */
-      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:none; padding:10px 0; margin-bottom:12px; font-size:.85rem; font-weight:700; color:#000; flex-wrap:wrap; gap:10px 20px; align-items:center; }',
+      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:1px solid #e0e0e0; border-bottom:none; border-radius:12px 12px 0 0; padding:18px 24px; margin-bottom:0; font-size:.85rem; font-weight:700; color:#000; flex-wrap:nowrap; gap:10px; align-items:center; box-sizing:border-box; }',
       '#tam-invoice-meta.show { display:flex; }',
-      '#tam-invoice-meta .tam-mi { display:flex; flex-direction:column; gap:1px; align-items:center; text-align:center; }',
-      '#tam-invoice-meta .tam-mi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
+      '#tam-invoice-meta.tam-invoice-block-header { display:flex!important; }',
 
       /* ── Validation banner (proc style) ── */
       '#tam-validation-banner { display:none; width:100%; max-width:960px; border:none; padding:8px 0 12px; margin-bottom:0; font-size:.75rem; font-weight:700; flex-wrap:wrap; gap:6px 24px; }',
@@ -6924,8 +6923,8 @@
       '  .tam-invoice-block-header button:not(.tam-inv-toggle-btn) { font-size:.68rem!important; padding:3px 8px!important; }',
       '  .tam-inv-quick-wrap { flex-wrap:wrap; gap:3px; }',
       /* Invoice meta single (above table) */
-      '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; }',
-      '  #tam-invoice-meta button { font-size:.7rem!important; padding:5px 10px!important; }',
+      '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; padding:14px 14px; }',
+      '  #tam-invoice-meta button { font-size:.68rem!important; padding:3px 8px!important; }',
       /* Session bar */
       '  #tam-session-bar { flex-wrap:wrap; gap:6px; padding:8px 0; }',
       '  #tam-session-name { max-width:100%; min-width:0; flex:1 1 140px; font-size:.78rem; }',

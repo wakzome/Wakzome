@@ -745,7 +745,7 @@
       ban.classList.add(r0.xv.fullyAgree ? 'ok' : 'err');
 
       // Use same header structure as multi-invoice
-      meta.className = 'tam-invoice-block-header tam-inv-color-0';
+      meta.className = 'tam-invoice-block-header tam-inv-color-0 show';
 
       var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
       var quickBtnsHtml = qd0

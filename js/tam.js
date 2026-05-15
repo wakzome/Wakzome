@@ -764,15 +764,15 @@
           (tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;') +
         '</button>' +
         '<span class="tam-inv-num">' + tamEsc(r0.invoiceNo) + '</span>' +
-        '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' &middot; ' +
-          r0.grouped.length + ' refs &middot; ' + r0.totalPieces + ' un &middot; ' + r0.shipPkgs + ' pac.</span>' +
-        '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' &euro;</span>' +
+        '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' � ' +
+          r0.grouped.length + ' refs � ' + r0.totalPieces + ' un � ' + r0.shipPkgs + ' pac.</span>' +
+        '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' �</span>' +
         quickBtnsHtml +
         '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '">' +
-          (tamEditMode[0] ? '&#x2713; fechar edi&#xe7;&#xe3;o' : '&#x2014; editar') +
+          (tamEditMode[0] ? '&#x2713; fechar edi��o' : '&#x2014; editar') +
         '</button>' +
         '<button class="tam-inv-stock-btn">&#x1f4e6; ingreso de stock</button>' +
-        '<button class="tam-inv-guia-btn">&#x1f4cb; gu&#xed;a</button>' +
+        '<button class="tam-inv-guia-btn">&#x1f4cb; gu�a</button>' +
         '<button class="tam-inv-export-btn">&#x2b07; exportar</button>' +
         '<button class="tam-inv-remove-btn" title="remover fatura">&#x2715;</button>';
 
@@ -6141,7 +6141,29 @@
     var s = document.createElement('style');
     s.id = 'tam-v9-styles';
     s.textContent = [
-      /* ── Freight alert — transporte não incluído ── */
+      /* TAM MODULE STYLES - all base CSS lives here */
+      '#tab-tam { width:100%; overflow:visible; align-items:center; padding-bottom:40px; }',
+      '#tab-tam.active { display:flex!important; flex-direction:column; flex:1; overflow:hidden; }',
+      '#tab-tam.active.tam-loaded { flex:none!important; overflow:visible!important; }',
+      '#admin-app.tam-loaded { overflow-y:auto!important; overflow-x:hidden!important; }',
+      '#tam-upload-zone { display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:24px; width:100%; max-width:480px; }',
+      '#tam-upload-label { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; min-height:130px; border:2px dashed #ccc; border-radius:16px; cursor:pointer; transition:border-color .2s,background .2s; padding:20px; text-align:center; color:#000; font-size:.95rem; font-weight:600; }',
+      '#tam-upload-label:hover, #tam-upload-label.drag-over { border-color:#555; background:#f9f9f9; }',
+      '#tam-upload-label .upload-icon { font-size:2.2rem; margin-bottom:8px; }',
+      '#tam-file-input { display:none; }',
+      '#tam-file-name { font-size:.85rem; color:#000; font-weight:600; min-height:18px; }',
+      '#tam-status-msg { font-size:.9rem; font-weight:600; color:#000; min-height:20px; text-align:center; }',
+      '#tam-export-btn { display:none; margin-top:16px; padding:9px 28px; font-size:.88rem; font-weight:600; cursor:pointer; border:1px solid #555; border-radius:12px; background:#fff; font-family:\'MontserratLight\',sans-serif; transition:background .2s,color .2s; }',
+      '#tam-export-btn.show { display:inline-block!important; }',
+      '#tam-export-btn:hover { background:#555; color:#fff; }',
+      '#tam-invoice-meta { display:none!important; width:100%; max-width:960px; background:transparent!important; border:1px solid #e0e0e0!important; border-bottom:none!important; border-radius:12px 12px 0 0!important; padding:18px 24px!important; margin-bottom:0!important; flex-wrap:nowrap!important; gap:10px!important; align-items:center!important; box-sizing:border-box; font-size:.85rem; font-weight:700; color:#000; }',
+      '#tam-invoice-meta.show { display:flex!important; }',
+      '#tam-validation-banner { display:none!important; width:100%; max-width:960px; border:none!important; padding:8px 0 12px!important; margin-bottom:0!important; font-size:.75rem; font-weight:700; flex-wrap:wrap; gap:6px 24px; }',
+      '#tam-validation-banner.ok  { display:flex!important; color:#4A7C6F!important; background:transparent!important; }',
+      '#tam-validation-banner.err { display:flex!important; color:#9B4D4D!important; background:transparent!important; }',
+      '#tam-validation-banner .tam-vi { display:flex; flex-direction:column; gap:0; align-items:center; text-align:center; }',
+      '#tam-validation-banner .tam-vi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
+/* ── Freight alert — transporte não incluído ── */
       '.tam-freight-alert { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; padding:8px 12px; background:#fff8e1; border:1.5px solid #ffc107; border-radius:9px; font-size:.8rem; color:#6d4c00; }',
       '.tam-freight-icon { font-size:1.1rem; }',
       '.tam-freight-msg { flex:1; min-width:180px; }',

@@ -2464,6 +2464,316 @@
   // Estado de ventas nocturnas por tienda/mes: { 'LOJA:MM': valor }
   var _premiosNocturno = {};
 
+  // ── Configuración del premio ──
+  // Meses activos: Abril(4)–Septiembre(9)
+  var PREMIOS_MESES_ACTIVOS = [4,5,6,7,8,9];
+  // Valor del premio por mes
+  var PREMIOS_VALOR = {4:100,5:100,6:100,7:200,8:200,9:100};
+  // Mínimo de diferencia por tienda para ganar el premio
+  var PREMIOS_MINIMO = {
+    'MEZKA AVENIDA': 1700,
+    'MEZKA MERCADO': 1700,
+    'SHANA':         1250,
+    'MAXX':          1250
+  };
+  // Mapeo nombre corto CSV → nombre completo
+  var PREMIOS_PERSONAS = [
+    {csv:'SANDRA M.',  nombre:'Sandra Melim'},
+    {csv:'EDNA M.',    nombre:'Edna Melim'},
+    {csv:'CARLA A.',   nombre:'Carla Alves'},
+    {csv:'MARILIA S.', nombre:'Marialia Silva'}
+  ];
+  // Mapeo nombre en CSV de tienda → loja key
+  var PREMIOS_CSV_LOJA = {
+    'MEZKA AVENIDA': 'MEZKA AVENIDA',
+    'MEZKA MERCADO': 'MEZKA MERCADO',
+    'SHANA':         'SHANA',
+    'MAXX':          'MAXX'
+  };
+  // Base de semanas (semana 1 = 2026-01-05)
+  var PREMIOS_BASE_DATE = new Date('2026-01-05T00:00:00');
+
+  // Caché de CSVs ya cargados: { 'porto_sN': texto | null }
+  var _premiosCSVCache = {};
+
+  // Obtiene la URL pública del bucket horarios
+  function _premiosStorageUrl(filename) {
+    // sbAdmin._supabaseUrl está disponible globalmente
+    var base = (typeof sbAdmin !== 'undefined' && sbAdmin.storageUrl)
+      ? sbAdmin.storageUrl
+      : (typeof sbAdmin !== 'undefined' && sbAdmin.supabaseUrl)
+        ? sbAdmin.supabaseUrl
+        : '';
+    // Intentar extraer la URL base del proyecto desde supabase-js
+    if(!base && typeof sbAdmin !== 'undefined') {
+      try { base = sbAdmin.storage.url || ''; } catch(e){}
+    }
+    // Fallback: leer desde la variable global de config si existe
+    if(!base && typeof SUPABASE_URL !== 'undefined') base = SUPABASE_URL;
+    if(!base) return null;
+    // Normalizar — quitar /rest/v1 si viene de ahí
+    base = base.replace(/\/rest\/v1.*$/, '').replace(/\/$/, '');
+    return base + '/storage/v1/object/public/horarios/' + filename;
+  }
+
+  // Calcula el número de semana para una fecha (lunes de la semana)
+  function _premiosWeekNum(mondayDate) {
+    var ms = new Date(mondayDate.getFullYear()+'-'+_pad(mondayDate.getMonth()+1)+'-'+_pad(mondayDate.getDate())+'T00:00:00') - PREMIOS_BASE_DATE;
+    return Math.round(ms / (7 * 86400000)) + 1;
+  }
+
+  // Devuelve los lunes de semanas que tienen al menos un día en el mes dado
+  function _premiosWeeksForMonth(year, month) {
+    // Primer y último día del mes
+    var firstDay = new Date(year, month-1, 1);
+    var lastDay  = new Date(year, month, 0); // día 0 del mes siguiente = último del mes
+    var weeks = [];
+    // Buscar el lunes anterior o igual al firstDay
+    var d = new Date(firstDay);
+    var dow = d.getDay(); // 0=dom,1=lun,...
+    d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1)); // retroceder al lunes
+    while(d <= lastDay) {
+      weeks.push(new Date(d));
+      d.setDate(d.getDate() + 7);
+    }
+    return weeks;
+  }
+
+  // Carga un CSV desde Storage (con caché)
+  function _premiosLoadCSV(weekNum) {
+    var key = 'porto_s' + weekNum;
+    if(_premiosCSVCache.hasOwnProperty(key)) {
+      return Promise.resolve(_premiosCSVCache[key]);
+    }
+    var url = _premiosStorageUrl(key + '.csv');
+    if(!url) return Promise.resolve(null);
+    return fetch(url).then(function(r){
+      if(!r.ok) { _premiosCSVCache[key]=null; return null; }
+      return r.text().then(function(txt){ _premiosCSVCache[key]=txt; return txt; });
+    }).catch(function(){ _premiosCSVCache[key]=null; return null; });
+  }
+
+  // Parsea un CSV de horarios y devuelve:
+  // { personaCsv: { lojaCsv: Set(fechas ISO trabajadas) } }
+  function _premiosParseCSV(csvText) {
+    if(!csvText) return {};
+    var result = {};
+    var lines = csvText.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+    var currentStoreName = null;
+    var currentDates = []; // fechas ISO de cada columna (índice 1-7)
+    var i = 0;
+    while(i < lines.length) {
+      var cols = lines[i].split(',');
+      // Cabecera de sección: PORTO SANTO,...
+      if(cols[0] === 'PORTO SANTO') {
+        i++;
+        // Siguiente línea: nombre tienda + fechas
+        if(i < lines.length) {
+          var storeLine = lines[i].split(',');
+          currentStoreName = storeLine[0].trim().toUpperCase();
+          currentDates = [];
+          for(var ci=1; ci<=7; ci++) {
+            var dateStr = (storeLine[ci]||'').trim();
+            // Formato DD/MM/YYYY → ISO YYYY-MM-DD
+            var parts = dateStr.split('/');
+            if(parts.length === 3) {
+              currentDates.push(parts[2]+'-'+parts[1]+'-'+parts[0]);
+            } else {
+              currentDates.push(null);
+            }
+          }
+        }
+        i++;
+        continue;
+      }
+      // Fila de persona: nombre+hrs, luego días
+      // El nombre es la primera columna, puede tener hrs: "SANDRA M.40hrs"
+      var rawName = cols[0].trim();
+      // Extraer prefijo del nombre (sin número de horas): "SANDRA M."
+      var personMatch = rawName.match(/^([A-ZÁÉÍÓÚÃÕÂÊÔ][^\d]+\.\s*)/);
+      var personKey = personMatch ? personMatch[1].trim() : null;
+
+      if(personKey && currentStoreName) {
+        if(!result[personKey]) result[personKey] = {};
+        if(!result[personKey][currentStoreName]) result[personKey][currentStoreName] = {};
+
+        // Recorrer cada día (columnas 1-7)
+        for(var di=1; di<=7; di++) {
+          var cell = (cols[di]||'').trim().toUpperCase();
+          var isoDate = currentDates[di-1];
+          if(!isoDate) continue;
+
+          // ¿Trabajó en esta tienda?
+          var trabajoAqui = false;
+          if(cell === 'FOLGA' || cell === 'FERIAS' || cell === 'LICENÇA' || cell === 'LICENCA' || cell === '') {
+            trabajoAqui = false;
+          } else if(cell === currentStoreName || PREMIOS_CSV_LOJA[cell] === PREMIOS_CSV_LOJA[currentStoreName]) {
+            // La celda dice el nombre de esta misma tienda (apoio desde otra)
+            trabajoAqui = true;
+          } else if(PREMIOS_CSV_LOJA[cell]) {
+            // Está trabajando en otra tienda — registrar allí
+            if(!result[personKey][cell]) result[personKey][cell] = {};
+            result[personKey][cell][isoDate] = true;
+            trabajoAqui = false;
+          } else if(cell.includes(':')) {
+            // Es un horario (HH:MM-HH:MM) → trabajó aquí
+            trabajoAqui = true;
+          }
+
+          if(trabajoAqui) {
+            result[personKey][currentStoreName][isoDate] = true;
+          }
+        }
+      }
+      i++;
+    }
+    return result;
+  }
+
+  // Carga y agrega horarios de todas las semanas de un mes
+  // Devuelve: { 'SANDRA M.': { 'MEZKA AVENIDA': Set(fechas), ... }, ... }
+  function _premiosHorariosDelMes(year, month) {
+    var weeks = _premiosWeeksForMonth(year, month);
+    var promises = weeks.map(function(monday) {
+      return _premiosLoadCSV(_premiosWeekNum(monday));
+    });
+    return Promise.all(promises).then(function(csvTexts) {
+      var merged = {};
+      csvTexts.forEach(function(csv) {
+        var parsed = _premiosParseCSV(csv);
+        Object.keys(parsed).forEach(function(person) {
+          if(!merged[person]) merged[person] = {};
+          Object.keys(parsed[person]).forEach(function(store) {
+            if(!merged[person][store]) merged[person][store] = {};
+            Object.keys(parsed[person][store]).forEach(function(fecha) {
+              // Solo incluir fechas del mes pedido
+              var m = parseInt((fecha||'').substring(5,7));
+              var y = parseInt((fecha||'').substring(0,4));
+              if(y === year && m === month) {
+                merged[person][store][fecha] = true;
+              }
+            });
+          });
+        });
+      });
+      return merged;
+    });
+  }
+
+  // Calcula días calendario del mes
+  function _diasDelMes(year, month) {
+    return new Date(year, month, 0).getDate();
+  }
+
+  // Renderiza la sección de personas de una tienda para un mes
+  // horariosData: resultado de _premiosHorariosDelMes
+  // loja: 'MEZKA AVENIDA' etc, mo: número mes, premioValor: 100 o 200
+  // diff: diferencia calculada (para saber si se ganó el premio)
+  // minimo: mínimo requerido
+  function _renderPremioPersonas(horariosData, loja, mo, year, premioValor, diff, minimo) {
+    var wrap = _el('div','border-radius:8px;padding:10px 12px;margin-top:6px;border:1px solid #e8e8e8;');
+    var ganoObjetivo = (diff !== null && diff >= minimo);
+
+    wrap.style.setProperty('background', ganoObjetivo ? '#f1f8f4' : '#fafafa','important');
+    wrap.style.setProperty('border-color', ganoObjetivo ? '#4a7c59' : '#e8e8e8','important');
+
+    var wHdr = _el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;');
+    wHdr.style.setProperty('color', ganoObjetivo ? '#4a7c59' : '#888888','important');
+    wHdr.textContent = ganoObjetivo
+      ? '✓ OBJETIVO ATINGIDO — PRÉMIO ' + premioValor + '€'
+      : '✗ OBJETIVO NÃO ATINGIDO';
+    wrap.appendChild(wHdr);
+
+    if(!ganoObjetivo) {
+      var falta = minimo - (diff||0);
+      var faltaEl = _el('div','font-size:.68rem;');
+      faltaEl.style.setProperty('color','#a03020','important');
+      faltaEl.textContent = 'Faltaram ' + _fmtEur(falta) + ' para atingir o objectivo mínimo de +' + _fmtEur(minimo);
+      wrap.appendChild(faltaEl);
+      return wrap;
+    }
+
+    // Calcular participación de cada persona
+    var diasMes = _diasDelMes(year, mo);
+    // Mapeo CSV → nombre de tienda en horariosData
+    // El store en horariosData usa el nombre tal como aparece en el CSV (ej: "MEZKA AVENIDA")
+    var lojaCSVKey = loja; // coincide directamente
+
+    var participaciones = [];
+    PREMIOS_PERSONAS.forEach(function(p) {
+      var diasTrabajados = 0;
+      var storeData = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
+        ? Object.keys(horariosData[p.csv][lojaCSVKey]).length
+        : 0;
+      diasTrabajados = storeData;
+      if(diasTrabajados > 0) {
+        participaciones.push({nombre: p.nombre, csv: p.csv, dias: diasTrabajados});
+      }
+    });
+
+    if(!participaciones.length) {
+      var noData = _el('div','font-size:.68rem;');
+      noData.style.setProperty('color','#888888','important');
+      noData.textContent = 'Sem dados de horário disponíveis para este mês.';
+      wrap.appendChild(noData);
+      return wrap;
+    }
+
+    // Determinar si alguien trabajó el mes completo
+    // "mes completo" = aparece solo en esta tienda durante todo el mes (no en otras de las premium)
+    var totalDiasMes = diasMes;
+    participaciones.forEach(function(p) {
+      // ¿Trabajó solo en esta tienda? Sumar sus días en otras tiendas premium
+      var diasOtrasLojas = 0;
+      PREMIOS_PERSONAS.forEach(function(pp) {
+        if(pp.csv !== p.csv) return;
+        ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'].forEach(function(otraLoja) {
+          if(otraLoja === loja) return;
+          var d = horariosData[pp.csv] && horariosData[pp.csv][otraLoja]
+            ? Object.keys(horariosData[pp.csv][otraLoja]).length : 0;
+          diasOtrasLojas += d;
+        });
+      });
+      p.soloEstaLoja = (diasOtrasLojas === 0);
+      p.premio = p.soloEstaLoja
+        ? premioValor  // mes completo → premio entero
+        : parseFloat((p.dias / totalDiasMes * premioValor).toFixed(2)); // proporcional
+    });
+
+    // Renderizar tabla de personas
+    var pt = document.createElement('table');
+    pt.setAttribute('style','width:100%;border-collapse:collapse;font-size:.75rem;');
+    participaciones.forEach(function(p,i) {
+      var ptr = document.createElement('tr');
+      var pbg = i%2===0?'#ffffff':'#f5fbf7';
+
+      var tdNom = document.createElement('td');
+      tdNom.textContent = p.nombre;
+      tdNom.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;font-weight:700;');
+      tdNom.style.setProperty('background',pbg,'important');
+      tdNom.style.setProperty('color','#111111','important');
+      ptr.appendChild(tdNom);
+
+      var tdDias = document.createElement('td');
+      tdDias.textContent = p.dias + ' dias' + (p.soloEstaLoja ? ' (mês completo)' : '');
+      tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:center;font-size:.68rem;');
+      tdDias.style.setProperty('background',pbg,'important');
+      tdDias.style.setProperty('color','#666666','important');
+      ptr.appendChild(tdDias);
+
+      var tdPremio = document.createElement('td');
+      tdPremio.textContent = _fmtEur(p.premio);
+      tdPremio.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-weight:800;');
+      tdPremio.style.setProperty('background',pbg,'important');
+      tdPremio.style.setProperty('color','#2a6a40','important');
+      ptr.appendChild(tdPremio);
+
+      pt.appendChild(ptr);
+    });
+    wrap.appendChild(pt);
+    return wrap;
+  }
+
   function _renderPremios() {
     var c = _getContent(); if(!c) return;
     c.innerHTML = ''; _setupContent(c);
@@ -2693,11 +3003,89 @@
       tw.appendChild(t);
       card.appendChild(tw);
 
+      // ── Sección de prémios por persona — cargada desde horarios ──
+      // Solo meses activos del premio (Abril-Septiembre) con datos
+      var premiosMesesActivos = [];
+      for(var pmo=1; pmo<=lojaLastMonth; pmo++) {
+        if(PREMIOS_MESES_ACTIVOS.indexOf(pmo) < 0) continue;
+        if(!PREMIOS_MINIMO[loja]) continue;
+        // Recuperar diff de ese mes (necesitamos recalcular)
+        var pmoStr = _pad(pmo);
+        var pmoTo = (pmo === lojaLastMonth) ? lojaLastDay : (String(currentYear)+'-'+pmoStr+'-31');
+        var p2025 = lojaRows.filter(function(r){
+          return r.data.substring(0,4)==='2025' && parseInt(r.data.substring(5,7))===pmo;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        var p2026 = lojaRows.filter(function(r){
+          return r.data.substring(0,4)===String(currentYear) &&
+                 parseInt(r.data.substring(5,7))===pmo && r.data<=pmoTo;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        var pDom = lojaRows.filter(function(r){
+          return r.data.substring(0,4)===String(currentYear) &&
+                 parseInt(r.data.substring(5,7))===pmo && r.data<=pmoTo &&
+                 _strToDate(r.data).getDay()===0;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        var pNoct = parseFloat(_premiosNocturno[loja+':'+pmoStr])||0;
+        var pDiff = (p2025>0||p2026>0) ? (p2026-pDom-pNoct-p2025) : null;
+        premiosMesesActivos.push({mo:pmo, diff:pDiff});
+      }
+
+      if(premiosMesesActivos.length > 0) {
+        var premiosSecTtl = _el('div','font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;margin-top:4px;');
+        premiosSecTtl.style.setProperty('color','#888888','important');
+        premiosSecTtl.textContent = '👥 ATRIBUIÇÃO DE PRÉMIOS POR COLABORADORA';
+        card.appendChild(premiosSecTtl);
+
+        var premiosSecWrap = _el('div','display:flex;flex-direction:column;gap:8px;');
+        card.appendChild(premiosSecWrap);
+
+        // Placeholder de carga
+        var loadingEl = _el('div','font-size:.68rem;padding:8px;');
+        loadingEl.style.setProperty('color','#aaaaaa','important');
+        loadingEl.textContent = 'A carregar horários…';
+        premiosSecWrap.appendChild(loadingEl);
+
+        // Cargar horarios de los meses activos de forma asíncrona
+        var mesesUnicos = premiosMesesActivos.map(function(x){return x.mo;});
+        var horariosPromises = mesesUnicos.map(function(pmo){
+          return _premiosHorariosDelMes(currentYear, pmo).then(function(data){
+            return {mo:pmo, data:data};
+          });
+        });
+
+        Promise.all(horariosPromises).then(function(results) {
+          loadingEl.remove();
+          var horariosMap = {};
+          results.forEach(function(r){ horariosMap[r.mo]=r.data; });
+
+          premiosMesesActivos.forEach(function(item) {
+            var pmo = item.mo;
+            var pDiff = item.diff;
+            var premioValor = PREMIOS_VALOR[pmo] || 100;
+            var minimo = PREMIOS_MINIMO[loja] || 1700;
+            var moLabel = MESES_PT[pmo-1];
+
+            var moSec = _el('div','');
+            var moHdr = _el('div','font-size:.65rem;font-weight:800;margin-bottom:4px;');
+            moHdr.style.setProperty('color','#555555','important');
+            moHdr.textContent = moLabel + ' — ' + premioValor + '€ / colaboradora';
+            moSec.appendChild(moHdr);
+
+            var horariosData = horariosMap[pmo] || {};
+            var personasWrap = _renderPremioPersonas(horariosData, loja, pmo, currentYear, premioValor, pDiff, minimo);
+            moSec.appendChild(personasWrap);
+            premiosSecWrap.appendChild(moSec);
+          });
+        }).catch(function() {
+          loadingEl.textContent = 'Erro ao carregar horários.';
+          loadingEl.style.setProperty('color','#a03020','important');
+        });
+      }
+
       // Nota nocturno si hay valores
       var noctKeys = ['06','07','08'].filter(function(mm){ return (_premiosNocturno[loja+':'+mm]||0) > 0; });
       if(noctKeys.length > 0) {
         var noctTotal = noctKeys.reduce(function(s,mm){ return s+(parseFloat(_premiosNocturno[loja+':'+mm])||0); },0);
-        var noctNota = _el('div','font-size:.65rem;margin-top:2px;');
+        var noctNota = _el('div','font-size:.65rem;margin-top:8px;');
         noctNota.style.setProperty('color','#888888','important');
         noctNota.textContent = '* Vendas noturnas subtraídas: ' + _fmtEur(noctTotal) + ' (Jun/Jul/Ago)';
         card.appendChild(noctNota);

@@ -2140,12 +2140,18 @@
     tamInvoices.forEach(function(r, invIdx){
       var pkgs = r.shipPkgs || 1;
       for (var i = 0; i < pkgs; i++) {
-        if (tamSession.boxes[offset + i] !== undefined) {
-          tamSession.boxes[offset + i].invIdx = invIdx;
+        var box = tamSession.boxes[offset + i];
+        if (box !== undefined && !box.dnZyCode) {
+          /* Only repair positional boxes that were NOT stamped by a DN confirm.
+             DN-stamped boxes already have the correct invIdx set at confirm time
+             and must not be overwritten by positional arithmetic. */
+          box.invIdx = invIdx;
         }
       }
       offset += pkgs;
     });
+    /* Boxes beyond the positional range (dynamically added for extra DNs):
+       they already carry their correct invIdx — leave them untouched. */
     if (!tamSession.quickDistrib) tamSession.quickDistrib = {};
   }
 
@@ -5058,92 +5064,59 @@
         Object.keys(tamSession.boxes[bi].refs).forEach(function(ref){ tamRefDone.delete(ref); });
       }
 
-      if (knownInvIdx >= 0) {
-        // Pass 0: re-edit — if a box already stamped with THIS DN exists, reuse it directly
+      /* ── Box selection — each DN always gets its own exclusive box ──────────
+         Priority order:
+           0. Re-edit: a box already stamped with THIS DN → reuse it.
+           1. An unlocked box with no dnZyCode (fresh or partially filled manually).
+           2. All available boxes are stamped with OTHER DNs → create a new box
+              dynamically. Never reopen a box belonging to a different DN.
+         The invIdx (used for quickDistrib isolation and column rendering) is set
+         on the box at creation/stamp time. tamRepairBoxInvIdx will not overwrite
+         boxes that carry a dnZyCode, so dynamically added boxes are safe.
+      ────────────────────────────────────────────────────────────────────────── */
+      var resolvedInvIdx = knownInvIdx >= 0 ? knownInvIdx : 0;
+
+      // Pass 0: re-edit — box already stamped with THIS DN → reuse directly
+      for (var bi=0; bi<tamSession.boxes.length; bi++) {
+        if (tamSession.boxes[bi].dnZyCode === dn.zyCode) {
+          if (tamSession.boxes[bi].locked) unlockBox(bi);
+          targetBox=tamSession.boxes[bi]; targetBi=bi; break;
+        }
+      }
+
+      // Pass 1: first unlocked box with no dnZyCode and matching invIdx (prefer empty)
+      if (!targetBox) {
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var bx = tamSession.boxes[bi];
-          if (bx.dnZyCode === dn.zyCode) {
-            if (bx.locked) unlockBox(bi);
+          var bx=tamSession.boxes[bi];
+          if (bx.invIdx===resolvedInvIdx && !bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length===0) {
             targetBox=bx; targetBi=bi; break;
           }
         }
-        // Pass 1a: prefer an EMPTY unlocked box for this invoice (no refs, no dnZyCode = truly fresh)
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            var bx = tamSession.boxes[bi];
-            if (bx.invIdx===knownInvIdx && !bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length === 0) {
-              targetBox=bx; targetBi=bi; break;
-            }
-          }
-        }
-        // Pass 1b: unlocked box for this invoice that has no dnZyCode (partial manual fill, not a confirmed DN)
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            var bx = tamSession.boxes[bi];
-            if (bx.invIdx===knownInvIdx && !bx.locked && !bx.dnZyCode) { targetBox=bx; targetBi=bi; break; }
-          }
-        }
-        // Pass 2: all boxes for this invoice are locked or stamped with other DNs
-        // — reopen the last box of this invoice ONLY if it belongs to THIS DN (already handled in Pass 0)
-        // — otherwise reopen the last box that has no dnZyCode
-        if (!targetBox) {
-          var lastUnstampedBi=-1;
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (tamSession.boxes[bi].invIdx===knownInvIdx && !tamSession.boxes[bi].dnZyCode) lastUnstampedBi=bi;
-          }
-          if (lastUnstampedBi >= 0) { unlockBox(lastUnstampedBi); targetBox=tamSession.boxes[lastUnstampedBi]; targetBi=lastUnstampedBi; }
-        }
-        // Pass 3: invIdx mismatch (legacy) — first empty unlocked box anywhere with no dnZyCode
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            var bx = tamSession.boxes[bi];
-            if (!bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
-          }
-        }
-        // Pass 4: any unlocked box without dnZyCode
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (!tamSession.boxes[bi].locked && !tamSession.boxes[bi].dnZyCode) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
-          }
-        }
-        // Pass 5: everything locked and stamped — last resort: reopen the last unstamped box of any invoice
-        if (!targetBox && tamSession.boxes.length) {
-          var lastAny=tamSession.boxes.length-1;
-          for (var bi=tamSession.boxes.length-1; bi>=0; bi--) {
-            if (!tamSession.boxes[bi].dnZyCode) { lastAny=bi; break; }
-          }
-          unlockBox(lastAny); targetBox=tamSession.boxes[lastAny]; targetBi=lastAny;
-        }
-      } else {
-        // ZY not mapped — Pass 0: re-edit of this DN
+      }
+      // Pass 1b: unlocked, no dnZyCode, matching invIdx (may have manual refs)
+      if (!targetBox) {
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var bx = tamSession.boxes[bi];
-          if (bx.dnZyCode === dn.zyCode) {
-            if (bx.locked) unlockBox(bi);
-            targetBox=bx; targetBi=bi; break;
-          }
+          var bx=tamSession.boxes[bi];
+          if (bx.invIdx===resolvedInvIdx && !bx.locked && !bx.dnZyCode) { targetBox=bx; targetBi=bi; break; }
         }
-        // First empty unlocked box with no dnZyCode
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            var bx = tamSession.boxes[bi];
-            if (!bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
-          }
+      }
+      // Pass 2: any unlocked box with no dnZyCode anywhere (legacy / invIdx mismatch)
+      if (!targetBox) {
+        for (var bi=0; bi<tamSession.boxes.length; bi++) {
+          var bx=tamSession.boxes[bi];
+          if (!bx.locked && !bx.dnZyCode) { targetBox=bx; targetBi=bi; break; }
         }
-        // Any unlocked box without dnZyCode
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (!tamSession.boxes[bi].locked && !tamSession.boxes[bi].dnZyCode) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
-          }
-        }
-        // All locked — reopen last unstamped box
-        if (!targetBox && tamSession.boxes.length) {
-          var lastAny2=tamSession.boxes.length-1;
-          for (var bi=tamSession.boxes.length-1; bi>=0; bi--) {
-            if (!tamSession.boxes[bi].dnZyCode) { lastAny2=bi; break; }
-          }
-          unlockBox(lastAny2); targetBox=tamSession.boxes[lastAny2]; targetBi=lastAny2;
-        }
+      }
+
+      // Pass 3: no suitable box found — CREATE a new box dynamically.
+      // This is the normal case when all existing boxes are already stamped with other DNs.
+      // The new box carries the correct invIdx so rendering and quickDistrib work correctly.
+      // tamRepairBoxInvIdx will NOT overwrite it because it will have dnZyCode set below.
+      if (!targetBox) {
+        var newBox = { total: null, refs: {}, locked: false, invIdx: resolvedInvIdx };
+        tamSession.boxes.push(newBox);
+        targetBi = tamSession.boxes.length - 1;
+        targetBox = newBox;
       }
 
       if (!targetBox) { tamShowDNError('Sem caixas na sess\u00e3o.'); return; }

@@ -266,12 +266,18 @@
 
     var rows=_filterByZone(_allRows);
     var isTotal=(_activePeriodBtn==='hadm-btn-total');
+    var _periodFns={'hadm-btn-7':_period7,'hadm-btn-30':_period30,'hadm-btn-90':_period90,'hadm-btn-mes':_periodMes,'hadm-btn-ano':_periodAno,'hadm-btn-q1':_periodQ1,'hadm-btn-q2':_periodQ2,'hadm-btn-q3':_periodQ3,'hadm-btn-q4':_periodQ4};
     var f;
     if(isTotal){
       f=_periodTotal(_allRows);
+    } else if(_activePeriodBtn&&_periodFns[_activePeriodBtn]){
+      // Recalcular con _allRows ya cargado — evita fecha fijada antes de la carga
+      f=_periodFns[_activePeriodBtn]();
+      var fEl2=document.getElementById('hadm-from'),tEl2=document.getElementById('hadm-to');
+      if(fEl2)fEl2.value=f.from;
+      if(tEl2)tEl2.value=f.to;
     } else {
       f=_getFilters();
-      // Si el período llega hasta hoy o más allá, usar lastDay como tope
       if(f.to>=_todayStr()) f={from:f.from, to:lastDay};
     }
 

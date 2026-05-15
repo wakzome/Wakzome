@@ -5059,64 +5059,89 @@
       }
 
       if (knownInvIdx >= 0) {
-        // Pass 1a: prefer an EMPTY unlocked box for this invoice (no refs yet = fresh box)
+        // Pass 0: re-edit — if a box already stamped with THIS DN exists, reuse it directly
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
           var bx = tamSession.boxes[bi];
-          if (bx.invIdx===knownInvIdx && !bx.locked && Object.keys(bx.refs).length === 0) {
+          if (bx.dnZyCode === dn.zyCode) {
+            if (bx.locked) unlockBox(bi);
             targetBox=bx; targetBi=bi; break;
           }
         }
-        // Pass 1b: no empty box — use an unlocked box that already has refs (partial fill)
+        // Pass 1a: prefer an EMPTY unlocked box for this invoice (no refs, no dnZyCode = truly fresh)
         if (!targetBox) {
           for (var bi=0; bi<tamSession.boxes.length; bi++) {
             var bx = tamSession.boxes[bi];
-            if (bx.invIdx===knownInvIdx && !bx.locked) { targetBox=bx; targetBi=bi; break; }
+            if (bx.invIdx===knownInvIdx && !bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length === 0) {
+              targetBox=bx; targetBi=bi; break;
+            }
           }
         }
-        // Pass 2: all boxes locked — reopen last box of this invoice
-        if (!targetBox) {
-          var lastBi=-1;
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (tamSession.boxes[bi].invIdx===knownInvIdx) lastBi=bi;
-          }
-          if (lastBi >= 0) { unlockBox(lastBi); targetBox=tamSession.boxes[lastBi]; targetBi=lastBi; }
-        }
-        // Pass 3: invIdx mismatch (legacy) — first empty unlocked box anywhere
+        // Pass 1b: unlocked box for this invoice that has no dnZyCode (partial manual fill, not a confirmed DN)
         if (!targetBox) {
           for (var bi=0; bi<tamSession.boxes.length; bi++) {
             var bx = tamSession.boxes[bi];
-            if (!bx.locked && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
+            if (bx.invIdx===knownInvIdx && !bx.locked && !bx.dnZyCode) { targetBox=bx; targetBi=bi; break; }
           }
         }
-        // Pass 4: any unlocked box
+        // Pass 2: all boxes for this invoice are locked or stamped with other DNs
+        // — reopen the last box of this invoice ONLY if it belongs to THIS DN (already handled in Pass 0)
+        // — otherwise reopen the last box that has no dnZyCode
+        if (!targetBox) {
+          var lastUnstampedBi=-1;
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            if (tamSession.boxes[bi].invIdx===knownInvIdx && !tamSession.boxes[bi].dnZyCode) lastUnstampedBi=bi;
+          }
+          if (lastUnstampedBi >= 0) { unlockBox(lastUnstampedBi); targetBox=tamSession.boxes[lastUnstampedBi]; targetBi=lastUnstampedBi; }
+        }
+        // Pass 3: invIdx mismatch (legacy) — first empty unlocked box anywhere with no dnZyCode
         if (!targetBox) {
           for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+            var bx = tamSession.boxes[bi];
+            if (!bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
           }
         }
-        // Pass 5: everything locked — reopen the last box of this invoice
+        // Pass 4: any unlocked box without dnZyCode
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            if (!tamSession.boxes[bi].locked && !tamSession.boxes[bi].dnZyCode) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+          }
+        }
+        // Pass 5: everything locked and stamped — last resort: reopen the last unstamped box of any invoice
         if (!targetBox && tamSession.boxes.length) {
           var lastAny=tamSession.boxes.length-1;
           for (var bi=tamSession.boxes.length-1; bi>=0; bi--) {
-            if (tamSession.boxes[bi].invIdx===knownInvIdx) { lastAny=bi; break; }
+            if (!tamSession.boxes[bi].dnZyCode) { lastAny=bi; break; }
           }
           unlockBox(lastAny); targetBox=tamSession.boxes[lastAny]; targetBi=lastAny;
         }
       } else {
-        // ZY not mapped — first empty unlocked box
+        // ZY not mapped — Pass 0: re-edit of this DN
         for (var bi=0; bi<tamSession.boxes.length; bi++) {
           var bx = tamSession.boxes[bi];
-          if (!bx.locked && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
-        }
-        // Any unlocked box
-        if (!targetBox) {
-          for (var bi=0; bi<tamSession.boxes.length; bi++) {
-            if (!tamSession.boxes[bi].locked) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+          if (bx.dnZyCode === dn.zyCode) {
+            if (bx.locked) unlockBox(bi);
+            targetBox=bx; targetBi=bi; break;
           }
         }
-        // All locked — reopen last box
+        // First empty unlocked box with no dnZyCode
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            var bx = tamSession.boxes[bi];
+            if (!bx.locked && !bx.dnZyCode && Object.keys(bx.refs).length === 0) { targetBox=bx; targetBi=bi; break; }
+          }
+        }
+        // Any unlocked box without dnZyCode
+        if (!targetBox) {
+          for (var bi=0; bi<tamSession.boxes.length; bi++) {
+            if (!tamSession.boxes[bi].locked && !tamSession.boxes[bi].dnZyCode) { targetBox=tamSession.boxes[bi]; targetBi=bi; break; }
+          }
+        }
+        // All locked — reopen last unstamped box
         if (!targetBox && tamSession.boxes.length) {
           var lastAny2=tamSession.boxes.length-1;
+          for (var bi=tamSession.boxes.length-1; bi>=0; bi--) {
+            if (!tamSession.boxes[bi].dnZyCode) { lastAny2=bi; break; }
+          }
           unlockBox(lastAny2); targetBox=tamSession.boxes[lastAny2]; targetBi=lastAny2;
         }
       }
@@ -5125,13 +5150,19 @@
 
       var totalQty = dn.refs.reduce(function(s,r){ return s+r.qty; }, 0);
       tamPushUndo();
-      /* REPLACE (not add) — idempotent, prevents double-counting on re-confirm */
+      /* REPLACE only refs belonging to this DN — clears previous values for these refs,
+         but never touches refs that may have been manually entered for other purposes */
       targetBox.dnZyCode = dn.zyCode;  /* stamp so header shows DN code */
+      /* On re-edit: remove only the refs that were previously written by this DN */
+      var dnRefKeys = dn.refs.map(function(r){ return r.ref; });
+      Object.keys(targetBox.refs).forEach(function(existingRef){
+        if (dnRefKeys.indexOf(existingRef) >= 0) delete targetBox.refs[existingRef];
+      });
       dn.refs.forEach(function(r){
         var safe=r.ref.replace(/[^a-z0-9]/gi,'_');
         var fi=modal.querySelector('#tam-dn-f-'+safe), pi=modal.querySelector('#tam-dn-p-'+safe);
         var fVal=fi?(parseInt(fi.value)||0):0, pVal=pi?(parseInt(pi.value)||0):0;
-        targetBox.refs[r.ref] = {f: fVal, p: pVal};  /* always overwrite */
+        targetBox.refs[r.ref] = {f: fVal, p: pVal};
       });
       /* Mark confirmed and always save the user-confirmed values for replay */
       if (tamDeliveryNotes[dn.zyCode]) {

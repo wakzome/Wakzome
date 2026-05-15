@@ -266,13 +266,25 @@
 
     var rows=_filterByZone(_allRows);
     var isTotal=(_activePeriodBtn==='hadm-btn-total');
-    var _periodFns={'hadm-btn-7':_period7,'hadm-btn-30':_period30,'hadm-btn-90':_period90,'hadm-btn-mes':_periodMes,'hadm-btn-ano':_periodAno,'hadm-btn-q1':_periodQ1,'hadm-btn-q2':_periodQ2,'hadm-btn-q3':_periodQ3,'hadm-btn-q4':_periodQ4};
     var f;
     if(isTotal){
       f=_periodTotal(_allRows);
-    } else if(_activePeriodBtn&&_periodFns[_activePeriodBtn]){
-      // Recalcular con _allRows ya cargado — evita fecha fijada antes de la carga
-      f=_periodFns[_activePeriodBtn]();
+    } else if(_activePeriodBtn&&_activePeriodBtn!=='hadm-btn-total'){
+      // Calcular from según el botón activo, pero usar lastDay (calculado con zonaLojas) como to
+      var tD=_strToDate(lastDay);
+      var fromVal;
+      if(_activePeriodBtn==='hadm-btn-7')   { var fd=new Date(tD);fd.setDate(tD.getDate()-6); fromVal=_dateToStr(fd); }
+      else if(_activePeriodBtn==='hadm-btn-30')  { var fd=new Date(tD);fd.setDate(tD.getDate()-29); fromVal=_dateToStr(fd); }
+      else if(_activePeriodBtn==='hadm-btn-90')  { var fd=new Date(tD);fd.setDate(tD.getDate()-89); fromVal=_dateToStr(fd); }
+      else if(_activePeriodBtn==='hadm-btn-mes') { fromVal=_dateToStr(new Date(tD.getFullYear(),tD.getMonth(),1)); }
+      else if(_activePeriodBtn==='hadm-btn-ano') { fromVal=tD.getFullYear()+'-01-01'; }
+      else if(_activePeriodBtn==='hadm-btn-q1')  { fromVal=tD.getFullYear()+'-01-01'; }
+      else if(_activePeriodBtn==='hadm-btn-q2')  { fromVal=tD.getFullYear()+'-04-01'; }
+      else if(_activePeriodBtn==='hadm-btn-q3')  { fromVal=tD.getFullYear()+'-07-01'; }
+      else if(_activePeriodBtn==='hadm-btn-q4')  { fromVal=tD.getFullYear()+'-10-01'; }
+      else { fromVal=_getFilters().from; }
+      f={from:fromVal, to:lastDay};
+      // Sincronizar inputs
       var fEl2=document.getElementById('hadm-from'),tEl2=document.getElementById('hadm-to');
       if(fEl2)fEl2.value=f.from;
       if(tEl2)tEl2.value=f.to;

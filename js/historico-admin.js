@@ -2729,7 +2729,7 @@
           } else if(cell.includes(':')) {
             // Es un horario (HH:MM-HH:MM) → trabajó aquí
             result[personKey][currentStoreName][isoDate] = true;
-            // Calcular horas y registrar si >= 4h para descuento posterior
+            // Calcular horas: si no es 8h y no es 1h, registrar para acumular
             var parts = cell.split('-');
             if(parts.length === 2) {
               var startParts = parts[0].trim().split(':');
@@ -2738,10 +2738,11 @@
                 var startMin = parseInt(startParts[0])*60 + parseInt(startParts[1]);
                 var endMin = parseInt(endParts[0])*60 + parseInt(endParts[1]);
                 var horas = (endMin - startMin) / 60;
-                if(horas >= 4) { // Solo registrar si >= 4 horas
-                  if(!result[personKey]['__horas__']) result[personKey]['__horas__'] = {};
-                  if(!result[personKey]['__horas__'][currentStoreName]) result[personKey]['__horas__'][currentStoreName] = 0;
-                  result[personKey]['__horas__'][currentStoreName] += horas;
+                // Si no es 8 horas y no es 1 hora, registrar
+                if(horas !== 8 && horas !== 1) {
+                  if(!result[personKey]['__horasParc__']) result[personKey]['__horasParc__'] = {};
+                  if(!result[personKey]['__horasParc__'][currentStoreName]) result[personKey]['__horasParc__'][currentStoreName] = 0;
+                  result[personKey]['__horasParc__'][currentStoreName] += horas;
                 }
               }
             }
@@ -2875,16 +2876,18 @@
       var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
         ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
       
-      // Calcular días adicionales de horas >= 4h
-      var horasAdicionales = horariosData[p.csv] && horariosData[p.csv]['__horas__'] && horariosData[p.csv]['__horas__'][lojaCSVKey]
-        ? horariosData[p.csv]['__horas__'][lojaCSVKey] : 0;
-      var diasAdicionales = horasAdicionales / 8;
+      // Calcular días adicionales de horas parciales >= 8h
+      var horasParc = horariosData[p.csv] && horariosData[p.csv]['__horasParc__'] && horariosData[p.csv]['__horasParc__'][lojaCSVKey]
+        ? horariosData[p.csv]['__horasParc__'][lojaCSVKey] : 0;
+      var diasAdicionales = Math.floor(horasParc / 8);
+      var horasRestantes = horasParc % 8;
       var diasTotal = fechasEnEstaLoja.length + diasAdicionales;
       
       participaciones.push({
         nombre: p.nombre,
         dias: fechasEnEstaLoja.length,
         diasAdicionales: diasAdicionales,
+        horasRestantes: horasRestantes,
         diasTotal: diasTotal,
         ausencias: diasAusencia
       });
@@ -2913,11 +2916,8 @@
       ptr.appendChild(tdNom);
 
       var tdDias = document.createElement('td');
-      var diasLabel = Math.floor(p.diasTotal) + ' dias';
-      if(p.diasAdicionales > 0) {
-        var fraccion = p.diasAdicionales - Math.floor(p.diasAdicionales);
-        if(fraccion >= 0.4) diasLabel += ' (+ ' + p.diasAdicionales.toFixed(1) + 'd horas)';
-      }
+      var diasLabel = p.diasTotal + ' dias trabalhados';
+      if(p.horasRestantes > 0) diasLabel += ' + ' + p.horasRestantes.toFixed(1) + 'h';
       if(p.ausencias > 0) diasLabel += ' · ' + p.ausencias + 'd férias';
       tdDias.textContent = diasLabel;
       tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-size:.68rem;font-weight:700;');

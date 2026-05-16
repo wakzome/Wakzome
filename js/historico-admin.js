@@ -2706,11 +2706,6 @@
     return new Date(year, month, 0).getDate();
   }
 
-  // Renderiza la sección de personas de una tienda para un mes
-  // horariosData: resultado de _premiosHorariosDelMes
-  // loja: 'MEZKA AVENIDA' etc, mo: número mes, premioValor: 100 o 200
-  // diff: diferencia calculada (para saber si se ganó el premio)
-  // minimo: mínimo requerido
   function _renderPremioPersonas(horariosData, loja, mo, year, premioValor, diff, minimo) {
     var wrap = _el('div','border-radius:8px;padding:10px 12px;margin-top:6px;border:1px solid #e8e8e8;');
     var ganoObjetivo = (diff !== null && diff >= minimo);
@@ -2734,71 +2729,19 @@
       return wrap;
     }
 
-    // Calcular participación de cada persona
-    var diasMes = _diasDelMes(year, mo);
+    // Calcular días trabajados por persona en esta tienda
     var lojaCSVKey = loja;
-    // Valor por semana = premioValor / 4 (redondeado a 2 decimales)
-    var valorPorSemana = parseFloat((premioValor / 4).toFixed(2));
-
-    // Calcular semanas ISO del mes — para saber cuántas semanas tiene
-    var semanasDelMes = _premiosWeeksForMonth(year, mo);
-    var nSemanasDelMes = semanasDelMes.length; // normalmente 4-5
-
     var participaciones = [];
     PREMIOS_PERSONAS.forEach(function(p) {
-      // Fechas trabajadas en esta tienda este mes
       var fechasEnEstaLoja = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
         ? Object.keys(horariosData[p.csv][lojaCSVKey]) : [];
       if(fechasEnEstaLoja.length === 0) return;
-
-      // ¿Tuvo ausencias registradas (férias/licença/baixa)?
       var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
         ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
-
-      // ¿Trabajó en otras tiendas premium este mes?
-      var diasOtrasLojas = 0;
-      ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'].forEach(function(otraLoja) {
-        if(otraLoja === loja) return;
-        var d = horariosData[p.csv] && horariosData[p.csv][otraLoja]
-          ? Object.keys(horariosData[p.csv][otraLoja]).length : 0;
-        diasOtrasLojas += d;
-      });
-
-      // Mes completo: sin ausencias y sin días en otras tiendas
-      var mesCompleto = (diasAusencia === 0 && diasOtrasLojas === 0);
-
-      var premio;
-      var semanasLabel = '';
-
-      if(mesCompleto) {
-        premio = premioValor; // premio entero
-      } else {
-        // Contar semanas ISO en que trabajó al menos 1 día en esta tienda
-        var semanasTrabajadasSet = {};
-        fechasEnEstaLoja.forEach(function(fecha) {
-          // Calcular número de semana ISO de esta fecha
-          var d = new Date(fecha + 'T00:00:00');
-          // Lunes de esa semana
-          var dow = d.getDay(); // 0=dom
-          var diffToMon = (dow === 0) ? -6 : 1 - dow;
-          var lunes = new Date(d);
-          lunes.setDate(d.getDate() + diffToMon);
-          semanasTrabajadasSet[_dateToStr(lunes)] = true;
-        });
-        var nSemanas = Object.keys(semanasTrabajadasSet).length;
-        semanasLabel = nSemanas + ' sem.';
-        premio = parseFloat((nSemanas * valorPorSemana).toFixed(2));
-        if(premio > premioValor) premio = premioValor;
-      }
-
       participaciones.push({
         nombre: p.nombre,
-        csv: p.csv,
         dias: fechasEnEstaLoja.length,
-        ausencias: diasAusencia,
-        mesCompleto: mesCompleto,
-        semanasLabel: semanasLabel,
-        premio: premio
+        ausencias: diasAusencia
       });
     });
 
@@ -2810,7 +2753,7 @@
       return wrap;
     }
 
-    // Renderizar tabla de personas
+    // Tabla: nombre | días trabajados
     var pt = document.createElement('table');
     pt.setAttribute('style','width:100%;border-collapse:collapse;font-size:.75rem;');
     participaciones.forEach(function(p,i) {
@@ -2825,22 +2768,13 @@
       ptr.appendChild(tdNom);
 
       var tdDias = document.createElement('td');
-      var diasLabel = p.dias + ' dias';
-      if(p.mesCompleto) diasLabel += ' (mês completo)';
-      else if(p.semanasLabel) diasLabel += ' · ' + p.semanasLabel;
+      var diasLabel = p.dias + ' dias trabalhados';
       if(p.ausencias > 0) diasLabel += ' · ' + p.ausencias + 'd férias';
       tdDias.textContent = diasLabel;
-      tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:center;font-size:.68rem;');
+      tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-size:.68rem;font-weight:700;');
       tdDias.style.setProperty('background',pbg,'important');
-      tdDias.style.setProperty('color','#666666','important');
+      tdDias.style.setProperty('color','#555555','important');
       ptr.appendChild(tdDias);
-
-      var tdPremio = document.createElement('td');
-      tdPremio.textContent = _fmtEur(p.premio);
-      tdPremio.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-weight:800;');
-      tdPremio.style.setProperty('background',pbg,'important');
-      tdPremio.style.setProperty('color','#2a6a40','important');
-      ptr.appendChild(tdPremio);
 
       pt.appendChild(ptr);
     });

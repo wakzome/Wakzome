@@ -347,11 +347,14 @@
     var rows=_filterByZone(_allRows);
     var isTotal=(_activePeriodBtn==='hadm-btn-total');
     var f;
+    var qNotStarted=false; // Flag: si Q seleccionado aún no ha iniciado
+    
     if(isTotal){
       f=_periodTotal(_allRows);
     } else if(_activePeriodBtn&&_activePeriodBtn!=='hadm-btn-total'){
       // Calcular from según el botón activo, pero usar lastDay (calculado con zonaLojas) como to
       var tD=_strToDate(lastDay);
+      var today=_strToDate(_todayStr());
       var fromVal;
       if(_activePeriodBtn==='hadm-btn-7')   { var fd=new Date(tD);fd.setDate(tD.getDate()-6); fromVal=_dateToStr(fd); }
       else if(_activePeriodBtn==='hadm-btn-30')  { var fd=new Date(tD);fd.setDate(tD.getDate()-29); fromVal=_dateToStr(fd); }
@@ -363,14 +366,28 @@
       else if(_activePeriodBtn==='hadm-btn-q3')  { fromVal=tD.getFullYear()+'-07-01'; }
       else if(_activePeriodBtn==='hadm-btn-q4')  { fromVal=tD.getFullYear()+'-10-01'; }
       else { fromVal=_getFilters().from; }
-      f={from:fromVal, to:lastDay};
+      
+      // Si es Q y aún no ha iniciado, marcar y no renderizar
+      var fromDate=_strToDate(fromVal);
+      if(fromDate>today && ['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0){
+        qNotStarted=true;
+        f=null;
+      } else {
+        f={from:fromVal, to:lastDay};
+      }
       // Sincronizar inputs
       var fEl2=document.getElementById('hadm-from'),tEl2=document.getElementById('hadm-to');
-      if(fEl2)fEl2.value=f.from;
-      if(tEl2)tEl2.value=f.to;
+      if(fEl2)fEl2.value=f?f.from:'';
+      if(tEl2)tEl2.value=f?f.to:'';
     } else {
       f=_getFilters();
       if(f.to>=_todayStr()) f={from:f.from, to:lastDay};
+    }
+    
+    // Si Q no ha iniciado, mostrar mensaje y salir
+    if(qNotStarted){
+      var c=_getContent(); if(c){c.innerHTML='<div style="padding:40px 20px;text-align:center;font-size:.85rem;color:#888 !important;">Este trimestre aún no ha iniciado. Los datos aparecerán cuando se comience a vender.</div>';_setupContent(c);}
+      return;
     }
 
     // Para el header: ventas del período seleccionado (zona filtrada)

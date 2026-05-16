@@ -2848,7 +2848,7 @@
       return wrap;
     }
 
-    // Calcular días trabajados por persona en esta tienda (días completos + parciales 4+h)
+    // Calcular horas totales trabajadas por persona en esta tienda (ignorar días < 4h)
     var lojaCSVKey = loja;
     var participaciones = [];
     PREMIOS_PERSONAS.forEach(function(p) {
@@ -2857,34 +2857,34 @@
       var fechasEnEstaLoja = Object.keys(horariosEnEstaLoja);
       if(fechasEnEstaLoja.length === 0) return;
       
-      // Contar días completos (480 minutos = 8 horas) y parciales (240-479 minutos = 4-7 horas)
-      var diasCompletos = 0;
-      var diasParciales = 0;
+      // Sumar solo horas de días con ≥ 4 horas (240 minutos)
+      var totalMinutos = 0;
       fechasEnEstaLoja.forEach(function(fecha) {
         var minutos = horariosEnEstaLoja[fecha] || 0;
-        if(minutos >= 480) {
-          diasCompletos++;
-        } else if(minutos >= 240) { // 4 horas = 240 minutos
-          diasParciales += 0.5;
+        if(minutos >= 240) { // Solo contar si ≥ 4 horas
+          totalMinutos += minutos;
         }
-        // Si < 240 minutos (< 4h), no contar
       });
       
-      // Total de días (enteros + medios)
-      var totalDias = diasCompletos + diasParciales;
-      var totalMinutos = Math.round(totalDias * 480); // convertir a minutos para formato
+      if(totalMinutos === 0) return; // Si total < 4h, no mostrar
       
-      // Convertir a "Xd Yh Zm"
-      var dias = Math.floor(totalMinutos / (8*60));
-      var horasRestantes = Math.floor((totalMinutos % (8*60)) / 60);
-      var minutosRestantes = totalMinutos % 60;
-      var tiempoFormat = dias + 'd ' + horasRestantes + 'h ' + minutosRestantes + 'm';
+      // Convertir minutos a días (8 horas = 480 minutos = 1 día)
+      var totalDias = totalMinutos / 480;
+      
+      // Formatear como "Xd" o "X.5d" o "Xd Yh Zm"
+      var dias = Math.floor(totalDias);
+      var minutosRestantes = Math.round((totalDias - dias) * 480);
+      var horasRestantes = Math.floor(minutosRestantes / 60);
+      var minRestantes = minutosRestantes % 60;
+      
+      var diasLabel = dias + 'd';
+      if(horasRestantes > 0 || minRestantes > 0) {
+        diasLabel += ' ' + horasRestantes + 'h ' + minRestantes + 'm';
+      }
       
       participaciones.push({
         nombre: p.nombre,
-        dias: totalDias,
-        diasLabel: tiempoFormat,
-        ausencias: 0
+        diasLabel: diasLabel
       });
     });
 

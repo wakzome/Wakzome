@@ -2729,6 +2729,22 @@
           } else if(cell.includes(':')) {
             // Es un horario (HH:MM-HH:MM) → trabajó aquí
             result[personKey][currentStoreName][isoDate] = true;
+            // Calcular horas y registrar si >= 4h para descuento posterior
+            var parts = cell.split('-');
+            if(parts.length === 2) {
+              var startParts = parts[0].trim().split(':');
+              var endParts = parts[1].trim().split(':');
+              if(startParts.length === 2 && endParts.length === 2) {
+                var startMin = parseInt(startParts[0])*60 + parseInt(startParts[1]);
+                var endMin = parseInt(endParts[0])*60 + parseInt(endParts[1]);
+                var horas = (endMin - startMin) / 60;
+                if(horas >= 4) { // Solo registrar si >= 4 horas
+                  if(!result[personKey]['__horas__']) result[personKey]['__horas__'] = {};
+                  if(!result[personKey]['__horas__'][currentStoreName]) result[personKey]['__horas__'][currentStoreName] = 0;
+                  result[personKey]['__horas__'][currentStoreName] += horas;
+                }
+              }
+            }
           }
         }
       }
@@ -2858,9 +2874,18 @@
       if(fechasEnEstaLoja.length === 0) return;
       var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
         ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
+      
+      // Calcular días adicionales de horas >= 4h
+      var horasAdicionales = horariosData[p.csv] && horariosData[p.csv]['__horas__'] && horariosData[p.csv]['__horas__'][lojaCSVKey]
+        ? horariosData[p.csv]['__horas__'][lojaCSVKey] : 0;
+      var diasAdicionales = horasAdicionales / 8;
+      var diasTotal = fechasEnEstaLoja.length + diasAdicionales;
+      
       participaciones.push({
         nombre: p.nombre,
         dias: fechasEnEstaLoja.length,
+        diasAdicionales: diasAdicionales,
+        diasTotal: diasTotal,
         ausencias: diasAusencia
       });
     });
@@ -2888,7 +2913,11 @@
       ptr.appendChild(tdNom);
 
       var tdDias = document.createElement('td');
-      var diasLabel = p.dias + ' dias trabalhados';
+      var diasLabel = Math.floor(p.diasTotal) + ' dias';
+      if(p.diasAdicionales > 0) {
+        var fraccion = p.diasAdicionales - Math.floor(p.diasAdicionales);
+        if(fraccion >= 0.4) diasLabel += ' (+ ' + p.diasAdicionales.toFixed(1) + 'd horas)';
+      }
       if(p.ausencias > 0) diasLabel += ' · ' + p.ausencias + 'd férias';
       tdDias.textContent = diasLabel;
       tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-size:.68rem;font-weight:700;');

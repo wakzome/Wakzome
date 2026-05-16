@@ -2736,20 +2736,49 @@
 
     // Calcular participación de cada persona
     var diasMes = _diasDelMes(year, mo);
-    // Mapeo CSV → nombre de tienda en horariosData
-    // El store en horariosData usa el nombre tal como aparece en el CSV (ej: "MEZKA AVENIDA")
-    var lojaCSVKey = loja; // coincide directamente
+    var lojaCSVKey = loja;
 
     var participaciones = [];
     PREMIOS_PERSONAS.forEach(function(p) {
-      var diasTrabajados = 0;
-      var storeData = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
-        ? Object.keys(horariosData[p.csv][lojaCSVKey]).length
-        : 0;
-      diasTrabajados = storeData;
-      if(diasTrabajados > 0) {
-        participaciones.push({nombre: p.nombre, csv: p.csv, dias: diasTrabajados});
+      // Días trabajados en esta tienda este mes
+      var diasEnEstaLoja = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
+        ? Object.keys(horariosData[p.csv][lojaCSVKey]).length : 0;
+      if(diasEnEstaLoja === 0) return;
+
+      // ¿Tuvo ausencias registradas (férias/licença/baixa)?
+      var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
+        ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
+
+      // ¿Trabajó en otras tiendas premium este mes?
+      var diasOtrasLojas = 0;
+      ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'].forEach(function(otraLoja) {
+        if(otraLoja === loja) return;
+        var d = horariosData[p.csv] && horariosData[p.csv][otraLoja]
+          ? Object.keys(horariosData[p.csv][otraLoja]).length : 0;
+        diasOtrasLojas += d;
+      });
+
+      // Mes completo: sin ausencias y sin días en otras tiendas
+      var mesCompleto = (diasAusencia === 0 && diasOtrasLojas === 0);
+
+      var premio;
+      if(mesCompleto) {
+        premio = premioValor; // premio entero
+      } else {
+        // Proporcional: días en esta tienda / días calendario del mes
+        // Tope: premioValor
+        premio = parseFloat((diasEnEstaLoja / diasMes * premioValor).toFixed(2));
+        if(premio > premioValor) premio = premioValor;
       }
+
+      participaciones.push({
+        nombre: p.nombre,
+        csv: p.csv,
+        dias: diasEnEstaLoja,
+        ausencias: diasAusencia,
+        mesCompleto: mesCompleto,
+        premio: premio
+      });
     });
 
     if(!participaciones.length) {
@@ -2759,28 +2788,6 @@
       wrap.appendChild(noData);
       return wrap;
     }
-
-    // Determinar si alguien trabajó el mes completo
-    // "mes completo" = solo en esta tienda Y sin ausencias (ferias/licença/baixa) ese mes
-    var totalDiasMes = diasMes;
-    participaciones.forEach(function(p) {
-      // ¿Tuvo ausencias este mes?
-      var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
-        ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
-      // ¿Trabajó en otras tiendas premium?
-      var diasOtrasLojas = 0;
-      ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'].forEach(function(otraLoja) {
-        if(otraLoja === loja) return;
-        var d = horariosData[p.csv] && horariosData[p.csv][otraLoja]
-          ? Object.keys(horariosData[p.csv][otraLoja]).length : 0;
-        diasOtrasLojas += d;
-      });
-      // Mes completo: sin ausencias y sin días en otras tiendas
-      p.soloEstaLoja = (diasOtrasLojas === 0 && diasAusencia === 0);
-      p.premio = p.soloEstaLoja
-        ? premioValor  // mes completo → premio entero
-        : parseFloat((p.dias / totalDiasMes * premioValor).toFixed(2)); // proporcional
-    });
 
     // Renderizar tabla de personas
     var pt = document.createElement('table');
@@ -2797,7 +2804,10 @@
       ptr.appendChild(tdNom);
 
       var tdDias = document.createElement('td');
-      tdDias.textContent = p.dias + ' dias' + (p.soloEstaLoja ? ' (mês completo)' : '');
+      var diasLabel = p.dias + ' dias';
+      if(p.mesCompleto) diasLabel += ' (mês completo)';
+      else if(p.ausencias > 0) diasLabel += ' · ' + p.ausencias + 'd férias';
+      tdDias.textContent = diasLabel;
       tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:center;font-size:.68rem;');
       tdDias.style.setProperty('background',pbg,'important');
       tdDias.style.setProperty('color','#666666','important');

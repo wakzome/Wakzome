@@ -347,34 +347,42 @@
     var rows=_filterByZone(_allRows);
     var isTotal=(_activePeriodBtn==='hadm-btn-total');
     var f;
-    var qNotStarted=false; // Flag: si Q seleccionado aún no ha iniciado
+    var fComparison; // Rango para comparaciones (puede ser diferente a f si Q no ha iniciado en 2026)
     
     if(isTotal){
       f=_periodTotal(_allRows);
+      fComparison=f;
     } else if(_activePeriodBtn&&_activePeriodBtn!=='hadm-btn-total'){
       // Calcular from según el botón activo, pero usar lastDay (calculado con zonaLojas) como to
       var tD=_strToDate(lastDay);
       var today=_strToDate(_todayStr());
       var fromVal;
+      var isQButton=false;
       if(_activePeriodBtn==='hadm-btn-7')   { var fd=new Date(tD);fd.setDate(tD.getDate()-6); fromVal=_dateToStr(fd); }
       else if(_activePeriodBtn==='hadm-btn-30')  { var fd=new Date(tD);fd.setDate(tD.getDate()-29); fromVal=_dateToStr(fd); }
       else if(_activePeriodBtn==='hadm-btn-90')  { var fd=new Date(tD);fd.setDate(tD.getDate()-89); fromVal=_dateToStr(fd); }
       else if(_activePeriodBtn==='hadm-btn-mes') { fromVal=_dateToStr(new Date(tD.getFullYear(),tD.getMonth(),1)); }
       else if(_activePeriodBtn==='hadm-btn-ano') { fromVal=tD.getFullYear()+'-01-01'; }
-      else if(_activePeriodBtn==='hadm-btn-q1')  { fromVal=tD.getFullYear()+'-01-01'; }
-      else if(_activePeriodBtn==='hadm-btn-q2')  { fromVal=tD.getFullYear()+'-04-01'; }
-      else if(_activePeriodBtn==='hadm-btn-q3')  { fromVal=tD.getFullYear()+'-07-01'; }
-      else if(_activePeriodBtn==='hadm-btn-q4')  { fromVal=tD.getFullYear()+'-10-01'; }
+      else if(_activePeriodBtn==='hadm-btn-q1')  { fromVal=tD.getFullYear()+'-01-01'; isQButton=true; }
+      else if(_activePeriodBtn==='hadm-btn-q2')  { fromVal=tD.getFullYear()+'-04-01'; isQButton=true; }
+      else if(_activePeriodBtn==='hadm-btn-q3')  { fromVal=tD.getFullYear()+'-07-01'; isQButton=true; }
+      else if(_activePeriodBtn==='hadm-btn-q4')  { fromVal=tD.getFullYear()+'-10-01'; isQButton=true; }
       else { fromVal=_getFilters().from; }
       
-      // Si es Q y aún no ha iniciado, marcar y no renderizar
       var fromDate=_strToDate(fromVal);
-      if(fromDate>today && ['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0){
-        qNotStarted=true;
-        f=null;
+      var hasDataInQ=rows.some(function(r){return r.data>=fromVal&&(parseFloat(r.montante)||0)>0;});
+      
+      // Si es Q y no hay datos en 2026 para ese Q, usar rango completo de Q para comparaciones
+      if(isQButton && !hasDataInQ){
+        var qEndDates={'hadm-btn-q1':'-03-31','hadm-btn-q2':'-06-30','hadm-btn-q3':'-09-30','hadm-btn-q4':'-12-31'};
+        var qEnd=tD.getFullYear()+qEndDates[_activePeriodBtn];
+        f=null; // No renderizar header de 2026
+        fComparison={from:fromVal, to:qEnd}; // Pero comparar con Q completo de años anteriores
       } else {
         f={from:fromVal, to:lastDay};
+        fComparison=f;
       }
+      
       // Sincronizar inputs
       var fEl2=document.getElementById('hadm-from'),tEl2=document.getElementById('hadm-to');
       if(fEl2)fEl2.value=f?f.from:'';
@@ -382,11 +390,12 @@
     } else {
       f=_getFilters();
       if(f.to>=_todayStr()) f={from:f.from, to:lastDay};
+      fComparison=f;
     }
     
-    // Si Q no ha iniciado, mostrar mensaje y salir
-    if(qNotStarted){
-      var c=_getContent(); if(c){c.innerHTML='<div style="padding:40px 20px;text-align:center;font-size:.85rem;color:#888 !important;">Este trimestre aún no ha iniciado. Los datos aparecerán cuando se comience a vender.</div>';_setupContent(c);}
+    // Si f es null pero hay fComparison, continuar (es caso de Q no iniciado)
+    if(!f&&!fComparison){
+      var c=_getContent(); if(c){c.innerHTML='';_setupContent(c);}
       return;
     }
 
@@ -407,8 +416,53 @@
         if(dr>0) diasRestantes=', faltan '+dr+' para terminar Q';
       }
     }
-    var dataLabel=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+(isToday?' · até hoje':' · até ontem')+' ('+nDays+' dias'+diasRestantes+')'+(_equalDates?' · datas exactas':''));
-    var comps=_equalDates?_buildComparisonsExact(f.from,f.to,rows):_buildComparisons(f.from,f.to,rows);
+    var dataLabel=f?(isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+(isToday?' · até hoje':' · até ontem')+' ('+nDays+' dias'+diasRestantes+')'+(_equalDates?' · datas exactas':''))):'';
+    var comps=_equalDates?_buildComparisonsExact(fComparison.from,fComparison.to,rows):_buildComparisons(fComparison.from,fComparison.to,rows);
+
+    // Si f es null pero hay comparaciones, mostrar solo las comparaciones sin header de 2026
+    if(!f&&comps.length){
+      var c=_getContent(); if(c){c.innerHTML='';_setupContent(c);}
+      
+      var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;position:relative;');
+      hdr.style.setProperty('background','#1a1a1a','important');
+      
+      // Renderizar solo comparaciones sin header de periodo 2026
+      if(comps.length){
+        var cRow=_el('div','display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:0;padding-top:0;border-top:none;');
+        comps.forEach(function(comp,idx){
+          var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
+          var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+          var diff=cTotal>0?(0-cTotal)/cTotal*100:null; // comparar con 0 ya que no hay datos de 2026
+          var cBox=_el('div','');
+          if(idx>0){
+            cBox.style.setProperty('border-top','1px solid #444444','important');
+            cBox.style.setProperty('padding-top','12px','important');
+            cBox.style.setProperty('margin-top','12px','important');
+          }
+          var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
+          cYear.style.setProperty('color','#aaaaaa','important');
+          cYear.textContent='vs '+comp.label;
+          cBox.appendChild(cYear);
+          var cDates=_el('div','font-size:.56rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px;');
+          cDates.style.setProperty('color','#555555','important');
+          cDates.textContent=_fmtDate(comp.from)+'→'+_fmtDate(comp.to);
+          cBox.appendChild(cDates);
+          var cLine=_el('div','display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;');
+          var cVal=_el('span','font-size:.88rem;font-weight:800;');
+          cVal.style.setProperty('color','#cccccc','important');
+          cVal.textContent=_fmtEur(cTotal);
+          cLine.appendChild(cVal);
+          cBox.appendChild(cLine);
+          cRow.appendChild(cBox);
+        });
+        hdr.appendChild(cRow);
+      }
+      c.appendChild(hdr);
+      return;
+    }
+    
+    // Header resumen normal (si f existe)
+    if(!f) return;
 
     // Header resumen
     var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;position:relative;');

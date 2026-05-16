@@ -57,6 +57,7 @@
   function _strToDate(s) { return new Date(s+'T00:00:00'); }
   function _fmtDate(str) { if(!str)return''; var p=str.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:str; }
   function _fmtEur(v) { var n=parseFloat(v||0).toFixed(2),parts=n.split('.'); parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.'); return parts[0]+','+parts[1]+'\u00a0€'; }
+  function _fmtNumber(v) { var n=parseFloat(v||0).toFixed(2),parts=n.split('.'); parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.'); return parts[0]+','+parts[1]; }
   function _dowStr(s) { return DIAS_PT[_strToDate(s).getDay()]; }
 
   function _yesterday() { return _strToDate(_yesterdayStr()); }
@@ -380,9 +381,12 @@
     // Si es Q1-Q4 y estamos en medio del trimestre, mostrar dias restantes
     if(['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0 && !isTotal){
       var today=_strToDate(_todayStr());
-      var to=_strToDate(f.to);
-      if(today<to){
-        var dr=Math.round((to-today)/86400000);
+      // Usar la fecha real de fin de trimestre, no lastDay
+      var qEndDates={'hadm-btn-q1':'03-31','hadm-btn-q2':'06-30','hadm-btn-q3':'09-30','hadm-btn-q4':'12-31'};
+      var qEndDateStr=today.getFullYear()+'-'+qEndDates[_activePeriodBtn];
+      var qEnd=_strToDate(qEndDateStr);
+      if(today<qEnd){
+        var dr=Math.round((qEnd-today)/86400000);
         if(dr>0) diasRestantes=', faltan '+dr+' para terminar Q';
       }
     }
@@ -425,19 +429,25 @@
     hdr.appendChild(hSub);
 
     if(!isTotal&&comps.length){
-      var cRow=_el('div','display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
-      comps.forEach(function(comp){
+      var cRow=_el('div','display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
+      comps.forEach(function(comp,idx){
         var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
         var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
         var diff=cTotal>0?(periodTotal-cTotal)/cTotal*100:null;
         var diffEur=periodTotal-cTotal;
-        var cBox=_el('div','min-width:120px;');
+        var cBox=_el('div','');
+        // Añadir separador antes de cada bloque excepto el primero
+        if(idx>0){
+          cBox.style.setProperty('border-top','1px solid #444444','important');
+          cBox.style.setProperty('padding-top','12px','important');
+          cBox.style.setProperty('margin-top','12px','important');
+        }
         var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
         cYear.style.setProperty('color','#aaaaaa','important');
         var yearLabel='vs '+comp.label;
         if(cTotal>0){
           var eur=_fmtEur(Math.abs(diffEur));
-          yearLabel+=' ('+(diffEur>=0?'+':'-')+eur+')';
+          yearLabel+=' ('+_fmtNumber(Math.abs(diffEur))+')';
         }
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);

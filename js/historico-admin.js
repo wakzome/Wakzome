@@ -2481,7 +2481,7 @@
     {csv:'SANDRA M.',  nombre:'Sandra Melim'},
     {csv:'EDNA M.',    nombre:'Edna Melim'},
     {csv:'CARLA A.',   nombre:'Carla Alves'},
-    {csv:'MARILIA S.', nombre:'Marialia Silva'}
+    {csv:'MARILIA S.', nombre:'Marilia Silva'}
   ];
   // Mapeo nombre en CSV de tienda → loja key
   var PREMIOS_CSV_LOJA = {

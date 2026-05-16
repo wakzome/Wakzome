@@ -2724,7 +2724,9 @@
       var falta = minimo - (diff||0);
       var faltaEl = _el('div','font-size:.68rem;');
       faltaEl.style.setProperty('color','#a03020','important');
-      faltaEl.textContent = 'Faltaram ' + _fmtEur(falta) + ' para atingir o objectivo mínimo de +' + _fmtEur(minimo);
+      var mesAtual = parseInt(_todayStr().substring(5,7));
+      var verbo = (mo === mesAtual) ? 'Faltam' : 'Faltaram';
+      faltaEl.textContent = verbo + ' ' + _fmtEur(falta) + ' para atingir o objectivo mínimo de +' + _fmtEur(minimo);
       wrap.appendChild(faltaEl);
       return wrap;
     }

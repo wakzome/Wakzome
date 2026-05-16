@@ -363,7 +363,20 @@
       else if(_activePeriodBtn==='hadm-btn-q3')  { fromVal=tD.getFullYear()+'-07-01'; }
       else if(_activePeriodBtn==='hadm-btn-q4')  { fromVal=tD.getFullYear()+'-10-01'; }
       else { fromVal=_getFilters().from; }
-      f={from:fromVal, to:lastDay};
+      
+      // Para Q: si no hay datos en 2026 para ese Q aún, usar fin de Q completo para comparaciones
+      var toVal=lastDay;
+      var isQBtn=['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0;
+      if(isQBtn){
+        var hasDataInQ=rows.some(function(r){return r.data>=fromVal&&(parseFloat(r.montante)||0)>0;});
+        if(!hasDataInQ){
+          // No hay datos en Q 2026, usar fin de Q para comparaciones con años anteriores
+          var qEndDates={'hadm-btn-q1':'03-31','hadm-btn-q2':'06-30','hadm-btn-q3':'09-30','hadm-btn-q4':'12-31'};
+          toVal=tD.getFullYear()+'-'+qEndDates[_activePeriodBtn];
+        }
+      }
+      
+      f={from:fromVal, to:toVal};
       // Sincronizar inputs
       var fEl2=document.getElementById('hadm-from'),tEl2=document.getElementById('hadm-to');
       if(fEl2)fEl2.value=f.from;

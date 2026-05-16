@@ -2767,7 +2767,7 @@
               var m = parseInt((fecha||'').substring(5,7));
               var y = parseInt((fecha||'').substring(0,4));
               if(y === year && m === month) {
-                merged[person][store][fecha] = true;
+                merged[person][store][fecha] = parsed[person][store][fecha]; // Mantener minutos
               }
             });
           });

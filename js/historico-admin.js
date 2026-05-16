@@ -363,20 +363,7 @@
       else if(_activePeriodBtn==='hadm-btn-q3')  { fromVal=tD.getFullYear()+'-07-01'; }
       else if(_activePeriodBtn==='hadm-btn-q4')  { fromVal=tD.getFullYear()+'-10-01'; }
       else { fromVal=_getFilters().from; }
-      
-      // Para Q: si no hay datos en 2026 para ese Q aún, usar fin de Q completo para comparaciones
-      var toVal=lastDay;
-      var isQBtn=['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0;
-      if(isQBtn){
-        var hasDataInQ=rows.some(function(r){return r.data>=fromVal&&(parseFloat(r.montante)||0)>0;});
-        if(!hasDataInQ){
-          // No hay datos en Q 2026, usar fin de Q para comparaciones con años anteriores
-          var qEndDates={'hadm-btn-q1':'03-31','hadm-btn-q2':'06-30','hadm-btn-q3':'09-30','hadm-btn-q4':'12-31'};
-          toVal=tD.getFullYear()+'-'+qEndDates[_activePeriodBtn];
-        }
-      }
-      
-      f={from:fromVal, to:toVal};
+      f={from:fromVal, to:lastDay};
       // Sincronizar inputs
       var fEl2=document.getElementById('hadm-from'),tEl2=document.getElementById('hadm-to');
       if(fEl2)fEl2.value=f.from;
@@ -2663,25 +2650,17 @@
     }).catch(function(){ _premiosCSVCache[key]=null; return null; });
   }
 
-  // Parsea rangos horarios y calcula horas totales
-  // Ej: "09:00-13:00" → 4, "09:00-13:00 19:00-23:00" → 8
-  function _premiosCalculateHours(timeRangeStr) {
-    if(!timeRangeStr || !timeRangeStr.includes(':')) return 0;
-    var ranges = timeRangeStr.split(/\s+/); // separar múltiples rangos
-    var totalMinutes = 0;
-    ranges.forEach(function(range) {
-      var parts = range.split('-');
-      if(parts.length === 2) {
-        var startParts = parts[0].split(':');
-        var endParts = parts[1].split(':');
-        if(startParts.length === 2 && endParts.length === 2) {
-          var startMin = parseInt(startParts[0])*60 + parseInt(startParts[1]);
-          var endMin = parseInt(endParts[0])*60 + parseInt(endParts[1]);
-          if(endMin > startMin) totalMinutes += (endMin - startMin);
-        }
-      }
-    });
-    return totalMinutes;
+  // Calcula horas de un rango horario (HH:MM-HH:MM)
+  function _premiosHorasDelRango(timeStr) {
+    if(!timeStr || !timeStr.includes(':')) return 480; // 8 horas por defecto
+    var parts = timeStr.split('-');
+    if(parts.length !== 2) return 480;
+    var startParts = parts[0].trim().split(':');
+    var endParts = parts[1].trim().split(':');
+    if(startParts.length !== 2 || endParts.length !== 2) return 480;
+    var startMin = parseInt(startParts[0])*60 + parseInt(startParts[1]);
+    var endMin = parseInt(endParts[0])*60 + parseInt(endParts[1]);
+    return endMin > startMin ? endMin - startMin : 480;
   }
 
   // Parsea un CSV de horarios y devuelve:
@@ -2691,7 +2670,7 @@
     var result = {};
     var lines = csvText.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
     var currentStoreName = null;
-    var currentDates = []; // fechas ISO de cada columna (índice 1-7)
+    var currentDates = [];
     var i = 0;
     while(i < lines.length) {
       var cols = lines[i].split(',');
@@ -2718,9 +2697,7 @@
         continue;
       }
       // Fila de persona: nombre+hrs, luego días
-      // El nombre es la primera columna, puede tener hrs: "SANDRA M.40hrs"
       var rawName = cols[0].trim();
-      // Extraer prefijo del nombre (sin número de horas): "SANDRA M."
       var personMatch = rawName.match(/^([A-ZÁÉÍÓÚÃÕÂÊÔ][^\d]+\.\s*)/);
       var personKey = personMatch ? personMatch[1].trim() : null;
 
@@ -2742,16 +2719,15 @@
             // folga normal — no cuenta como ausencia ni como trabajo
           } else if(cell === currentStoreName || PREMIOS_CSV_LOJA[cell] === PREMIOS_CSV_LOJA[currentStoreName]) {
             // La celda dice el nombre de esta misma tienda (apoio desde otra)
-            // No contar horas, ya que es apoio sin horario específico
-            result[personKey][currentStoreName][isoDate] = 480; // 8 horas por defecto para apoio
+            result[personKey][currentStoreName][isoDate] = 480; // 8 horas
           } else if(PREMIOS_CSV_LOJA[cell]) {
             // Está trabajando en otra tienda — registrar allí
             if(!result[personKey][cell]) result[personKey][cell] = {};
-            result[personKey][cell][isoDate] = 480; // 8 horas por defecto
+            result[personKey][cell][isoDate] = 480; // 8 horas
           } else if(cell.includes(':')) {
-            // Es un horario (HH:MM-HH:MM o múltiples) → calcular horas
-            var minutes = _premiosCalculateHours(cell);
-            result[personKey][currentStoreName][isoDate] = minutes;
+            // Es un horario (HH:MM-HH:MM) → registrar minutos trabajados
+            var minutos = _premiosHorasDelRango(cell);
+            result[personKey][currentStoreName][isoDate] = minutos;
           }
         }
       }
@@ -2872,32 +2848,43 @@
       return wrap;
     }
 
-    // Calcular horas totales trabajadas por persona en esta tienda (solo si objetivo alcanzado)
+    // Calcular días trabajados por persona en esta tienda (días completos + parciales 4+h)
     var lojaCSVKey = loja;
     var participaciones = [];
     PREMIOS_PERSONAS.forEach(function(p) {
       var horariosEnEstaLoja = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
         ? horariosData[p.csv][lojaCSVKey] : {};
+      var fechasEnEstaLoja = Object.keys(horariosEnEstaLoja);
+      if(fechasEnEstaLoja.length === 0) return;
       
-      // Sumar minutos totales del mes en esta tienda
-      var totalMinutos = 0;
-      Object.keys(horariosEnEstaLoja).forEach(function(fecha) {
-        totalMinutos += (horariosEnEstaLoja[fecha] || 0);
+      // Contar días completos (480 minutos = 8 horas) y parciales (240-479 minutos = 4-7 horas)
+      var diasCompletos = 0;
+      var diasParciales = 0;
+      fechasEnEstaLoja.forEach(function(fecha) {
+        var minutos = horariosEnEstaLoja[fecha] || 0;
+        if(minutos >= 480) {
+          diasCompletos++;
+        } else if(minutos >= 240) { // 4 horas = 240 minutos
+          diasParciales += 0.5;
+        }
+        // Si < 240 minutos (< 4h), no contar
       });
       
-      if(totalMinutos === 0) return; // Si no hay horas, no mostrar
+      // Total de días (enteros + medios)
+      var totalDias = diasCompletos + diasParciales;
+      var totalMinutos = Math.round(totalDias * 480); // convertir a minutos para formato
       
-      // Convertir minutos a días, horas, minutos
-      var dias = Math.floor(totalMinutos / (8*60)); // 8 horas = 1 día
+      // Convertir a "Xd Yh Zm"
+      var dias = Math.floor(totalMinutos / (8*60));
       var horasRestantes = Math.floor((totalMinutos % (8*60)) / 60);
       var minutosRestantes = totalMinutos % 60;
-      
       var tiempoFormat = dias + 'd ' + horasRestantes + 'h ' + minutosRestantes + 'm';
       
       participaciones.push({
         nombre: p.nombre,
-        tiempoFormat: tiempoFormat,
-        totalMinutos: totalMinutos
+        dias: totalDias,
+        diasLabel: tiempoFormat,
+        ausencias: 0
       });
     });
 
@@ -2924,8 +2911,7 @@
       ptr.appendChild(tdNom);
 
       var tdDias = document.createElement('td');
-      var tiempoLabel = p.tiempoFormat;
-      tdDias.textContent = tiempoLabel;
+      tdDias.textContent = p.diasLabel;
       tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-size:.68rem;font-weight:700;');
       tdDias.style.setProperty('background',pbg,'important');
       tdDias.style.setProperty('color','#555555','important');

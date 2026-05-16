@@ -2588,6 +2588,7 @@
       if(personKey && currentStoreName) {
         if(!result[personKey]) result[personKey] = {};
         if(!result[personKey][currentStoreName]) result[personKey][currentStoreName] = {};
+        if(!result[personKey]['__ausencias__']) result[personKey]['__ausencias__'] = {};
 
         // Recorrer cada día (columnas 1-7)
         for(var di=1; di<=7; di++) {
@@ -2595,24 +2596,20 @@
           var isoDate = currentDates[di-1];
           if(!isoDate) continue;
 
-          // ¿Trabajó en esta tienda?
-          var trabajoAqui = false;
-          if(cell === 'FOLGA' || cell === 'FERIAS' || cell === 'LICENÇA' || cell === 'LICENCA' || cell === '') {
-            trabajoAqui = false;
+          // ¿Ausencia larga (no folga normal)?
+          if(cell === 'FERIAS' || cell === 'LICENÇA' || cell === 'LICENCA' || cell === 'BAIXA') {
+            result[personKey]['__ausencias__'][isoDate] = true;
+          } else if(cell === 'FOLGA' || cell === '') {
+            // folga normal — no cuenta como ausencia ni como trabajo
           } else if(cell === currentStoreName || PREMIOS_CSV_LOJA[cell] === PREMIOS_CSV_LOJA[currentStoreName]) {
             // La celda dice el nombre de esta misma tienda (apoio desde otra)
-            trabajoAqui = true;
+            result[personKey][currentStoreName][isoDate] = true;
           } else if(PREMIOS_CSV_LOJA[cell]) {
             // Está trabajando en otra tienda — registrar allí
             if(!result[personKey][cell]) result[personKey][cell] = {};
             result[personKey][cell][isoDate] = true;
-            trabajoAqui = false;
           } else if(cell.includes(':')) {
             // Es un horario (HH:MM-HH:MM) → trabajó aquí
-            trabajoAqui = true;
-          }
-
-          if(trabajoAqui) {
             result[personKey][currentStoreName][isoDate] = true;
           }
         }
@@ -2622,15 +2619,27 @@
     return result;
   }
 
+
   // Carga y agrega horarios de todas las semanas de un mes
-  // Devuelve: { 'SANDRA M.': { 'MEZKA AVENIDA': Set(fechas), ... }, ... }
+  // Devuelve: { 'SANDRA M.': { 'MEZKA AVENIDA': {fechas}, '__ausencias__': {fechas}, ... }, ... }
   function _premiosHorariosDelMes(year, month) {
     var weeks = _premiosWeeksForMonth(year, month);
     var promises = weeks.map(function(monday) {
       return _premiosLoadCSV(_premiosWeekNum(monday));
     });
-    return Promise.all(promises).then(function(csvTexts) {
+
+    // También consultar tabla ferias de Supabase para este año
+    var feriasPromise = sbAdmin.from('ferias').select('nome,de,ate')
+      .then(function(res){ return res.data || []; })
+      .catch(function(){ return []; });
+
+    return Promise.all([Promise.all(promises), feriasPromise]).then(function(results) {
+      var csvTexts = results[0];
+      var feriasRows = results[1];
+
       var merged = {};
+
+      // Procesar CSVs
       csvTexts.forEach(function(csv) {
         var parsed = _premiosParseCSV(csv);
         Object.keys(parsed).forEach(function(person) {
@@ -2638,7 +2647,6 @@
           Object.keys(parsed[person]).forEach(function(store) {
             if(!merged[person][store]) merged[person][store] = {};
             Object.keys(parsed[person][store]).forEach(function(fecha) {
-              // Solo incluir fechas del mes pedido
               var m = parseInt((fecha||'').substring(5,7));
               var y = parseInt((fecha||'').substring(0,4));
               if(y === year && m === month) {
@@ -2648,6 +2656,47 @@
           });
         });
       });
+
+      // Añadir días de férias desde Supabase
+      // Cruzar nombre completo de ferias con clave CSV de PREMIOS_PERSONAS
+      feriasRows.forEach(function(f) {
+        // Buscar la persona en PREMIOS_PERSONAS por nombre completo (case-insensitive)
+        var personaMatch = null;
+        PREMIOS_PERSONAS.forEach(function(p) {
+          if(p.nombre.toUpperCase() === (f.nome||'').toUpperCase()) personaMatch = p;
+        });
+        if(!personaMatch) return;
+
+        // Parsear fechas de férias (formato DD/MM/YYYY o YYYY-MM-DD)
+        function parseFeriaDate(str) {
+          if(!str) return null;
+          if(str.includes('/')) {
+            var parts = str.split('/');
+            return new Date(+parts[2], +parts[1]-1, +parts[0]);
+          }
+          var parts = str.split('-');
+          return new Date(+parts[0], +parts[1]-1, +parts[2]);
+        }
+        var deD = parseFeriaDate(f.de);
+        var ateD = parseFeriaDate(f.ate);
+        if(!deD || !ateD) return;
+
+        // Iterar cada día del rango de férias
+        var d = new Date(deD);
+        while(d <= ateD) {
+          var dy = d.getFullYear();
+          var dm = d.getMonth() + 1;
+          if(dy === year && dm === month) {
+            var isoDate = dy + '-' + _pad(dm) + '-' + _pad(d.getDate());
+            var csvKey = personaMatch.csv;
+            if(!merged[csvKey]) merged[csvKey] = {};
+            if(!merged[csvKey]['__ausencias__']) merged[csvKey]['__ausencias__'] = {};
+            merged[csvKey]['__ausencias__'][isoDate] = true;
+          }
+          d.setDate(d.getDate() + 1);
+        }
+      });
+
       return merged;
     });
   }
@@ -2712,21 +2761,22 @@
     }
 
     // Determinar si alguien trabajó el mes completo
-    // "mes completo" = aparece solo en esta tienda durante todo el mes (no en otras de las premium)
+    // "mes completo" = solo en esta tienda Y sin ausencias (ferias/licença/baixa) ese mes
     var totalDiasMes = diasMes;
     participaciones.forEach(function(p) {
-      // ¿Trabajó solo en esta tienda? Sumar sus días en otras tiendas premium
+      // ¿Tuvo ausencias este mes?
+      var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
+        ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
+      // ¿Trabajó en otras tiendas premium?
       var diasOtrasLojas = 0;
-      PREMIOS_PERSONAS.forEach(function(pp) {
-        if(pp.csv !== p.csv) return;
-        ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'].forEach(function(otraLoja) {
-          if(otraLoja === loja) return;
-          var d = horariosData[pp.csv] && horariosData[pp.csv][otraLoja]
-            ? Object.keys(horariosData[pp.csv][otraLoja]).length : 0;
-          diasOtrasLojas += d;
-        });
+      ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'].forEach(function(otraLoja) {
+        if(otraLoja === loja) return;
+        var d = horariosData[p.csv] && horariosData[p.csv][otraLoja]
+          ? Object.keys(horariosData[p.csv][otraLoja]).length : 0;
+        diasOtrasLojas += d;
       });
-      p.soloEstaLoja = (diasOtrasLojas === 0);
+      // Mes completo: sin ausencias y sin días en otras tiendas
+      p.soloEstaLoja = (diasOtrasLojas === 0 && diasAusencia === 0);
       p.premio = p.soloEstaLoja
         ? premioValor  // mes completo → premio entero
         : parseFloat((p.dias / totalDiasMes * premioValor).toFixed(2)); // proporcional

@@ -144,7 +144,86 @@
     return {from:from,to:to};
   }
 
+  // Inyecta el HTML del módulo dentro de #admin-app si aún no existe
+  function _injectHTML(){
+    if(document.getElementById('adm-historico-panel')) return;
+    var adminApp=document.getElementById('admin-app');
+    if(!adminApp) return;
+
+    var panel=document.createElement('div');
+    panel.id='adm-historico-panel';
+    panel.innerHTML=
+      '<div class="hadm-filter-container">'+
+        '<div class="hadm-row">'+
+          '<button id="hadm-btn-7">7/D</button>'+
+          '<button id="hadm-btn-30">30/D</button>'+
+          '<button id="hadm-btn-90">90/D</button>'+
+          '<button id="hadm-btn-mes">*Mes</button>'+
+          '<button id="hadm-btn-ano">*Ano</button>'+
+          '<button id="hadm-btn-q1">Q1</button>'+
+          '<button id="hadm-btn-q2">Q2</button>'+
+          '<button id="hadm-btn-q3">Q3</button>'+
+          '<button id="hadm-btn-q4">Q4</button>'+
+          '<button id="hadm-btn-total">Total</button>'+
+        '</div>'+
+        '<div class="hadm-row">'+
+          '<button id="hadm-btn-parfois">Parfois</button>'+
+          '<button id="hadm-btn-primavera">Primavera</button>'+
+          '<button id="hadm-btn-mezkaps">Mezka Ps</button>'+
+          '<button id="hadm-btn-mezkafnc">Mezka Fnc</button>'+
+          '<button id="hadm-btn-domingo">Domingo Ps</button>'+
+        '</div>'+
+        '<div class="hadm-row hadm-row-dates">'+
+          '<div class="hadm-filter-group hadm-date-group">'+
+            '<label>De</label>'+
+            '<input type="date" id="hadm-from">'+
+          '</div>'+
+          '<div class="hadm-filter-group hadm-date-group">'+
+            '<label>Até</label>'+
+            '<input type="date" id="hadm-to">'+
+          '</div>'+
+          '<div class="hadm-filter-group">'+
+            '<label>Loja</label>'+
+            '<select id="hadm-loja">'+
+              '<option value="">todas as lojas</option>'+
+              '<option value="MAXX">Maxx</option>'+
+              '<option value="MEZKA AVENIDA">Mezka Avenida</option>'+
+              '<option value="MEZKA FUNCHAL">Mezka Funchal</option>'+
+              '<option value="MEZKA MERCADO">Mezka Mercado</option>'+
+              '<option value="PARFOIS ARCADAS SAO FRANCISCO">Parfois Arcadas</option>'+
+              '<option value="PARFOIS MADEIRA SHOPPING">Madeira Shopping</option>'+
+              '<option value="SHANA">Shana</option>'+
+            '</select>'+
+          '</div>'+
+          '<button class="hadm-buscar-btn" id="hadm-buscar-btn">pesquisar</button>'+
+        '</div>'+
+        '<div class="hadm-row">'+
+          '<button id="hadm-tab-vendas">📋 Vendas</button>'+
+          '<button id="hadm-tab-carregar">➕ Carregar dados</button>'+
+          '<button id="hadm-tab-proyeccion">📈 Projecção</button>'+
+          '<button id="hadm-tab-premios">€ Prémios</button>'+
+        '</div>'+
+      '</div>'+
+      '<div id="hadm-content"></div>';
+    adminApp.appendChild(panel);
+
+    // Modal de trazabilidad (también del módulo)
+    if(!document.getElementById('hadm-traza-overlay')){
+      var overlay=document.createElement('div');
+      overlay.id='hadm-traza-overlay';
+      overlay.innerHTML=
+        '<div id="hadm-traza-modal">'+
+          '<button id="hadm-traza-close" title="Fechar">✕</button>'+
+          '<div id="hadm-traza-body"></div>'+
+        '</div>';
+      adminApp.appendChild(overlay);
+    }
+  }
+
   window.openHistoricoAdmin = function () {
+    _injectHTML(); // Crear el HTML del módulo si no existe
+    _injectStyles(); // Inyectar CSS si no existe
+    _attachListeners(); // Enganchar listeners una sola vez
     var adminApp=document.getElementById('admin-app');
     var dashboard=document.getElementById('adm-dashboard');
     var moduleBar=document.getElementById('adm-module-bar');
@@ -3571,6 +3650,47 @@
     if(document.getElementById('hadm-styles'))return;
     var s=document.createElement('style');s.id='hadm-styles';
     s.textContent=
+      // ── Estilos base del módulo (antes en index.html) ──
+      '#adm-historico-panel{display:none;width:100%;box-sizing:border-box;flex-direction:column;animation:tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;}'+
+      '.hadm-filter-bar{display:flex;flex-wrap:wrap;flex-direction:column;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1.5px solid #e6e6e6;background:#f7f7f7;flex-shrink:0;}'+
+      '.hadm-tab-bar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px;background:#f7f7f7;border-bottom:1.5px solid #e6e6e6;flex-shrink:0;}'+
+      '.hadm-period-btns{display:flex;gap:8px;width:100%;flex-wrap:wrap;margin-bottom:4px;}'+
+      '.hadm-filter-dates{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;width:100%;}'+
+      '.hadm-filter-group{display:flex;flex-direction:column;gap:4px;}'+
+      '.hadm-filter-group label{font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;opacity:.5;}'+
+      '.hadm-filter-group input[type="date"],.hadm-filter-group select{padding:8px 12px;font-size:.88rem;font-weight:bold;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:9px;background:#fff;outline:none;cursor:pointer;}'+
+      '.hadm-buscar-btn{padding:9px 22px;font-size:.88rem;font-weight:bold;font-family:"MontserratLight",sans-serif;background:#000;color:#fff !important;border:none;border-radius:9px;cursor:pointer;align-self:flex-end;}'+
+      '.hadm-buscar-btn:hover{background:#333;}'+
+      '#hadm-content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;width:100%;box-sizing:border-box;}'+
+      '.adm-mod-card[data-module="historico"]::before{background:linear-gradient(145deg,#0a1a2e 0%,#0f2a40 60%,#1a3a5c 100%);}'+
+      // ── Mobile (max-width: 768px) ──
+      '@media (max-width: 768px){'+
+        '.hadm-row-dates{flex-wrap:wrap !important;gap:8px !important;}'+
+        '.hadm-date-group{flex:1;min-width:120px;}'+
+        '.hadm-date-group input[type="date"]{width:100%;box-sizing:border-box;font-size:.82rem;padding:7px 8px;}'+
+        '.hadm-row-dates .hadm-filter-group:not(.hadm-date-group){flex:1;min-width:140px;}'+
+        '.hadm-row-dates .hadm-buscar-btn{align-self:flex-end;}'+
+      '}'+
+      // ── Desktop (min-width: 769px) ──
+      '@media (min-width: 769px){'+
+        '.hadm-filter-container{max-width:860px !important;width:calc(100% - 48px) !important;padding:14px 20px !important;gap:10px !important;}'+
+        '.hadm-row:first-child{flex-wrap:nowrap !important;gap:6px !important;}'+
+        '.hadm-row:nth-child(2){flex-wrap:nowrap !important;gap:6px !important;}'+
+        '.hadm-row:nth-child(3){flex-wrap:nowrap !important;gap:6px !important;}'+
+        '.hadm-rows-combined{display:flex !important;flex-wrap:wrap !important;gap:6px !important;justify-content:center !important;width:100% !important;}'+
+        '#adm-historico-panel .hadm-filter-container button{padding:6px 13px !important;font-size:.78rem !important;}'+
+        '.hadm-row-dates{flex-wrap:nowrap !important;flex:1 !important;}'+
+        '.hadm-date-group{min-width:0 !important;}'+
+      '}'+
+      // ── Modal trazabilidad ──
+      '#hadm-traza-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}'+
+      '#hadm-traza-overlay.active{display:flex;}'+
+      '#hadm-traza-modal{background:#ffffff;border-radius:16px;width:100%;max-width:700px;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.28);position:relative;padding:28px 28px 24px;box-sizing:border-box;animation:hadmModalIn 0.22s cubic-bezier(0.22,1,0.36,1) forwards;}'+
+      '@keyframes hadmModalIn{from{opacity:0;transform:scale(0.96) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}'+
+      '@media (max-width: 768px){#hadm-traza-modal{max-width:100%;max-height:92vh;padding:20px 16px 20px;border-radius:12px;}}'+
+      '#hadm-traza-close{position:absolute;top:14px;right:16px;font-size:1.3rem;cursor:pointer;color:#888;line-height:1;background:none;border:none;padding:4px 8px;border-radius:6px;}'+
+      '#hadm-traza-close:hover{background:#f0f0f0;color:#111;}'+
+      // ── Estilos originales del módulo ──
       '#adm-historico-panel input[type="number"]::-webkit-outer-spin-button,#adm-historico-panel input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}'+
       '#adm-historico-panel input[type="number"]{-moz-appearance:textfield;}'+
       '#adm-historico-panel select option{background:#ffffff !important;color:#111111 !important;}'+
@@ -3599,7 +3719,10 @@
     });
   }
 
-  setTimeout(function(){
+  var _listenersAttached=false;
+  function _attachListeners(){
+    if(_listenersAttached) return;
+    _listenersAttached=true;
     // ── Modal de trazabilidad — cerrar
     var trazaClose=document.getElementById('hadm-traza-close');
     var trazaOverlay=document.getElementById('hadm-traza-overlay');
@@ -3731,6 +3854,6 @@
     });
 
     _applyBtnStyles();
-  },0);
+  }
 
 })();

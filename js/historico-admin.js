@@ -265,7 +265,7 @@
       sw.style.setProperty('height','0','important');
     }
     _injectStyles();
-    _activeTab='vendas'; _activePeriodBtn='hadm-btn-30'; _activeZoneBtn=null; _expanded={};
+    _activeTab='vendas'; _activePeriodBtn='hadm-btn-mes'; _activeZoneBtn=null; _expanded={};
     _applyBtnStyles();
     var p=_period30();
     var fEl=document.getElementById('hadm-from'),tEl=document.getElementById('hadm-to');
@@ -376,7 +376,17 @@
     var periodRows=rows.filter(function(r){return r.data>=f.from&&r.data<=f.to;});
     var periodTotal=periodRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
     var nDays=Math.round((_strToDate(f.to)-_strToDate(f.from))/86400000)+1;
-    var dataLabel=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+(isToday?' · até hoje':' · até ontem')+' ('+nDays+' dias)'+(_equalDates?' · datas exactas':''));
+    var diasRestantes='';
+    // Si es Q1-Q4 y estamos en medio del trimestre, mostrar dias restantes
+    if(['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0 && !isTotal){
+      var today=_strToDate(_todayStr());
+      var to=_strToDate(f.to);
+      if(today<to){
+        var dr=Math.round((to-today)/86400000);
+        if(dr>0) diasRestantes=', faltan '+dr+' para terminar Q';
+      }
+    }
+    var dataLabel=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+(isToday?' · até hoje':' · até ontem')+' ('+nDays+' dias'+diasRestantes+')'+(_equalDates?' · datas exactas':''));
     var comps=_equalDates?_buildComparisonsExact(f.from,f.to,rows):_buildComparisons(f.from,f.to,rows);
 
     // Header resumen
@@ -420,10 +430,16 @@
         var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
         var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
         var diff=cTotal>0?(periodTotal-cTotal)/cTotal*100:null;
+        var diffEur=periodTotal-cTotal;
         var cBox=_el('div','min-width:120px;');
         var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
         cYear.style.setProperty('color','#aaaaaa','important');
-        cYear.textContent='vs '+comp.label;
+        var yearLabel='vs '+comp.label;
+        if(cTotal>0){
+          var eur=_fmtEur(Math.abs(diffEur));
+          yearLabel+=' ('+(diffEur>=0?'+':'-')+eur+')';
+        }
+        cYear.textContent=yearLabel;
         cBox.appendChild(cYear);
         var cDates=_el('div','font-size:.56rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px;');
         cDates.style.setProperty('color','#555555','important');

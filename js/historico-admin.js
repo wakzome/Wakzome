@@ -2663,8 +2663,29 @@
     }).catch(function(){ _premiosCSVCache[key]=null; return null; });
   }
 
+  // Parsea rangos horarios y calcula horas totales
+  // Ej: "09:00-13:00" → 4, "09:00-13:00 19:00-23:00" → 8
+  function _premiosCalculateHours(timeRangeStr) {
+    if(!timeRangeStr || !timeRangeStr.includes(':')) return 0;
+    var ranges = timeRangeStr.split(/\s+/); // separar múltiples rangos
+    var totalMinutes = 0;
+    ranges.forEach(function(range) {
+      var parts = range.split('-');
+      if(parts.length === 2) {
+        var startParts = parts[0].split(':');
+        var endParts = parts[1].split(':');
+        if(startParts.length === 2 && endParts.length === 2) {
+          var startMin = parseInt(startParts[0])*60 + parseInt(startParts[1]);
+          var endMin = parseInt(endParts[0])*60 + parseInt(endParts[1]);
+          if(endMin > startMin) totalMinutes += (endMin - startMin);
+        }
+      }
+    });
+    return totalMinutes;
+  }
+
   // Parsea un CSV de horarios y devuelve:
-  // { personaCsv: { lojaCsv: Set(fechas ISO trabajadas) } }
+  // { personaCsv: { lojaCsv: { fecha: minutos_trabajados } } }
   function _premiosParseCSV(csvText) {
     if(!csvText) return {};
     var result = {};
@@ -2721,14 +2742,16 @@
             // folga normal — no cuenta como ausencia ni como trabajo
           } else if(cell === currentStoreName || PREMIOS_CSV_LOJA[cell] === PREMIOS_CSV_LOJA[currentStoreName]) {
             // La celda dice el nombre de esta misma tienda (apoio desde otra)
-            result[personKey][currentStoreName][isoDate] = true;
+            // No contar horas, ya que es apoio sin horario específico
+            result[personKey][currentStoreName][isoDate] = 480; // 8 horas por defecto para apoio
           } else if(PREMIOS_CSV_LOJA[cell]) {
             // Está trabajando en otra tienda — registrar allí
             if(!result[personKey][cell]) result[personKey][cell] = {};
-            result[personKey][cell][isoDate] = true;
+            result[personKey][cell][isoDate] = 480; // 8 horas por defecto
           } else if(cell.includes(':')) {
-            // Es un horario (HH:MM-HH:MM) → trabajó aquí
-            result[personKey][currentStoreName][isoDate] = true;
+            // Es un horario (HH:MM-HH:MM o múltiples) → calcular horas
+            var minutes = _premiosCalculateHours(cell);
+            result[personKey][currentStoreName][isoDate] = minutes;
           }
         }
       }
@@ -2849,19 +2872,32 @@
       return wrap;
     }
 
-    // Calcular días trabajados por persona en esta tienda
+    // Calcular horas totales trabajadas por persona en esta tienda (solo si objetivo alcanzado)
     var lojaCSVKey = loja;
     var participaciones = [];
     PREMIOS_PERSONAS.forEach(function(p) {
-      var fechasEnEstaLoja = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
-        ? Object.keys(horariosData[p.csv][lojaCSVKey]) : [];
-      if(fechasEnEstaLoja.length === 0) return;
-      var diasAusencia = horariosData[p.csv] && horariosData[p.csv]['__ausencias__']
-        ? Object.keys(horariosData[p.csv]['__ausencias__']).length : 0;
+      var horariosEnEstaLoja = horariosData[p.csv] && horariosData[p.csv][lojaCSVKey]
+        ? horariosData[p.csv][lojaCSVKey] : {};
+      
+      // Sumar minutos totales del mes en esta tienda
+      var totalMinutos = 0;
+      Object.keys(horariosEnEstaLoja).forEach(function(fecha) {
+        totalMinutos += (horariosEnEstaLoja[fecha] || 0);
+      });
+      
+      if(totalMinutos === 0) return; // Si no hay horas, no mostrar
+      
+      // Convertir minutos a días, horas, minutos
+      var dias = Math.floor(totalMinutos / (8*60)); // 8 horas = 1 día
+      var horasRestantes = Math.floor((totalMinutos % (8*60)) / 60);
+      var minutosRestantes = totalMinutos % 60;
+      
+      var tiempoFormat = dias + 'd ' + horasRestantes + 'h ' + minutosRestantes + 'm';
+      
       participaciones.push({
         nombre: p.nombre,
-        dias: fechasEnEstaLoja.length,
-        ausencias: diasAusencia
+        tiempoFormat: tiempoFormat,
+        totalMinutos: totalMinutos
       });
     });
 
@@ -2888,9 +2924,8 @@
       ptr.appendChild(tdNom);
 
       var tdDias = document.createElement('td');
-      var diasLabel = p.dias + ' dias trabalhados';
-      if(p.ausencias > 0) diasLabel += ' · ' + p.ausencias + 'd férias';
-      tdDias.textContent = diasLabel;
+      var tiempoLabel = p.tiempoFormat;
+      tdDias.textContent = tiempoLabel;
       tdDias.setAttribute('style','padding:5px 8px;border-bottom:1px solid #e8f0eb;text-align:right;font-size:.68rem;font-weight:700;');
       tdDias.style.setProperty('background',pbg,'important');
       tdDias.style.setProperty('color','#555555','important');

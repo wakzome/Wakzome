@@ -1751,7 +1751,19 @@
                 } else {
                   // Actual shift — join morning + afternoon with |
                   const shift = cellB ? (cellA + '|' + cellB) : cellA;
-                  S.schedule[person.id][day] = { type: 'work', shift, store: storeId };
+                  const cur = S.schedule[person.id][day];
+                  // Detect apoio: single short time slot (no cellB) and person already
+                  // has a full shift assigned for this day from their primary store block
+                  const isShortSlot = !cellB && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(cellA);
+                  const hasFullShift = cur.type === 'work' && cur.shift && cur.shift.includes('|');
+                  if (isShortSlot && hasFullShift) {
+                    // Apoio interval — store separately, preserve the main shift
+                    if (!S._apoioShifts) S._apoioShifts = {};
+                    if (!S._apoioShifts[person.id]) S._apoioShifts[person.id] = {};
+                    S._apoioShifts[person.id][day] = { store: storeId, shift: cellA };
+                  } else {
+                    S.schedule[person.id][day] = { type: 'work', shift, store: storeId };
+                  }
                 }
               }
             });

@@ -3522,6 +3522,10 @@
         #tab-gerador .gh-dom-trab-title { font-size:.82rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
         #tab-gerador .gh-dom-trab-hint { font-size:.7rem; color:#4a6a9c; }
         #tab-gerador .gh-dom-trab-inp { width:70px !important; text-align:center; font-size:1.1rem !important; font-weight:700 !important; padding:8px 10px !important; border-radius:7px !important; flex-shrink:0; }
+
+        /* ── LAYOUT del panel tab-gerador (movido desde index.html) ── */
+        #tab-gerador.active { display:flex !important; flex-direction:column !important; flex:1 !important; overflow:hidden !important; width:100% !important; padding:0 !important; }
+        #tab-gerador #gh-container { flex:1; display:flex; flex-direction:column; overflow-x:auto; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; width:100%; }
       `;
       document.head.appendChild(style);
     }

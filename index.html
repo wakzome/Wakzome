@@ -3791,6 +3791,13 @@ td                   { font-size: .96rem !important; }
   <div id="saft-faturas-count-label" style="font-size:.62rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;margin-top:-2px;">a vencer esta semana</div>
   <div id="saft-faturas-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;"></div>
   <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
+
+  <!-- CÓDIGOS DE EMERGÊNCIA PORTO SANTO -->
+  <div id="saft-divider3" style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
+  <div id="emg-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;">código de emergência</div>
+  <div id="emg-date" style="font-size:.6rem;color:#999;margin-bottom:6px;">hoje</div>
+  <div id="emg-codes-list" style="display:flex;flex-direction:column;gap:3px;width:100%;"></div>
+  <div id="emg-valid" style="font-size:.58rem;color:#bbb;margin-top:6px;text-align:right;">válido até às 00:00</div>
 </div>
 
 <!-- POPUP compartido -->
@@ -5162,6 +5169,76 @@ td                   { font-size: .96rem !important; }
 
     var backBtn = document.getElementById('adm-back-btn');
     if (backBtn) backBtn.click();
+  });
+})();
+</script>
+<script>
+/* ── CÓDIGOS DE EMERGÊNCIA PORTO SANTO ── */
+(function () {
+  function _emergencyCode(tienda, dateStr) {
+    var SECRET = 'wkz.ps@8f2e1b9d4c7a';
+    var raw = SECRET + '|' + tienda.toLowerCase() + '|' + dateStr;
+    var h = 5381;
+    for (var i = 0; i < raw.length; i++) {
+      h = ((h << 5) + h) + raw.charCodeAt(i);
+      h = h & 0x7fffffff;
+    }
+    var code = 10000 + (h % 90000);
+    return String(Math.abs(code));
+  }
+
+  function _renderEmgCodes() {
+    var list = document.getElementById('emg-codes-list');
+    var dateEl = document.getElementById('emg-date');
+    if (!list) return;
+
+    var today = new Date();
+    var dd = String(today.getDate()).padStart(2,'0');
+    var mm = String(today.getMonth()+1).padStart(2,'0');
+    var yyyy = today.getFullYear();
+    var dateStr = yyyy + '-' + mm + '-' + dd;
+    var displayDate = dd + '/' + mm + '/' + yyyy;
+
+    if (dateEl) dateEl.textContent = displayDate;
+
+    var stores = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx'];
+    list.innerHTML = '';
+    stores.forEach(function (s) {
+      var code = _emergencyCode(s, dateStr);
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:2px 0;border-bottom:1px solid #f0f0f0;';
+      var nameEl = document.createElement('span');
+      nameEl.style.cssText = 'font-size:.65rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      nameEl.textContent = s;
+      var codeEl = document.createElement('span');
+      codeEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:.08em;white-space:nowrap;';
+      codeEl.textContent = code;
+      row.appendChild(nameEl);
+      row.appendChild(codeEl);
+      list.appendChild(row);
+    });
+
+    // Programar regeneración a medianoche
+    var now = new Date();
+    var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5);
+    var msUntilMidnight = midnight - now;
+    setTimeout(function () { _renderEmgCodes(); }, msUntilMidnight);
+  }
+
+  // Esperar a que el admin-app esté visible para renderizar
+  var adminApp = document.getElementById('admin-app');
+  if (adminApp) {
+    new MutationObserver(function (muts, obs) {
+      if (adminApp.classList.contains('show')) {
+        _renderEmgCodes();
+        obs.disconnect();
+      }
+    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+  }
+  // También intentar al cargar por si ya está visible
+  document.addEventListener('DOMContentLoaded', function () {
+    var app = document.getElementById('admin-app');
+    if (app && app.classList.contains('show')) _renderEmgCodes();
   });
 })();
 </script>

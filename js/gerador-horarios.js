@@ -1751,19 +1751,7 @@
                 } else {
                   // Actual shift — join morning + afternoon with |
                   const shift = cellB ? (cellA + '|' + cellB) : cellA;
-                  const cur = S.schedule[person.id][day];
-                  // Detect apoio: single short time slot (no cellB) and person already
-                  // has a full shift assigned for this day from their primary store block
-                  const isShortSlot = !cellB && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(cellA);
-                  const hasFullShift = cur.type === 'work' && cur.shift && cur.shift.includes('|');
-                  if (isShortSlot && hasFullShift) {
-                    // Apoio interval — store separately, preserve the main shift
-                    if (!S._apoioShifts) S._apoioShifts = {};
-                    if (!S._apoioShifts[person.id]) S._apoioShifts[person.id] = {};
-                    S._apoioShifts[person.id][day] = { store: storeId, shift: cellA };
-                  } else {
-                    S.schedule[person.id][day] = { type: 'work', shift, store: storeId };
-                  }
+                  S.schedule[person.id][day] = { type: 'work', shift, store: storeId };
                 }
               }
             });
@@ -2094,6 +2082,9 @@
         max = Math.max(max, w);
       });
 
+      // Badge "+99h" sits next to hours — account for its width
+      const badgeFont = `700 ${0.62 * BASE}px sans-serif`;
+      max += measure('+99h', badgeFont) + 10; // badge + gap
       // Add padding: 8px left + 12px right (from .gh-p-cell) + 8px header padding each side
       const PAD = 20 + 16; // generous fixed padding
       return Math.ceil(max + PAD);
@@ -2190,10 +2181,9 @@
           <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
             <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
               <span class="gh-p-dot">●</span>${shortName(p.name)}
-              ${(()=>{const s=S._banco?.[p.id]??0;const pos=s>0;const zero=s===0;return `<span class="gh-banco-badge${zero?' gh-banco-zero':pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}">${pos?'+':''}${s}h</span>`;})()}
               <span class="gh-p-remove-x">✕</span>
             </button>
-            <div class="gh-p-hrs ok">${aH > 0 ? aH + 'h' : ''}</div>
+            <div class="gh-p-hrs ok">${(()=>{const s=S._banco?.[p.id]??0;const pos=s>0;const zero=s===0;return `<span class="gh-banco-badge${zero?' gh-banco-zero':pos?' gh-banco-pos':' gh-banco-neg'}" data-pid="${p.id}">${pos?'+':''}${s}h</span>`;})()}${aH > 0 ? ' ' + aH + 'h' : ''}</div>
           </div></td>${cells}</tr>`;
       }).join('');
 
@@ -2207,7 +2197,7 @@
                 <button class="gh-store-act-btn gh-store-add" data-store="${st.id}" title="Adicionar pessoa">＋</button>
               </div>
             </td>
-            ${DAYS.map((d,i) => `<td>${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
+            ${DAYS.map((d,i) => `<td style="width:108px;min-width:108px;max-width:108px;box-sizing:border-box">${d}<br><span class="gh-tbl-date">${fmt(dates[i])}</span></td>`).join('')}
           </tr>
         </thead>
         <tbody>${rows || `<tr><td colspan="8" style="padding:18px 12px;text-align:center;color:#bbb;font-size:.8rem;font-style:italic;">Loja vazia — use ＋ para adicionar pessoal</td></tr>`}</tbody>
@@ -3287,14 +3277,14 @@
         #tab-gerador .gh-no-click:hover { background:transparent !important; }
 
         /* ── PERSON CELL ── */
-        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; text-align:center; }
+        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; text-align:center; overflow:hidden; }
         #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; justify-content:center; gap:5px; color:#111; }
         #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
         #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0; text-align:center; }
         #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
         #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
         #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
-        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:2px; font-weight:600; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }
+        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:3px; font-weight:600; text-align:center; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:5px; flex-wrap:nowrap; }
         #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
         #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
         #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; font-family:inherit; line-height:1.4; display:inline-block; }

@@ -5454,7 +5454,7 @@ td                   { font-size: .96rem !important; }
         var notas = (row.querySelector('.fd-nota-input') || {}).value || '';
 
         // Guardar sempre (permite limpar datas)
-        upserts.push({ pessoa_id: pid, datas: datas, notas: notas, updated_at: new Date().toISOString() });
+        upserts.push({ pessoa_id: pid, datas: datas, notas: notas });
         _fd[pid] = { datas: datas, notas: notas };
       });
 

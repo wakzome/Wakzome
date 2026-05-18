@@ -525,8 +525,8 @@
           const labels = datasNaSemana.map(ds => {
             const d = new Date(ds + 'T00:00:00');
             return `${d.getDate()} ${MESES[d.getMonth()]}`;
-          }).join(', ');
-          folgaPedidaTag = ` · <span style="font-size:.58rem;color:#b8860b;font-weight:700;background:#fff8e8;padding:1px 5px;border-radius:3px;" title="Folga pedida com antecedência">⚑ pediu ${labels}</span>`;
+          }).join(' · ');
+          folgaPedidaTag = `<span style="display:inline-flex;align-items:center;gap:5px;margin-top:3px;padding:3px 9px 3px 7px;background:#fff3cd;border:1.5px solid #e6a817;border-radius:5px;font-size:.7rem;font-weight:800;color:#7a4800;letter-spacing:.02em;white-space:nowrap;">⚑ PEDIU FOLGA · ${labels.toUpperCase()}</span>`;
         }
       }
 
@@ -560,7 +560,8 @@
             <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
             <div class="gh-sr-nameblock">
               <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
-              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndTag}${folgaPedidaTag}</span>
+              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndTag}</span>
+              ${folgaPedidaTag ? `<div style="margin-top:2px;">${folgaPedidaTag}</div>` : ''}
             </div>
           </div>
           <div class="gh-sr-btns">
@@ -3118,14 +3119,26 @@
         ${candidates.length ? candidates.map(p => {
           const hasBadge = (() => {
             const _fdR = S._folgasDirigidas?.[p.id];
-            const feriaDias = Array.isArray(_fdR) ? _fdR : (_fdR?._allDatas || S._folgas?.[p.id]?.dias || []);
             const hasAbs = !!absOf(p.id);
-            return hasAbs ? '🏖' : feriaDias.length ? '📅' : '';
+            if (hasAbs) return { icon: '🏖', label: '' };
+            if (_fdR?._allDatas?.length) {
+              const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+              const labels = _fdR._allDatas.map(ds => {
+                const d = new Date(ds + 'T00:00:00');
+                return `${d.getDate()} ${MESES[d.getMonth()]}`;
+              }).join(', ');
+              return { icon: '⚑', label: labels };
+            }
+            return { icon: '', label: '' };
           })();
+          const badgeHtml = hasBadge.icon ? (hasBadge.label
+            ? `<span style="font-size:.68rem;font-weight:700;color:#7a4800;background:#fff3cd;border:1px solid #e6a817;border-radius:4px;padding:1px 6px;white-space:nowrap;">⚑ ${hasBadge.label}</span>`
+            : `<span style="font-size:.82rem;">${hasBadge.icon}</span>`)
+            : '';
           return `<button class="gh-add-person-pick" data-pid="${p.id}"
-            style="text-align:left;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:.82rem;font-family:inherit;display:flex;justify-content:space-between;align-items:center;">
+            style="text-align:left;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;background:${hasBadge.label ? '#fffbf0' : '#fff'};cursor:pointer;font-size:.82rem;font-family:inherit;display:flex;justify-content:space-between;align-items:center;gap:8px;">
             <span>${shortName(p.name)}</span>
-            <span style="font-size:.7rem;color:#888">${hasBadge}</span>
+            ${badgeHtml}
           </button>`;
         }).join('') : '<div style="color:#bbb;font-size:.75rem;padding:8px">Todas as pessoas já foram adicionadas.</div>'}
       </div>`;

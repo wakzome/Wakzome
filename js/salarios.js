@@ -21,6 +21,20 @@
     '#s-salary-table tbody tr.s-row-copied td * { color:#ffffff !important; }',
     '#s-salary-table tbody tr.s-row-copied:hover td { background:#2e2e2e !important; }',
     '#s-salary-table tbody tr.s-row-copied .s-liq-check { display:inline-block !important; color:#7ecfc0 !important; }',
+
+    // ── Alertas de erros contabilísticos ──
+    '.s-err-badge { display:inline-flex; align-items:center; gap:4px; margin-left:7px; padding:1px 7px 1px 5px; border-radius:20px; font-size:0.7em; font-weight:700; letter-spacing:0.03em; vertical-align:middle; white-space:nowrap; cursor:default; transition:opacity .15s; }',
+    '.s-err-badge svg { flex-shrink:0; }',
+    '.s-err-red  { background:#fff0f0; color:#c0392b; border:1px solid #f5c6c6; }',
+    '.s-err-yellow { background:#fffbf0; color:#b07d00; border:1px solid #f0dfa0; }',
+    '#s-salary-table tbody tr.s-row-copied .s-err-red    { background:#5a1a1a; color:#f5a0a0; border-color:#7a2020; }',
+    '#s-salary-table tbody tr.s-row-copied .s-err-yellow { background:#4a3a00; color:#f0d060; border-color:#7a6000; }',
+    '#s-errors-summary { display:flex; align-items:flex-start; gap:10px; margin:0 0 18px 0; padding:14px 18px; border-radius:10px; background:#fff8f8; border:1px solid #f0d0d0; font-size:0.88em; line-height:1.55; }',
+    '#s-errors-summary.has-yellow { background:#fffcf2; border-color:#f0e4a0; }',
+    '#s-errors-summary-icon { font-size:1.5em; flex-shrink:0; margin-top:1px; }',
+    '#s-errors-summary ul { margin:4px 0 0 0; padding:0 0 0 16px; }',
+    '#s-errors-summary li { margin-bottom:2px; }',
+    '#s-errors-summary strong { font-weight:700; }',
   ].join('\n');
   document.head.appendChild(st);
 })();
@@ -157,7 +171,18 @@ function sParsePayrollTable(text) {
       else { inNumbers = true; numberTokens.push(tokens[i]); }
     }
     if (nameTokens.length === 0 || numberTokens.length === 0) continue;
-    results.push({ code: tokens[0], name: nameTokens.join(' '), liquido: numberTokens[numberTokens.length - 1] });
+    // numberTokens index map (14 colunas numéricas do PDF):
+    // 0:bruto 1:alimentação 2:férias 3:natal 4:outrosAbonos 5:totalAbonos
+    // 6:faltas 7:outrosDesc 8:IRS 9:sobretaxa 10:segSocial 11:descEntid 12:totalDesc 13:líquido
+    const toNum = s => parseFloat((s || '0').replace(/\./g, '').replace(',', '.')) || 0;
+    results.push({
+      code:        tokens[0],
+      name:        nameTokens.join(' '),
+      liquido:     numberTokens[numberTokens.length - 1],
+      alimentacao: toNum(numberTokens[1]),
+      ferias:      toNum(numberTokens[2]),
+      outrosAbonos:toNum(numberTokens[4]),
+    });
   }
   return results;
 }
@@ -174,16 +199,42 @@ function sRenderTable(rows) {
   }
   filtered.sort((a, b) => a.name.localeCompare(b.name, 'pt'));
   sTableData = filtered;
+
+  // ── Detecção de erros contabilísticos ──
+  const errRed    = filtered.filter(r => r.ferias > 0 && r.alimentacao > 0);
+  const errYellow = filtered.filter(r => r.ferias > 0 && r.alimentacao === 0 && r.outrosAbonos === 35);
+  let summaryHtml = '';
+  if (errRed.length || errYellow.length) {
+    const onlyYellow = errRed.length === 0;
+    let items = '';
+    errRed.forEach(r => {
+      items += `<li><strong>${escHtml(r.name)}</strong> — subsídio de férias + subsídio de alimentação</li>`;
+    });
+    errYellow.forEach(r => {
+      items += `<li><strong>${escHtml(r.name)}</strong> — subsídio de férias + abono de falhas (€35)</li>`;
+    });
+    summaryHtml = `<div id="s-errors-summary"${onlyYellow ? ' class="has-yellow"' : ''}>
+      <div id="s-errors-summary-icon">${onlyYellow ? '⚠️' : '🚨'}</div>
+      <div><strong>${errRed.length + errYellow.length} erro(s) detetado(s) neste processamento:</strong><ul>${items}</ul></div>
+    </div>`;
+  }
   const total = filtered.reduce((sum, r) => {
     const n = parseFloat(r.liquido.replace(/\./g, '').replace(',', '.'));
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
-  let html = `<table id="s-salary-table"><thead><tr>
+  let html = summaryHtml + `<table id="s-salary-table"><thead><tr>
     <th class="row-num">#</th><th>nome</th><th>vencimento</th>
   </tr></thead><tbody>`;
   filtered.forEach((r, i) => {
     const cleanVal = r.liquido.replace(/\.(?=\d{3},)/, '');
-    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}</td><td onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Clique para copiar"><span class="s-liq-cell"><svg class="s-liq-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${escHtml(cleanVal)}</span></td></tr>`;
+    // Badge de erro
+    let badge = '';
+    if (r.ferias > 0 && r.alimentacao > 0) {
+      badge = `<span class="s-err-badge s-err-red" title="Subsídio de férias + subsídio de alimentação indevido"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> erro</span>`;
+    } else if (r.ferias > 0 && r.outrosAbonos === 35) {
+      badge = `<span class="s-err-badge s-err-yellow" title="Subsídio de férias + abono de falhas (€35) — verificar"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> verificar</span>`;
+    }
+    html += `<tr><td class="row-num">${i + 1}</td><td>${escHtml(r.name)}${badge}</td><td onclick="sCopyLiquido(this)" data-val="${escHtml(cleanVal)}" title="Clique para copiar"><span class="s-liq-cell"><svg class="s-liq-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${escHtml(cleanVal)}</span></td></tr>`;
   });
   html += `</tbody><tfoot><tr>
     <td class="row-num"></td><td>total</td>

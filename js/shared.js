@@ -127,6 +127,7 @@
         // ── LOGIN TIENDA ──
         currentStore = data.tienda;
         window._currentStoreGlobal = data.tienda;
+        window._currentEmployeeName = (data.nombre || '').trim().toUpperCase();
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
           showGreeting(data.nombre || data.tienda, function() {

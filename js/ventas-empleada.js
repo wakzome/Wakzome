@@ -61,8 +61,172 @@
     setTimeout(function () { overlay.classList.remove('open'); }, 650);
   };
 
-  // ── Selector de sub-tienda (Porto Santo) ──
+  // ── Código de emergencia: hash determinista por tienda+fecha ──
+  // Genera 5 dígitos numéricos a partir de un string. Sin librerías externas.
+  function _emergencyCode(tienda, dateStr) {
+    var SECRET = 'wkz.ps@8f2e1b9d4c7a';
+    var raw = SECRET + '|' + tienda.toLowerCase() + '|' + dateStr;
+    // djb2 hash
+    var h = 5381;
+    for (var i = 0; i < raw.length; i++) {
+      h = ((h << 5) + h) + raw.charCodeAt(i);
+      h = h & 0x7fffffff; // mantener positivo 31 bits
+    }
+    // Extraer 5 dígitos: usar módulo para obtener número 10000–99999
+    var code = 10000 + (h % 90000);
+    return String(Math.abs(code));
+  }
+
+  // ── Obtener semana ISO del año ──
+  function _isoWeek(d) {
+    var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+    var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  }
+
+  // ── Descargar y parsear el CSV de horarios de Porto Santo ──
+  function _fetchScheduleCSV() {
+    var today = new Date();
+    var week  = _isoWeek(today);
+    var base  = 'https://' + (window.SUPABASE_URL || '').replace('https://','').replace(/\/$/, '');
+    var bucket = '/storage/v1/object/public/horarios/';
+
+    // Intentar semana actual, luego anterior y siguiente como fallback
+    var candidates = [week, week - 1, week + 1].map(function (w) {
+      return base + bucket + 'porto_s' + w + '.csv';
+    });
+
+    function tryNext(idx) {
+      if (idx >= candidates.length) return Promise.reject(new Error('Horário não encontrado'));
+      return fetch(candidates[idx] + '?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (res) {
+          if (!res.ok) return tryNext(idx + 1);
+          return res.text();
+        })
+        .catch(function () { return tryNext(idx + 1); });
+    }
+    return tryNext(0);
+  }
+
+  // ── Parsear CSV y detectar tiendas asignadas hoy para una empleada ──
+  // Devuelve array con nombres de subtiendas donde trabaja hoy (puede ser vacío)
+  function _getAssignedStoresForToday(csvText, employeeName) {
+    if (!employeeName) return [];
+
+    var today    = new Date();
+    var todayStr = today.toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric' })
+                        .replace(/\//g, '/'); // DD/MM/YYYY
+
+    var lines = csvText.split(/\r?\n/).map(function (l) { return l.split(','); });
+
+    var assigned = [];
+    var currentSection = null; // tienda actual del bloque CSV
+    var i = 0;
+
+    while (i < lines.length) {
+      var row = lines[i];
+      var cell0 = (row[0] || '').trim();
+
+      // Detectar cabecera de bloque: "PORTO SANTO" seguido de nombre de tienda
+      if (cell0.toUpperCase() === 'PORTO SANTO') {
+        // Siguiente fila es el nombre de la sub-tienda + fechas
+        var nextRow = lines[i + 1] || [];
+        currentSection = (nextRow[0] || '').trim(); // ej: "MEZKA AVENIDA"
+        i += 2; // saltar las 2 filas de cabecera
+        continue;
+      }
+
+      // Fila de empleada: cell0 contiene "NOMBRE X.NNhrs"
+      // Comparar ignorando apellido y horas: buscar el primer token que coincida
+      var firstToken = cell0.split(/[\s.]/)[0].toUpperCase();
+      var empFirst   = employeeName.split(/[\s.]/)[0].toUpperCase();
+
+      if (firstToken && firstToken === empFirst && currentSection) {
+        // Buscar la columna de hoy en la fila de fechas (2 filas atrás = cabecera de fechas)
+        // La cabecera de fechas está en la fila inmediatamente después de la fila "PORTO SANTO"
+        // Necesitamos buscarla hacia atrás: buscamos la fila que tiene fechas DD/MM/YYYY
+        var headerRow = null;
+        for (var back = i - 1; back >= 0; back--) {
+          var candidate = lines[back];
+          var hasDate = false;
+          for (var c = 1; c < candidate.length; c++) {
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test((candidate[c] || '').trim())) { hasDate = true; break; }
+          }
+          if (hasDate) { headerRow = candidate; break; }
+          // Si encontramos "PORTO SANTO" ya pasamos el bloque
+          if ((candidate[0] || '').trim().toUpperCase() === 'PORTO SANTO') break;
+        }
+
+        if (headerRow) {
+          var todayColIdx = -1;
+          for (var c = 1; c < headerRow.length; c++) {
+            if ((headerRow[c] || '').trim() === todayStr) { todayColIdx = c; break; }
+          }
+
+          if (todayColIdx > 0) {
+            // Leer filas A y B de esta empleada
+            var rowA = lines[i]     || [];
+            var rowB = lines[i + 1] || [];
+            var valA = (rowA[todayColIdx] || '').trim().toUpperCase();
+            var valB = (rowB[todayColIdx] || '').trim().toUpperCase();
+
+            var isScheduled = false;
+            var skipValues  = ['FOLGA', 'FERIAS', '', 'MEZKA AVENIDA', 'MEZKA MERCADO', 'SHANA', 'MAXX'];
+
+            // Valor tiene horario (ej: "10:00-13:00") → está en esta tienda
+            if (valA && !skipValues.includes(valA) && /\d{2}:\d{2}/.test(valA)) isScheduled = true;
+            if (!isScheduled && valB && !skipValues.includes(valB) && /\d{2}:\d{2}/.test(valB)) isScheduled = true;
+
+            if (isScheduled && assigned.indexOf(currentSection) === -1) {
+              assigned.push(currentSection);
+            }
+          }
+        }
+        i += 2; // saltar par de filas (A y B)
+        continue;
+      }
+
+      i++;
+    }
+
+    return assigned;
+  }
+
+  // ── Normalizar nombre de sección CSV → nombre de subtienda en PORTO_SUBTIENDAS ──
+  function _normalizeSection(sectionName) {
+    var map = {
+      'MEZKA AVENIDA':  'Mezka Avenida',
+      'MEZKA MERCADO':  'Mezka Mercado',
+      'SHANA':          'Shana',
+      'MAXX':           'Maxx'
+    };
+    return map[(sectionName || '').trim().toUpperCase()] || null;
+  }
+
+  // ── Selector de sub-tienda (Porto Santo) — con control de acceso por horario ──
   function _showSubtiendasSelector() {
+    var body = document.getElementById('ventas-overlay-body');
+    body.innerHTML = '<div class="v-loading">a verificar horário…</div>';
+
+    var empName = (window._currentEmployeeName || '').trim().toUpperCase();
+
+    _fetchScheduleCSV()
+      .then(function (csvText) {
+        var rawAssigned = _getAssignedStoresForToday(csvText, empName);
+        // Normalizar nombres de sección a nombres de subtienda
+        var assignedStores = rawAssigned.map(_normalizeSection).filter(Boolean);
+
+        _renderSubtiendasWithAccess(assignedStores, csvText);
+      })
+      .catch(function () {
+        // Si falla la descarga del CSV, mostrar todos los botones sin restricción
+        _renderSubtiendasWithAccess([], null);
+      });
+  }
+
+  // ── Renderizar los 4 botones con lógica de acceso ──
+  function _renderSubtiendasWithAccess(assignedStores, csvText) {
     var body = document.getElementById('ventas-overlay-body');
     body.innerHTML = '';
 
@@ -74,18 +238,95 @@
     title.textContent = 'seleciona a loja';
     wrap.appendChild(title);
 
+    var todayStr = _todayStr(); // YYYY-MM-DD para el código de emergencia
+
     PORTO_SUBTIENDAS.forEach(function (name) {
+      var btnWrap = document.createElement('div');
+      btnWrap.className = 'v-subtienda-btn-wrap';
+
       var btn = document.createElement('button');
       btn.className = 'v-subtienda-btn';
       btn.textContent = name;
+
+      // Determinar si tiene acceso directo
+      // assignedStores vacío (CSV no descargado) = acceso libre a todas
+      var hasDirectAccess = (assignedStores.length === 0) || (assignedStores.indexOf(name) !== -1);
+
       btn.addEventListener('click', function () {
-        _vSubtienda = name;
-        _loadVentasPanel();
+        if (hasDirectAccess) {
+          _vSubtienda = name;
+          _loadVentasPanel();
+          return;
+        }
+        // Sin acceso directo → mostrar campo de código de emergencia
+        _toggleEmergencyField(btnWrap, name, todayStr);
       });
-      wrap.appendChild(btn);
+
+      btnWrap.appendChild(btn);
+      wrap.appendChild(btnWrap);
     });
 
     body.appendChild(wrap);
+  }
+
+  // ── Mostrar/ocultar campo de código de emergencia bajo un botón ──
+  function _toggleEmergencyField(btnWrap, storeName, todayStr) {
+    // Si ya hay un campo abierto para esta tienda, cerrarlo
+    var existing = btnWrap.querySelector('.v-emergency-wrap');
+    if (existing) { existing.remove(); return; }
+
+    // Cerrar cualquier otro campo abierto
+    document.querySelectorAll('.v-emergency-wrap').forEach(function (el) { el.remove(); });
+
+    var wrap = document.createElement('div');
+    wrap.className = 'v-emergency-wrap';
+
+    var msg = document.createElement('div');
+    msg.className = 'v-emergency-msg';
+    msg.textContent = 'não estás programada para ' + storeName + ' hoje';
+    wrap.appendChild(msg);
+
+    var row = document.createElement('div');
+    row.className = 'v-emergency-row';
+
+    var inp = document.createElement('input');
+    inp.type        = 'number';
+    inp.className   = 'v-emergency-input';
+    inp.placeholder = 'código de emergência';
+    inp.maxLength   = 5;
+
+    var confirmBtn = document.createElement('button');
+    confirmBtn.className   = 'v-emergency-confirm';
+    confirmBtn.textContent = 'entrar';
+
+    var errMsg = document.createElement('div');
+    errMsg.className = 'v-emergency-err';
+    errMsg.style.display = 'none';
+
+    function _tryCode() {
+      var entered  = inp.value.trim();
+      var expected = _emergencyCode(storeName, todayStr);
+      if (entered === expected) {
+        _vSubtienda = storeName;
+        _loadVentasPanel();
+      } else {
+        errMsg.textContent = '✗ código incorrecto';
+        errMsg.style.display = 'block';
+        inp.value = '';
+        inp.focus();
+      }
+    }
+
+    confirmBtn.addEventListener('click', _tryCode);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') _tryCode(); });
+
+    row.appendChild(inp);
+    row.appendChild(confirmBtn);
+    wrap.appendChild(row);
+    wrap.appendChild(errMsg);
+    btnWrap.appendChild(wrap);
+
+    inp.focus();
   }
 
   // ── Cargar el panel principal (historial + formulario) ──
@@ -573,7 +814,17 @@
           'padding:8px 12px;font-size:.8rem;font-weight:600;cursor:pointer;' +
           'text-transform:uppercase;' +
         '}' +
-        '.v-emp-option:hover,.v-emp-option.v-emp-active{background:#f0f7f3;color:#1e2a22;}';
+        '.v-emp-option:hover,.v-emp-option.v-emp-active{background:#f0f7f3;color:#1e2a22;}' +
+        /* Emergencia */
+        '.v-subtienda-btn-wrap{display:flex;flex-direction:column;align-items:stretch;width:100%;max-width:320px;}' +
+        '.v-emergency-wrap{margin-top:6px;padding:12px 14px;background:#fdf6f0;border:1.5px solid #e0b08a;border-radius:10px;}' +
+        '.v-emergency-msg{font-size:.78rem;color:#a0522d;margin-bottom:8px;font-weight:600;text-align:center;}' +
+        '.v-emergency-row{display:flex;gap:8px;align-items:center;}' +
+        '.v-emergency-input{flex:1;padding:8px 10px;border:1.5px solid #d0a070;border-radius:7px;font-size:.88rem;text-align:center;letter-spacing:.1em;}' +
+        '.v-emergency-input:focus{border-color:#a0522d;outline:none;box-shadow:0 0 0 2px rgba(160,82,45,.15);}' +
+        '.v-emergency-confirm{padding:8px 14px;background:#a0522d;color:#fff;border:none;border-radius:7px;font-size:.82rem;cursor:pointer;white-space:nowrap;}' +
+        '.v-emergency-confirm:hover{background:#7a3e22;}' +
+        '.v-emergency-err{font-size:.78rem;color:#c0392b;margin-top:6px;text-align:center;font-weight:600;}';
       document.head.appendChild(s);
     }
 

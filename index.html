@@ -1089,25 +1089,7 @@ td, th { border-radius:10px; margin:2px; }
 #admin-app.s-loaded { overflow-y: auto; overflow-x: hidden; }
 #tab-horarios.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; width: 100%; }
 
-/* ── GERADOR: mismo patrón que tab-horarios ── */
-#tab-gerador.active {
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 !important;
-  overflow: hidden !important;
-  width: 100% !important;
-  padding: 0 !important;
-}
-#tab-gerador #gh-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-x: auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  min-height: 0;
-  width: 100%;
-}
+/* ── GERADOR: estilos de layout gestionados en gerador-horarios.js ── */
 
 /* ══════════════════════════════════════════════════════════
    ADMIN DASHBOARD — new module landing screen
@@ -3794,7 +3776,7 @@ td                   { font-size: .96rem !important; }
 
   <!-- CÓDIGOS DE EMERGÊNCIA PORTO SANTO -->
   <div id="saft-divider3" style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
-  <div id="emg-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;">códigos</div>
+  <div id="emg-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;">código de emergência</div>
   <div id="emg-date" style="font-size:.6rem;color:#999;margin-bottom:6px;">hoje</div>
   <div id="emg-codes-list" style="display:flex;flex-direction:column;gap:3px;width:100%;"></div>
   <div id="emg-valid" style="font-size:.58rem;color:#bbb;margin-top:6px;text-align:right;">válido até às 00:00</div>

@@ -1931,6 +1931,123 @@ input, textarea { cursor: text !important; }
 .f-card .f-badge.soon        { background:rgba(220,140,0,0.1);  color:#a06000; }
 .f-card .f-badge.past        { background:#f8f8f8; color:#000; }
 
+/* ══ FOLGAS DIRIGIDAS ══ */
+#fd-btn {
+  padding: 5px 14px;
+  font-size: .72rem; font-weight: bold;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: lowercase; letter-spacing: .05em;
+  color: #fff !important; border: 1px solid #555; border-radius: 20px;
+  background: #222 !important; cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+  width: 100%; margin-top: 2px;
+}
+#fd-btn:hover { border-color: #aaa !important; background: #333 !important; }
+#fd-badge-count {
+  display: inline-block; background: #555; color: #fff !important;
+  font-size: .58rem; font-weight: bold; border-radius: 20px;
+  padding: 1px 5px; margin-left: 4px; vertical-align: middle;
+  min-width: 14px; text-align: center;
+}
+
+/* Modal backdrop */
+#fd-overlay {
+  display: none; position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(3px);
+  align-items: center; justify-content: center;
+}
+#fd-overlay.open { display: flex; }
+
+/* Modal box */
+#fd-modal {
+  background: #1a1a1a !important; color: #fff !important;
+  border: 1px solid #383838; border-radius: 14px;
+  width: min(94vw, 560px); max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,.7);
+}
+#fd-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px 12px; border-bottom: 1px solid #2e2e2e;
+  flex-shrink: 0;
+}
+#fd-modal-title {
+  font-size: .78rem; font-weight: bold; text-transform: uppercase;
+  letter-spacing: .12em; color: #fff !important;
+}
+#fd-modal-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.1rem; color: #888 !important; line-height: 1;
+  padding: 2px 6px; border-radius: 6px;
+  transition: color .2s, background .2s;
+}
+#fd-modal-close:hover { color: #fff !important; background: #333 !important; }
+#fd-modal-body {
+  overflow-y: auto; padding: 12px 16px; flex: 1;
+  scrollbar-width: thin; scrollbar-color: #444 #1a1a1a;
+}
+#fd-modal-footer {
+  padding: 12px 20px; border-top: 1px solid #2e2e2e;
+  display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0;
+}
+
+/* Pessoa row */
+.fd-pessoa-row {
+  background: #222 !important; border: 1px solid #2e2e2e;
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+}
+.fd-pessoa-name {
+  font-size: .8rem; font-weight: bold; color: #fff !important;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+}
+.fd-pessoa-name .fd-has-dates {
+  font-size: .6rem; background: #3a3a3a; color: #bbb !important;
+  border-radius: 20px; padding: 1px 7px; font-weight: normal;
+}
+.fd-dates-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;
+}
+.fd-date-input {
+  background: #2a2a2a !important; border: 1px solid #3a3a3a;
+  border-radius: 7px; padding: 5px 8px;
+  font-size: .72rem; color: #fff !important;
+  font-family: 'MontserratLight', sans-serif;
+  width: 100%; box-sizing: border-box;
+  colorscheme: dark;
+}
+.fd-date-input:focus { outline: none; border-color: #666; }
+.fd-nota-input {
+  background: #2a2a2a !important; border: 1px solid #2e2e2e;
+  border-radius: 7px; padding: 5px 8px;
+  font-size: .7rem; color: #ccc !important;
+  font-family: 'MontserratLight', sans-serif;
+  width: 100%; box-sizing: border-box;
+}
+.fd-nota-input:focus { outline: none; border-color: #555; }
+.fd-nota-input::placeholder { color: #555 !important; }
+
+/* Save / Cancel buttons */
+.fd-footer-btn {
+  padding: 7px 20px; border-radius: 20px; font-size: .72rem;
+  font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  text-transform: lowercase; letter-spacing: .05em;
+  cursor: pointer; border: 1px solid #444; transition: background .2s, border-color .2s;
+}
+#fd-save-btn {
+  background: #fff !important; color: #000 !important; border-color: #fff;
+}
+#fd-save-btn:hover { background: #ddd !important; }
+#fd-cancel-btn {
+  background: transparent !important; color: #888 !important;
+}
+#fd-cancel-btn:hover { color: #fff !important; border-color: #666; }
+
+/* Loading spinner */
+#fd-loading {
+  text-align: center; padding: 24px; color: #666 !important;
+  font-size: .75rem; letter-spacing: .05em;
+}
+
 /* ══ SAFT REMINDER ══ */
 #saft-reminder {
   position: fixed;
@@ -3780,6 +3897,11 @@ td                   { font-size: .96rem !important; }
   <div id="emg-date" style="font-size:.6rem;color:#999;margin-bottom:6px;">hoje</div>
   <div id="emg-codes-list" style="display:flex;flex-direction:column;gap:3px;width:100%;"></div>
   <div id="emg-valid" style="font-size:.58rem;color:#bbb;margin-top:6px;text-align:right;">válido até às 00:00</div>
+
+  <!-- FOLGAS DIRIGIDAS -->
+  <div style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
+  <div style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:6px;">folgas pedidas</div>
+  <button id="fd-btn" onclick="openFolgasDirigidasModal()">ver / editar<span id="fd-badge-count" style="display:none"></span></button>
 </div>
 
 <!-- POPUP compartido -->
@@ -5224,5 +5346,211 @@ td                   { font-size: .96rem !important; }
   });
 })();
 </script>
+<!-- FOLGAS DIRIGIDAS MODAL -->
+<div id="fd-overlay" onclick="if(event.target===this)closeFolgasDirigidasModal()">
+  <div id="fd-modal">
+    <div id="fd-modal-header">
+      <div id="fd-modal-title">folgas dirigidas · porto santo</div>
+      <button id="fd-modal-close" onclick="closeFolgasDirigidasModal()">✕</button>
+    </div>
+    <div id="fd-modal-body">
+      <div id="fd-loading">a carregar pessoas…</div>
+    </div>
+    <div id="fd-modal-footer">
+      <button class="fd-footer-btn" id="fd-cancel-btn" onclick="closeFolgasDirigidasModal()">cancelar</button>
+      <button class="fd-footer-btn" id="fd-save-btn" onclick="saveFolgasDirigidas()">guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ FOLGAS DIRIGIDAS — dashboard modal ══ */
+(function () {
+
+  // Estado local: { [pid]: { datas: ['2025-06-04', ...], notas: '' } }
+  var _fd = {};
+  var _people = [];
+
+  /* ── Abrir modal ── */
+  window.openFolgasDirigidasModal = async function () {
+    document.getElementById('fd-overlay').classList.add('open');
+    var body = document.getElementById('fd-modal-body');
+    body.innerHTML = '<div id="fd-loading">a carregar pessoas…</div>';
+
+    try {
+      var sb = await _getSb();
+      if (!sb) { body.innerHTML = '<div id="fd-loading">Supabase não disponível.</div>'; return; }
+
+      // Carregar pessoas de Porto Santo
+      var { data: people } = await sb.from('gh_people')
+        .select('id,name,store_id').eq('active', true);
+      _people = (people || []).sort((a,b) => a.name.localeCompare(b.name));
+
+      // Carregar folgas dirigidas existentes
+      var { data: fds } = await sb.from('gh_folgas_dirigidas').select('*');
+      _fd = {};
+      (fds || []).forEach(function (r) {
+        _fd[r.pessoa_id] = { id: r.id, datas: r.datas || [], notas: r.notas || '' };
+      });
+
+      _renderModal(body);
+      _updateBadge();
+    } catch (e) {
+      console.error('Erro ao carregar folgas dirigidas:', e);
+      body.innerHTML = '<div id="fd-loading">Erro ao carregar dados.</div>';
+    }
+  };
+
+  function _renderModal(body) {
+    body.innerHTML = '';
+    if (!_people.length) {
+      body.innerHTML = '<div id="fd-loading">Sem pessoas na base de dados.</div>';
+      return;
+    }
+    _people.forEach(function (p) {
+      var rec = _fd[p.id] || { datas: [], notas: '' };
+      var datas = (rec.datas || []).concat(['','','','']).slice(0, 4);
+      var hasDates = rec.datas && rec.datas.length > 0;
+
+      var row = document.createElement('div');
+      row.className = 'fd-pessoa-row';
+      row.dataset.pid = p.id;
+
+      var dateInputs = datas.map(function (d, i) {
+        return '<input type="date" class="fd-date-input" data-pid="' + p.id + '" data-idx="' + i + '" value="' + (d||'') + '">';
+      }).join('');
+
+      row.innerHTML =
+        '<div class="fd-pessoa-name">' +
+          _shortName(p.name) +
+          (hasDates ? '<span class="fd-has-dates">' + rec.datas.length + ' data' + (rec.datas.length !== 1 ? 's' : '') + '</span>' : '') +
+        '</div>' +
+        '<div class="fd-dates-grid">' + dateInputs + '</div>' +
+        '<input type="text" class="fd-nota-input" data-pid="' + p.id + '" placeholder="nota (opcional)" value="' + _esc(rec.notas || '') + '">';
+
+      body.appendChild(row);
+    });
+  }
+
+  /* ── Guardar ── */
+  window.saveFolgasDirigidas = async function () {
+    var saveBtn = document.getElementById('fd-save-btn');
+    saveBtn.textContent = 'a guardar…';
+    saveBtn.disabled = true;
+
+    try {
+      var sb = await _getSb();
+      if (!sb) { alert('Supabase não disponível.'); return; }
+
+      // Recolher valores do DOM
+      var rows = document.querySelectorAll('.fd-pessoa-row');
+      var upserts = [];
+
+      rows.forEach(function (row) {
+        var pid = row.dataset.pid;
+        var dateInputs = row.querySelectorAll('.fd-date-input');
+        var datas = [];
+        dateInputs.forEach(function (inp) { if (inp.value) datas.push(inp.value); });
+        var notas = (row.querySelector('.fd-nota-input') || {}).value || '';
+
+        // Guardar sempre (permite limpar datas)
+        upserts.push({ pessoa_id: pid, datas: datas, notas: notas, updated_at: new Date().toISOString() });
+        _fd[pid] = { datas: datas, notas: notas };
+      });
+
+      // Upsert em batch
+      var { error } = await sb.from('gh_folgas_dirigidas')
+        .upsert(upserts, { onConflict: 'pessoa_id' });
+      if (error) throw error;
+
+      _updateBadge();
+      closeFolgasDirigidasModal();
+    } catch (e) {
+      console.error('Erro ao guardar folgas dirigidas:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+    } finally {
+      saveBtn.textContent = 'guardar';
+      saveBtn.disabled = false;
+    }
+  };
+
+  /* ── Fechar modal ── */
+  window.closeFolgasDirigidasModal = function () {
+    document.getElementById('fd-overlay').classList.remove('open');
+  };
+
+  /* ── Badge com total de datas futuras pendentes ── */
+  function _updateBadge() {
+    var badge = document.getElementById('fd-badge-count');
+    if (!badge) return;
+    var today = new Date().toISOString().split('T')[0];
+    var total = 0;
+    Object.values(_fd).forEach(function (r) {
+      (r.datas || []).forEach(function (d) { if (d >= today) total++; });
+    });
+    if (total > 0) {
+      badge.textContent = total;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  /* ── Helpers ── */
+  function _getSb() {
+    if (typeof sbAdmin !== 'undefined' && sbAdmin) return Promise.resolve(sbAdmin);
+    return new Promise(function (resolve) {
+      var tries = 0;
+      var t = setInterval(function () {
+        if (typeof sbAdmin !== 'undefined' && sbAdmin) { clearInterval(t); resolve(sbAdmin); }
+        if (++tries > 50) { clearInterval(t); resolve(null); }
+      }, 100);
+    });
+  }
+
+  function _shortName(name) {
+    if (!name) return '';
+    var parts = name.trim().split(/\s+/);
+    return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+  }
+
+  function _esc(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  /* ── Inicializar badge ao carregar ── */
+  async function _initBadge() {
+    try {
+      var sb = await _getSb();
+      if (!sb) return;
+      var today = new Date().toISOString().split('T')[0];
+      var { data: fds } = await sb.from('gh_folgas_dirigidas').select('datas');
+      var total = 0;
+      (fds || []).forEach(function (r) {
+        (r.datas || []).forEach(function (d) { if (d >= today) total++; });
+      });
+      _fd = {};
+      (fds || []).forEach(function (r) { /* badge only, full load is on open */ });
+      var badge = document.getElementById('fd-badge-count');
+      if (badge && total > 0) {
+        badge.textContent = total;
+        badge.style.display = 'inline-block';
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  // Esperar a que el admin sea visible
+  document.addEventListener('DOMContentLoaded', function () {
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    if (adminApp.classList.contains('show')) { _initBadge(); return; }
+    new MutationObserver(function (muts, obs) {
+      if (adminApp.classList.contains('show')) { obs.disconnect(); _initBadge(); }
+    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+  });
+
+})();
+</script>
+
 </body>
 </html>

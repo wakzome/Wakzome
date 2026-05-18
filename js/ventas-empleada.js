@@ -265,8 +265,7 @@
       btn.textContent = name;
 
       // Determinar si tiene acceso directo
-      // assignedStores vacío (CSV no descargado) = acceso libre a todas
-      var hasDirectAccess = (assignedStores.length === 0) || (assignedStores.indexOf(name) !== -1);
+      var hasDirectAccess = (assignedStores.indexOf(name) !== -1);
 
       btn.addEventListener('click', function () {
         if (hasDirectAccess) {

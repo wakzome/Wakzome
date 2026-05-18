@@ -508,10 +508,30 @@
       const saldo   = S._banco?.[p.id]    || 0;
       // Dias dirigidos: fonte primária é _folgasDirigidas (estável entre regenerações)
       // Fallback para _folgas (carregado de Supabase) se não há dirigidas em memória
-      const diasDirigidos = S._folgasDirigidas?.[p.id] || [];
+      const folgaDirigidaRec = S._folgasDirigidas?.[p.id];
+      const diasDirigidos = Array.isArray(folgaDirigidaRec) ? folgaDirigidaRec :
+        (folgaDirigidaRec?._weekDays?.length ? folgaDirigidaRec._weekDays : []);
+
+      // Badge de aviso: datas pedidas que caem nesta semana
+      let folgaPedidaTag = '';
+      if (folgaDirigidaRec?._allDatas?.length && S.weekStart) {
+        const weekEnd = new Date(S.weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+        const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+        const datasNaSemana = folgaDirigidaRec._allDatas.filter(ds => {
+          const d = new Date(ds + 'T00:00:00');
+          return d >= S.weekStart && d <= weekEnd;
+        });
+        if (datasNaSemana.length) {
+          const labels = datasNaSemana.map(ds => {
+            const d = new Date(ds + 'T00:00:00');
+            return `${d.getDate()} ${MESES[d.getMonth()]}`;
+          }).join(', ');
+          folgaPedidaTag = ` · <span style="font-size:.58rem;color:#b8860b;font-weight:700;background:#fff8e8;padding:1px 5px;border-radius:3px;" title="Folga pedida com antecedência">⚑ pediu ${labels}</span>`;
+        }
+      }
 
       const dayBtns = DIAS.map(d => {
-        const active = diasDirigidos.includes(d);
+        const active = Array.isArray(diasDirigidos) ? diasDirigidos.includes(d) : false;
         return `<button class="gh-day-btn${active?' gh-day-btn-on':''}" data-pid="${p.id}" data-day="${d}" title="${DIAS_FULL[d]}">${d.charAt(0)}</button>`;
       }).join('');
 
@@ -540,7 +560,7 @@
             <button class="gh-toggle-btn" data-pid="${p.id}">▶</button>
             <div class="gh-sr-nameblock">
               <span class="gh-sr-name">${shortName(p.name)}${saldoTag}</span>
-              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndTag}</span>
+              <span class="gh-sr-meta">${storeName} · <span class="gh-auto-badge gh-auto-${p.autonomia||'autonoma'}">${condLabel}</span>${onFerias?' · 🏖':''}${contractEndTag}${folgaPedidaTag}</span>
             </div>
           </div>
           <div class="gh-sr-btns">
@@ -615,6 +635,13 @@
         const pid = btn.dataset.pid;
         const day = btn.dataset.day;
         if (!S._folgasDirigidas) S._folgasDirigidas = {};
+        // Compatibilidade: se o registo é o novo formato (objecto com _allDatas),
+        // converter para array simples de nomes de dia para edição local no gerador
+        if (S._folgasDirigidas[pid] && !Array.isArray(S._folgasDirigidas[pid])) {
+          S._folgasDirigidas[pid] = S._folgasDirigidas[pid]._weekDays?.map(i =>
+            ['seg','ter','qua','qui','sex','sab','dom'][i]
+          ).filter(Boolean) || [];
+        }
         if (!S._folgasDirigidas[pid]) S._folgasDirigidas[pid] = [];
         const dias = S._folgasDirigidas[pid];
         const idx = dias.indexOf(day);
@@ -827,6 +854,42 @@
       // Banco de horas
       const { data: banco } = await sb.from('gh_banco_horas').select('*');
       (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
+
+      // Folgas dirigidas — datas exactas solicitadas com antecedência
+      // Só carregamos se ainda não há dados em memória (_folgasDirigidas persiste na sessão)
+      if (!S._folgasDirigidas || Object.keys(S._folgasDirigidas).length === 0) {
+        const { data: folgasDirigidas } = await sb.from('gh_folgas_dirigidas').select('*');
+        S._folgasDirigidas = S._folgasDirigidas || {};
+        (folgasDirigidas || []).forEach(r => {
+          // Converter datas ISO para dias da semana que caem nesta semana
+          if (!r.datas || !r.datas.length) return;
+          const weekDays = [];
+          r.datas.forEach(dateStr => {
+            const d = new Date(dateStr + 'T00:00:00');
+            const diff = Math.round((d - S.weekStart) / 86400000);
+            if (diff >= 0 && diff <= 6) weekDays.push(diff); // índice 0-6
+          });
+          // Guardar as datas completas para o badge de aviso
+          S._folgasDirigidas[r.pessoa_id] = {
+            _allDatas: r.datas,
+            _notas: r.notas || '',
+            _weekDays: weekDays  // índices de dia dentro desta semana
+          };
+        });
+      } else {
+        // Sessão já tem dados — recalcular _weekDays para a nova semana
+        Object.keys(S._folgasDirigidas).forEach(pid => {
+          const rec = S._folgasDirigidas[pid];
+          if (!rec || !rec._allDatas) return;
+          const weekDays = [];
+          rec._allDatas.forEach(dateStr => {
+            const d = new Date(dateStr + 'T00:00:00');
+            const diff = Math.round((d - S.weekStart) / 86400000);
+            if (diff >= 0 && diff <= 6) weekDays.push(diff);
+          });
+          rec._weekDays = weekDays;
+        });
+      }
 
     } catch(e) { console.error('Erro ao carregar incidências:', e); }
   }
@@ -1289,8 +1352,12 @@
           return;
         }
         // Check folga direccionada
-        const folgaDias = S._folgasDirigidas?.[p.id] || [];
-        if (folgaDias.includes(day)) {
+        const _fdRec = S._folgasDirigidas?.[p.id];
+        const folgaDias = Array.isArray(_fdRec) ? _fdRec : (_fdRec?._weekDays || []);
+        // folgaDias são índices de dia (0=Seg…6=Dom) na nova estrutura
+        // mas o código antigo usava nomes de dia (ex: 'seg') — verificar ambos
+        const dayIdx = ['seg','ter','qua','qui','sex','sab','dom'].indexOf(day);
+        if (folgaDias.includes(day) || (dayIdx >= 0 && folgaDias.includes(dayIdx))) {
           S.schedule[p.id][day] = { type: 'folga', shift: null, store: null };
           return;
         }
@@ -3050,7 +3117,8 @@
       <div style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;">
         ${candidates.length ? candidates.map(p => {
           const hasBadge = (() => {
-            const feriaDias = S._folgasDirigidas?.[p.id] || S._folgas?.[p.id]?.dias || [];
+            const _fdR = S._folgasDirigidas?.[p.id];
+            const feriaDias = Array.isArray(_fdR) ? _fdR : (_fdR?._allDatas || S._folgas?.[p.id]?.dias || []);
             const hasAbs = !!absOf(p.id);
             return hasAbs ? '🏖' : feriaDias.length ? '📅' : '';
           })();

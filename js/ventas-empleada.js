@@ -227,6 +227,22 @@
 
   // ── Renderizar los 4 botones con lógica de acceso ──
   function _renderSubtiendasWithAccess(assignedStores, csvText) {
+    // Inyectar CSS de emergencia una sola vez
+    if (!document.getElementById('v-emergency-style')) {
+      var es = document.createElement('style');
+      es.id = 'v-emergency-style';
+      es.textContent =
+        '.v-subtienda-btn-wrap{display:flex;flex-direction:column;align-items:stretch;width:100%;max-width:320px;}' +
+        '.v-emergency-wrap{margin-top:6px;padding:12px 14px;background:#f5f5f5;border:1.5px solid #bbb;border-radius:10px;}' +
+        '.v-emergency-msg{font-size:.78rem;color:#555;margin-bottom:8px;font-weight:600;text-align:center;}' +
+        '.v-emergency-row{display:flex;gap:8px;align-items:center;}' +
+        '.v-emergency-input{flex:1;padding:8px 10px;border:1.5px solid #bbb;border-radius:7px;font-size:.88rem;text-align:center;letter-spacing:.1em;background:#fff;}' +
+        '.v-emergency-input:focus{border-color:#555;outline:none;box-shadow:0 0 0 2px rgba(0,0,0,.08);}' +
+        '.v-emergency-confirm{padding:8px 14px;background:#333;color:#fff;border:none;border-radius:7px;font-size:.82rem;cursor:pointer;white-space:nowrap;}' +
+        '.v-emergency-confirm:hover{background:#000;}' +
+        '.v-emergency-err{font-size:.78rem;color:#555;margin-top:6px;text-align:center;font-weight:600;}';
+      document.head.appendChild(es);
+    }
     var body = document.getElementById('ventas-overlay-body');
     body.innerHTML = '';
 
@@ -814,17 +830,7 @@
           'padding:8px 12px;font-size:.8rem;font-weight:600;cursor:pointer;' +
           'text-transform:uppercase;' +
         '}' +
-        '.v-emp-option:hover,.v-emp-option.v-emp-active{background:#f0f7f3;color:#1e2a22;}' +
-        /* Emergencia */
-        '.v-subtienda-btn-wrap{display:flex;flex-direction:column;align-items:stretch;width:100%;max-width:320px;}' +
-        '.v-emergency-wrap{margin-top:6px;padding:12px 14px;background:#fdf6f0;border:1.5px solid #e0b08a;border-radius:10px;}' +
-        '.v-emergency-msg{font-size:.78rem;color:#a0522d;margin-bottom:8px;font-weight:600;text-align:center;}' +
-        '.v-emergency-row{display:flex;gap:8px;align-items:center;}' +
-        '.v-emergency-input{flex:1;padding:8px 10px;border:1.5px solid #d0a070;border-radius:7px;font-size:.88rem;text-align:center;letter-spacing:.1em;}' +
-        '.v-emergency-input:focus{border-color:#a0522d;outline:none;box-shadow:0 0 0 2px rgba(160,82,45,.15);}' +
-        '.v-emergency-confirm{padding:8px 14px;background:#a0522d;color:#fff;border:none;border-radius:7px;font-size:.82rem;cursor:pointer;white-space:nowrap;}' +
-        '.v-emergency-confirm:hover{background:#7a3e22;}' +
-        '.v-emergency-err{font-size:.78rem;color:#c0392b;margin-top:6px;text-align:center;font-weight:600;}';
+        '.v-emp-option:hover,.v-emp-option.v-emp-active{background:#f0f7f3;color:#1e2a22;}';
       document.head.appendChild(s);
     }
 

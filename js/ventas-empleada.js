@@ -292,7 +292,7 @@
     var inp = document.createElement('input');
     inp.type        = 'number';
     inp.className   = 'v-emergency-input';
-    inp.placeholder = 'código de emergência';
+    inp.placeholder = '';
     inp.maxLength   = 5;
 
     var confirmBtn = document.createElement('button');

@@ -951,6 +951,8 @@ body {
 
 .adm-mod-card[data-module="vendas-group"]::before { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
 
+#summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
+
 #container-tables {
   display: flex; flex-direction: column;
   flex: 0 0 auto;
@@ -3224,6 +3226,7 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 <div id="container-tables" class="reveal-item">
+  <div id="summary-wrap" class="table-wrap" style="display:none !important;"></div>
   <div id="legal-notice">
     <p>AS AUSÊNCIAS AO TRABALHO DEVEM SER COMUNICADAS COM A ANTECEDÊNCIA LEGALMENTE PREVISTA SEMPRE QUE PREVISÍVEIS, OU LOGO QUE POSSÍVEL QUANDO IMPREVISÍVEIS, INDICANDO O RESPETIVO MOTIVO.</p>
     <p>O COMPROVATIVO DA AUSÊNCIA DEVERÁ SER APRESENTADO NOS TERMOS E PRAZOS PREVISTOS NO CÓDIGO DO TRABALHO. QUANDO A FALTA, EMBORA JUSTIFICADA, DETERMINE LEGALMENTE PERDA DE RETRIBUIÇÃO, CABERÁ EXCLUSIVAMENTE AO TRABALHADOR OPTAR ENTRE O DESCONTO REMUNERATÓRIO CORRESPONDENTE OU, SE ASSIM O ENTENDER, A SUBSTITUIÇÃO DESSA PERDA POR RENÚNCIA A DIAS DE FÉRIAS OU PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO.</p>

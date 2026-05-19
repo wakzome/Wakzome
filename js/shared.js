@@ -680,7 +680,7 @@
       let rowspanCols=[];
       html+=`<tr class="${activeCls}">`;
       html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px">
-              <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
               ${escapeHtml(A[0]||'')}</td>`;
       for(let c=1;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
@@ -756,7 +756,7 @@
         const activeCls = isActiveNow ? ' tr-active-now' : '';
         html += `<tr class="${activeCls}">`;
         html += `<td class="name" style="white-space:nowrap;width:${colWidths[0]*12}px">
-                  <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${circleColor};margin-right:5px;"></span>
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                   ${escapeHtml(A[0]||'')}
                  </td>`;
         for (let c = 1; c < cols; c++) {

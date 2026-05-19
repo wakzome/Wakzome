@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="color-scheme" content="light">
-<!-- ===== INTRO ===== -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Acesso restrito.">
+
 <style>
 @font-face {
     font-family: 'MontserratLight';
@@ -76,7 +78,7 @@ select, select option {
     font-weight: 300 !important;
 }
 </style>
-<!-- ===== INTRO ===== -->
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wakzome</title>
 <link rel="icon" type="image/png" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/ICON.png">
@@ -3170,16 +3172,14 @@ td                   { font-size: .96rem !important; }
 </style>
 </head>
 <body>
-<!-- ✦ WOW elements -->
+
 <div id="wz-vignette"></div>
 <div id="wz-wipe"></div>
 <button id="wz-minimal-btn" title="ultra-minimal" aria-label="toggle minimal mode"></button>
 
-<!-- glow layers — animated background -->
 <div id="glow-layer-1"></div>
 <div id="glow-layer-2"></div>
 
-<!-- ===== INTRO ===== -->
 <div id="sweep-line"></div>
 <div id="greeting-overlay"><div id="greeting-text"></div><div id="greeting-sub">wakzome</div></div>
 
@@ -3192,11 +3192,9 @@ td                   { font-size: .96rem !important; }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/intro.js"></script>
-<!-- ===== INTRO ===== -->
 
 <div id="rotate-message">Por favor, rode o telemóvel para o modo horizontal</div>
 
-<!-- ═══ LOGIN (estilo index) ═══ -->
 <div id="login-screen">
   <div class="login-bubble"></div>
   <div class="login-bubble"></div>
@@ -3212,7 +3210,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- ═══ VISTA HORARIOS (index) ═══ -->
 <div id="main-header">
   <div id="main-nav">
     <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
@@ -3237,7 +3234,6 @@ td                   { font-size: .96rem !important; }
   <div class="table-wrap" id="table-container"><div>A carregar...</div></div>
 </div>
 
-<!-- ═══ VISTA ADMIN (salários + recibos) ═══ -->
 <div id="admin-app">
   <button id="admin-menu-btn" aria-label="menu" title="menu">
     <span></span><span></span><span></span>
@@ -3250,7 +3246,7 @@ td                   { font-size: .96rem !important; }
     <div class="loading-dots"><span></span><span></span><span></span></div>
   </div>
 
-  <!-- ── MODULE BACK BAR (shown when inside a module) ── -->
+  
   <div id="adm-module-bar">
     <button id="adm-back-btn">
       <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3261,7 +3257,7 @@ td                   { font-size: .96rem !important; }
     <span id="adm-module-bar-title"></span>
   </div>
 
-  <!-- ── ADMIN DASHBOARD LANDING ── -->
+  
   <div id="adm-dashboard">
     <div id="adm-dash-greeting">
       <div class="adm-brand">ADMINISTRAÇÃO</div>
@@ -3395,7 +3391,7 @@ td                   { font-size: .96rem !important; }
     <button class="tab-btn" data-tab="processamento">faturas</button>
   </div>
 
-  <!-- MOBILE MENU DRAWER -->
+  
   <div id="admin-menu-overlay"></div>
   <div id="admin-menu-drawer">
     <button class="drawer-tab-btn active" data-tab="salarios">salários</button>
@@ -3410,7 +3406,7 @@ td                   { font-size: .96rem !important; }
     <button class="drawer-tab-btn" data-tab="processamento">faturas</button>
   </div>
 
-  <!-- TAB SALÁRIOS -->
+  
   <div id="tab-salarios" class="tab-panel active">
     <div id="s-upload-zone">
       <label id="s-upload-label" for="s-file-input">
@@ -3425,12 +3421,12 @@ td                   { font-size: .96rem !important; }
     <div class="results-wrap" id="s-results-wrap"></div>
   </div>
 
-  <!-- TAB RECIBOS -->
+  
   <div id="tab-recibos" class="tab-panel">
 
-    <!-- CONFIG -->
+    
 
-    <!-- UPLOAD GRID with inline step hints -->
+    
     <div id="r-upload-outer">
       <div id="r-hint-pdf" class="r-inline-hint"></div>
       <div id="r-upload-grid">
@@ -3462,18 +3458,18 @@ td                   { font-size: .96rem !important; }
       </div>
     </div>
 
-    <!-- PROGRESS -->
+    
     <div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>
     <div id="r-progress-detail"></div>
 
-    <!-- CONFERIR — fixed right -->
+    
     <div id="r-conferir-fixed">
       <button id="r-conferir-btn">🔍 conferir recibos</button>
       <p id="r-conferir-note">⚠ pode demorar alguns minutos a atualizar.</p>
     </div>
 
   </div>
-  <!-- TAB HORÁRIOS -->
+  
   <div id="tab-agenda" class="tab-panel"></div>
   <div id="tab-rotulos" class="tab-panel"></div>
 
@@ -3493,10 +3489,10 @@ td                   { font-size: .96rem !important; }
     <div id="h-table-area"><div id="h-status-msg">selecione uma loja para ver o horário</div></div>
   </div>
 
-  <!-- TAB GERADOR DE HORÁRIOS -->
+  
   <div id="tab-gerador" class="tab-panel"></div>
 
-  <!-- TAB FÉRIAS -->
+  
   <div id="tab-ferias" class="tab-panel">
     <div id="f-today-banner">
       <div class="f-banner-title">🌴 de férias hoje</div>
@@ -3505,15 +3501,15 @@ td                   { font-size: .96rem !important; }
     <div id="f-area"></div>
   </div>
 
-  <!-- TAB EDITOR PDF -->
+  
   <div id="tab-editor" class="tab-panel">
-    <!-- Mobile unavailable message -->
+    
     <div id="ed-mobile-msg" style="display:none;">
       <span>🖥️</span>
       <p>editor de pdf não disponível em mobile</p>
       <small>acede a partir de um computador para utilizar esta funcionalidade</small>
     </div>
-    <!-- Toolbar -->
+    
     <div id="ed-toolbar">
       <label id="ed-upload-btn" for="ed-file-input" title="Carregar PDF">
         <span>📂</span> carregar pdf
@@ -3539,7 +3535,7 @@ td                   { font-size: .96rem !important; }
       <div class="ed-sep"></div>
       <button id="ed-export-btn" title="Exportar PDF">⬇️ exportar pdf</button>
     </div>
-    <!-- Canvas area -->
+    
     <div id="ed-canvas-wrap">
       <div id="ed-drop-hint">
         <span>📄</span>
@@ -3550,10 +3546,10 @@ td                   { font-size: .96rem !important; }
     </div>
   </div>
 
-  <!-- TAB TAM ─────────────────────────────────────────────── -->
+  
   <div id="tab-tam" class="tab-panel">
 
-    <!-- Upload zone -->
+    
     <div id="tam-upload-zone">
       <label id="tam-upload-label" for="tam-file-input">
         <span class="upload-icon">📦</span>
@@ -3565,20 +3561,20 @@ td                   { font-size: .96rem !important; }
       <div id="tam-status-msg"></div>
     </div>
 
-    <!-- Invoice meta banner -->
+    
     <div id="tam-invoice-meta"></div>
 
-    <!-- Validation banner -->
+    
     <div id="tam-validation-banner"></div>
 
-    <!-- Results table -->
+    
     <div id="tam-results-wrap"></div>
     <button id="tam-export-btn">⬇ exportar excel</button>
 
   </div>
-  <!-- /TAB TAM ───────────────────────────────────────────── -->
+  
 
-  <!-- ─── VENTAS ADMIN PANEL ─── -->
+  
   <div id="adm-ventas-panel">
     <div class="vadm-filter-bar">
       <div class="vadm-period-btns">
@@ -3616,13 +3612,12 @@ td                   { font-size: .96rem !important; }
     </div>
     <div id="adm-ventas-content"></div>
   </div>
-  <!-- /VENTAS ADMIN PANEL -->
+  
 
-  <!-- ── HISTÓRICO ADMIN: HTML inyectado dinámicamente desde js/historico-admin.js ── -->
+  
 
-</div><!-- /#admin-app -->
+</div>
 
-<!-- EDITOR: Export modal -->
 <div id="ed-export-modal">
   <div id="ed-export-modal-box">
     <div class="ed-modal-title">exportar pdf</div>
@@ -3642,7 +3637,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- SAFT REMINDER -->
 <div id="saft-reminder">
   <div id="saft-label">recordatorio</div>
   <div id="saft-title">solicitar criação<br>de SAFT</div>
@@ -3660,24 +3654,21 @@ td                   { font-size: .96rem !important; }
   <div id="saft-faturas-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;"></div>
   <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
 
-  <!-- CÓDIGOS DE ACESSO PORTO SANTO -->
+  
   <div id="saft-divider3" style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
   <div id="emg-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;">código de acesso</div>
   <div id="emg-date" style="font-size:.6rem;color:#999;margin-bottom:6px;">hoje</div>
   <div id="emg-codes-list" style="display:flex;flex-direction:column;gap:3px;width:100%;"></div>
   <div id="emg-valid" style="font-size:.58rem;color:#bbb;margin-top:6px;text-align:right;">válido até às 00:00</div>
 
-  <!-- FOLGAS DIRIGIDAS -->
+  
   <div style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
   <div style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:6px;">folgas pedidas</div>
   <button id="fd-btn" onclick="openFolgasDirigidasModal()">ver / editar<span id="fd-badge-count" style="display:none"></span></button>
 </div>
 
-<!-- POPUP compartido -->
 <div id="page-name-popup"></div>
 
-<!-- RECIBOS OVERLAY -->
-<!-- AGENDA OVERLAY -->
 <div id="agenda-overlay">
   <div id="agenda-overlay-bar">
     <button id="agenda-overlay-back" onclick="closeAgendaOverlay()">← voltar</button>
@@ -3688,7 +3679,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- RÓTULOS OVERLAY -->
 <div id="rotulos-overlay">
   <div id="rotulos-overlay-bar">
     <button id="rotulos-overlay-back" onclick="closeRotulosOverlay()">← voltar</button>
@@ -3699,7 +3689,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- PROCESSAMENTO OVERLAY -->
 <div id="processamento-overlay">
   <div id="processamento-overlay-bar">
     <button id="processamento-overlay-back" onclick="closeProcessamentoOverlay();document.body.classList.remove('no-glow')">← voltar</button>
@@ -3739,7 +3728,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- ETIQUETAS OVERLAY -->
 <div id="etiquetas-overlay">
   <div id="etiquetas-overlay-bar">
     <button id="etiquetas-overlay-back" onclick="closeEtiquetasOverlay()">← voltar</button>
@@ -3804,7 +3792,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- VENTAS OVERLAY (empleada) -->
 <div id="ventas-overlay">
   <div id="ventas-overlay-bar">
     <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
@@ -3815,8 +3802,6 @@ td                   { font-size: .96rem !important; }
   </div>
 </div>
 
-<!-- FATURAS SUB-OVERLAY -->
-<!-- HORARIOS GROUP OVERLAY -->
 <div id="horarios-overlay">
   <div id="horarios-overlay-bar">
     <button id="horarios-overlay-back">
@@ -3895,7 +3880,7 @@ td                   { font-size: .96rem !important; }
       <div class="fsub-tagline">SELECIONE UM MÓDULO</div>
     </div>
     <div id="faturas-sub-grid">
-      <!-- TAM -->
+      
       <div class="adm-mod-card" data-faturas-module="tam" style="animation-delay:0.05s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3910,7 +3895,7 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <!-- FATURAS LISBOA -->
+      
       <div class="adm-mod-card" data-faturas-module="processamento" style="animation-delay:0.10s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3945,7 +3930,7 @@ td                   { font-size: .96rem !important; }
       <div class="vsub-tagline">SELECIONE UM MÓDULO</div>
     </div>
     <div id="vendas-sub-grid">
-      <!-- VENDAS DECLARADAS -->
+      
       <div class="adm-mod-card" data-vendas-module="ventas" style="animation-delay:0.05s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3961,7 +3946,7 @@ td                   { font-size: .96rem !important; }
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
-      <!-- HISTÓRICO -->
+      
       <div class="adm-mod-card" data-vendas-module="historico" style="animation-delay:0.10s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -5078,7 +5063,7 @@ td                   { font-size: .96rem !important; }
   });
 })();
 </script>
-<!-- FOLGAS DIRIGIDAS MODAL -->
+
 <div id="fd-overlay" onclick="if(event.target===this)closeFolgasDirigidasModal()">
   <div id="fd-modal">
     <div id="fd-modal-header">

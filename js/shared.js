@@ -72,6 +72,9 @@
       const data = await loginRes.json();
       const sessionToken = data.token;
 
+      // Guardar token en cookie para el portero de /js/
+      document.cookie = 'wkz_session=' + sessionToken + '; path=/; SameSite=Strict';
+
       // Inicializar Supabase con credenciales del login — sin llamada extra
       await window.initSupabase(sessionToken, {
         url: data.url,

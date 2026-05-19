@@ -75,28 +75,11 @@
       // Guardar token en cookie para el portero de /js/
       document.cookie = 'wkz_session=' + sessionToken + '; path=/; SameSite=Strict';
 
-      // Cargar los JS protegidos ahora que la cookie está lista
-      await (function loadProtectedScripts() {
-        const scripts = [
-          'js/agenda.js','js/rotulos.js','js/processamento.js',
-          'js/admin-init.js','js/salarios.js','js/recibos.js',
-          'js/admin-horarios.js','js/ferias.js','js/editor-pdf.js',
-          'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
-          'js/ventas-empleada.js','js/ventas-admin.js',
-          'js/historico-admin.js','js/predictivo.js'
-        ];
-        return scripts.reduce(function(p, src) {
-          return p.then(function() {
-            return new Promise(function(resolve, reject) {
-              var s = document.createElement('script');
-              s.src = src;
-              s.onload = resolve;
-              s.onerror = reject;
-              document.body.appendChild(s);
-            });
-          });
-        }, Promise.resolve());
-      })();
+      // Guardar datos de sesión y redirigir a la app
+      sessionStorage.setItem('wkz_token', sessionToken);
+      sessionStorage.setItem('wkz_data', JSON.stringify(data));
+      window.location.href = '/app.html';
+      return;
 
       // Inicializar Supabase con credenciales del login — sin llamada extra
       await window.initSupabase(sessionToken, {

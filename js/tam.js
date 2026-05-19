@@ -4787,8 +4787,8 @@
             '<thead><tr>' +
               '<th class="tam-dn-th">Refer\u00eancia</th>' +
               '<th class="tam-dn-th tam-dn-th-t">T</th>' +
-              '<th class="tam-dn-th tam-dn-th-f">FNC</th>' +
-              '<th class="tam-dn-th tam-dn-th-p">PXO</th>' +
+              '<th class="tam-dn-th tam-dn-th-f"><button class="tam-dn-col-btn tam-dn-col-btn-f">FNC</button></th>' +
+              '<th class="tam-dn-th tam-dn-th-p"><button class="tam-dn-col-btn tam-dn-col-btn-p">PXO</button></th>' +
               '<th class="tam-dn-th"></th>' +
             '</tr></thead>' +
             '<tbody>' + rowsHtml + '</tbody>' +
@@ -4803,6 +4803,26 @@
       '</div>';
     document.body.appendChild(modal);
     requestAnimationFrame(function(){ modal.classList.add('tam-dn-visible'); });
+
+    /* ── Column-fill buttons: FNC fills 100% F, 0 P; PXO fills 100% P, 0 F ── */
+    modal.querySelector(".tam-dn-col-btn-f").addEventListener("click", function() {
+      dn.refs.forEach(function(r) {
+        var safe = r.ref.replace(/[^a-z0-9]/gi, "_");
+        var fi = modal.querySelector("#tam-dn-f-" + safe);
+        var pi = modal.querySelector("#tam-dn-p-" + safe);
+        if (fi) { fi.value = r.qty; fi.dispatchEvent(new Event("input", {bubbles:true})); }
+        if (pi) { pi.value = 0;     pi.dispatchEvent(new Event("input", {bubbles:true})); }
+      });
+    });
+    modal.querySelector(".tam-dn-col-btn-p").addEventListener("click", function() {
+      dn.refs.forEach(function(r) {
+        var safe = r.ref.replace(/[^a-z0-9]/gi, "_");
+        var fi = modal.querySelector("#tam-dn-f-" + safe);
+        var pi = modal.querySelector("#tam-dn-p-" + safe);
+        if (fi) { fi.value = 0;     fi.dispatchEvent(new Event("input", {bubbles:true})); }
+        if (pi) { pi.value = r.qty; pi.dispatchEvent(new Event("input", {bubbles:true})); }
+      });
+    });
 
     /* ── Pre-fill from confirmed distribution when editing ── */
     if (dn.distribConfirmed && dn.lastPhotoDistrib && dn.lastPhotoDistrib.length && !motorDDistrib) {
@@ -6753,9 +6773,9 @@
       '.tam-dn-close:hover { background:#c62828; color:#fff; border-color:#c62828; }',
       '#tam-dn-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#tam-dn-table { width:auto; min-width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; table-layout:auto; }',
-      '.tam-dn-th-t { width:1px; white-space:nowrap; text-align:center; color:#666!important; }',
-      '.tam-dn-th-f { width:1px; white-space:nowrap; text-align:center; color:#1565c0!important; background:#e8f0fe; }',
-      '.tam-dn-th-p { width:1px; white-space:nowrap; text-align:center; color:#c62828!important; background:#fce4ec; }',
+      '.tam-dn-th-t { width:1px; white-space:nowrap; text-align:center!important; color:#666!important; }',
+      '.tam-dn-th-f { width:1px; white-space:nowrap; text-align:center!important; color:#1565c0!important; background:#e8f0fe; }',
+      '.tam-dn-th-p { width:1px; white-space:nowrap; text-align:center!important; color:#c62828!important; background:#fce4ec; }',
       '.tam-conf-badge { display:inline-block; padding:2px 8px; border-radius:5px; font-weight:700; }',
       '.tam-conf-ok   { background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; }',
       '.tam-conf-warn { background:#fff8e1; color:#e65100; border:1px solid #ffcc80; }',
@@ -6764,6 +6784,11 @@
       '.tam-dn-th { padding:8px 12px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666!important; border-bottom:2px solid #ddd; text-align:left; }',
       '.tam-dn-th-f { color:#1565c0!important; background:#e8f0fe; }',
       '.tam-dn-th-p { color:#c62828!important; background:#fce4ec; }',
+      '.tam-dn-col-btn { display:block; width:100%; padding:3px 6px; font-size:.68rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.05em; cursor:pointer; border-radius:6px; border:1.5px solid transparent; background:transparent; transition:all .13s; text-align:center; }',
+      '.tam-dn-col-btn-f { color:#1565c0!important; border-color:transparent; }',
+      '.tam-dn-col-btn-f:hover { background:rgba(21,101,192,.12)!important; border-color:#1565c0!important; }',
+      '.tam-dn-col-btn-p { color:#c62828!important; border-color:transparent; }',
+      '.tam-dn-col-btn-p:hover { background:rgba(198,40,40,.12)!important; border-color:#c62828!important; }',
       '.tam-dn-row td { padding:7px 12px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
       '.tam-dn-ref { font-weight:bold; color:#222; white-space:nowrap; width:1%; }',  /* shrink to longest ref */
       '.tam-dn-total { text-align:center; color:#555; font-weight:bold; white-space:nowrap; width:1%; }',

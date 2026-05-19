@@ -3439,6 +3439,2105 @@ td                   { font-size: .96rem !important; }
     <button id="key-submit">entrar</button>
   </div>
 </div>
+
+<!-- ═══ VISTA HORARIOS (index) ═══ -->
+<div id="main-header">
+  <div id="main-nav">
+    <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
+    <a id="etiquetas-link" href="#" onclick="openEtiquetasOverlay(); return false;">ETIQUETAS</a>
+    <a id="ventas-link" href="#" onclick="openVentasOverlay(); return false;">VENDAS</a>
+  </div>
+  <div id="main-header-center" class="reveal-item">
+    <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
+    <div id="current-time-main"></div>
+    <div id="current-date-main"></div>
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+</div>
+<div id="shift-countdown"></div>
+<div id="container-tables" class="reveal-item">
+  <!-- summary-wrap kept hidden in DOM — required by JS, never shown -->
+  <div id="summary-wrap" class="table-wrap" style="display:none !important;"></div>
+  <div id="legal-notice">
+    <p>AS AUSÊNCIAS AO TRABALHO DEVEM SER COMUNICADAS COM A ANTECEDÊNCIA LEGALMENTE PREVISTA SEMPRE QUE PREVISÍVEIS, OU LOGO QUE POSSÍVEL QUANDO IMPREVISÍVEIS, INDICANDO O RESPETIVO MOTIVO.</p>
+    <p>O COMPROVATIVO DA AUSÊNCIA DEVERÁ SER APRESENTADO NOS TERMOS E PRAZOS PREVISTOS NO CÓDIGO DO TRABALHO. QUANDO A FALTA, EMBORA JUSTIFICADA, DETERMINE LEGALMENTE PERDA DE RETRIBUIÇÃO, CABERÁ EXCLUSIVAMENTE AO TRABALHADOR OPTAR ENTRE O DESCONTO REMUNERATÓRIO CORRESPONDENTE OU, SE ASSIM O ENTENDER, A SUBSTITUIÇÃO DESSA PERDA POR RENÚNCIA A DIAS DE FÉRIAS OU PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO.</p>
+    <p>QUALQUER PRESTAÇÃO DE TRABALHO EM HORAS EXTRAORDINÁRIAS DEVE SER PREVIAMENTE COMUNICADA E ACORDADA COM O EMPREGADOR, NÃO SENDO ACEITES HORAS NÃO INFORMADAS POSTERIORMENTE.</p>
+    <p>DE ACORDO COM A LEGISLAÇÃO VIGENTE, OS HORÁRIOS ROTATIVOS DA EMPRESA PODERÃO SER ALTERADOS PONTUALMENTE EM SITUAÇÕES DE FORÇA MAIOR OU NECESSIDADE ORGANIZATIVA, SEMPRE RESPEITANDO O DESCANSO MÍNIMO LEGAL. QUALQUER ALTERAÇÃO SERÁ COMUNICADA COM A DEVIDA ANTECEDÊNCIA APENAS ÀS COLABORADORAS AFETADAS, NÃO SENDO NECESSÁRIO O SEU CONSENTIMENTO OU APROVAÇÃO, SALVO SE A ALTERAÇÃO IMPLICAR A REDUÇÃO DO DESCANSO MÍNIMO LEGAL.</p>
+    <p>CASO ALGUMA COLABORADORA NECESSITE TROCAR UM DIA DE FOLGA POR MOTIVOS ATENDÍVEIS, DEVERÁ INFORMAR À EMPRESA, APRESENTANDO A COORDENAÇÃO COM A PESSOA QUE TENHA A FOLGA PRETENDIDA.</p>
+  </div>
+  <div class="table-wrap" id="table-container"><div>A carregar...</div></div>
+</div>
+
+<!-- ═══ VISTA ADMIN (salários + recibos) ═══ -->
+<div id="admin-app">
+  <button id="admin-menu-btn" aria-label="menu" title="menu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <div id="admin-header" class="reveal-item">
+    <div class="logo-text" id="admin-logo" style="cursor:pointer;">wakzome</div>
+    <div id="admin-time"></div>
+    <div id="admin-date"></div>
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <!-- ── MODULE BACK BAR (shown when inside a module) ── -->
+  <div id="adm-module-bar">
+    <button id="adm-back-btn">
+      <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="adm-module-bar-title"></span>
+  </div>
+
+  <!-- ── ADMIN DASHBOARD LANDING ── -->
+  <div id="adm-dashboard">
+    <div id="adm-dash-greeting">
+      <div class="adm-brand">ADMINISTRAÇÃO</div>
+      <div class="adm-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="adm-module-grid">
+      <div class="adm-mod-card" data-module="salarios" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 7v1m0 8v1M9.5 9.5C9.5 8.67 10.67 8 12 8s2.5.67 2.5 1.5S13.33 11 12 11s-2.5.67-2.5 1.5S10.67 14 12 14s2.5.67 2.5 1.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">SALÁRIOS</div>
+          <div class="adm-mod-desc">processamento de salários</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="recibos" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5" y="3" width="14" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">RECIBOS</div>
+          <div class="adm-mod-desc">encriptação e envio de recibos</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="agenda" style="animation-delay:0.15s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="5" width="16" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 3v4M16 3v4M4 10h16" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="9" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+            <circle cx="12" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+            <circle cx="15" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">AGENDA</div>
+          <div class="adm-mod-desc">gestão de pagamento de faturas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="vendas-group" style="animation-delay:0.18s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">VENDAS</div>
+          <div class="adm-mod-desc">vendas declaradas · histórico</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="rotulos" style="animation-delay:0.20s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 7a2 2 0 0 1 2-2h8.586a2 2 0 0 1 1.414.586l3.414 3.414A2 2 0 0 1 20 10.414V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <circle cx="8.5" cy="11.5" r="1.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.2"/>
+            <path d="M8 15h8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">RÓTULOS</div>
+          <div class="adm-mod-desc">impressão de rótulos</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="horarios-group" style="animation-delay:0.25s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 8v4l2.5 2.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HORÁRIOS</div>
+          <div class="adm-mod-desc">horários · gerador · férias</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="editor" style="animation-delay:0.30s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14.5 4.5l5 5L7 22H2v-5L14.5 4.5Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M12 7l5 5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">EDITOR DE PDF</div>
+          <div class="adm-mod-desc">edição e anotação de documentos</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="faturas" style="animation-delay:0.35s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 7h8M8 10h8M8 13h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M14 17l1.5 1.5L18 15" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">FATURAS</div>
+          <div class="adm-mod-desc">tam · faturas lisboa</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-nav" class="reveal-item" style="opacity:0;">
+    <button class="tab-btn active" data-tab="salarios">salários</button>
+    <button class="tab-btn" data-tab="recibos">recibos</button>
+    <button class="tab-btn" data-tab="agenda">agenda</button>
+    <button class="tab-btn" data-tab="rotulos">rótulos</button>
+    <button class="tab-btn" data-tab="horarios">horários</button>
+    <button class="tab-btn" data-tab="gerador">gerador de horários</button>
+    <button class="tab-btn" data-tab="ferias">férias</button>
+    <button class="tab-btn" data-tab="editor">editor pdf</button>
+    <button class="tab-btn" data-tab="tam">tam</button>
+    <button class="tab-btn" data-tab="processamento">faturas</button>
+  </div>
+
+  <!-- MOBILE MENU DRAWER -->
+  <div id="admin-menu-overlay"></div>
+  <div id="admin-menu-drawer">
+    <button class="drawer-tab-btn active" data-tab="salarios">salários</button>
+    <button class="drawer-tab-btn" data-tab="recibos">recibos</button>
+    <button class="drawer-tab-btn" data-tab="agenda">agenda</button>
+    <button class="drawer-tab-btn" data-tab="rotulos">rótulos</button>
+    <button class="drawer-tab-btn" data-tab="horarios">horários</button>
+    <button class="drawer-tab-btn" data-tab="gerador">gerador de horários</button>
+    <button class="drawer-tab-btn" data-tab="ferias">férias</button>
+    <button class="drawer-tab-btn" data-tab="editor">editor pdf</button>
+    <button class="drawer-tab-btn" data-tab="tam">tam</button>
+    <button class="drawer-tab-btn" data-tab="processamento">faturas</button>
+  </div>
+
+  <!-- TAB SALÁRIOS -->
+  <div id="tab-salarios" class="tab-panel active">
+    <div id="s-upload-zone">
+      <label id="s-upload-label" for="s-file-input">
+        <span class="upload-icon">📄</span>
+        carregar pdf de salários<br>
+        <small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro aqui</small>
+      </label>
+      <input type="file" id="s-file-input" accept="application/pdf">
+      <div id="s-file-name"></div>
+      <div id="s-status-msg"></div>
+    </div>
+    <div class="results-wrap" id="s-results-wrap"></div>
+  </div>
+
+  <!-- TAB RECIBOS -->
+  <div id="tab-recibos" class="tab-panel">
+
+    <!-- CONFIG -->
+
+    <!-- UPLOAD GRID with inline step hints -->
+    <div id="r-upload-outer">
+      <div id="r-hint-pdf" class="r-inline-hint"></div>
+      <div id="r-upload-grid">
+        <label class="upload-box" id="r-label-pdf">
+          <span class="upload-icon">📄</span>
+          pdf de recibos<br>
+          <small style="font-size:.75rem;opacity:.6">clique ou arraste</small>
+          <input type="file" id="r-input-pdf" accept="application/pdf">
+          <span class="file-loaded" id="r-name-pdf"></span>
+        </label>
+        <label class="upload-box" id="r-label-csv">
+          <span class="upload-icon">📋</span>
+          csv de senhas<br>
+          <small style="font-size:.75rem;opacity:.6">nome;senha</small>
+          <input type="file" id="r-input-csv" accept=".csv,.txt">
+          <span class="file-loaded" id="r-name-csv"></span>
+        </label>
+      </div>
+      <div id="r-hint-csv" class="r-inline-hint r-inline-hint-right"></div>
+    </div>
+
+    <button id="r-process-btn">processar recibos</button>
+
+    <div id="r-status-area">
+      <div id="r-status-msg"></div>
+      <div id="r-warnings-box">
+        <div class="warn-title">senhas em falta — nenhum recibo foi gerado</div>
+        <ul id="r-warnings-list"></ul>
+      </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>
+    <div id="r-progress-detail"></div>
+
+    <!-- CONFERIR — fixed right -->
+    <div id="r-conferir-fixed">
+      <button id="r-conferir-btn">🔍 conferir recibos</button>
+      <p id="r-conferir-note">⚠ pode demorar alguns minutos a atualizar.</p>
+    </div>
+
+  </div>
+  <!-- TAB HORÁRIOS -->
+  <div id="tab-agenda" class="tab-panel"></div>
+  <div id="tab-rotulos" class="tab-panel"></div>
+
+  <div id="tab-horarios" class="tab-panel">
+    <div id="h-store-selector">
+      <label>loja</label>
+      <select id="h-store-select">
+        <option value="">— selecionar —</option>
+        <option value="mezka funchal">Mezka Funchal</option>
+        <option value="parfois madeira shopping">Parfois Madeira Shopping</option>
+        <option value="parfois arcadas são francisco">Parfois Arcadas São Francisco</option>
+        <option value="porto santo">Porto Santo</option>
+      </select>
+      <select id="h-week-select" style="display:none;"></select>
+    </div>
+    <div id="h-dashboard"></div>
+    <div id="h-table-area"><div id="h-status-msg">selecione uma loja para ver o horário</div></div>
+  </div>
+
+  <!-- TAB GERADOR DE HORÁRIOS -->
+  <div id="tab-gerador" class="tab-panel"></div>
+
+  <!-- TAB FÉRIAS -->
+  <div id="tab-ferias" class="tab-panel">
+    <div id="f-today-banner">
+      <div class="f-banner-title">🌴 de férias hoje</div>
+      <div class="f-banner-names" id="f-banner-names"></div>
+    </div>
+    <div id="f-area"></div>
+  </div>
+
+  <!-- TAB EDITOR PDF -->
+  <div id="tab-editor" class="tab-panel">
+    <!-- Mobile unavailable message -->
+    <div id="ed-mobile-msg" style="display:none;">
+      <span>🖥️</span>
+      <p>editor de pdf não disponível em mobile</p>
+      <small>acede a partir de um computador para utilizar esta funcionalidade</small>
+    </div>
+    <!-- Toolbar -->
+    <div id="ed-toolbar">
+      <label id="ed-upload-btn" for="ed-file-input" title="Carregar PDF">
+        <span>📂</span> carregar pdf
+        <input type="file" id="ed-file-input" accept="application/pdf" style="display:none">
+      </label>
+      <div class="ed-sep"></div>
+      <button id="ed-add-text-btn" title="Adicionar caixa de texto">✏️ texto</button>
+      <label id="ed-add-img-btn" for="ed-img-input" title="Inserir imagem">
+        🖼️ imagem
+        <input type="file" id="ed-img-input" accept="image/*" style="display:none">
+      </label>
+      <button id="ed-edit-native-btn" title="Ativar edição do texto original do PDF">🔤 editar texto original</button>
+      <div class="ed-sep"></div>
+      <label class="ed-tool-label" for="ed-font-size">tamanho</label>
+      <input type="number" id="ed-font-size" value="14" min="6" max="120" step="1">
+      <input type="color" id="ed-font-color" value="#000000" title="Cor do texto">
+      <div class="ed-sep"></div>
+      <label class="ed-tool-label" for="ed-page-select">página</label>
+      <select id="ed-page-select"></select>
+      <div class="ed-sep"></div>
+      <button id="ed-undo-btn" title="Desfazer (Ctrl+Z)">↩ desfazer</button>
+      <button id="ed-redo-btn" title="Refazer (Ctrl+Y)">↪ refazer</button>
+      <div class="ed-sep"></div>
+      <button id="ed-export-btn" title="Exportar PDF">⬇️ exportar pdf</button>
+    </div>
+    <!-- Canvas area -->
+    <div id="ed-canvas-wrap">
+      <div id="ed-drop-hint">
+        <span>📄</span>
+        <p>carregue um PDF para começar a editar</p>
+        <small>clique em "carregar pdf" na barra acima</small>
+      </div>
+      <div id="ed-pages-container"></div>
+    </div>
+  </div>
+
+  <!-- TAB TAM ─────────────────────────────────────────────── -->
+  <div id="tab-tam" class="tab-panel">
+
+    <!-- Upload zone -->
+    <div id="tam-upload-zone">
+      <label id="tam-upload-label" for="tam-file-input">
+        <span class="upload-icon">📦</span>
+        carregar fatura tam fashion<br>
+        <small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro pdf aqui</small>
+      </label>
+      <input type="file" id="tam-file-input" accept="application/pdf">
+      <div id="tam-file-name"></div>
+      <div id="tam-status-msg"></div>
+    </div>
+
+    <!-- Invoice meta banner -->
+    <div id="tam-invoice-meta"></div>
+
+    <!-- Validation banner -->
+    <div id="tam-validation-banner"></div>
+
+    <!-- Results table -->
+    <div id="tam-results-wrap"></div>
+    <button id="tam-export-btn">⬇ exportar excel</button>
+
+  </div>
+  <!-- /TAB TAM ───────────────────────────────────────────── -->
+
+  <!-- ─── VENTAS ADMIN PANEL ─── -->
+  <div id="adm-ventas-panel">
+    <div class="vadm-filter-bar">
+      <div class="vadm-period-btns">
+        <button class="vadm-period-btn" id="vadm-btn-hoy">Hoje</button>
+        <button class="vadm-period-btn" id="vadm-btn-semana">Esta semana</button>
+        <button class="vadm-period-btn" id="vadm-btn-mes">Este mês</button>
+        <button class="vadm-period-btn" id="vadm-btn-porto">Porto Santo</button>
+        <button class="vadm-period-btn" id="vadm-btn-funchal">Funchal</button>
+        <button class="vadm-period-btn" id="vadm-btn-domingos">Domingos PS</button>
+      </div>
+      <div class="vadm-filter-dates">
+        <div class="vadm-filter-group">
+          <label>De</label>
+          <input type="date" id="vadm-from">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Até</label>
+          <input type="date" id="vadm-to">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Loja</label>
+          <select id="vadm-tienda">
+            <option value="">todas as lojas</option>
+            <option value="mezka funchal">Mezka Funchal</option>
+            <option value="parfois madeira shopping">Madeira Shopping</option>
+            <option value="parfois arcadas são francisco">Parfois Arcadas</option>
+            <option value="Shana">Shana</option>
+            <option value="Mezka Avenida">Mezka Avenida</option>
+            <option value="Mezka Mercado">Mezka Mercado</option>
+            <option value="Maxx">Maxx</option>
+          </select>
+        </div>
+        <button class="vadm-buscar-btn" id="vadm-buscar-btn">pesquisar</button>
+      </div>
+    </div>
+    <div id="adm-ventas-content"></div>
+  </div>
+  <!-- /VENTAS ADMIN PANEL -->
+
+  <!-- ── HISTÓRICO ADMIN: HTML inyectado dinámicamente desde js/historico-admin.js ── -->
+
+</div><!-- /#admin-app -->
+
+<!-- EDITOR: Export modal -->
+<div id="ed-export-modal">
+  <div id="ed-export-modal-box">
+    <div class="ed-modal-title">exportar pdf</div>
+    <input type="text" id="ed-export-filename" placeholder="nome do ficheiro" value="editado">
+    <div id="ed-folder-row">
+      <div id="ed-folder-display">pasta de transferências (padrão)</div>
+      <button id="ed-folder-pick-btn">📁 escolher pasta</button>
+    </div>
+    <div id="ed-export-hint">
+      Selecione uma pasta para guardar diretamente, ou clique em <span>guardar</span> para descarregar para a pasta padrão do browser.<br>
+      💡 Recomendado: guardar em <span>Wakzome Pessoal — OneDrive Pessoal</span>
+    </div>
+    <div class="ed-modal-btns">
+      <button class="ed-modal-btn" id="ed-export-cancel">cancelar</button>
+      <button class="ed-modal-btn primary" id="ed-export-confirm">⬇️ guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SAFT REMINDER -->
+<div id="saft-reminder">
+  <div id="saft-label">recordatorio</div>
+  <div id="saft-title">solicitar criação<br>de SAFT</div>
+  <div id="saft-countdown">—</div>
+  <div id="saft-countdown-label">dias</div>
+  <a id="saft-btn" href="https://areareservada.pri.pt/#/auth/login" target="_blank" rel="noopener">abrir portal →</a>
+  <div id="saft-divider"></div>
+  <button id="saft-recibos-btn" onclick="openRecibosOverlay()">recibos</button>
+  <div id="saft-recibos-label">últimos recibos<br>carregados</div>
+  <div id="saft-recibos-mes">—</div>
+  <div id="saft-divider2" style="width:100%;height:1px;background:#e8e8e8;margin:10px 0;"></div>
+  <div id="saft-faturas-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;">faturas</div>
+  <div id="saft-faturas-count" style="font-size:1.5rem;font-weight:100;color:#000;line-height:1;letter-spacing:-.01em;">—</div>
+  <div id="saft-faturas-count-label" style="font-size:.62rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;margin-top:-2px;">a vencer esta semana</div>
+  <div id="saft-faturas-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;"></div>
+  <button id="saft-agenda-btn" onclick="openAgendaOverlay()" style="margin-top:4px;padding:5px 14px;font-size:.72rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;letter-spacing:.05em;color:#000;border:1px solid #ccc;border-radius:20px;background:transparent;cursor:pointer;transition:color .2s,border-color .2s,background .2s;width:100%;">ver agenda →</button>
+
+  <!-- CÓDIGOS DE ACESSO PORTO SANTO -->
+  <div id="saft-divider3" style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
+  <div id="emg-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;">código de acesso</div>
+  <div id="emg-date" style="font-size:.6rem;color:#999;margin-bottom:6px;">hoje</div>
+  <div id="emg-codes-list" style="display:flex;flex-direction:column;gap:3px;width:100%;"></div>
+  <div id="emg-valid" style="font-size:.58rem;color:#bbb;margin-top:6px;text-align:right;">válido até às 00:00</div>
+
+  <!-- FOLGAS DIRIGIDAS -->
+  <div style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
+  <div style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:6px;">folgas pedidas</div>
+  <button id="fd-btn" onclick="openFolgasDirigidasModal()">ver / editar<span id="fd-badge-count" style="display:none"></span></button>
+</div>
+
+<!-- POPUP compartido -->
+<div id="page-name-popup"></div>
+
+<!-- RECIBOS OVERLAY -->
+<!-- AGENDA OVERLAY -->
+<div id="agenda-overlay">
+  <div id="agenda-overlay-bar">
+    <button id="agenda-overlay-back" onclick="closeAgendaOverlay()">← voltar</button>
+    <div id="agenda-overlay-title">agenda faturas</div>
+  </div>
+  <div id="agenda-overlay-content">
+    <div id="ag-root" style="width:100%;"></div>
+  </div>
+</div>
+
+<!-- RÓTULOS OVERLAY -->
+<div id="rotulos-overlay">
+  <div id="rotulos-overlay-bar">
+    <button id="rotulos-overlay-back" onclick="closeRotulosOverlay()">← voltar</button>
+    <div id="rotulos-overlay-title">rótulos</div>
+  </div>
+  <div id="rotulos-overlay-content">
+    <div id="rt-root" style="width:100%;"></div>
+  </div>
+</div>
+
+<!-- PROCESSAMENTO OVERLAY -->
+<div id="processamento-overlay">
+  <div id="processamento-overlay-bar">
+    <button id="processamento-overlay-back" onclick="closeProcessamentoOverlay();document.body.classList.remove('no-glow')">← voltar</button>
+    <div id="processamento-overlay-title">processamento de faturas</div>
+  </div>
+  <div id="processamento-overlay-content">
+    <div id="proc-root" style="width:100%; min-height:100%;"></div>
+  </div>
+</div>
+
+<div id="recibos-overlay">
+  <div id="recibos-overlay-bar">
+    <button id="recibos-overlay-back" onclick="closeRecibosOverlay()">← voltar</button>
+    <div id="recibos-overlay-title"></div>
+  </div>
+  <div id="recibos-overlay-content">
+    <div id="recibos-overlay-loading">a carregar…</div>
+    <div id="recibos-overlay-body" style="display:none;">
+      <div class="logo" style="font-size:3rem;font-weight:100;text-transform:lowercase;margin-bottom:4px;">wakzome</div>
+      <div id="recibos-page-title" style="font-size:1.6rem;font-weight:bold;margin-bottom:32px;color:#000;"></div>
+      <table id="recibos-table" style="width:100%;max-width:700px;border-collapse:separate;border-spacing:0;border-radius:15px;overflow:hidden;">
+        <thead><tr>
+          <th class="rn" style="background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;">#</th>
+          <th style="background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;">colaborador</th>
+          <th style="background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;">descarregar</th>
+        </tr></thead>
+        <tbody id="recibos-tbody"></tbody>
+      </table>
+      <div class="recibos-nota">
+        <p><strong>Após a impressão do recibo:</strong></p>
+        <p>· Caso esteja de acordo, poderá colocá-lo juntamente com os restantes recibos num único envelope, como tem sido feito até agora;</p>
+        <p>· Em alternativa, poderá guardá-lo em envelope fechado e juntá-lo à restante documentação que habitualmente é enviada para Lisboa.</p>
+        <p>Solicitamos igualmente o devido cuidado em assegurar que cada trabalhadora assine o seu recibo original e que este seja enviado, uma vez que, de acordo com a política interna, a assinatura constitui um procedimento obrigatório e regular.</p>
+      </div>
+    </div>
+    <div id="recibos-overlay-error" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- ETIQUETAS OVERLAY -->
+<div id="etiquetas-overlay">
+  <div id="etiquetas-overlay-bar">
+    <button id="etiquetas-overlay-back" onclick="closeEtiquetasOverlay()">← voltar</button>
+    <div id="etiquetas-overlay-title">etiquetas de preços</div>
+  </div>
+  <div id="etiquetas-overlay-content">
+    <div id="etiquetas-form-wrap">
+      <div class="et-section-title">configurar preços e quantidades</div>
+
+      <div class="et-price-row" id="et-row-1">
+        <label>Preço 1</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-1">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-1">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-1">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-2">
+        <label>Preço 2</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-2">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-2">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-2">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-3">
+        <label>Preço 3</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-3">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-3">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-3">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-4">
+        <label>Preço 4</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-4">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-4">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-4">—</span>
+      </div>
+      <div class="et-price-row" id="et-row-5">
+        <label>Preço 5</label>
+        <input class="et-price-input" type="number" step="0.01" min="0" placeholder="0,00 €" id="et-price-5">
+        <span class="et-sep">×</span>
+        <input class="et-qty-input" type="number" min="0" value="0" id="et-qty-5">
+        <span class="et-sep">etiquetas</span>
+        <span class="et-total-badge" id="et-tot-5">—</span>
+      </div>
+
+      <div id="et-summary-row">
+        <span id="et-summary-text">total: 0 etiquetas · 0 páginas</span>
+        <span id="et-pages-text"></span>
+      </div>
+
+      <div class="et-btn-row">
+        <button class="et-btn" id="et-preview-btn" onclick="etiquetasGerar(false)">pré-visualizar</button>
+        <button class="et-btn primary" id="et-download-btn" onclick="etiquetasGerar(true)">⬇ descarregar PDF</button>
+      </div>
+      <div id="et-status"></div>
+    </div>
+  </div>
+</div>
+
+<!-- VENTAS OVERLAY (empleada) -->
+<div id="ventas-overlay">
+  <div id="ventas-overlay-bar">
+    <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
+    <span id="ventas-overlay-title">vendas</span>
+  </div>
+  <div id="ventas-overlay-content">
+    <div id="ventas-overlay-body"></div>
+  </div>
+</div>
+
+<!-- FATURAS SUB-OVERLAY -->
+<!-- HORARIOS GROUP OVERLAY -->
+<div id="horarios-overlay">
+  <div id="horarios-overlay-bar">
+    <button id="horarios-overlay-back">
+      ← início
+    </button>
+    <span id="horarios-overlay-title">horários</span>
+  </div>
+  <div id="horarios-overlay-content">
+    <div id="horarios-sub-header">
+      <div class="hsub-brand">HORÁRIOS</div>
+      <div class="hsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="horarios-sub-grid">
+      <div class="adm-mod-card" data-horarios-module="horarios" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 8v4l2.5 2.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HORÁRIOS</div>
+          <div class="adm-mod-desc">gestão de horários por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-horarios-module="gerador" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="4" width="18" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 9h18" stroke="rgba(255,255,255,0.55)" stroke-width="1.1"/>
+            <path d="M8 4v5M16 4v5" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M7 14h4M7 17h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="17" cy="15.5" r="2.5" stroke="rgba(255,255,255,0.7)" stroke-width="1.1"/>
+            <path d="M17 14.5v1l.7.7" stroke="rgba(255,255,255,0.85)" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">GERADOR DE HORÁRIOS</div>
+          <div class="adm-mod-desc">geração automática de horários</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-horarios-module="ferias" style="animation-delay:0.15s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3C12 3 7 8 7 13a5 5 0 0 0 10 0c0-5-5-10-5-10Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 13v5M9 18h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M7 9c-2 1-4 3-4 3s2 0 3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M17 9c2 1 4 3 4 3s-2 0-3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">FÉRIAS</div>
+          <div class="adm-mod-desc">controlo de férias e ausências</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="faturas-overlay">
+  <div id="faturas-overlay-bar">
+    <button id="faturas-overlay-back">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="faturas-overlay-title">faturas</span>
+  </div>
+  <div id="faturas-overlay-content">
+    <div id="faturas-sub-header">
+      <div class="fsub-brand">FATURAS</div>
+      <div class="fsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="faturas-sub-grid">
+      <!-- TAM -->
+      <div class="adm-mod-card" data-faturas-module="tam" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">TAM</div>
+          <div class="adm-mod-desc">faturas TAM Fashion</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <!-- FATURAS LISBOA -->
+      <div class="adm-mod-card" data-faturas-module="processamento" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M15 17l1.5 1.5L19 16" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">FATURAS LISBOA</div>
+          <div class="adm-mod-desc">processamento de faturas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="vendas-overlay">
+  <div id="vendas-overlay-bar">
+    <button id="vendas-overlay-back">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="vendas-overlay-title">vendas</span>
+  </div>
+  <div id="vendas-overlay-content">
+    <div id="vendas-sub-header">
+      <div class="vsub-brand">VENDAS</div>
+      <div class="vsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="vendas-sub-grid">
+      <!-- VENDAS DECLARADAS -->
+      <div class="adm-mod-card" data-vendas-module="ventas" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">VENDAS DECLARADAS</div>
+          <div class="adm-mod-desc">vendas declaradas por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <!-- HISTÓRICO -->
+      <div class="adm-mod-card" data-vendas-module="historico" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+              stroke="rgba(255,255,255,0.85)" stroke-width="1.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HISTÓRICO</div>
+          <div class="adm-mod-desc">análise de vendas históricas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="r-modal-overlay">
+  <div id="r-modal-box">
+    <div class="modal-title">sem senha no csv</div>
+    <div class="modal-name" id="r-modal-name"></div>
+    <div class="modal-counter" id="r-modal-counter"></div>
+    <div id="r-modal-pwd-row">
+      <label>senha</label>
+      <input type="text" id="r-modal-pwd-input" placeholder="introduza a senha">
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn primary" id="r-modal-btn-pwd">🔑 introduzir senha agora</button>
+      <button class="modal-btn" id="r-modal-btn-no-pwd">📄 gerar recibo sem senha</button>
+      <button class="modal-btn" id="r-modal-btn-skip">⏭ não gerar recibo</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/shared.js"></script>
+<script id="lazy-scripts">/* cargados tras login */</script>
+<script>
+/* ══ FÉRIAS compatibility bridge ══ */
+(function () {
+  "use strict";
+  function tryInitFerias() {
+    if (typeof window.initFerias    === "function") { window.initFerias();    return true; }
+    if (typeof window.loadFerias    === "function") { window.loadFerias();    return true; }
+    if (typeof window.renderFerias  === "function") { window.renderFerias();  return true; }
+    if (typeof window.refreshFerias === "function") { window.refreshFerias(); return true; }
+    var btn = document.querySelector(".tab-btn[data-tab=ferias]");
+    if (btn) { var nav=document.getElementById("tab-nav"),pd=nav?nav.style.display:null; if(nav)nav.style.display=""; btn.click(); if(nav&&pd!==null)nav.style.display=pd; return true; }
+    return false;
+  }
+  document.addEventListener("ferias:open", function () { setTimeout(tryInitFerias, 40); });
+  document.addEventListener("DOMContentLoaded", function () {
+    var _orig = window.openModule;
+    if (typeof _orig === "function") {
+      window.openModule = function (tab) { _orig(tab); if (tab === "ferias") setTimeout(tryInitFerias, 40); };
+    }
+    var panel = document.getElementById("tab-ferias");
+    if (panel && panel.classList.contains("active")) setTimeout(tryInitFerias, 80);
+  });
+})();
+</script>
+
+<script>
+/* ── Hamburger / drawer menu ── */
+(function () {
+  const btn      = document.getElementById('admin-menu-btn');
+  const drawer   = document.getElementById('admin-menu-drawer');
+  const overlay  = document.getElementById('admin-menu-overlay');
+  const tabNav   = document.getElementById('tab-nav');
+
+  function openMenu() {
+    btn.classList.add('open');
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+  }
+  function closeMenu() {
+    btn.classList.remove('open');
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+
+  btn.addEventListener('click', function () {
+    drawer.classList.contains('open') ? closeMenu() : openMenu();
+  });
+  overlay.addEventListener('click', closeMenu);
+
+  /* Sync active state from tab-nav into drawer */
+  function syncActive(tabName) {
+    drawer.querySelectorAll('.drawer-tab-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.tab === tabName);
+    });
+  }
+
+  /* When a drawer button is clicked → trigger the matching tab-nav button */
+  drawer.addEventListener('click', function (e) {
+    const drawerBtn = e.target.closest('.drawer-tab-btn');
+    if (!drawerBtn) return;
+    const tab = drawerBtn.dataset.tab;
+    const realBtn = tabNav.querySelector('[data-tab="' + tab + '"]');
+    if (realBtn) realBtn.click();
+    syncActive(tab);
+    closeMenu();
+  });
+
+  /* Keep drawer in sync when tab-nav buttons are clicked (desktop / JS) */
+  tabNav.addEventListener('click', function (e) {
+    const tabBtn = e.target.closest('.tab-btn');
+    if (tabBtn) syncActive(tabBtn.dataset.tab);
+  });
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════
+   ✦ WOW SYSTEM — motion & interaction effects only
+   Zero color changes to existing palette
+══════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const html = document.documentElement;
+
+  /* ── 1. CINEMATIC INTRO: glitch + chromatic + GSAP shatter ── */
+  function initCinematicIntro(){
+    const screen  = $('intro-screen');
+    const dynText = $('dynamic-text');
+    if(!screen || !dynText) return;
+
+    let chromaApplied = false;
+    const obs = new MutationObserver(() => {
+      const chars = dynText.querySelectorAll('.char');
+      if(chars.length && !chromaApplied){
+        chromaApplied = true;
+        dynText.dataset.text = dynText.textContent;
+        setTimeout(() => {
+          chars.forEach(ch => {
+            if(Math.random() > 0.5){
+              ch.classList.add('char-glitch');
+              ch.style.animationDelay = (Math.random()*4)+'s';
+            }
+          });
+          setTimeout(() => dynText.classList.add('chromatic'), 600);
+        }, 800);
+        obs.disconnect();
+      }
+    });
+    obs.observe(dynText, { childList:true, subtree:true, attributes:true, attributeFilter:['style'] });
+
+    /* GSAP shatter on exit */
+    const exitObs = new MutationObserver(() => {
+      const op = parseFloat(window.getComputedStyle(screen).opacity);
+      if(op < 0.95 && !screen.dataset.shattered && typeof gsap !== 'undefined'){
+        screen.dataset.shattered = '1';
+        dynText.querySelectorAll('.char').forEach((ch, i) => {
+          const dir = i%2===0 ? -1 : 1;
+          gsap.to(ch, {
+            x: dir*(20+Math.random()*90), y: -(10+Math.random()*80),
+            rotation: dir*(10+Math.random()*40),
+            scale: 0.2+Math.random()*0.4,
+            opacity:0, filter:'blur(8px)',
+            duration:0.6, ease:'power2.in', delay:i*0.035
+          });
+        });
+        gsap.to($('intro-line'), { scaleX:0, opacity:0, duration:0.3, ease:'power2.in' });
+      }
+    });
+    exitObs.observe(screen, { attributes:true, attributeFilter:['style'] });
+  }
+
+  /* ── 3. STAGGERED TABLE ROW ENTRANCE ── */
+  function staggerRows(root){
+    (root||document).querySelectorAll('tbody tr:not(.wz-entered)').forEach((tr,i) => {
+      tr.classList.add('wz-entered','wz-row-enter');
+      tr.style.animationDelay = (i*40)+'ms';
+    });
+  }
+  new MutationObserver(muts => {
+    muts.forEach(m => m.addedNodes.forEach(n => {
+      if(n.nodeType!==1) return;
+      if(n.tagName==='TABLE' || n.querySelector?.('table'))
+        setTimeout(() => staggerRows(n), 20);
+    }));
+  }).observe(document.body, { childList:true, subtree:true });
+
+  /* ── 4. VIGNETTE on overlay open ── */
+  const vignette = $('wz-vignette');
+  ['recibos-overlay','r-modal-overlay','ed-export-modal'].forEach(id => {
+    const el = $(id); if(!el) return;
+    new MutationObserver(() => {
+      const open = el.classList.contains('open')||el.classList.contains('show')||el.classList.contains('visible');
+      if(vignette) vignette.classList.toggle('active', open);
+    }).observe(el, { attributes:true, attributeFilter:['class','style'] });
+  });
+
+  /* ── 5. WIPE TRANSITION global helper ── */
+  const wipeEl = $('wz-wipe');
+  window.wzWipe = function(cb){
+    if(!wipeEl){ cb&&cb(); return; }
+    wipeEl.classList.remove('wipe-out');
+    void wipeEl.offsetWidth;
+    wipeEl.classList.add('wipe-in');
+    wipeEl.addEventListener('animationend', function h(){
+      wipeEl.removeEventListener('animationend',h);
+      cb&&cb();
+      setTimeout(()=>{
+        wipeEl.classList.remove('wipe-in');
+        void wipeEl.offsetWidth;
+        wipeEl.classList.add('wipe-out');
+        wipeEl.addEventListener('animationend', function h2(){
+          wipeEl.removeEventListener('animationend',h2);
+          wipeEl.classList.remove('wipe-out');
+        },{once:true});
+      },80);
+    },{once:true});
+  };
+
+  /* ── 6. MINIMAL SOUND SYSTEM ── */
+  let audioCtx = null;
+  function ac(){ return audioCtx||(audioCtx=new(window.AudioContext||window.webkitAudioContext)()); }
+  function tone(freq,type,dur,gain){
+    try{
+      const o=ac().createOscillator(), g=ac().createGain();
+      o.connect(g); g.connect(ac().destination);
+      o.type=type||'sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ac().currentTime);
+      g.gain.linearRampToValueAtTime(gain||0.04, ac().currentTime+0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, ac().currentTime+(dur||0.15));
+      o.start(); o.stop(ac().currentTime+(dur||0.16));
+    }catch(e){}
+  }
+  const SFX = {
+    click:   ()=>tone(820,'sine',0.08,0.04),
+    hover:   ()=>tone(640,'sine',0.05,0.02),
+    error:   ()=>tone(160,'sawtooth',0.22,0.06),
+    success: ()=>{ tone(880,'sine',0.12,0.04); setTimeout(()=>tone(1100,'sine',0.15,0.035),80); },
+    egg:     ()=>{ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,'sine',0.18,0.04),i*80)); }
+  };
+  window.WZ_SFX = SFX;
+
+  document.addEventListener('click', e => {
+    if(e.target.closest('button,a,.tab-btn,label[for],#recibos-link')) SFX.click();
+  },{passive:true});
+  document.addEventListener('mouseover', e => {
+    if(e.target.closest('button,.tab-btn,#recibos-link')) SFX.hover();
+  },{passive:true});
+
+  const statusEl = $('r-status-msg')||$('s-status-msg');
+  if(statusEl) new MutationObserver(()=>{
+    const t = statusEl.textContent.toLowerCase();
+    if(t.includes('erro')||t.includes('falhou')) SFX.error();
+    if(t.includes('concluí')||t.includes('guardado')) SFX.success();
+  }).observe(statusEl,{characterData:true,childList:true,subtree:true});
+
+  /* ── 7. TIME-AWARE GLOW ── */
+  function applyTimeAmbience(){
+    const h = new Date().getHours();
+    html.classList.remove('wz-morning','wz-evening');
+    if(h>=6  && h<12) html.classList.add('wz-morning');
+    if(h>=18 && h<21) html.classList.add('wz-evening');
+  }
+  applyTimeAmbience();
+  setInterval(applyTimeAmbience, 60000);
+
+  /* ── 8. MOUSE PARALLAX on header ── */
+  let pmx=0, pmy=0;
+  document.addEventListener('mousemove', e=>{
+    pmx=(e.clientX/innerWidth -0.5)*2;
+    pmy=(e.clientY/innerHeight-0.5)*2;
+  },{passive:true});
+  (function loop(){
+    [$('main-header-center'),$('admin-header')].forEach((el,i)=>{
+      if(!el) return;
+      const d=i===0?6:5;
+      el.style.transform=`translate(${pmx*d}px,${pmy*(d-2)}px)`;
+    });
+    requestAnimationFrame(loop);
+  })();
+
+  /* ── 9. EASTER EGGS ── */
+  let clicks=0, clickTimer;
+  document.addEventListener('click', e=>{
+    const logo = e.target.closest('.logo-text');
+    if(!logo) return;
+    clicks++;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(()=>{
+      if(clicks>=3){
+        logo.classList.remove('burst');
+        void logo.offsetWidth;
+        logo.classList.add('burst');
+        SFX.egg();
+        html.classList.toggle('wz-egg');
+        // particle burst
+        for(let i=0;i<12;i++){
+          const p=document.createElement('div');
+          p.style.cssText=`position:fixed;left:${e.clientX}px;top:${e.clientY}px;width:4px;height:4px;border-radius:50%;background:#000;pointer-events:none;z-index:99999;transform:translate(-50%,-50%)`;
+          document.body.appendChild(p);
+          const angle=(i/12)*Math.PI*2, dist=40+Math.random()*60;
+          if(typeof gsap!=='undefined'){
+            gsap.to(p,{x:Math.cos(angle)*dist,y:Math.sin(angle)*dist,opacity:0,scale:0,duration:0.6+Math.random()*0.3,ease:'power2.out',onComplete:()=>p.remove()});
+          } else { setTimeout(()=>p.remove(),700); }
+        }
+        setTimeout(()=>logo.classList.remove('burst'),700);
+      }
+      clicks=0;
+    },350);
+  });
+
+  // Konami code
+  const KONAMI=[38,38,40,40,37,39,37,39,66,65]; let ki=0;
+  document.addEventListener('keydown', e=>{
+    ki = e.keyCode===KONAMI[ki] ? ki+1 : 0;
+    if(ki===KONAMI.length){ ki=0; html.classList.toggle('wz-egg'); SFX.egg(); }
+  });
+
+  /* ── 10. ULTRA-MINIMAL TOGGLE ── */
+  const minBtn = $('wz-minimal-btn');
+  if(minBtn) minBtn.addEventListener('click',()=>{
+    html.classList.toggle('wz-minimal'); SFX.click();
+  });
+
+  /* ── INIT ── */
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded', initCinematicIntro);
+  else
+    initCinematicIntro();
+
+})();
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   ADMIN DASHBOARD — card navigation
+══════════════════════════════════════════════════════════ */
+(function () {
+  var MODULE_LABELS = {
+    salarios:      'salários',
+    recibos:       'recibos',
+    agenda:        'agenda',
+    rotulos:       'rótulos',
+    horarios:      'horários',
+    gerador:       'gerador de horários',
+    ferias:        'férias',
+    editor:        'editor pdf',
+    tam:           'tam',
+    processamento: 'faturas lisboa',
+    faturas:       'faturas'
+  };
+
+  function openModule(tab) {
+    // Intercept faturas → open sub-overlay instead
+    if (tab === 'faturas') { openFaturasOverlay(); return; }
+
+    // Intercept horarios-group → open horarios sub-overlay
+    if (tab === 'horarios-group') { openHorariosOverlay(); return; }
+
+    // Intercept vendas-group → open vendas sub-overlay
+    if (tab === 'vendas-group') { openVendasOverlay(); return; }
+
+    // Intercept ventas → open admin ventas panel
+    if (tab === 'ventas') {
+      var adminApp = document.getElementById('admin-app');
+      var dashboard = document.getElementById('adm-dashboard');
+      var moduleBar = document.getElementById('adm-module-bar');
+      var barTitle  = document.getElementById('adm-module-bar-title');
+      var panel     = document.getElementById('adm-ventas-panel');
+      // Desactivar cualquier tab-panel activo para que no se superponga
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+      if (dashboard) dashboard.style.display = 'none';
+      if (moduleBar) moduleBar.style.display  = 'flex';
+      if (barTitle)  barTitle.textContent     = 'vendas declaradas';
+      if (adminApp)  { adminApp.classList.add('module-open'); adminApp.scrollTop = 0; }
+      if (panel)     panel.style.display      = 'block';
+      if (typeof _vAdmLoadData === 'function') _vAdmLoadData();
+      return;
+    }
+
+    // Intercept historico → open admin historico panel
+    if (tab === 'historico') {
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+      var dashboard = document.getElementById('adm-dashboard');
+      var moduleBar = document.getElementById('adm-module-bar');
+      var barTitle  = document.getElementById('adm-module-bar-title');
+      if (dashboard) dashboard.style.display = 'none';
+      if (moduleBar) moduleBar.style.display  = 'flex';
+      if (barTitle)  barTitle.textContent     = 'histórico de vendas';
+      if (typeof openHistoricoAdmin === 'function') openHistoricoAdmin();
+      return;
+    }
+
+    // If navigating away from gerador, clean up its layout first
+    if (tab !== 'gerador' && typeof cleanupGeradorLayout === 'function') {
+      cleanupGeradorLayout();
+    }
+
+    var adminApp = document.getElementById('admin-app');
+    var barTitle = document.getElementById('adm-module-bar-title');
+
+    // Activate the tab in the existing tab system
+    document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    document.querySelectorAll('.tab-panel').forEach(function (p) {
+      p.classList.remove('active');
+    });
+    var panel = document.getElementById('tab-' + tab);
+    if (panel) panel.classList.add('active');
+
+    // Show module mode
+    adminApp.classList.add('module-open');
+    adminApp.scrollTop = 0;
+    if (barTitle) barTitle.textContent = MODULE_LABELS[tab] || tab;
+    var moduleBar = document.getElementById('adm-module-bar');
+    if (moduleBar) moduleBar.style.display = 'flex';
+
+    // Forzar reflow en móvil para que el navegador recalcule el scroll
+    // tras la inyección dinámica de contenido
+    setTimeout(function () {
+      adminApp.style.overflow = 'hidden';
+      adminApp.offsetHeight; // reflow
+      adminApp.style.overflow = '';
+    }, 80);
+
+    // Special overlays that are handled by openAgendaOverlay etc.
+    // Those functions will handle their own overlay; we just need
+    // to ensure the panel is present for layout. For agenda/rotulos/processamento
+    // we trigger their overlay functions if they exist.
+    if (tab === 'agenda'        && typeof openAgendaOverlay        === 'function') { openAgendaOverlay();        adminApp.classList.remove('module-open'); }
+    if (tab === 'rotulos'       && typeof openRotulosOverlay       === 'function') { openRotulosOverlay();       adminApp.classList.remove('module-open'); }
+    if (tab === 'processamento' && typeof openProcessamentoOverlay === 'function') { openProcessamentoOverlay(); adminApp.classList.remove('module-open'); document.body.classList.add('no-glow'); }
+    if (tab === 'tam') { document.body.classList.add('no-glow'); }
+
+    // Férias: trigger initialization if ferias.js exposes an init function,
+    // otherwise dispatch a synthetic tab-change event so ferias.js can listen for it.
+    if (tab === 'gerador') {
+      if (typeof initGeradorHorarios === 'function') setTimeout(initGeradorHorarios, 40);
+    }
+    if (tab === 'ferias') {
+      if (typeof initFerias === 'function') {
+        initFerias();
+      } else if (typeof loadFerias === 'function') {
+        loadFerias();
+      } else if (typeof renderFerias === 'function') {
+        renderFerias();
+      } else {
+        // Fallback: dispatch a custom event that ferias.js can listen to
+        document.dispatchEvent(new CustomEvent('ferias:open'));
+        // Also fire a synthetic click on the tab button so legacy listeners fire
+        var feriasBtns = document.querySelectorAll('.tab-btn[data-tab="ferias"], .drawer-tab-btn[data-tab="ferias"]');
+        feriasBtns.forEach(function(b) {
+          b.dispatchEvent(new CustomEvent('ferias:tabactivated', { bubbles: true }));
+        });
+      }
+    }
+  }
+
+  function goToDashboard() {
+    var adminApp = document.getElementById('admin-app');
+    adminApp.classList.remove('module-open');
+    document.body.classList.remove('no-glow');
+    // Reset tab panels
+    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+
+    // Hide module bar explicitly
+    var moduleBar = document.getElementById('adm-module-bar');
+    if (moduleBar) moduleBar.style.display = '';
+
+    // Hide ventas admin panel
+    var vPanel = document.getElementById('adm-ventas-panel');
+    if (vPanel) vPanel.style.display = 'none';
+
+    // Hide historico admin panel
+    if (typeof closeHistoricoAdmin === 'function') closeHistoricoAdmin();
+    else {
+      var hPanel = document.getElementById('adm-historico-panel');
+      if (hPanel) hPanel.style.display = 'none';
+    }
+
+    // Restaurar dashboard (puede haber sido ocultado con style.display='none')
+    var dashboard = document.getElementById('adm-dashboard');
+    if (dashboard) dashboard.style.display = '';
+
+    // Re-trigger card entrance animations
+    document.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+      c.style.animation = 'none';
+      c.offsetWidth; // reflow
+      c.style.animation = '';
+      c.style.animationDelay = (0.05 + i * 0.05) + 's';
+    });
+  }
+
+  /* ── FATURAS OVERLAY ── */
+  function openFaturasOverlay() {
+    var ov = document.getElementById('faturas-overlay');
+    if (!ov) return;
+    ov.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        ov.classList.add('visible');
+        // Re-trigger sub-card animations
+        ov.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+          c.style.animation = 'none';
+          c.offsetWidth;
+          c.style.animation = '';
+          c.style.animationDelay = (0.05 + i * 0.07) + 's';
+        });
+      });
+    });
+  }
+
+  function closeFaturasOverlay() {
+    var ov = document.getElementById('faturas-overlay');
+    if (!ov) return;
+    ov.classList.remove('visible');
+    setTimeout(function () { ov.classList.remove('open'); }, 460);
+  }
+
+  function openHorariosOverlay() {
+    var ov = document.getElementById('horarios-overlay');
+    if (!ov) return;
+    ov.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        ov.classList.add('visible');
+        ov.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+          c.style.animation = 'none';
+          c.offsetWidth;
+          c.style.animation = '';
+          c.style.animationDelay = (0.05 + i * 0.07) + 's';
+        });
+      });
+    });
+  }
+
+  function closeHorariosOverlay() {
+    var ov = document.getElementById('horarios-overlay');
+    if (!ov) return;
+    ov.classList.remove('visible');
+    setTimeout(function () { ov.classList.remove('open'); }, 460);
+  }
+
+  function openVendasOverlay() {
+    var ov = document.getElementById('vendas-overlay');
+    if (!ov) return;
+    ov.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        ov.classList.add('visible');
+        ov.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+          c.style.animation = 'none';
+          c.offsetWidth;
+          c.style.animation = '';
+          c.style.animationDelay = (0.05 + i * 0.07) + 's';
+        });
+      });
+    });
+  }
+
+  function closeVendasOverlay() {
+    var ov = document.getElementById('vendas-overlay');
+    if (!ov) return;
+    ov.classList.remove('visible');
+    setTimeout(function () { ov.classList.remove('open'); }, 460);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    // Main dashboard card clicks
+    document.querySelectorAll('.adm-mod-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.module;
+        if (mod) openModule(mod);
+      });
+    });
+
+    // Sub-cards inside faturas overlay
+    document.querySelectorAll('[data-faturas-module]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.faturasModule;
+        if (!mod) return;
+        closeFaturasOverlay();
+        // Wait for overlay fade-out then open the real module
+        setTimeout(function () { openModule(mod); }, 200);
+      });
+    });
+
+    // Sub-cards inside horarios overlay
+    document.querySelectorAll('[data-horarios-module]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.horariosModule;
+        if (!mod) return;
+        closeHorariosOverlay();
+        setTimeout(function () { openModule(mod); }, 200);
+      });
+    });
+
+    // Sub-cards inside vendas overlay
+    document.querySelectorAll('[data-vendas-module]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mod = card.dataset.vendasModule;
+        if (!mod) return;
+        closeVendasOverlay();
+        setTimeout(function () { openModule(mod); }, 200);
+      });
+    });
+
+    // Back button in faturas overlay → close overlay (back to dashboard)
+    var fatBack = document.getElementById('faturas-overlay-back');
+    if (fatBack) fatBack.addEventListener('click', closeFaturasOverlay);
+
+    // Back button in horarios overlay
+    var horBack = document.getElementById('horarios-overlay-back');
+    if (horBack) horBack.addEventListener('click', closeHorariosOverlay);
+
+    // Back button in vendas overlay
+    var venBack = document.getElementById('vendas-overlay-back');
+    if (venBack) venBack.addEventListener('click', closeVendasOverlay);
+
+    // Back button
+    var backBtn = document.getElementById('adm-back-btn');
+    if (backBtn) backBtn.addEventListener('click', goToDashboard);
+  });
+})();
+</script>
+
+<script>
+/* ── Intercepta tabs de agenda e rótulos ── */
+(function () {
+  var _lastTab = 'salarios';
+
+  function interceptOverlayTabs() {
+    document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (btn) {
+      if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos' && btn.dataset.tab !== 'processamento') return;
+      if (btn.dataset._overlayBound) return;
+      btn.dataset._overlayBound = '1';
+
+      btn.addEventListener('click', function (e) {
+        /* Cancela a activação do painel vazio e abre o overlay */
+        e.stopImmediatePropagation();
+
+        /* Volta a activar o tab anterior visualmente */
+        document.querySelectorAll('.tab-btn').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.tab === _lastTab);
+        });
+        document.querySelectorAll('.drawer-tab-btn').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.tab === _lastTab);
+        });
+
+        if (btn.dataset.tab === 'agenda')         openAgendaOverlay();
+        if (btn.dataset.tab === 'rotulos')        openRotulosOverlay();
+        if (btn.dataset.tab === 'processamento')  openProcessamentoOverlay();
+      }, true); /* capture = true → executa antes do listener do admin-init */
+    });
+  }
+
+  /* Guarda o último tab activo real (não agenda/rotulos) */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.tab-btn, .drawer-tab-btn');
+    if (!btn) return;
+    if (btn.dataset.tab !== 'agenda' && btn.dataset.tab !== 'rotulos' && btn.dataset.tab !== 'processamento') {
+      _lastTab = btn.dataset.tab;
+    }
+  }, true);
+
+  /* Corre depois de admin-init.js ter registado os seus listeners */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', interceptOverlayTabs);
+  } else {
+    interceptOverlayTabs();
+  }
+})();
+</script>
+
+<script>
+/* ══ SAFT REMINDER — facturas próximas a vencer ══ */
+(function () {
+  var FIRST_YEAR = 2023;
+
+  function dataKey(y) { return 'ag_faturas_' + y; }
+
+  function diasPara(dateStr) {
+    if (!dateStr) return null;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var d = new Date(dateStr); d.setHours(0,0,0,0);
+    return Math.round((d - today) / 86400000);
+  }
+
+  function fmtDate(dateStr) {
+    if (!dateStr) return '';
+    var p = dateStr.split('-');
+    return p[2] + '/' + p[1];
+  }
+
+  function fmtVal(v) {
+    return v.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+
+  function loadFaturas() {
+    var allFat = [];
+    var currentYear = new Date().getFullYear();
+    for (var y = FIRST_YEAR; y <= currentYear; y++) {
+      try {
+        var raw = localStorage.getItem(dataKey(y));
+        if (raw) {
+          var arr = JSON.parse(raw);
+          arr.forEach(function (f) { allFat.push(f); });
+        }
+      } catch (e) {}
+    }
+    return allFat;
+  }
+
+  function renderFaturasWidget() {
+    var countEl = document.getElementById('saft-faturas-count');
+    var listEl  = document.getElementById('saft-faturas-list');
+    if (!countEl || !listEl) return;
+
+    var faturas = loadFaturas();
+
+    /* Limites da semana corrente: segunda-feira 00:00 → domingo 23:59 */
+    var hoje = new Date(); hoje.setHours(0,0,0,0);
+    var diaSemana = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1; /* 0=seg … 6=dom */
+    var seg = new Date(hoje); seg.setDate(hoje.getDate() - diaSemana);
+    var dom = new Date(seg);  dom.setDate(seg.getDate() + 6); dom.setHours(23,59,59,999);
+
+    /* Filtra: pendentes, vencimento dentro desta semana OU já vencidas (arrastadas de semanas anteriores) */
+    var semana = faturas.filter(function (f) {
+      if (f.estado === 'pago' || f.estado === 'nc') return false;
+      if (!f.vencimento) return false;
+      var d = new Date(f.vencimento); d.setHours(0,0,0,0);
+      return d <= dom;
+    });
+
+    var total = semana.length;
+    var montante = semana.reduce(function (acc, f) { return acc + (f.valor || 0); }, 0);
+    var vencidas = semana.filter(function (f) { return diasPara(f.vencimento) < 0; }).length;
+    var aVencer  = total - vencidas;
+
+    /* Contador */
+    countEl.textContent = total > 0 ? total : '0';
+    countEl.className = '';
+    if (vencidas > 0)   countEl.classList.add('danger');
+    else if (total > 0) countEl.classList.add('warn');
+
+    /* Label dinâmico: vencidas / a vencer / ambas */
+    var labelEl = document.getElementById('saft-faturas-count-label');
+    if (labelEl) {
+      if (vencidas > 0 && aVencer > 0) {
+        labelEl.textContent = vencidas + ' vencida' + (vencidas > 1 ? 's' : '') +
+                              ' / ' + aVencer + ' a vencer';
+      } else if (vencidas > 0) {
+        labelEl.textContent = vencidas === 1 ? 'fatura vencida' : 'faturas vencidas';
+      } else if (aVencer > 0) {
+        labelEl.textContent = aVencer === 1 ? 'fatura a vencer esta semana' : 'faturas a vencer esta semana';
+      } else {
+        labelEl.textContent = 'a vencer esta semana';
+      }
+    }
+
+    /* Monto total */
+    listEl.innerHTML = '';
+    if (total === 0) {
+      listEl.innerHTML = '<div style="font-size:.65rem;font-weight:bold;color:#000;opacity:.45;">sem vencimentos esta semana</div>';
+      return;
+    }
+
+    var montoEl = document.createElement('div');
+    montoEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:-.01em;line-height:1.2;';
+    montoEl.textContent = fmtVal(montante);
+    listEl.appendChild(montoEl);
+
+    var subEl = document.createElement('div');
+    subEl.style.cssText = 'font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#000;opacity:.5;margin-top:1px;';
+    subEl.textContent = 'total a liquidar';
+    listEl.appendChild(subEl);
+  }
+
+  /* Corre quando o saft-reminder fica visível e depois a cada minuto */
+  function init() {
+    renderFaturasWidget();
+    setInterval(renderFaturasWidget, 60000);
+
+    /* Actualiza também quando a agenda fecha (pode ter havido mudanças) */
+    document.addEventListener('agendaClosed', renderFaturasWidget);
+    /* Fallback: observer no classList do overlay */
+    var agOv = document.getElementById('agenda-overlay');
+    if (agOv) {
+      var obs = new MutationObserver(function () {
+        if (!agOv.classList.contains('open')) renderFaturasWidget();
+      });
+      obs.observe(agOv, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   OVERLAY RECIBOS — openRecibosOverlay / closeRecibosOverlay
+   Lê o index.json do Supabase sempre sem cache
+══════════════════════════════════════════════════════════════ */
+(function () {
+  var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  window.openRecibosOverlay = function () {
+    var overlay     = document.getElementById('recibos-overlay');
+    var loading     = document.getElementById('recibos-overlay-loading');
+    var body        = document.getElementById('recibos-overlay-body');
+    var errorDiv    = document.getElementById('recibos-overlay-error');
+    var titleEl     = document.getElementById('recibos-overlay-title');
+    var pageTitleEl = document.getElementById('recibos-page-title');
+    var tbody       = document.getElementById('recibos-tbody');
+    if (!overlay) return;
+
+    /* Abrir overlay */
+    overlay.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    });
+
+    /* Reset */
+    loading.style.display  = 'block';
+    loading.textContent    = 'a carregar…';
+    body.style.display     = 'none';
+    errorDiv.style.display = 'none';
+    errorDiv.textContent   = '';
+    tbody.innerHTML        = '';
+
+    /* Título do mês */
+    var mes       = localStorage.getItem('gh_mes') || '';
+    var mmMatch   = mes.match(/^(\d{2})-(\d{4})$/);
+    var monthName = mmMatch ? (MESES[parseInt(mmMatch[1], 10) - 1] || mes) : mes;
+    if (titleEl)     titleEl.textContent     = monthName || 'recibos';
+    if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
+
+    /* Fetch do index.json — bucket privado, usa signed URL */
+    sbClient.storage.from('recibos').createSignedUrl('index.json', 60)
+      .then(function (signRes) {
+        if (signRes.error) throw new Error(signRes.error.message);
+        return fetch(signRes.data.signedUrl + '&t=' + Date.now(), { cache: 'no-store' });
+      })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (indexData) {
+        var items = indexData.dados || [];
+        if (!items.length && indexData.ficheiros) {
+          items = indexData.ficheiros.map(function (f) {
+            return { filename: f, name: f.replace(/_/g, ' ').replace(/\.pdf$/i, ''), mes: indexData.mes || mes };
+          });
+        }
+
+        if (!items.length) {
+          loading.style.display  = 'none';
+          errorDiv.style.display = 'block';
+          errorDiv.textContent   = 'Nenhum recibo encontrado.';
+          return;
+        }
+
+        var mesPasta = indexData.mes || mes;
+        var paths = items.map(function (item) { return mesPasta + '/' + item.filename; });
+
+        /* Gerar signed URLs para os PDFs */
+        return sbClient.storage.from('recibos').createSignedUrls(paths, 300)
+          .then(function (urlRes) {
+            if (urlRes.error) throw new Error(urlRes.error.message);
+            var signed = urlRes.data; /* [{ path, signedUrl }, ...] */
+
+            tbody.innerHTML = items.map(function (item, i) {
+              var entry   = signed[i] || {};
+              var fileUrl = entry.signedUrl || '';
+              var name    = item.name || item.filename;
+              var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              var safeFile = String(item.filename).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              return '<tr>'
+                + '<td class="rn">' + (i + 1) + '</td>'
+                + '<td>' + safeName + '</td>'
+                + '<td><a href="' + fileUrl + '" download="' + safeFile + '" '
+                +   'style="padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;'
+                +   'border-radius:7px;background:#fff;text-decoration:none;font-weight:600;display:inline-block;"'
+                +   ' onmouseover="this.style.background=\'#555\';this.style.color=\'#fff\';this.style.borderColor=\'#555\'"'
+                +   ' onmouseout="this.style.background=\'#fff\';this.style.color=\'\';this.style.borderColor=\'#ccc\'"'
+                +   '>⬇ pdf</a></td>'
+                + '</tr>';
+            }).join('');
+
+            loading.style.display = 'none';
+            body.style.display    = 'block';
+          });
+      })
+      .catch(function (err) {
+        console.error('openRecibosOverlay:', err);
+        loading.style.display  = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent   = '⚠️ Erro ao carregar recibos: ' + err.message;
+      });
+  };
+  window.closeRecibosOverlay = function () {
+    var overlay = document.getElementById('recibos-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    setTimeout(function () { overlay.classList.remove('open'); }, 460);
+  };
+})();
+</script>
+<script>
+/* ══ ETIQUETAS DE PREÇOS ══ */
+(function () {
+  var COLS = 5, ROWS = 13, PER_PAGE = 65;
+
+  function fmtPrice(v) {
+    return parseFloat(v).toFixed(2).replace('.', ',') + '€';
+  }
+
+  function getEntries() {
+    var entries = [];
+    for (var i = 1; i <= 5; i++) {
+      var priceEl = document.getElementById('et-price-' + i);
+      var qtyEl   = document.getElementById('et-qty-' + i);
+      var p = parseFloat(priceEl && priceEl.value);
+      var q = parseInt(qtyEl && qtyEl.value, 10);
+      if (isFinite(p) && p > 0 && isFinite(q) && q > 0) {
+        entries.push({ price: p, qty: q });
+      }
+    }
+    return entries;
+  }
+
+  function updateSummary() {
+    for (var i = 1; i <= 5; i++) {
+      var priceEl = document.getElementById('et-price-' + i);
+      var qtyEl   = document.getElementById('et-qty-' + i);
+      var totEl   = document.getElementById('et-tot-' + i);
+      var p = parseFloat(priceEl && priceEl.value);
+      var q = parseInt(qtyEl && qtyEl.value, 10);
+      if (totEl) totEl.textContent = (isFinite(p) && p > 0 && isFinite(q) && q > 0) ? q + ' und.' : '—';
+    }
+    var entries = getEntries();
+    var total = entries.reduce(function (a, e) { return a + e.qty; }, 0);
+    var pages = total > 0 ? Math.ceil(total / PER_PAGE) : 0;
+    var sumEl = document.getElementById('et-summary-text');
+    if (sumEl) sumEl.textContent = 'total: ' + total + ' etiqueta' + (total !== 1 ? 's' : '') + ' · ' + pages + ' página' + (pages !== 1 ? 's' : '');
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    for (var i = 1; i <= 5; i++) {
+      var pe = document.getElementById('et-price-' + i);
+      var qe = document.getElementById('et-qty-' + i);
+      if (pe) pe.addEventListener('input', updateSummary);
+      if (qe) qe.addEventListener('input', updateSummary);
+    }
+    updateSummary();
+  });
+
+  window.etiquetasGerar = async function (download) {
+    var entries = getEntries();
+    if (!entries.length) {
+      document.getElementById('et-status').textContent = '⚠️ Introduza pelo menos um preço e quantidade.';
+      return;
+    }
+    var statusEl = document.getElementById('et-status');
+    statusEl.textContent = 'a gerar PDF…';
+    try {
+      var PDFLib = window.PDFLib;
+      var PDFDocument = PDFLib.PDFDocument;
+      var rgb = PDFLib.rgb;
+      var StandardFonts = PDFLib.StandardFonts;
+      var pdfDoc = await PDFDocument.create();
+      var font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      var labels = [];
+      entries.forEach(function (e) {
+        for (var k = 0; k < e.qty; k++) labels.push(fmtPrice(e.price));
+      });
+      var totalPages = Math.ceil(labels.length / PER_PAGE);
+      var idx = 0;
+      var pageW = 595.28, pageH = 841.89;
+      var marginX = 20, marginY = 20;
+      var cellW = (pageW - marginX * 2) / COLS;
+      var cellH = (pageH - marginY * 2) / ROWS;
+      var fontSize = 28;
+      for (var p = 0; p < totalPages; p++) {
+        var page = pdfDoc.addPage([pageW, pageH]);
+        for (var row = 0; row < ROWS; row++) {
+          for (var col = 0; col < COLS; col++) {
+            if (idx >= labels.length) break;
+            var text = labels[idx++];
+            var tw = font.widthOfTextAtSize(text, fontSize);
+            var x = marginX + col * cellW + (cellW - tw) / 2;
+            var y = pageH - marginY - (row + 1) * cellH + (cellH - fontSize * 0.75) / 2;
+            page.drawText(text, { x: x, y: y, size: fontSize, font: font, color: rgb(0, 0, 0) });
+          }
+        }
+      }
+      var pdfBytes = await pdfDoc.save();
+      var blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob);
+      if (download) {
+        var a = document.createElement('a');
+        a.href = url; a.download = 'etiquetas_precos.pdf'; a.click();
+        statusEl.textContent = '✓ PDF descarregado.';
+      } else {
+        window.open(url, '_blank');
+        statusEl.textContent = '✓ PDF aberto em nova aba.';
+      }
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = '⚠️ Erro ao gerar PDF: ' + err.message;
+    }
+  };
+
+  window.openEtiquetasOverlay = function () {
+    var overlay = document.getElementById('etiquetas-overlay');
+    if (!overlay) return;
+    overlay.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    });
+    var s = document.getElementById('et-status');
+    if (s) s.textContent = '';
+    updateSummary();
+  };
+
+  window.closeEtiquetasOverlay = function () {
+    var overlay = document.getElementById('etiquetas-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    setTimeout(function () { overlay.classList.remove('open'); }, 460);
+  };
+})();
+</script>
+
+
+<script>
+/* ── Interceptar botón/gesto "atrás" de Android ── */
+(function () {
+  history.pushState({ appLayer: 0 }, '');
+
+  window.addEventListener('popstate', function () {
+    history.pushState({ appLayer: 0 }, '');
+
+    var overlays = [
+      { id: 'agenda-overlay',        close: function () { if (typeof closeAgendaOverlay === 'function') closeAgendaOverlay(); } },
+      { id: 'rotulos-overlay',       close: function () { if (typeof closeRotulosOverlay === 'function') closeRotulosOverlay(); } },
+      { id: 'processamento-overlay', close: function () { if (typeof closeProcessamentoOverlay === 'function') { closeProcessamentoOverlay(); document.body.classList.remove('no-glow'); } } },
+      { id: 'recibos-overlay',       close: function () { if (typeof closeRecibosOverlay === 'function') closeRecibosOverlay(); } },
+      { id: 'etiquetas-overlay',     close: function () { if (typeof closeEtiquetasOverlay === 'function') closeEtiquetasOverlay(); } },
+      { id: 'ventas-overlay',        close: function () { if (typeof closeVentasOverlay === 'function') closeVentasOverlay(); } },
+      { id: 'horarios-overlay',      close: function () { var btn = document.getElementById('horarios-overlay-back'); if (btn) btn.click(); } },
+      { id: 'faturas-overlay',       close: function () { var btn = document.getElementById('faturas-overlay-back'); if (btn) btn.click(); } },
+      { id: 'vendas-overlay',        close: function () { var btn = document.getElementById('vendas-overlay-back'); if (btn) btn.click(); } }
+    ];
+
+    for (var i = 0; i < overlays.length; i++) {
+      var el = document.getElementById(overlays[i].id);
+      if (el && el.classList.contains('open')) {
+        overlays[i].close();
+        return;
+      }
+    }
+
+    var backBtn = document.getElementById('adm-back-btn');
+    if (backBtn) backBtn.click();
+  });
+})();
+</script>
+<script>
+/* ── CÓDIGOS DE EMERGÊNCIA PORTO SANTO ── */
+(function () {
+  function _emergencyCode(tienda, dateStr) {
+    var SECRET = 'wkz.ps@8f2e1b9d4c7a';
+    var raw = SECRET + '|' + tienda.toLowerCase() + '|' + dateStr;
+    var h = 5381;
+    for (var i = 0; i < raw.length; i++) {
+      h = ((h << 5) + h) + raw.charCodeAt(i);
+      h = h & 0x7fffffff;
+    }
+    var code = 10000 + (h % 90000);
+    return String(Math.abs(code));
+  }
+
+  function _renderEmgCodes() {
+    var list = document.getElementById('emg-codes-list');
+    var dateEl = document.getElementById('emg-date');
+    if (!list) return;
+
+    var today = new Date();
+    var dd = String(today.getDate()).padStart(2,'0');
+    var mm = String(today.getMonth()+1).padStart(2,'0');
+    var yyyy = today.getFullYear();
+    var dateStr = yyyy + '-' + mm + '-' + dd;
+    var displayDate = dd + '/' + mm + '/' + yyyy;
+
+    if (dateEl) dateEl.textContent = displayDate;
+
+    var stores = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx'];
+    list.innerHTML = '';
+    stores.forEach(function (s) {
+      var code = _emergencyCode(s, dateStr);
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:2px 0;border-bottom:1px solid #f0f0f0;';
+      var nameEl = document.createElement('span');
+      nameEl.style.cssText = 'font-size:.65rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      nameEl.textContent = s;
+      var codeEl = document.createElement('span');
+      codeEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:.08em;white-space:nowrap;';
+      codeEl.textContent = code;
+      row.appendChild(nameEl);
+      row.appendChild(codeEl);
+      list.appendChild(row);
+    });
+
+    // Programar regeneración a medianoche
+    var now = new Date();
+    var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5);
+    var msUntilMidnight = midnight - now;
+    setTimeout(function () { _renderEmgCodes(); }, msUntilMidnight);
+  }
+
+  // Esperar a que el admin-app esté visible para renderizar
+  var adminApp = document.getElementById('admin-app');
+  if (adminApp) {
+    new MutationObserver(function (muts, obs) {
+      if (adminApp.classList.contains('show')) {
+        _renderEmgCodes();
+        obs.disconnect();
+      }
+    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+  }
+  // También intentar al cargar por si ya está visible
+  document.addEventListener('DOMContentLoaded', function () {
+    var app = document.getElementById('admin-app');
+    if (app && app.classList.contains('show')) _renderEmgCodes();
+  });
+})();
+</script>
+<!-- FOLGAS DIRIGIDAS MODAL -->
+<div id="fd-overlay" onclick="if(event.target===this)closeFolgasDirigidasModal()">
+  <div id="fd-modal">
+    <div id="fd-modal-header">
+      <div id="fd-modal-title">folgas dirigidas · porto santo</div>
+      <button id="fd-modal-close" onclick="closeFolgasDirigidasModal()">✕</button>
+    </div>
+    <div id="fd-modal-body">
+      <div id="fd-loading">a carregar pessoas…</div>
+    </div>
+    <div id="fd-modal-footer">
+      <button class="fd-footer-btn" id="fd-cancel-btn" onclick="closeFolgasDirigidasModal()">cancelar</button>
+      <button class="fd-footer-btn" id="fd-save-btn" onclick="saveFolgasDirigidas()">guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ FOLGAS DIRIGIDAS — dashboard modal ══ */
+(function () {
+
+  // Estado local: { [pid]: { datas: ['2025-06-04', ...], notas: '' } }
+  var _fd = {};
+  var _people = [];
+
+  /* ── Abrir modal ── */
+  window.openFolgasDirigidasModal = async function () {
+    document.getElementById('fd-overlay').classList.add('open');
+    var body = document.getElementById('fd-modal-body');
+    body.innerHTML = '<div id="fd-loading">a carregar pessoas…</div>';
+
+    try {
+      var sb = await _getSb();
+      if (!sb) { body.innerHTML = '<div id="fd-loading">Supabase não disponível.</div>'; return; }
+
+      // Carregar pessoas de Porto Santo
+      var { data: people } = await sb.from('gh_people')
+        .select('id,name,store_id').eq('active', true);
+      _people = (people || []).sort((a,b) => a.name.localeCompare(b.name));
+
+      // Carregar folgas dirigidas existentes
+      var { data: fds } = await sb.from('gh_folgas_dirigidas').select('*');
+      _fd = {};
+      (fds || []).forEach(function (r) {
+        _fd[r.pessoa_id] = { id: r.id, datas: r.datas || [], notas: r.notas || '' };
+      });
+
+      _renderModal(body);
+      _updateBadge();
+    } catch (e) {
+      console.error('Erro ao carregar folgas dirigidas:', e);
+      body.innerHTML = '<div id="fd-loading">Erro ao carregar dados.</div>';
+    }
+  };
+
+  function _renderModal(body) {
+    body.innerHTML = '';
+    if (!_people.length) {
+      body.innerHTML = '<div id="fd-loading">Sem pessoas na base de dados.</div>';
+      return;
+    }
+    _people.forEach(function (p) {
+      var rec = _fd[p.id] || { datas: [], notas: '' };
+      var datas = (rec.datas || []).concat(['','','','']).slice(0, 4);
+      var hasDates = rec.datas && rec.datas.length > 0;
+
+      var row = document.createElement('div');
+      row.className = 'fd-pessoa-row';
+      row.dataset.pid = p.id;
+
+      var dateInputs = datas.map(function (d, i) {
+        return '<input type="date" class="fd-date-input" data-pid="' + p.id + '" data-idx="' + i + '" value="' + (d||'') + '">';
+      }).join('');
+
+      row.innerHTML =
+        '<div class="fd-pessoa-name">' +
+          _shortName(p.name) +
+          (hasDates ? '<span class="fd-has-dates">' + rec.datas.length + ' data' + (rec.datas.length !== 1 ? 's' : '') + '</span>' : '') +
+        '</div>' +
+        '<div class="fd-dates-grid">' + dateInputs + '</div>' +
+        '<input type="text" class="fd-nota-input" data-pid="' + p.id + '" placeholder="nota (opcional)" value="' + _esc(rec.notas || '') + '">';
+
+      body.appendChild(row);
+    });
+  }
+
+  /* ── Guardar ── */
+  window.saveFolgasDirigidas = async function () {
+    var saveBtn = document.getElementById('fd-save-btn');
+    saveBtn.textContent = 'a guardar…';
+    saveBtn.disabled = true;
+
+    try {
+      var sb = await _getSb();
+      if (!sb) { alert('Supabase não disponível.'); return; }
+
+      // Recolher valores do DOM
+      var rows = document.querySelectorAll('.fd-pessoa-row');
+      var upserts = [];
+
+      rows.forEach(function (row) {
+        var pid = row.dataset.pid;
+        var dateInputs = row.querySelectorAll('.fd-date-input');
+        var datas = [];
+        dateInputs.forEach(function (inp) { if (inp.value) datas.push(inp.value); });
+        var notas = (row.querySelector('.fd-nota-input') || {}).value || '';
+
+        // Guardar sempre (permite limpar datas)
+        upserts.push({ pessoa_id: pid, datas: datas, notas: notas });
+        _fd[pid] = { datas: datas, notas: notas };
+      });
+
+      // Upsert em batch
+      var { error } = await sb.from('gh_folgas_dirigidas')
+        .upsert(upserts, { onConflict: 'pessoa_id' });
+      if (error) throw error;
+
+      _updateBadge();
+      closeFolgasDirigidasModal();
+    } catch (e) {
+      console.error('Erro ao guardar folgas dirigidas:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+    } finally {
+      saveBtn.textContent = 'guardar';
+      saveBtn.disabled = false;
+    }
+  };
+
+  /* ── Fechar modal ── */
+  window.closeFolgasDirigidasModal = function () {
+    document.getElementById('fd-overlay').classList.remove('open');
+  };
+
+  /* ── Badge com total de datas futuras pendentes ── */
+  function _updateBadge() {
+    var badge = document.getElementById('fd-badge-count');
+    if (!badge) return;
+    var today = new Date().toISOString().split('T')[0];
+    var total = 0;
+    Object.values(_fd).forEach(function (r) {
+      (r.datas || []).forEach(function (d) { if (d >= today) total++; });
+    });
+    if (total > 0) {
+      badge.textContent = total;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  /* ── Helpers ── */
+  function _getSb() {
+    if (typeof sbAdmin !== 'undefined' && sbAdmin) return Promise.resolve(sbAdmin);
+    return new Promise(function (resolve) {
+      var tries = 0;
+      var t = setInterval(function () {
+        if (typeof sbAdmin !== 'undefined' && sbAdmin) { clearInterval(t); resolve(sbAdmin); }
+        if (++tries > 50) { clearInterval(t); resolve(null); }
+      }, 100);
+    });
+  }
+
+  function _shortName(name) {
+    if (!name) return '';
+    var parts = name.trim().split(/\s+/);
+    return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+  }
+
+  function _esc(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  /* ── Inicializar badge ao carregar ── */
+  async function _initBadge() {
+    try {
+      var sb = await _getSb();
+      if (!sb) return;
+      var today = new Date().toISOString().split('T')[0];
+      var { data: fds } = await sb.from('gh_folgas_dirigidas').select('datas');
+      var total = 0;
+      (fds || []).forEach(function (r) {
+        (r.datas || []).forEach(function (d) { if (d >= today) total++; });
+      });
+      _fd = {};
+      (fds || []).forEach(function (r) { /* badge only, full load is on open */ });
+      var badge = document.getElementById('fd-badge-count');
+      if (badge && total > 0) {
+        badge.textContent = total;
+        badge.style.display = 'inline-block';
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  // Esperar a que el admin sea visible
+  document.addEventListener('DOMContentLoaded', function () {
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    if (adminApp.classList.contains('show')) { _initBadge(); return; }
+    new MutationObserver(function (muts, obs) {
+      if (adminApp.classList.contains('show')) { obs.disconnect(); _initBadge(); }
+    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+  });
+
+})();
+</script>
+
 </body>
 </html>

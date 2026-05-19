@@ -1,24 +1,59 @@
-// Archivos necesarios para mostrar el login — NO bloquear
 const PUBLIC_JS = [
   '/js/supabase-config.js',
   '/js/intro.js',
   '/js/shared.js',
 ];
 
-export default function middleware(request) {
+async function verifyToken(token) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+
+  const [header, body, signature] = parts;
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return false;
+
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(`${header}.${body}`);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+
+  const expectedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  if (expectedSignature !== signature) return false;
+
+  try {
+    const payload = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/')));
+    if (Date.now() > payload.exp) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export default async function middleware(request) {
   const url = new URL(request.url);
 
-  // Solo actuar en rutas /js/
   if (!url.pathname.startsWith('/js/')) {
     return;
   }
 
-  // Dejar pasar los JS del login
   if (PUBLIC_JS.includes(url.pathname)) {
     return;
   }
 
-  // Para el resto, verificar cookie
   const cookieHeader = request.headers.get('cookie') || '';
   const match = cookieHeader.match(/(?:^|;\s*)wkz_session=([^;]+)/);
   const token = match ? match[1] : null;
@@ -27,16 +62,10 @@ export default function middleware(request) {
     return new Response('No autorizado', { status: 401 });
   }
 
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return new Response('No autorizado', { status: 401 });
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    if (Date.now() > payload.exp) return new Response('No autorizado', { status: 401 });
-  } catch {
+  const valid = await verifyToken(token);
+  if (!valid) {
     return new Response('No autorizado', { status: 401 });
   }
-
-  // Token válido → dejar pasar
 }
 
 export const config = {

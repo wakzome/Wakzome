@@ -995,13 +995,15 @@ body {
 table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
 th, td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.9rem; font-weight:bold; color:#000; }
 th { background:#444; color:#fff !important; text-transform:uppercase; font-size:1rem; position:relative; top:0; z-index:2; }
-td.name { white-space:nowrap; text-align:center; border-radius:15px 0 0 15px; }
+td.name { white-space:nowrap; text-align:center; border-radius:15px 0 0 15px; display:flex; align-items:center; justify-content:flex-start; padding-left:8px; }
 td.multi-line { white-space:pre-line; }
 td.bold-row { font-weight:bold; }
 tr:hover td { background:#eaeaea; }
 td, th { border-radius:10px; margin:2px; }
 .today-col { background: #D7D7D7 !important; }
 .today-col:hover { background: #ffffff !important; }
+th.today-col { background: #222 !important; color: #fff !important; }
+th.today-col:hover { background: #333 !important; color: #fff !important; }
 .blinking-now { animation: blinkCell 2s infinite !important; background-color: #e0e0e0 !important; }
 @keyframes blinkCell { 0%,100%{background-color:#f0f0f0;} 50%{background-color:#d0d0d0;} }
 #page-name-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1); font-size:3rem; font-weight:bold; opacity:0; pointer-events:none; transition: opacity 0.5s ease, transform 0.5s ease; color:#000; font-family:'MontserratLight', sans-serif; z-index:4; }
@@ -3037,7 +3039,7 @@ html, body,
 .adm-mod-name, .adm-mod-desc, .adm-mod-arrow,
 #adm-dash-greeting .adm-brand, #adm-dash-greeting .adm-tagline,
 #adm-module-bar-title,
-th, td, .tab-btn, .drawer-tab-btn,
+td, .tab-btn, .drawer-tab-btn,
 input, button, select, textarea,
 .f-card .f-name, .f-card .f-dates, .f-card .f-badge, .f-section-title,
 #f-today-banner .f-banner-title, #f-today-banner .f-banner-names,

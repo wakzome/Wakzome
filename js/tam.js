@@ -6784,7 +6784,7 @@
       '.tam-dn-th { padding:8px 12px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666!important; border-bottom:2px solid #ddd; text-align:left; }',
       '.tam-dn-th-f { color:#111!important; background:#e8e8e8; padding:0!important; }',
       '.tam-dn-th-p { color:#111!important; background:#e8e8e8; padding:0!important; }',
-      '.tam-dn-col-btn { display:block; width:100%; height:100%; padding:8px 12px; font-size:.68rem; font-weight:700; font-family:'MontserratLight',sans-serif; text-transform:uppercase; letter-spacing:.05em; cursor:pointer; border-radius:0; border:none; background:transparent; transition:background .13s; text-align:center; color:#111!important; }',
+      '.tam-dn-col-btn { display:block; width:100%; padding:8px 12px; font-size:.68rem; font-weight:700; font-family:'MontserratLight',sans-serif; text-transform:uppercase; letter-spacing:.05em; cursor:pointer; border-radius:0; border:none; background:transparent; transition:background .13s; text-align:center; color:#111!important; }',
       '.tam-dn-col-btn-f { color:#111!important; }',
       '.tam-dn-col-btn-f:hover { background:rgba(0,0,0,.1)!important; }',
       '.tam-dn-col-btn-p { color:#111!important; }',

@@ -6769,7 +6769,7 @@
       '.tam-dn-total { text-align:center; color:#555; font-weight:bold; white-space:nowrap; width:1%; }',
       '.tam-dn-cell { text-align:center; white-space:nowrap; width:1%; }',
       /* No spinners on DN inputs */
-      '.tam-dn-inp { width:58px; min-width:44px; padding:5px 4px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-dn-inp { width:58px; min-width:44px; padding:5px 4px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; color:#000!important; }',
       '.tam-dn-inp::-webkit-inner-spin-button,.tam-dn-inp::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }',
       '.tam-dn-inp-f:focus { border-color:#000; }',
       '.tam-dn-inp-p:focus { border-color:#000; }',

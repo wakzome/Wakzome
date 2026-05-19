@@ -1,5 +1,5 @@
-// Archivos necesarios para mostrar el login — NO bloquear
-const PUBLIC_JS = [
+// Archivos públicos (necesarios para el login)
+const PUBLIC_PATHS = [
   '/js/supabase-config.js',
   '/js/intro.js',
   '/js/shared.js',
@@ -7,38 +7,35 @@ const PUBLIC_JS = [
 
 export default function middleware(request) {
   const url = new URL(request.url);
+  const path = url.pathname;
 
-  // Solo actuar en rutas /js/
-  if (!url.pathname.startsWith('/js/')) {
+  // Solo proteger /js/* y /app.html
+  const isProtectedJs = path.startsWith('/js/') && !PUBLIC_PATHS.includes(path);
+  const isAppHtml = path === '/app.html';
+
+  if (!isProtectedJs && !isAppHtml) {
     return;
   }
 
-  // Dejar pasar los JS del login
-  if (PUBLIC_JS.includes(url.pathname)) {
-    return;
-  }
-
-  // Para el resto, verificar cookie
+  // Leer cookie wkz_session
   const cookieHeader = request.headers.get('cookie') || '';
   const match = cookieHeader.match(/(?:^|;\s*)wkz_session=([^;]+)/);
   const token = match ? match[1] : null;
 
   if (!token) {
-    return new Response('No autorizado', { status: 401 });
+    return Response.redirect(new URL('/', request.url), 302);
   }
 
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return new Response('No autorizado', { status: 401 });
+    if (parts.length !== 3) return Response.redirect(new URL('/', request.url), 302);
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    if (Date.now() > payload.exp) return new Response('No autorizado', { status: 401 });
+    if (Date.now() > payload.exp) return Response.redirect(new URL('/', request.url), 302);
   } catch {
-    return new Response('No autorizado', { status: 401 });
+    return Response.redirect(new URL('/', request.url), 302);
   }
-
-  // Token válido → dejar pasar
 }
 
 export const config = {
-  matcher: '/js/(.*)',
+  matcher: ['/js/(.*)', '/app.html'],
 };

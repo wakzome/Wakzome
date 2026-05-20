@@ -11,8 +11,27 @@
     var style = document.createElement('style');
     style.id  = STYLE_ID;
     style.textContent = [
-      /* Reset scoped */
-      '#proc-content *, #proc-content *::before, #proc-content *::after { box-sizing: border-box; margin: 0; padding: 0; }',
+      /* ── ISOLATION RESET: neutraliza TUDO o que o index.html possa pisar ── */
+      /* Elementos dentro de #proc-content */
+      '#proc-content *, #proc-content *::before, #proc-content *::after { box-sizing:border-box; margin:0; padding:0; }',
+      '#proc-content tr, #proc-content tr:hover { background:unset; transform:none !important; box-shadow:none !important; transition:none !important; }',
+      '#proc-content td, #proc-content th { background:unset; color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
+      '#proc-content button { transform:none !important; box-shadow:none !important; transition:background .15s,border-color .15s,color .15s !important; font-size:unset !important; }',
+      '#proc-content button:hover { transform:none !important; box-shadow:none !important; color:unset !important; }',
+      '#proc-content input, #proc-content select, #proc-content textarea { font-size:unset !important; font-weight:unset !important; cursor:unset !important; }',
+      /* Modais que vivem no body fora do #proc-content */
+      '#proc-criacao-modal tr, #proc-criacao-modal tr:hover { background:unset; transform:none !important; box-shadow:none !important; transition:none !important; }',
+      '#proc-criacao-modal td, #proc-criacao-modal th { background:unset; color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
+      '#proc-criacao-modal button { transform:none !important; box-shadow:none !important; font-size:unset !important; }',
+      '#proc-criacao-modal button:hover { transform:none !important; box-shadow:none !important; color:unset !important; }',
+      '#proc-guia-modal tr, #proc-guia-modal tr:hover { background:unset; transform:none !important; box-shadow:none !important; transition:none !important; }',
+      '#proc-guia-modal td, #proc-guia-modal th { background:unset; color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
+      '#proc-guia-modal button { transform:none !important; box-shadow:none !important; font-size:unset !important; }',
+      '#proc-guia-modal button:hover { transform:none !important; box-shadow:none !important; color:unset !important; }',
+      '.proc-or-modal tr, .proc-or-modal tr:hover { background:unset; transform:none !important; box-shadow:none !important; transition:none !important; }',
+      '.proc-or-modal td, .proc-or-modal th { background:unset; color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
+      '.proc-or-modal button { transform:none !important; box-shadow:none !important; font-size:unset !important; }',
+      '.proc-or-modal button:hover { transform:none !important; box-shadow:none !important; color:unset !important; }',
 
       /* Wrapper */
       '#proc-content { width:100%; min-height:100%; background:#fff; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:\'MontserratLight\', sans-serif; font-size:14px; font-weight:600; color:#000; }',

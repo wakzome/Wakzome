@@ -1059,11 +1059,12 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 #admin-app #tab-nav { display: none !important; }
 #admin-app #admin-menu-btn { display: none !important; }
 
-#admin-app.module-open #adm-dashboard { display: none !important; }
+#admin-app.module-open #adm-dashboard { pointer-events: none !important; visibility: hidden !important; opacity: 0 !important; }
 #admin-app:not(.module-open) .tab-panel { display: none !important; }
 #admin-app:not(.module-open) #adm-module-bar { display: none !important; }
 #admin-app.module-open #adm-module-bar { display: flex !important; }
 #admin-app.module-open #admin-header { display: none; }
+#adm-dashboard { transition: opacity 0.22s cubic-bezier(0.22,1,0.36,1), visibility 0.22s; }
 
 #adm-dashboard {
   display: flex;
@@ -4339,11 +4340,25 @@ td                   { font-size: .96rem !important; }
     if (panel) panel.classList.add('active');
 
     
-    adminApp.classList.add('module-open');
-    adminApp.scrollTop = 0;
-    if (barTitle) barTitle.textContent = MODULE_LABELS[tab] || tab;
-    var moduleBar = document.getElementById('adm-module-bar');
-    if (moduleBar) moduleBar.style.display = 'flex';
+    var dashboard = document.getElementById('adm-dashboard');
+    var _doOpen = function () {
+      adminApp.classList.add('module-open');
+      adminApp.scrollTop = 0;
+      if (barTitle) barTitle.textContent = MODULE_LABELS[tab] || tab;
+      var moduleBar = document.getElementById('adm-module-bar');
+      if (moduleBar) moduleBar.style.display = 'flex';
+    };
+    if (dashboard && window.getComputedStyle(dashboard).opacity !== '0') {
+      dashboard.style.opacity = '0';
+      dashboard.style.pointerEvents = 'none';
+      setTimeout(function () {
+        dashboard.style.opacity = '';
+        dashboard.style.pointerEvents = '';
+        _doOpen();
+      }, 220);
+    } else {
+      _doOpen();
+    }
 
     
     
@@ -4410,7 +4425,15 @@ td                   { font-size: .96rem !important; }
 
     
     var dashboard = document.getElementById('adm-dashboard');
-    if (dashboard) dashboard.style.display = '';
+    if (dashboard) {
+      dashboard.style.opacity = '0';
+      dashboard.style.display = '';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          dashboard.style.opacity = '';
+        });
+      });
+    }
 
     
     document.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
@@ -5272,5 +5295,6 @@ td                   { font-size: .96rem !important; }
 })();
 </script>
 
+<script src="js/parfois.js"></script>
 </body>
 </html>

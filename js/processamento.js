@@ -302,32 +302,35 @@
       '#proc-criacao-modal { position:fixed; inset:0; z-index:6000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s ease; pointer-events:none; }',
       '#proc-criacao-modal.proc-criacao-visible { opacity:1; pointer-events:auto; }',
       '#proc-criacao-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.38); }',
-      '#proc-criacao-panel { position:relative; z-index:1; width:min(680px,96vw); max-height:82vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 64px rgba(0,0,0,.18); transform:translateY(12px); transition:transform .2s ease; font-family:\'MontserratLight\',sans-serif; overflow:hidden; }',
+      '#proc-criacao-panel { position:relative; z-index:1; width:auto; min-width:360px; max-width:96vw; max-height:82vh; display:inline-flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 64px rgba(0,0,0,.18); transform:translateY(12px); transition:transform .2s ease; font-family:\'MontserratLight\',sans-serif; overflow:hidden; }',
       '#proc-criacao-modal.proc-criacao-visible #proc-criacao-panel { transform:translateY(0); }',
-      '#proc-criacao-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px 14px; border-bottom:1px solid #e0e0e0; flex-shrink:0; }',
+      '#proc-criacao-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px 14px; border-bottom:1px solid #e0e0e0; flex-shrink:0; gap:40px; }',
       '#proc-criacao-title { display:flex; flex-direction:column; gap:2px; }',
       '#proc-criacao-title-main { font-size:1rem; font-weight:700; color:#000; }',
       '#proc-criacao-title-sub { font-size:.62rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.4; }',
-      '#proc-criacao-close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:.95rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:transparent; color:#000; transition:background .12s,border-color .12s; font-family:\'MontserratLight\',sans-serif; font-weight:700; }',
+      '#proc-criacao-close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:.95rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:transparent; color:#000; transition:background .12s,border-color .12s; font-family:\'MontserratLight\',sans-serif; font-weight:700; flex-shrink:0; }',
       '#proc-criacao-close:hover { background:#f0f0f0; border-color:#ccc; }',
-      '#proc-criacao-scroll { overflow-y:auto; flex:1; }',
-      '#proc-criacao-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; }',
+      '#proc-criacao-scroll { overflow-y:auto; overflow-x:hidden; flex:1; }',
+      '#proc-criacao-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; table-layout:auto; }',
       '#proc-criacao-table thead { position:sticky; top:0; z-index:2; }',
       '#proc-criacao-table thead th { padding:8px 14px; font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#000 !important; background:#fff !important; border-bottom:2px solid #e0e0e0; white-space:nowrap; text-align:left; }',
+      '#proc-criacao-table thead th.center { text-align:center; }',
       '#proc-criacao-table thead th.right { text-align:right; }',
       '#proc-criacao-table tbody tr { border-bottom:1px solid #f0f0f0; cursor:pointer; transition:background .1s; }',
-      '#proc-criacao-table tbody tr:hover { background:#f5f5f5; }',
+      '#proc-criacao-table tbody tr:hover { background:#f5f5f5 !important; }',
+      '#proc-criacao-table tbody tr:hover td { color:#000 !important; opacity:1 !important; }',
       '#proc-criacao-table tbody tr.proc-criacao-active { background:#000 !important; }',
+      '#proc-criacao-table tbody tr.proc-criacao-active:hover { background:#000 !important; }',
       '#proc-criacao-table tbody tr.proc-criacao-active td { color:#fff !important; }',
       '#proc-criacao-table tbody tr.proc-criacao-active td * { color:#fff !important; }',
       '#proc-criacao-table td { padding:8px 14px; font-size:.88rem; font-weight:700; color:#000; white-space:nowrap; vertical-align:middle; user-select:none; }',
       '#proc-criacao-table td.td-ref { font-size:.88rem; font-weight:800; }',
-      '#proc-criacao-table td.td-nome { font-size:.82rem; font-weight:600; max-width:200px; overflow:hidden; text-overflow:ellipsis; }',
+      '#proc-criacao-table td.td-nome { font-size:.82rem; font-weight:600; text-align:center; }',
       '#proc-criacao-table td.td-pvp { font-size:.88rem; font-weight:800; text-align:right; }',
-      '#proc-criacao-table td.td-marg { font-size:.72rem; font-weight:700; text-align:right; opacity:.55; }',
-      '#proc-criacao-table td.td-custo { font-size:.72rem; font-weight:700; text-align:right; opacity:.45; }',
-      '#proc-criacao-table tbody tr.proc-criacao-active td.td-marg { opacity:.75; }',
-      '#proc-criacao-table tbody tr.proc-criacao-active td.td-custo { opacity:.7; }',
+      '#proc-criacao-table td.td-marg { font-size:.72rem; font-weight:700; text-align:right; opacity:.5; }',
+      '#proc-criacao-table td.td-custo { font-size:.72rem; font-weight:700; text-align:right; opacity:.4; }',
+      '#proc-criacao-table tbody tr.proc-criacao-active td.td-marg { opacity:.8; }',
+      '#proc-criacao-table tbody tr.proc-criacao-active td.td-custo { opacity:.75; }',
       '#proc-criacao-copy-hint { padding:6px 22px 10px; font-size:.65rem; font-weight:700; color:#000; opacity:.35; letter-spacing:.04em; text-transform:uppercase; flex-shrink:0; border-top:1px solid #f0f0f0; }',
 
       /* ── GUIA MODAL ── */
@@ -4280,8 +4283,8 @@
       +         '<th>Refer\u00eancia</th>'
       +         '<th>Nome</th>'
       +         '<th class="right">PVP</th>'
-      +         '<th class="right">Margem</th>'
-      +         '<th class="right">Pre\u00e7o Custo</th>'
+      +         '<th class="right">%</th>'
+      +         '<th class="right">PC</th>'
       +       '</tr></thead>'
       +       '<tbody>' + rowsHTML + '</tbody>'
       +     '</table>'

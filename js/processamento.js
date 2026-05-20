@@ -90,7 +90,7 @@
       /* Header card */
       '#proc-content .proc-header-card { background:#fff; border:1px solid #e0e0e0; border-radius:0; padding:20px; margin-bottom:10px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; align-items:end; }',
       '#proc-content .proc-field-group { display:flex; flex-direction:column; gap:5px; }',
-      '#proc-content .proc-field-label { font-size:.6rem; font-weight:400; letter-spacing:.12em; text-transform:uppercase; color:#000; opacity:.5; }',
+      '#proc-content .proc-field-label { font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#000 !important; opacity:1 !important; }',
 
       /* Inputs */
       '#proc-content input[type="text"], #proc-content input[type="number"] { background:#fafafa; border:1px solid #e0e0e0; color:#000; font-family:\'MontserratLight\',sans-serif; font-size:.88rem; font-weight:700; padding:8px 10px; border-radius:8px; outline:none; width:100%; transition:border-color 0.15s; -moz-appearance:textfield; }',
@@ -189,7 +189,7 @@
       '#proc-content .proc-summary-line { display:flex; gap:20px; font-size:.78rem; color:#000; font-weight:700; }',
       '#proc-content .proc-summary-line strong { color:#000; }',
       '#proc-content .proc-diff-chip { font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:20px; border:1.5px solid; display:inline-flex; align-items:center; gap:5px; transition:background 0.3s ease,border-color 0.3s ease; }',
-      '#proc-content .proc-diff-chip.zero { border-color:#3a6b60; color:#fff; background:linear-gradient(135deg,#4A7C6F,#6aab9e); font-size:.88rem; padding:5px 14px; border-radius:24px; box-shadow:0 2px 10px rgba(74,124,111,.35); letter-spacing:.02em; animation:proc-chip-pop 0.35s cubic-bezier(.36,.07,.19,.97); }',
+      '#proc-content .proc-diff-chip.zero { border-color:#ccc; color:#000; background:#f0f0f0; font-size:.88rem; padding:5px 14px; border-radius:24px; box-shadow:none; letter-spacing:.02em; animation:proc-chip-pop 0.35s cubic-bezier(.36,.07,.19,.97); }',
       '#proc-content .proc-diff-chip.pos { border-color:#4a6a80; color:#fff; background:linear-gradient(135deg,#5F7B94,#9DB6C9); font-size:.95rem; font-weight:800; padding:6px 16px; border-radius:24px; box-shadow:0 3px 14px rgba(95,123,148,.45); letter-spacing:.02em; animation:proc-chip-shake 0.4s cubic-bezier(.36,.07,.19,.97); }',
       '#proc-content .proc-diff-chip.neg { border-color:#7a3535; color:#fff; background:linear-gradient(135deg,#9B4D4D,#c47a7a); font-size:.95rem; font-weight:800; padding:6px 16px; border-radius:24px; box-shadow:0 3px 16px rgba(155,77,77,.5); letter-spacing:.02em; animation:proc-chip-shake 0.4s cubic-bezier(.36,.07,.19,.97); }',
       '@keyframes proc-chip-pop { 0%{transform:scale(.85);opacity:.6} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }',
@@ -2174,6 +2174,74 @@
     var block = document.getElementById('proc-table-block-' + fid);
     if (!block || block._keyboardInited) return;
     block._keyboardInited = true;
+
+    /* ── Paste from Excel: distribute lines downward in the same column ── */
+    block.addEventListener('paste', function(e) {
+      var input = e.target;
+      if (input.tagName !== 'INPUT') return;
+      if (!input.closest('#proc-table-block-' + fid)) return;
+
+      var text = (e.clipboardData || window.clipboardData).getData('text');
+      if (!text) return;
+
+      /* Split by newline, clean carriage returns and empty trailing line */
+      var lines = text.split('\n').map(function(l) { return l.replace(/\r/g, '').trim(); });
+      if (lines[lines.length - 1] === '') lines.pop();
+
+      /* Only handle multi-line paste */
+      if (lines.length <= 1) return;
+
+      e.preventDefault();
+
+      /* Find which row this input belongs to */
+      var tr = input.closest('tr');
+      if (!tr) return;
+      var tbody = document.getElementById('proc-tableBody-' + fid);
+      if (!tbody) return;
+      var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      var startRowIdx = allRows.indexOf(tr);
+      if (startRowIdx === -1) return;
+
+      /* Find column index of this input within its row */
+      var rowInputs = Array.prototype.slice.call(tr.querySelectorAll('input[type="text"], input[type="number"]'));
+      var colIdx = rowInputs.indexOf(input);
+
+      /* Ensure enough rows exist */
+      var rowsNeeded = startRowIdx + lines.length;
+      var currentRowCount = rowCounts[fid] || 0;
+      if (rowsNeeded > currentRowCount) {
+        procAddRows(fid, rowsNeeded - currentRowCount);
+        /* Re-fetch rows after adding */
+        allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      }
+
+      /* Paste each line into the same column of successive rows */
+      lines.forEach(function(val, i) {
+        var targetRow = allRows[startRowIdx + i];
+        if (!targetRow) return;
+        var targetInputs = Array.prototype.slice.call(
+          targetRow.querySelectorAll('input[type="text"], input[type="number"]')
+        );
+        var targetInput = targetInputs[colIdx];
+        if (!targetInput) return;
+        targetInput.value = val;
+        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        /* Get row id from tr id: proc-row-{fid}-{id} */
+        var rowId = parseInt((targetRow.id || '').split('-').pop(), 10);
+        if (!isNaN(rowId)) procRecalcRow(fid, rowId);
+      });
+
+      /* Focus the first pasted cell */
+      var firstTargetRow = allRows[startRowIdx];
+      if (firstTargetRow) {
+        var firstInputs = Array.prototype.slice.call(
+          firstTargetRow.querySelectorAll('input[type="text"], input[type="number"]')
+        );
+        if (firstInputs[colIdx]) firstInputs[colIdx].focus();
+      }
+      procSaveSession(false);
+    });
+
     block.addEventListener('keydown', function(e) {
       var input = e.target;
       if (input.tagName !== 'INPUT') return;

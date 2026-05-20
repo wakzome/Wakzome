@@ -67,6 +67,8 @@
       '#proc-content .proc-transp-input.proc-transp-active { border-color:#5F7B94; background:#F0F4F7; color:#5F7B94; }',
       '#proc-content .proc-transp-apply-btn { padding:3px 9px; border:1px solid #5F7B94; border-radius:6px; background:transparent; color:#5F7B94; font-size:.65rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .13s,color .13s; white-space:nowrap; }',
       '#proc-content .proc-transp-apply-btn:hover { background:#5F7B94; color:#fff; }',
+      '#proc-content .proc-transp-undo-btn { padding:3px 9px; border:1px solid #9B4D4D; border-radius:6px; background:transparent; color:#9B4D4D; font-size:.65rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .13s,color .13s; white-space:nowrap; }',
+      '#proc-content .proc-transp-undo-btn:hover { background:#9B4D4D; color:#fff; }',
 
       /* Collapse toggle triangle in banner */
       '#proc-content .proc-collapse-btn { display:flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0; border:1px solid #ddd; border-radius:7px; background:transparent; cursor:pointer; color:#888; font-size:.75rem; transition:background .13s,border-color .13s,color .13s; flex-shrink:0; }',
@@ -103,11 +105,11 @@
       '#proc-content .proc-table-block { background:#fff; border:1px solid #e0e0e0; border-radius:14px; overflow:visible; margin-bottom:10px; contain:layout style; }',
       '#proc-content .proc-table-wrap { overflow-x:auto; width:100%; }',
       '#proc-content .proc-table-wrap table { border-collapse:collapse; white-space:nowrap; border-radius:0; border-spacing:0; width:100%; table-layout:auto; }',
-      '#proc-content .proc-table-wrap thead tr { background:transparent; border-bottom:1px solid #e0e0e0; }',
-      '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.68rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:1; white-space:nowrap; border:none; border-radius:0; background:transparent; }',
+      '#proc-content .proc-table-wrap thead tr { background:#fff !important; border-bottom:1px solid #e0e0e0; }',
+      '#proc-content .proc-table-wrap thead th { padding:8px 7px; text-align:center; font-size:.68rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000 !important; opacity:1; white-space:nowrap; border:none; border-radius:0; background:#fff !important; }',
       '#proc-content .proc-table-wrap thead th.left { text-align:left; padding-left:10px; }',
-      '#proc-content .proc-table-wrap thead th.th-a4 { color:#000; background:transparent; }',
-      '#proc-content .proc-table-wrap thead th.th-a5 { color:#000; background:transparent; }',
+      '#proc-content .proc-table-wrap thead th.th-a4 { color:#000 !important; background:#fff !important; }',
+      '#proc-content .proc-table-wrap thead th.th-a5 { color:#000 !important; background:#fff !important; }',
       '#proc-content .proc-table-wrap tbody tr { border-bottom:1px solid #f0f0f0; }',
       '#proc-content .proc-table-wrap tbody tr:hover { background:#f5f5f5 !important; }',
       '#proc-content .proc-table-wrap tbody tr.has-data { background:#fff; }',
@@ -333,7 +335,7 @@
       '.proc-guia-addr-btn { padding:7px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#fff; color:#000; transition:background .12s,color .12s,border-color .12s; white-space:nowrap; text-align:center; display:flex; align-items:center; justify-content:center; gap:5px; width:100%; }',
       '.proc-guia-addr-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.proc-guia-addr-btn.proc-guia-addr-copied { background:#e8e8e8!important; border-color:#555!important; }',
-      '.proc-guia-th2 { padding:7px 10px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #ddd; text-align:left; white-space:nowrap; }',
+      '.proc-guia-th2 { padding:7px 10px; background:#fff !important; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000 !important; border-bottom:2px solid #ddd; text-align:left; white-space:nowrap; }',
       '.proc-guia-th2-inner { display:flex; align-items:center; gap:5px; }',
       '.proc-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:background .12s,border-color .12s,color .12s; flex-shrink:0; }',
       '.proc-guia-hdr-copy:hover { background:#f0f0f0; border-color:#555; }',
@@ -341,10 +343,10 @@
       '#proc-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
       '#proc-guia-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
       '#proc-guia-table thead { position:sticky; top:0; z-index:2; }',
-      '.proc-guia-th { padding:9px 14px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border-bottom:2px solid #ddd; text-align:center; }',
-      '.proc-guia-th-f { background:#fff; color:#000; }',
-      '.proc-guia-th-p { background:#fff; color:#000; }',
-      '.proc-guia-th-sep { width:16px; background:#fff; border-bottom:2px solid #ddd; }',
+      '.proc-guia-th { padding:9px 14px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border-bottom:2px solid #ddd; text-align:center; color:#000 !important; }',
+      '.proc-guia-th-f { background:#fff !important; color:#000 !important; }',
+      '.proc-guia-th-p { background:#fff !important; color:#000 !important; }',
+      '.proc-guia-th-sep { width:16px; background:#fff !important; border-bottom:2px solid #ddd; }',
       
       '.proc-guia-td { padding:7px 14px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }',
       '.proc-guia-ref-f { font-weight:700; color:#000; min-width:120px; }',
@@ -424,8 +426,8 @@
       '.proc-or-scroll { overflow:auto; flex:1; }',
       '.proc-or-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
       '.proc-or-table thead { position:sticky; top:0; z-index:2; }',
-      '.proc-or-table thead tr { background:transparent; border-bottom:1px solid #e0e0e0; }',
-      '.proc-or-table th { padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; white-space:nowrap; }',
+      '.proc-or-table thead tr { background:#fff !important; border-bottom:1px solid #e0e0e0; }',
+      '.proc-or-table th { padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000 !important; background:#fff !important; white-space:nowrap; }',
       '.proc-or-table th.center { text-align:center; }',
       '.proc-or-table td { padding:7px 12px; font-size:.84rem; font-weight:400; border-bottom:1px solid #f0f0f0; color:#000; }',
       '.proc-or-table td.center { text-align:center; }',
@@ -1519,6 +1521,7 @@
       +       '<input type="number" class="proc-transp-input" id="proc-transp-' + fid + '" placeholder="opcional" step="0.01" min="0"'
       +       ' oninput="procTranspChange(' + fid + ')" />'
       +       '<button class="proc-transp-apply-btn" id="proc-transp-btn-' + fid + '" style="display:none" onclick="procTranspApply(' + fid + ')">distribuir</button>'
+      +       '<button class="proc-transp-undo-btn" id="proc-transp-undo-' + fid + '" style="display:none" onclick="procTranspUndo(' + fid + ')">\u21a9 desfazer</button>'
       +     '</div>'
       +     '<div class="proc-guia-erp-wrap">'
       +       '<span class="proc-guia-erp-label">N.º Guia ERP</span>'
@@ -1629,6 +1632,9 @@
   }
 
   /* ── TRANSPORTE / DESCONTO GERAL ── */
+  /* Snapshot por factura: guarda os preços originais antes de distribuir */
+  var _transpSnapshot = {};
+
   function procTranspChange(fid) {
     var input = document.getElementById('proc-transp-' + fid);
     var btn   = document.getElementById('proc-transp-btn-' + fid);
@@ -1644,12 +1650,14 @@
   }
 
   function procTranspApply(fid) {
-    var input = document.getElementById('proc-transp-' + fid);
+    var input   = document.getElementById('proc-transp-' + fid);
+    var undoBtn = document.getElementById('proc-transp-undo-' + fid);
+    var applyBtn = document.getElementById('proc-transp-btn-' + fid);
     if (!input) return;
     var transpTotal = parseFloat(input.value);
     if (isNaN(transpTotal) || transpTotal <= 0) return;
 
-    /* Collect all rows with pieces (a4+a5) > 0 */
+    /* Collect rows with pieces > 0 */
     var rc = rowCounts[fid] || 0;
     var totalPecas = 0;
     var rowData = [];
@@ -1667,6 +1675,14 @@
     }
     if (totalPecas === 0) return;
 
+    /* Save snapshot of original prices before applying */
+    var snapshot = { transpTotal: transpTotal, rows: [] };
+    rowData.forEach(function(rd) {
+      if (!rd.precoInput) return;
+      snapshot.rows.push({ id: rd.id, originalPreco: rd.precoInput.value });
+    });
+    _transpSnapshot[fid] = snapshot;
+
     /* Distribute proportionally by piece count */
     var perPeca = transpTotal / totalPecas;
     rowData.forEach(function(rd) {
@@ -1678,11 +1694,41 @@
       procRecalcRow(fid, rd.id);
     });
 
-    /* Clear the field after applying */
-    input.value = '';
-    input.classList.remove('proc-transp-active');
-    var btn = document.getElementById('proc-transp-btn-' + fid);
-    if (btn) btn.style.display = 'none';
+    /* Update UI: hide apply btn, show undo btn, keep input visible with applied value */
+    input.disabled = true;
+    input.classList.add('proc-transp-active');
+    if (applyBtn) applyBtn.style.display = 'none';
+    if (undoBtn)  undoBtn.style.display  = 'inline-block';
+    procSaveSession(false);
+  }
+
+  function procTranspUndo(fid) {
+    var snapshot = _transpSnapshot[fid];
+    if (!snapshot) return;
+
+    /* Restore original prices from snapshot */
+    snapshot.rows.forEach(function(s) {
+      var tr = document.getElementById('proc-row-' + fid + '-' + s.id);
+      if (!tr) return;
+      var nums = tr.querySelectorAll('input[type="number"]');
+      if (nums[3]) {
+        nums[3].value = s.originalPreco;
+        procRecalcRow(fid, s.id);
+      }
+    });
+
+    /* Reset UI */
+    delete _transpSnapshot[fid];
+    var input    = document.getElementById('proc-transp-' + fid);
+    var undoBtn  = document.getElementById('proc-transp-undo-' + fid);
+    var applyBtn = document.getElementById('proc-transp-btn-' + fid);
+    if (input) {
+      input.value    = snapshot.transpTotal;
+      input.disabled = false;
+      input.classList.add('proc-transp-active');
+    }
+    if (applyBtn) applyBtn.style.display = 'inline-block';
+    if (undoBtn)  undoBtn.style.display  = 'none';
     procSaveSession(false);
   }
 
@@ -4053,6 +4099,7 @@
   window.procGuiaErpChange       = procGuiaErpChange;
   window.procTranspChange        = procTranspChange;
   window.procTranspApply         = procTranspApply;
+  window.procTranspUndo          = procTranspUndo;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

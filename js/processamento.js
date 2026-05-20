@@ -1022,11 +1022,16 @@
           return { ref:r.ref, desc:r.desc, qtdFt:r.qtdFt, a4:r.a4, a5:r.a5,
                    preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs, flagged:r.flagged, pvpManual:r.pvpManual };
         });
+        var transpInput = document.getElementById('proc-transp-' + fid);
+        var transpVal   = transpInput ? transpInput.value : '';
+        var transpApplied = !!(transpInput && transpInput.disabled);
         return {
           proveedor:    (document.getElementById('proc-proveedor-'    + fid) || {}).value || '',
           valorFactura: (document.getElementById('proc-valorFactura-' + fid) || {}).value || '',
           guiaErp:      (document.getElementById('proc-guia-erp-'     + fid) || {}).value || '',
           collapsed:    !!(document.getElementById('proc-fatura-' + fid) || {}).classList && (document.getElementById('proc-fatura-' + fid)).classList.contains('proc-collapsed'),
+          transpTotal:   transpVal,
+          transpApplied: transpApplied,
           rows: rows
         };
       })
@@ -1500,7 +1505,26 @@
       procSyncRefColWidth(fid);
       procSyncDescColWidth(fid);
       procSyncObsColWidth(fid);
-    }
+      /* Restore transp field */
+      if (data.transpTotal) {
+        var tEl      = document.getElementById('proc-transp-'      + fid);
+        var tBtn     = document.getElementById('proc-transp-btn-'  + fid);
+        var tUndoBtn = document.getElementById('proc-transp-undo-' + fid);
+        if (tEl) {
+          tEl.value = data.transpTotal;
+          tEl.classList.add('proc-transp-active');
+          if (data.transpApplied) {
+            tEl.disabled = true;
+            if (tBtn)     tBtn.style.display     = 'none';
+            if (tUndoBtn) tUndoBtn.style.display = 'inline-block';
+          } else {
+            tEl.disabled = false;
+            if (tBtn)     tBtn.style.display     = 'inline-block';
+            if (tUndoBtn) tUndoBtn.style.display = 'none';
+          }
+        }
+      }
+    } /* end if (data) */
     if (activeFaturas.length > 1) {
       wrap.scrollIntoView({ behavior:'smooth', block:'start' });
     }
@@ -1683,13 +1707,13 @@
     });
     _transpSnapshot[fid] = snapshot;
 
-    /* Distribute proportionally by piece count */
+    /* perPeca = coste de transporte por unidade — soma-se ao preço unitário de cada linha */
     var perPeca = transpTotal / totalPecas;
     rowData.forEach(function(rd) {
       if (!rd.precoInput) return;
       var currentPreco = parseFloat(rd.precoInput.value) || 0;
       if (currentPreco <= 0) return;
-      var addition = Math.round(perPeca * rd.pcs * 100) / 100;
+      var addition = Math.round(perPeca * 100) / 100;
       rd.precoInput.value = (currentPreco + addition).toFixed(2);
       procRecalcRow(fid, rd.id);
     });

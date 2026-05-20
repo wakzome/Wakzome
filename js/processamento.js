@@ -3830,6 +3830,7 @@
         var pRow = pRows[i] || null;
         var refRow = fRow || pRow;
         var cls = refRow.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
+        var trBg = refRow.done ? 'background:#f5f5f5;' : (i%2===0 ? 'background:#fff;' : 'background:#F7F4F3;');
         /* Indicator dots live in their own column — refs are untouched */
         var fDot = (fRow && fRow._dotColor)
           ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + fRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
@@ -3841,14 +3842,14 @@
         var fQty = fRow ? (fRow.done ? fRow.totalF : fRow.pendF) : '';
         var pRef = pRow ? pRow.ref : '';
         var pQty = pRow ? (pRow.done ? pRow.totalP : pRow.pendP) : '';
-        html += '<tr class="proc-guia-tr' + cls + '">'
-          + '<td class="proc-guia-td proc-guia-dot-col">' + fDot + '</td>'
-          + '<td class="proc-guia-td proc-guia-ref-f" data-gcol="0">' + fRef + '</td>'
-          + '<td class="proc-guia-td proc-guia-qty-f" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
-          + '<td class="proc-guia-td proc-guia-sep-td"></td>'
-          + '<td class="proc-guia-td proc-guia-dot-col">' + pDot + '</td>'
-          + '<td class="proc-guia-td proc-guia-ref-p" data-gcol="2">' + pRef + '</td>'
-          + '<td class="proc-guia-td proc-guia-qty-p" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
+        html += '<tr class="proc-guia-tr' + cls + '" style="' + trBg + '">'
+          + '<td class="proc-guia-td proc-guia-dot-col" style="' + trBg + '">' + fDot + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-f" style="' + trBg + '" data-gcol="0">' + fRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-qty-f" style="' + trBg + '" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
+          + '<td class="proc-guia-td proc-guia-sep-td" style="' + trBg + '"></td>'
+          + '<td class="proc-guia-td proc-guia-dot-col" style="' + trBg + '">' + pDot + '</td>'
+          + '<td class="proc-guia-td proc-guia-ref-p" style="' + trBg + '" data-gcol="2">' + pRef + '</td>'
+          + '<td class="proc-guia-td proc-guia-qty-p" style="' + trBg + '" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
           + '</tr>';
       }
       return html;

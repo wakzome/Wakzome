@@ -4395,10 +4395,21 @@
       };
       doCopy(cellVal);
 
-      /* Flash feedback on clicked cell */
+      /* Strong copy feedback: cell turns black with ✓ briefly */
       if (td) {
-        td.classList.add('proc-cell-copied');
-        setTimeout(function() { td.classList.remove('proc-cell-copied'); }, 380);
+        var origText = td.textContent;
+        var origColor = td.style.color;
+        var origBg = td.style.background;
+        td.style.setProperty('background', '#000', 'important');
+        td.style.setProperty('color', '#fff', 'important');
+        td.textContent = '✓';
+        setTimeout(function() {
+          td.textContent = origText;
+          td.style.background = origBg;
+          td.style.color = origColor;
+          /* Re-apply active style if this row is still active */
+          if (tr2 === activeRow) applyActiveStyle(tr2);
+        }, 500);
       }
     });
 

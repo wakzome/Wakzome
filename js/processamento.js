@@ -297,6 +297,11 @@
       '#proc-content .proc-criacao-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; border:1.5px solid #ccc; background:#fff; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .15s,border-color .15s,box-shadow .15s,transform .15s; box-shadow:0 1px 4px rgba(0,0,0,.10); flex-shrink:0; vertical-align:middle; margin-left:8px; }',
       '#proc-content .proc-criacao-btn:hover { background:#000; color:#fff; border-color:#000; box-shadow:0 3px 12px rgba(0,0,0,.22); transform:scale(1.08); }',
       '#proc-content .proc-criacao-btn:active { transform:scale(0.96); }',
+      /* ── GUIA INCLUDE CHECKBOX ── */
+      '#proc-content .proc-guia-include-wrap { display:inline-flex; align-items:center; gap:5px; margin-left:10px; cursor:pointer; user-select:none; }',
+      '#proc-content .proc-guia-include-wrap input[type="checkbox"] { width:14px; height:14px; cursor:pointer; accent-color:#000; flex-shrink:0; }',
+      '#proc-content .proc-guia-include-wrap .proc-guia-include-label { font-size:.58rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; opacity:.5; white-space:nowrap; }',
+      '#proc-content .proc-guia-include-wrap.excluded .proc-guia-include-label { opacity:.35; text-decoration:line-through; }',
 
       /* ── CRIAÇÃO DE ARTIGOS MODAL ── */
       '#proc-criacao-modal { position:fixed; inset:0; z-index:6000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s ease; pointer-events:none; }',
@@ -1064,6 +1069,8 @@
         var transpInput = document.getElementById('proc-transp-' + fid);
         var transpVal   = transpInput ? transpInput.value : '';
         var transpApplied = !!(transpInput && transpInput.disabled);
+        var guiaCb = document.getElementById('proc-guia-include-' + fid);
+        var guiaInclude = guiaCb ? guiaCb.checked : true;
         return {
           proveedor:    (document.getElementById('proc-proveedor-'    + fid) || {}).value || '',
           valorFactura: (document.getElementById('proc-valorFactura-' + fid) || {}).value || '',
@@ -1071,6 +1078,7 @@
           collapsed:    !!(document.getElementById('proc-fatura-' + fid) || {}).classList && (document.getElementById('proc-fatura-' + fid)).classList.contains('proc-collapsed'),
           transpTotal:   transpVal,
           transpApplied: transpApplied,
+          guiaInclude:   guiaInclude,
           rows: rows
         };
       })
@@ -1563,6 +1571,13 @@
           }
         }
       }
+      /* Restore guia include checkbox */
+      if (data.guiaInclude === false) {
+        var gCb   = document.getElementById('proc-guia-include-'      + fid);
+        var gWrap = document.getElementById('proc-guia-include-wrap-' + fid);
+        if (gCb)   gCb.checked = false;
+        if (gWrap) gWrap.classList.add('excluded');
+      }
     } /* end if (data) */
     if (activeFaturas.length > 1) {
       wrap.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1609,6 +1624,10 @@
       +     '<div style="display:flex;align-items:center;gap:6px;">'
       +       '<div class="proc-amount" id="proc-totalCalc-' + fid + '">0.00</div>'
       +       '<button class="proc-criacao-btn" title="Cria\u00e7\u00e3o de Artigos" onclick="procShowCriacaoModal(' + fid + ')">&#10022;</button>'
+      +       '<label class="proc-guia-include-wrap" id="proc-guia-include-wrap-' + fid + '" title="Incluir na guia de transporte">'
+      +         '<input type="checkbox" id="proc-guia-include-' + fid + '" checked onchange="procGuiaIncludeChange(' + fid + ')">'
+      +         '<span class="proc-guia-include-label">guia</span>'
+      +       '</label>'
       +     '</div></div></div>'
       + '</div>'
       /* Lock message */
@@ -1795,6 +1814,18 @@
     }
     if (applyBtn) applyBtn.style.display = 'inline-block';
     if (undoBtn)  undoBtn.style.display  = 'none';
+    procSaveSession(false);
+  }
+
+  function procGuiaIncludeChange(fid) {
+    var cb   = document.getElementById('proc-guia-include-' + fid);
+    var wrap = document.getElementById('proc-guia-include-wrap-' + fid);
+    if (!cb || !wrap) return;
+    if (cb.checked) {
+      wrap.classList.remove('excluded');
+    } else {
+      wrap.classList.add('excluded');
+    }
     procSaveSession(false);
   }
 
@@ -3463,6 +3494,9 @@
   function procBuildGuiaRows() {
     var rows = [];
     activeFaturas.forEach(function(fid) {
+      /* Skip if this fatura is excluded from guia */
+      var cb = document.getElementById('proc-guia-include-' + fid);
+      if (cb && !cb.checked) return;
       var fatRows = procCollectRows(fid);
       var pEl = document.getElementById('proc-proveedor-' + fid);
       var forn = pEl ? (pEl.value || 'Fatura ' + fid) : 'Fatura ' + fid;
@@ -4444,6 +4478,7 @@
   window.procTranspChange        = procTranspChange;
   window.procTranspApply         = procTranspApply;
   window.procTranspUndo          = procTranspUndo;
+  window.procGuiaIncludeChange   = procGuiaIncludeChange;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

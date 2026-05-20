@@ -58,6 +58,15 @@
       '#proc-content .proc-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:130px; outline:none; transition:border-color .15s,background .15s; }',
       '#proc-content .proc-guia-erp-input:focus { border-color:#000; background:#fff; }',
       '#proc-content .proc-guia-erp-input.proc-guia-done { border-color:#4A7C6F; background:#F0F7F5; color:#4A7C6F; }',
+      /* Transporte / desconto geral */
+      '#proc-content .proc-transp-wrap { display:flex; align-items:center; gap:6px; }',
+      '#proc-content .proc-transp-label { font-size:.58rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
+      '#proc-content .proc-transp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:90px; outline:none; transition:border-color .15s,background .15s; -moz-appearance:textfield; }',
+      '#proc-content .proc-transp-input::-webkit-inner-spin-button { -webkit-appearance:none; }',
+      '#proc-content .proc-transp-input:focus { border-color:#000; background:#fff; }',
+      '#proc-content .proc-transp-input.proc-transp-active { border-color:#5F7B94; background:#F0F4F7; color:#5F7B94; }',
+      '#proc-content .proc-transp-apply-btn { padding:3px 9px; border:1px solid #5F7B94; border-radius:6px; background:transparent; color:#5F7B94; font-size:.65rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .13s,color .13s; white-space:nowrap; }',
+      '#proc-content .proc-transp-apply-btn:hover { background:#5F7B94; color:#fff; }',
 
       /* Collapse toggle triangle in banner */
       '#proc-content .proc-collapse-btn { display:flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0; border:1px solid #ddd; border-radius:7px; background:transparent; cursor:pointer; color:#888; font-size:.75rem; transition:background .13s,border-color .13s,color .13s; flex-shrink:0; }',
@@ -205,6 +214,13 @@
       /* Sticky cell in flagged row must have solid bg to avoid bleed-through */
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged td.td-ref { background:#fdf0f0 !important; }',
       '#proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover td.td-ref { background:#f9e4e4 !important; }',
+      /* When a flagged (red) row is also active (being copied) — active wins, force black bg + white text */
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active { background:#000 !important; outline:2px solid #000; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active:hover { background:#000 !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active td { background:#000 !important; color:#fff !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active td * { color:#fff !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active td.td-ref { background:#111 !important; }',
+      '#proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active:hover td.td-ref { background:#111 !important; }',
 
       /* Buttons */
       '#proc-content .proc-btn { padding:7px 16px; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; font-weight:700; text-transform:lowercase; cursor:pointer; transition:background 0.15s,border-color 0.15s; white-space:nowrap; }',
@@ -281,7 +297,7 @@
       '#proc-guia-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
       '#proc-guia-panel { position:relative; z-index:1; width:min(720px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.28); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
       '#proc-guia-modal.proc-guia-visible #proc-guia-panel { transform:translateY(0); }',
-      '#proc-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
+      '#proc-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fff; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
       '#proc-guia-title { display:flex; flex-direction:column; gap:2px; }',
       '#proc-guia-title-main { font-size:.95rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
       '#proc-guia-title-sub { display:block; font-size:.68rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
@@ -390,7 +406,7 @@
       '.proc-or-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
       '.proc-or-panel { position:relative; z-index:1; width:min(700px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); transform:translateY(14px); transition:transform 0.22s ease; overflow:hidden; }',
       '.proc-or-modal.visible .proc-or-panel { transform:translateY(0); }',
-      '.proc-or-panel-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
+      '.proc-or-panel-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fff; flex-shrink:0; }',
       '.proc-or-panel-title { display:flex; flex-direction:column; gap:2px; }',
       '.proc-or-panel-title-main { font-size:1rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
       '.proc-or-panel-title-sub { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
@@ -477,6 +493,8 @@
       '  #proc-content .proc-table-wrap tbody tr:hover td.td-ref { background:#f5f5f5 !important; }',
       '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged td.td-ref { background:#fdf0f0 !important; }',
       '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover td.td-ref { background:#f9e4e4 !important; }',
+      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active td.td-ref { background:#111 !important; }',
+      '  #proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active:hover td.td-ref { background:#111 !important; }',
       '}',
     ].join('\n');
     document.head.appendChild(style);
@@ -1496,6 +1514,12 @@
       +     '<span class="proc-fatura-banner-provider" id="proc-banner-provider-' + fid + '"></span>'
       +   '</div>'
       +   '<div style="display:flex;align-items:center;gap:10px;">'
+      +     '<div class="proc-transp-wrap">'
+      +       '<span class="proc-transp-label">Transporte / Desc. geral</span>'
+      +       '<input type="number" class="proc-transp-input" id="proc-transp-' + fid + '" placeholder="opcional" step="0.01" min="0"'
+      +       ' oninput="procTranspChange(' + fid + ')" />'
+      +       '<button class="proc-transp-apply-btn" id="proc-transp-btn-' + fid + '" style="display:none" onclick="procTranspApply(' + fid + ')">distribuir</button>'
+      +     '</div>'
       +     '<div class="proc-guia-erp-wrap">'
       +       '<span class="proc-guia-erp-label">N.º Guia ERP</span>'
       +       '<input type="text" class="proc-guia-erp-input" id="proc-guia-erp-' + fid + '" placeholder="ex: 2025/001" autocomplete="off"'
@@ -1601,6 +1625,64 @@
       input.classList.remove('proc-guia-done');
       if (banner) banner.classList.remove('proc-banner-done');
     }
+    procSaveSession(false);
+  }
+
+  /* ── TRANSPORTE / DESCONTO GERAL ── */
+  function procTranspChange(fid) {
+    var input = document.getElementById('proc-transp-' + fid);
+    var btn   = document.getElementById('proc-transp-btn-' + fid);
+    if (!input || !btn) return;
+    var val = parseFloat(input.value);
+    var hasVal = !isNaN(val) && val > 0;
+    btn.style.display = hasVal ? 'inline-block' : 'none';
+    if (hasVal) {
+      input.classList.add('proc-transp-active');
+    } else {
+      input.classList.remove('proc-transp-active');
+    }
+  }
+
+  function procTranspApply(fid) {
+    var input = document.getElementById('proc-transp-' + fid);
+    if (!input) return;
+    var transpTotal = parseFloat(input.value);
+    if (isNaN(transpTotal) || transpTotal <= 0) return;
+
+    /* Collect all rows with pieces (a4+a5) > 0 */
+    var rc = rowCounts[fid] || 0;
+    var totalPecas = 0;
+    var rowData = [];
+    for (var i = 1; i <= rc; i++) {
+      var tr = document.getElementById('proc-row-' + fid + '-' + i);
+      if (!tr) continue;
+      var nums = tr.querySelectorAll('input[type="number"]');
+      var a4   = parseFloat(nums[1] ? nums[1].value : 0) || 0;
+      var a5   = parseFloat(nums[2] ? nums[2].value : 0) || 0;
+      var pcs  = a4 + a5;
+      if (pcs > 0) {
+        totalPecas += pcs;
+        rowData.push({ id: i, pcs: pcs, precoInput: nums[3] });
+      }
+    }
+    if (totalPecas === 0) return;
+
+    /* Distribute proportionally by piece count */
+    var perPeca = transpTotal / totalPecas;
+    rowData.forEach(function(rd) {
+      if (!rd.precoInput) return;
+      var currentPreco = parseFloat(rd.precoInput.value) || 0;
+      if (currentPreco <= 0) return;
+      var addition = Math.round(perPeca * rd.pcs * 100) / 100;
+      rd.precoInput.value = (currentPreco + addition).toFixed(2);
+      procRecalcRow(fid, rd.id);
+    });
+
+    /* Clear the field after applying */
+    input.value = '';
+    input.classList.remove('proc-transp-active');
+    var btn = document.getElementById('proc-transp-btn-' + fid);
+    if (btn) btn.style.display = 'none';
     procSaveSession(false);
   }
 
@@ -3969,6 +4051,8 @@
   window.procPVPEditBlur         = procPVPEditBlur;
   window.procToggleCollapse      = procToggleCollapse;
   window.procGuiaErpChange       = procGuiaErpChange;
+  window.procTranspChange        = procTranspChange;
+  window.procTranspApply         = procTranspApply;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

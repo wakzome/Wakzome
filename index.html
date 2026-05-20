@@ -992,14 +992,14 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 .table-wrap { overflow-x:auto; display:flex; justify-content:center; transition: opacity 0.5s ease; }
-table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
-th, td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.9rem; font-weight:bold; color:#000; }
-th { background:#444; color:#fff !important; text-transform:uppercase; font-size:1rem; position:relative; top:0; z-index:2; }
-td.name { white-space:nowrap; text-align:center; border-radius:15px 0 0 15px; display:flex; align-items:center; justify-content:flex-start; padding-left:8px; }
-td.multi-line { white-space:pre-line; }
-td.bold-row { font-weight:bold; }
-tr:hover td { background:#eaeaea; }
-td, th { border-radius:10px; margin:2px; }
+#table-container table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
+#table-container th, #table-container td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.9rem; font-weight:bold; color:#000; }
+#table-container th { background:#444; color:#fff !important; text-transform:uppercase; font-size:1rem; position:relative; top:0; z-index:2; }
+#table-container td.name { white-space:nowrap; text-align:center; border-radius:15px 0 0 15px; display:flex; align-items:center; justify-content:flex-start; padding-left:8px; }
+#table-container td.multi-line { white-space:pre-line; }
+#table-container td.bold-row { font-weight:bold; }
+#table-container tr:hover td { background:#eaeaea; }
+#table-container td, #table-container th { border-radius:10px; margin:2px; }
 .today-col { background: #D7D7D7 !important; }
 .today-col:hover { background: #ffffff !important; }
 th.today-col { background: #222 !important; color: #fff !important; }
@@ -1635,7 +1635,10 @@ body::before {
 }
 
 * { cursor: crosshair !important; }
+#proc-content *, #proc-criacao-modal *, #proc-guia-modal *, .proc-or-modal * { cursor: unset !important; }
 input, textarea { cursor: text !important; }
+#proc-content input, #proc-content textarea,
+#proc-criacao-modal input, #proc-guia-modal input, .proc-or-modal input { cursor: text !important; }
 
 @keyframes colonBlink {
   0%, 49%  { opacity: 1; }
@@ -2554,7 +2557,7 @@ body::before {
 body.no-glow #glow-layer-1,
 body.no-glow #glow-layer-2 { animation: none; }
 
-button, .tab-btn, #key-submit, #recibos-link,
+button:not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn, #key-submit, #recibos-link,
 .modal-btn, #r-process-btn,
 #r-conferir-btn, #saft-btn, #saft-recibos-btn,
 .ed-modal-btn, #ed-folder-pick-btn {
@@ -2563,7 +2566,7 @@ button, .tab-btn, #key-submit, #recibos-link,
               background 0.2s, color 0.2s, border-color 0.2s !important;
   will-change: transform;
 }
-button:hover:not(:disabled), .tab-btn:hover,
+button:hover:not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn:hover,
 #key-submit:hover, #recibos-link:hover,
 .modal-btn:hover, #r-process-btn:hover,
 #r-conferir-btn:hover, #saft-btn:hover, #saft-recibos-btn:hover,
@@ -2571,7 +2574,7 @@ button:hover:not(:disabled), .tab-btn:hover,
   transform: translateY(-2px);
   box-shadow: 0 8px 22px rgba(0,0,0,0.07);
 }
-button:active:not(:disabled), .tab-btn:active,
+button:active:not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn:active,
 #key-submit:active, #recibos-link:active,
 .modal-btn:active, #r-process-btn:active,
 .ed-modal-btn:active {
@@ -2627,7 +2630,7 @@ button:active:not(:disabled), .tab-btn:active,
   animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
 }
 
-tr { transition: background 0.15s ease; }
+#table-container tr { transition: background 0.15s ease; }
 
 .logo-text {
   transition: letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1),
@@ -3105,7 +3108,7 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #ed-export-btn:hover,
 #tam-export-btn:hover,
 #ed-folder-pick-btn:hover,
-button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(#etiquetas-overlay-back):not(#ventas-overlay-back):not(#horarios-overlay-back):not(#faturas-overlay-back):not(:disabled) { color: inherit; }
+button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(#etiquetas-overlay-back):not(#ventas-overlay-back):not(#horarios-overlay-back):not(#faturas-overlay-back):not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button) { color: inherit; }
 #key-submit:hover { color: #fff !important; }
 #ventas-overlay-back:hover,
 #horarios-overlay-back:hover,
@@ -3153,8 +3156,12 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #adm-dash-greeting .adm-tagline { opacity: 0.45; letter-spacing: .18em; }
 #adm-module-bar-title { opacity: 0.45; }
 
-input, select, textarea { font-size: .92rem !important; font-weight: 300 !important; }
-button { font-size: .88rem !important; }
+#proc-content input, #proc-content select, #proc-content textarea,
+#proc-criacao-modal input, #proc-guia-modal input, .proc-or-modal input { font-size: unset !important; font-weight: unset !important; }
+:not(#proc-content):not(#proc-criacao-modal):not(#proc-guia-modal):not(.proc-or-modal) > input,
+:not(#proc-content):not(#proc-criacao-modal):not(#proc-guia-modal):not(.proc-or-modal) > select,
+:not(#proc-content):not(#proc-criacao-modal):not(#proc-guia-modal):not(.proc-or-modal) > textarea { font-size: .92rem !important; font-weight: 300 !important; }
+:not(#proc-content):not(#proc-criacao-modal):not(#proc-guia-modal):not(.proc-or-modal) > button { font-size: .88rem !important; }
 
 .adm-mod-name        { font-size: .88rem !important; }
 .adm-mod-desc        { font-size: .70rem !important; }
@@ -3162,8 +3169,8 @@ button { font-size: .88rem !important; }
 #adm-back-btn        { font-size: .84rem !important; }
 .tab-btn             { font-size: .95rem !important; }
 .drawer-tab-btn      { font-size: .98rem !important; }
-th                   { font-size: 1.05rem !important; }
-td                   { font-size: .96rem !important; }
+#table-container th          { font-size: 1.05rem !important; }
+#table-container td          { font-size: .96rem !important; }
 .f-card .f-name      { font-size: .94rem !important; }
 .f-card .f-dates     { font-size: .78rem !important; }
 .f-card .f-badge     { font-size: .75rem !important; }

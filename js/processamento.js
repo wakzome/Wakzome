@@ -28,8 +28,8 @@
       '#proc-guia-modal td, #proc-guia-modal th { color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
       '#proc-guia-modal button { transform:none !important; box-shadow:none !important; font-size:unset !important; }',
       '#proc-guia-modal button:hover { transform:none !important; box-shadow:none !important; color:unset !important; }',
-      '.proc-or-modal tr, .proc-or-modal tr:hover { background:unset; transform:none !important; box-shadow:none !important; transition:none !important; }',
-      '.proc-or-modal td, .proc-or-modal th { background:unset; color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
+      '.proc-or-modal tr, .proc-or-modal tr:hover { transform:none !important; box-shadow:none !important; transition:none !important; }',
+      '.proc-or-modal td, .proc-or-modal th { color:unset; border:unset; border-radius:unset; margin:unset; padding:unset; font-size:unset; transform:none !important; box-shadow:none !important; }',
       '.proc-or-modal button { transform:none !important; box-shadow:none !important; font-size:unset !important; }',
       '.proc-or-modal button:hover { transform:none !important; box-shadow:none !important; color:unset !important; }',
 

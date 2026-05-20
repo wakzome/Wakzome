@@ -285,7 +285,7 @@
   function isEanPart2(s) { return /^\d{2,6}$/.test(s); }
   function isFullEan(s)  { return /^\d{13}$/.test(s); }
   function isPautal(s)   { return /^\d{6}$/.test(s); }
-  function isPrice(s)    { return /^\d{1,4},\d{2}$/.test(s); }
+  function isPrice(s)    { return /^\d{1,4},\d{2,3}$/.test(s); }
   function parsePrice(s) { return parseFloat(s.replace(',', '.')); }
   function isSizeSuffix(s) {
     return /^(XS-?S|S-?S|M-?L|XL|XXS|XS|S|M|L|XXL|\d+-\d+)$/.test(s);
@@ -341,7 +341,8 @@
      MOTOR A — column-aware (Y-position + content detection)
      Original strategy: groups by Y, identifies columns by content type
   ══════════════════════════════════════════════════════════════ */
-  function pfEngineA(allItems, meta) {
+  function pfEngineA(allItems, meta, eanMap) {
+    eanMap = eanMap || {};
     var rows  = groupRows(allItems, 5);
     var items = [];
 
@@ -352,7 +353,8 @@
       if (state.code && state.desc && state.qty !== null && state.price !== null) {
         var ref = state.code.match(/^(\d+)/);
         if (ref) {
-          items.push({ ref: ref[1], code: state.code, ean: state.ean || '',
+          items.push({ ref: ref[1], code: state.code,
+                       ean: state.ean || eanMap[state.code] || '',
                        desc: state.desc, qty: state.qty,
                        unitPrice: state.unitPrice || 0, price: state.price });
         }
@@ -380,8 +382,13 @@
         state.code = firstCell;
         for (var ci = 1; ci < cells.length; ci++) {
           var c = cells[ci].str;
-          if (!state.ean && !state.pautal && isEanPart1(c)) { state.ean1 = c; continue; }
           if (!state.ean && isFullEan(c)) { state.ean = c; state.ean1 = null; continue; }
+          if (!state.ean && !state.pautal && isEanPart1(c)) { state.ean1 = c; continue; }
+          // EAN part2 within same row (x~83, immediately after part1)
+          if (!state.ean && state.ean1 && isEanPart2(c)) {
+            var ec = state.ean1 + c;
+            if (ec.length === 13) { state.ean = ec; state.ean1 = null; continue; }
+          }
           if (!state.pautal && isPautal(c)) { state.pautal = c; continue; }
           if (!state.country && COUNTRIES.test(c)) { state.country = c; continue; }
           if (state.country && state.qty === null && /^\d{1,3}$/.test(c)) { state.qty = parseInt(c); continue; }
@@ -453,13 +460,14 @@
      Uses fixed X-coordinate ranges to identify each column.
      Tolerant to content-type ambiguities since position is primary.
   ══════════════════════════════════════════════════════════════ */
-  function pfEngineB(allItems, meta) {
+  function pfEngineB(allItems, meta, eanMap) {
+    eanMap = eanMap || {};
     var rows  = groupRows(allItems, 6);  // slightly looser tolerance
     var items = [];
 
-    /* Parfois column X ranges (based on PDF structure):
-       Col 0 (Article/Box): x < 130
-       Col 1 (EAN):         130 <= x < 210
+    /* Parfois column X ranges — calibrated from real PDF:
+       Col 0 (Article/Box): x < 70
+       Col 1 (EAN):         70 <= x < 145
        Col 2 (Pautal):      210 <= x < 270
        Col 3 (Desc):        270 <= x < 395
        Col 4 (Composição):  395 <= x < 530
@@ -472,18 +480,17 @@
        Col 11 (Preço):      740 <= x
     */
     function colOf(x) {
-      if (x < 130)  return 0;
-      if (x < 210)  return 1;
-      if (x < 270)  return 2;
-      if (x < 395)  return 3;
-      if (x < 530)  return 4;
-      if (x < 565)  return 5;
-      if (x < 595)  return 6;
-      if (x < 630)  return 7;
-      if (x < 655)  return 8;
-      if (x < 715)  return 9;
-      if (x < 740)  return 10;
-      return 11;
+      if (x < 70)   return 0;   // Article/Box
+      if (x < 145)  return 1;   // EAN
+      if (x < 175)  return 2;   // Pautal
+      if (x < 255)  return 3;   // Descrição
+      if (x < 355)  return 4;   // Composição
+      if (x < 395)  return 5;   // País
+      if (x < 425)  return 6;   // Qtd
+      if (x < 480)  return 7;   // IVA
+      if (x < 515)  return 8;   // P.Unit
+      if (x < 545)  return 9;   // Desc%
+      return 10;                 // Preço total
     }
 
     var cur = null;
@@ -492,7 +499,8 @@
       if (cur && cur.code && cur.desc && cur.qty !== null && cur.price !== null) {
         var ref = cur.code.match(/^(\d+)/);
         if (ref) {
-          items.push({ ref: ref[1], code: cur.code, ean: cur.ean || '',
+          items.push({ ref: ref[1], code: cur.code,
+                       ean: cur.ean || eanMap[cur.code] || '',
                        desc: cur.desc, qty: cur.qty,
                        unitPrice: cur.unitPrice || 0, price: cur.price });
         }
@@ -556,19 +564,19 @@
 
         // Qty: col6
         var q6 = colStr(6).trim();
-        if (/^\d{1,3}$/.test(q6)) cur.qty = parseInt(q6);
+        if (/^\d{1,3}$/.test(q6) && parseInt(q6) > 0) cur.qty = parseInt(q6);
 
         // Unit price: col9
-        var u9 = colStr(9).trim();
-        if (isPrice(u9)) cur.unitPrice = parsePrice(u9);
+        var u8 = colStr(8).trim();
+        if (isPrice(u8)) cur.unitPrice = parsePrice(u8);
 
-        // Total price: col11
-        var p11 = colStr(11).trim();
-        if (isPrice(p11)) cur.price = parsePrice(p11);
+        // Total price: col10
+        var p10 = colStr(10).trim();
+        if (isPrice(p10)) cur.price = parsePrice(p10);
 
         // If desc missing, try to find any text in col3 range
         if (!cur.desc) {
-          var allDescCells = cells.filter(function(c){ return colOf(c.x) === 3; });
+          var allDescCells = cells.filter(function(c){ return colOf(c.x) === 3; }); // col3 = Descrição
           if (allDescCells.length) cur.desc = allDescCells.map(function(c){ return c.str; }).join(' ');
         }
         continue;
@@ -597,12 +605,12 @@
           if (/^\d{1,3}$/.test(qq6)) cur.qty = parseInt(qq6);
         }
         if (cur.price === null) {
-          var pp11 = colStr(11).trim();
-          if (isPrice(pp11)) cur.price = parsePrice(pp11);
+          var pp10 = colStr(10).trim();
+          if (isPrice(pp10)) cur.price = parsePrice(pp10);
         }
         if (cur.unitPrice === null) {
-          var uu9 = colStr(9).trim();
-          if (isPrice(uu9)) cur.unitPrice = parsePrice(uu9);
+          var uu8 = colStr(8).trim();
+          if (isPrice(uu8)) cur.unitPrice = parsePrice(uu8);
         }
       }
     }
@@ -616,7 +624,8 @@
      article code row is the item for that box. Reads the entire
      multi-row cluster between two box codes as one logical record.
   ══════════════════════════════════════════════════════════════ */
-  function pfEngineC(allItems, meta) {
+  function pfEngineC(allItems, meta, eanMap) {
+    eanMap = eanMap || {};
     var rows  = groupRows(allItems, 7);  // looser still — catches split rows
     var items = [];
 
@@ -710,8 +719,9 @@
       else if (prices.length === 1) { price = prices[0]; }
 
       if (desc && qty !== null && price !== null) {
-        items.push({ ref: ref[1], code: code, ean: ean, desc: desc,
-                     qty: qty, unitPrice: unitPrice || 0, price: price });
+        items.push({ ref: ref[1], code: code,
+                     ean: ean || eanMap[code] || '',
+                     desc: desc, qty: qty, unitPrice: unitPrice || 0, price: price });
       }
     });
 
@@ -790,11 +800,61 @@
   /* ══════════════════════════════════════════════════════════════
      FULL PARSE — runs all 3 motors, returns invoice object
   ══════════════════════════════════════════════════════════════ */
+  /* Pre-build EAN map: { articleCode -> ean13 }
+     In Parfois PDFs the EAN fragments appear at x~82.7, in rows BEFORE
+     or AROUND the article row. We scan all items and reconstruct 13-digit
+     EANs, then attach them to the nearest article code by Y proximity. */
+  function pfBuildEanMap(allItems) {
+    var eanMap = {};
+    // Collect all EAN-column items (x between 70 and 145)
+    var eanItems = allItems.filter(function(i){ return i.x >= 70 && i.x < 130; }); // x=82.7 EAN column only
+    // Collect all article code items
+    var artItems = allItems.filter(function(i){ return isArticleCode(i.str); });
+
+    // Reconstruct EANs: look for consecutive numeric fragments that sum to 13 digits
+    var eansSorted = eanItems.slice().sort(function(a,b){ return a.y - b.y; });
+    var eans = [];  // { y, ean13 }
+    for (var i = 0; i < eansSorted.length; i++) {
+      var s = eansSorted[i].str;
+      if (isFullEan(s)) {
+        eans.push({ y: eansSorted[i].y, ean: s });
+      } else if (isEanPart1(s)) {
+        // Try to combine with the next item
+        if (i + 1 < eansSorted.length && isEanPart2(eansSorted[i+1].str)) {
+          var cand = s + eansSorted[i+1].str;
+          if (cand.length === 13) {
+            eans.push({ y: eansSorted[i].y, ean: cand });
+            i++; // skip next
+          }
+        }
+      }
+    }
+
+    // Match each EAN to the nearest article code by Y distance
+    artItems.forEach(function(art) {
+      var bestDist = 999;
+      var bestEan  = '';
+      eans.forEach(function(e) {
+        var dist = Math.abs(e.y - art.y);
+        if (dist < bestDist && dist < 60) { // within 60 Y units
+          bestDist = dist;
+          bestEan  = e.ean;
+        }
+      });
+      if (bestEan) {
+        var ref = art.str.match(/^(\d+)/);
+        if (ref) eanMap[art.str] = bestEan;  // key: full article code
+      }
+    });
+    return eanMap;
+  }
+
   function pfParseAll(allItems, fileName) {
-    var meta = pfExtractMeta(allItems, fileName);
-    var resA = pfEngineA(allItems, meta);
-    var resB = pfEngineB(allItems, meta);
-    var resC = pfEngineC(allItems, meta);
+    var meta   = pfExtractMeta(allItems, fileName);
+    var eanMap = pfBuildEanMap(allItems);
+    var resA = pfEngineA(allItems, meta, eanMap);
+    var resB = pfEngineB(allItems, meta, eanMap);
+    var resC = pfEngineC(allItems, meta, eanMap);
 
     var agree    = pfEnginesAgree(resA, resB, resC);
     var autoEng  = pfPickEngine(resA, resB, resC);

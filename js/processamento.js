@@ -1518,7 +1518,7 @@
       +   '<div style="display:flex;align-items:center;gap:10px;">'
       +     '<div class="proc-transp-wrap">'
       +       '<span class="proc-transp-label">Transporte / Desc. geral</span>'
-      +       '<input type="number" class="proc-transp-input" id="proc-transp-' + fid + '" placeholder="opcional" step="0.01" min="0"'
+      +       '<input type="number" class="proc-transp-input" id="proc-transp-' + fid + '" placeholder="opcional" step="0.01"'
       +       ' oninput="procTranspChange(' + fid + ')" />'
       +       '<button class="proc-transp-apply-btn" id="proc-transp-btn-' + fid + '" style="display:none" onclick="procTranspApply(' + fid + ')">distribuir</button>'
       +       '<button class="proc-transp-undo-btn" id="proc-transp-undo-' + fid + '" style="display:none" onclick="procTranspUndo(' + fid + ')">\u21a9 desfazer</button>'
@@ -1640,7 +1640,7 @@
     var btn   = document.getElementById('proc-transp-btn-' + fid);
     if (!input || !btn) return;
     var val = parseFloat(input.value);
-    var hasVal = !isNaN(val) && val > 0;
+    var hasVal = !isNaN(val) && val !== 0;
     btn.style.display = hasVal ? 'inline-block' : 'none';
     if (hasVal) {
       input.classList.add('proc-transp-active');
@@ -1655,7 +1655,7 @@
     var applyBtn = document.getElementById('proc-transp-btn-' + fid);
     if (!input) return;
     var transpTotal = parseFloat(input.value);
-    if (isNaN(transpTotal) || transpTotal <= 0) return;
+    if (isNaN(transpTotal) || transpTotal === 0) return;
 
     /* Collect rows with pieces > 0 */
     var rc = rowCounts[fid] || 0;

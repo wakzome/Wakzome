@@ -642,11 +642,17 @@ function _predWorkWithParsed(parsed, nextEvento) {
   c2Hist=Array.from({length:7},()=>[]);
   c3Freq=Array.from({length:7},()=>({}));
   c3Hist=Array.from({length:7},()=>[]);
+  // Law reset
+  lawPosFreq  = Array.from({length:5}, () => ({}));
+  lawMFreq    = {};
+  lawNFreq    = {};
+  lawOFreq    = {};
+  lawNumsHist = [];
   initPatternHistograms();
   const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
   for(let i=0;i<minN;i++){
     const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);updateDynRankHist(rowNums);}
+    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);updateDynRankHist(rowNums);updateLawHistory(rowNums.slice(0,5));}
   }
 
   const lastProbs=allSeqsData.map((seq,si)=>{
@@ -1504,6 +1510,141 @@ let histEvensBlk5  = []; // count of even numbers in S1-S5 per row
 let histEvensBlk2  = []; // count of even numbers in S6-S7 per row
 let histEvensGlobal= []; // count of even numbers in all 7 per row
 
+// ── LAW FILTER — estructuras de datos ────────────────────────────────────────
+// lawPosFreq[si][cnt] = cuántas veces el número en posición si tuvo conteo=cnt
+//   en la ventana de 9 filas del bloque S1-S5
+// lawMFreq[v], lawNFreq[v], lawOFreq[v] = distribución histórica de M, N, O
+let lawPosFreq   = Array.from({length:5}, () => ({})); // por posición (G-K)
+let lawMFreq     = {}; // distribución histórica de M (cuántos números con conteo=0)
+let lawNFreq     = {}; // distribución histórica de N (cuántos números con conteo=1)
+let lawOFreq     = {}; // distribución histórica de O (cuántos números con conteo≥2)
+// Historial de números S1-S5 por fila, para construir la ventana dinámica
+let lawNumsHist  = []; // lawNumsHist[i] = [n_s1, n_s2, n_s3, n_s4, n_s5] del evento i
+
+// ── LAW: actualizar historial ─────────────────────────────────────────────────
+// Se llama evento a evento con los números reales de S1-S5.
+// Acumula: (a) la ventana dinámica de 9 filas, (b) la distribución de conteos
+// por posición (G-K) y (c) la distribución de M, N, O.
+function updateLawHistory(seqNums5) {
+  // seqNums5 = [n_s1, n_s2, n_s3, n_s4, n_s5] — números reales del evento actual
+  if(seqNums5.length < 5 || seqNums5.some(n => !n || n <= 0)) return;
+
+  // Agregar al historial de ventana
+  lawNumsHist.push([...seqNums5]);
+
+  // Necesitamos al menos 10 filas para tener ventana de 9 anteriores + 1 actual
+  const totalRows = lawNumsHist.length;
+  if(totalRows < 10) return;
+
+  // Ventana: las 9 filas inmediatamente anteriores a la fila actual
+  // (índices totalRows-10 a totalRows-2, ambos inclusive)
+  const windowStart = totalRows - 10;
+  const windowEnd   = totalRows - 2; // inclusive
+  const ventana = lawNumsHist.slice(windowStart, windowEnd + 1); // 9 filas
+
+  // Contar cuántas veces aparece cada número de la fila actual en el bloque S1-S5
+  // de las 9 filas de la ventana (bloque completo = hasta 45 celdas)
+  const conteos = seqNums5.map(num => {
+    let cnt = 0;
+    for(const row of ventana) {
+      for(const n of row) { if(n === num) cnt++; }
+    }
+    return cnt;
+  });
+
+  // Acumular distribución por posición (sub-filtro G-K)
+  conteos.forEach((cnt, si) => {
+    lawPosFreq[si][cnt] = (lawPosFreq[si][cnt] || 0) + 1;
+  });
+
+  // Calcular M, N, O y acumular sus distribuciones (sub-filtro M-O)
+  const M = conteos.filter(c => c === 0).length;
+  const N = conteos.filter(c => c === 1).length;
+  const O = conteos.filter(c => c >= 2).length;
+  lawMFreq[M] = (lawMFreq[M] || 0) + 1;
+  lawNFreq[N] = (lawNFreq[N] || 0) + 1;
+  lawOFreq[O] = (lawOFreq[O] || 0) + 1;
+}
+
+// ── LAW: calcular valores permitidos usando media − 2σ ───────────────────────
+// freqObj = { valor: frecuencia, ... }
+// Retorna un Set con los valores cuya frecuencia >= media - 2*sigma
+function calcLawAllowed(freqObj) {
+  const entries = Object.entries(freqObj).map(([k, v]) => ({val: Number(k), freq: v}));
+  const total = entries.reduce((s, e) => s + e.freq, 0);
+  if(total < 30) return null; // sin historia suficiente → no filtrar
+
+  const freqs = entries.map(e => e.freq);
+  const mean  = freqs.reduce((a, b) => a + b, 0) / freqs.length;
+  const sigma = Math.sqrt(freqs.reduce((a, v) => a + (v - mean) ** 2, 0) / freqs.length);
+  const umbral = mean - 2 * sigma;
+
+  const allowed = new Set();
+  entries.forEach(e => { if(e.freq >= umbral) allowed.add(e.val); });
+  // Seguridad: si el filtro elimina todo, no filtrar
+  return allowed.size > 0 ? allowed : null;
+}
+
+// ── LAW: obtener conteos en ventana actual (para filtrar combinaciones) ───────
+// Dado el historial completo, construye el conteo de cada número
+// en la ventana de las últimas 9 filas del bloque S1-S5.
+function getLawWindowCounts() {
+  const n = lawNumsHist.length;
+  if(n < 9) return null;
+  const ventana = lawNumsHist.slice(n - 9); // últimas 9 filas
+  // Construir mapa num → conteo
+  const counts = {};
+  for(const row of ventana) {
+    for(const num of row) {
+      counts[num] = (counts[num] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+// ── LAW: filtro principal sobre blk5 ─────────────────────────────────────────
+function filtrarPorLaw(blk5Results) {
+  if(!blk5Results.length) return blk5Results;
+
+  // Calcular valores permitidos para cada posición y para M, N, O
+  const allowedPos = lawPosFreq.map(freq => calcLawAllowed(freq));
+  const allowedM   = calcLawAllowed(lawMFreq);
+  const allowedN   = calcLawAllowed(lawNFreq);
+  const allowedO   = calcLawAllowed(lawOFreq);
+
+  // Si ningún sub-filtro tiene historia suficiente, no filtrar
+  const hayAlgo = allowedPos.some(a => a !== null) || allowedM || allowedN || allowedO;
+  if(!hayAlgo) return blk5Results;
+
+  // Obtener conteos de la ventana actual
+  const windowCounts = getLawWindowCounts();
+  if(!windowCounts) return blk5Results;
+
+  const filtered = blk5Results.filter(({nums}) => {
+    // nums = [n_s1, n_s2, n_s3, n_s4, n_s5]
+    const conteos = nums.map(n => windowCounts[n] || 0);
+
+    // Sub-filtro 1: por posición (G-K)
+    for(let si = 0; si < 5; si++) {
+      if(!allowedPos[si]) continue; // sin historia → pasa
+      if(!allowedPos[si].has(conteos[si])) return false;
+    }
+
+    // Sub-filtro 2: M, N, O
+    const M = conteos.filter(c => c === 0).length;
+    const N = conteos.filter(c => c === 1).length;
+    const O = conteos.filter(c => c >= 2).length;
+    if(allowedM && !allowedM.has(M)) return false;
+    if(allowedN && !allowedN.has(N)) return false;
+    if(allowedO && !allowedO.has(O)) return false;
+
+    return true;
+  });
+
+  // Seguridad: si el filtro vacía la lista, devolver originales
+  return filtered.length > 0 ? filtered : blk5Results;
+}
+
 function updateHistSums(seqNums) {
   // seqNums = [n1,n2,n3,n4,n5,n6,n7] actual numbers for a row
   if(seqNums.length < 7 || seqNums.some(n=>!n||n<=0)) return;
@@ -1703,11 +1844,12 @@ function analizarCombinaciones(allColProbs, totalRows) {
   const {thresholds, boundsMaps} = precomputarFiltros();
   const blk5Filtered = filtrarBlk5(blk5Results, thresholds, boundsMaps);
   const blk5FilteredDyn = filtrarPorRankingDinamico(blk5Filtered);
+  const blk5FilteredLaw = filtrarPorLaw(blk5FilteredDyn);
   const blk2Filtered = filtrarBlk2(blk2Results, thresholds, boundsMaps);
 
   // Step 3: Cross-block combinations (global sum filter)
   const globalResults = [];
-  for(const b5 of blk5FilteredDyn) {
+  for(const b5 of blk5FilteredLaw) {
     for(const b2 of blk2Filtered) {
       const allNums    = [...b5.nums, ...b2.nums];
       const globalSum  = b5.sum + b2.sum;
@@ -1731,6 +1873,7 @@ function analizarCombinaciones(allColProbs, totalRows) {
     blk5Results, blk2Results, globalResults: globalFiltered,
     boundsMaps,
     blk5FilteredDyn,
+    blk5FilteredLaw,
     dynRankAllowed: calcDynRankAllowed(),
     dynRankMapActual: buildDynamicRanking(dynRankFreq)
   };
@@ -1878,6 +2021,77 @@ function renderCombinaciones(result, totalRows) {
     dynHtml += `<div style="font-size:9px;color:#666;margin-top:6px;font-style:italic;">Combinaciones S1–S5: ${antes} → <b>${despues}</b> tras filtro dinámico (−${antes-despues})</div>`;
     dynHtml += '</div>';
     html += dynHtml;
+  }
+
+  // ── PANEL LAW ────────────────────────────────────────────────────────────────
+  {
+    const lawTotal = Object.values(lawMFreq).reduce((s,v)=>s+v,0);
+    const colLabels = ['G (S1)','H (S2)','I (S3)','J (S4)','K (S5)'];
+    const colColors = ['#e8f5e9','#e3f2fd','#fff8e1','#fce4ec','#f3e5f5'];
+    const colText   = ['#1b5e20','#0d47a1','#f57f17','#880e4f','#4a148c'];
+
+    let lawHtml = '<div style="background:#f5f0ff;border:1px solid #d1c4e9;border-radius:8px;padding:10px 14px;margin-bottom:10px;">';
+    lawHtml += `<div style="font-size:11px;font-weight:700;color:#4a148c;margin-bottom:6px;border-bottom:1px solid #d1c4e9;padding-bottom:4px;">⚖️ Filtro Law — Ventana 9 filas (${lawTotal} eventos históricos)</div>`;
+
+    if(lawTotal < 30) {
+      lawHtml += '<div style="font-size:9px;color:#999;font-style:italic;">Historia insuficiente (mínimo 30 eventos)</div>';
+    } else {
+      // Sub-filtro 1: por posición (G-K)
+      lawHtml += '<div style="font-size:10px;font-weight:700;color:#555;margin-bottom:4px;">Sub-filtro posición (G–K) — conteos permitidos:</div>';
+      lawHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">';
+      lawPosFreq.forEach((freq, si) => {
+        const allowed = calcLawAllowed(freq);
+        const totalSi = Object.values(freq).reduce((s,v)=>s+v,0);
+        let detalle = '';
+        const maxCnt = Math.max(...Object.keys(freq).map(Number), 0);
+        for(let c=0; c<=maxCnt; c++) {
+          const f = freq[c] || 0;
+          const pct = totalSi > 0 ? (f/totalSi*100).toFixed(0) : 0;
+          const ok = allowed ? allowed.has(c) : true;
+          detalle += `<span style="font-size:9px;padding:1px 4px;border-radius:3px;margin:1px;display:inline-block;background:${ok?colColors[si]:'#eee'};color:${ok?colText[si]:'#aaa'};${ok?'':'text-decoration:line-through;'}">${c}(${pct}%)</span>`;
+        }
+        lawHtml += `<div style="background:#fff;border:1px solid ${colColors[si]};border-radius:6px;padding:6px 10px;min-width:80px;">
+          <div style="font-size:10px;font-weight:700;color:${colText[si]};margin-bottom:3px;">${colLabels[si]}</div>
+          <div style="font-size:10px;color:#444;margin-bottom:3px;">OK: <b>${allowed ? [...allowed].sort((a,b)=>a-b).join(', ') : '?'}</b></div>
+          <div>${detalle}</div>
+        </div>`;
+      });
+      lawHtml += '</div>';
+
+      // Sub-filtro 2: M, N, O
+      lawHtml += '<div style="font-size:10px;font-weight:700;color:#555;margin-bottom:4px;">Sub-filtro agregado (M/N/O) — valores permitidos:</div>';
+      lawHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">';
+      const mno = [
+        {label:'M (conteo=0)', freq:lawMFreq, color:'#e8f5e9', text:'#1b5e20'},
+        {label:'N (conteo=1)', freq:lawNFreq, color:'#e3f2fd', text:'#0d47a1'},
+        {label:'O (conteo≥2)', freq:lawOFreq, color:'#fff8e1', text:'#f57f17'},
+      ];
+      mno.forEach(({label, freq, color, text}) => {
+        const allowed = calcLawAllowed(freq);
+        const totalV = Object.values(freq).reduce((s,v)=>s+v,0);
+        let detalle = '';
+        const maxV = Math.max(...Object.keys(freq).map(Number), 0);
+        for(let v=0; v<=maxV; v++) {
+          const f = freq[v] || 0;
+          const pct = totalV > 0 ? (f/totalV*100).toFixed(0) : 0;
+          const ok = allowed ? allowed.has(v) : true;
+          detalle += `<span style="font-size:9px;padding:1px 4px;border-radius:3px;margin:1px;display:inline-block;background:${ok?color:'#eee'};color:${ok?text:'#aaa'};${ok?'':'text-decoration:line-through;'}">${v}(${pct}%)</span>`;
+        }
+        lawHtml += `<div style="background:#fff;border:1px solid ${color};border-radius:6px;padding:6px 10px;min-width:90px;">
+          <div style="font-size:10px;font-weight:700;color:${text};margin-bottom:3px;">${label}</div>
+          <div style="font-size:10px;color:#444;margin-bottom:3px;">OK: <b>${allowed ? [...allowed].sort((a,b)=>a-b).join(', ') : '?'}</b></div>
+          <div>${detalle}</div>
+        </div>`;
+      });
+      lawHtml += '</div>';
+
+      // Estadística de reducción
+      const antesLaw = blk5FilteredDyn ? blk5FilteredDyn.length : 0;
+      const despuesLaw = blk5FilteredLaw ? blk5FilteredLaw.length : 0;
+      lawHtml += `<div style="font-size:9px;color:#666;font-style:italic;">Combinaciones S1–S5: ${antesLaw} → <b>${despuesLaw}</b> tras filtro Law (−${antesLaw-despuesLaw})</div>`;
+    }
+    lawHtml += '</div>';
+    html += lawHtml;
   }
 
   // ── PANEL DE DIAGNÓSTICO DE FILTROS ─────────────────────────────────────────

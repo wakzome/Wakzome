@@ -2919,18 +2919,17 @@
       return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
     });
 
-    /* ── Per-line rounding: for each line, round the LINE TOTAL (precio×qty)
-          to 2 decimals, then derive the unit price from that rounded total.
-          This minimises per-line error to at most 0.005€ regardless of qty. ── */
+    /* ── Per-line rounding: for each line choose floor or ceil unit price
+          so that precio_rounded × qty is closest to the exact line total.
+          Error per line ≤ 0.005€ regardless of qty. ── */
     lines.forEach(function(l) {
-      if (l.qty > 0) {
-        var lineTotal = Math.round(l.precio * l.qty * 100) / 100;
-        l.precio = Math.round((lineTotal / l.qty) * 100) / 100;
-        l.lineTotal = lineTotal;
-      } else {
-        l.precio = Math.round(l.precio * 100) / 100;
-        l.lineTotal = l.precio;
-      }
+      if (l.qty <= 0) { l.precio = Math.round(l.precio * 100) / 100; return; }
+      var exactTotal  = l.precio * l.qty;
+      var floorPrice  = Math.floor(l.precio * 100) / 100;
+      var ceilPrice   = floorPrice + 0.01;
+      var errFloor    = Math.abs(floorPrice * l.qty - exactTotal);
+      var errCeil     = Math.abs(ceilPrice  * l.qty - exactTotal);
+      l.precio = errCeil < errFloor ? ceilPrice : floorPrice;
     });
 
     /* ── Render helpers ── */

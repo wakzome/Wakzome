@@ -116,12 +116,12 @@
       /* ── Invoice blocks ── */
       '.pf-inv-block{width:100%;max-width:680px;margin-bottom:28px;border:1.5px solid #e0e0e0;border-radius:14px;overflow:hidden;}',
       '.pf-inv-block.pf-collapsed .pf-inv-body{display:none;}',
-      '.pf-inv-hdr{background:#222;padding:12px 16px;display:flex;align-items:center;gap:10px;}',
+      '.pf-inv-hdr{background:#222;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}',
       ,
-      '.pf-inv-num{font-size:.95rem;font-weight:bold;color:#fff!important;letter-spacing:.05em;}',
-      '.pf-inv-meta{font-size:.72rem;color:rgba(255,255,255,0.6)!important;}',
-      '.pf-inv-total{font-size:.82rem;font-weight:bold;color:#fff!important;}',
-      '.pf-inv-acts{display:flex;gap:8px;flex-wrap:wrap;}',
+      '.pf-inv-num{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.04em;white-space:nowrap;}',
+      '.pf-inv-meta{font-size:.68rem;color:rgba(255,255,255,0.6)!important;white-space:nowrap;}',
+      '.pf-inv-total{font-size:.82rem;font-weight:bold;color:#fff!important;white-space:nowrap;flex-shrink:0;}',
+      '.pf-inv-acts{display:flex;gap:6px;flex-wrap:nowrap;align-items:center;}',
       /* ── Engine selector (same pattern as TAM) ── */
       '.pf-engine-sel-wrap{padding:8px 16px;background:#f8f8f8;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}',
       '.pf-engine-sel-wrap em{font-size:.72rem;color:#888;font-style:normal;}',
@@ -133,7 +133,7 @@
       '.pf-engine-auto:hover{background:#1a3a1a!important;border-color:#1a3a1a!important;}',
       '.pf-engine-conflict{background:#7a3a00!important;color:#fff!important;border-color:#7a3a00!important;}',
       /* ── Badges ── */
-      '.pf-badge{font-size:.68rem;font-weight:bold;padding:4px 10px;border-radius:20px;white-space:nowrap;}',
+      '.pf-badge{font-size:.65rem;font-weight:bold;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;}',
       '.pf-ok{background:#2a5a2a!important;color:#fff!important;}',
       '.pf-err{background:#7a1a1a!important;color:#fff!important;}',
       '.pf-warn{background:#555!important;color:#fff!important;}',
@@ -875,8 +875,13 @@
   }
 
   function pfGetActiveResult(inv) {
-    var label = pfState.activeEngines[inv.fileName] || inv.autoEngine || 'A';
-    return inv.engineCache[label] || inv.engineCache['A'];
+    var label  = pfState.activeEngines[inv.fileName] || inv.autoEngine || 'A';
+    var cached = inv.engineCache ? (inv.engineCache[label] || inv.engineCache['A']) : null;
+    if (!cached) return { items:[], parsedQty:0, parsedPrice:0, qtyOk:null, priceOk:null, valid:false };
+    // Recompute qtyOk and priceOk with current logic (IVA 23%)
+    var qtyOk   = inv.totalQtd > 0 ? cached.parsedQty === inv.totalQtd : null;
+    var priceOk = inv.totalEur > 0 ? Math.abs(rnd2(cached.parsedPrice * 1.23) - inv.totalEur) < 0.20 : null;
+    return Object.assign({}, cached, { qtyOk: qtyOk, priceOk: priceOk, valid: qtyOk !== false && priceOk !== false });
   }
 
   function pfGetActiveItems(inv) {

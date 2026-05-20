@@ -21,6 +21,7 @@
     invoices:      [],
     activeEngines: {},   // { fileName: 'A'|'B'|'C' }
     engineCache:   {},   // { fileName: { A: result, B: result, C: result } }
+    collapsed:     {},   // { fileName: true } — collapsed invoices
     sessionName:   '',
     createdAt:     null
   };
@@ -87,17 +88,17 @@
     s.id = 'pf-styles';
     s.textContent = [
       /* ── Layout ── */
-      '#pf-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:220;flex-direction:column;opacity:0;transition:opacity 0.45s cubic-bezier(0.22,1,0.36,1);}',
+      '#pf-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:220;flex-direction:column;opacity:0;transition:opacity 0.45s cubic-bezier(0.22,1,0.36,1);overflow-y:auto;-webkit-overflow-scrolling:touch;}',
       '#pf-overlay.open{display:flex;}',
       '#pf-overlay.visible{opacity:1;}',
-      '#pf-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;flex-wrap:wrap;}',
+      '#pf-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;flex-wrap:wrap;position:sticky;top:0;z-index:10;}',
       '#pf-back{font-size:.9rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;transition:background .2s,transform .15s;text-transform:lowercase;letter-spacing:.03em;box-shadow:0 2px 8px rgba(0,0,0,0.18);display:inline-flex;align-items:center;gap:8px;}',
       '#pf-back:hover{background:#333;border-color:#333;transform:translateY(-1px);}',
       '#pf-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;}',
       '#pf-session-lbl{font-size:.72rem;color:#aaa;margin-left:auto;white-space:nowrap;}',
       '#pf-clear-btn{font-size:.72rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#666;border:1.5px solid #666;padding:5px 12px;border-radius:8px;transition:background .2s;text-transform:lowercase;white-space:nowrap;}',
       '#pf-clear-btn:hover{background:#333;border-color:#333;}',
-      '#pf-content{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;padding:28px 16px 60px;font-family:\'MontserratLight\',sans-serif;-webkit-overflow-scrolling:touch;}',
+      '#pf-content{display:flex;flex-direction:column;align-items:center;padding:28px 16px 60px;font-family:\'MontserratLight\',sans-serif;}',
       '#pf-drop-area{width:100%;max-width:680px;border:2px dashed #ccc;border-radius:14px;padding:32px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafafa;margin-bottom:20px;box-sizing:border-box;}',
       '#pf-drop-area:hover,#pf-drop-area.drag-over{border-color:#555;background:#f0f0f0;}',
       '#pf-drop-lbl{font-size:.88rem;font-weight:600;color:#555;}',
@@ -114,7 +115,9 @@
       '.pf-btn-mid:hover{background:#333!important;border-color:#333!important;}',
       /* ── Invoice blocks ── */
       '.pf-inv-block{width:100%;max-width:680px;margin-bottom:28px;border:1.5px solid #e0e0e0;border-radius:14px;overflow:hidden;}',
-      '.pf-inv-hdr{background:#222;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}',
+      '.pf-inv-block.pf-collapsed .pf-inv-body{display:none;}',
+      '.pf-inv-hdr{background:#222;padding:12px 16px;display:flex;align-items:center;gap:10px;}',
+      ,
       '.pf-inv-num{font-size:.95rem;font-weight:bold;color:#fff!important;letter-spacing:.05em;}',
       '.pf-inv-meta{font-size:.72rem;color:rgba(255,255,255,0.6)!important;}',
       '.pf-inv-total{font-size:.82rem;font-weight:bold;color:#fff!important;}',
@@ -201,7 +204,10 @@
       '.pf-st-copy-btn.pf-st-copy-active{color:#2a5a2a!important;}',
       '#pf-st-footer{padding:10px 18px;border-top:1px solid #eee;font-size:.72rem;font-weight:bold;color:#666;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;}',
       /* ── Responsive ── */
-      '@media(max-width:480px){.pf-inv-hdr{flex-direction:column;align-items:flex-start;}.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}'
+      '.pf-inv-toggle{background:none;border:none;color:rgba(255,255,255,0.7)!important;font-size:.85rem;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s;}',
+      '.pf-inv-toggle:hover{color:#fff!important;}',
+      '.pf-inv-spacer{flex:1;}',
+      '@media(max-width:480px){.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -326,7 +332,7 @@
     var parsedQty   = grouped.reduce(function(s,g){ return s + g.qty; }, 0);
     var parsedPrice = rnd2(grouped.reduce(function(s,g){ return s + g.price; }, 0));
     var qtyOk       = meta.totalQtd > 0 ? parsedQty === meta.totalQtd : null;
-    var priceOk     = meta.totalEur > 0 ? Math.abs(parsedPrice - meta.totalEur) < 0.15 : null;
+    var priceOk     = meta.totalEur > 0 ? Math.abs(rnd2(parsedPrice * 1.23) - meta.totalEur) < 0.20 : null;
     return {
       items:       grouped,
       parsedQty:   parsedQty,
@@ -909,12 +915,11 @@
     statusMsg.textContent = pfState.invoices.length + ' fatura(s) · ' + totRefs + ' referências · ' + totPcs + ' peças';
 
     pfState.invoices.forEach(function(inv, idx) {
-      var activeLabel = pfState.activeEngines[inv.fileName] || inv.autoEngine || 'A';
-      var res         = pfGetActiveResult(inv);
-      var cache       = inv.engineCache;
+      var res        = pfGetActiveResult(inv);
+      var isCollapsed = !!pfState.collapsed[inv.fileName];
 
       var block = document.createElement('div');
-      block.className = 'pf-inv-block';
+      block.className = 'pf-inv-block' + (isCollapsed ? ' pf-collapsed' : '');
 
       // Badge
       var badge = '';
@@ -926,6 +931,7 @@
         badge = '<span class="pf-badge pf-warn">– sem totais</span>';
       }
 
+      // Uniform header: num/meta | badge | spacer | total | bc-btn | stock-btn | toggle
       block.innerHTML =
         '<div class="pf-inv-hdr">' +
           '<div>' +
@@ -936,31 +942,21 @@
             '</div>' +
           '</div>' +
           badge +
+          '<span class="pf-inv-spacer"></span>' +
           '<div class="pf-inv-total">' + fmt(res.parsedPrice) + ' €</div>' +
           '<div class="pf-inv-acts">' +
             '<button class="pf-btn pf-btn-mid" data-bc="' + idx + '">códigos de barras</button>' +
             '<button class="pf-btn pf-btn-dark" data-st="' + idx + '">ingresso de stock</button>' +
           '</div>' +
-        '</div>';
+          '<button class="pf-inv-toggle" data-toggle="' + idx + '" title="expandir/minimizar">' +
+            (isCollapsed ? '&#9654;' : '&#9660;') +
+          '</button>' +
+        '</div>' +
+        '<div class="pf-inv-body"></div>';
 
-      // Engine selector — always shown, shows agreement or conflict
-      var engSel = document.createElement('div');
-      engSel.className = 'pf-engine-sel-wrap';
-      var engInfo = ['A','B','C'].map(function(lbl) {
-        var er      = cache[lbl];
-        var isAct   = lbl === activeLabel;
-        var isStar  = lbl === inv.autoEngine;
-        var cls     = 'pf-engine-btn' + (isAct ? ' active' : '') + (isStar && !isAct ? ' pf-engine-auto' : '');
-        return '<button class="' + cls + '" data-engine="' + lbl + '" data-inv="' + idx + '">' +
-          lbl + (isStar ? ' ★' : '') + ': ' + er.items.length + ' refs / ' + er.parsedQty + ' un' +
-          (er.valid ? ' ✓' : '') +
-        '</button>';
-      }).join('');
-      engSel.innerHTML = '<em>motor</em><span class="pf-engine-btns">' + engInfo + '</span>' +
-        (inv.agree ? '<span style="font-size:.7rem;color:#2a5a2a;font-weight:bold;">✓ motores concordam</span>' : '');
-      block.appendChild(engSel);
+      var body = block.querySelector('.pf-inv-body');
 
-      // Validation row
+      // Validation row (inside body)
       if (res.qtyOk === false || res.priceOk === false) {
         var vd = document.createElement('div');
         vd.className = 'pf-val-row err';
@@ -968,15 +964,15 @@
         if (res.qtyOk === false) msgs.push('qtd lida: ' + res.parsedQty + ' · fatura: ' + inv.totalQtd);
         if (res.priceOk === false) msgs.push('valor lido: ' + fmt(res.parsedPrice) + ' € · fatura: ' + fmt(inv.totalEur) + ' €');
         vd.textContent = msgs.join('  ·  ');
-        block.appendChild(vd);
+        body.appendChild(vd);
       } else if (res.qtyOk === true && res.priceOk === true) {
         var vo = document.createElement('div');
         vo.className = 'pf-val-row ok';
         vo.textContent = '✓ totais confirmados · ' + inv.totalQtd + ' pcs · ' + fmt(inv.totalEur) + ' €';
-        block.appendChild(vo);
+        body.appendChild(vo);
       }
 
-      // Table
+      // Table (inside body)
       var tw = document.createElement('div');
       tw.className = 'pf-table-wrap';
       var trows = res.items.map(function(it) {
@@ -1004,19 +1000,17 @@
             '<td class="pf-td-r" style="font-weight:bold;color:#000!important;">' + fmt(res.parsedPrice) + ' €</td>' +
           '</tr></tfoot>' +
         '</table>';
-      block.appendChild(tw);
+      body.appendChild(tw);
       content.appendChild(block);
     });
 
-    // Engine selector listeners
-    content.querySelectorAll('[data-engine]').forEach(function(btn) {
+    // Toggle listeners
+    content.querySelectorAll('[data-toggle]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        var lbl = btn.getAttribute('data-engine');
-        var i   = parseInt(btn.getAttribute('data-inv'));
+        var i   = parseInt(btn.getAttribute('data-toggle'));
         var inv = pfState.invoices[i];
         if (!inv) return;
-        pfState.activeEngines[inv.fileName] = lbl;
-        pfSave();
+        pfState.collapsed[inv.fileName] = !pfState.collapsed[inv.fileName];
         pfRender();
       });
     });

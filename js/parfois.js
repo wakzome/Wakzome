@@ -1,13 +1,12 @@
 // ══════════════════════════════════════════════════════════════
-//  PARFOIS — invoice parser · WAK04 Ilha Dourada  v2
-//  · Parses ALL pages before processing
-//  · Column-aware: groups PDF items by Y-position into rows,
-//    then identifies columns by X to extract fields correctly
-//  · EAN reconstruction from split cells (10+3 digits)
-//  · Ref deduplication: sum qty, average price
+//  PARFOIS — invoice parser · WAK04 Ilha Dourada  v3
+//  · Motor A: column-aware (Y-position grouping + content detection)
+//  · Motor B: X-range positional column mapping
+//  · Motor C: box-anchor strategy (S6... code triggers article read)
 //  · Cross-validation vs invoice totals
-//  · Barcode overlay + Stock entry modal (A5, copyable)
-//  · Greyscale palette · dark bg → white text !important
+//  · Engine selector when motors diverge (like TAM)
+//  · Stock modal: Referencia | ARM | IVA | € | Qtd. (col copy)
+//  · Barcode overlay: Ref + Nombre + EAN
 // ══════════════════════════════════════════════════════════════
 (function () {
   'use strict';
@@ -15,13 +14,15 @@
   /* ══════════════════════════════════════════════════════════════
      CONSTANTS & STATE
   ══════════════════════════════════════════════════════════════ */
-  var PF_LS_KEY     = 'parfois_week_session_v2';
+  var PF_LS_KEY     = 'parfois_week_session_v3';
   var PF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
   var pfState = {
-    invoices:    [],
-    sessionName: '',
-    createdAt:   null
+    invoices:      [],
+    activeEngines: {},   // { fileName: 'A'|'B'|'C' }
+    engineCache:   {},   // { fileName: { A: result, B: result, C: result } }
+    sessionName:   '',
+    createdAt:     null
   };
 
   /* ══════════════════════════════════════════════════════════════
@@ -45,9 +46,10 @@
   function pfSave() {
     try {
       localStorage.setItem(PF_LS_KEY, JSON.stringify({
-        sessionName: pfState.sessionName,
-        createdAt:   pfState.createdAt,
-        invoices:    pfState.invoices
+        sessionName:   pfState.sessionName,
+        createdAt:     pfState.createdAt,
+        invoices:      pfState.invoices,
+        activeEngines: pfState.activeEngines
       }));
     } catch(e) {}
   }
@@ -59,18 +61,21 @@
       var data = JSON.parse(raw);
       var weekName = pfWeekName();
       if (!data.sessionName || data.sessionName !== weekName) return false;
-      pfState.sessionName = data.sessionName;
-      pfState.createdAt   = data.createdAt;
-      pfState.invoices    = data.invoices || [];
+      pfState.sessionName   = data.sessionName;
+      pfState.createdAt     = data.createdAt;
+      pfState.invoices      = data.invoices || [];
+      pfState.activeEngines = data.activeEngines || {};
       return pfState.invoices.length > 0;
     } catch(e) { return false; }
   }
 
   function pfClear() {
     try { localStorage.removeItem(PF_LS_KEY); } catch(e) {}
-    pfState.invoices    = [];
-    pfState.sessionName = pfWeekName();
-    pfState.createdAt   = Date.now();
+    pfState.invoices      = [];
+    pfState.activeEngines = {};
+    pfState.engineCache   = {};
+    pfState.sessionName   = pfWeekName();
+    pfState.createdAt     = Date.now();
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -81,6 +86,7 @@
     var s = document.createElement('style');
     s.id = 'pf-styles';
     s.textContent = [
+      /* ── Layout ── */
       '#pf-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:220;flex-direction:column;opacity:0;transition:opacity 0.45s cubic-bezier(0.22,1,0.36,1);}',
       '#pf-overlay.open{display:flex;}',
       '#pf-overlay.visible{opacity:1;}',
@@ -99,18 +105,31 @@
       '#pf-file-input{display:none;}',
       '#pf-status-bar{width:100%;max-width:680px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:18px;}',
       '#pf-status-msg{font-size:.82rem;font-weight:bold;color:#555;}',
+      /* ── Buttons ── */
       '.pf-btn{font-size:.78rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:7px 14px;border-radius:8px;border:1.5px solid #ccc;background:#fff;color:#000!important;transition:background .15s,border-color .15s;text-transform:lowercase;white-space:nowrap;}',
       '.pf-btn:hover{background:#f0f0f0;border-color:#888;}',
       '.pf-btn-dark{background:#222!important;color:#fff!important;border-color:#222!important;}',
       '.pf-btn-dark:hover{background:#444!important;border-color:#444!important;}',
       '.pf-btn-mid{background:#555!important;color:#fff!important;border-color:#555!important;}',
       '.pf-btn-mid:hover{background:#333!important;border-color:#333!important;}',
+      /* ── Invoice blocks ── */
       '.pf-inv-block{width:100%;max-width:680px;margin-bottom:28px;border:1.5px solid #e0e0e0;border-radius:14px;overflow:hidden;}',
       '.pf-inv-hdr{background:#222;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}',
       '.pf-inv-num{font-size:.95rem;font-weight:bold;color:#fff!important;letter-spacing:.05em;}',
       '.pf-inv-meta{font-size:.72rem;color:rgba(255,255,255,0.6)!important;}',
       '.pf-inv-total{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-inv-acts{display:flex;gap:8px;flex-wrap:wrap;}',
+      /* ── Engine selector (same pattern as TAM) ── */
+      '.pf-engine-sel-wrap{padding:8px 16px;background:#f8f8f8;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}',
+      '.pf-engine-sel-wrap em{font-size:.72rem;color:#888;font-style:normal;}',
+      '.pf-engine-btns{display:flex;gap:6px;flex-wrap:wrap;}',
+      '.pf-engine-btn{font-size:.72rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:5px 12px;border-radius:6px;border:1.5px solid #ccc;background:#fff;color:#000!important;transition:background .15s,border-color .15s;text-transform:uppercase;letter-spacing:.06em;}',
+      '.pf-engine-btn:hover{background:#f0f0f0;border-color:#888;}',
+      '.pf-engine-btn.active{background:#222!important;color:#fff!important;border-color:#222!important;}',
+      '.pf-engine-auto{background:#2a5a2a!important;color:#fff!important;border-color:#2a5a2a!important;}',
+      '.pf-engine-auto:hover{background:#1a3a1a!important;border-color:#1a3a1a!important;}',
+      '.pf-engine-conflict{background:#7a3a00!important;color:#fff!important;border-color:#7a3a00!important;}',
+      /* ── Badges ── */
       '.pf-badge{font-size:.68rem;font-weight:bold;padding:4px 10px;border-radius:20px;white-space:nowrap;}',
       '.pf-ok{background:#2a5a2a!important;color:#fff!important;}',
       '.pf-err{background:#7a1a1a!important;color:#fff!important;}',
@@ -118,6 +137,7 @@
       '.pf-val-row{margin:0 16px 10px;padding:8px 12px;border-radius:8px;font-size:.75rem;font-weight:bold;}',
       '.pf-val-row.ok{background:#e8f5e8;border:1px solid #b0d0b0;color:#1a4a1a!important;}',
       '.pf-val-row.err{background:#fdf0f0;border:1px solid #e0b0b0;color:#6a1010!important;}',
+      /* ── Table ── */
       '.pf-table-wrap{overflow-x:auto;}',
       '.pf-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;}',
       '.pf-table th{background:#444;color:#fff!important;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;padding:8px 10px;text-align:left;border-bottom:2px solid #333;}',
@@ -129,11 +149,13 @@
       '.pf-td-r{text-align:right!important;font-variant-numeric:tabular-nums;}',
       '.pf-table tfoot td{background:#f5f5f5!important;font-weight:bold!important;border-top:2px solid #ddd;font-size:.8rem;color:#000!important;}',
       '.pf-empty{text-align:center;padding:50px 20px;color:#ccc;font-size:.88rem;font-weight:600;}',
+      /* ── Spinner ── */
       '#pf-spinner{display:none;position:fixed;inset:0;z-index:999;background:rgba(255,255,255,0.88);align-items:center;justify-content:center;flex-direction:column;gap:14px;}',
       '#pf-spinner.on{display:flex;}',
       '.pf-spin{width:36px;height:36px;border:3px solid #ddd;border-top-color:#333;border-radius:50%;animation:pf-spin .7s linear infinite;}',
       '.pf-spin-txt{font-size:.82rem;font-weight:bold;color:#666;}',
       '@keyframes pf-spin{to{transform:rotate(360deg);}}',
+      /* ── Barcode overlay ── */
       '#pf-bc-overlay{display:none;position:fixed;inset:0;z-index:310;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);align-items:center;justify-content:center;}',
       '#pf-bc-overlay.open{display:flex;}',
       '#pf-bc-panel{background:#fff;border-radius:16px;width:calc(100% - 32px);max-width:540px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
@@ -148,21 +170,37 @@
       '.pf-bc-ref{font-size:.78rem;font-weight:bold;color:#000!important;letter-spacing:.05em;}',
       '.pf-bc-name{font-size:.72rem;color:#999!important;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.pf-bc-code{font-size:.85rem;font-weight:bold;color:#000!important;letter-spacing:.1em;background:#f5f5f5;padding:4px 10px;border-radius:6px;border:1px solid #e0e0e0;white-space:nowrap;font-variant-numeric:tabular-nums;}',
-      '#pf-st-overlay{display:none;position:fixed;inset:0;z-index:310;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);align-items:center;justify-content:center;}',
-      '#pf-st-overlay.open{display:flex;}',
-      '#pf-st-panel{background:#fff;border-radius:16px;width:calc(100% - 32px);max-width:600px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
-      '#pf-st-hdr{background:#333;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}',
-      '#pf-st-hdr-info{flex:1;}',
-      '#pf-st-title{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.07em;text-transform:uppercase;}',
-      '#pf-st-sub{font-size:.68rem;color:rgba(255,255,255,0.55)!important;margin-top:3px;}',
-      '#pf-st-close{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s;line-height:1;}',
-      '#pf-st-close:hover{background:rgba(255,255,255,0.15);}',
-      '#pf-st-cbar{background:#f5f5f5;padding:9px 18px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:10px;flex-shrink:0;}',
-      '#pf-st-copy{font-size:.75rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:6px 14px;border-radius:8px;border:none;background:#333!important;color:#fff!important;transition:background .15s;text-transform:lowercase;}',
-      '#pf-st-copy:hover{background:#111!important;}',
-      '#pf-st-cstatus{font-size:.72rem;font-weight:bold;color:#666;}',
-      '#pf-st-body{overflow-y:auto;flex:1;}',
-      '#pf-st-ta{width:100%;box-sizing:border-box;padding:14px 18px;font-size:.8rem;font-weight:600;font-family:\'MontserratLight\',sans-serif;border:none;outline:none;resize:none;color:#000!important;background:#fff;line-height:1.75;min-height:280px;}',
+      /* ── Stock modal (same pattern as TAM tamShowStockModal) ── */
+      '#pf-st-modal{display:none;position:fixed;inset:0;z-index:310;}',
+      '#pf-st-modal.pf-st-visible{display:block;}',
+      '#pf-st-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}',
+      '#pf-st-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:calc(100% - 32px);max-width:600px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
+      '#pf-st-header{background:#222;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;}',
+      '#pf-st-title-wrap{display:flex;flex-direction:column;gap:3px;}',
+      '#pf-st-inv-label{font-size:.88rem;font-weight:bold;color:#fff!important;letter-spacing:.05em;}',
+      '#pf-st-sub-label{font-size:.68rem;color:rgba(255,255,255,0.55)!important;letter-spacing:.04em;}',
+      '#pf-st-actions{display:flex;align-items:center;gap:8px;}',
+      '.pf-st-action-btn{font-size:.72rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.3);background:transparent;color:#fff!important;transition:background .15s;text-transform:lowercase;}',
+      '.pf-st-action-btn:hover{background:rgba(255,255,255,0.15);}',
+      '.pf-st-close-btn{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s;line-height:1;}',
+      '.pf-st-close-btn:hover{background:rgba(255,255,255,0.15);}',
+      '#pf-st-scroll{overflow-y:auto;flex:1;}',
+      '#pf-st-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;}',
+      '.pf-st-th{background:#f0f0f0;padding:9px 12px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
+      '.pf-st-th.pf-st-ref{text-align:left;min-width:130px;}',
+      '.pf-st-th.pf-st-num{text-align:center;}',
+      '.pf-st-td{padding:8px 12px;font-size:.8rem;font-weight:600;border-bottom:1px solid #f0f0f0;color:#000!important;vertical-align:middle;}',
+      '.pf-st-td.pf-st-ref{font-weight:bold!important;letter-spacing:.04em;}',
+      '.pf-st-td.pf-st-num{text-align:center;font-variant-numeric:tabular-nums;}',
+      '.pf-st-row-even td{background:#fff;}',
+      '.pf-st-row-odd td{background:#fafafa;}',
+      /* copy button inside th — same as TAM tam-stock-copy-btn */
+      '.pf-guia-th2-inner{display:flex;align-items:center;gap:5px;}',
+      '.pf-st-copy-btn{background:none;border:none;cursor:pointer;font-size:.85rem;color:#888;padding:0 3px;line-height:1;border-radius:4px;transition:color .15s,background .15s;}',
+      '.pf-st-copy-btn:hover{color:#000;background:#e0e0e0;}',
+      '.pf-st-copy-btn.pf-st-copy-active{color:#2a5a2a!important;}',
+      '#pf-st-footer{padding:10px 18px;border-top:1px solid #eee;font-size:.72rem;font-weight:bold;color:#666;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;}',
+      /* ── Responsive ── */
       '@media(max-width:480px){.pf-inv-hdr{flex-direction:column;align-items:flex-start;}.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}'
     ].join('');
     document.head.appendChild(s);
@@ -182,64 +220,44 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     PDF EXTRACTION — column-aware
-     
-     Strategy:
-     1. Extract ALL items from ALL pages with their x,y coordinates
-     2. Group items into rows by Y coordinate (within 4px tolerance)
-     3. Within each row, sort items by X to get column order
-     4. Identify table rows by detecting article code patterns
-     5. EAN is always the 2nd column: first part ~10 digits, second
-        part ~3 digits on the NEXT row continuing the same record
+     PDF EXTRACTION — shared by all engines
   ══════════════════════════════════════════════════════════════ */
   async function pfExtract(file) {
     if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js não disponível');
     if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = PF_WORKER_URL;
     }
-
     var buf = await file.arrayBuffer();
     var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-
-    // Collect ALL items from ALL pages with global coords
-    // We add a large Y offset per page so page 2 items are always below page 1
     var allItems = [];
     var pageYOffset = 0;
-    var PAGE_HEIGHT_ESTIMATE = 1000; // large enough to separate pages
+    var PAGE_HEIGHT_ESTIMATE = 1000;
 
     for (var p = 1; p <= pdf.numPages; p++) {
       var page    = await pdf.getPage(p);
       var vp      = page.getViewport({ scale: 1 });
       var content = await page.getTextContent();
-
       content.items.forEach(function(item) {
         if (!item.str || !item.str.trim()) return;
-        var x = item.transform[4];
-        // PDF Y is bottom-up, convert to top-down
-        var y = vp.height - item.transform[5];
         allItems.push({
           str:  item.str.trim(),
-          x:    x,
-          y:    y + pageYOffset,
+          x:    item.transform[4],
+          y:    (vp.height - item.transform[5]) + pageYOffset,
           page: p
         });
       });
-
       pageYOffset += PAGE_HEIGHT_ESTIMATE;
     }
-
     return allItems;
   }
 
   /* Group items into rows by Y proximity */
   function groupRows(items, tolerance) {
     tolerance = tolerance || 4;
-    // Sort by Y then X
     var sorted = items.slice().sort(function(a, b) {
       if (Math.abs(a.y - b.y) <= tolerance) return a.x - b.x;
       return a.y - b.y;
     });
-
     var rows = [];
     var cur  = null;
     sorted.forEach(function(item) {
@@ -252,218 +270,126 @@
     return rows;
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     MAIN PARSER
-  ══════════════════════════════════════════════════════════════ */
-  function pfParse(allItems, fileName) {
-    /* ── 1. Extract header info from raw text ── */
-    var allText   = allItems.map(function(i){ return i.str; }).join(' ');
-    var invoiceNo = '';
-    var invoiceDate = '';
+  /* ── Shared pattern matchers ── */
+  var COUNTRIES = /^(CN|MM|TR|IN|VN|BD|MA|CA|PT|ES|FR|IT|DE|PK|KH|TH|ID|MY|TW|HK|MX|CO|PE|TN|EG|LK|MR|SN|ET|KE)$/;
 
-    var mft = allText.match(/FT\s+(\d{4}\/\d{6,7})/);
-    if (mft) invoiceNo = 'FT ' + mft[1];
-    var mdate = allText.match(/(\d{2}\/\d{2}\/\d{4})/);
-    if (mdate) invoiceDate = mdate[1];
+  function isArticleCode(s) {
+    return /^\d{5,8}[_\-A-Z]/.test(s) ||
+           /^\d{5,8}[A-Z]{2,4}$/.test(s) ||
+           /^\d{5,8}(NCL|NCS|NCM|BNL)$/.test(s);
+  }
+  function isBoxCode(s) {
+    return /^[OSGEP]\d{9,}/.test(s);
+  }
+  function isEanPart1(s) { return /^\d{7,11}$/.test(s); }
+  function isEanPart2(s) { return /^\d{2,6}$/.test(s); }
+  function isFullEan(s)  { return /^\d{13}$/.test(s); }
+  function isPautal(s)   { return /^\d{6}$/.test(s); }
+  function isPrice(s)    { return /^\d{1,4},\d{2}$/.test(s); }
+  function parsePrice(s) { return parseFloat(s.replace(',', '.')); }
+  function isSizeSuffix(s) {
+    return /^(XS-?S|S-?S|M-?L|XL|XXS|XS|S|M|L|XXL|\d+-\d+)$/.test(s);
+  }
 
-    /* ── 2. Extract footer totals ── */
-    var totalQtd = 0;
-    var totalEur = 0;
-    var numCaixas = 0;
+  var SKIP_ROW = /^(Barata|BARATA|Contribuinte|Rua|www\.|INVOICE|Pág\.|Total Qtd|TOTAL EUR|Subtotal|Desconto|Frete|Seguro|Total IVA|Nº total|Peso|Volume|Local de|Lugar de|Processado|ATCUD:|Em caso|Data:|Hora:|Matric|Cliente|WAK|WAKZOME|Morada|PORTUGAL|Porto Santo|Rua Dr|FT\s+\d{4}\/|% IVA|Incidência|Valor IVA|23,00\s+\d|Obs\.\:|O Gestor|Nuno|Caixa\s|Código|artigo|Descrição|Composição|País|Cód\.|Preço|Desc\.|Pronto Pag|Air|CIF|ORIGINAL)/i;
 
-    var mq  = allText.match(/Total\s+Qtd\s+(\d+)/i);
-    if (mq) totalQtd = parseInt(mq[1]);
-    var me  = allText.match(/TOTAL\s+EUR\s+([\d.,]+)/i);
-    if (me) totalEur = parseFloat(me[1].replace(/\./g,'').replace(',','.'));
-    var mcx = allText.match(/N[oº°]\s*total\s+de\s+caixas[:\s]+(\d+)/i);
-    if (mcx) numCaixas = parseInt(mcx[1]);
+  /* ── Deduplication (shared) ── */
+  function pfDedupe(items) {
+    var refMap = {};
+    items.forEach(function(item) {
+      var key = item.ref;
+      if (!refMap[key]) {
+        refMap[key] = { ref: item.ref, desc: item.desc, ean: item.ean,
+                        totalQty: 0, totalPrice: 0, sumUnit: 0 };
+      }
+      var r = refMap[key];
+      r.totalQty   += item.qty;
+      r.totalPrice += item.price;
+      r.sumUnit    += item.unitPrice * item.qty;
+      if (!r.ean && item.ean) r.ean = item.ean;
+      if (item.desc && item.desc.length > (r.desc || '').length) r.desc = item.desc;
+    });
+    return Object.values(refMap).map(function(r) {
+      return {
+        ref:       r.ref,
+        desc:      r.desc || '—',
+        ean:       r.ean || '',
+        qty:       r.totalQty,
+        price:     rnd2(r.totalPrice),
+        unitPrice: r.totalQty > 0 ? rnd2(r.sumUnit / r.totalQty) : 0
+      };
+    });
+  }
 
-    /* ── 3. Group into rows ── */
-    var rows = groupRows(allItems, 5);
-
-    /* ── 4. Identify the table X-columns by scanning for known patterns
-       The table structure (left→right) is:
-         Col A (x~30-120):   Box code OR Article code OR size suffix
-         Col B (x~120-200):  EAN part 1 (first ~10 digits)
-         Col C (x~200-260):  Código Pautal (6 digits)
-         Col D (x~260-380):  Descrição (product name)
-         Col E (x~380-520):  Composição (long text)
-         Col F (x~520-560):  País (CN/MM/TR/IN/VN/BD/MA)
-         Col G (x~560-590):  Qtd p/Caixa (integer)
-         Col H (x~590-620):  % IVA (23)
-         Col I (x~620-660):  Cód. (usually empty)
-         Col J (x~660-710):  Preço Unit. (e.g. 12,680)
-         Col K (x~710-740):  % Desc. (0,00)
-         Col L (x~740-800):  Preço total (e.g. 25,36)
-       
-       We don't hardcode X values — instead we detect by content patterns.
-    ── */
-
-    // Known country codes
-    var COUNTRIES = /^(CN|MM|TR|IN|VN|BD|MA|CA|PT|ES|FR|IT|DE|PK|BD|KH|TH|ID|MY|TW|HK|MX|CO|PE|TN|MA|EG|LK|MR|SN|ET|KE)$/;
-
-    // Article code pattern: digits+underscore+letters, or digits+letters (no underscore)
-    function isArticleCode(s) {
-      return /^\d{5,8}[_\-A-Z]/.test(s) ||   // 218121_WT, 246919_NVL
-             /^\d{5,8}[A-Z]{2,4}$/.test(s) || // 246919NVL (no underscore)
-             /^\d{5,8}NCL$/.test(s) ||         // 244521NCL
-             /^\d{5,8}NCS$/.test(s) ||
-             /^\d{5,8}NCM$/.test(s) ||
-             /^\d{5,8}BNL$/.test(s);
-    }
-
-    // Box code pattern
-    function isBoxCode(s) {
-      return /^[OSGEP]\d{10,}$/.test(s) || /^[OSGEP]\d{9,}[A-Z]?\d?$/.test(s);
-    }
-
-    // EAN partial: first part (7-11 digits)
-    function isEanPart1(s) {
-      return /^\d{7,11}$/.test(s);
-    }
-
-    // EAN fragment: second part (2-6 digits)
-    function isEanPart2(s) {
-      return /^\d{2,6}$/.test(s);
-    }
-
-    function isFullEan(s) {
-      return /^\d{13}$/.test(s);
-    }
-
-    // Código Pautal: 6 digits
-    function isPautal(s) {
-      return /^\d{6}$/.test(s);
-    }
-
-    // Price: N,NN or NN,NN or NNN,NN
-    function isPrice(s) {
-      return /^\d{1,4},\d{2}$/.test(s);
-    }
-
-    function parsePrice(s) {
-      return parseFloat(s.replace(',', '.'));
-    }
-
-    // Size suffix (can follow article code split across rows)
-    function isSizeSuffix(s) {
-      return /^(XS-?S|S-?S|M-?L|XL|XXS|XS|S|M|L|XL|XXL|\d+-\d+)$/.test(s);
-    }
-
-    /* ── 5. State machine over rows ── */
-    var items = [];  // parsed line items
-
-    var state = {
-      code:     null,
-      ean1:     null,  // first fragment
-      ean:      null,  // full 13-digit EAN
-      pautal:   null,
-      desc:     null,
-      country:  null,
-      qty:      null,
-      unitPrice:null,
-      price:    null,  // line total
-      rowIdx:   -1
+  /* ── Build result object ── */
+  function pfBuildResult(grouped, meta) {
+    var parsedQty   = grouped.reduce(function(s,g){ return s + g.qty; }, 0);
+    var parsedPrice = rnd2(grouped.reduce(function(s,g){ return s + g.price; }, 0));
+    var qtyOk       = meta.totalQtd > 0 ? parsedQty === meta.totalQtd : null;
+    var priceOk     = meta.totalEur > 0 ? Math.abs(parsedPrice - meta.totalEur) < 0.15 : null;
+    return {
+      items:       grouped,
+      parsedQty:   parsedQty,
+      parsedPrice: parsedPrice,
+      qtyOk:       qtyOk,
+      priceOk:     priceOk,
+      valid:       qtyOk !== false && priceOk !== false
     };
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     MOTOR A — column-aware (Y-position + content detection)
+     Original strategy: groups by Y, identifies columns by content type
+  ══════════════════════════════════════════════════════════════ */
+  function pfEngineA(allItems, meta) {
+    var rows  = groupRows(allItems, 5);
+    var items = [];
+
+    var state = { code:null, ean1:null, ean:null, pautal:null, desc:null,
+                  country:null, qty:null, unitPrice:null, price:null };
 
     function flush() {
       if (state.code && state.desc && state.qty !== null && state.price !== null) {
         var ref = state.code.match(/^(\d+)/);
         if (ref) {
-          items.push({
-            ref:      ref[1],
-            code:     state.code,
-            ean:      state.ean || '',
-            desc:     state.desc,
-            qty:      state.qty,
-            unitPrice:state.unitPrice || 0,
-            price:    state.price
-          });
+          items.push({ ref: ref[1], code: state.code, ean: state.ean || '',
+                       desc: state.desc, qty: state.qty,
+                       unitPrice: state.unitPrice || 0, price: state.price });
         }
       }
-      state.code      = null;
-      state.ean1      = null;
-      state.ean       = null;
-      state.pautal    = null;
-      state.desc      = null;
-      state.country   = null;
-      state.qty       = null;
-      state.unitPrice = null;
-      state.price     = null;
+      state.code=null; state.ean1=null; state.ean=null; state.pautal=null;
+      state.desc=null; state.country=null; state.qty=null;
+      state.unitPrice=null; state.price=null;
     }
 
     for (var ri = 0; ri < rows.length; ri++) {
       var row   = rows[ri];
-      var cells = row.items; // already sorted by X
-
+      var cells = row.items;
       if (!cells.length) continue;
+      var firstCell = cells[0].str;
+      var rowStr    = cells.map(function(c){ return c.str; }).join(' ');
 
-      var firstCell  = cells[0].str;
-      var allCells   = cells.map(function(c){ return c.str; });
-      var rowStr     = allCells.join(' ');
-
-      // Skip obvious header/footer lines
-      if (/^(Barata|BARATA|Contribuinte|Rua|www\.|INVOICE|Pág\.|Qtd (a transferir|transferida)|Valor (a transferir|transferido)|Total Qtd|TOTAL EUR|Subtotal|Desconto|Frete|Seguro|Total IVA|Nº total|Peso|Volume|Local de|Lugar de|Processado|ATCUD:|Em caso|Data:|Hora:|Matric|Cliente|WAK|WAKZOME|Morada|PORTUGAL|Porto Santo|Rua Dr)/i.test(rowStr)) continue;
-      if (/^(FT\s+\d{4}\/|% IVA|Incidência|Valor IVA|23,00\s+\d|Obs\.\:|O Gestor|Nuno|Caixa\s|Código|artigo|Descrição|Composição|País|IVA|Cód\.|Preço|Desc\.)/i.test(rowStr)) continue;
-      if (/^(Pronto Pag|Air|CIF|ORIGINAL)/i.test(rowStr)) continue;
+      if (SKIP_ROW.test(rowStr)) continue;
       if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
       if (/^(100002|ATCUD:)/.test(firstCell)) continue;
 
-      // ── Box code row → just marks a new group, flush previous ──
-      if (isBoxCode(firstCell)) {
-        flush();
-        continue;
-      }
+      if (isBoxCode(firstCell)) { flush(); continue; }
 
-      // ── Article code row ──
       if (isArticleCode(firstCell)) {
         flush();
         state.code = firstCell;
-
-        // Parse all cells in this row
         for (var ci = 1; ci < cells.length; ci++) {
           var c = cells[ci].str;
-
-          // EAN part 1 (second column, before Pautal)
-          if (!state.ean && !state.pautal && isEanPart1(c)) {
-            state.ean1 = c;
-            continue;
-          }
-          // Full EAN
-          if (!state.ean && isFullEan(c)) {
-            state.ean = c;
-            state.ean1 = null;
-            continue;
-          }
-          // Pautal
-          if (!state.pautal && isPautal(c)) {
-            state.pautal = c;
-            continue;
-          }
-          // Country code
-          if (!state.country && COUNTRIES.test(c)) {
-            state.country = c;
-            continue;
-          }
-          // After country: qty (integer 1-9), then 23 (IVA), then unitPrice, then 0,00, then price
-          if (state.country && state.qty === null && /^\d{1,3}$/.test(c)) {
-            state.qty = parseInt(c);
-            continue;
-          }
-          if (state.qty !== null && c === '23') continue; // IVA
-          if (state.qty !== null && state.unitPrice === null && isPrice(c)) {
-            state.unitPrice = parsePrice(c);
-            continue;
-          }
-          if (state.unitPrice !== null && c === '0,00') continue; // discount
-          if (state.unitPrice !== null && state.price === null && isPrice(c)) {
-            state.price = parsePrice(c);
-            continue;
-          }
-          // Description: appears after Pautal, before country
-          // If not yet captured, and this looks like a description word
+          if (!state.ean && !state.pautal && isEanPart1(c)) { state.ean1 = c; continue; }
+          if (!state.ean && isFullEan(c)) { state.ean = c; state.ean1 = null; continue; }
+          if (!state.pautal && isPautal(c)) { state.pautal = c; continue; }
+          if (!state.country && COUNTRIES.test(c)) { state.country = c; continue; }
+          if (state.country && state.qty === null && /^\d{1,3}$/.test(c)) { state.qty = parseInt(c); continue; }
+          if (state.qty !== null && c === '23') continue;
+          if (state.qty !== null && state.unitPrice === null && isPrice(c)) { state.unitPrice = parsePrice(c); continue; }
+          if (state.unitPrice !== null && c === '0,00') continue;
+          if (state.unitPrice !== null && state.price === null && isPrice(c)) { state.price = parsePrice(c); continue; }
           if (state.pautal && !state.country && !state.desc && !/^\d/.test(c) && c.length > 2) {
-            // Accumulate description words (stop at composition keywords)
             if (!/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(c)) {
               state.desc = (state.desc ? state.desc + ' ' : '') + c;
             }
@@ -472,18 +398,10 @@
         continue;
       }
 
-      // ── Continuation row (not a new article code) ──
       if (state.code) {
-        // Could be: size suffix, EAN fragment 2, desc continuation, qty/price if they were on next row
-
-        // EAN fragment 2 (completes the EAN)
         if (state.ean1 && !state.ean && isEanPart2(firstCell)) {
-          var candidate = state.ean1 + firstCell;
-          if (candidate.length === 13) {
-            state.ean  = candidate;
-            state.ean1 = null;
-          }
-          // Rest of row might contain pautal, desc, country, qty, prices
+          var cand = state.ean1 + firstCell;
+          if (cand.length === 13) { state.ean = cand; state.ean1 = null; }
           for (var cj = 1; cj < cells.length; cj++) {
             var cc = cells[cj].str;
             if (!state.pautal && isPautal(cc)) { state.pautal = cc; continue; }
@@ -501,28 +419,19 @@
           }
           continue;
         }
-
-        // Size suffix on its own row (e.g. "M-L", "S-S")
         if (isSizeSuffix(firstCell) && cells.length === 1 && !state.desc) {
-          state.code = state.code + ' ' + firstCell;
-          continue;
+          state.code = state.code + ' ' + firstCell; continue;
         }
-
-        // If we haven't gotten desc yet and this row has desc-like content
         if (!state.desc && !state.country) {
-          var descCandidates = cells.filter(function(c){
+          var dcands = cells.filter(function(c) {
             return !isPautal(c.str) && !isEanPart1(c.str) && !isEanPart2(c.str) &&
                    !COUNTRIES.test(c.str) && !/^\d{1,3}$/.test(c.str) &&
                    !isPrice(c.str) && c.str !== '23' && c.str !== '0,00' &&
                    !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(c.str) &&
                    c.str.length > 2;
           });
-          if (descCandidates.length) {
-            state.desc = descCandidates.map(function(c){ return c.str; }).join(' ').trim();
-          }
+          if (dcands.length) state.desc = dcands.map(function(c){ return c.str; }).join(' ').trim();
         }
-
-        // If still missing qty/price from a trailing row
         if (state.desc && state.country && state.qty === null) {
           for (var ck = 0; ck < cells.length; ck++) {
             var cv = cells[ck].str;
@@ -535,49 +444,301 @@
         }
       }
     }
-    flush(); // final flush
+    flush();
+    return pfBuildResult(pfDedupe(items), meta);
+  }
 
-    /* ── 6. DEDUPLICATION: sum qty, weighted-average price ── */
-    var refMap = {};
-    items.forEach(function(item) {
-      var key = item.ref;
-      if (!refMap[key]) {
-        refMap[key] = {
-          ref:        item.ref,
-          desc:       item.desc,
-          ean:        item.ean,
-          totalQty:   0,
-          totalPrice: 0,
-          sumUnit:    0,
-          count:      0
-        };
+  /* ══════════════════════════════════════════════════════════════
+     MOTOR B — X-range positional column mapping
+     Uses fixed X-coordinate ranges to identify each column.
+     Tolerant to content-type ambiguities since position is primary.
+  ══════════════════════════════════════════════════════════════ */
+  function pfEngineB(allItems, meta) {
+    var rows  = groupRows(allItems, 6);  // slightly looser tolerance
+    var items = [];
+
+    /* Parfois column X ranges (based on PDF structure):
+       Col 0 (Article/Box): x < 130
+       Col 1 (EAN):         130 <= x < 210
+       Col 2 (Pautal):      210 <= x < 270
+       Col 3 (Desc):        270 <= x < 395
+       Col 4 (Composição):  395 <= x < 530
+       Col 5 (País):        530 <= x < 565
+       Col 6 (Qtd):         565 <= x < 595
+       Col 7 (IVA):         595 <= x < 630
+       Col 8 (Cód):         630 <= x < 655
+       Col 9 (P.Unit):      655 <= x < 715
+       Col 10 (Desc%):      715 <= x < 740
+       Col 11 (Preço):      740 <= x
+    */
+    function colOf(x) {
+      if (x < 130)  return 0;
+      if (x < 210)  return 1;
+      if (x < 270)  return 2;
+      if (x < 395)  return 3;
+      if (x < 530)  return 4;
+      if (x < 565)  return 5;
+      if (x < 595)  return 6;
+      if (x < 630)  return 7;
+      if (x < 655)  return 8;
+      if (x < 715)  return 9;
+      if (x < 740)  return 10;
+      return 11;
+    }
+
+    var cur = null;
+
+    function flush() {
+      if (cur && cur.code && cur.desc && cur.qty !== null && cur.price !== null) {
+        var ref = cur.code.match(/^(\d+)/);
+        if (ref) {
+          items.push({ ref: ref[1], code: cur.code, ean: cur.ean || '',
+                       desc: cur.desc, qty: cur.qty,
+                       unitPrice: cur.unitPrice || 0, price: cur.price });
+        }
       }
-      var r = refMap[key];
-      r.totalQty   += item.qty;
-      r.totalPrice += item.price;
-      r.sumUnit    += item.unitPrice * item.qty;
-      r.count      += 1;
-      if (!r.ean && item.ean) r.ean = item.ean;
-      if (item.desc && item.desc.length > (r.desc || '').length) r.desc = item.desc;
+      cur = null;
+    }
+
+    for (var ri = 0; ri < rows.length; ri++) {
+      var row   = rows[ri];
+      var cells = row.items;
+      if (!cells.length) continue;
+      var firstCell = cells[0].str;
+      var rowStr    = cells.map(function(c){ return c.str; }).join(' ');
+
+      if (SKIP_ROW.test(rowStr)) continue;
+      if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
+      if (/^(100002|ATCUD:)/.test(firstCell)) continue;
+
+      // Build column map for this row
+      var colMap = {};
+      cells.forEach(function(cell) {
+        var col = colOf(cell.x);
+        if (!colMap[col]) colMap[col] = [];
+        colMap[col].push(cell.str);
+      });
+      function colStr(col) { return colMap[col] ? colMap[col].join(' ') : ''; }
+
+      var col0 = colStr(0);
+
+      if (isBoxCode(col0)) { flush(); continue; }
+
+      if (isArticleCode(col0)) {
+        flush();
+        cur = {
+          code:      col0,
+          ean:       '',
+          desc:      '',
+          country:   '',
+          qty:       null,
+          unitPrice: null,
+          price:     null
+        };
+
+        // EAN: col1 may be partial, col1+extra forms 13 digits
+        var ean1str = colStr(1);
+        var ean2str = colStr(2);
+        if (isFullEan(ean1str)) {
+          cur.ean = ean1str;
+        } else if (isEanPart1(ean1str) && isEanPart2(ean2str)) {
+          var cand = ean1str + ean2str;
+          if (cand.length === 13) cur.ean = cand;
+        }
+
+        // Description: col3
+        var d3 = colStr(3);
+        if (d3 && !/^\d/.test(d3) && d3.length > 1) cur.desc = d3;
+
+        // Country: col5
+        var c5 = colStr(5);
+        if (COUNTRIES.test(c5.trim())) cur.country = c5.trim();
+
+        // Qty: col6
+        var q6 = colStr(6).trim();
+        if (/^\d{1,3}$/.test(q6)) cur.qty = parseInt(q6);
+
+        // Unit price: col9
+        var u9 = colStr(9).trim();
+        if (isPrice(u9)) cur.unitPrice = parsePrice(u9);
+
+        // Total price: col11
+        var p11 = colStr(11).trim();
+        if (isPrice(p11)) cur.price = parsePrice(p11);
+
+        // If desc missing, try to find any text in col3 range
+        if (!cur.desc) {
+          var allDescCells = cells.filter(function(c){ return colOf(c.x) === 3; });
+          if (allDescCells.length) cur.desc = allDescCells.map(function(c){ return c.str; }).join(' ');
+        }
+        continue;
+      }
+
+      // Continuation row
+      if (cur) {
+        // EAN fragment completion
+        if (!cur.ean) {
+          var cf0 = colStr(0), cf1 = colStr(1);
+          if (isEanPart2(cf0) && cur._ean1) {
+            var ec = cur._ean1 + cf0;
+            if (ec.length === 13) cur.ean = ec;
+          }
+          if (isFullEan(cf0)) cur.ean = cf0;
+          if (isFullEan(cf1)) cur.ean = cf1;
+        }
+        // Description from col3 if still missing
+        if (!cur.desc) {
+          var dd3 = colStr(3);
+          if (dd3 && !/^\d/.test(dd3) && dd3.length > 1) cur.desc = dd3;
+        }
+        // Qty/price fallback from continuation
+        if (cur.qty === null) {
+          var qq6 = colStr(6).trim();
+          if (/^\d{1,3}$/.test(qq6)) cur.qty = parseInt(qq6);
+        }
+        if (cur.price === null) {
+          var pp11 = colStr(11).trim();
+          if (isPrice(pp11)) cur.price = parsePrice(pp11);
+        }
+        if (cur.unitPrice === null) {
+          var uu9 = colStr(9).trim();
+          if (isPrice(uu9)) cur.unitPrice = parsePrice(uu9);
+        }
+      }
+    }
+    flush();
+    return pfBuildResult(pfDedupe(items), meta);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     MOTOR C — box-anchor strategy
+     Uses the S6.../O6... box code row as an anchor: the very next
+     article code row is the item for that box. Reads the entire
+     multi-row cluster between two box codes as one logical record.
+  ══════════════════════════════════════════════════════════════ */
+  function pfEngineC(allItems, meta) {
+    var rows  = groupRows(allItems, 7);  // looser still — catches split rows
+    var items = [];
+
+    // Split rows into clusters anchored by box codes
+    var clusters = [];
+    var curCluster = null;
+
+    for (var ri = 0; ri < rows.length; ri++) {
+      var row       = rows[ri];
+      var cells     = row.items;
+      if (!cells.length) continue;
+      var firstCell = cells[0].str;
+      var rowStr    = cells.map(function(c){ return c.str; }).join(' ');
+
+      if (SKIP_ROW.test(rowStr)) continue;
+      if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
+      if (/^(100002|ATCUD:)/.test(firstCell)) continue;
+
+      if (isBoxCode(firstCell)) {
+        if (curCluster && curCluster.rows.length) clusters.push(curCluster);
+        curCluster = { boxCode: firstCell, rows: [] };
+        continue;
+      }
+      if (curCluster) curCluster.rows.push(row);
+    }
+    if (curCluster && curCluster.rows.length) clusters.push(curCluster);
+
+    // Process each cluster: find article code, then collect all field data
+    clusters.forEach(function(cluster) {
+      var allText = cluster.rows.map(function(r){ return r.items.map(function(c){ return c.str; }).join(' '); }).join(' ');
+      // Find article code
+      var artRow = cluster.rows.find(function(r){ return r.items.length && isArticleCode(r.items[0].str); });
+      if (!artRow) return;
+
+      var code = artRow.items[0].str;
+      var ref  = code.match(/^(\d+)/);
+      if (!ref) return;
+
+      // Collect all cells from entire cluster
+      var allCells = [];
+      cluster.rows.forEach(function(r){ r.items.forEach(function(c){ allCells.push(c); }); });
+      allCells.sort(function(a,b){ return a.x - b.x; });
+
+      var ean = '', desc = '', country = '', qty = null, unitPrice = null, price = null;
+      var ean1 = '';
+
+      // EAN: scan for 13-digit or reconstructible sequence
+      var allStrs = allCells.map(function(c){ return c.str; });
+      for (var i = 0; i < allStrs.length; i++) {
+        if (isFullEan(allStrs[i])) { ean = allStrs[i]; break; }
+        if (isEanPart1(allStrs[i]) && !ean1) {
+          ean1 = allStrs[i];
+          if (i+1 < allStrs.length && isEanPart2(allStrs[i+1])) {
+            var ec = ean1 + allStrs[i+1];
+            if (ec.length === 13) { ean = ec; break; }
+          }
+        }
+      }
+
+      // Description: text tokens after the pautal code (6-digit), before country
+      var pautalIdx = -1;
+      for (var j = 0; j < allStrs.length; j++) {
+        if (isPautal(allStrs[j])) { pautalIdx = j; break; }
+      }
+      if (pautalIdx >= 0) {
+        var descParts = [];
+        for (var k = pautalIdx + 1; k < allStrs.length; k++) {
+          var t = allStrs[k];
+          if (COUNTRIES.test(t)) break;
+          if (/^\d/.test(t)) continue;
+          if (/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(t)) continue;
+          if (t.length > 2) descParts.push(t);
+        }
+        desc = descParts.slice(0, 3).join(' ').trim(); // cap at 3 words
+      }
+
+      // Country, qty, unitPrice, price — scan all tokens from right-to-left
+      // Find the two rightmost prices (unitPrice then total), then qty before them
+      var prices = [];
+      var countryFound = false;
+      for (var m = 0; m < allStrs.length; m++) {
+        var ts = allStrs[m];
+        if (COUNTRIES.test(ts) && !countryFound) { country = ts; countryFound = true; }
+        if (isPrice(ts) && ts !== '0,00') prices.push(parsePrice(ts));
+        if (countryFound && qty === null && /^\d{1,3}$/.test(ts) && !isPautal(ts)) {
+          qty = parseInt(ts);
+        }
+      }
+      // prices[0] = unitPrice, prices[1] = total (they appear left-to-right)
+      if (prices.length >= 2) { unitPrice = prices[0]; price = prices[1]; }
+      else if (prices.length === 1) { price = prices[0]; }
+
+      if (desc && qty !== null && price !== null) {
+        items.push({ ref: ref[1], code: code, ean: ean, desc: desc,
+                     qty: qty, unitPrice: unitPrice || 0, price: price });
+      }
     });
 
-    var grouped = Object.values(refMap).map(function(r) {
-      var avgUnit = r.totalQty > 0 ? rnd2(r.sumUnit / r.totalQty) : 0;
-      return {
-        ref:       r.ref,
-        desc:      r.desc || '—',
-        ean:       r.ean || '',
-        qty:       r.totalQty,
-        price:     rnd2(r.totalPrice),
-        unitPrice: avgUnit
-      };
-    });
+    return pfBuildResult(pfDedupe(items), meta);
+  }
 
-    /* ── 7. Cross-validation ── */
-    var parsedQty   = grouped.reduce(function(s,g){ return s + g.qty; }, 0);
-    var parsedPrice = rnd2(grouped.reduce(function(s,g){ return s + g.price; }, 0));
-    var qtyOk       = totalQtd > 0 ? parsedQty === totalQtd : null;
-    var priceOk     = totalEur > 0 ? Math.abs(parsedPrice - totalEur) < 0.15 : null;
+  /* ══════════════════════════════════════════════════════════════
+     EXTRACT META (invoice number, date, totals)
+  ══════════════════════════════════════════════════════════════ */
+  function pfExtractMeta(allItems, fileName) {
+    var allText = allItems.map(function(i){ return i.str; }).join(' ');
+    var invoiceNo   = '';
+    var invoiceDate = '';
+    var totalQtd    = 0;
+    var totalEur    = 0;
+    var numCaixas   = 0;
+
+    var mft  = allText.match(/FT\s+(\d{4}\/\d{6,7})/);
+    if (mft) invoiceNo = 'FT ' + mft[1];
+    var mdate = allText.match(/(\d{2}\/\d{2}\/\d{4})/);
+    if (mdate) invoiceDate = mdate[1];
+    var mq   = allText.match(/Total\s+Qtd\s+(\d+)/i);
+    if (mq) totalQtd = parseInt(mq[1]);
+    var me   = allText.match(/TOTAL\s+EUR\s+([\d.,]+)/i);
+    if (me) totalEur = parseFloat(me[1].replace(/\./g,'').replace(',','.'));
+    var mcx  = allText.match(/N[oº°]\s*total\s+de\s+caixas[:\s]+(\d+)/i);
+    if (mcx) numCaixas = parseInt(mcx[1]);
 
     return {
       fileName:    fileName,
@@ -585,25 +746,89 @@
       invoiceDate: invoiceDate,
       numCaixas:   numCaixas,
       totalQtd:    totalQtd,
-      totalEur:    totalEur,
-      parsedQty:   parsedQty,
-      parsedPrice: parsedPrice,
-      qtyOk:       qtyOk,
-      priceOk:     priceOk,
-      valid:       qtyOk !== false && priceOk !== false,
-      items:       grouped
+      totalEur:    totalEur
     };
   }
+
+  /* ══════════════════════════════════════════════════════════════
+     ENGINE SELECTION — pick best, detect conflict
+  ══════════════════════════════════════════════════════════════ */
+  function pfPickEngine(resA, resB, resC) {
+    // Count how many engines agree on qty and price
+    var results = [
+      { label: 'A', res: resA },
+      { label: 'B', res: resB },
+      { label: 'C', res: resC }
+    ];
+
+    // Prefer engines that pass cross-validation
+    var valid = results.filter(function(r){ return r.res.valid; });
+    if (valid.length === 1) return valid[0].label;
+    if (valid.length > 1) {
+      // Among valid, prefer the one with most refs (more complete)
+      var best = valid.reduce(function(a,b){ return b.res.items.length >= a.res.items.length ? b : a; });
+      return best.label;
+    }
+
+    // None fully valid — pick the one closest to invoice totals
+    var scored = results.map(function(r) {
+      var qScore = r.res.qtyOk === true ? 2 : r.res.qtyOk === null ? 1 : 0;
+      var pScore = r.res.priceOk === true ? 2 : r.res.priceOk === null ? 1 : 0;
+      return { label: r.label, score: qScore + pScore, refs: r.res.items.length };
+    });
+    scored.sort(function(a,b){ return b.score !== a.score ? b.score - a.score : b.refs - a.refs; });
+    return scored[0].label;
+  }
+
+  function pfEnginesAgree(resA, resB, resC) {
+    // Agree if all 3 produce same qty and same price total (within 0.02)
+    var qA = resA.parsedQty, qB = resB.parsedQty, qC = resC.parsedQty;
+    var pA = resA.parsedPrice, pB = resB.parsedPrice, pC = resC.parsedPrice;
+    return (qA === qB && qB === qC) && (Math.abs(pA-pB)<0.02 && Math.abs(pB-pC)<0.02);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     FULL PARSE — runs all 3 motors, returns invoice object
+  ══════════════════════════════════════════════════════════════ */
+  function pfParseAll(allItems, fileName) {
+    var meta = pfExtractMeta(allItems, fileName);
+    var resA = pfEngineA(allItems, meta);
+    var resB = pfEngineB(allItems, meta);
+    var resC = pfEngineC(allItems, meta);
+
+    var agree    = pfEnginesAgree(resA, resB, resC);
+    var autoEng  = pfPickEngine(resA, resB, resC);
+
+    return Object.assign({}, meta, {
+      _allItems:  allItems,
+      engineCache: { A: resA, B: resB, C: resC },
+      autoEngine:  autoEng,
+      agree:       agree,
+      // active engine result — will be set by pfGetActiveResult()
+    });
+  }
+
+  function pfGetActiveResult(inv) {
+    var label = pfState.activeEngines[inv.fileName] || inv.autoEngine || 'A';
+    return inv.engineCache[label] || inv.engineCache['A'];
+  }
+
+  function pfGetActiveItems(inv) {
+    return pfGetActiveResult(inv).items;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     STYLES
+  ══════════════════════════════════════════════════════════════ */
 
   /* ══════════════════════════════════════════════════════════════
      RENDER
   ══════════════════════════════════════════════════════════════ */
   function pfRender() {
-    var content    = document.getElementById('pf-content');
-    var statusMsg  = document.getElementById('pf-status-msg');
+    var content   = document.getElementById('pf-content');
+    var statusMsg = document.getElementById('pf-status-msg');
     if (!content) return;
 
-    // Remove old blocks
     content.querySelectorAll('.pf-inv-block,.pf-empty').forEach(function(el){ el.remove(); });
 
     if (!pfState.invoices.length) {
@@ -615,19 +840,27 @@
       return;
     }
 
-    var totRefs = pfState.invoices.reduce(function(s,inv){ return s + inv.items.length; }, 0);
-    var totPcs  = pfState.invoices.reduce(function(s,inv){ return s + inv.parsedQty; }, 0);
+    var totRefs = 0, totPcs = 0;
+    pfState.invoices.forEach(function(inv){
+      var r = pfGetActiveResult(inv);
+      totRefs += r.items.length;
+      totPcs  += r.parsedQty;
+    });
     statusMsg.textContent = pfState.invoices.length + ' fatura(s) · ' + totRefs + ' referências · ' + totPcs + ' peças';
 
     pfState.invoices.forEach(function(inv, idx) {
+      var activeLabel = pfState.activeEngines[inv.fileName] || inv.autoEngine || 'A';
+      var res         = pfGetActiveResult(inv);
+      var cache       = inv.engineCache;
+
       var block = document.createElement('div');
       block.className = 'pf-inv-block';
 
       // Badge
       var badge = '';
-      if (inv.qtyOk === true && inv.priceOk === true) {
+      if (res.qtyOk === true && res.priceOk === true) {
         badge = '<span class="pf-badge pf-ok">✓ validado</span>';
-      } else if (inv.qtyOk === false || inv.priceOk === false) {
+      } else if (res.qtyOk === false || res.priceOk === false) {
         badge = '<span class="pf-badge pf-err">⚠ divergência</span>';
       } else {
         badge = '<span class="pf-badge pf-warn">– sem totais</span>';
@@ -639,27 +872,44 @@
             '<div class="pf-inv-num">' + esc(inv.invoiceNo) + '</div>' +
             '<div class="pf-inv-meta">' + esc(inv.invoiceDate) +
               (inv.numCaixas ? ' · ' + inv.numCaixas + ' cx.' : '') +
-              ' · ' + inv.parsedQty + ' pcs' +
+              ' · ' + res.parsedQty + ' pcs' +
             '</div>' +
           '</div>' +
           badge +
-          '<div class="pf-inv-total">' + fmt(inv.parsedPrice) + ' €</div>' +
+          '<div class="pf-inv-total">' + fmt(res.parsedPrice) + ' €</div>' +
           '<div class="pf-inv-acts">' +
             '<button class="pf-btn pf-btn-mid" data-bc="' + idx + '">códigos de barras</button>' +
             '<button class="pf-btn pf-btn-dark" data-st="' + idx + '">ingresso de stock</button>' +
           '</div>' +
         '</div>';
 
-      // Validation summary
-      if (inv.qtyOk === false || inv.priceOk === false) {
+      // Engine selector — always shown, shows agreement or conflict
+      var engSel = document.createElement('div');
+      engSel.className = 'pf-engine-sel-wrap';
+      var engInfo = ['A','B','C'].map(function(lbl) {
+        var er      = cache[lbl];
+        var isAct   = lbl === activeLabel;
+        var isStar  = lbl === inv.autoEngine;
+        var cls     = 'pf-engine-btn' + (isAct ? ' active' : '') + (isStar && !isAct ? ' pf-engine-auto' : '');
+        return '<button class="' + cls + '" data-engine="' + lbl + '" data-inv="' + idx + '">' +
+          lbl + (isStar ? ' ★' : '') + ': ' + er.items.length + ' refs / ' + er.parsedQty + ' un' +
+          (er.valid ? ' ✓' : '') +
+        '</button>';
+      }).join('');
+      engSel.innerHTML = '<em>motor</em><span class="pf-engine-btns">' + engInfo + '</span>' +
+        (inv.agree ? '<span style="font-size:.7rem;color:#2a5a2a;font-weight:bold;">✓ motores concordam</span>' : '');
+      block.appendChild(engSel);
+
+      // Validation row
+      if (res.qtyOk === false || res.priceOk === false) {
         var vd = document.createElement('div');
         vd.className = 'pf-val-row err';
         var msgs = [];
-        if (inv.qtyOk === false) msgs.push('qtd lida: ' + inv.parsedQty + ' · fatura: ' + inv.totalQtd);
-        if (inv.priceOk === false) msgs.push('valor lido: ' + fmt(inv.parsedPrice) + ' € · fatura: ' + fmt(inv.totalEur) + ' €');
+        if (res.qtyOk === false) msgs.push('qtd lida: ' + res.parsedQty + ' · fatura: ' + inv.totalQtd);
+        if (res.priceOk === false) msgs.push('valor lido: ' + fmt(res.parsedPrice) + ' € · fatura: ' + fmt(inv.totalEur) + ' €');
         vd.textContent = msgs.join('  ·  ');
         block.appendChild(vd);
-      } else if (inv.qtyOk === true && inv.priceOk === true) {
+      } else if (res.qtyOk === true && res.priceOk === true) {
         var vo = document.createElement('div');
         vo.className = 'pf-val-row ok';
         vo.textContent = '✓ totais confirmados · ' + inv.totalQtd + ' pcs · ' + fmt(inv.totalEur) + ' €';
@@ -669,11 +919,12 @@
       // Table
       var tw = document.createElement('div');
       tw.className = 'pf-table-wrap';
-      var rows = inv.items.map(function(it) {
+      var trows = res.items.map(function(it) {
         return '<tr>' +
           '<td class="pf-td-ref">' + esc(it.ref) + '</td>' +
           '<td class="pf-td-name">' + esc(it.desc) + '</td>' +
           '<td class="pf-td-r">' + it.qty + '</td>' +
+          '<td class="pf-td-r">' + fmt(it.unitPrice) + ' €</td>' +
           '<td class="pf-td-r">' + fmt(it.price) + ' €</td>' +
         '</tr>';
       }).join('');
@@ -682,17 +933,32 @@
           '<thead><tr>' +
             '<th>Referência</th><th>Nome</th>' +
             '<th style="text-align:right">Pcs</th>' +
-            '<th style="text-align:right">Preço</th>' +
+            '<th style="text-align:right">P.Unit</th>' +
+            '<th style="text-align:right">Total</th>' +
           '</tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
+          '<tbody>' + trows + '</tbody>' +
           '<tfoot><tr>' +
             '<td colspan="2" style="font-weight:bold;color:#000!important;">TOTAL</td>' +
-            '<td class="pf-td-r" style="font-weight:bold;color:#000!important;">' + inv.parsedQty + '</td>' +
-            '<td class="pf-td-r" style="font-weight:bold;color:#000!important;">' + fmt(inv.parsedPrice) + ' €</td>' +
+            '<td class="pf-td-r" style="font-weight:bold;color:#000!important;">' + res.parsedQty + '</td>' +
+            '<td></td>' +
+            '<td class="pf-td-r" style="font-weight:bold;color:#000!important;">' + fmt(res.parsedPrice) + ' €</td>' +
           '</tr></tfoot>' +
         '</table>';
       block.appendChild(tw);
       content.appendChild(block);
+    });
+
+    // Engine selector listeners
+    content.querySelectorAll('[data-engine]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var lbl = btn.getAttribute('data-engine');
+        var i   = parseInt(btn.getAttribute('data-inv'));
+        var inv = pfState.invoices[i];
+        if (!inv) return;
+        pfState.activeEngines[inv.fileName] = lbl;
+        pfSave();
+        pfRender();
+      });
     });
 
     // Button listeners
@@ -710,11 +976,12 @@
   function pfOpenBC(idx) {
     var inv = pfState.invoices[idx];
     if (!inv) return;
-    var ov   = document.getElementById('pf-bc-overlay');
-    var body = document.getElementById('pf-bc-body');
-    var ttl  = document.getElementById('pf-bc-title');
+    var items = pfGetActiveItems(inv);
+    var ov    = document.getElementById('pf-bc-overlay');
+    var body  = document.getElementById('pf-bc-body');
+    var ttl   = document.getElementById('pf-bc-title');
     ttl.textContent = inv.invoiceNo + ' · códigos de barras';
-    var withEan = inv.items.filter(function(it){ return it.ean; });
+    var withEan = items.filter(function(it){ return it.ean; });
     body.innerHTML = withEan.length
       ? withEan.map(function(it){
           return '<div class="pf-bc-row">' +
@@ -730,29 +997,153 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     STOCK MODAL
+     STOCK MODAL — same pattern as TAM tamShowStockModal
+     Columns: Referencia | ARM | IVA | € | Qtd.
+     Each column has individual copy button (⧉)
   ══════════════════════════════════════════════════════════════ */
   function pfOpenST(idx) {
     var inv = pfState.invoices[idx];
     if (!inv) return;
-    var ov  = document.getElementById('pf-st-overlay');
-    var sub = document.getElementById('pf-st-sub');
-    var ta  = document.getElementById('pf-st-ta');
-    sub.textContent = inv.invoiceNo + ' · ' + inv.invoiceDate + ' · Armazém A5';
-    var lines = [
-      'INGRESSO DE STOCK · ' + inv.invoiceNo + ' · ' + inv.invoiceDate,
-      'Armazém: A5',
-      '',
-      'Ref\tNome\tQtd\tPreço Unit.\tTotal',
-      '─'.repeat(56)
-    ];
-    inv.items.forEach(function(it){
-      lines.push(it.ref + '\t' + it.desc + '\t' + it.qty + '\t' + fmt(it.unitPrice) + ' €\t' + fmt(it.price) + ' €');
+    var items = pfGetActiveItems(inv);
+
+    // Build rows — ARM fixed A5, IVA fixed 23
+    var rows = items.map(function(it) {
+      return {
+        ref:   it.ref,
+        arm:   'A5',
+        iva:   '23',
+        price: it.unitPrice,
+        qty:   it.qty
+      };
     });
-    lines.push('─'.repeat(56));
-    lines.push('TOTAL\t\t' + inv.parsedQty + '\t\t' + fmt(inv.parsedPrice) + ' €');
-    ta.value = lines.join('\n');
-    ov.classList.add('open');
+
+    var COL_S = ['Referencia', 'ARM', 'IVA', '€', 'Qtd.'];
+
+    // Remove any existing modal
+    var old = document.getElementById('pf-st-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'pf-st-modal';
+
+    var tableRows = rows.map(function(row, i) {
+      return '<tr class="' + (i % 2 === 0 ? 'pf-st-row-even' : 'pf-st-row-odd') + '">' +
+        '<td class="pf-st-td pf-st-ref">'                  + esc(row.ref)       + '</td>' +
+        '<td class="pf-st-td pf-st-num">'                  + esc(row.arm)       + '</td>' +
+        '<td class="pf-st-td pf-st-num">'                  + esc(row.iva)       + '</td>' +
+        '<td class="pf-st-td pf-st-num">'                  + fmt(row.price)     + '</td>' +
+        '<td class="pf-st-td pf-st-num">'                  + row.qty            + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var noData = rows.length === 0
+      ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;font-style:italic;">Sem artigos nesta fatura</td></tr>'
+      : '';
+
+    modal.innerHTML =
+      '<div id="pf-st-backdrop"></div>' +
+      '<div id="pf-st-panel">' +
+        '<div id="pf-st-header">' +
+          '<div id="pf-st-title-wrap">' +
+            '<span id="pf-st-inv-label">' + esc(inv.invoiceNo) + '</span>' +
+            '<span id="pf-st-sub-label">Ingresso de Stock · Primavera ERP</span>' +
+          '</div>' +
+          '<div id="pf-st-actions">' +
+            '<button id="pf-st-export-btn" class="pf-st-action-btn">⬇ Exportar Excel</button>' +
+            '<button id="pf-st-close-btn" class="pf-st-close-btn" title="fechar">✕</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="pf-st-scroll">' +
+          '<table id="pf-st-table">' +
+            '<thead>' +
+              '<tr>' +
+                '<th class="pf-st-th pf-st-ref"><div class="pf-guia-th2-inner"><button class="pf-st-copy-btn" data-scol="0">&#x29c9;</button>Referencia</div></th>' +
+                '<th class="pf-st-th pf-st-num"><div class="pf-guia-th2-inner" style="justify-content:center"><button class="pf-st-copy-btn" data-scol="1">&#x29c9;</button>ARM</div></th>' +
+                '<th class="pf-st-th pf-st-num"><div class="pf-guia-th2-inner" style="justify-content:center"><button class="pf-st-copy-btn" data-scol="2">&#x29c9;</button>IVA</div></th>' +
+                '<th class="pf-st-th pf-st-num"><div class="pf-guia-th2-inner" style="justify-content:center"><button class="pf-st-copy-btn" data-scol="3">&#x29c9;</button>&euro;</div></th>' +
+                '<th class="pf-st-th pf-st-num"><div class="pf-guia-th2-inner" style="justify-content:center"><button class="pf-st-copy-btn" data-scol="4">&#x29c9;</button>Qtd.</div></th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' + (noData || tableRows) + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div id="pf-st-footer">' +
+          rows.length + ' linhas · ' + rows.reduce(function(s,r){ return s+r.qty; },0) + ' uds · A5' +
+          '<span class="pf-guia-copy-msg" id="pf-st-copy-msg" style="margin-left:10px;font-size:.72rem;font-weight:bold;color:#2a5a2a;"></span>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(function(){ modal.classList.add('pf-st-visible'); });
+
+    function closeModal() {
+      modal.classList.remove('pf-st-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
+    }
+    modal.querySelector('#pf-st-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#pf-st-close-btn').addEventListener('click', closeModal);
+    document.addEventListener('keydown', function esc(e){
+      if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc); }
+    });
+
+    /* Column copy buttons — same logic as TAM */
+    var copyMsg   = modal.querySelector('#pf-st-copy-msg');
+    var copyTimer = null;
+    var colKeys   = ['ref','arm','iva','price','qty'];
+
+    modal.querySelectorAll('.pf-st-copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var ci  = parseInt(btn.getAttribute('data-scol'));
+        var key = colKeys[ci];
+        var vals = rows.map(function(rw) {
+          if (key === 'ref')   return rw.ref;
+          if (key === 'arm')   return rw.arm;
+          if (key === 'iva')   return rw.iva;
+          if (key === 'price') return fmt(rw.price);
+          return String(rw.qty);
+        });
+        if (!vals.length) return;
+        modal.querySelectorAll('.pf-st-copy-btn').forEach(function(b){ b.classList.remove('pf-st-copy-active'); });
+        btn.classList.add('pf-st-copy-active');
+        var text = vals.join('\n');
+        function showMsg(ok) {
+          if (!copyMsg) return;
+          copyMsg.textContent = ok ? '✓ ' + COL_S[ci] + ' copiado!' : '⚠ copie manualmente';
+          copyMsg.style.color = ok ? '#2a5a2a' : '#888';
+          if (copyTimer) clearTimeout(copyTimer);
+          copyTimer = setTimeout(function(){
+            copyMsg.textContent = '';
+            modal.querySelectorAll('.pf-st-copy-btn').forEach(function(b){ b.classList.remove('pf-st-copy-active'); });
+          }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
+        } else {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta); showMsg(true);
+          } catch(e2) { showMsg(false); }
+        }
+      });
+    });
+
+    /* Export CSV */
+    modal.querySelector('#pf-st-export-btn').addEventListener('click', function() {
+      var lines = ['\uFEFF' + ['Referencia','ARM','IVA','Euro','Quantidade'].join(';')];
+      rows.forEach(function(row) {
+        lines.push([row.ref, row.arm, row.iva, String(row.price).replace('.',','), row.qty].join(';'));
+      });
+      var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'Stock_' + (inv.invoiceNo||'fatura').replace(/[^a-zA-Z0-9_-]/g,'_') + '.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -783,12 +1174,18 @@
 
       try {
         var allItems = await pfExtract(file);
-        pfSpinner('a analisar ' + file.name + '…');
-        var parsed   = pfParse(allItems, file.name);
+        pfSpinner('a analisar com 3 motores…');
+        var inv = pfParseAll(allItems, file.name);
 
-        var existIdx = pfState.invoices.findIndex(function(inv){ return inv.fileName === file.name; });
-        if (existIdx >= 0) pfState.invoices[existIdx] = parsed;
-        else pfState.invoices.push(parsed);
+        var existIdx = pfState.invoices.findIndex(function(i){ return i.fileName === file.name; });
+        if (existIdx >= 0) {
+          // Preserve engine choice if user had manually selected one
+          var prevEngine = pfState.activeEngines[file.name];
+          pfState.invoices[existIdx] = inv;
+          if (prevEngine) pfState.activeEngines[file.name] = prevEngine;
+        } else {
+          pfState.invoices.push(inv);
+        }
 
         if (!pfState.sessionName) {
           pfState.sessionName = pfWeekName();
@@ -834,7 +1231,7 @@
             '<path d="M16 14l1.5 1.5L20 13" stroke="rgba(255,255,255,0.7)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
           '</svg>' +
         '</span>' +
-        '<div><div class="adm-mod-name">PARFOIS</div><div class="adm-mod-desc">faturas Parfois · EAN + stock</div></div>' +
+        '<div><div class="adm-mod-name">PARFOIS</div><div class="adm-mod-desc">faturas Parfois · 3 motores · EAN + stock</div></div>' +
         '<div class="adm-mod-arrow">→</div>';
       card.addEventListener('click', pfOpen);
       grid.appendChild(card);
@@ -858,7 +1255,7 @@
         '<div id="pf-content">' +
           '<label id="pf-drop-area" for="pf-file-input">' +
             '<div id="pf-drop-lbl">arrastar PDF aqui ou clicar para seleccionar</div>' +
-            '<div id="pf-drop-sub">faturas Parfois · um ou vários PDFs</div>' +
+            '<div id="pf-drop-sub">faturas Parfois · um ou vários PDFs · 3 motores de leitura</div>' +
             '<input type="file" id="pf-file-input" accept="application/pdf" multiple>' +
           '</label>' +
           '<div id="pf-status-bar">' +
@@ -873,6 +1270,9 @@
         if (confirm('Limpar sessão Parfois desta semana?')) {
           pfClear(); pfRender(); pfUpdateLbl();
         }
+      });
+      document.getElementById('pf-drop-area').addEventListener('click', function(){
+        document.getElementById('pf-file-input').click();
       });
       document.getElementById('pf-file-input').addEventListener('change', function(e){
         if (e.target.files.length) pfHandleFiles(e.target.files);
@@ -905,47 +1305,6 @@
       bc.addEventListener('click', function(e){ if (e.target === bc) bc.classList.remove('open'); });
     }
 
-    /* Stock modal */
-    if (!document.getElementById('pf-st-overlay')) {
-      var st = document.createElement('div');
-      st.id  = 'pf-st-overlay';
-      st.innerHTML =
-        '<div id="pf-st-panel">' +
-          '<div id="pf-st-hdr">' +
-            '<div id="pf-st-hdr-info">' +
-              '<div id="pf-st-title">ingresso de stock · A5</div>' +
-              '<div id="pf-st-sub"></div>' +
-            '</div>' +
-            '<button id="pf-st-close">✕</button>' +
-          '</div>' +
-          '<div id="pf-st-cbar">' +
-            '<button id="pf-st-copy">copiar tudo</button>' +
-            '<span id="pf-st-cstatus"></span>' +
-          '</div>' +
-          '<div id="pf-st-body"><textarea id="pf-st-ta" readonly></textarea></div>' +
-        '</div>';
-      document.body.appendChild(st);
-      document.getElementById('pf-st-close').addEventListener('click', function(){ st.classList.remove('open'); });
-      st.addEventListener('click', function(e){ if (e.target === st) st.classList.remove('open'); });
-      document.getElementById('pf-st-copy').addEventListener('click', function(){
-        var ta  = document.getElementById('pf-st-ta');
-        var cs  = document.getElementById('pf-st-cstatus');
-        ta.select();
-        try {
-          if (navigator.clipboard) {
-            navigator.clipboard.writeText(ta.value).then(function(){
-              cs.textContent = '✓ copiado!';
-              setTimeout(function(){ cs.textContent = ''; }, 2000);
-            });
-          } else {
-            document.execCommand('copy');
-            cs.textContent = '✓ copiado!';
-            setTimeout(function(){ cs.textContent = ''; }, 2000);
-          }
-        } catch(e) { cs.textContent = 'seleccione manualmente'; }
-      });
-    }
-
     /* Spinner */
     if (!document.getElementById('pf-spinner')) {
       var sp = document.createElement('div');
@@ -958,9 +1317,8 @@
     document.addEventListener('keydown', function(e){
       if (e.key !== 'Escape') return;
       var bc2 = document.getElementById('pf-bc-overlay');
-      var st2 = document.getElementById('pf-st-overlay');
       if (bc2) bc2.classList.remove('open');
-      if (st2) st2.classList.remove('open');
+      // stock modal handles its own escape
     });
   }
 
@@ -1011,7 +1369,6 @@
     pfInit();
   }
 
-  /* Re-init if grid appears later */
   new MutationObserver(function(){
     var grid = document.getElementById('faturas-sub-grid');
     if (grid && !document.getElementById('pf-card')) {

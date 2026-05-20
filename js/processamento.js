@@ -81,7 +81,7 @@
       '#proc-content .proc-fatura-instance.proc-collapsed #proc-table-block-1,'+
       '#proc-content .proc-fatura-instance.proc-collapsed [id^="proc-table-block-"] { display:none !important; }',
       '#proc-content .proc-fatura-instance.proc-collapsed { padding-bottom:12px; margin-bottom:16px; border-bottom-width:1px; border-bottom-style:dashed; }',
-      '#proc-content .proc-fatura-banner.proc-banner-done { background:#F0F7F5; border-color:#b5d9d0; }',
+      '#proc-content .proc-fatura-banner.proc-banner-done { background:#f5f5f5; border-color:#ddd; }',
 
       /* Connect banner to header-card */
       '#proc-content .proc-fatura-instance .proc-header-card { border-radius:0; border-top:none; margin-top:0; }',

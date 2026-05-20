@@ -1271,9 +1271,6 @@
           pfClear(); pfRender(); pfUpdateLbl();
         }
       });
-      document.getElementById('pf-drop-area').addEventListener('click', function(){
-        document.getElementById('pf-file-input').click();
-      });
       document.getElementById('pf-file-input').addEventListener('change', function(e){
         if (e.target.files.length) pfHandleFiles(e.target.files);
         e.target.value = '';

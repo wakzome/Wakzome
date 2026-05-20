@@ -4305,14 +4305,44 @@
 
     /* Row / cell interaction */
     var activeRow = null;
+
+    function applyActiveStyle(tr2) {
+      tr2.style.setProperty('background', '#000', 'important');
+      Array.prototype.forEach.call(tr2.querySelectorAll('td'), function(td2) {
+        td2.style.setProperty('color', '#fff', 'important');
+        td2.style.setProperty('opacity', '1', 'important');
+      });
+    }
+    function clearActiveStyle(tr2) {
+      tr2.style.removeProperty('background');
+      Array.prototype.forEach.call(tr2.querySelectorAll('td'), function(td2) {
+        td2.style.removeProperty('color');
+        td2.style.removeProperty('opacity');
+      });
+    }
+
+    modal.querySelector('tbody').addEventListener('mouseover', function(e) {
+      var tr2 = e.target.closest('tr');
+      if (tr2 && tr2 === activeRow) applyActiveStyle(tr2);
+    });
+    modal.querySelector('tbody').addEventListener('mouseleave', function(e) {
+      if (activeRow) applyActiveStyle(activeRow);
+    });
+
     modal.querySelector('tbody').addEventListener('click', function(e) {
       var td = e.target.closest('td');
       var tr2 = e.target.closest('tr');
       if (!tr2) return;
 
-      /* Highlight row */
-      if (activeRow && activeRow !== tr2) activeRow.classList.remove('proc-criacao-active');
+      /* Clear previous active row inline styles */
+      if (activeRow && activeRow !== tr2) {
+        activeRow.classList.remove('proc-criacao-active');
+        clearActiveStyle(activeRow);
+      }
+
+      /* Set new active row */
       tr2.classList.add('proc-criacao-active');
+      applyActiveStyle(tr2);
       activeRow = tr2;
 
       /* Determine value to copy from the clicked cell */
@@ -4334,14 +4364,6 @@
         } catch(ex) {}
       };
       doCopy(cellVal);
-
-      /* Brief flash on cell */
-      var origBg = td ? td.style.background : '';
-      if (td) {
-        td.style.transition = 'background .12s';
-        td.style.background = '#333';
-        setTimeout(function() { td.style.background = origBg; }, 220);
-      }
     });
 
     /* Animate in */

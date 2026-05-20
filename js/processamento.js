@@ -2919,6 +2919,12 @@
       return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
     });
 
+    /* ── Simple nearest rounding: round each unit price to 2 decimals.
+       Max error per line = 0.005€, so for 73 lines max total drift ≈ ±0.36€ ── */
+    lines.forEach(function(l) {
+      l.precio = Math.round(l.precio * 100) / 100;
+    });
+
     /* ── Render helpers ── */
     var currentIva = '23';
 

@@ -576,6 +576,7 @@ function _predWorkWithParsed(parsed, nextEvento) {
   const suffixes = ['','b','c','d','e','f','g'];
   const nums     = ['1','2','3','4','5','6','7'];
 
+  // ── Fase 1: construir allSeqsData (síncrono, liviano) ─────────────────────
   for(let si=0;si<7;si++) {
     const nums_si = parsed[si];
     const cols=[[],[],[],[]]; const filas=[];
@@ -589,8 +590,11 @@ function _predWorkWithParsed(parsed, nextEvento) {
     predAllSeqs.push({cols,filas,n:filas.length});
   }
 
-  for(let si=0;si<7;si++) {
-    const seq=allSeqsData[si]; if(!seq||seq.n<2) continue;
+  // ── Fase 2: procesar cada secuencia en su propio tick ────────────────────
+  // Cede el control al browser entre cada secuencia para evitar cuelgue.
+  function _procesarSecuencia(si, onDone) {
+    const seq=allSeqsData[si]; 
+    if(!seq||seq.n<2) { onDone(); return; }
     const {cols,filas,n}=seq;
 
     swapIn(si);
@@ -628,47 +632,69 @@ function _predWorkWithParsed(parsed, nextEvento) {
     }
     swapOut(si);
     if(totalPreds>0) predRenderSummary(suffixes[si], nums[si], totalPreds, hitCounts, totalHitsSum, colCorrect, cols);
+    onDone();
   }
 
-  // Sumas y frecuencias
-  histSumsBlk5=[]; histSumsBlk2=[]; histSumsGlobal=[];
-  histEvensBlk5=[]; histEvensBlk2=[]; histEvensGlobal=[];
-  numFreq=Array.from({length:7},()=>({}));
-  letraFreq=Array.from({length:7},()=>({}));
-  letrasHist=Array.from({length:7},()=>[]);
-  abFreq=Array.from({length:7},()=>({}));
-  abHist=Array.from({length:7},()=>[]);
-  c2Freq=Array.from({length:7},()=>({}));
-  c2Hist=Array.from({length:7},()=>[]);
-  c3Freq=Array.from({length:7},()=>({}));
-  c3Hist=Array.from({length:7},()=>[]);
-  // Law reset
-  lawPosFreq  = Array.from({length:5}, () => ({}));
-  lawMFreq    = {};
-  lawNFreq    = {};
-  lawOFreq    = {};
-  lawNumsHist = [];
-  initPatternHistograms();
-  const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
-  for(let i=0;i<minN;i++){
-    const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
-    if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);updateDynRankHist(rowNums);updateLawHistory(rowNums.slice(0,5));}
+  // Encadenar las 7 secuencias con setTimeout entre cada una
+  function _runSecuencias(si) {
+    if(si >= 7) {
+      // Todas las secuencias procesadas → continuar con fase 3
+      setTimeout(_predFase3, 0);
+      return;
+    }
+    const btn = document.getElementById('pred-btn-calcular');
+    if(btn) btn.textContent = `Calculando S${si+1}/7...`;
+    setTimeout(() => {
+      _procesarSecuencia(si, () => _runSecuencias(si + 1));
+    }, 0);
   }
 
-  const lastProbs=allSeqsData.map((seq,si)=>{
-    if(!seq||seq.n<2) return null;
-    swapIn(si);
-    const probs=predecirFilaConProbs(seq.cols,seq.n,null);
-    swapOut(si);
-    return probs;
-  });
+  // ── Fase 3: sumas, frecuencias, combinaciones y render ────────────────────
+  function _predFase3() {
+    const btn = document.getElementById('pred-btn-calcular');
+    if(btn) btn.textContent = 'Analizando...';
 
-  const totalRows=minN;
-  const comboResult=analizarCombinaciones(lastProbs,totalRows);
-  renderCombinaciones(comboResult,totalRows);
+    histSumsBlk5=[]; histSumsBlk2=[]; histSumsGlobal=[];
+    histEvensBlk5=[]; histEvensBlk2=[]; histEvensGlobal=[];
+    numFreq=Array.from({length:7},()=>({}));
+    letraFreq=Array.from({length:7},()=>({}));
+    letrasHist=Array.from({length:7},()=>[]);
+    abFreq=Array.from({length:7},()=>({}));
+    abHist=Array.from({length:7},()=>[]);
+    c2Freq=Array.from({length:7},()=>({}));
+    c2Hist=Array.from({length:7},()=>[]);
+    c3Freq=Array.from({length:7},()=>({}));
+    c3Hist=Array.from({length:7},()=>[]);
+    // Law reset
+    lawPosFreq  = Array.from({length:5}, () => ({}));
+    lawMFreq    = {};
+    lawNFreq    = {};
+    lawOFreq    = {};
+    lawNumsHist = [];
+    initPatternHistograms();
+    const minN=Math.min(...allSeqsData.filter(s=>s.n>0).map(s=>s.n));
+    for(let i=0;i<minN;i++){
+      const rowNums=allSeqsData.map(s=>s.filas[i]?s.filas[i].num:0);
+      if(rowNums.every(n=>n>0)){updateHistSums(rowNums);updateLetraHist(rowNums);updateAbHist(rowNums);updateC2Hist(rowNums);updateC3Hist(rowNums);updatePatternHistograms(rowNums);updateDynRankHist(rowNums);updateLawHistory(rowNums.slice(0,5));}
+    }
 
-  const btn=document.getElementById('pred-btn-calcular');
-  if(btn){btn.disabled=false;btn.textContent='⚡ Calcular';}
+    const lastProbs=allSeqsData.map((seq,si)=>{
+      if(!seq||seq.n<2) return null;
+      swapIn(si);
+      const probs=predecirFilaConProbs(seq.cols,seq.n,null);
+      swapOut(si);
+      return probs;
+    });
+
+    const totalRows=minN;
+    const comboResult=analizarCombinaciones(lastProbs,totalRows);
+    renderCombinaciones(comboResult,totalRows);
+
+    if(btn){btn.disabled=false;btn.textContent='⚡ Calcular';}
+  }
+
+  // Arrancar el procesamiento por secuencias
+  _runSecuencias(0);
 }
 
 // ── pctColor helper ──────────────────────────────────

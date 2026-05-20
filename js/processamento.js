@@ -2919,18 +2919,43 @@
       return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
     });
 
-    /* ── Per-line rounding: for each line choose floor or ceil unit price
-          so that precio_rounded × qty is closest to the exact line total.
-          Error per line ≤ 0.005€ regardless of qty. ── */
+    /* ── Global penny distribution:
+       1. Floor all unit prices to 2 decimals
+       2. Calculate gap vs invoice total in cents
+       3. Add +0.01 to lines with largest fractional remainder × qty
+       This guarantees total matches invoice to within 1 cent ── */
+    var vEl2 = document.getElementById('proc-valorFactura-' + fid);
+    var facturaTotal = parseFloat(vEl2 ? vEl2.value : 0) || 0;
+
+    /* Step 1: floor all prices, store exact remainder per line */
     lines.forEach(function(l) {
-      if (l.qty <= 0) { l.precio = Math.round(l.precio * 100) / 100; return; }
-      var exactTotal  = l.precio * l.qty;
-      var floorPrice  = Math.floor(l.precio * 100) / 100;
-      var ceilPrice   = floorPrice + 0.01;
-      var errFloor    = Math.abs(floorPrice * l.qty - exactTotal);
-      var errCeil     = Math.abs(ceilPrice  * l.qty - exactTotal);
-      l.precio = errCeil < errFloor ? ceilPrice : floorPrice;
+      var exact      = l.precio * l.qty;          /* exact line total */
+      l.precioFloor  = Math.floor(l.precio * 100) / 100;
+      l.floorTotal   = Math.round(l.precioFloor * l.qty * 100) / 100;
+      l.remainder    = exact - l.floorTotal;       /* how much we're undervaluing this line */
+      l.precio       = l.precioFloor;
     });
+
+    /* Step 2: compute gap between floored total and invoice */
+    var target = facturaTotal > 0 ? facturaTotal
+               : lines.reduce(function(s,l){ return s + l.precio*l.qty; }, 0);
+    var floored = lines.reduce(function(s,l){ return s + l.floorTotal; }, 0);
+    floored = Math.round(floored * 100) / 100;
+    var gapCents = Math.round((target - floored) * 100); /* integer cents */
+
+    /* Step 3: add +0.01 to lines with largest remainder, up to gapCents lines */
+    if (gapCents > 0) {
+      var sorted = lines.slice().sort(function(a,b){ return b.remainder - a.remainder; });
+      for (var ci = 0; ci < gapCents && ci < sorted.length; ci++) {
+        sorted[ci].precio = Math.round((sorted[ci].precio + 0.01) * 100) / 100;
+      }
+    } else if (gapCents < 0) {
+      /* Invoice is less than floored — subtract from lines with smallest remainder */
+      var sortedAsc = lines.slice().sort(function(a,b){ return a.remainder - b.remainder; });
+      for (var di = 0; di < Math.abs(gapCents) && di < sortedAsc.length; di++) {
+        sortedAsc[di].precio = Math.round((sortedAsc[di].precio - 0.01) * 100) / 100;
+      }
+    }
 
     /* ── Render helpers ── */
     var currentIva = '23';

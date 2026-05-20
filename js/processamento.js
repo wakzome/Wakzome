@@ -2919,6 +2919,40 @@
       return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
     });
 
+    /* ── Penny adjustment: round each unit price to 2 decimals so that
+          sum(precio_rounded × qty) matches the invoice total exactly ── */
+    var vEl2 = document.getElementById('proc-valorFactura-' + fid);
+    var facturaTotal = parseFloat(vEl2 ? vEl2.value : 0) || 0;
+
+    if (facturaTotal > 0 && lines.length > 0) {
+      /* Step 1: floor each price to 2 decimals, compute rounded total */
+      lines.forEach(function(l) {
+        l.precioFloor = Math.floor(l.precio * 100) / 100;
+        l.resto       = l.precio * 100 - Math.floor(l.precio * 100); /* fractional cents */
+      });
+      var roundedTotal = lines.reduce(function(s, l) { return s + l.precioFloor * l.qty; }, 0);
+      roundedTotal = Math.round(roundedTotal * 100) / 100;
+
+      /* Step 2: how many lines need +0.01 to reach facturaTotal */
+      var diff = Math.round((facturaTotal - roundedTotal) * 100); /* in cents */
+
+      if (diff !== 0 && Math.abs(diff) <= lines.length) {
+        /* Sort by fractional remainder descending to distribute fairly */
+        var sorted = lines.slice().sort(function(a, b) { return b.resto - a.resto; });
+        var increment = diff > 0 ? 1 : -1;
+        var count = Math.abs(diff);
+        for (var ci = 0; ci < count; ci++) {
+          sorted[ci].precioFloor = Math.round((sorted[ci].precioFloor + increment * 0.01) * 100) / 100;
+        }
+      }
+
+      /* Apply adjusted price back to each line */
+      lines.forEach(function(l) { l.precio = l.precioFloor; });
+    } else {
+      /* No invoice total — just round to 2 decimals */
+      lines.forEach(function(l) { l.precio = Math.round(l.precio * 100) / 100; });
+    }
+
     /* ── Render helpers ── */
     var currentIva = '23';
 

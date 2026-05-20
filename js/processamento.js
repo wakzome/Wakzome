@@ -1859,6 +1859,7 @@
       tbody.addEventListener('input', function(e) {
         if (!e.target || !e.target.classList.contains('proc-desc-input')) return;
         var inp = e.target;
+        procSyncDescColWidth(fid);
         var sg  = document.getElementById('proc-desc-global-sugg');
         var q   = inp.value.trim().toUpperCase().replace(/\s+/g,' ');
         if (!q || q.length < 2) { sg.style.display = 'none'; return; }
@@ -2029,13 +2030,13 @@
     var tbody = document.getElementById('proc-tableBody-' + fid);
     if (!tbody) return;
     var inputs = tbody.querySelectorAll('input.proc-desc-input');
-    var maxLen = 14; /* minimum fallback chars */
+    var maxLen = 22; /* minimum fallback chars */
     inputs.forEach(function(inp) {
       var len = inp.value ? inp.value.length : 0;
       if (len > maxLen) maxLen = len;
     });
     inputs.forEach(function(inp) {
-      inp.setAttribute('size', maxLen + 1);
+      inp.setAttribute('size', maxLen + 2);
     });
   }
 

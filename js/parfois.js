@@ -14,7 +14,7 @@
   /* ══════════════════════════════════════════════════════════════
      CONSTANTS & STATE
   ══════════════════════════════════════════════════════════════ */
-  var PF_LS_KEY     = 'parfois_week_session_v3';
+  var PF_LS_KEY     = 'parfois_week_session_v4';
   var PF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
   var pfState = {

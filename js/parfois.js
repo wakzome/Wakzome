@@ -14,7 +14,7 @@
   /* ══════════════════════════════════════════════════════════════
      CONSTANTS & STATE
   ══════════════════════════════════════════════════════════════ */
-  var PF_LS_KEY     = 'parfois_week_session_v5';
+  var PF_LS_KEY     = 'parfois_week_session_v6';
   var PF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
   var pfState = {
@@ -353,126 +353,128 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     MOTOR A — column-aware (Y-position + content detection)
-     Original strategy: groups by Y, identifies columns by content type
+     MOTOR A — anchor-based (Gemini strategy)
+     Uses article codes as Y-anchors, assigns other columns with
+     per-column Y tolerances. Composition column (x≈260) ignored.
   ══════════════════════════════════════════════════════════════ */
   function pfEngineA(allItems, meta, eanMap) {
     eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 5);
+
+    // Column type by X coordinate
+    function colType(x) {
+      if (x >= 15  && x <= 45)  return 'CODE';
+      if (x >= 65  && x <= 115) return 'EAN';
+      if (x >= 120 && x <= 160) return 'PAUTAL';
+      if (x >= 165 && x <= 235) return 'DESC';
+      if (x >= 240 && x <= 335) return 'COMP';   // composição — ignored
+      if (x >= 345 && x <= 385) return 'COUNTRY';
+      if (x >= 386 && x <= 420) return 'QTY';
+      if (x >= 421 && x <= 455) return 'IVA';
+      if (x >= 456 && x <= 505) return 'UPRICE';
+      if (x >= 506 && x <= 540) return 'DISC';
+      if (x >= 541 && x <= 590) return 'TOTAL';
+      return 'UNKNOWN';
+    }
+
+    // Pass 1 — identify article anchors (CODE column, skipping headers/boxes)
+    var anchors = [];
+    allItems.forEach(function(item) {
+      if (colType(item.x) !== 'CODE') return;
+      var s = item.str;
+      if (isBoxCode(s) || SKIP_ROW.test(s)) return;
+      if (!isArticleCode(s)) return;
+      anchors.push({
+        y: item.y, code: s,
+        eanParts: [], descParts: [],
+        pautal: '', country: '', qty: null,
+        unitPrice: null, total: null
+      });
+    });
+
+    anchors.sort(function(a, b) { return a.y - b.y; });
+
+    // Pass 2 — assign each non-CODE item to nearest anchor with per-column tolerance
+    allItems.forEach(function(item) {
+      var ct = colType(item.x);
+      if (ct === 'CODE' || ct === 'COMP' || ct === 'UNKNOWN') return;
+      if (SKIP_ROW.test(item.str)) return;
+
+      var best = null, bestDist = Infinity;
+      anchors.forEach(function(a) {
+        var d = Math.abs(item.y - a.y);
+        if (d < bestDist) { bestDist = d; best = a; }
+      });
+      if (!best) return;
+
+      // EAN column: ±10 (absorbs y±3 and y±4 fragments)
+      if (ct === 'EAN') {
+        if (bestDist <= 10) best.eanParts.push(item);
+        return;
+      }
+      // All other columns: ±5
+      if (bestDist > 5) return;
+
+      switch (ct) {
+        case 'PAUTAL':  if (!best.pautal  && isPautal(item.str))          best.pautal  = item.str; break;
+        case 'DESC':    best.descParts.push(item); break;
+        case 'COUNTRY': if (!best.country && COUNTRIES.test(item.str))    best.country = item.str; break;
+        case 'QTY':     if (best.qty    === null && /^\d{1,3}$/.test(item.str)) best.qty     = parseInt(item.str); break;
+        case 'UPRICE':  if (best.unitPrice === null && isPrice(item.str)) best.unitPrice = parsePrice(item.str); break;
+        case 'TOTAL':   if (best.total  === null && isPrice(item.str))    best.total   = parsePrice(item.str); break;
+      }
+    });
+
+    // Pass 3 — consolidate each anchor into a result item
     var items = [];
+    anchors.forEach(function(anchor) {
+      var ref = anchor.code.match(/^(\d+)/);
+      if (!ref) return;
 
-    var state = { code:null, ean1:null, ean:null, pautal:null, desc:null,
-                  country:null, qty:null, unitPrice:null, price:null };
-
-    function flush() {
-      if (state.code && state.desc && state.qty !== null && state.price !== null) {
-        var ref = state.code.match(/^(\d+)/);
-        if (ref) {
-          items.push({ ref: ref[1], code: state.code,
-                       ean: state.ean || eanMap[state.code] || '',
-                       desc: state.desc, qty: state.qty,
-                       unitPrice: state.unitPrice || 0, price: state.price });
-        }
-      }
-      state.code=null; state.ean1=null; state.ean=null; state.pautal=null;
-      state.desc=null; state.country=null; state.qty=null;
-      state.unitPrice=null; state.price=null;
-    }
-
-    for (var ri = 0; ri < rows.length; ri++) {
-      var row   = rows[ri];
-      var cells = row.items;
-      if (!cells.length) continue;
-      var firstCell = cells[0].str;
-      var rowStr    = cells.map(function(c){ return c.str; }).join(' ');
-
-      if (SKIP_ROW.test(rowStr)) continue;
-      if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
-      if (/^(100002|ATCUD:|Qtd (a|transfer))/.test(firstCell)) continue;
-
-      if (isBoxCode(firstCell)) { flush(); continue; }
-
-      if (isArticleCode(firstCell)) {
-        flush();
-        state.code = firstCell;
-        // Pre-load EAN from map (handles EAN fragments in adjacent Y rows)
-        if (eanMap[firstCell]) state.ean = eanMap[firstCell];
-        for (var ci = 1; ci < cells.length; ci++) {
-          var c = cells[ci].str;
-          if (!state.ean && isFullEan(c)) { state.ean = c; state.ean1 = null; continue; }
-          if (!state.ean && !state.pautal && isEanPart1(c)) { state.ean1 = c; continue; }
-          // EAN part2 within same row (x~83, immediately after part1)
-          if (!state.ean && state.ean1 && isEanPart2(c)) {
-            var ec = state.ean1 + c;
-            if (ec.length === 13) { state.ean = ec; state.ean1 = null; continue; }
-          }
-          if (!state.pautal && isPautal(c)) { state.pautal = c; continue; }
-          if (!state.country && COUNTRIES.test(c)) { state.country = c; continue; }
-          if (state.country && state.qty === null && /^\d{1,3}$/.test(c)) { state.qty = parseInt(c); continue; }
-          if (state.qty !== null && c === '23') continue;
-          if (state.qty !== null && state.unitPrice === null && isPrice(c)) { state.unitPrice = parsePrice(c); continue; }
-          if (state.unitPrice !== null && c === '0,00') continue;
-          if (state.unitPrice !== null && state.price === null && isPrice(c)) { state.price = parsePrice(c); continue; }
-          // Only accept desc from x < 230 (desc column), not from composição (x~260)
-          if (state.pautal && !state.country && !state.desc && !/^\d/.test(c) && c.length > 2) {
-            var cx = cells[ci] ? cells[ci].x : 999;
-            if (cx < 230 && !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(c)) {
-              state.desc = (state.desc ? state.desc + ' ' : '') + c;
+      // Reconstruct EAN from parts sorted by Y
+      var ean = eanMap[anchor.code] || '';
+      if (!ean) {
+        anchor.eanParts.sort(function(a, b) { return a.y - b.y; });
+        var eanStr = anchor.eanParts.map(function(p){ return p.str; }).join('');
+        // Validate: must be 13 digits or a known reconstructible pair
+        if (isFullEan(eanStr)) {
+          ean = eanStr;
+        } else {
+          // Try part1+part2 reconstruction
+          var parts = anchor.eanParts.map(function(p){ return p.str; });
+          for (var i = 0; i < parts.length - 1; i++) {
+            if (isEanPart1(parts[i]) && isEanPart2(parts[i+1])) {
+              var cand = parts[i] + parts[i+1];
+              if (cand.length === 13) { ean = cand; break; }
             }
           }
         }
-        continue;
       }
 
-      if (state.code) {
-        if (state.ean1 && !state.ean && isEanPart2(firstCell)) {
-          var cand = state.ean1 + firstCell;
-          if (cand.length === 13) { state.ean = cand; state.ean1 = null; }
-          for (var cj = 1; cj < cells.length; cj++) {
-            var cc = cells[cj].str;
-            if (!state.pautal && isPautal(cc)) { state.pautal = cc; continue; }
-            if (!state.country && COUNTRIES.test(cc)) { state.country = cc; continue; }
-            if (state.country && state.qty === null && /^\d{1,3}$/.test(cc)) { state.qty = parseInt(cc); continue; }
-            if (state.qty !== null && cc === '23') continue;
-            if (state.qty !== null && state.unitPrice === null && isPrice(cc)) { state.unitPrice = parsePrice(cc); continue; }
-            if (state.unitPrice !== null && cc === '0,00') continue;
-            if (state.unitPrice !== null && state.price === null && isPrice(cc)) { state.price = parsePrice(cc); continue; }
-            if (state.pautal && !state.country && !state.desc && !/^\d/.test(cc) && cc.length > 2) {
-              var ccx = cells[cj] ? cells[cj].x : 999;
-              if (ccx < 230 && !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(cc)) {
-                state.desc = (state.desc ? state.desc + ' ' : '') + cc;
-              }
-            }
-          }
-          continue;
-        }
-        if (isSizeSuffix(firstCell) && cells.length === 1 && !state.desc) {
-          state.code = state.code + ' ' + firstCell; continue;
-        }
-        if (!state.desc && !state.country) {
-          var dcands = cells.filter(function(c) {
-            return c.x < 230 &&
-                   !isPautal(c.str) && !isEanPart1(c.str) && !isEanPart2(c.str) &&
-                   !COUNTRIES.test(c.str) && !/^\d{1,3}$/.test(c.str) &&
-                   !isPrice(c.str) && c.str !== '23' && c.str !== '0,00' &&
-                   !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(c.str) &&
-                   c.str.length > 2;
-          });
-          if (dcands.length) state.desc = dcands.map(function(c){ return c.str; }).join(' ').trim();
-        }
-        if (state.desc && state.country && state.qty === null) {
-          for (var ck = 0; ck < cells.length; ck++) {
-            var cv = cells[ck].str;
-            if (state.qty === null && /^\d{1,3}$/.test(cv)) { state.qty = parseInt(cv); continue; }
-            if (state.qty !== null && cv === '23') continue;
-            if (state.qty !== null && state.unitPrice === null && isPrice(cv)) { state.unitPrice = parsePrice(cv); continue; }
-            if (state.unitPrice !== null && cv === '0,00') continue;
-            if (state.unitPrice !== null && state.price === null && isPrice(cv)) { state.price = parsePrice(cv); continue; }
-          }
+      // Reconstruct description: sort descParts by Y then X, take first clean token
+      anchor.descParts.sort(function(a, b) {
+        return Math.abs(a.y - b.y) <= 2 ? a.x - b.x : a.y - b.y;
+      });
+      var desc = '';
+      for (var di = 0; di < anchor.descParts.length; di++) {
+        var dt = anchor.descParts[di].str;
+        if (dt.length > 1 && !/^\d/.test(dt) &&
+            !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(dt)) {
+          desc = dt;
+          break;
         }
       }
-    }
-    flush();
+      if (!desc || anchor.qty === null || anchor.total === null) return;
+
+      items.push({
+        ref:       ref[1],
+        code:      anchor.code,
+        ean:       ean,
+        desc:      desc,
+        qty:       anchor.qty,
+        unitPrice: anchor.unitPrice || 0,
+        price:     anchor.total
+      });
+    });
     return pfBuildResult(pfDedupe(items), meta);
   }
 

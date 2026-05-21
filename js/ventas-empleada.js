@@ -85,31 +85,37 @@
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
   }
 
-  // ── Descargar y parsear el CSV de horarios de Porto Santo ──
+  // ── Descargar el CSV de horarios de Porto Santo que contiene la fecha de hoy ──
+  // Estrategia: probar varios candidatos por número de semana ISO y quedarse
+  // con el primero cuyo contenido incluya la fecha de hoy (DD/MM/YYYY).
+  // Así funciona correctamente sin importar cuándo se publiquen los horarios.
   function _fetchScheduleCSV() {
     var today = new Date();
     var week  = _isoWeek(today);
     var base  = 'https://' + (window.SUPABASE_URL || '').replace('https://','').replace(/\/$/, '');
     var bucket = '/storage/v1/object/public/horarios/';
 
-    // El CSV en vigor es el de la semana laboral en curso.
-    // Si hoy es lunes o martes (días 1-2), la semana ISO ya cambió pero
-    // el horario publicado puede coincidir con la semana actual.
-    // A partir del miércoles (día 3+) el horario activo es el de week-1
-    // porque el nuevo CSV (week) ya se publica pero aún no ha empezado.
-    var dayOfWeek = today.getDay(); // 0=dom,1=lun,…,6=sáb
-    var isoDay    = dayOfWeek === 0 ? 7 : dayOfWeek; // 1=lun … 7=dom
-    var activeWeek = isoDay >= 3 ? week - 1 : week;
-    var candidates = [activeWeek, activeWeek + 1, activeWeek - 1].map(function (w) {
+    // Fecha de hoy en formato DD/MM/YYYY (el mismo que aparece en el CSV)
+    var todayForCheck = today.toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+    // Candidatos: semana actual y las 2 anteriores y 2 siguientes
+    var weeks = [week, week - 1, week + 1, week - 2, week + 2];
+    var urls  = weeks.map(function (w) {
       return base + bucket + 'porto_s' + w + '.csv';
     });
 
+    // Descargar cada candidato y devolver el primero que contenga la fecha de hoy
     function tryNext(idx) {
-      if (idx >= candidates.length) return Promise.reject(new Error('Horário não encontrado'));
-      return fetch(candidates[idx] + '?t=' + Date.now(), { cache: 'no-store' })
+      if (idx >= urls.length) return Promise.reject(new Error('Horário não encontrado'));
+      return fetch(urls[idx] + '?t=' + Date.now(), { cache: 'no-store' })
         .then(function (res) {
           if (!res.ok) return tryNext(idx + 1);
-          return res.text();
+          return res.text().then(function (text) {
+            // Verificar que este CSV contiene la fecha de hoy
+            if (text.indexOf(todayForCheck) !== -1) return text;
+            // No contiene hoy → probar el siguiente
+            return tryNext(idx + 1);
+          });
         })
         .catch(function () { return tryNext(idx + 1); });
     }

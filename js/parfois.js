@@ -14,7 +14,7 @@
   /* ══════════════════════════════════════════════════════════════
      CONSTANTS & STATE
   ══════════════════════════════════════════════════════════════ */
-  var PF_LS_KEY     = 'parfois_week_session_v6';
+  var PF_LS_KEY     = 'parfois_week_session_v7';
   var PF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
   var pfState = {
@@ -483,273 +483,196 @@
      Uses fixed X-coordinate ranges to identify each column.
      Tolerant to content-type ambiguities since position is primary.
   ══════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     MOTOR B — anchor-based, strict column X ranges
+     Same anchor strategy as A but uses tighter EAN tolerance (±8)
+     and requires pautal to confirm desc column assignment.
+  ══════════════════════════════════════════════════════════════ */
   function pfEngineB(allItems, meta, eanMap) {
     eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 6);  // slightly looser tolerance
-    var items = [];
 
-    /* Parfois column X ranges — calibrated from real PDF:
-       Col 0 (Article/Box): x < 70
-       Col 1 (EAN):         70 <= x < 145
-       Col 2 (Pautal):      210 <= x < 270
-       Col 3 (Desc):        270 <= x < 395
-       Col 4 (Composição):  395 <= x < 530
-       Col 5 (País):        530 <= x < 565
-       Col 6 (Qtd):         565 <= x < 595
-       Col 7 (IVA):         595 <= x < 630
-       Col 8 (Cód):         630 <= x < 655
-       Col 9 (P.Unit):      655 <= x < 715
-       Col 10 (Desc%):      715 <= x < 740
-       Col 11 (Preço):      740 <= x
-    */
-    function colOf(x) {
-      if (x < 70)   return 0;   // Article/Box
-      if (x < 145)  return 1;   // EAN
-      if (x < 175)  return 2;   // Pautal
-      if (x < 255)  return 3;   // Descrição
-      if (x < 355)  return 4;   // Composição
-      if (x < 395)  return 5;   // País
-      if (x < 425)  return 6;   // Qtd
-      if (x < 480)  return 7;   // IVA
-      if (x < 515)  return 8;   // P.Unit
-      if (x < 545)  return 9;   // Desc%
-      return 10;                 // Preço total
+    function colTypeB(x) {
+      if (x >= 15  && x <= 45)  return 'CODE';
+      if (x >= 65  && x <= 115) return 'EAN';
+      if (x >= 120 && x <= 160) return 'PAUTAL';
+      if (x >= 165 && x <= 235) return 'DESC';
+      if (x >= 240 && x <= 335) return 'COMP';
+      if (x >= 345 && x <= 385) return 'COUNTRY';
+      if (x >= 386 && x <= 420) return 'QTY';
+      if (x >= 421 && x <= 455) return 'IVA';
+      if (x >= 456 && x <= 505) return 'UPRICE';
+      if (x >= 506 && x <= 540) return 'DISC';
+      if (x >= 541 && x <= 590) return 'TOTAL';
+      return 'UNKNOWN';
     }
 
-    var cur = null;
+    // Pass 1 — anchors
+    var anchors = [];
+    allItems.forEach(function(item) {
+      if (colTypeB(item.x) !== 'CODE') return;
+      if (isBoxCode(item.str) || SKIP_ROW.test(item.str) || !isArticleCode(item.str)) return;
+      anchors.push({ y: item.y, code: item.str, eanParts: [], descParts: [],
+                     pautal: '', country: '', qty: null, unitPrice: null, total: null });
+    });
+    anchors.sort(function(a, b) { return a.y - b.y; });
 
-    function flush() {
-      if (cur && cur.code && cur.desc && cur.qty !== null && cur.price !== null) {
-        var ref = cur.code.match(/^(\d+)/);
-        if (ref) {
-          items.push({ ref: ref[1], code: cur.code,
-                       ean: cur.ean || eanMap[cur.code] || '',
-                       desc: cur.desc, qty: cur.qty,
-                       unitPrice: cur.unitPrice || 0, price: cur.price });
-        }
-      }
-      cur = null;
-    }
-
-    for (var ri = 0; ri < rows.length; ri++) {
-      var row   = rows[ri];
-      var cells = row.items;
-      if (!cells.length) continue;
-      var firstCell = cells[0].str;
-      var rowStr    = cells.map(function(c){ return c.str; }).join(' ');
-
-      if (SKIP_ROW.test(rowStr)) continue;
-      if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
-      if (/^(100002|ATCUD:)/.test(firstCell)) continue;
-
-      // Build column map for this row
-      var colMap = {};
-      cells.forEach(function(cell) {
-        var col = colOf(cell.x);
-        if (!colMap[col]) colMap[col] = [];
-        colMap[col].push(cell.str);
+    // Pass 2 — assign with per-column tolerance (B uses ±8 for EAN, ±4 for rest)
+    allItems.forEach(function(item) {
+      var ct = colTypeB(item.x);
+      if (ct === 'CODE' || ct === 'COMP' || ct === 'UNKNOWN') return;
+      if (SKIP_ROW.test(item.str)) return;
+      var best = null, bestDist = Infinity;
+      anchors.forEach(function(a) {
+        var d = Math.abs(item.y - a.y);
+        if (d < bestDist) { bestDist = d; best = a; }
       });
-      function colStr(col) { return colMap[col] ? colMap[col].join(' ') : ''; }
-
-      var col0 = colStr(0);
-
-      if (isBoxCode(col0)) { flush(); continue; }
-
-      if (isArticleCode(col0)) {
-        flush();
-        cur = {
-          code:      col0,
-          ean:       '',
-          desc:      '',
-          country:   '',
-          qty:       null,
-          unitPrice: null,
-          price:     null
-        };
-
-        // EAN: col1 may be partial, col1+extra forms 13 digits
-        var ean1str = colStr(1);
-        var ean2str = colStr(2);
-        if (isFullEan(ean1str)) {
-          cur.ean = ean1str;
-        } else if (isEanPart1(ean1str) && isEanPart2(ean2str)) {
-          var cand = ean1str + ean2str;
-          if (cand.length === 13) cur.ean = cand;
-        }
-
-        // Description: col3
-        var d3 = colStr(3);
-        if (d3 && !/^\d/.test(d3) && d3.length > 1) cur.desc = d3;
-
-        // Country: col5
-        var c5 = colStr(5);
-        if (COUNTRIES.test(c5.trim())) cur.country = c5.trim();
-
-        // Qty: col6
-        var q6 = colStr(6).trim();
-        if (/^\d{1,3}$/.test(q6) && parseInt(q6) > 0) cur.qty = parseInt(q6);
-
-        // Unit price: col9
-        var u8 = colStr(8).trim();
-        if (isPrice(u8)) cur.unitPrice = parsePrice(u8);
-
-        // Total price: col10
-        var p10 = colStr(10).trim();
-        if (isPrice(p10)) cur.price = parsePrice(p10);
-
-        // If desc missing, try to find any text in col3 range
-        if (!cur.desc) {
-          var allDescCells = cells.filter(function(c){ return colOf(c.x) === 3; }); // col3 = Descrição
-          if (allDescCells.length) cur.desc = allDescCells.map(function(c){ return c.str; }).join(' ');
-        }
-        continue;
+      if (!best) return;
+      if (ct === 'EAN') { if (bestDist <= 8) best.eanParts.push(item); return; }
+      if (bestDist > 4) return;
+      switch (ct) {
+        case 'PAUTAL':  if (!best.pautal  && isPautal(item.str))               best.pautal    = item.str; break;
+        case 'DESC':    best.descParts.push(item); break;
+        case 'COUNTRY': if (!best.country && COUNTRIES.test(item.str))         best.country   = item.str; break;
+        case 'QTY':     if (best.qty    === null && /^\d{1,3}$/.test(item.str)) best.qty     = parseInt(item.str); break;
+        case 'UPRICE':  if (best.unitPrice === null && isPrice(item.str))      best.unitPrice = parsePrice(item.str); break;
+        case 'TOTAL':   if (best.total  === null && isPrice(item.str))         best.total     = parsePrice(item.str); break;
       }
+    });
 
-      // Continuation row
-      if (cur) {
-        // EAN fragment completion
-        if (!cur.ean) {
-          var cf0 = colStr(0), cf1 = colStr(1);
-          if (isEanPart2(cf0) && cur._ean1) {
-            var ec = cur._ean1 + cf0;
-            if (ec.length === 13) cur.ean = ec;
-          }
-          if (isFullEan(cf0)) cur.ean = cf0;
-          if (isFullEan(cf1)) cur.ean = cf1;
-        }
-        // Description from col3 if still missing
-        if (!cur.desc) {
-          var dd3 = colStr(3);
-          if (dd3 && !/^\d/.test(dd3) && dd3.length > 1) cur.desc = dd3;
-        }
-        // Qty/price fallback from continuation
-        if (cur.qty === null) {
-          var qq6 = colStr(6).trim();
-          if (/^\d{1,3}$/.test(qq6)) cur.qty = parseInt(qq6);
-        }
-        if (cur.price === null) {
-          var pp10 = colStr(10).trim();
-          if (isPrice(pp10)) cur.price = parsePrice(pp10);
-        }
-        if (cur.unitPrice === null) {
-          var uu8 = colStr(8).trim();
-          if (isPrice(uu8)) cur.unitPrice = parsePrice(uu8);
-        }
-      }
-    }
-    flush();
-    return pfBuildResult(pfDedupe(items), meta);
-  }
-
-  /* ══════════════════════════════════════════════════════════════
-     MOTOR C — box-anchor strategy
-     Uses the S6.../O6... box code row as an anchor: the very next
-     article code row is the item for that box. Reads the entire
-     multi-row cluster between two box codes as one logical record.
-  ══════════════════════════════════════════════════════════════ */
-  function pfEngineC(allItems, meta, eanMap) {
-    eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 6);  // looser still — catches split rows
+    // Pass 3 — consolidate
     var items = [];
-
-    // Split rows into clusters anchored by box codes
-    var clusters = [];
-    var curCluster = null;
-
-    for (var ri = 0; ri < rows.length; ri++) {
-      var row       = rows[ri];
-      var cells     = row.items;
-      if (!cells.length) continue;
-      var firstCell = cells[0].str;
-      var rowStr    = cells.map(function(c){ return c.str; }).join(' ');
-
-      if (SKIP_ROW.test(rowStr)) continue;
-      if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
-      if (/^(100002|ATCUD:)/.test(firstCell)) continue;
-
-      if (isBoxCode(firstCell)) {
-        if (curCluster && curCluster.rows.length) clusters.push(curCluster);
-        curCluster = { boxCode: firstCell, rows: [] };
-        continue;
-      }
-      if (curCluster) curCluster.rows.push(row);
-    }
-    if (curCluster && curCluster.rows.length) clusters.push(curCluster);
-
-    // Process each cluster: find article code, then collect all field data
-    clusters.forEach(function(cluster) {
-      var allText = cluster.rows.map(function(r){ return r.items.map(function(c){ return c.str; }).join(' '); }).join(' ');
-      // Find article code
-      var artRow = cluster.rows.find(function(r){ return r.items.length && isArticleCode(r.items[0].str); });
-      if (!artRow) return;
-
-      var code = artRow.items[0].str;
-      var ref  = code.match(/^(\d+)/);
+    anchors.forEach(function(anchor) {
+      var ref = anchor.code.match(/^(\d+)/);
       if (!ref) return;
-
-      // Collect all cells from entire cluster
-      var allCells = [];
-      cluster.rows.forEach(function(r){ r.items.forEach(function(c){ allCells.push(c); }); });
-      allCells.sort(function(a,b){ return a.x - b.x; });
-
-      var ean = '', desc = '', country = '', qty = null, unitPrice = null, price = null;
-      var ean1 = '';
-
-      // EAN: scan for 13-digit or reconstructible sequence
-      var allStrs = allCells.map(function(c){ return c.str; });
-      for (var i = 0; i < allStrs.length; i++) {
-        if (isFullEan(allStrs[i])) { ean = allStrs[i]; break; }
-        if (isEanPart1(allStrs[i]) && !ean1) {
-          ean1 = allStrs[i];
-          if (i+1 < allStrs.length && isEanPart2(allStrs[i+1])) {
-            var ec = ean1 + allStrs[i+1];
-            if (ec.length === 13) { ean = ec; break; }
+      var ean = eanMap[anchor.code] || '';
+      if (!ean) {
+        anchor.eanParts.sort(function(a, b) { return a.y - b.y; });
+        var parts = anchor.eanParts.map(function(p){ return p.str; });
+        var eanStr = parts.join('');
+        if (isFullEan(eanStr)) { ean = eanStr; }
+        else {
+          for (var i = 0; i < parts.length - 1; i++) {
+            if (isEanPart1(parts[i]) && isEanPart2(parts[i+1])) {
+              var c = parts[i] + parts[i+1];
+              if (c.length === 13) { ean = c; break; }
+            }
           }
         }
       }
-
-      // Description: text tokens after the pautal code (6-digit), before country
-      var pautalIdx = -1;
-      for (var j = 0; j < allStrs.length; j++) {
-        if (isPautal(allStrs[j])) { pautalIdx = j; break; }
-      }
-      if (pautalIdx >= 0) {
-        var descParts = [];
-        for (var k = pautalIdx + 1; k < allStrs.length; k++) {
-          var t = allStrs[k];
-          if (COUNTRIES.test(t)) break;
-          if (/^\d/.test(t)) continue;
-          if (/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(t)) continue;
-          if (t.length > 2) descParts.push(t);
-        }
-        desc = descParts.slice(0, 3).join(' ').trim(); // cap at 3 words
-      }
-
-      // Country, qty, unitPrice, price — scan all tokens from right-to-left
-      // Find the two rightmost prices (unitPrice then total), then qty before them
-      var prices = [];
-      var countryFound = false;
-      for (var m = 0; m < allStrs.length; m++) {
-        var ts = allStrs[m];
-        if (COUNTRIES.test(ts) && !countryFound) { country = ts; countryFound = true; }
-        if (isPrice(ts) && ts !== '0,00') prices.push(parsePrice(ts));
-        if (countryFound && qty === null && /^\d{1,3}$/.test(ts) && !isPautal(ts)) {
-          qty = parseInt(ts);
+      anchor.descParts.sort(function(a, b) { return Math.abs(a.y-b.y)<=2 ? a.x-b.x : a.y-b.y; });
+      var desc = '';
+      for (var di = 0; di < anchor.descParts.length; di++) {
+        var dt = anchor.descParts[di].str;
+        if (dt.length > 1 && !/^\d/.test(dt) &&
+            !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(dt)) {
+          desc = dt; break;
         }
       }
-      // prices[0] = unitPrice, prices[1] = total (they appear left-to-right)
-      if (prices.length >= 2) { unitPrice = prices[0]; price = prices[1]; }
-      else if (prices.length === 1) { price = prices[0]; }
-
-      if (desc && qty !== null && price !== null) {
-        items.push({ ref: ref[1], code: code,
-                     ean: ean || eanMap[code] || '',
-                     desc: desc, qty: qty, unitPrice: unitPrice || 0, price: price });
-      }
+      if (!desc || anchor.qty === null || anchor.total === null) return;
+      items.push({ ref: ref[1], code: anchor.code,
+                   ean: ean, desc: desc, qty: anchor.qty,
+                   unitPrice: anchor.unitPrice || 0, price: anchor.total });
     });
 
     return pfBuildResult(pfDedupe(items), meta);
   }
+
+  /* ══════════════════════════════════════════════════════════════
+     MOTOR C — anchor-based, looser EAN tolerance (±12)
+     Differentiator: uses ±6 for non-EAN columns (catches more
+     items when article rows are further from their fields).
+  ══════════════════════════════════════════════════════════════ */
+  function pfEngineC(allItems, meta, eanMap) {
+    eanMap = eanMap || {};
+
+    function colTypeC(x) {
+      if (x >= 15  && x <= 45)  return 'CODE';
+      if (x >= 65  && x <= 115) return 'EAN';
+      if (x >= 120 && x <= 160) return 'PAUTAL';
+      if (x >= 165 && x <= 235) return 'DESC';
+      if (x >= 240 && x <= 335) return 'COMP';
+      if (x >= 345 && x <= 385) return 'COUNTRY';
+      if (x >= 386 && x <= 420) return 'QTY';
+      if (x >= 421 && x <= 455) return 'IVA';
+      if (x >= 456 && x <= 505) return 'UPRICE';
+      if (x >= 506 && x <= 540) return 'DISC';
+      if (x >= 541 && x <= 590) return 'TOTAL';
+      return 'UNKNOWN';
+    }
+
+    // Pass 1 — anchors
+    var anchors = [];
+    allItems.forEach(function(item) {
+      if (colTypeC(item.x) !== 'CODE') return;
+      if (isBoxCode(item.str) || SKIP_ROW.test(item.str) || !isArticleCode(item.str)) return;
+      anchors.push({ y: item.y, code: item.str, eanParts: [], descParts: [],
+                     pautal: '', country: '', qty: null, unitPrice: null, total: null });
+    });
+    anchors.sort(function(a, b) { return a.y - b.y; });
+
+    // Pass 2 — assign with looser tolerances (C: ±12 EAN, ±6 rest)
+    allItems.forEach(function(item) {
+      var ct = colTypeC(item.x);
+      if (ct === 'CODE' || ct === 'COMP' || ct === 'UNKNOWN') return;
+      if (SKIP_ROW.test(item.str)) return;
+      var best = null, bestDist = Infinity;
+      anchors.forEach(function(a) {
+        var d = Math.abs(item.y - a.y);
+        if (d < bestDist) { bestDist = d; best = a; }
+      });
+      if (!best) return;
+      if (ct === 'EAN') { if (bestDist <= 12) best.eanParts.push(item); return; }
+      if (bestDist > 6) return;
+      switch (ct) {
+        case 'PAUTAL':  if (!best.pautal  && isPautal(item.str))               best.pautal    = item.str; break;
+        case 'DESC':    best.descParts.push(item); break;
+        case 'COUNTRY': if (!best.country && COUNTRIES.test(item.str))         best.country   = item.str; break;
+        case 'QTY':     if (best.qty    === null && /^\d{1,3}$/.test(item.str)) best.qty     = parseInt(item.str); break;
+        case 'UPRICE':  if (best.unitPrice === null && isPrice(item.str))      best.unitPrice = parsePrice(item.str); break;
+        case 'TOTAL':   if (best.total  === null && isPrice(item.str))         best.total     = parsePrice(item.str); break;
+      }
+    });
+
+    // Pass 3 — consolidate
+    var items = [];
+    anchors.forEach(function(anchor) {
+      var ref = anchor.code.match(/^(\d+)/);
+      if (!ref) return;
+      var ean = eanMap[anchor.code] || '';
+      if (!ean) {
+        anchor.eanParts.sort(function(a, b) { return a.y - b.y; });
+        var parts = anchor.eanParts.map(function(p){ return p.str; });
+        var eanStr = parts.join('');
+        if (isFullEan(eanStr)) { ean = eanStr; }
+        else {
+          for (var i = 0; i < parts.length - 1; i++) {
+            if (isEanPart1(parts[i]) && isEanPart2(parts[i+1])) {
+              var c = parts[i] + parts[i+1];
+              if (c.length === 13) { ean = c; break; }
+            }
+          }
+        }
+      }
+      anchor.descParts.sort(function(a, b) { return Math.abs(a.y-b.y)<=2 ? a.x-b.x : a.y-b.y; });
+      var desc = '';
+      for (var di = 0; di < anchor.descParts.length; di++) {
+        var dt = anchor.descParts[di].str;
+        if (dt.length > 1 && !/^\d/.test(dt) &&
+            !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(dt)) {
+          desc = dt; break;
+        }
+      }
+      if (!desc || anchor.qty === null || anchor.total === null) return;
+      items.push({ ref: ref[1], code: anchor.code,
+                   ean: ean, desc: desc, qty: anchor.qty,
+                   unitPrice: anchor.unitPrice || 0, price: anchor.total });
+    });
+
+    return pfBuildResult(pfDedupe(items), meta);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     EXTRACT META
 
   /* ══════════════════════════════════════════════════════════════
      EXTRACT META (invoice number, date, totals)

@@ -1149,9 +1149,9 @@
               '<span id="pf-st-copy-msg"></span>' +
             '</div>' +
             '<div class="pf-st-footer-row">' +
-              '<span class="' + qCls + '">' + qIcon + ' Pcs: ' + modalQty + ' (motor: ' + motorQty + ')</span>' +
+              '<span class="' + qCls + '">' + qIcon + ' ' + modalQty + ' pcs</span>' +
               '<span style="color:#ccc">|</span>' +
-              '<span class="' + pCls + '">' + pIcon + ' Total s/IVA: ' + fmtN(modalTotal) + '€ (motor: ' + fmtN(motorTotal) + '€)</span>' +
+              '<span class="' + pCls + '">' + pIcon + ' ' + fmtN(modalTotal) + ' € s/IVA</span>' +
             '</div>';
           })() +
         '</div>' +

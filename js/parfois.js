@@ -358,7 +358,7 @@
   ══════════════════════════════════════════════════════════════ */
   function pfEngineA(allItems, meta, eanMap) {
     eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 8);
+    var rows  = groupRows(allItems, 5);
     var items = [];
 
     var state = { code:null, ean1:null, ean:null, pautal:null, desc:null,
@@ -395,6 +395,8 @@
       if (isArticleCode(firstCell)) {
         flush();
         state.code = firstCell;
+        // Pre-load EAN from map (handles EAN fragments in adjacent Y rows)
+        if (eanMap[firstCell]) state.ean = eanMap[firstCell];
         for (var ci = 1; ci < cells.length; ci++) {
           var c = cells[ci].str;
           if (!state.ean && isFullEan(c)) { state.ean = c; state.ean1 = null; continue; }
@@ -645,7 +647,7 @@
   ══════════════════════════════════════════════════════════════ */
   function pfEngineC(allItems, meta, eanMap) {
     eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 9);  // looser still — catches split rows
+    var rows  = groupRows(allItems, 6);  // looser still — catches split rows
     var items = [];
 
     // Split rows into clusters anchored by box codes
@@ -825,45 +827,44 @@
      EANs, then attach them to the nearest article code by Y proximity. */
   function pfBuildEanMap(allItems) {
     var eanMap = {};
-    // Collect all EAN-column items (x between 70 and 145)
-    var eanItems = allItems.filter(function(i){ return i.x >= 70 && i.x < 135; }); // x=82.7 EAN column only
-    // Collect all article code items
+    // Collect EAN-column items (x=82.7 column)
+    var eanItems = allItems.filter(function(i){ return i.x >= 70 && i.x < 135; });
     var artItems = allItems.filter(function(i){ return isArticleCode(i.str); });
 
-    // Reconstruct EANs: look for consecutive numeric fragments that sum to 13 digits
+    // Reconstruct all EAN13s from fragments, sorted by Y
     var eansSorted = eanItems.slice().sort(function(a,b){ return a.y - b.y; });
-    var eans = [];  // { y, ean13 }
+    var eans = [];
     for (var i = 0; i < eansSorted.length; i++) {
       var s = eansSorted[i].str;
       if (isFullEan(s)) {
         eans.push({ y: eansSorted[i].y, ean: s });
       } else if (isEanPart1(s)) {
-        // Try to combine with the next item
-        if (i + 1 < eansSorted.length && isEanPart2(eansSorted[i+1].str)) {
-          var cand = s + eansSorted[i+1].str;
-          if (cand.length === 13) {
-            eans.push({ y: eansSorted[i].y, ean: cand });
-            i++; // skip next
+        // Combine with any immediately following part2 within Y+10
+        for (var j = i+1; j < eansSorted.length && eansSorted[j].y - eansSorted[i].y <= 10; j++) {
+          if (isEanPart2(eansSorted[j].str)) {
+            var cand = s + eansSorted[j].str;
+            if (cand.length === 13) {
+              eans.push({ y: eansSorted[i].y, ean: cand });
+              i = j; // skip consumed part2
+              break;
+            }
           }
         }
       }
     }
 
-    // Match each EAN to the nearest article code by Y distance
+    // Match each EAN to the nearest article within Y±12
     artItems.forEach(function(art) {
       var bestDist = 999;
       var bestEan  = '';
       eans.forEach(function(e) {
         var dist = Math.abs(e.y - art.y);
-        if (dist < bestDist && dist < 20) { // within 20 Y units
+        if (dist < bestDist && dist <= 12) {
           bestDist = dist;
           bestEan  = e.ean;
         }
       });
-      if (bestEan) {
-        var ref = art.str.match(/^(\d+)/);
-        if (ref) eanMap[art.str] = bestEan;  // key: full article code
-      }
+      if (bestEan) eanMap[art.str] = bestEan;
     });
     return eanMap;
   }

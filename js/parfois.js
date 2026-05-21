@@ -1324,7 +1324,7 @@
           '<button id="pf-back">' +
             '<svg width="13" height="13" viewBox="0 0 12 12" fill="none">' +
               '<path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-            '</svg> faturas' +
+            '</svg> início' +
           '</button>' +
           '<span id="pf-title">parfois</span>' +
           '<span id="pf-session-lbl"></span>' +
@@ -1410,7 +1410,12 @@
     var ov = document.getElementById('pf-overlay');
     if (!ov) return;
     ov.classList.remove('visible');
-    setTimeout(function(){ ov.classList.remove('open'); }, 450);
+    setTimeout(function(){
+      ov.classList.remove('open');
+      // Navigate to dashboard using the page's own back button
+      var admBack = document.getElementById('adm-back-btn');
+      if (admBack) { admBack.click(); }
+    }, 450);
   }
 
   /* Hook faturas-sub-grid */
@@ -1436,6 +1441,15 @@
     pfHook();
     if (pfLoad()) { pfRender(); pfUpdateLbl(); }
     else { pfState.sessionName = pfWeekName(); pfState.createdAt = Date.now(); }
+    // Retry card injection in case faturas-sub-grid loads late (e.g. incognito)
+    [300, 800, 1800, 3500].forEach(function(delay) {
+      setTimeout(function() {
+        if (!document.getElementById('pf-card')) {
+          pfBuildDOM();
+          pfHook();
+        }
+      }, delay);
+    });
   }
 
   if (document.readyState === 'loading') {
@@ -1447,6 +1461,12 @@
   new MutationObserver(function(){
     var grid = document.getElementById('faturas-sub-grid');
     if (grid && !document.getElementById('pf-card')) {
+      pfBuildDOM();
+      pfHook();
+    }
+    // Re-hook when dashboard re-renders (e.g. navigating back)
+    if (grid && grid._pfHooked && !document.getElementById('pf-card')) {
+      grid._pfHooked = false;
       pfBuildDOM();
       pfHook();
     }

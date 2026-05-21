@@ -1067,6 +1067,7 @@
     var inv = pfState.invoices[idx];
     if (!inv) return;
     var items = pfGetActiveItems(inv);
+    var res   = pfGetActiveResult(inv);
 
     // Build rows — ARM fixed A5, IVA fixed 23
     var rows = items.map(function(it) {

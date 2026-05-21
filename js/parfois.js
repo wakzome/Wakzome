@@ -1050,6 +1050,10 @@
     var ttl   = document.getElementById('pf-bc-title');
     ttl.textContent = inv.invoiceNo + ' · códigos de barras';
 
+    // Normalize: session may have old format (ean string) or new (eans array)
+    items.forEach(function(it) {
+      if (!it.eans) it.eans = it.ean ? [it.ean] : [];
+    });
     var withEan = items.filter(function(it){ return it.eans && it.eans.length; });
 
     if (!withEan.length) {

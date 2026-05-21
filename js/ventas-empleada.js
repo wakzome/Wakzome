@@ -92,8 +92,15 @@
     var base  = 'https://' + (window.SUPABASE_URL || '').replace('https://','').replace(/\/$/, '');
     var bucket = '/storage/v1/object/public/horarios/';
 
-    // Intentar semana actual, luego anterior y siguiente como fallback
-    var candidates = [week, week - 1, week + 1].map(function (w) {
+    // El CSV en vigor es el de la semana laboral en curso.
+    // Si hoy es lunes o martes (días 1-2), la semana ISO ya cambió pero
+    // el horario publicado puede coincidir con la semana actual.
+    // A partir del miércoles (día 3+) el horario activo es el de week-1
+    // porque el nuevo CSV (week) ya se publica pero aún no ha empezado.
+    var dayOfWeek = today.getDay(); // 0=dom,1=lun,…,6=sáb
+    var isoDay    = dayOfWeek === 0 ? 7 : dayOfWeek; // 1=lun … 7=dom
+    var activeWeek = isoDay >= 3 ? week - 1 : week;
+    var candidates = [activeWeek, activeWeek + 1, activeWeek - 1].map(function (w) {
       return base + bucket + 'porto_s' + w + '.csv';
     });
 

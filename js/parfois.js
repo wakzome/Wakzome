@@ -202,7 +202,10 @@
       '.pf-st-copy-btn{background:none;border:none;cursor:pointer;font-size:.85rem;color:#888;padding:0 3px;line-height:1;border-radius:4px;transition:color .15s,background .15s;}',
       '.pf-st-copy-btn:hover{color:#000;background:#e0e0e0;}',
       '.pf-st-copy-btn.pf-st-copy-active{color:#2a5a2a!important;}',
-      '#pf-st-footer{padding:10px 18px;border-top:1px solid #eee;font-size:.72rem;font-weight:bold;color:#666;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;}',
+      '#pf-st-footer{padding:8px 18px;border-top:1px solid #eee;font-size:.72rem;font-weight:bold;color:#666;display:flex;flex-direction:column;gap:5px;flex-shrink:0;background:#fafafa;}',
+      '.pf-st-footer-row{display:flex;align-items:center;gap:8px;}',
+      '.pf-st-check-ok{color:#2a5a2a!important;}',
+      '.pf-st-check-err{color:#7a1a1a!important;}',
       /* ── Responsive ── */
       '.pf-inv-toggle{background:none;border:none;color:rgba(255,255,255,0.7)!important;font-size:.85rem;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s;}',
       '.pf-inv-toggle:hover{color:#fff!important;}',
@@ -1127,8 +1130,29 @@
           '</table>' +
         '</div>' +
         '<div id="pf-st-footer">' +
-          rows.length + ' linhas · ' + rows.reduce(function(s,r){ return s+r.qty; },0) + ' uds · A5' +
-          '<span class="pf-guia-copy-msg" id="pf-st-copy-msg" style="margin-left:10px;font-size:.72rem;font-weight:bold;color:#2a5a2a;"></span>' +
+          (function(){
+            var modalQty   = rows.reduce(function(s,r){ return s+r.qty; }, 0);
+            var modalTotal = rows.reduce(function(s,r){ return s + r.price*r.qty; }, 0);
+            modalTotal = Math.round((modalTotal + Number.EPSILON)*100)/100;
+            var motorQty   = res.parsedQty;
+            var motorTotal = res.parsedPrice;
+            var qMatch = modalQty === motorQty;
+            var pMatch = Math.abs(modalTotal - motorTotal) < 0.02;
+            var qCls   = qMatch ? 'pf-st-check-ok' : 'pf-st-check-err';
+            var pCls   = pMatch ? 'pf-st-check-ok' : 'pf-st-check-err';
+            var qIcon  = qMatch ? '✓' : '⚠';
+            var pIcon  = pMatch ? '✓' : '⚠';
+            function fmtN(n){ return Number(n).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+            return '<div class="pf-st-footer-row">' +
+              rows.length + ' linhas · A5' +
+              '<span id="pf-st-copy-msg"></span>' +
+            '</div>' +
+            '<div class="pf-st-footer-row">' +
+              '<span class="' + qCls + '">' + qIcon + ' Pcs: ' + modalQty + ' (motor: ' + motorQty + ')</span>' +
+              '<span style="color:#ccc">|</span>' +
+              '<span class="' + pCls + '">' + pIcon + ' Total s/IVA: ' + fmtN(modalTotal) + '€ (motor: ' + fmtN(motorTotal) + '€)</span>' +
+            '</div>';
+          })() +
         '</div>' +
       '</div>';
 

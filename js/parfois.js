@@ -166,13 +166,18 @@
       '#pf-bc-title{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.07em;text-transform:uppercase;}',
       '#pf-bc-close{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s;line-height:1;}',
       '#pf-bc-close:hover{background:rgba(255,255,255,0.15);}',
-      '#pf-bc-body{overflow-y:auto;padding:14px 18px;flex:1;}',
-      '.pf-bc-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f0f0;}',
-      '.pf-bc-row:last-child{border-bottom:none;}',
-      '.pf-bc-info{flex:1;min-width:0;}',
-      '.pf-bc-ref{font-size:.78rem;font-weight:bold;color:#000!important;letter-spacing:.05em;}',
-      '.pf-bc-name{font-size:.72rem;color:#999!important;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-      '.pf-bc-code{font-size:.85rem;font-weight:bold;color:#000!important;letter-spacing:.1em;background:#f5f5f5;padding:4px 10px;border-radius:6px;border:1px solid #e0e0e0;white-space:nowrap;font-variant-numeric:tabular-nums;}',
+      '#pf-bc-body{overflow-y:auto;padding:0 0 8px;flex:1;}',
+      '.pf-bc-group{border-bottom:1px solid #ececec;padding:10px 18px 8px;}',
+      '.pf-bc-group:last-child{border-bottom:none;}',
+      '.pf-bc-group-hdr{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;}',
+      '.pf-bc-ref{font-size:.78rem;font-weight:bold;color:#000!important;letter-spacing:.05em;cursor:pointer;padding:2px 5px;border-radius:4px;transition:background .15s;}',
+      '.pf-bc-ref:hover{background:#f0f0f0;}',
+      '.pf-bc-name{font-size:.72rem;color:#888!important;cursor:pointer;padding:2px 5px;border-radius:4px;transition:background .15s;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}',
+      '.pf-bc-name:hover{background:#f0f0f0;}',
+      '.pf-bc-eans{display:flex;flex-direction:column;gap:4px;}',
+      '.pf-bc-code{font-size:.85rem;font-weight:bold;color:#000!important;letter-spacing:.1em;background:#f5f5f5;padding:5px 12px;border-radius:6px;border:1px solid #e0e0e0;white-space:nowrap;font-variant-numeric:tabular-nums;cursor:pointer;display:inline-block;transition:background .15s,border-color .15s;}',
+      '.pf-bc-code:hover{background:#e8e8e8;border-color:#bbb;}',
+      '.pf-bc-copied{background:#e8f5e8!important;border-color:#a0c8a0!important;color:#1a4a1a!important;}',
       /* ── Stock modal (same pattern as TAM tamShowStockModal) ── */
       '#pf-st-modal{display:none;position:fixed;inset:0;z-index:310;}',
       '#pf-st-modal.pf-st-visible{display:block;}',
@@ -308,21 +313,22 @@
     items.forEach(function(item) {
       var key = item.ref;
       if (!refMap[key]) {
-        refMap[key] = { ref: item.ref, desc: item.desc, ean: item.ean,
+        refMap[key] = { ref: item.ref, desc: item.desc, eans: [],
                         totalQty: 0, totalPrice: 0, sumUnit: 0 };
       }
       var r = refMap[key];
       r.totalQty   += item.qty;
       r.totalPrice += item.price;
       r.sumUnit    += item.unitPrice * item.qty;
-      if (!r.ean && item.ean) r.ean = item.ean;
+      if (item.ean && r.eans.indexOf(item.ean) === -1) r.eans.push(item.ean);
       if (item.desc && item.desc.length > (r.desc || '').length) r.desc = item.desc;
     });
     return Object.values(refMap).map(function(r) {
       return {
         ref:       r.ref,
         desc:      r.desc || '—',
-        ean:       r.ean || '',
+        ean:       r.eans[0] || '',      // primary EAN (backward compat)
+        eans:      r.eans,               // all EANs
         qty:       r.totalQty,
         price:     rnd2(r.totalPrice),
         unitPrice: r.totalQty > 0 ? rnd2(r.sumUnit / r.totalQty) : 0
@@ -1043,18 +1049,72 @@
     var body  = document.getElementById('pf-bc-body');
     var ttl   = document.getElementById('pf-bc-title');
     ttl.textContent = inv.invoiceNo + ' · códigos de barras';
-    var withEan = items.filter(function(it){ return it.ean; });
-    body.innerHTML = withEan.length
-      ? withEan.map(function(it){
-          return '<div class="pf-bc-row">' +
-            '<div class="pf-bc-info">' +
-              '<div class="pf-bc-ref">' + esc(it.ref) + '</div>' +
-              '<div class="pf-bc-name">' + esc(it.desc) + '</div>' +
-            '</div>' +
-            '<div class="pf-bc-code">' + esc(it.ean) + '</div>' +
-          '</div>';
-        }).join('')
-      : '<div style="text-align:center;padding:40px;color:#bbb;font-size:.82rem;">nenhum EAN encontrado</div>';
+
+    var withEan = items.filter(function(it){ return it.eans && it.eans.length; });
+
+    if (!withEan.length) {
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;font-size:.82rem;">nenhum EAN encontrado</div>';
+      ov.classList.add('open');
+      return;
+    }
+
+    // Build grouped HTML
+    body.innerHTML = withEan.map(function(it) {
+      var eansJoined = it.eans.join('|');
+      var eanBtns = it.eans.map(function(ean) {
+        return '<span class="pf-bc-code" data-eans="' + eansJoined + '">' + esc(ean) + '</span>';
+      }).join('');
+      return '<div class="pf-bc-group">' +
+        '<div class="pf-bc-group-hdr">' +
+          '<span class="pf-bc-ref" data-copy="' + esc(it.ref) + '">' + esc(it.ref) + '</span>' +
+          '<span class="pf-bc-name" data-copy="' + esc(it.desc) + '">' + esc(it.desc) + '</span>' +
+        '</div>' +
+        '<div class="pf-bc-eans">' + eanBtns + '</div>' +
+      '</div>';
+    }).join('');
+
+    // Copy helper
+    function pfCopyText(text, el) {
+      var done = function() {
+        el.classList.add('pf-bc-copied');
+        setTimeout(function(){ el.classList.remove('pf-bc-copied'); }, 900);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(done);
+      } else {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch(e) {}
+        done();
+      }
+    }
+
+    // Ref click — copy ref text
+    body.querySelectorAll('.pf-bc-ref').forEach(function(el) {
+      el.addEventListener('click', function() {
+        pfCopyText(el.getAttribute('data-copy'), el);
+      });
+    });
+
+    // Name click — copy name text
+    body.querySelectorAll('.pf-bc-name').forEach(function(el) {
+      el.addEventListener('click', function() {
+        pfCopyText(el.getAttribute('data-copy'), el);
+      });
+    });
+
+    // EAN click — copy ALL eans of this ref as "UN\tEAN" lines
+    body.querySelectorAll('.pf-bc-code').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var eans = el.getAttribute('data-eans').split('|');
+        var text = eans.map(function(e){ return 'UN\t' + e; }).join('\n');
+        pfCopyText(text, el);
+      });
+    });
+
     ov.classList.add('open');
   }
 

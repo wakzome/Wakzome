@@ -388,7 +388,7 @@
 
       if (SKIP_ROW.test(rowStr)) continue;
       if (/^\d{2}\/\d{2}\/\d{4}\s*$/.test(rowStr)) continue;
-      if (/^(100002|ATCUD:)/.test(firstCell)) continue;
+      if (/^(100002|ATCUD:|Qtd (a|transfer))/.test(firstCell)) continue;
 
       if (isBoxCode(firstCell)) { flush(); continue; }
 
@@ -411,8 +411,10 @@
           if (state.qty !== null && state.unitPrice === null && isPrice(c)) { state.unitPrice = parsePrice(c); continue; }
           if (state.unitPrice !== null && c === '0,00') continue;
           if (state.unitPrice !== null && state.price === null && isPrice(c)) { state.price = parsePrice(c); continue; }
+          // Only accept desc from x < 230 (desc column), not from composição (x~260)
           if (state.pautal && !state.country && !state.desc && !/^\d/.test(c) && c.length > 2) {
-            if (!/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(c)) {
+            var cx = cells[ci] ? cells[ci].x : 999;
+            if (cx < 230 && !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(c)) {
               state.desc = (state.desc ? state.desc + ' ' : '') + c;
             }
           }
@@ -434,7 +436,8 @@
             if (state.unitPrice !== null && cc === '0,00') continue;
             if (state.unitPrice !== null && state.price === null && isPrice(cc)) { state.price = parsePrice(cc); continue; }
             if (state.pautal && !state.country && !state.desc && !/^\d/.test(cc) && cc.length > 2) {
-              if (!/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(cc)) {
+              var ccx = cells[cj] ? cells[cj].x : 999;
+              if (ccx < 230 && !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(cc)) {
                 state.desc = (state.desc ? state.desc + ' ' : '') + cc;
               }
             }
@@ -446,10 +449,11 @@
         }
         if (!state.desc && !state.country) {
           var dcands = cells.filter(function(c) {
-            return !isPautal(c.str) && !isEanPart1(c.str) && !isEanPart2(c.str) &&
+            return c.x < 230 &&
+                   !isPautal(c.str) && !isEanPart1(c.str) && !isEanPart2(c.str) &&
                    !COUNTRIES.test(c.str) && !/^\d{1,3}$/.test(c.str) &&
                    !isPrice(c.str) && c.str !== '23' && c.str !== '0,00' &&
-                   !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp)/i.test(c.str) &&
+                   !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(c.str) &&
                    c.str.length > 2;
           });
           if (dcands.length) state.desc = dcands.map(function(c){ return c.str; }).join(' ').trim();

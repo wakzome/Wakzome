@@ -3049,6 +3049,25 @@
         S._apoioShifts[pid][day] = { store: apoioSid, shift: apoioSlot };
         // Remove APOIO marker (with or without time) to get the clean shift string
         shift = shiftRaw.replace(/\|APOIO(?::[^|]+)?/, '');
+      } else {
+        // No APOIO in new shift — clean up any previous apoio entry for this day
+        const prevApoio = S._apoioShifts?.[pid]?.[day];
+        if (prevApoio) {
+          const prevApoioSid = prevApoio.store;
+          delete S._apoioShifts[pid][day];
+          // If person has no remaining apoio days in that store, remove from its section
+          const stillHasApoioInStore = Object.values(S._apoioShifts[pid] || {}).some(a => a.store === prevApoioSid);
+          const stillHasWorkInStore = DAYS.some(d => d !== day && S.schedule[pid]?.[d]?.type === 'work' && S.schedule[pid]?.[d]?.store === prevApoioSid);
+          if (!stillHasApoioInStore && !stillHasWorkInStore) {
+            if (S._personStores?.[pid]) {
+              S._personStores[pid] = S._personStores[pid].filter(s => s !== prevApoioSid);
+              if (S._personStores[pid].length === 0) delete S._personStores[pid];
+            }
+            if (S._storeOrder?.[prevApoioSid]) {
+              S._storeOrder[prevApoioSid] = S._storeOrder[prevApoioSid].filter(id => id !== pid);
+            }
+          }
+        }
       }
       const p = P(pid), ce = document.getElementById('gh-me-conf');
       const hard = PEOPLE.find(o => o.id !== pid && p?.hardAvoid?.includes(o.id) && S.schedule[o.id]?.[day]?.type === 'work' && S.schedule[o.id]?.[day]?.store === sid);

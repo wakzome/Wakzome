@@ -358,7 +358,7 @@
   ══════════════════════════════════════════════════════════════ */
   function pfEngineA(allItems, meta, eanMap) {
     eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 5);
+    var rows  = groupRows(allItems, 8);
     var items = [];
 
     var state = { code:null, ean1:null, ean:null, pautal:null, desc:null,
@@ -641,7 +641,7 @@
   ══════════════════════════════════════════════════════════════ */
   function pfEngineC(allItems, meta, eanMap) {
     eanMap = eanMap || {};
-    var rows  = groupRows(allItems, 7);  // looser still — catches split rows
+    var rows  = groupRows(allItems, 9);  // looser still — catches split rows
     var items = [];
 
     // Split rows into clusters anchored by box codes
@@ -822,7 +822,7 @@
   function pfBuildEanMap(allItems) {
     var eanMap = {};
     // Collect all EAN-column items (x between 70 and 145)
-    var eanItems = allItems.filter(function(i){ return i.x >= 70 && i.x < 130; }); // x=82.7 EAN column only
+    var eanItems = allItems.filter(function(i){ return i.x >= 70 && i.x < 135; }); // x=82.7 EAN column only
     // Collect all article code items
     var artItems = allItems.filter(function(i){ return isArticleCode(i.str); });
 
@@ -851,7 +851,7 @@
       var bestEan  = '';
       eans.forEach(function(e) {
         var dist = Math.abs(e.y - art.y);
-        if (dist < bestDist && dist < 60) { // within 60 Y units
+        if (dist < bestDist && dist < 20) { // within 20 Y units
           bestDist = dist;
           bestEan  = e.ean;
         }

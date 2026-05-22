@@ -17,6 +17,10 @@
   var PF_LS_KEY     = 'parfois_week_session_v7';
   var PF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
+  /* Supabase — uses global sbAdmin defined in supabase-config.js */
+  var PF_SB_TABLE = 'parfois_sessions';
+  function pfSB() { return (typeof sbAdmin !== 'undefined') ? sbAdmin : null; }
+
   var pfState = {
     invoices:      [],
     activeEngines: {},   // { fileName: 'A'|'B'|'C' }
@@ -44,39 +48,119 @@
   /* ══════════════════════════════════════════════════════════════
      LOCALSTORAGE
   ══════════════════════════════════════════════════════════════ */
-  function pfSave() {
-    try {
-      localStorage.setItem(PF_LS_KEY, JSON.stringify({
-        sessionName:   pfState.sessionName,
-        createdAt:     pfState.createdAt,
-        invoices:      pfState.invoices,
-        activeEngines: pfState.activeEngines
-      }));
-    } catch(e) {}
+  /* ── localStorage helpers ── */
+  function pfLocalSaveAll(all) {
+    try { localStorage.setItem(PF_LS_KEY, JSON.stringify(all)); } catch(e) {}
+  }
+  function pfLocalLoadAll() {
+    try { var r = localStorage.getItem(PF_LS_KEY); return r ? JSON.parse(r) : {}; } catch(e) { return {}; }
   }
 
-  function pfLoad() {
-    try {
-      var raw = localStorage.getItem(PF_LS_KEY);
-      if (!raw) return false;
-      var data = JSON.parse(raw);
-      var weekName = pfWeekName();
-      if (!data.sessionName || data.sessionName !== weekName) return false;
-      pfState.sessionName   = data.sessionName;
-      pfState.createdAt     = data.createdAt;
-      pfState.invoices      = data.invoices || [];
-      pfState.activeEngines = data.activeEngines || {};
-      return pfState.invoices.length > 0;
-    } catch(e) { return false; }
+  /* ── Build session payload ── */
+  function pfBuildPayload() {
+    return {
+      name:          pfState.sessionName,
+      savedAt:       Date.now(),
+      invoices:      pfState.invoices,
+      activeEngines: pfState.activeEngines,
+      collapsed:     pfState.collapsed
+    };
   }
+
+  /* ── Save current session to localStorage + Supabase ── */
+  function pfSave() {
+    if (!pfState.sessionName) return;
+    var payload = pfBuildPayload();
+    // localStorage
+    var all = pfLocalLoadAll();
+    all[pfState.sessionName] = payload;
+    pfLocalSaveAll(all);
+    // Supabase (async, non-blocking)
+    pfSaveToSupabase(payload);
+  }
+
+  async function pfSaveToSupabase(payload) {
+    var sb = pfSB();
+    if (!sb) return;
+    try {
+      var row = {
+        session_name: payload.name,
+        saved_at:     new Date(payload.savedAt).toISOString(),
+        data:         JSON.stringify(payload)
+      };
+      var check = await sb.from(PF_SB_TABLE).select('session_name').eq('session_name', payload.name).limit(1);
+      if (check.data && check.data.length > 0) {
+        await sb.from(PF_SB_TABLE).update({ saved_at: row.saved_at, data: row.data }).eq('session_name', payload.name);
+      } else {
+        await sb.from(PF_SB_TABLE).insert(row);
+      }
+    } catch(e) { console.warn('Parfois: Supabase save error', e); }
+  }
+
+  /* ── Load all sessions merging localStorage + Supabase ── */
+  async function pfLoadAllMerged() {
+    var local = pfLocalLoadAll();
+    var sb = pfSB();
+    if (!sb) return local;
+    try {
+      var res = await sb.from(PF_SB_TABLE).select('session_name, saved_at, data').order('saved_at', { ascending: false });
+      if (!res.error && res.data) {
+        res.data.forEach(function(row) {
+          try {
+            var parsed = JSON.parse(row.data);
+            var loc = local[parsed.name];
+            if (!loc || parsed.savedAt > (loc.savedAt || 0)) local[parsed.name] = parsed;
+          } catch(e) {}
+        });
+        pfLocalSaveAll(local);
+      }
+    } catch(e) { console.warn('Parfois: Supabase load error', e); }
+    return local;
+  }
+
+  /* ── Delete session from localStorage + Supabase ── */
+  function pfDeleteSession(name) {
+    var all = pfLocalLoadAll();
+    delete all[name];
+    pfLocalSaveAll(all);
+    var sb = pfSB();
+    if (sb) sb.from(PF_SB_TABLE).delete().eq('session_name', name).then(function(){});
+  }
+
+  /* ── Load a specific session into pfState ── */
+  async function pfLoadSession(name) {
+    var sb = pfSB();
+    var data = null;
+    if (sb) {
+      try {
+        var res = await sb.from(PF_SB_TABLE).select('data').eq('session_name', name).limit(1);
+        if (!res.error && res.data && res.data.length) data = JSON.parse(res.data[0].data);
+      } catch(e) {}
+    }
+    if (!data) {
+      var all = pfLocalLoadAll();
+      data = all[name];
+    }
+    if (!data) return false;
+    pfState.sessionName   = data.name;
+    pfState.createdAt     = data.savedAt;
+    pfState.invoices      = data.invoices      || [];
+    pfState.activeEngines = data.activeEngines || {};
+    pfState.collapsed     = data.collapsed     || {};
+    return true;
+  }
+
+  /* ── Legacy pfLoad — not used for session picker but kept for compat ── */
+  function pfLoad() { return false; }
 
   function pfClear() {
     try { localStorage.removeItem(PF_LS_KEY); } catch(e) {}
     pfState.invoices      = [];
     pfState.activeEngines = {};
     pfState.engineCache   = {};
-    pfState.sessionName   = pfWeekName();
-    pfState.createdAt     = Date.now();
+    pfState.collapsed     = {};
+    pfState.sessionName   = '';
+    pfState.createdAt     = null;
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -215,7 +299,30 @@
       '.pf-inv-toggle{background:none;border:none;color:rgba(255,255,255,0.7)!important;font-size:.85rem;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s;}',
       '.pf-inv-toggle:hover{color:#fff!important;}',
       '.pf-inv-spacer{flex:1;}',
-      '@media(max-width:480px){.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}'
+      '@media(max-width:480px){.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}',
+      /* ── Session picker ── */
+      '#pf-sess-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:219;overflow-y:auto;-webkit-overflow-scrolling:touch;}',
+      '#pf-sess-overlay.open{display:flex;align-items:flex-start;justify-content:center;padding:40px 16px 60px;}',
+      '#pf-sess-card{width:100%;max-width:480px;background:#fff;border:1.5px solid #e0e0e0;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);}',
+      '#pf-sess-card-top{padding:28px 28px 0;}',
+      '.pf-sess-pretitle{font-size:.68rem;font-weight:bold;letter-spacing:.12em;color:#aaa;text-transform:uppercase;margin-bottom:8px;}',
+      '.pf-sess-title{font-size:1.5rem;font-weight:bold;color:#000;margin-bottom:6px;}',
+      '.pf-sess-subtitle{font-size:.8rem;color:#888;margin-bottom:20px;}',
+      '.pf-sess-section-lbl{font-size:.68rem;font-weight:bold;letter-spacing:.1em;color:#aaa;text-transform:uppercase;padding:0 28px;margin-bottom:8px;}',
+      '.pf-sess-list{padding:0 16px;margin-bottom:8px;}',
+      '.pf-sess-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #e8e8e8;border-radius:10px;margin-bottom:8px;background:#fff;transition:border-color .15s;}',
+      '.pf-sess-row:hover{border-color:#bbb;}',
+      '.pf-sess-info{flex:1;min-width:0;}',
+      '.pf-sess-name{font-size:.88rem;font-weight:bold;color:#000;}',
+      '.pf-sess-meta{font-size:.7rem;color:#aaa;margin-top:2px;}',
+      '.pf-sess-load-btn{font-size:.75rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:6px 14px;border-radius:7px;border:1.5px solid #ccc;background:#fff;color:#000;white-space:nowrap;transition:background .15s;display:inline-flex;align-items:center;gap:5px;}',
+      '.pf-sess-load-btn:hover{background:#f0f0f0;border-color:#888;}',
+      '.pf-sess-del-btn{background:none;border:none;color:#ccc;font-size:.9rem;cursor:pointer;padding:4px 6px;border-radius:5px;transition:color .15s,background .15s;}',
+      '.pf-sess-del-btn:hover{color:#9B4D4D;background:#fdf0f0;}',
+      '.pf-sess-empty{text-align:center;padding:28px 16px;color:#ccc;font-size:.82rem;}',
+      '#pf-sess-new-btn{display:block;width:calc(100% - 56px);margin:12px 28px 28px;padding:14px;font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;border:1.5px solid #e0e0e0;border-radius:12px;background:#fff;color:#000;text-align:center;transition:background .15s,border-color .15s;}',
+      '#pf-sess-new-btn:hover{background:#f8f8f8;border-color:#bbb;}',
+      '.pf-sess-loading{text-align:center;padding:20px;color:#aaa;font-size:.8rem;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -834,7 +941,84 @@
   /* ══════════════════════════════════════════════════════════════
      RENDER
   ══════════════════════════════════════════════════════════════ */
-  function pfRender() {
+  /* ══════════════════════════════════════════════════════════════
+     SESSION PICKER
+  ══════════════════════════════════════════════════════════════ */
+  function pfFmtDate(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    return d.toLocaleDateString('pt-PT') + ' · ' + d.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  async function pfOpenSessionPicker() {
+    var ov = document.getElementById('pf-sess-overlay');
+    if (!ov) return;
+    var list = document.getElementById('pf-sess-list');
+    if (list) list.innerHTML = '<div class="pf-sess-loading">a carregar sessões…</div>';
+    ov.classList.add('open');
+
+    var all = await pfLoadAllMerged();
+    var sessions = Object.values(all).sort(function(a,b){ return (b.savedAt||0)-(a.savedAt||0); });
+
+    if (!list) return;
+    if (!sessions.length) {
+      list.innerHTML = '<div class="pf-sess-empty">nenhuma sessão guardada</div>';
+      return;
+    }
+    list.innerHTML = sessions.map(function(s) {
+      var invCount = (s.invoices || []).length;
+      var fatStr   = invCount + ' fat.';
+      return '<div class="pf-sess-row">' +
+        '<div class="pf-sess-info">' +
+          '<div class="pf-sess-name">' + esc(s.name || '') + '</div>' +
+          '<div class="pf-sess-meta">' + pfFmtDate(s.savedAt) + ' · ' + fatStr + '</div>' +
+        '</div>' +
+        '<button class="pf-sess-load-btn" data-sname="' + esc(s.name) + '">↩ carregar</button>' +
+        '<button class="pf-sess-del-btn"  data-sdel="'  + esc(s.name) + '" title="eliminar">×</button>' +
+      '</div>';
+    }).join('');
+
+    list.querySelectorAll('[data-sname]').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var name = btn.getAttribute('data-sname');
+        pfSpinner('a carregar sessão…');
+        var ok = await pfLoadSession(name);
+        pfSpinner(null);
+        if (ok) {
+          pfCloseSessionPicker();
+          pfRender();
+          pfUpdateLbl();
+          pfOpenEntry();
+        }
+      });
+    });
+
+    list.querySelectorAll('[data-sdel]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var name = btn.getAttribute('data-sdel');
+        if (!confirm('Eliminar a sessão "' + name + '"?')) return;
+        pfDeleteSession(name);
+        btn.closest('.pf-sess-row').remove();
+      });
+    });
+  }
+
+  function pfCloseSessionPicker() {
+    var ov = document.getElementById('pf-sess-overlay');
+    if (ov) ov.classList.remove('open');
+  }
+
+  function pfStartNewSession() {
+    pfClear();
+    pfState.sessionName = pfWeekName();
+    pfState.createdAt   = Date.now();
+    pfCloseSessionPicker();
+    pfRender();
+    pfUpdateLbl();
+    pfOpen();
+  }
+
+    function pfRender() {
     var content   = document.getElementById('pf-content');
     var statusMsg = document.getElementById('pf-status-msg');
     if (!content) return;
@@ -1311,7 +1495,7 @@
         '</span>' +
         '<div><div class="adm-mod-name">PARFOIS</div><div class="adm-mod-desc">faturas Parfois · 3 motores · EAN + stock</div></div>' +
         '<div class="adm-mod-arrow">→</div>';
-      card.addEventListener('click', pfOpen);
+      card.addEventListener('click', pfOpenEntry);
       grid.appendChild(card);
     }
 
@@ -1380,6 +1564,25 @@
       bc.addEventListener('click', function(e){ if (e.target === bc) bc.classList.remove('open'); });
     }
 
+    /* Session picker overlay */
+    if (!document.getElementById('pf-sess-overlay')) {
+      var so = document.createElement('div');
+      so.id = 'pf-sess-overlay';
+      so.innerHTML =
+        '<div id="pf-sess-card">' +
+          '<div id="pf-sess-card-top">' +
+            '<div class="pf-sess-pretitle">processamento de faturas</div>' +
+            '<div class="pf-sess-title">Escolhe uma sessão ou inicia uma nova</div>' +
+            '<div class="pf-sess-subtitle">Para evitar sobreescrever dados, selecciona sempre a sessão correcta.</div>' +
+          '</div>' +
+          '<div class="pf-sess-section-lbl">sessões guardadas</div>' +
+          '<div class="pf-sess-list" id="pf-sess-list"></div>' +
+          '<button id="pf-sess-new-btn">⭐ iniciar nova sessão</button>' +
+        '</div>';
+      document.body.appendChild(so);
+      document.getElementById('pf-sess-new-btn').addEventListener('click', pfStartNewSession);
+    }
+
     /* Spinner */
     if (!document.getElementById('pf-spinner')) {
       var sp = document.createElement('div');
@@ -1406,7 +1609,12 @@
     ov.classList.add('open');
     requestAnimationFrame(function(){ ov.classList.add('visible'); });
   }
+  function pfOpenEntry() {
+    /* Always show session picker first */
+    pfOpenSessionPicker();
+  }
   function pfClose() {
+    pfCloseSessionPicker();
     var ov = document.getElementById('pf-overlay');
     if (!ov) return;
     ov.classList.remove('visible');
@@ -1439,8 +1647,7 @@
     pfStyles();
     pfBuildDOM();
     pfHook();
-    if (pfLoad()) { pfRender(); pfUpdateLbl(); }
-    else { pfState.sessionName = pfWeekName(); pfState.createdAt = Date.now(); }
+    pfState.sessionName = pfWeekName(); pfState.createdAt = Date.now();
     // Retry card injection in case faturas-sub-grid loads late (e.g. incognito)
     [300, 800, 1800, 3500].forEach(function(delay) {
       setTimeout(function() {

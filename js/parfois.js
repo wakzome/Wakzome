@@ -348,9 +348,11 @@
       '#pf-pvp-close{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1;flex-shrink:0;}',
       '#pf-pvp-close:hover{background:rgba(255,255,255,0.15);}',
       '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;}',
-      '#pf-pvp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;min-width:520px;}',
+      '#pf-pvp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
+      '.pf-pvp-th.pf-pvp-th-compact{width:1px;}',
       '.pf-pvp-th{background:#f0f0f0;padding:8px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
       '.pf-pvp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
+      '.pf-pvp-th-compact,.pf-pvp-td.compact{width:1px;}',
       '.pf-pvp-td.pf-pvp-td-name{white-space:normal;min-width:110px;}',
       '.pf-pvp-td-ref{font-weight:bold;letter-spacing:.04em;cursor:pointer;border-radius:4px;padding:2px 4px;transition:background .15s;}',
       '.pf-pvp-td-ref:hover{background:#f0f0f0;}',
@@ -369,30 +371,34 @@
       '#pf-pvp-save-msg{font-size:.72rem;font-weight:bold;color:#2a5a2a;}',
       '#pf-pvp-complete-badge{font-size:.7rem;font-weight:bold;padding:3px 10px;border-radius:20px;background:#2a7a2a;color:#fff!important;}',
       /* ── PVP Employee overlay ── */
-      '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;overflow:hidden;}',
+      '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;}',
       '#pf-pvp-emp-overlay.open{display:flex;}',
-      '#pf-pvp-emp-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;flex-wrap:wrap;}',
-      '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}',
+      '#pf-pvp-emp-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}',
+      '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 14px 7px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}',
       '#pf-pvp-emp-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;}',
       '#pf-pvp-emp-save-msg{margin-left:auto;font-size:.72rem;font-weight:bold;color:#2a5a2a;}',
-      '#pf-pvp-emp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;display:flex;flex-direction:column;gap:16px;}',
-      '.pf-pvp-emp-card{border:1.5px solid #e0e0e0;border-radius:12px;overflow:hidden;}',
-      '.pf-pvp-emp-card-hdr{background:#1a1a2e;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}',
+      '#pf-pvp-emp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;display:flex;flex-direction:column;gap:16px;min-height:0;}',
+      '.pf-pvp-emp-card{border:1.5px solid #e0e0e0;border-radius:12px;overflow:hidden;flex-shrink:0;}',
+      '.pf-pvp-emp-card-hdr{background:#1a1a2e;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.6)!important;}',
       '.pf-pvp-emp-scroll{overflow-x:auto;}',
       '.pf-pvp-emp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
-      '.pf-pvp-emp-th{background:#f0f0f0;padding:8px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
+      '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
+      '.pf-pvp-emp-th.pf-emp-th-compact{width:1px;}',
       '.pf-pvp-emp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
-      '.pf-pvp-emp-td.pf-pvp-emp-td-name{white-space:normal;}',
-      '.pf-pvp-emp-input{width:80px;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
-      '.pf-pvp-emp-input:focus{outline:none;border-color:#666;}',
-      '.pf-pvp-emp-input::placeholder{color:#999;}',
+      '.pf-pvp-emp-td.pf-pvp-emp-td-name{white-space:nowrap;}',
+      '.pf-pvp-emp-input{width:72px;border:1px solid #ddd;border-radius:6px;padding:4px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
+      '.pf-pvp-emp-obs-input{width:160px;border:1px solid #ddd;border-radius:6px;padding:4px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
+      '.pf-pvp-emp-input:focus,.pf-pvp-emp-obs-input:focus{outline:none;border-color:#666;}',
+      '.pf-pvp-emp-input::placeholder,.pf-pvp-emp-obs-input::placeholder{color:#bbb;}',
       '.pf-pvp-emp-input.filled{background:#f0f8f0;border-color:#a0c8a0;}',
-      '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;}',
+      '.pf-pvp-emp-obs-input.filled{background:#f0f8f0;border-color:#a0c8a0;}',
+      '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;flex-shrink:0;}',
       '.pf-pvp-emp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
-      '.pf-pvp-emp-notes-ta{width:100%;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;resize:vertical;min-height:56px;box-sizing:border-box;}',
-      '.pf-pvp-emp-notes-ta:focus{outline:none;border-color:#666;}'
+      '.pf-pvp-emp-notes-ta{width:100%;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:64px;box-sizing:border-box;}',
+      '.pf-pvp-emp-notes-ta:focus{outline:none;border-color:#666;}',
+      '.pf-pvp-emp-notes-ta::placeholder{color:#bbb;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -1593,11 +1599,11 @@
     function renderTable() {
       return '<table id="pf-pvp-table">' +
         '<thead><tr>' +
-          '<th class="pf-pvp-th">Ref.</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-compact">Ref.</th>' +
           '<th class="pf-pvp-th">Nome do artigo</th>' +
-          '<th class="pf-pvp-th" style="text-align:center">Qtd.</th>' +
-          '<th class="pf-pvp-th" style="text-align:center">PVP (\u20ac)</th>' +
-          '<th class="pf-pvp-th" style="text-align:center">Obs.</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-compact" style="text-align:center">Qtd.</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-compact" style="text-align:center">PVP (\u20ac)</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-compact" style="text-align:center">Obs.</th>' +
         '</tr></thead><tbody>' +
         items.map(function(it, i) {
           return '<tr>' +
@@ -1756,25 +1762,25 @@
       btn.href = '#';
       btn.textContent = 'LISTA PVP';
       // Copy style from sibling links
-      // Copy computed styles from sibling to match appearance exactly
+      // Apply same CSS id as recibos-link so it picks up existing stylesheet rules
+      // We add it to the nav — the page CSS for #recibos-link applies to all nav links
+      // We clone the id-based styles by adding inline style matching the computed result
       var sibling = document.getElementById('recibos-link');
       if (sibling) {
-        btn.className = sibling.className;
         var cs = window.getComputedStyle(sibling);
-        btn.style.display    = cs.display || 'block';
-        btn.style.padding    = cs.padding;
-        btn.style.border     = cs.border;
-        btn.style.borderRadius = cs.borderRadius;
-        btn.style.background = cs.background;
-        btn.style.color      = cs.color;
-        btn.style.fontFamily = cs.fontFamily;
-        btn.style.fontSize   = cs.fontSize;
-        btn.style.fontWeight = cs.fontWeight;
-        btn.style.letterSpacing = cs.letterSpacing;
-        btn.style.textDecoration = 'none';
-        btn.style.cursor     = 'pointer';
-      } else {
-        btn.style.display = 'block';
+        btn.style.cssText = (
+          'display:' + (cs.display||'inline-block') + ';' +
+          'padding:' + cs.padding + ';' +
+          'border:' + cs.border + ';' +
+          'border-radius:' + cs.borderRadius + ';' +
+          'background:' + cs.background + ';' +
+          'color:' + cs.color + ';' +
+          'font-family:' + cs.fontFamily + ';' +
+          'font-size:' + cs.fontSize + ';' +
+          'font-weight:' + cs.fontWeight + ';' +
+          'letter-spacing:' + cs.letterSpacing + ';' +
+          'text-decoration:none;cursor:pointer;text-transform:uppercase;'
+        );
       }
       nav.appendChild(btn);
       btn.addEventListener('click', function(e){
@@ -1817,7 +1823,7 @@
             '<input class="pf-pvp-emp-input' + (it.pvp ? ' filled' : '') + '" data-ei="' + ei + '" data-ii="' + ii + '" data-f="pvp" type="text" placeholder="0,00" value="' + esc(it.pvp||'') + '">' +
           '</td>' +
           '<td class="pf-pvp-emp-td">' +
-            '<input class="pf-pvp-emp-input' + (it.obs ? ' filled' : '') + '" data-ei="' + ei + '" data-ii="' + ii + '" data-f="obs" type="text" placeholder="observa\u00e7\u00f5es\u2026" value="' + esc(it.obs||'') + '">' +
+            '<input class="pf-pvp-emp-obs-input' + (it.obs ? ' filled' : '') + '" data-ei="' + ei + '" data-ii="' + ii + '" data-f="obs" type="text" placeholder="obs..." value="' + esc(it.obs||'') + '">' +
           '</td>' +
         '</tr>';
       }).join('');
@@ -1829,11 +1835,11 @@
         '<div class="pf-pvp-emp-scroll">' +
           '<table class="pf-pvp-emp-table">' +
             '<thead><tr>' +
-              '<th class="pf-pvp-emp-th">Ref.</th>' +
+              '<th class="pf-pvp-emp-th pf-emp-th-compact">Ref.</th>' +
               '<th class="pf-pvp-emp-th">Nome</th>' +
-              '<th class="pf-pvp-emp-th" style="text-align:center">Qtd.</th>' +
-              '<th class="pf-pvp-emp-th">PVP (\u20ac)</th>' +
-              '<th class="pf-pvp-emp-th">Observa\u00e7\u00f5es</th>' +
+              '<th class="pf-pvp-emp-th pf-emp-th-compact" style="text-align:center">Qtd.</th>' +
+              '<th class="pf-pvp-emp-th pf-emp-th-compact">PVP (\u20ac)</th>' +
+              '<th class="pf-pvp-emp-th pf-emp-th-compact">Obs.</th>' +
             '</tr></thead>' +
             '<tbody>' + rows + '</tbody>' +
           '</table>' +

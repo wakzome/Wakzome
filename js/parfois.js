@@ -349,7 +349,7 @@
       '#pf-pvp-close:hover{background:rgba(255,255,255,0.15);}',
       '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;}',
       /* Admin table: auto layout, compact cols shrink to content */
-      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
+      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;max-width:100%;}',
       '.pf-pvp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
@@ -393,7 +393,7 @@
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.55)!important;}',
       '.pf-pvp-emp-scroll{overflow-x:auto;}',
       /* Employee table: auto layout, compact cols */
-      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
+      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;max-width:100%;}',
       '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-emp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-emp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',

@@ -1516,8 +1516,8 @@
         '</div>' +
         '<div id="pf-content">' +
           '<label id="pf-drop-area" for="pf-file-input">' +
-            '<div id="pf-drop-lbl">arrastar PDF aqui ou clicar para seleccionar</div>' +
-            '<div id="pf-drop-sub">faturas Parfois · um ou vários PDFs · 3 motores de leitura</div>' +
+            '<div id="pf-drop-lbl">Carregar fatura</div>' +
+            '<div id="pf-drop-sub"></div>' +
             '<input type="file" id="pf-file-input" accept="application/pdf" multiple>' +
           '</label>' +
           '<div id="pf-status-bar">' +
@@ -1571,9 +1571,9 @@
       so.innerHTML =
         '<div id="pf-sess-card">' +
           '<div id="pf-sess-card-top">' +
-            '<div class="pf-sess-pretitle">processamento de faturas</div>' +
-            '<div class="pf-sess-title">Escolhe uma sessão ou inicia uma nova</div>' +
-            '<div class="pf-sess-subtitle">Para evitar sobreescrever dados, selecciona sempre a sessão correcta.</div>' +
+            '<div class="pf-sess-pretitle">parfois</div>' +
+            '<div class="pf-sess-title">Sessões</div>' +
+            '<div style="display:none"></div>' +
           '</div>' +
           '<div class="pf-sess-section-lbl">sessões guardadas</div>' +
           '<div class="pf-sess-list" id="pf-sess-list"></div>' +
@@ -1614,13 +1614,14 @@
     pfOpenSessionPicker();
   }
   function pfClose() {
+    // Save before closing
+    if (pfState.sessionName && pfState.invoices.length) pfSave();
     pfCloseSessionPicker();
     var ov = document.getElementById('pf-overlay');
     if (!ov) return;
     ov.classList.remove('visible');
     setTimeout(function(){
       ov.classList.remove('open');
-      // Navigate to dashboard using the page's own back button
       var admBack = document.getElementById('adm-back-btn');
       if (admBack) { admBack.click(); }
     }, 450);
@@ -1635,7 +1636,7 @@
     grid.addEventListener('click', function(e){
       if (e.target.closest('[data-faturas-module="parfois"]')) {
         e.stopPropagation();
-        pfOpen();
+        pfOpenEntry();
       }
     });
   }
@@ -1648,6 +1649,10 @@
     pfBuildDOM();
     pfHook();
     pfState.sessionName = pfWeekName(); pfState.createdAt = Date.now();
+    // Autosave every 15 seconds
+    setInterval(function() {
+      if (pfState.sessionName && pfState.invoices.length) pfSave();
+    }, 15000);
     // Retry card injection in case faturas-sub-grid loads late (e.g. incognito)
     [300, 800, 1800, 3500].forEach(function(delay) {
       setTimeout(function() {

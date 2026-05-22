@@ -3924,6 +3924,58 @@
     tamUpdateDNCount();
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     EXPORT DN + DISTRIBUIÇÃO → EXCEL (CSV tab-separated, UTF-8 BOM)
+  ══════════════════════════════════════════════════════════════ */
+  function tamExportDNExcel() {
+    var dns = Object.values(tamDeliveryNotes);
+    if (!dns.length) return;
+
+    // Sort DNs: by invoice then by zyCode
+    dns.sort(function(a, b) {
+      var iA = tamDNtoInvIdx.hasOwnProperty(a.zyCode) ? tamDNtoInvIdx[a.zyCode] : 9999;
+      var iB = tamDNtoInvIdx.hasOwnProperty(b.zyCode) ? tamDNtoInvIdx[b.zyCode] : 9999;
+      if (iA !== iB) return iA - iB;
+      return a.zyCode < b.zyCode ? -1 : a.zyCode > b.zyCode ? 1 : 0;
+    });
+
+    var rows = [];
+    // Header
+    rows.push(['DN', 'FACTURA', 'REFERÊNCIA', 'T', 'FNC', 'PXO'].join('	'));
+
+    dns.forEach(function(dn, idx) {
+      var invIdx   = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
+      var factura  = (invIdx >= 0 && tamInvoices[invIdx]) ? tamInvoices[invIdx].invoiceNo : '';
+      var refs     = dn.refs || [];
+
+      // Build distrib map from lastPhotoDistrib if confirmed, else zeros
+      var distribMap = {};
+      if (dn.distribConfirmed && dn.lastPhotoDistrib && dn.lastPhotoDistrib.length) {
+        dn.lastPhotoDistrib.forEach(function(d){ if (d && d.ref) distribMap[d.ref] = { f: d.f || 0, p: d.p || 0 }; });
+      }
+
+      refs.forEach(function(r) {
+        var d   = distribMap[r.ref] || { f: 0, p: 0 };
+        rows.push([dn.zyCode, factura, r.ref, r.qty, d.f, d.p].join('	'));
+      });
+
+      // Blank separator row between DNs (not after last one)
+      if (idx < dns.length - 1) rows.push('');
+    });
+
+    var bom     = '\uFEFF';
+    var content = bom + rows.join('\r\n');
+    var blob    = new Blob([content], { type: 'text/tab-separated-values;charset=utf-8;' });
+    var url     = URL.createObjectURL(blob);
+    var a       = document.createElement('a');
+    var date    = new Date().toISOString().slice(0, 10);
+    a.href      = url;
+    a.download  = 'DN_Distribuicao_' + date + '.xls';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);
+  }
+
   function tamUpdateDNCount() {
     var el = document.getElementById('tam-dn-count');
     if (!el) return;
@@ -3993,8 +4045,12 @@
     } else {
       var hdrHtml =
         '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
-        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
-        dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</div>' +
+        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">' +
+        '<span>' + dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</span>' +
+        '<button id="tam-dn-export-xls-btn" style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;' +
+        'padding:3px 9px;border-radius:6px;border:1px solid #bbb;background:transparent;color:#000;opacity:.7;cursor:pointer;' +
+        'font-family:MontserratLight,sans-serif;transition:all .15s;">↓ excel</button>' +
+        '</div>' +
         '<div style="padding:8px 14px 6px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
           '<input id="tam-dn-filter-inp" type="text" placeholder="🔍 filtrar por código ZY…" autocomplete="off" spellcheck="false" style="' +
             'width:100%;box-sizing:border-box;padding:6px 10px;font-size:.78rem;' +
@@ -4043,6 +4099,17 @@
     document.body.appendChild(panel);
 
     /* Filtro en tiempo real */
+    /* ── Excel export button ── */
+    var xlsBtn = panel.querySelector('#tam-dn-export-xls-btn');
+    if (xlsBtn) {
+      xlsBtn.addEventListener('mouseenter', function(){ xlsBtn.style.opacity='1'; xlsBtn.style.background='#f5f5f5'; });
+      xlsBtn.addEventListener('mouseleave', function(){ xlsBtn.style.opacity='.7'; xlsBtn.style.background='transparent'; });
+      xlsBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        tamExportDNExcel();
+      });
+    }
+
     var filterInp = panel.querySelector('#tam-dn-filter-inp');
     if (filterInp) {
       filterInp.addEventListener('input', function() {
@@ -5120,13 +5187,8 @@
           if (bx.invIdx===resolvedInvIdx && !bx.locked && !bx.dnZyCode) { targetBox=bx; targetBi=bi; break; }
         }
       }
-      // Pass 2: any unlocked box with no dnZyCode anywhere (legacy / invIdx mismatch)
-      if (!targetBox) {
-        for (var bi=0; bi<tamSession.boxes.length; bi++) {
-          var bx=tamSession.boxes[bi];
-          if (!bx.locked && !bx.dnZyCode) { targetBox=bx; targetBi=bi; break; }
-        }
-      }
+      // Pass 2 REMOVED — a DN must NEVER write to a box belonging to a different invoice.
+      // If no free box exists for resolvedInvIdx, Pass 3 creates one with the correct invIdx.
 
       // Pass 3: no suitable box found — CREATE a new box dynamically.
       // This is the normal case when all existing boxes are already stamped with other DNs.

@@ -334,71 +334,79 @@
       '#pf-pvp-modal{display:none;position:fixed;inset:0;z-index:320;}',
       '#pf-pvp-modal.pf-pvp-open{display:block;}',
       '#pf-pvp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);}',
-      '#pf-pvp-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:calc(100% - 24px);max-width:700px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
-      '#pf-pvp-header{background:#1a1a2e;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap;}',
-      '#pf-pvp-title{font-size:.85rem;font-weight:bold;color:#fff!important;letter-spacing:.05em;flex:1;min-width:0;}',
+      '#pf-pvp-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:calc(100% - 24px);max-width:680px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
+      '#pf-pvp-header{background:#222;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}',
+      '#pf-pvp-title{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.04em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
       '#pf-pvp-pub-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;}',
       '#pf-pvp-pub-lbl{font-size:.7rem;color:rgba(255,255,255,0.7)!important;white-space:nowrap;}',
-      '.pf-pvp-switch{position:relative;width:40px;height:22px;display:inline-block;}',
+      '.pf-pvp-switch{position:relative;width:38px;height:20px;display:inline-block;}',
       '.pf-pvp-switch input{opacity:0;width:0;height:0;position:absolute;}',
-      '.pf-pvp-slider{position:absolute;inset:0;background:#555;border-radius:22px;cursor:pointer;transition:background .2s;}',
-      '.pf-pvp-slider:before{content:"";position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .2s;}',
-      'input:checked+.pf-pvp-slider{background:#2a7a2a;}',
+      '.pf-pvp-slider{position:absolute;inset:0;background:#555;border-radius:20px;cursor:pointer;transition:background .2s;}',
+      '.pf-pvp-slider:before{content:"";position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .2s;}',
+      'input:checked+.pf-pvp-slider{background:#444;}',
       'input:checked+.pf-pvp-slider:before{transform:translateX(18px);}',
       '#pf-pvp-close{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1;flex-shrink:0;}',
       '#pf-pvp-close:hover{background:rgba(255,255,255,0.15);}',
       '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;}',
-      '#pf-pvp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
-      '.pf-pvp-th.pf-pvp-th-compact{width:1px;}',
-      '.pf-pvp-th{background:#f0f0f0;padding:8px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
-      '.pf-pvp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
-      '.pf-pvp-th-compact,.pf-pvp-td.compact{width:1px;}',
-      '.pf-pvp-td.pf-pvp-td-name{white-space:normal;min-width:110px;}',
-      '.pf-pvp-td-ref{font-weight:bold;letter-spacing:.04em;cursor:pointer;border-radius:4px;padding:2px 4px;transition:background .15s;}',
-      '.pf-pvp-td-ref:hover{background:#f0f0f0;}',
-      '.pf-pvp-obs-star{font-size:1rem;color:#333;cursor:default;position:relative;}',
-      '.pf-pvp-obs-empty{color:#ccc;font-size:.85rem;}',
-      '.pf-pvp-td-pvp-val{cursor:pointer;border-radius:4px;padding:2px 4px;transition:background .15s;}',
-      '.pf-pvp-td-pvp-val:hover{background:#f0f0f0;}',
-      '.pf-pvp-input{width:100%;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 8px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:60px;transition:border-color .15s;}',
-      '.pf-pvp-input:focus{outline:none;border-color:#666;}',
-      '.pf-pvp-input.pf-pvp-filled{background:#f0f8f0;border-color:#a0c8a0;}',
+      /* Admin table: auto layout, compact cols shrink to content */
+      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:100%;}',
+      '.pf-pvp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
+      '.pf-pvp-th-c{white-space:nowrap;width:0.1%;}',
+      '.pf-pvp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
+      '.pf-pvp-td-name{white-space:nowrap;}',
+      /* Ref: bold, click to copy, grey flash */
+      '.pf-pvp-td-ref{font-weight:bold;letter-spacing:.04em;cursor:pointer;border-radius:3px;padding:1px 4px;transition:background .12s,color .12s;}',
+      '.pf-pvp-td-ref:hover{background:#e8e8e8;}',
+      '.pf-pvp-td-ref.copied-dark{background:#333;color:#fff!important;}',
+      '.pf-pvp-td-ref.copied-light{background:#ddd;color:#000!important;}',
+      /* PVP in admin: read-only clickable span */
+      '.pf-pvp-val{display:inline-block;min-width:52px;text-align:right;cursor:pointer;border-radius:3px;padding:1px 4px;transition:background .12s,color .12s;font-variant-numeric:tabular-nums;}',
+      '.pf-pvp-val:hover{background:#e8e8e8;}',
+      '.pf-pvp-val.copied-dark{background:#333;color:#fff!important;}',
+      '.pf-pvp-val.copied-light{background:#ddd;color:#000!important;}',
+      /* Obs asterisk */
+      '.pf-pvp-obs-star{font-size:.9rem;color:#555;cursor:default;}',
+      '.pf-pvp-obs-empty{color:#ddd;font-size:.8rem;}',
+      /* Admin PVP input (employee only — hidden in admin) */
+      '.pf-pvp-input{width:70px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
+      '.pf-pvp-input:focus{outline:none;border-color:#555;}',
+      '.pf-pvp-input::placeholder{color:#ccc;}',
       '#pf-pvp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;flex-shrink:0;}',
       '#pf-pvp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
-      '#pf-pvp-notes{width:100%;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;resize:vertical;min-height:56px;box-sizing:border-box;}',
-      '#pf-pvp-notes:focus{outline:none;border-color:#666;}',
-      '#pf-pvp-footer{padding:8px 14px;border-top:1px solid #eee;font-size:.72rem;color:#aaa;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;flex-wrap:wrap;}',
-      '#pf-pvp-save-msg{font-size:.72rem;font-weight:bold;color:#2a5a2a;}',
-      '#pf-pvp-complete-badge{font-size:.7rem;font-weight:bold;padding:3px 10px;border-radius:20px;background:#2a7a2a;color:#fff!important;}',
+      '#pf-pvp-notes{width:100%;border:1px solid #e0e0e0;border-radius:7px;padding:7px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:52px;box-sizing:border-box;}',
+      '#pf-pvp-notes:focus{outline:none;border-color:#555;}',
+      '#pf-pvp-notes::placeholder{color:#ccc;}',
+      '#pf-pvp-footer{padding:7px 14px;border-top:1px solid #eee;font-size:.7rem;color:#aaa;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;}',
+      '#pf-pvp-save-msg{font-size:.7rem;font-weight:bold;color:#555;}',
+      '#pf-pvp-complete-badge{font-size:.68rem;font-weight:bold;padding:2px 9px;border-radius:20px;background:#333;color:#fff!important;}',
       /* ── PVP Employee overlay ── */
       '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;}',
       '#pf-pvp-emp-overlay.open{display:flex;}',
       '#pf-pvp-emp-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}',
       '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 14px 7px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}',
-      '#pf-pvp-emp-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;}',
-      '#pf-pvp-emp-save-msg{margin-left:auto;font-size:.72rem;font-weight:bold;color:#2a5a2a;}',
+      '#pf-pvp-emp-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000!important;}',
+      '#pf-pvp-emp-save-msg{margin-left:auto;font-size:.7rem;font-weight:bold;color:#555;}',
       '#pf-pvp-emp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;display:flex;flex-direction:column;gap:16px;min-height:0;}',
       '.pf-pvp-emp-card{border:1.5px solid #e0e0e0;border-radius:12px;overflow:hidden;flex-shrink:0;}',
-      '.pf-pvp-emp-card-hdr{background:#1a1a2e;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
+      '.pf-pvp-emp-card-hdr{background:#222;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
-      '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.6)!important;}',
+      '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.55)!important;}',
       '.pf-pvp-emp-scroll{overflow-x:auto;}',
-      '.pf-pvp-emp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
-      '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
-      '.pf-pvp-emp-th.pf-emp-th-compact{width:1px;}',
-      '.pf-pvp-emp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
-      '.pf-pvp-emp-td.pf-pvp-emp-td-name{white-space:nowrap;}',
-      '.pf-pvp-emp-input{width:72px;border:1px solid #ddd;border-radius:6px;padding:4px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
-      '.pf-pvp-emp-obs-input{width:160px;border:1px solid #ddd;border-radius:6px;padding:4px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
-      '.pf-pvp-emp-input:focus,.pf-pvp-emp-obs-input:focus{outline:none;border-color:#666;}',
-      '.pf-pvp-emp-input::placeholder,.pf-pvp-emp-obs-input::placeholder{color:#bbb;}',
-      '.pf-pvp-emp-input.filled{background:#f0f8f0;border-color:#a0c8a0;}',
-      '.pf-pvp-emp-obs-input.filled{background:#f0f8f0;border-color:#a0c8a0;}',
+      /* Employee table: auto layout, compact cols */
+      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
+      '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
+      '.pf-pvp-emp-th-c{white-space:nowrap;width:0.1%;}',
+      '.pf-pvp-emp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
+      /* Inputs: empty placeholder, no background colour when filled */
+      '.pf-pvp-emp-pvp-inp{width:68px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
+      '.pf-pvp-emp-obs-inp{width:140px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
+      '.pf-pvp-emp-pvp-inp:focus,.pf-pvp-emp-obs-inp:focus{outline:none;border-color:#555;}',
+      '.pf-pvp-emp-pvp-inp::placeholder,.pf-pvp-emp-obs-inp::placeholder{color:#ccc;}',
       '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;flex-shrink:0;}',
       '.pf-pvp-emp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
-      '.pf-pvp-emp-notes-ta{width:100%;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:64px;box-sizing:border-box;}',
-      '.pf-pvp-emp-notes-ta:focus{outline:none;border-color:#666;}',
-      '.pf-pvp-emp-notes-ta::placeholder{color:#bbb;}'
+      '.pf-pvp-emp-notes-ta{width:100%;border:1px solid #ddd;border-radius:7px;padding:7px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:68px;box-sizing:border-box;}',
+      '.pf-pvp-emp-notes-ta:focus{outline:none;border-color:#555;}',
+      '.pf-pvp-emp-notes-ta::placeholder{color:#ccc;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -1599,24 +1607,23 @@
     function renderTable() {
       return '<table id="pf-pvp-table">' +
         '<thead><tr>' +
-          '<th class="pf-pvp-th pf-pvp-th-compact">Ref.</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-c">Ref.</th>' +
           '<th class="pf-pvp-th">Nome do artigo</th>' +
-          '<th class="pf-pvp-th pf-pvp-th-compact" style="text-align:center">Qtd.</th>' +
-          '<th class="pf-pvp-th pf-pvp-th-compact" style="text-align:center">PVP (\u20ac)</th>' +
-          '<th class="pf-pvp-th pf-pvp-th-compact" style="text-align:center">Obs.</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-c" style="text-align:right">Qtd.</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-c" style="text-align:right">PVP (\u20ac)</th>' +
+          '<th class="pf-pvp-th pf-pvp-th-c" style="text-align:center">Obs.</th>' +
         '</tr></thead><tbody>' +
         items.map(function(it, i) {
+          var pvpDisplay = it.pvp ? it.pvp : '—';
           return '<tr>' +
-            '<td class="pf-pvp-td pf-pvp-td-ref" data-pvp-copy="' + esc(it.ref) + '" title="clicar para copiar">' + esc(it.ref) + '</td>' +
+            '<td class="pf-pvp-td pf-pvp-th-c"><span class="pf-pvp-td-ref" data-pvp-copy-ref="' + esc(it.ref) + '">' + esc(it.ref) + '</span></td>' +
             '<td class="pf-pvp-td pf-pvp-td-name">' + esc(it.name) + '</td>' +
-            '<td class="pf-pvp-td" style="text-align:center">' + it.qty + '</td>' +
-            '<td class="pf-pvp-td" style="text-align:center">' +
-              '<input class="pf-pvp-input' + (it.pvp ? ' pf-pvp-filled' : '') + '" data-pvp-i="' + i + '" data-pvp-f="pvp" type="text" placeholder="0,00" value="' + esc(it.pvp) + '">' +
+            '<td class="pf-pvp-td pf-pvp-th-c" style="text-align:right">' + it.qty + '</td>' +
+            '<td class="pf-pvp-td pf-pvp-th-c" style="text-align:right">' +
+              '<span class="pf-pvp-val" data-pvp-copy-val="' + esc(it.pvp||'') + '" title="clicar para copiar">' + esc(pvpDisplay) + '</span>' +
             '</td>' +
-            '<td class="pf-pvp-td" style="text-align:center">' +
-              (it.obs
-                ? '<span class="pf-pvp-obs-star" title="' + esc(it.obs) + '">\u2731</span>'
-                : '<span class="pf-pvp-obs-empty">&mdash;</span>') +
+            '<td class="pf-pvp-td pf-pvp-th-c" style="text-align:center">' +
+              (it.obs ? '<span class="pf-pvp-obs-star" title="' + esc(it.obs) + '">\u2731</span>' : '<span class="pf-pvp-obs-empty">—</span>') +
             '</td>' +
           '</tr>';
         }).join('') +
@@ -1697,10 +1704,26 @@
       });
     });
 
-    // Copy ref on click
-    modal.querySelectorAll('[data-pvp-copy]').forEach(function(td) {
-      td.addEventListener('click', function(){
-        pfCopyText(td.getAttribute('data-pvp-copy'), td);
+    // Copy ref and pvp val on click — grey flash
+    function pvpFlash(el, text) {
+      if (!el || !text) return;
+      var cls = text.length > 4 ? 'copied-light' : 'copied-dark';
+      el.classList.add(cls);
+      setTimeout(function(){ el.classList.remove(cls); }, 700);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function(){});
+      } else { try { var ta=document.createElement('textarea'); ta.value=text;
+        ta.style.cssText='position:fixed;top:-9999px;opacity:0;';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta); } catch(e){} }
+    }
+    modal.querySelectorAll('[data-pvp-copy-ref]').forEach(function(el) {
+      el.addEventListener('click', function(){ pvpFlash(el, el.getAttribute('data-pvp-copy-ref')); });
+    });
+    modal.querySelectorAll('[data-pvp-copy-val]').forEach(function(el) {
+      el.addEventListener('click', function(){
+        var v = el.getAttribute('data-pvp-copy-val');
+        if (v) pvpFlash(el, v);
       });
     });
 
@@ -1762,25 +1785,27 @@
       btn.href = '#';
       btn.textContent = 'LISTA PVP';
       // Copy style from sibling links
-      // Apply same CSS id as recibos-link so it picks up existing stylesheet rules
-      // We add it to the nav — the page CSS for #recibos-link applies to all nav links
-      // We clone the id-based styles by adding inline style matching the computed result
-      var sibling = document.getElementById('recibos-link');
-      if (sibling) {
-        var cs = window.getComputedStyle(sibling);
-        btn.style.cssText = (
-          'display:' + (cs.display||'inline-block') + ';' +
-          'padding:' + cs.padding + ';' +
-          'border:' + cs.border + ';' +
-          'border-radius:' + cs.borderRadius + ';' +
-          'background:' + cs.background + ';' +
-          'color:' + cs.color + ';' +
-          'font-family:' + cs.fontFamily + ';' +
-          'font-size:' + cs.fontSize + ';' +
-          'font-weight:' + cs.fontWeight + ';' +
-          'letter-spacing:' + cs.letterSpacing + ';' +
-          'text-decoration:none;cursor:pointer;text-transform:uppercase;'
-        );
+      // Inject a style rule that targets pf-pvp-emp-nav-btn
+      // mirroring #recibos-link rules from the page stylesheet
+      if (!document.getElementById('pf-pvp-nav-btn-style')) {
+        var ns = document.createElement('style');
+        ns.id = 'pf-pvp-nav-btn-style';
+        var sibling = document.getElementById('recibos-link');
+        var cs = sibling ? window.getComputedStyle(sibling) : null;
+        ns.textContent = '#pf-pvp-emp-nav-btn{' +
+          'display:' + (cs ? cs.display : 'block') + ';' +
+          'padding:' + (cs ? cs.padding : '8px 18px') + ';' +
+          'border:' + (cs ? cs.border : '1.5px solid #000') + ';' +
+          'border-radius:' + (cs ? cs.borderRadius : '20px') + ';' +
+          'background:' + (cs ? cs.background : '#fff') + ';' +
+          'color:' + (cs ? cs.color : '#000') + '!important;' +
+          'font-family:' + (cs ? cs.fontFamily : 'inherit') + ';' +
+          'font-size:' + (cs ? cs.fontSize : '.82rem') + ';' +
+          'font-weight:' + (cs ? cs.fontWeight : '600') + ';' +
+          'letter-spacing:' + (cs ? cs.letterSpacing : '.08em') + ';' +
+          'text-decoration:none;cursor:pointer;' +
+        '}';
+        document.head.appendChild(ns);
       }
       nav.appendChild(btn);
       btn.addEventListener('click', function(e){
@@ -1816,14 +1841,14 @@
       var upd = rec.updated_at ? new Date(rec.updated_at).toLocaleDateString('pt-PT') + ' \u00b7 ' + new Date(rec.updated_at).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) : '';
       var rows = entry.items.map(function(it, ii) {
         return '<tr>' +
-          '<td class="pf-pvp-emp-td" style="font-weight:bold">' + esc(it.ref||'') + '</td>' +
-          '<td class="pf-pvp-emp-td pf-pvp-emp-td-name">' + esc(it.name||'') + '</td>' +
-          '<td class="pf-pvp-emp-td" style="text-align:center">' + (it.qty||'') + '</td>' +
-          '<td class="pf-pvp-emp-td">' +
-            '<input class="pf-pvp-emp-input' + (it.pvp ? ' filled' : '') + '" data-ei="' + ei + '" data-ii="' + ii + '" data-f="pvp" type="text" placeholder="0,00" value="' + esc(it.pvp||'') + '">' +
+          '<td class="pf-pvp-emp-td pf-pvp-emp-th-c" style="font-weight:bold">' + esc(it.ref||'') + '</td>' +
+          '<td class="pf-pvp-emp-td">' + esc(it.name||'') + '</td>' +
+          '<td class="pf-pvp-emp-td pf-pvp-emp-th-c" style="text-align:right">' + (it.qty||'') + '</td>' +
+          '<td class="pf-pvp-emp-td pf-pvp-emp-th-c">' +
+            '<input class="pf-pvp-emp-pvp-inp" data-ei="' + ei + '" data-ii="' + ii + '" data-f="pvp" type="text" value="' + esc(it.pvp||'') + '">' +
           '</td>' +
-          '<td class="pf-pvp-emp-td">' +
-            '<input class="pf-pvp-emp-obs-input' + (it.obs ? ' filled' : '') + '" data-ei="' + ei + '" data-ii="' + ii + '" data-f="obs" type="text" placeholder="obs..." value="' + esc(it.obs||'') + '">' +
+          '<td class="pf-pvp-emp-td pf-pvp-emp-th-c">' +
+            '<input class="pf-pvp-emp-obs-inp" data-ei="' + ei + '" data-ii="' + ii + '" data-f="obs" type="text" value="' + esc(it.obs||'') + '">' +
           '</td>' +
         '</tr>';
       }).join('');
@@ -1835,11 +1860,11 @@
         '<div class="pf-pvp-emp-scroll">' +
           '<table class="pf-pvp-emp-table">' +
             '<thead><tr>' +
-              '<th class="pf-pvp-emp-th pf-emp-th-compact">Ref.</th>' +
+              '<th class="pf-pvp-emp-th pf-pvp-emp-th-c">Ref.</th>' +
               '<th class="pf-pvp-emp-th">Nome</th>' +
-              '<th class="pf-pvp-emp-th pf-emp-th-compact" style="text-align:center">Qtd.</th>' +
-              '<th class="pf-pvp-emp-th pf-emp-th-compact">PVP (\u20ac)</th>' +
-              '<th class="pf-pvp-emp-th pf-emp-th-compact">Obs.</th>' +
+              '<th class="pf-pvp-emp-th pf-pvp-emp-th-c" style="text-align:right">Qtd.</th>' +
+              '<th class="pf-pvp-emp-th pf-pvp-emp-th-c">PVP (\u20ac)</th>' +
+              '<th class="pf-pvp-emp-th pf-pvp-emp-th-c">Obs.</th>' +
             '</tr></thead>' +
             '<tbody>' + rows + '</tbody>' +
           '</table>' +
@@ -1858,7 +1883,6 @@
         var ii = parseInt(inp.getAttribute('data-ii'));
         var f  = inp.getAttribute('data-f');
         _pvpEmpLists[ei].items[ii][f] = inp.value;
-        inp.classList.toggle('filled', !!inp.value.trim());
         pfPvpEmpScheduleSave();
       });
     });

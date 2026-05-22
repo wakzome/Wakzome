@@ -354,6 +354,8 @@
       '.pf-pvp-td.pf-pvp-td-name{white-space:normal;min-width:110px;}',
       '.pf-pvp-td-ref{font-weight:bold;letter-spacing:.04em;cursor:pointer;border-radius:4px;padding:2px 4px;transition:background .15s;}',
       '.pf-pvp-td-ref:hover{background:#f0f0f0;}',
+      '.pf-pvp-obs-star{font-size:1rem;color:#333;cursor:default;position:relative;}',
+      '.pf-pvp-obs-empty{color:#ccc;font-size:.85rem;}',
       '.pf-pvp-td-pvp-val{cursor:pointer;border-radius:4px;padding:2px 4px;transition:background .15s;}',
       '.pf-pvp-td-pvp-val:hover{background:#f0f0f0;}',
       '.pf-pvp-input{width:100%;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 8px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:60px;transition:border-color .15s;}',
@@ -367,24 +369,25 @@
       '#pf-pvp-save-msg{font-size:.72rem;font-weight:bold;color:#2a5a2a;}',
       '#pf-pvp-complete-badge{font-size:.7rem;font-weight:bold;padding:3px 10px;border-radius:20px;background:#2a7a2a;color:#fff!important;}',
       /* ── PVP Employee overlay ── */
-      '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;}',
+      '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;overflow:hidden;}',
       '#pf-pvp-emp-overlay.open{display:flex;}',
       '#pf-pvp-emp-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;flex-wrap:wrap;}',
       '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}',
       '#pf-pvp-emp-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;}',
       '#pf-pvp-emp-save-msg{margin-left:auto;font-size:.72rem;font-weight:bold;color:#2a5a2a;}',
-      '#pf-pvp-emp-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:16px;}',
+      '#pf-pvp-emp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;display:flex;flex-direction:column;gap:16px;}',
       '.pf-pvp-emp-card{border:1.5px solid #e0e0e0;border-radius:12px;overflow:hidden;}',
       '.pf-pvp-emp-card-hdr{background:#1a1a2e;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.6)!important;}',
       '.pf-pvp-emp-scroll{overflow-x:auto;}',
-      '.pf-pvp-emp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;min-width:380px;}',
+      '.pf-pvp-emp-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
       '.pf-pvp-emp-th{background:#f0f0f0;padding:8px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
-      '.pf-pvp-emp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;}',
-      '.pf-pvp-emp-td.pf-pvp-emp-td-name{white-space:normal;min-width:100px;}',
-      '.pf-pvp-emp-input{width:100%;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:60px;}',
+      '.pf-pvp-emp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
+      '.pf-pvp-emp-td.pf-pvp-emp-td-name{white-space:normal;}',
+      '.pf-pvp-emp-input{width:80px;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
       '.pf-pvp-emp-input:focus{outline:none;border-color:#666;}',
+      '.pf-pvp-emp-input::placeholder{color:#999;}',
       '.pf-pvp-emp-input.filled{background:#f0f8f0;border-color:#a0c8a0;}',
       '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;}',
       '.pf-pvp-emp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
@@ -1593,19 +1596,21 @@
           '<th class="pf-pvp-th">Ref.</th>' +
           '<th class="pf-pvp-th">Nome do artigo</th>' +
           '<th class="pf-pvp-th" style="text-align:center">Qtd.</th>' +
-          '<th class="pf-pvp-th">PVP (\u20ac)</th>' +
-          '<th class="pf-pvp-th">Observa\u00e7\u00f5es</th>' +
+          '<th class="pf-pvp-th" style="text-align:center">PVP (\u20ac)</th>' +
+          '<th class="pf-pvp-th" style="text-align:center">Obs.</th>' +
         '</tr></thead><tbody>' +
         items.map(function(it, i) {
           return '<tr>' +
             '<td class="pf-pvp-td pf-pvp-td-ref" data-pvp-copy="' + esc(it.ref) + '" title="clicar para copiar">' + esc(it.ref) + '</td>' +
             '<td class="pf-pvp-td pf-pvp-td-name">' + esc(it.name) + '</td>' +
             '<td class="pf-pvp-td" style="text-align:center">' + it.qty + '</td>' +
-            '<td class="pf-pvp-td">' +
+            '<td class="pf-pvp-td" style="text-align:center">' +
               '<input class="pf-pvp-input' + (it.pvp ? ' pf-pvp-filled' : '') + '" data-pvp-i="' + i + '" data-pvp-f="pvp" type="text" placeholder="0,00" value="' + esc(it.pvp) + '">' +
             '</td>' +
-            '<td class="pf-pvp-td">' +
-              '<input class="pf-pvp-input' + (it.obs ? ' pf-pvp-filled' : '') + '" data-pvp-i="' + i + '" data-pvp-f="obs" type="text" placeholder="observa\u00e7\u00f5es\u2026" value="' + esc(it.obs) + '">' +
+            '<td class="pf-pvp-td" style="text-align:center">' +
+              (it.obs
+                ? '<span class="pf-pvp-obs-star" title="' + esc(it.obs) + '">\u2731</span>'
+                : '<span class="pf-pvp-obs-empty">&mdash;</span>') +
             '</td>' +
           '</tr>';
         }).join('') +
@@ -1676,12 +1681,11 @@
       autoTimer = setTimeout(doSave, 15000);
     }
 
-    // Input listeners
-    modal.querySelectorAll('[data-pvp-i]').forEach(function(inp) {
+    // Input listeners (PVP only — obs is asterisk tooltip in admin)
+    modal.querySelectorAll('[data-pvp-i][data-pvp-f="pvp"]').forEach(function(inp) {
       inp.addEventListener('input', function() {
         var i = parseInt(inp.getAttribute('data-pvp-i'));
-        var f = inp.getAttribute('data-pvp-f');
-        items[i][f] = inp.value;
+        items[i].pvp = inp.value;
         inp.classList.toggle('pf-pvp-filled', !!inp.value.trim());
         scheduleAutoSave();
       });
@@ -1752,12 +1756,26 @@
       btn.href = '#';
       btn.textContent = 'LISTA PVP';
       // Copy style from sibling links
+      // Copy computed styles from sibling to match appearance exactly
       var sibling = document.getElementById('recibos-link');
       if (sibling) {
         btn.className = sibling.className;
-        btn.style.cssText = sibling.style.cssText;
+        var cs = window.getComputedStyle(sibling);
+        btn.style.display    = cs.display || 'block';
+        btn.style.padding    = cs.padding;
+        btn.style.border     = cs.border;
+        btn.style.borderRadius = cs.borderRadius;
+        btn.style.background = cs.background;
+        btn.style.color      = cs.color;
+        btn.style.fontFamily = cs.fontFamily;
+        btn.style.fontSize   = cs.fontSize;
+        btn.style.fontWeight = cs.fontWeight;
+        btn.style.letterSpacing = cs.letterSpacing;
+        btn.style.textDecoration = 'none';
+        btn.style.cursor     = 'pointer';
+      } else {
+        btn.style.display = 'block';
       }
-      btn.style.display = 'block';
       nav.appendChild(btn);
       btn.addEventListener('click', function(e){
         e.preventDefault();

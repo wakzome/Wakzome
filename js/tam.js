@@ -3925,7 +3925,7 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     EXPORT DN + DISTRIBUIÇÃO → EXCEL (CSV tab-separated, UTF-8 BOM)
+     EXPORT DN + DISTRIBUIÇÃO → CSV semicolon-separated, UTF-8 BOM
   ══════════════════════════════════════════════════════════════ */
   function tamExportDNExcel() {
     var dns = Object.values(tamDeliveryNotes);
@@ -3941,7 +3941,7 @@
 
     var rows = [];
     // Header
-    rows.push(['DN', 'FACTURA', 'REFERÊNCIA', 'T', 'FNC', 'PXO'].join('	'));
+    rows.push(['DN', 'FACTURA', 'REFERÊNCIA', 'T', 'FNC', 'PXO'].join(';'));
 
     dns.forEach(function(dn, idx) {
       var invIdx   = tamDNtoInvIdx.hasOwnProperty(dn.zyCode) ? tamDNtoInvIdx[dn.zyCode] : -1;
@@ -3956,7 +3956,7 @@
 
       refs.forEach(function(r) {
         var d   = distribMap[r.ref] || { f: 0, p: 0 };
-        rows.push([dn.zyCode, factura, r.ref, r.qty, d.f, d.p].join('	'));
+        rows.push([dn.zyCode, factura, r.ref, r.qty, d.f, d.p].join(';'));
       });
 
       // Blank separator row between DNs (not after last one)
@@ -3965,12 +3965,12 @@
 
     var bom     = '\uFEFF';
     var content = bom + rows.join('\r\n');
-    var blob    = new Blob([content], { type: 'text/tab-separated-values;charset=utf-8;' });
+    var blob    = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     var url     = URL.createObjectURL(blob);
     var a       = document.createElement('a');
     var date    = new Date().toISOString().slice(0, 10);
     a.href      = url;
-    a.download  = 'DN_Distribuicao_' + date + '.xls';
+    a.download  = 'DN_Distribuicao_' + date + '.csv';
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);

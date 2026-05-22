@@ -4043,16 +4043,20 @@
     if (!dns.length) {
       panel.innerHTML = '<div style="padding:18px 16px;font-size:.82rem;color:#000;opacity:.5;font-weight:700;">Nenhuma DN carregada.</div>';
     } else {
+      var confCount = dns.filter(function(d){ return d.distribConfirmed; }).length;
+      var pendCount = dns.length - confCount;
       var hdrHtml =
         '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
         'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">' +
         '<span>' + dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</span>' +
+        '<span style="margin-left:8px;font-size:.6rem;font-weight:700;opacity:.7;color:#4A7C6F;">' + confCount + '</span>' +
+        '<span style="font-size:.6rem;font-weight:700;opacity:.4;color:#000;">/' + pendCount + '</span>' +
         '<button id="tam-dn-export-xls-btn" style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;' +
         'padding:3px 9px;border-radius:6px;border:1px solid #bbb;background:transparent;color:#000;opacity:.7;cursor:pointer;' +
         'font-family:MontserratLight,sans-serif;transition:all .15s;">↓ excel</button>' +
         '</div>' +
         '<div style="padding:8px 14px 6px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">' +
-          '<input id="tam-dn-filter-inp" type="text" placeholder="🔍 filtrar por código ZY…" autocomplete="off" spellcheck="false" style="' +
+          '<input id="tam-dn-filter-inp" type="text" placeholder="🔍 filtrar por ZY ou referência…" autocomplete="off" spellcheck="false" style="' +
             'width:100%;box-sizing:border-box;padding:6px 10px;font-size:.78rem;' +
             "font-family:'MontserratLight',sans-serif;border:1px solid #e0e0e0;" +
             'border-radius:7px;outline:none;background:#fafafa;color:#000;transition:border-color .15s;">' +
@@ -4078,7 +4082,8 @@
           'border:1px solid #ccc;border-radius:6px;background:transparent;' +
           "color:#000;font-family:'MontserratLight',sans-serif;" +
           'transition:all .12s;white-space:nowrap;flex-shrink:0;">✏ distribuir</button>';
-        return '<div class="tam-dn-row-item" data-zy="' + tamEsc(dn.zyCode) + '" style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
+        var dnRefs = (dn.refs || []).map(function(r){ return r.ref.toLowerCase(); }).join(' ');
+        return '<div class="tam-dn-row-item" data-zy="' + tamEsc(dn.zyCode) + '" data-refs="' + tamEsc(dnRefs) + '" style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
               tamEsc(dn.zyCode) + confirmed +
@@ -4115,8 +4120,9 @@
       filterInp.addEventListener('input', function() {
         var q = filterInp.value.trim().toLowerCase();
         panel.querySelectorAll('.tam-dn-row-item').forEach(function(row) {
-          var zy = (row.getAttribute('data-zy') || '').toLowerCase();
-          row.style.display = (!q || zy.indexOf(q) >= 0) ? 'flex' : 'none';
+          var zy   = (row.getAttribute('data-zy')   || '').toLowerCase();
+          var refs = (row.getAttribute('data-refs') || '').toLowerCase();
+          row.style.display = (!q || zy.indexOf(q) >= 0 || refs.indexOf(q) >= 0) ? 'flex' : 'none';
         });
       });
       filterInp.addEventListener('click', function(e){ e.stopPropagation(); });

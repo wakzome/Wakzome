@@ -349,7 +349,7 @@
       '#pf-pvp-close:hover{background:rgba(255,255,255,0.15);}',
       '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;}',
       /* Admin table: auto layout, compact cols shrink to content */
-      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:100%;}',
+      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
       '.pf-pvp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
@@ -1785,26 +1785,29 @@
       btn.href = '#';
       btn.textContent = 'LISTA PVP';
       // Copy style from sibling links
-      // Inject a style rule that targets pf-pvp-emp-nav-btn
-      // mirroring #recibos-link rules from the page stylesheet
+      // Hardcode exact CSS matching #recibos-link from index.html
       if (!document.getElementById('pf-pvp-nav-btn-style')) {
         var ns = document.createElement('style');
         ns.id = 'pf-pvp-nav-btn-style';
-        var sibling = document.getElementById('recibos-link');
-        var cs = sibling ? window.getComputedStyle(sibling) : null;
-        ns.textContent = '#pf-pvp-emp-nav-btn{' +
-          'display:' + (cs ? cs.display : 'block') + ';' +
-          'padding:' + (cs ? cs.padding : '8px 18px') + ';' +
-          'border:' + (cs ? cs.border : '1.5px solid #000') + ';' +
-          'border-radius:' + (cs ? cs.borderRadius : '20px') + ';' +
-          'background:' + (cs ? cs.background : '#fff') + ';' +
-          'color:' + (cs ? cs.color : '#000') + '!important;' +
-          'font-family:' + (cs ? cs.fontFamily : 'inherit') + ';' +
-          'font-size:' + (cs ? cs.fontSize : '.82rem') + ';' +
-          'font-weight:' + (cs ? cs.fontWeight : '600') + ';' +
-          'letter-spacing:' + (cs ? cs.letterSpacing : '.08em') + ';' +
-          'text-decoration:none;cursor:pointer;' +
-        '}';
+        ns.textContent =
+          '#pf-pvp-emp-nav-btn{' +
+            'display:inline-block;' +
+            'padding:4px 13px;' +
+            'font-size:0.7rem;' +
+            'font-weight:600;' +
+            'font-family:\'MontserratLight\',sans-serif;' +
+            'text-transform:uppercase;' +
+            'color:#000!important;' +
+            'text-decoration:none;' +
+            'letter-spacing:.1em;' +
+            'border:1px solid #ccc;' +
+            'border-radius:20px;' +
+            'cursor:pointer;' +
+            'min-width:82px;' +
+            'text-align:center;' +
+            'transition:color .2s,border-color .2s,background .2s;' +
+          '}' +
+          '#pf-pvp-emp-nav-btn:hover{border-color:#555;background:#f5f5f5;}';
         document.head.appendChild(ns);
       }
       nav.appendChild(btn);

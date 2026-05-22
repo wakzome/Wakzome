@@ -356,7 +356,7 @@
       '.pf-pvp-td-ref:hover{background:#f0f0f0;}',
       '.pf-pvp-td-pvp-val{cursor:pointer;border-radius:4px;padding:2px 4px;transition:background .15s;}',
       '.pf-pvp-td-pvp-val:hover{background:#f0f0f0;}',
-      '.pf-pvp-input{width:100%;border:1px solid #e0e0e0;border-radius:6px;padding:5px 8px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:70px;transition:border-color .15s;}',
+      '.pf-pvp-input{width:100%;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 8px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:60px;transition:border-color .15s;}',
       '.pf-pvp-input:focus{outline:none;border-color:#666;}',
       '.pf-pvp-input.pf-pvp-filled{background:#f0f8f0;border-color:#a0c8a0;}',
       '#pf-pvp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;flex-shrink:0;}',
@@ -383,7 +383,7 @@
       '.pf-pvp-emp-th{background:#f0f0f0;padding:8px 10px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;text-align:left;}',
       '.pf-pvp-emp-td{padding:6px 8px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;}',
       '.pf-pvp-emp-td.pf-pvp-emp-td-name{white-space:normal;min-width:100px;}',
-      '.pf-pvp-emp-input{width:100%;border:1px solid #e0e0e0;border-radius:6px;padding:5px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:70px;}',
+      '.pf-pvp-emp-input{width:100%;max-width:90px;border:1px solid #e0e0e0;border-radius:6px;padding:5px 7px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000;background:#fff;box-sizing:border-box;min-width:60px;}',
       '.pf-pvp-emp-input:focus{outline:none;border-color:#666;}',
       '.pf-pvp-emp-input.filled{background:#f0f8f0;border-color:#a0c8a0;}',
       '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;}',
@@ -2112,7 +2112,6 @@
     pfStyles();
     pfBuildDOM();
     pfHook();
-    pfPvpBuildEmployeeOverlay();
     pfState.sessionName = pfWeekName();
     pfState.createdAt   = Date.now();
     // Autosave every 15 seconds
@@ -2127,15 +2126,23 @@
     pfInit();
   }
 
-  /* Watch for pf-card being removed from DOM (e.g. faturas grid re-render)
-     and re-inject it immediately */
+  /* Watch for:
+     1. pf-card removed from DOM → re-inject
+     2. #main-header getting class 'show' → employee logged in → inject PVP button */
   new MutationObserver(function(mutations) {
-    var cardGone = !document.getElementById('pf-card');
+    // Re-inject admin card if removed
+    var cardGone   = !document.getElementById('pf-card');
     var gridExists = !!document.getElementById('faturas-sub-grid');
-    if (cardGone && gridExists) {
-      pfBuildDOM();
-      pfHook();
+    if (cardGone && gridExists) { pfBuildDOM(); pfHook(); }
+
+    // Detect employee login: main-header gets class 'show'
+    if (!document.getElementById('pf-pvp-emp-overlay')) {
+      var mh = document.getElementById('main-header');
+      if (mh && mh.classList.contains('show') &&
+          typeof window._currentStoreGlobal !== 'undefined') {
+        pfPvpBuildEmployeeOverlay();
+      }
     }
-  }).observe(document.body, { childList: true, subtree: true });
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
 })();

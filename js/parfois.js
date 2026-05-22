@@ -301,10 +301,12 @@
       '.pf-inv-spacer{flex:1;}',
       '@media(max-width:480px){.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}',
       /* ── Session picker ── */
-      '#pf-sess-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:219;overflow-y:auto;-webkit-overflow-scrolling:touch;}',
-      '#pf-sess-overlay.open{display:flex;align-items:flex-start;justify-content:center;padding:40px 16px 60px;}',
+      '#pf-sess-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:300;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}',
+      '#pf-sess-overlay.open{display:flex;flex-direction:column;align-items:stretch;}',
+      '#pf-sess-topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}',
+      '#pf-sess-body{flex:1;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px 60px;}',
       '#pf-sess-card{width:100%;max-width:480px;background:#fff;border:1.5px solid #e0e0e0;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);}',
-      '#pf-sess-card-top{padding:28px 28px 0;}',
+      '#pf-sess-card-top{padding:20px 28px 0;}',
       '.pf-sess-pretitle{font-size:.68rem;font-weight:bold;letter-spacing:.12em;color:#aaa;text-transform:uppercase;margin-bottom:8px;}',
       '.pf-sess-title{font-size:1.5rem;font-weight:bold;color:#000;margin-bottom:6px;}',
       '.pf-sess-subtitle{font-size:.8rem;color:#888;margin-bottom:20px;}',
@@ -988,7 +990,7 @@
           pfCloseSessionPicker();
           pfRender();
           pfUpdateLbl();
-          pfOpenEntry();
+          pfOpen();
         }
       });
     });
@@ -1569,18 +1571,27 @@
       var so = document.createElement('div');
       so.id = 'pf-sess-overlay';
       so.innerHTML =
-        '<div id="pf-sess-card">' +
-          '<div id="pf-sess-card-top">' +
-            '<div class="pf-sess-pretitle">parfois</div>' +
-            '<div class="pf-sess-title">Sessões</div>' +
-            '<div style="display:none"></div>' +
+        '<div id="pf-sess-topbar">' +
+          '<button id="pf-sess-back" style="font-size:.9rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;transition:background .2s;text-transform:lowercase;letter-spacing:.03em;box-shadow:0 2px 8px rgba(0,0,0,0.18);display:inline-flex;align-items:center;gap:8px;"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> início</button>' +
+          '<span style="font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;">parfois</span>' +
+        '</div>' +
+        '<div id="pf-sess-body">' +
+          '<div id="pf-sess-card">' +
+            '<div id="pf-sess-card-top">' +
+              '<div class="pf-sess-title">Sessões</div>' +
+            '</div>' +
+            '<div class="pf-sess-section-lbl">sessões guardadas</div>' +
+            '<div class="pf-sess-list" id="pf-sess-list"></div>' +
+            '<button id="pf-sess-new-btn">⭐ iniciar nova sessão</button>' +
           '</div>' +
-          '<div class="pf-sess-section-lbl">sessões guardadas</div>' +
-          '<div class="pf-sess-list" id="pf-sess-list"></div>' +
-          '<button id="pf-sess-new-btn">⭐ iniciar nova sessão</button>' +
         '</div>';
       document.body.appendChild(so);
       document.getElementById('pf-sess-new-btn').addEventListener('click', pfStartNewSession);
+      document.getElementById('pf-sess-back').addEventListener('click', function() {
+        pfCloseSessionPicker();
+        var admBack = document.getElementById('adm-back-btn');
+        if (admBack) admBack.click();
+      });
     }
 
     /* Spinner */

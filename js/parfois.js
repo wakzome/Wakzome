@@ -300,6 +300,8 @@
       '.pf-inv-toggle:hover{color:#fff!important;}',
       '.pf-inv-spacer{flex:1;}',
       '@media(max-width:480px){.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}',
+      /* ── Parfois card gradient (missing from index.html) ── */
+      '#faturas-sub-grid .adm-mod-card[data-faturas-module="parfois"]::before{background:linear-gradient(145deg,#1a0f0f 0%,#2e1515 60%,#3d1a1a 100%);}',
       /* ── Session picker ── */
       '#pf-sess-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:300;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}',
       '#pf-sess-overlay.open{display:flex;flex-direction:column;align-items:stretch;}',
@@ -1638,14 +1640,15 @@
     }, 450);
   }
 
-  /* Hook faturas-sub-grid */
+  /* Hook faturas-sub-grid — delegates to grid, never needs re-hooking */
   function pfHook() {
     var grid = document.getElementById('faturas-sub-grid');
     if (!grid) return;
     if (grid._pfHooked) return;
     grid._pfHooked = true;
-    grid.addEventListener('click', function(e){
-      if (e.target.closest('[data-faturas-module="parfois"]')) {
+    grid.addEventListener('click', function(e) {
+      var card = e.target.closest('[data-faturas-module="parfois"]');
+      if (card) {
         e.stopPropagation();
         pfOpenEntry();
       }
@@ -1659,20 +1662,12 @@
     pfStyles();
     pfBuildDOM();
     pfHook();
-    pfState.sessionName = pfWeekName(); pfState.createdAt = Date.now();
+    pfState.sessionName = pfWeekName();
+    pfState.createdAt   = Date.now();
     // Autosave every 15 seconds
     setInterval(function() {
       if (pfState.sessionName && pfState.invoices.length) pfSave();
     }, 15000);
-    // Retry card injection in case faturas-sub-grid loads late (e.g. incognito)
-    [300, 800, 1800, 3500].forEach(function(delay) {
-      setTimeout(function() {
-        if (!document.getElementById('pf-card')) {
-          pfBuildDOM();
-          pfHook();
-        }
-      }, delay);
-    });
   }
 
   if (document.readyState === 'loading') {
@@ -1681,15 +1676,12 @@
     pfInit();
   }
 
-  new MutationObserver(function(){
-    var grid = document.getElementById('faturas-sub-grid');
-    if (grid && !document.getElementById('pf-card')) {
-      pfBuildDOM();
-      pfHook();
-    }
-    // Re-hook when dashboard re-renders (e.g. navigating back)
-    if (grid && grid._pfHooked && !document.getElementById('pf-card')) {
-      grid._pfHooked = false;
+  /* Watch for pf-card being removed from DOM (e.g. faturas grid re-render)
+     and re-inject it immediately */
+  new MutationObserver(function(mutations) {
+    var cardGone = !document.getElementById('pf-card');
+    var gridExists = !!document.getElementById('faturas-sub-grid');
+    if (cardGone && gridExists) {
       pfBuildDOM();
       pfHook();
     }

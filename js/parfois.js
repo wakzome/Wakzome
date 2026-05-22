@@ -191,7 +191,7 @@
       '#pf-status-bar{width:100%;max-width:680px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:18px;}',
       '#pf-status-msg{font-size:.82rem;font-weight:bold;color:#555;}',
       /* ── Buttons ── */
-      '.pf-btn{font-size:.78rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:7px 14px;border-radius:8px;border:1.5px solid #ccc;background:#fff;color:#000!important;transition:background .15s,border-color .15s;text-transform:lowercase;white-space:nowrap;}',
+      '.pf-btn{font-size:.72rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:5px 10px;border-radius:7px;border:1.5px solid #ccc;background:#fff;color:#000!important;transition:background .15s,border-color .15s;text-transform:lowercase;white-space:nowrap;}',
       '.pf-btn:hover{background:#f0f0f0;border-color:#888;}',
       '.pf-btn-dark{background:#222!important;color:#fff!important;border-color:#222!important;}',
       '.pf-btn-dark:hover{background:#444!important;border-color:#444!important;}',
@@ -200,12 +200,12 @@
       /* ── Invoice blocks ── */
       '.pf-inv-block{width:100%;max-width:680px;margin-bottom:28px;border:1.5px solid #e0e0e0;border-radius:14px;overflow:hidden;}',
       '.pf-inv-block.pf-collapsed .pf-inv-body{display:none;}',
-      '.pf-inv-hdr{background:#222;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}',
+      '.pf-inv-hdr{background:#222;padding:10px 14px;display:flex;flex-direction:column;gap:6px;}',
       ,
-      '.pf-inv-num{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.04em;white-space:nowrap;}',
+      '.pf-inv-num{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.04em;white-space:nowrap;line-height:1.2;}',
       '.pf-inv-meta{font-size:.68rem;color:rgba(255,255,255,0.6)!important;white-space:nowrap;}',
       '.pf-inv-total{font-size:.82rem;font-weight:bold;color:#fff!important;white-space:nowrap;flex-shrink:0;}',
-      '.pf-inv-acts{display:flex;gap:6px;flex-wrap:nowrap;align-items:center;}',
+      '.pf-inv-acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}',
       /* ── Engine selector (same pattern as TAM) ── */
       '.pf-engine-sel-wrap{padding:8px 16px;background:#f8f8f8;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}',
       '.pf-engine-sel-wrap em{font-size:.72rem;color:#888;font-style:normal;}',
@@ -226,13 +226,13 @@
       '.pf-val-row.err{background:#fdf0f0;border:1px solid #e0b0b0;color:#6a1010!important;}',
       /* ── Table ── */
       '.pf-table-wrap{overflow-x:auto;}',
-      '.pf-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;}',
-      '.pf-table th{background:#444;color:#fff!important;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;padding:8px 10px;text-align:left;border-bottom:2px solid #333;}',
-      '.pf-table td{font-size:.8rem;font-weight:600;padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#000!important;vertical-align:middle;}',
+      '.pf-table{width:100%;border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;}',
+      '.pf-table th{background:#444;color:#fff!important;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;padding:8px 8px;text-align:left;border-bottom:2px solid #333;white-space:nowrap;}',
+      '.pf-table td{font-size:.8rem;font-weight:600;padding:7px 8px;border-bottom:1px solid #f0f0f0;color:#000!important;vertical-align:middle;white-space:nowrap;}',
       '.pf-table tr:last-child td{border-bottom:none;}',
       '.pf-table tbody tr:hover td{background:#f9f9f9;}',
       '.pf-td-ref{font-weight:bold!important;letter-spacing:.04em;}',
-      '.pf-td-name{color:#444!important;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '.pf-td-name{color:#444!important;white-space:nowrap;}',
       '.pf-td-r{text-align:right!important;font-variant-numeric:tabular-nums;}',
       '.pf-table tfoot td{background:#f5f5f5!important;font-weight:bold!important;border-top:2px solid #ddd;font-size:.8rem;color:#000!important;}',
       '.pf-empty{text-align:center;padding:50px 20px;color:#ccc;font-size:.88rem;font-weight:600;}',
@@ -298,8 +298,10 @@
       /* ── Responsive ── */
       '.pf-inv-toggle{background:none;border:none;color:rgba(255,255,255,0.7)!important;font-size:.85rem;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s;}',
       '.pf-inv-toggle:hover{color:#fff!important;}',
+      '.pf-inv-hdr-top{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}',
+      '.pf-inv-hdr-bot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}',
       '.pf-inv-spacer{flex:1;}',
-      '@media(max-width:480px){.pf-table td,.pf-table th{padding:5px 7px;font-size:.74rem;}}',
+      '@media(max-width:520px){.pf-table td,.pf-table th{padding:4px 6px;font-size:.72rem;}}',
       /* ── Parfois card gradient (missing from index.html) ── */
       '#faturas-sub-grid .adm-mod-card[data-faturas-module="parfois"]::before{background:linear-gradient(145deg,#1a0f0f 0%,#2e1515 60%,#3d1a1a 100%);}',
       /* ── Session picker ── */
@@ -1063,26 +1065,28 @@
         badge = '<span class="pf-badge pf-warn">– sem totais</span>';
       }
 
-      // Uniform header: num/meta | badge | spacer | total | bc-btn | stock-btn | toggle
+      // Header: top row (num/meta/badge/total/toggle) + bottom row (buttons)
       block.innerHTML =
         '<div class="pf-inv-hdr">' +
-          '<div>' +
-            '<div class="pf-inv-num">' + esc(inv.invoiceNo) + '</div>' +
-            '<div class="pf-inv-meta">' + esc(inv.invoiceDate) +
-              (inv.numCaixas ? ' · ' + inv.numCaixas + ' cx.' : '') +
-              ' · ' + res.parsedQty + ' pcs' +
+          '<div class="pf-inv-hdr-top">' +
+            '<div>' +
+              '<div class="pf-inv-num">' + esc(inv.invoiceNo) + '</div>' +
+              '<div class="pf-inv-meta">' + esc(inv.invoiceDate) +
+                (inv.numCaixas ? ' · ' + inv.numCaixas + ' cx.' : '') +
+                ' · ' + res.parsedQty + ' pcs' +
+              '</div>' +
             '</div>' +
+            badge +
+            '<span class="pf-inv-spacer"></span>' +
+            '<div class="pf-inv-total">' + fmt(res.parsedPrice) + ' \u20ac</div>' +
+            '<button class="pf-inv-toggle" data-toggle="' + idx + '" title="expandir/minimizar">' +
+              (isCollapsed ? '&#9654;' : '&#9660;') +
+            '</button>' +
           '</div>' +
-          badge +
-          '<span class="pf-inv-spacer"></span>' +
-          '<div class="pf-inv-total">' + fmt(res.parsedPrice) + ' €</div>' +
-          '<div class="pf-inv-acts">' +
-            '<button class="pf-btn pf-btn-mid" data-bc="' + idx + '">códigos de barras</button>' +
+          '<div class="pf-inv-hdr-bot">' +
+            '<button class="pf-btn pf-btn-mid" data-bc="' + idx + '">c\u00f3digos de barras</button>' +
             '<button class="pf-btn pf-btn-dark" data-st="' + idx + '">ingresso de stock</button>' +
           '</div>' +
-          '<button class="pf-inv-toggle" data-toggle="' + idx + '" title="expandir/minimizar">' +
-            (isCollapsed ? '&#9654;' : '&#9660;') +
-          '</button>' +
         '</div>' +
         '<div class="pf-inv-body"></div>';
 

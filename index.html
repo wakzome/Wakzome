@@ -3187,9 +3187,8 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
    MOSAIC EMPLOYEE LANDING — wz-mosaic
    ============================================================ */
 
-/* Pre-emptively hide employee-facing elements so they never flash.
-   The mosaic covers the screen. The horarios modal restores #container-tables
-   via inline styles (higher specificity) when needed. */
+/* Hide header/container permanently — mosaic replaces them.
+   login-screen (z-index:5) sits above all of this. */
 #main-header,
 #container-tables {
   opacity: 0 !important;
@@ -3199,18 +3198,19 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 }
 
 #wz-mosaic {
-  display: block;          /* always in layout — covers header */
+  display: block;
   position: fixed;
   inset: 0;
-  z-index: 8;
+  z-index: 4;              /* BELOW login-screen (z:5) — login always visible */
   background: #fff;
   opacity: 0;
-  pointer-events: none;    /* invisible = non-interactive until shown */
+  pointer-events: none;
   transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1);
 }
 #wz-mosaic.wz-mosaic--visible {
   opacity: 1;
   pointer-events: auto;
+  z-index: 9;              /* ABOVE everything once login is gone */
 }
 
 /* Grid layout — editorial, non-uniform */

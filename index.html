@@ -3186,17 +3186,31 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 /* ============================================================
    MOSAIC EMPLOYEE LANDING — wz-mosaic
    ============================================================ */
+
+/* Pre-emptively hide employee-facing elements so they never flash.
+   The mosaic covers the screen. The horarios modal restores #container-tables
+   via inline styles (higher specificity) when needed. */
+#main-header,
+#container-tables {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  transition: none !important;
+}
+
 #wz-mosaic {
-  display: none;
+  display: block;          /* always in layout — covers header */
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 8;
   background: #fff;
   opacity: 0;
-  transition: opacity 0.8s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;    /* invisible = non-interactive until shown */
+  transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1);
 }
 #wz-mosaic.wz-mosaic--visible {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* Grid layout — editorial, non-uniform */
@@ -3678,28 +3692,11 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   /* ── Show mosaic after login ──────────────────────────────── */
   function showMosaic() {
     var mosaic = document.getElementById('wz-mosaic');
-    var header = document.getElementById('main-header');
-    var ct     = document.getElementById('container-tables');
     if (!mosaic) return;
-
-    // Hide original header and container-tables visually
-    // (we do NOT remove them from DOM — horarios modal needs them)
-    if (header) {
-      header.style.opacity = '0';
-      header.style.pointerEvents = 'none';
-      header.style.position = 'absolute';
-      header.style.top = '-9999px';
-    }
-    if (ct) {
-      ct.style.opacity = '0';
-      ct.style.pointerEvents = 'none';
-      ct.style.position = 'absolute';
-      ct.style.top = '-9999px';
-    }
 
     applyStoreVisibility();
 
-    mosaic.style.display = 'block';
+    // Mosaic already display:block, opacity:0 — just activate
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         mosaic.classList.add('wz-mosaic--visible');
@@ -3707,19 +3704,62 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     });
   }
 
-  /* ── Watch for main-header becoming visible (post-login) ─── */
+  /* ── Watch for login-screen hiding (fires before header shows) ── */
   var _mosaicShown = false;
-  var header = document.getElementById('main-header');
-  if (header) {
-    var obs = new MutationObserver(function () {
-      if (!_mosaicShown && header.classList.contains('show')) {
-        _mosaicShown = true;
-        obs.disconnect();
-        // Short delay to let shared.js populate h-store-select
-        setTimeout(showMosaic, 180);
+
+  function _isAdminSession() {
+    // If admin-app is shown, skip mosaic entirely
+    var adminApp = document.getElementById('admin-app');
+    return adminApp && adminApp.classList.contains('show');
+  }
+
+  function _triggerMosaic() {
+    if (_mosaicShown) return;
+    if (_isAdminSession()) return;  // admins skip mosaic
+    _mosaicShown = true;
+    // Small delay so shared.js can set h-store-select value
+    setTimeout(showMosaic, 120);
+  }
+
+  // Strategy 1: observe login-screen style/class changes
+  var loginScreen = document.getElementById('login-screen');
+  if (loginScreen) {
+    var loginObs = new MutationObserver(function () {
+      var s = window.getComputedStyle(loginScreen);
+      if (s.display === 'none' || s.opacity === '0' || s.visibility === 'hidden' ||
+          loginScreen.style.display === 'none' || parseFloat(s.opacity) < 0.05) {
+        loginObs.disconnect();
+        _triggerMosaic();
       }
     });
-    obs.observe(header, { attributes: true, attributeFilter: ['class'] });
+    loginObs.observe(loginScreen, {
+      attributes: true,
+      attributeFilter: ['style', 'class']
+    });
+  }
+
+  // Strategy 2: observe main-header getting .show (fallback)
+  var header = document.getElementById('main-header');
+  if (header) {
+    var headerObs = new MutationObserver(function () {
+      if (header.classList.contains('show')) {
+        headerObs.disconnect();
+        _triggerMosaic();
+      }
+    });
+    headerObs.observe(header, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // Strategy 3: observe container-tables getting reveal class (second fallback)
+  var ct0 = document.getElementById('container-tables');
+  if (ct0) {
+    var ctObs = new MutationObserver(function () {
+      if (ct0.classList.contains('in')) {
+        ctObs.disconnect();
+        _triggerMosaic();
+      }
+    });
+    ctObs.observe(ct0, { attributes: true, attributeFilter: ['class'] });
   }
 
   /* ── Horarios Modal ───────────────────────────────────────── */
@@ -3733,15 +3773,9 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var content = document.getElementById('wz-horarios-modal__content');
     var ct      = document.getElementById('container-tables');
 
-    // Move container-tables into modal content
+    // Restore container-tables visibility (CSS hides it globally)
     if (ct && content && !content.contains(ct)) {
-      // Restore visibility so it renders
-      ct.style.opacity = '';
-      ct.style.pointerEvents = '';
-      ct.style.position = '';
-      ct.style.top = '';
-      ct.style.minWidth = '';
-      ct.style.width = '100%';
+      ct.style.cssText = 'opacity:1 !important; pointer-events:auto !important; visibility:visible !important; min-width:0; width:100%; position:static; display:flex;';
       content.appendChild(ct);
     }
 
@@ -3764,12 +3798,9 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       modal.classList.remove('wz-modal--open');
       _horariosOpen = false;
 
-      // Move container-tables back (hidden) so DOM is intact
+      // Move container-tables back to body, let CSS hide it again
       if (ct && content.contains(ct)) {
-        ct.style.opacity = '0';
-        ct.style.pointerEvents = 'none';
-        ct.style.position = 'absolute';
-        ct.style.top = '-9999px';
+        ct.style.cssText = '';  // remove inline styles — CSS rule takes over
         document.body.appendChild(ct);
       }
     }, 460);

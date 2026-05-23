@@ -1840,7 +1840,6 @@
   var _pvpEmpTimer  = null;
 
   async function pfPvpOpenEmployee() {
-    window.pfPvpOpenEmployee = pfPvpOpenEmployee;
     var ov   = document.getElementById('pf-pvp-emp-overlay');
     var body = document.getElementById('pf-pvp-emp-body');
     if (!ov || !body) return;
@@ -2252,5 +2251,13 @@
       }
     }
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+
+  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir */
+  window.pfPvpOpenEmployee = function() {
+    if (!document.getElementById('pf-pvp-emp-overlay')) {
+      pfPvpBuildEmployeeOverlay();
+    }
+    pfPvpOpenEmployee();
+  };
 
 })();

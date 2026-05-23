@@ -3177,6 +3177,24 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #wz-mosaic.wz-on      { display: block; }
 #wz-mosaic.wz-visible { opacity: 1; }
 
+#wz-brand {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  font-family: 'MontserratLight', sans-serif;
+  font-size: clamp(1.6rem, 4vw, 3rem);
+  font-weight: 100;
+  letter-spacing: 0.22em;
+  text-transform: lowercase;
+  color: #fff;
+  text-shadow: 0 2px 24px rgba(0,0,0,0.38);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1) 0.25s;
+}
+#wz-mosaic.wz-visible #wz-brand { opacity: 1; }
+
 #wz-grid {
   display: grid;
   width: 100%; height: 100%;
@@ -3307,7 +3325,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 20px; border-bottom: 1px solid #efefef;
   position: sticky; top: 0; background: #fff; z-index: 2;
-  border-radius: 18px 18px 0 0;
+  border-radius: 20px 20px 0 0;
 }
 #wz-hor-modal-bar span {
   font-family: "MontserratLight", sans-serif;
@@ -3320,6 +3338,24 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   border-radius: 8px; transition: background 0.15s;
 }
 #wz-hor-modal-bar button:hover { background: #f0f0f0; }
+#wz-week-nav {
+  display: flex; align-items: center; gap: 6px;
+}
+#wz-week-label {
+  font-family: 'MontserratLight', sans-serif;
+  font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: #555; min-width: 72px; text-align: center;
+}
+#wz-week-prev, #wz-week-next {
+  background: none; border: 1px solid #ddd;
+  border-radius: 8px; padding: 5px 10px;
+  cursor: pointer; font-size: 0.9rem; color: #333;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  line-height: 1;
+}
+#wz-week-prev:hover, #wz-week-next:hover { background: #f0f0f0; border-color: #aaa; }
+#wz-week-prev:disabled, #wz-week-next:disabled { opacity: 0.25; cursor: default; pointer-events: none; }
 #wz-hor-modal-body { padding: 20px; }
 
 /* ── MODAL AVISO ──────────────────────────────────────────────── */
@@ -3421,6 +3457,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 
 <!-- ══ MOSAICO ══════════════════════════════════════════════════ -->
 <div id="wz-mosaic">
+  <div id="wz-brand">wakzome</div>
   <div id="wz-grid">
     <div class="wz-cell wz-cell-horarios" id="wz-c-horarios">
       <img src="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/horarios.png" alt="horários" draggable="false">
@@ -3459,6 +3496,11 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   <div id="wz-hor-modal-box">
     <div id="wz-hor-modal-bar">
       <span>horários</span>
+      <div id="wz-week-nav">
+        <button id="wz-week-prev" title="semana anterior">&#8592;</button>
+        <span id="wz-week-label"></span>
+        <button id="wz-week-next" title="semana seguinte">&#8594;</button>
+      </div>
       <button id="wz-hor-close">✕</button>
     </div>
     <div id="wz-hor-modal-body"></div>
@@ -3530,25 +3572,63 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   /* ─────────────────────────────────────────────────────────────
      MODAL HORÁRIOS
   ───────────────────────────────────────────────────────────── */
+  var _wzWeekIndex = 0;
+
+  function wzWeekNavUpdate() {
+    var blocks = window._lastBlocks;
+    if (!blocks || !blocks.length) {
+      document.getElementById('wz-week-nav').style.display = 'none';
+      return;
+    }
+    var total  = blocks.length;
+    var label  = document.getElementById('wz-week-label');
+    var prev   = document.getElementById('wz-week-prev');
+    var next   = document.getElementById('wz-week-next');
+    document.getElementById('wz-week-nav').style.display = total > 1 ? 'flex' : 'none';
+    if (label) label.textContent = 'semana ' + (_wzWeekIndex + 1) + ' / ' + total;
+    if (prev)  prev.disabled  = _wzWeekIndex <= 0;
+    if (next)  next.disabled  = _wzWeekIndex >= total - 1;
+    /* sync hidden select so shared.js interval still works */
+    var ws = document.getElementById('week-select');
+    if (ws) ws.value = _wzWeekIndex;
+  }
+
+  function wzWeekGo(idx) {
+    var blocks = window._lastBlocks;
+    if (!blocks || !blocks.length) return;
+    _wzWeekIndex = Math.max(0, Math.min(idx, blocks.length - 1));
+    wzWeekNavUpdate();
+    /* kill any pending fade before rendering */
+    var tc = document.getElementById('table-container');
+    if (tc) { tc.style.transition = 'none'; tc.style.opacity = '1'; }
+    if (window._hRender && typeof window._hRender.table === 'function') {
+      var firstCell = (blocks[_wzWeekIndex][0][0] || '').trim().toLowerCase();
+      if (firstCell === 'porto santo') {
+        window._hRender.porto(blocks, _wzWeekIndex);
+      } else {
+        window._hRender.table(blocks, _wzWeekIndex);
+      }
+    }
+  }
+
   function openHor() {
     if (_horOpen) return;
     _horOpen = true;
     var modal = document.getElementById('wz-hor-modal');
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
-    var bar   = document.getElementById('wz-hor-modal-bar');
 
     /* Matar fade pendente do fadeRenderTable antes de mostrar */
     var tc = document.getElementById('table-container');
     if (tc) { tc.style.transition = 'none'; tc.style.opacity = '1'; }
 
-    /* Mostrar modal primeiro — deixar a animação CSS arrancar */
+    /* Mostrar modal — animação CSS arranca */
     modal.classList.add('wz-on');
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         modal.classList.add('wz-visible');
 
-        /* Mover container-tables após o primeiro frame da animação */
+        /* Mover container-tables após primeiro frame */
         if (ct && body && !body.contains(ct)) {
           ct.style.display    = 'flex';
           ct.style.opacity    = '1';
@@ -3558,20 +3638,20 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
           body.appendChild(ct);
         }
 
-        /* Mover week-select agora — ou polling se ainda não existe */
-        function tryMoveWeekSelect() {
-          var ws = document.getElementById('week-select');
-          if (ws && bar && !bar.contains(ws)) {
-            ws.style.display = 'inline-block';
-            var closeBtn = document.getElementById('wz-hor-close');
-            bar.insertBefore(ws, closeBtn || null);
-            return true;
+        /* Inicializar índice da semana atual e actualizar navegação */
+        function initWeekNav() {
+          var blocks = window._lastBlocks;
+          if (!blocks || !blocks.length) return false;
+          if (typeof window._hRender !== 'undefined' &&
+              typeof window._hRender.findCurrentWeek === 'function') {
+            _wzWeekIndex = window._hRender.findCurrentWeek(blocks);
           }
-          return !!ws;
+          wzWeekNavUpdate();
+          return true;
         }
-        if (!tryMoveWeekSelect()) {
-          var _wsPoll = setInterval(function () {
-            if (tryMoveWeekSelect()) clearInterval(_wsPoll);
+        if (!initWeekNav()) {
+          var _navPoll = setInterval(function () {
+            if (initWeekNav()) clearInterval(_navPoll);
           }, 80);
         }
       });
@@ -3583,18 +3663,10 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var modal = document.getElementById('wz-hor-modal');
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
-    var bar   = document.getElementById('wz-hor-modal-bar');
     modal.classList.remove('wz-visible');
     setTimeout(function () {
       modal.classList.remove('wz-on');
       _horOpen = false;
-      /* Devolver week-select ao main-header-center */
-      var ws  = document.getElementById('week-select');
-      var mhc = document.getElementById('main-header-center');
-      if (ws && bar && bar.contains(ws) && mhc) {
-        ws.style.display = 'none';
-        mhc.appendChild(ws);
-      }
       /* Devolver container-tables ao body e esconder */
       if (ct && body.contains(ct)) {
         ct.style.display = 'none';
@@ -3627,6 +3699,13 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     document.getElementById('wz-c-horarios').addEventListener('click', openHor);
     document.getElementById('wz-hor-close').addEventListener('click', closeHor);
     document.getElementById('wz-hor-modal-bg').addEventListener('click', closeHor);
+
+    document.getElementById('wz-week-prev').addEventListener('click', function () {
+      wzWeekGo(_wzWeekIndex - 1);
+    });
+    document.getElementById('wz-week-next').addEventListener('click', function () {
+      wzWeekGo(_wzWeekIndex + 1);
+    });
 
     /* PVP — só Porto Santo (célula hidden via CSS para outras lojas) */
     document.getElementById('wz-c-pvp').addEventListener('click', function () {

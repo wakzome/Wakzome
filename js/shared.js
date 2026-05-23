@@ -679,7 +679,7 @@
       const activeCls = isActiveNow ? ' tr-active-now' : '';
       let rowspanCols=[];
       html+=`<tr class="${activeCls}">`;
-      html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px">
+      html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
               <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
               ${escapeHtml(A[0]||'')}</td>`;
       for(let c=1;c<cols;c++){
@@ -733,9 +733,9 @@
       const firstCell = (row[0] || '').trim().toLowerCase();
       if (firstCell === 'porto santo') {
         html += '<tr>';
-        html += `<th style="width:${colWidths[0]*12}px">${escapeHtml(row[0])}</th>`;
+        html += `<th style="width:${colWidths[0]*12}px;background:#444;color:#fff;text-align:center;">${escapeHtml(row[0])}</th>`;
         for (let c = 1; c < cols; c++) {
-          html += `<th style="width:${colWidths[c]*12}px">${escapeHtml(row[c] || '')}</th>`;
+          html += `<th style="width:${colWidths[c]*12}px;background:#444;color:#fff;text-align:center;">${escapeHtml(row[c] || '')}</th>`;
         }
         html += '</tr>'; i++; continue;
       }
@@ -743,7 +743,8 @@
       html += '<tr>';
       for (let c = 0; c < cols; c++) {
         const cls = (c === todayCol ? 'today-col' : '');
-        html += `<th class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(row[c] || '')}</th>`;
+        const bg = (c === todayCol ? '' : 'background:#444;color:#fff;');
+        html += `<th class="${cls}" style="width:${colWidths[c]*12}px;${bg}text-align:center;">${escapeHtml(row[c] || '')}</th>`;
       }
       html += '</tr>'; i++;
       while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
@@ -755,7 +756,7 @@
         }
         const activeCls = isActiveNow ? ' tr-active-now' : '';
         html += `<tr class="${activeCls}">`;
-        html += `<td class="name" style="white-space:nowrap;width:${colWidths[0]*12}px">
+        html += `<td class="name" style="white-space:nowrap;width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
                   <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                   ${escapeHtml(A[0]||'')}
                  </td>`;

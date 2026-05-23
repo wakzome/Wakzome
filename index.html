@@ -3210,11 +3210,11 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .wz-cell img {
   width: 100%; height: 100%;
   object-fit: cover; display: block;
-  transition: transform 0.55s cubic-bezier(0.22,1,0.36,1), filter 0.45s ease;
+  transition: transform 0.42s cubic-bezier(0.22,1,0.36,1), filter 0.38s ease;
 }
 .wz-cell-overlay {
   position: absolute; inset: 0; pointer-events: none;
-  background: transparent; transition: background 0.4s ease;
+  background: transparent; transition: background 0.38s ease;
 }
 .wz-cell-label {
   position: absolute; left: 0; top: 50%;
@@ -3230,11 +3230,11 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   backdrop-filter: blur(4px);
   border-radius: 0 6px 6px 0;
   opacity: 0;
-  transition: opacity 0.3s ease, transform 0.32s cubic-bezier(0.22,1,0.36,1);
+  transition: opacity 0.28s ease, transform 0.3s cubic-bezier(0.22,1,0.36,1);
 }
-.wz-cell:hover img          { transform: scale(1.04); filter: brightness(0.85); }
+.wz-cell:hover img          { transform: scale(1.12); filter: brightness(0.82); }
 .wz-cell:hover .wz-cell-overlay {
-  background: linear-gradient(90deg, rgba(0,0,0,0.28) 0%, transparent 55%);
+  background: linear-gradient(90deg, rgba(0,0,0,0.32) 0%, transparent 55%);
 }
 .wz-cell:hover .wz-cell-label {
   opacity: 1; transform: translateY(-50%) translateX(0);
@@ -3297,20 +3297,24 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #wz-hor-modal.wz-on { display: flex; }
 #wz-hor-modal-bg {
   position: absolute; inset: 0;
-  background: rgba(255,255,255,0.5); backdrop-filter: blur(16px);
-  opacity: 0; transition: opacity 0.4s ease; cursor: pointer;
+  background: rgba(255,255,255,0.5); backdrop-filter: blur(20px);
+  opacity: 0; transition: opacity 0.55s cubic-bezier(0.22,1,0.36,1); cursor: pointer;
 }
 #wz-hor-modal.wz-visible #wz-hor-modal-bg { opacity: 1; }
 #wz-hor-modal-box {
   position: relative; z-index: 1; background: #fff;
-  border-radius: 18px; box-shadow: 0 20px 70px rgba(0,0,0,0.18);
+  border-radius: 18px; box-shadow: 0 32px 90px rgba(0,0,0,0.14);
   width: min(95vw, 1080px); max-height: 88vh;
   overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
-  opacity: 0; transform: translateY(16px) scale(0.98);
-  transition: opacity 0.4s cubic-bezier(0.22,1,0.36,1),
-              transform 0.4s cubic-bezier(0.22,1,0.36,1);
+  opacity: 0; transform: translateY(28px) scale(0.97);
+  transition: opacity 0.55s cubic-bezier(0.16,1,0.3,1),
+              transform 0.55s cubic-bezier(0.16,1,0.3,1),
+              box-shadow 0.55s ease;
 }
-#wz-hor-modal.wz-visible #wz-hor-modal-box { opacity: 1; transform: none; }
+#wz-hor-modal.wz-visible #wz-hor-modal-box {
+  opacity: 1; transform: translateY(0) scale(1);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.13);
+}
 #wz-hor-modal-bar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 20px; border-bottom: 1px solid #efefef;

@@ -387,16 +387,18 @@
       '#pf-pvp-emp-search{width:100%;border:1px solid #ddd;border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;outline:none;}',
       '#pf-pvp-emp-search:focus{border-color:#555;}',
       '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 14px 7px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}',
+      '#pf-pvp-emp-save-btn{background:none;border:1.5px solid #ccc;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:1rem;color:#555;transition:border-color .15s,color .15s;line-height:1;}',
+      '#pf-pvp-emp-save-btn:hover{border-color:#555;color:#000;}',
       '#pf-pvp-emp-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000!important;}',
       '#pf-pvp-emp-save-msg{margin-left:auto;font-size:.7rem;font-weight:bold;color:#555;}',
-      '#pf-pvp-emp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;display:flex;flex-direction:column;gap:16px;min-height:0;}',
-      '.pf-pvp-emp-card{border:1.5px solid #e0e0e0;border-radius:12px;overflow:hidden;flex-shrink:0;}',
-      '.pf-pvp-emp-card-hdr{background:#222;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
+      '#pf-pvp-emp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 24px;display:flex;flex-direction:column;align-items:center;gap:16px;min-height:0;}',
+      '.pf-pvp-emp-card{border:1.5px solid #e0e0e0;border-radius:12px;overflow:hidden;flex-shrink:0;width:fit-content;min-width:min(100%,320px);}',
+      '.pf-pvp-emp-card-hdr{background:#222;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.55)!important;}',
-      '.pf-pvp-emp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;display:flex;justify-content:center;}',
+      '.pf-pvp-emp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}',
       /* Employee table: auto layout, compact cols */
-      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;white-space:nowrap;margin:0 auto;}',
+      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;white-space:nowrap;}',
       '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-emp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-emp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
@@ -405,7 +407,7 @@
       '.pf-pvp-emp-obs-inp{width:140px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
       '.pf-pvp-emp-pvp-inp:focus,.pf-pvp-emp-obs-inp:focus{outline:none;border-color:#555;}',
       '.pf-pvp-emp-pvp-inp::placeholder,.pf-pvp-emp-obs-inp::placeholder{color:#ccc;}',
-      '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;flex-shrink:0;}',
+      '.pf-pvp-emp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;background:#fafafa;flex-shrink:0;width:100%;box-sizing:border-box;}',
       '.pf-pvp-emp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
       '.pf-pvp-emp-notes-ta{width:100%;border:1px solid #ddd;border-radius:7px;padding:7px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:68px;box-sizing:border-box;}',
       '.pf-pvp-emp-notes-ta:focus{outline:none;border-color:#555;}',
@@ -1773,6 +1775,7 @@
           '</svg> voltar' +
         '</button>' +
         '<span id="pf-pvp-emp-title">lista pvp</span>' +
+        '<button id="pf-pvp-emp-save-btn" title="guardar agora">&#128190;</button>' +
         '<span id="pf-pvp-emp-save-msg"></span>' +
       '</div>' +
       '<div id="pf-pvp-emp-search-bar">' +
@@ -1784,6 +1787,13 @@
     document.getElementById('pf-pvp-emp-back').addEventListener('click', function(){
       pfPvpEmpSaveAll().then(function(){ ov.classList.remove('open'); });
     });
+    // Force save button
+    var saveBtn = document.getElementById('pf-pvp-emp-save-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function() {
+        pfPvpEmpSaveAll();
+      });
+    }
 
     // Create "LISTA PVP" button in employee nav
     var nav = document.getElementById('main-nav');

@@ -334,7 +334,7 @@
       '#pf-pvp-modal{display:none;position:fixed;inset:0;z-index:320;}',
       '#pf-pvp-modal.pf-pvp-open{display:block;}',
       '#pf-pvp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);}',
-      '#pf-pvp-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:calc(100% - 24px);max-width:680px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
+      '#pf-pvp-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:fit-content;min-width:320px;max-width:calc(100vw - 24px);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
       '#pf-pvp-header{background:#222;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}',
       '#pf-pvp-title{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.04em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
       '#pf-pvp-pub-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;}',
@@ -347,7 +347,7 @@
       'input:checked+.pf-pvp-slider:before{transform:translateX(18px);}',
       '#pf-pvp-close{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1;flex-shrink:0;}',
       '#pf-pvp-close:hover{background:rgba(255,255,255,0.15);}',
-      '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;}',
+      '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;display:flex;justify-content:flex-start;}',
       /* Admin table: auto layout, compact cols shrink to content */
       '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;max-width:100%;}',
       '.pf-pvp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
@@ -391,7 +391,7 @@
       '.pf-pvp-emp-card-hdr{background:#222;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.55)!important;}',
-      '.pf-pvp-emp-scroll{overflow-x:auto;}',
+      '.pf-pvp-emp-scroll{overflow-x:auto;display:flex;justify-content:center;}',
       /* Employee table: auto layout, compact cols */
       '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;max-width:100%;}',
       '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',

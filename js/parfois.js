@@ -383,8 +383,8 @@
       '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;}',
       '#pf-pvp-emp-overlay.open{display:flex;}',
       '#pf-pvp-emp-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}',
-      '#pf-pvp-emp-search-bar{padding:8px 16px;border-bottom:1px solid #f0f0f0;background:#fff;flex-shrink:0;}',
-      '#pf-pvp-emp-search{width:100%;border:1px solid #ddd;border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;outline:none;}',
+      '#pf-pvp-emp-search-bar{padding:8px 0 12px;background:#fff;flex-shrink:0;display:flex;justify-content:center;}',
+      '#pf-pvp-emp-search{width:var(--pvp-list-width,600px);max-width:calc(100vw - 48px);border:1px solid #ddd;border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;outline:none;}',
       '#pf-pvp-emp-search:focus{border-color:#555;}',
       '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 14px 7px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}',
       '#pf-pvp-emp-save-btn{background:none;border:1.5px solid #ccc;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:1rem;color:#555;transition:border-color .15s,color .15s;line-height:1;}',
@@ -1916,6 +1916,17 @@
         _pvpEmpLists[ei].notes = ta.value;
         pfPvpEmpScheduleSave();
       });
+    });
+
+    // ── Equalise card widths — all cards take the width of the widest ──
+    requestAnimationFrame(function() {
+      var cards = body.querySelectorAll('.pf-pvp-emp-card');
+      var maxW = 0;
+      cards.forEach(function(c) { if (c.scrollWidth > maxW) maxW = c.scrollWidth; });
+      if (maxW > 0) {
+        cards.forEach(function(c) { c.style.width = maxW + 'px'; });
+        document.documentElement.style.setProperty('--pvp-list-width', maxW + 'px');
+      }
     });
 
     // ── Search/filter ──

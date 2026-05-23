@@ -334,8 +334,8 @@
       '#pf-pvp-modal{display:none;position:fixed;inset:0;z-index:320;}',
       '#pf-pvp-modal.pf-pvp-open{display:block;}',
       '#pf-pvp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);}',
-      '#pf-pvp-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:fit-content;min-width:320px;max-width:calc(100vw - 24px);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
-      '#pf-pvp-header{background:#222;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}',
+      '#pf-pvp-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;width:auto;min-width:0;max-width:calc(100vw - 24px);max-height:88vh;display:inline-flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2);}',
+      '#pf-pvp-header{background:#222;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;width:100%;box-sizing:border-box;}',
       '#pf-pvp-title{font-size:.82rem;font-weight:bold;color:#fff!important;letter-spacing:.04em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
       '#pf-pvp-pub-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;}',
       '#pf-pvp-pub-lbl{font-size:.7rem;color:rgba(255,255,255,0.7)!important;white-space:nowrap;}',
@@ -347,9 +347,9 @@
       'input:checked+.pf-pvp-slider:before{transform:translateX(18px);}',
       '#pf-pvp-close{background:none;border:none;color:#fff!important;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1;flex-shrink:0;}',
       '#pf-pvp-close:hover{background:rgba(255,255,255,0.15);}',
-      '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:auto;display:flex;justify-content:flex-start;}',
+      '#pf-pvp-scroll{flex:1;overflow-y:auto;overflow-x:hidden;}',
       /* Admin table: auto layout, compact cols shrink to content */
-      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;max-width:100%;}',
+      '#pf-pvp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;white-space:nowrap;}',
       '.pf-pvp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
@@ -371,12 +371,12 @@
       '.pf-pvp-input{width:70px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
       '.pf-pvp-input:focus{outline:none;border-color:#555;}',
       '.pf-pvp-input::placeholder{color:#ccc;}',
-      '#pf-pvp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;flex-shrink:0;min-width:0;}',
+      '#pf-pvp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;flex-shrink:0;width:100%;box-sizing:border-box;}',
       '#pf-pvp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
       '#pf-pvp-notes{width:100%;border:1px solid #e0e0e0;border-radius:7px;padding:7px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:52px;box-sizing:border-box;}',
       '#pf-pvp-notes:focus{outline:none;border-color:#555;}',
       '#pf-pvp-notes::placeholder{color:#ccc;}',
-      '#pf-pvp-footer{padding:7px 14px;border-top:1px solid #eee;font-size:.7rem;color:#aaa;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;}',
+      '#pf-pvp-footer{padding:7px 14px;border-top:1px solid #eee;font-size:.7rem;color:#aaa;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fafafa;width:100%;box-sizing:border-box;}',
       '#pf-pvp-save-msg{font-size:.7rem;font-weight:bold;color:#555;}',
       '#pf-pvp-complete-badge{font-size:.68rem;font-weight:bold;padding:2px 9px;border-radius:20px;background:#333;color:#fff!important;}',
       /* ── PVP Employee overlay ── */
@@ -394,9 +394,9 @@
       '.pf-pvp-emp-card-hdr{background:#222;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.55)!important;}',
-      '.pf-pvp-emp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}',
+      '.pf-pvp-emp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;display:flex;justify-content:center;}',
       /* Employee table: auto layout, compact cols */
-      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;}',
+      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;white-space:nowrap;margin:0 auto;}',
       '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-emp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-emp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
@@ -1587,7 +1587,8 @@
     var items = res.items.map(function(it) {
       var saved = savedMap[it.ref] || {};
       return { ref: it.ref, name: it.desc, qty: it.qty,
-               pvp: saved.pvp || '', obs: saved.obs || '' };
+               pvp: saved.pvp || '', obs: saved.obs || '',
+               eans: it.eans || (it.ean ? [it.ean] : []) };
     });
 
     var published = existing ? !!existing.published : false;
@@ -1846,22 +1847,13 @@
       return;
     }
 
-    // Build EAN lookup from current session invoices for search
-    var eanByRef = {};
-    pfState.invoices.forEach(function(inv) {
-      pfGetActiveItems(inv).forEach(function(it) {
-        if (!eanByRef[it.ref]) eanByRef[it.ref] = [];
-        (it.eans || (it.ean ? [it.ean] : [])).forEach(function(e) {
-          if (e && eanByRef[it.ref].indexOf(e) === -1) eanByRef[it.ref].push(e);
-        });
-      });
-    });
+    // EANs are stored directly in each item (saved by admin)
 
     body.innerHTML = _pvpEmpLists.map(function(entry, ei) {
       var rec = entry.rec;
       var upd = rec.updated_at ? new Date(rec.updated_at).toLocaleDateString('pt-PT') + ' \u00b7 ' + new Date(rec.updated_at).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) : '';
       var rows = entry.items.map(function(it, ii) {
-        var eans = (eanByRef[it.ref] || []).join(' ');
+        var eans = (it.eans || []).join(' ');
         return '<tr data-filter-ref="' + esc(it.ref||'') + '" data-filter-name="' + esc((it.name||'').toLowerCase()) + '" data-filter-eans="' + esc(eans) + '">' +
           '<td class="pf-pvp-emp-td pf-pvp-emp-th-c" style="font-weight:bold">' + esc(it.ref||'') + '</td>' +
           '<td class="pf-pvp-emp-td">' + esc(it.name||'') + '</td>' +

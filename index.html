@@ -3338,28 +3338,41 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   border-radius: 8px; transition: background 0.15s;
 }
 #wz-hor-modal-bar button:hover { background: #f0f0f0; }
+#wz-hor-modal-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid #efefef;
+  position: sticky; top: 0; background: #fff; z-index: 2;
+  border-radius: 20px 20px 0 0;
+}
+#wz-hor-modal-bar > span {
+  font-family: "MontserratLight", sans-serif;
+  font-size: 0.78rem; font-weight: 700;
+  text-transform: lowercase; letter-spacing: 0.1em; color: #000;
+  flex: 1;
+}
+#wz-hor-modal-bar button {
+  background: none; border: none; cursor: pointer;
+  color: #000; padding: 4px 8px;
+  border-radius: 8px; transition: background 0.15s;
+}
+#wz-hor-modal-bar button:hover { background: #f0f0f0; }
 #wz-week-nav {
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 2px;
+  position: absolute; left: 50%; transform: translateX(-50%);
+}
+#wz-week-prev, #wz-week-next {
+  font-size: 1.5rem; padding: 4px 12px; line-height: 1;
+}
+#wz-week-prev:disabled, #wz-week-next:disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+#wz-week-right {
+  display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end;
 }
 #wz-week-label {
   font-family: 'MontserratLight', sans-serif;
   font-size: 0.72rem; font-weight: 700;
-  text-transform: lowercase; letter-spacing: 0.06em;
-  color: #555; min-width: 62px; text-align: center;
+  text-transform: lowercase; letter-spacing: 0.06em; color: #555;
 }
-#wz-week-prev, #wz-week-next {
-  background: none; border: none;
-  border-radius: 8px; padding: 4px 8px;
-  cursor: pointer; font-size: 1.3rem; color: #333;
-  transition: background 0.15s, opacity 0.15s;
-  line-height: 1;
-}
-#wz-week-prev:hover, #wz-week-next:hover { background: #f0f0f0; }
-#wz-week-prev:disabled, #wz-week-next:disabled { opacity: 0.2; cursor: default; pointer-events: none; }
-#wz-week-nav #wz-hor-close {
-  margin-left: 8px; padding: 4px 10px;
-  font-size: 1rem; border-left: 1px solid #eee;
-}
+#wz-hor-close { font-size: 1rem; }
 #wz-hor-modal-body { padding: 20px; }
 
 /* ── MODAL AVISO ──────────────────────────────────────────────── */
@@ -3502,8 +3515,10 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       <span>horários</span>
       <div id="wz-week-nav">
         <button id="wz-week-prev" title="semana anterior">&#8592;</button>
-        <span id="wz-week-label"></span>
         <button id="wz-week-next" title="semana seguinte">&#8594;</button>
+      </div>
+      <div id="wz-week-right">
+        <span id="wz-week-label"></span>
         <button id="wz-hor-close">✕</button>
       </div>
     </div>

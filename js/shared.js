@@ -653,13 +653,15 @@
     const persons=[];
     for(let i=0;i<dataRows.length;i+=3) persons.push({A:dataRows[i]||Array(cols).fill(''),B:dataRows[i+1]||Array(cols).fill(''),C:dataRows[i+2]||Array(cols).fill('')});
     function rowHasBlankToken(row){ if(!row) return false; const re=/^\s*(?:40\s*hrs|40hrs|7(?:[\.,]5)?|8|0)\s*$/i; return row.some(cell=>re.test(String(cell).trim())); }
-    let html='<table>';
+    let html='<table style="margin:0 auto;">';
     for(let r=0;r<2;r++){
       html+='<tr>';
       for(let c=0;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
         const thBg=(c===todayCol?'':'background:#444;color:#fff;');
-        html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}white-space:nowrap;text-align:center;">${escapeHtml(headerRows[r][c]||'')}</th>`;
+        // col 0 = store/name header: allow wrap. col 1+ = day headers: nowrap
+        const thWrap=(c===0?'':'white-space:nowrap;');
+        html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;">${escapeHtml(headerRows[r][c]||'')}</th>`;
       }
       html+='</tr>';
     }
@@ -680,30 +682,36 @@
       const activeCls = isActiveNow ? ' tr-active-now' : '';
       let rowspanCols=[];
       html+=`<tr class="${activeCls}">`;
-      html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px;text-align:center;justify-content:center;white-space:nowrap;">
+      // name cell: allow wrap so compound names break naturally
+      html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
               <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
               ${escapeHtml(A[0]||'')}</td>`;
       for(let c=1;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
         const top=A[c]||'', bot=B[c]||'';
+        // nowrap only if cell looks like a schedule (contains digits and colon/dash, no spaces)
+        const isSchedule = v => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(v.trim());
+        const topNw = isSchedule(top)||top===''||top.toUpperCase()==='FOLGA'||top.toUpperCase()==='FERIAS';
+        const botNw = isSchedule(bot)||bot===''||bot.toUpperCase()==='FOLGA'||bot.toUpperCase()==='FERIAS';
+        const nw = (topNw && botNw) ? 'white-space:nowrap;' : '';
         if(top===bot && top!==''){
-          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${escapeHtml(top)}</td>`;
+          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px;${nw}text-align:center;">${escapeHtml(top)}</td>`;
           rowspanCols.push(c);
         } else if(top!==''||bot!==''){
           const cont=[top,bot].filter(v=>v).map(escapeHtml).join('<br>');
-          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${cont}</td>`;
+          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px;${nw}text-align:center;">${cont}</td>`;
           rowspanCols.push(c);
-        } else { html+=`<td class="${cls}" style="background:${bgA};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;"></td>`; }
+        } else { html+=`<td class="${cls}" style="background:${bgA};width:${colWidths[c]*12}px;text-align:center;"></td>`; }
       }
       html+=`</tr><tr class="${activeCls}">`;
       for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
         const cls=(c===todayCol?'today-col':'');
-        html+=`<td class="${cls}" style="background:${bgB};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
+        html+=`<td class="${cls}" style="background:${bgB};width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
       }
       html+='</tr><tr>';
       for(let c=0;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
-        html+=`<td class="bold-row ${cls}" style="background:#fff;width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${escapeHtml(C[c]||'')}</td>`;
+        html+=`<td class="bold-row ${cls}" style="background:#fff;width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(C[c]||'')}</td>`;
       }
       html+='</tr>';
     });
@@ -714,7 +722,7 @@
   function renderPortoSanto(blocks, index) {
     const rows = blocks[index];
     const cols = Math.max(...rows.map(r => r.length));
-    let html = '<table>';
+    let html = '<table style="margin:0 auto;">';
     function findTodayColPS(row) {
       const today = new Date();
       for (let c = 1; c < row.length; c++) {
@@ -757,7 +765,7 @@
         }
         const activeCls = isActiveNow ? ' tr-active-now' : '';
         html += `<tr class="${activeCls}">`;
-        html += `<td class="name" style="white-space:nowrap;width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
+        html += `<td class="name" style="width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
                   <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                   ${escapeHtml(A[0]||'')}
                  </td>`;
@@ -767,14 +775,18 @@
           const afternoon = (B[c] || '').trim().toUpperCase();
           let content = '';
           const specialWords = ['FOLGA', 'FERIAS'];
+          const isSchedule = v => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(v.trim());
+          const nw = (isSchedule(A[c]||'')||specialWords.includes(morning)||morning==='') &&
+                     (isSchedule(B[c]||'')||specialWords.includes(afternoon)||afternoon==='')
+                     ? 'white-space:nowrap;' : '';
           if (morning && morning === afternoon && specialWords.includes(morning)) {
-            content = `<div style="text-align:center">${escapeHtml(morning)}</div>`;
+            content = escapeHtml(morning);
           } else if (morning && afternoon) {
             content = `${escapeHtml(A[c])}<br>${escapeHtml(B[c])}`;
           } else {
             content = escapeHtml(A[c] || B[c] || '');
           }
-          html += `<td class="${cls}" style="width:${colWidths[c]*12}px;text-align:center;white-space:nowrap;">${content}</td>`;
+          html += `<td class="${cls}" style="width:${colWidths[c]*12}px;text-align:center;${nw}">${content}</td>`;
         }
         html += '</tr>'; i += 2;
       }

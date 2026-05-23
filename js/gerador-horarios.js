@@ -1419,36 +1419,12 @@
             if (!S.schedule[p.id]) return;
 
             // Calcular horas reales de esta persona en esta semana
-            let realHrs = 0;
-            let tieneHorario = false;
-            DAYS.forEach(d => {
-              const cl = S.schedule[p.id]?.[d];
-              if (cl?.type === 'work' && cl.shift) {
-                tieneHorario = true;
-                cl.shift.split('|').forEach(sg => {
-                  const pts = sg.split('-');
-                  if (pts.length < 2) return;
-                  const [h1,m1] = pts[0].split(':').map(Number);
-                  const [h2,m2] = pts[1].split(':').map(Number);
-                  if (!isNaN(h1)&&!isNaN(h2)) realHrs += (h2+m2/60)-(h1+m1/60);
-                });
-              }
-              const apoio = S._apoioShifts?.[p.id]?.[d];
-              if (apoio?.shift) {
-                tieneHorario = true;
-                const pts = apoio.shift.split('-');
-                if (pts.length>=2) {
-                  const [h1,m1]=pts[0].split(':').map(Number);
-                  const [h2,m2]=pts[1].split(':').map(Number);
-                  if (!isNaN(h1)&&!isNaN(h2)) realHrs+=(h2+m2/60)-(h1+m1/60);
-                }
-              }
-            });
+            const realHrs = calcPersonHrs(p.id);
+            const tieneHorario = DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work');
 
             // Si la persona no tiene horario esta semana, no tocar su saldo
             if (!tieneHorario) return;
 
-            realHrs = Math.round(realHrs * 10) / 10;
             const diffSemana = Math.round((realHrs - 40) * 10) / 10;
 
             const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
@@ -1610,29 +1586,7 @@
 
       storePeople.forEach(p => {
         // Calculate actual hours worked this week
-        let actualHrs = 0;
-        DAYS_ORDER.forEach(d => {
-          const cl = S.schedule[p.id]?.[d];
-          if (cl?.type === 'work' && cl.shift) {
-            cl.shift.split('|').forEach(sg => {
-              const pts = sg.split('-');
-              if (pts.length < 2) return;
-              const [h1,m1] = pts[0].split(':').map(Number);
-              const [h2,m2] = pts[1].split(':').map(Number);
-              if (!isNaN(h1) && !isNaN(h2)) actualHrs += (h2+m2/60)-(h1+m1/60);
-            });
-          }
-          const apoio = S._apoioShifts?.[p.id]?.[d];
-          if (apoio?.shift) {
-            const pts = apoio.shift.split('-');
-            if (pts.length >= 2) {
-              const [h1,m1] = pts[0].split(':').map(Number);
-              const [h2,m2] = pts[1].split(':').map(Number);
-              if (!isNaN(h1) && !isNaN(h2)) actualHrs += (h2+m2/60)-(h1+m1/60);
-            }
-          }
-        });
-        actualHrs = Math.round(actualHrs * 10) / 10;
+        const actualHrs = calcPersonHrs(p.id);
         const nameLabel = psShortName(p.name) + actualHrs + 'hrs';
         const rowA = [nameLabel];
         const rowB = [nameLabel];
@@ -2232,31 +2186,7 @@
           return `<td class="gh-sh-td${noClick}" data-pid="${p.id}" data-day="${day}" data-store="${st.id}"><div class="gh-sh-inner ${cls}">${content}</div></td>`;
         }).join('');
 
-        let aH = 0;
-        DAYS.forEach(d => {
-          const cl = S.schedule[p.id]?.[d];
-          if (cl?.type === 'work' && cl.shift && cl.shift.includes(':')) {
-            cl.shift.split('|').forEach(sg => {
-              const parts = sg.split('-');
-              if (parts.length < 2) return;
-              const [h1, m1] = parts[0].split(':').map(Number);
-              const [h2, m2] = parts[1].split(':').map(Number);
-              if (isNaN(h1) || isNaN(h2)) return;
-              aH += (h2 + m2/60) - (h1 + m1/60);
-            });
-          }
-          // Add apoio hours if person does apoio on this day
-          const apoio = S._apoioShifts?.[p.id]?.[d];
-          if (apoio?.shift) {
-            const parts = apoio.shift.split('-');
-            if (parts.length >= 2) {
-              const [h1, m1] = parts[0].split(':').map(Number);
-              const [h2, m2] = parts[1].split(':').map(Number);
-              if (!isNaN(h1) && !isNaN(h2)) aH += (h2 + m2/60) - (h1 + m1/60);
-            }
-          }
-        });
-        aH = Math.round(aH * 10) / 10;
+        const aH = calcPersonHrs(p.id);
         return `<tr>
           <td style="width:${_col0W}px;min-width:${_col0W}px;max-width:${_col0W}px;box-sizing:border-box"><div class="gh-p-cell">
             <button class="gh-p-remove-btn" data-pid="${p.id}" data-store="${st.id}" title="Eliminar desta tabela">
@@ -3025,6 +2955,10 @@
     if (type !== 'work') {
       const cellType = type === 'ferias' ? 'ferias' : type === 'baixa' ? 'baixa' : 'folga';
       S.schedule[pid][day] = { type: cellType, shift: null, store: null };
+      // Limpieza atómica: eliminar apoio huérfano de este día
+      if (S._apoioShifts?.[pid]?.[day]) {
+        delete S._apoioShifts[pid][day];
+      }
     } else {
       const shiftRaw = document.getElementById('gh-me-shift').value;
       const sid   = document.getElementById('gh-me-store').value;

@@ -371,7 +371,7 @@
       '.pf-pvp-input{width:70px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;}',
       '.pf-pvp-input:focus{outline:none;border-color:#555;}',
       '.pf-pvp-input::placeholder{color:#ccc;}',
-      '#pf-pvp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;flex-shrink:0;}',
+      '#pf-pvp-notes-wrap{padding:10px 14px;border-top:1px solid #eee;flex-shrink:0;min-width:0;}',
       '#pf-pvp-notes-lbl{font-size:.65rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;color:#aaa;margin-bottom:5px;}',
       '#pf-pvp-notes{width:100%;border:1px solid #e0e0e0;border-radius:7px;padding:7px 10px;font-size:.8rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;resize:vertical;min-height:52px;box-sizing:border-box;}',
       '#pf-pvp-notes:focus{outline:none;border-color:#555;}',
@@ -383,6 +383,9 @@
       '#pf-pvp-emp-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:400;flex-direction:column;}',
       '#pf-pvp-emp-overlay.open{display:flex;}',
       '#pf-pvp-emp-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}',
+      '#pf-pvp-emp-search-bar{padding:8px 16px;border-bottom:1px solid #f0f0f0;background:#fff;flex-shrink:0;}',
+      '#pf-pvp-emp-search{width:100%;border:1px solid #ddd;border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:\'MontserratLight\',sans-serif;color:#000!important;background:#fff;box-sizing:border-box;outline:none;}',
+      '#pf-pvp-emp-search:focus{border-color:#555;}',
       '#pf-pvp-emp-back{font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 14px 7px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}',
       '#pf-pvp-emp-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000!important;}',
       '#pf-pvp-emp-save-msg{margin-left:auto;font-size:.7rem;font-weight:bold;color:#555;}',
@@ -391,9 +394,9 @@
       '.pf-pvp-emp-card-hdr{background:#222;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}',
       '.pf-pvp-emp-card-title{font-size:.82rem;font-weight:bold;color:#fff!important;}',
       '.pf-pvp-emp-card-date{font-size:.68rem;color:rgba(255,255,255,0.55)!important;}',
-      '.pf-pvp-emp-scroll{overflow-x:auto;display:flex;justify-content:center;}',
+      '.pf-pvp-emp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}',
       /* Employee table: auto layout, compact cols */
-      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;max-width:100%;}',
+      '.pf-pvp-emp-table{border-collapse:collapse;font-family:\'MontserratLight\',sans-serif;table-layout:auto;width:max-content;}',
       '.pf-pvp-emp-th{background:#f0f0f0;padding:7px 10px;font-size:.67rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333!important;border-bottom:2px solid #ddd;white-space:nowrap;}',
       '.pf-pvp-emp-th-c{white-space:nowrap;width:0.1%;}',
       '.pf-pvp-emp-td{padding:6px 10px;font-size:.8rem;border-bottom:1px solid #f0f0f0;vertical-align:middle;color:#000!important;white-space:nowrap;}',
@@ -1754,8 +1757,9 @@
   function pfPvpBuildEmployeeOverlay() {
     if (document.getElementById('pf-pvp-emp-overlay')) return;
 
-    // Only inject for store employees
+    // Only inject for Porto Santo employees — never for other stores
     if (typeof window._currentStoreGlobal === 'undefined') return;
+    if (String(window._currentStoreGlobal).toLowerCase().trim() !== 'porto santo') return;
 
     // Create overlay
     var ov = document.createElement('div');
@@ -1769,6 +1773,9 @@
         '</button>' +
         '<span id="pf-pvp-emp-title">lista pvp</span>' +
         '<span id="pf-pvp-emp-save-msg"></span>' +
+      '</div>' +
+      '<div id="pf-pvp-emp-search-bar">' +
+        '<input id="pf-pvp-emp-search" type="text" placeholder="Filtrar por nome ou c\u00f3digo de barras\u2026" autocomplete="off">' +
       '</div>' +
       '<div id="pf-pvp-emp-body"></div>';
     document.body.appendChild(ov);
@@ -1839,11 +1846,23 @@
       return;
     }
 
+    // Build EAN lookup from current session invoices for search
+    var eanByRef = {};
+    pfState.invoices.forEach(function(inv) {
+      pfGetActiveItems(inv).forEach(function(it) {
+        if (!eanByRef[it.ref]) eanByRef[it.ref] = [];
+        (it.eans || (it.ean ? [it.ean] : [])).forEach(function(e) {
+          if (e && eanByRef[it.ref].indexOf(e) === -1) eanByRef[it.ref].push(e);
+        });
+      });
+    });
+
     body.innerHTML = _pvpEmpLists.map(function(entry, ei) {
       var rec = entry.rec;
       var upd = rec.updated_at ? new Date(rec.updated_at).toLocaleDateString('pt-PT') + ' \u00b7 ' + new Date(rec.updated_at).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) : '';
       var rows = entry.items.map(function(it, ii) {
-        return '<tr>' +
+        var eans = (eanByRef[it.ref] || []).join(' ');
+        return '<tr data-filter-ref="' + esc(it.ref||'') + '" data-filter-name="' + esc((it.name||'').toLowerCase()) + '" data-filter-eans="' + esc(eans) + '">' +
           '<td class="pf-pvp-emp-td pf-pvp-emp-th-c" style="font-weight:bold">' + esc(it.ref||'') + '</td>' +
           '<td class="pf-pvp-emp-td">' + esc(it.name||'') + '</td>' +
           '<td class="pf-pvp-emp-td pf-pvp-emp-th-c" style="text-align:right">' + (it.qty||'') + '</td>' +
@@ -1896,6 +1915,29 @@
         pfPvpEmpScheduleSave();
       });
     });
+
+    // ── Search/filter ──
+    var searchInp = document.getElementById('pf-pvp-emp-search');
+    if (searchInp) {
+      searchInp.value = '';
+      searchInp.addEventListener('input', function() {
+        var q = searchInp.value.trim().toLowerCase();
+        // Filter rows in all cards
+        body.querySelectorAll('.pf-pvp-emp-table tbody tr').forEach(function(tr) {
+          if (!q) { tr.style.display = ''; return; }
+          var ref  = (tr.getAttribute('data-filter-ref')  || '').toLowerCase();
+          var name = (tr.getAttribute('data-filter-name') || '').toLowerCase();
+          var eans = (tr.getAttribute('data-filter-eans') || '').toLowerCase();
+          tr.style.display = (ref.includes(q) || name.includes(q) || eans.includes(q)) ? '' : 'none';
+        });
+        // Hide card entirely if all its rows are hidden
+        body.querySelectorAll('.pf-pvp-emp-card').forEach(function(card) {
+          var rows = card.querySelectorAll('.pf-pvp-emp-table tbody tr');
+          var anyVisible = Array.prototype.some.call(rows, function(r){ return r.style.display !== 'none'; });
+          card.style.display = anyVisible ? '' : 'none';
+        });
+      });
+    }
   }
 
   function pfPvpEmpScheduleSave() {
@@ -2190,7 +2232,8 @@
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       var mh = document.getElementById('main-header');
       if (mh && mh.classList.contains('show') &&
-          typeof window._currentStoreGlobal !== 'undefined') {
+          typeof window._currentStoreGlobal !== 'undefined' &&
+          String(window._currentStoreGlobal).toLowerCase().trim() === 'porto santo') {
         pfPvpBuildEmployeeOverlay();
       }
     }

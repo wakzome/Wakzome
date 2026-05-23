@@ -658,7 +658,8 @@
       html+='<tr>';
       for(let c=0;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
-        html+=`<th class="${cls}" style="width:${colWidths[c]*12}px">${escapeHtml(headerRows[r][c]||'')}</th>`;
+        const thBg=(c===todayCol?'':'background:#444;color:#fff;');
+        html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}white-space:nowrap;text-align:center;">${escapeHtml(headerRows[r][c]||'')}</th>`;
       }
       html+='</tr>';
     }
@@ -679,30 +680,30 @@
       const activeCls = isActiveNow ? ' tr-active-now' : '';
       let rowspanCols=[];
       html+=`<tr class="${activeCls}">`;
-      html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
+      html+=`<td class="name" rowspan="2" style="background:${bgA};width:${colWidths[0]*12}px;text-align:center;justify-content:center;white-space:nowrap;">
               <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
               ${escapeHtml(A[0]||'')}</td>`;
       for(let c=1;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
         const top=A[c]||'', bot=B[c]||'';
         if(top===bot && top!==''){
-          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px">${escapeHtml(top)}</td>`;
+          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${escapeHtml(top)}</td>`;
           rowspanCols.push(c);
         } else if(top!==''||bot!==''){
           const cont=[top,bot].filter(v=>v).map(escapeHtml).join('<br>');
-          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px">${cont}</td>`;
+          html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bgA};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${cont}</td>`;
           rowspanCols.push(c);
-        } else { html+=`<td class="${cls}" style="background:${bgA};width:${colWidths[c]*12}px"></td>`; }
+        } else { html+=`<td class="${cls}" style="background:${bgA};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;"></td>`; }
       }
       html+=`</tr><tr class="${activeCls}">`;
       for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
         const cls=(c===todayCol?'today-col':'');
-        html+=`<td class="${cls}" style="background:${bgB};width:${colWidths[c]*12}px">${escapeHtml(B[c]||'')}</td>`;
+        html+=`<td class="${cls}" style="background:${bgB};width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
       }
       html+='</tr><tr>';
       for(let c=0;c<cols;c++){
         const cls=(c===todayCol?'today-col':'');
-        html+=`<td class="bold-row ${cls}" style="background:#fff;width:${colWidths[c]*12}px">${escapeHtml(C[c]||'')}</td>`;
+        html+=`<td class="bold-row ${cls}" style="background:#fff;width:${colWidths[c]*12}px;white-space:nowrap;text-align:center;">${escapeHtml(C[c]||'')}</td>`;
       }
       html+='</tr>';
     });
@@ -773,7 +774,7 @@
           } else {
             content = escapeHtml(A[c] || B[c] || '');
           }
-          html += `<td class="${cls}" style="width:${colWidths[c]*12}px; text-align:center;">${content}</td>`;
+          html += `<td class="${cls}" style="width:${colWidths[c]*12}px;text-align:center;white-space:nowrap;">${content}</td>`;
         }
         html += '</tr>'; i += 2;
       }

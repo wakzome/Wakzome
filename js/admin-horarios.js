@@ -167,7 +167,7 @@
 
     const temp = document.createElement('div');
     temp.id = 'table-container';
-    temp.style.cssText = 'display:flex;justify-content:flex-start;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    temp.style.cssText = 'display:flex;justify-content:center;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;';
     area.appendChild(temp);
 
     const firstCell = (filtered[index][0][0] || '').trim().toLowerCase();

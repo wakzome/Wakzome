@@ -3566,10 +3566,14 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     if (ct && body && !body.contains(ct)) {
       ct.style.display    = 'flex';
       ct.style.opacity    = '1';
+      ct.style.transition = 'none';
       ct.style.minWidth   = '0';
       ct.style.width      = '100%';
       body.appendChild(ct);
     }
+    /* Cancelar qualquer fade pendente do fadeRenderTable */
+    var tc = document.getElementById('table-container');
+    if (tc) { tc.style.transition = 'none'; tc.style.opacity = '1'; }
     modal.classList.add('wz-on');
     requestAnimationFrame(function () {
       requestAnimationFrame(function () { modal.classList.add('wz-visible'); });

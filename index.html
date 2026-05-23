@@ -963,24 +963,6 @@ body {
   padding-bottom: 10px;
 }
 
-#legal-notice {
-  flex-shrink: 0;
-  width: 0;
-  min-width: 100%;
-  box-sizing: border-box;
-  padding: 10px 2px 8px;
-  font-size: 0.7rem;
-  line-height: 1.7;
-  color: #000;
-  text-align: justify;
-  font-weight: 600;
-  letter-spacing: .01em;
-  overflow-wrap: break-word;
-}
-#legal-notice p { margin: 0 0 4px; }
-@media (max-width: 768px) {
-  #legal-notice { display: none !important; }
-}
 
 #table-container {
   flex: 0 0 auto;
@@ -3065,7 +3047,7 @@ input, button, select, textarea,
 #saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
 #saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
 .saft-fat-item,
-#legal-notice, #page-name-popup,
+#page-name-popup,
 #greeting-text, #greeting-sub,
 #h-store-selector label, #h-store-select, #h-week-select,
 #h-active-badge, #h-status-msg,
@@ -3297,23 +3279,29 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #wz-hor-modal.wz-on { display: flex; }
 #wz-hor-modal-bg {
   position: absolute; inset: 0;
-  background: rgba(255,255,255,0.5); backdrop-filter: blur(20px);
-  opacity: 0; transition: opacity 0.55s cubic-bezier(0.22,1,0.36,1); cursor: pointer;
+  background: rgba(248,248,248,0.72); backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
+  cursor: pointer;
 }
 #wz-hor-modal.wz-visible #wz-hor-modal-bg { opacity: 1; }
 #wz-hor-modal-box {
   position: relative; z-index: 1; background: #fff;
-  border-radius: 18px; box-shadow: 0 32px 90px rgba(0,0,0,0.14);
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   width: min(95vw, 1080px); max-height: 88vh;
   overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
-  opacity: 0; transform: translateY(28px) scale(0.97);
-  transition: opacity 0.55s cubic-bezier(0.16,1,0.3,1),
-              transform 0.55s cubic-bezier(0.16,1,0.3,1),
-              box-shadow 0.55s ease;
+  opacity: 0;
+  transform: translateY(20px) scale(0.985);
+  transition: opacity 0.65s cubic-bezier(0.16,1,0.3,1),
+              transform 0.65s cubic-bezier(0.16,1,0.3,1),
+              box-shadow 0.65s cubic-bezier(0.16,1,0.3,1);
 }
 #wz-hor-modal.wz-visible #wz-hor-modal-box {
-  opacity: 1; transform: translateY(0) scale(1);
-  box-shadow: 0 24px 70px rgba(0,0,0,0.13);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.11), 0 2px 8px rgba(0,0,0,0.06);
 }
 #wz-hor-modal-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -3333,7 +3321,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 }
 #wz-hor-modal-bar button:hover { background: #f0f0f0; }
 #wz-hor-modal-body { padding: 20px; }
-#wz-hor-modal-body #legal-notice { display: none !important; }
 
 /* ── MODAL AVISO ──────────────────────────────────────────────── */
 #wz-aviso-modal {
@@ -3428,13 +3415,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 </div>
 <div id="container-tables" class="reveal-item">
   <div id="summary-wrap" class="table-wrap" style="display:none !important;"></div>
-  <div id="legal-notice">
-    <p>AS AUSÊNCIAS AO TRABALHO DEVEM SER COMUNICADAS COM A ANTECEDÊNCIA LEGALMENTE PREVISTA SEMPRE QUE PREVISÍVEIS, OU LOGO QUE POSSÍVEL QUANDO IMPREVISÍVEIS, INDICANDO O RESPETIVO MOTIVO.</p>
-    <p>O COMPROVATIVO DA AUSÊNCIA DEVERÁ SER APRESENTADO NOS TERMOS E PRAZOS PREVISTOS NO CÓDIGO DO TRABALHO. QUANDO A FALTA, EMBORA JUSTIFICADA, DETERMINE LEGALMENTE PERDA DE RETRIBUIÇÃO, CABERÁ EXCLUSIVAMENTE AO TRABALHADOR OPTAR ENTRE O DESCONTO REMUNERATÓRIO CORRESPONDENTE OU, SE ASSIM O ENTENDER, A SUBSTITUIÇÃO DESSA PERDA POR RENÚNCIA A DIAS DE FÉRIAS OU PRESTAÇÃO DE TRABALHO EM ACRÉSCIMO.</p>
-    <p>QUALQUER PRESTAÇÃO DE TRABALHO EM HORAS EXTRAORDINÁRIAS DEVE SER PREVIAMENTE COMUNICADA E ACORDADA COM O EMPREGADOR, NÃO SENDO ACEITES HORAS NÃO INFORMADAS POSTERIORMENTE.</p>
-    <p>DE ACORDO COM A LEGISLAÇÃO VIGENTE, OS HORÁRIOS ROTATIVOS DA EMPRESA PODERÃO SER ALTERADOS PONTUALMENTE EM SITUAÇÕES DE FORÇA MAIOR OU NECESSIDADE ORGANIZATIVA, SEMPRE RESPEITANDO O DESCANSO MÍNIMO LEGAL. QUALQUER ALTERAÇÃO SERÁ COMUNICADA COM A DEVIDA ANTECEDÊNCIA APENAS ÀS COLABORADORAS AFETADAS, NÃO SENDO NECESSÁRIO O SEU CONSENTIMENTO OU APROVAÇÃO, SALVO SE A ALTERAÇÃO IMPLICAR A REDUÇÃO DO DESCANSO MÍNIMO LEGAL.</p>
-    <p>CASO ALGUMA COLABORADORA NECESSITE TROCAR UM DIA DE FOLGA POR MOTIVOS ATENDÍVEIS, DEVERÁ INFORMAR À EMPRESA, APRESENTANDO A COORDENAÇÃO COM A PESSOA QUE TENHA A FOLGA PRETENDIDA.</p>
-  </div>
   <div class="table-wrap" id="table-container"><div>A carregar...</div></div>
 </div>
 
@@ -3558,29 +3538,43 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var ct    = document.getElementById('container-tables');
     var bar   = document.getElementById('wz-hor-modal-bar');
 
-    /* Mover week-select para a barra do modal */
-    var ws = document.getElementById('week-select');
-    if (ws && bar && !bar.contains(ws)) {
-      ws.style.display = 'inline-block';
-      var closeBtn = document.getElementById('wz-hor-close');
-      bar.insertBefore(ws, closeBtn || null);
-    }
-
-    /* Mover container-tables para dentro do modal e torná-lo visível */
-    if (ct && body && !body.contains(ct)) {
-      ct.style.display    = 'flex';
-      ct.style.opacity    = '1';
-      ct.style.transition = 'none';
-      ct.style.minWidth   = '0';
-      ct.style.width      = '100%';
-      body.appendChild(ct);
-    }
-    /* Cancelar qualquer fade pendente do fadeRenderTable */
+    /* Matar fade pendente do fadeRenderTable antes de mostrar */
     var tc = document.getElementById('table-container');
     if (tc) { tc.style.transition = 'none'; tc.style.opacity = '1'; }
+
+    /* Mostrar modal primeiro — deixar a animação CSS arrancar */
     modal.classList.add('wz-on');
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () { modal.classList.add('wz-visible'); });
+      requestAnimationFrame(function () {
+        modal.classList.add('wz-visible');
+
+        /* Mover container-tables após o primeiro frame da animação */
+        if (ct && body && !body.contains(ct)) {
+          ct.style.display    = 'flex';
+          ct.style.opacity    = '1';
+          ct.style.transition = 'none';
+          ct.style.minWidth   = '0';
+          ct.style.width      = '100%';
+          body.appendChild(ct);
+        }
+
+        /* Mover week-select agora — ou polling se ainda não existe */
+        function tryMoveWeekSelect() {
+          var ws = document.getElementById('week-select');
+          if (ws && bar && !bar.contains(ws)) {
+            ws.style.display = 'inline-block';
+            var closeBtn = document.getElementById('wz-hor-close');
+            bar.insertBefore(ws, closeBtn || null);
+            return true;
+          }
+          return !!ws;
+        }
+        if (!tryMoveWeekSelect()) {
+          var _wsPoll = setInterval(function () {
+            if (tryMoveWeekSelect()) clearInterval(_wsPoll);
+          }, 80);
+        }
+      });
     });
   }
 

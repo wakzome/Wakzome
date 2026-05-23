@@ -1840,6 +1840,7 @@
   var _pvpEmpTimer  = null;
 
   async function pfPvpOpenEmployee() {
+    window.pfPvpOpenEmployee = pfPvpOpenEmployee;
     var ov   = document.getElementById('pf-pvp-emp-overlay');
     var body = document.getElementById('pf-pvp-emp-body');
     if (!ov || !body) return;

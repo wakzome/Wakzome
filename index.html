@@ -3183,25 +3183,18 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 </style>
 
 <style>
-/* ── MOSAIC: ocultar header/nav só quando o mosaico está ativo ── */
-body.wz-mosaic-active #main-header,
-body.wz-mosaic-active #container-tables {
-  display: none !important;
-}
-
-/* ── MOSAIC: ecrã principal ── */
+/* ── MOSAICO ─────────────────────────────────────────────────── */
 #wz-mosaic {
   display: none;
   position: fixed; inset: 0;
   z-index: 6;
   background: #fff;
   opacity: 0;
-  transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1);
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
 }
 #wz-mosaic.wz-on      { display: block; }
 #wz-mosaic.wz-visible { opacity: 1; }
 
-/* grid editorial */
 #wz-grid {
   display: grid;
   width: 100%; height: 100%;
@@ -3218,13 +3211,10 @@ body.wz-mosaic-active #container-tables {
   width: 100%; height: 100%;
   object-fit: cover; display: block;
   transition: transform 0.55s cubic-bezier(0.22,1,0.36,1), filter 0.45s ease;
-  will-change: transform, filter;
 }
 .wz-cell-overlay {
-  position: absolute; inset: 0;
-  background: transparent;
-  transition: background 0.4s ease;
-  pointer-events: none;
+  position: absolute; inset: 0; pointer-events: none;
+  background: transparent; transition: background 0.4s ease;
 }
 .wz-cell-label {
   position: absolute; left: 0; top: 50%;
@@ -3236,7 +3226,7 @@ body.wz-mosaic-active #container-tables {
   font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.2em; white-space: nowrap;
   padding: 14px 9px;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.52);
   backdrop-filter: blur(4px);
   border-radius: 0 6px 6px 0;
   opacity: 0;
@@ -3246,22 +3236,22 @@ body.wz-mosaic-active #container-tables {
 .wz-cell:hover .wz-cell-overlay {
   background: linear-gradient(90deg, rgba(0,0,0,0.28) 0%, transparent 55%);
 }
-.wz-cell:hover .wz-cell-label { opacity: 1; transform: translateY(-50%) translateX(0); }
+.wz-cell:hover .wz-cell-label {
+  opacity: 1; transform: translateY(-50%) translateX(0);
+}
 
-/* posições */
 .wz-cell-horarios  { grid-column: 1; grid-row: 1 / 3; }
 .wz-cell-pvp       { grid-column: 2; grid-row: 1; }
 .wz-cell-etiquetas { grid-column: 3; grid-row: 1; }
 .wz-cell-recibo    { grid-column: 2; grid-row: 2; }
 .wz-cell-vendas    { grid-column: 3; grid-row: 2; }
 
-/* sem pvp */
 #wz-grid.wz-no-pvp .wz-cell-pvp       { display: none; }
 #wz-grid.wz-no-pvp .wz-cell-etiquetas { grid-column: 2; grid-row: 1; }
 #wz-grid.wz-no-pvp .wz-cell-recibo    { grid-column: 3; grid-row: 1; }
 #wz-grid.wz-no-pvp .wz-cell-vendas    { grid-column: 2 / 4; grid-row: 2; }
 
-/* ── AVISO botão ── */
+/* ── AVISO ────────────────────────────────────────────────────── */
 #wz-aviso-btn {
   position: absolute; bottom: 22px; left: 50%;
   transform: translateX(-50%) translateY(12px);
@@ -3274,8 +3264,7 @@ body.wz-mosaic-active #container-tables {
   cursor: pointer;
   font-family: "MontserratLight", sans-serif;
   font-size: 0.8rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.12em;
-  color: #000;
+  text-transform: uppercase; letter-spacing: 0.12em; color: #000;
   box-shadow: 0 4px 18px rgba(0,0,0,0.12);
   opacity: 0;
   transition: opacity 0.5s ease 0.5s,
@@ -3283,19 +3272,24 @@ body.wz-mosaic-active #container-tables {
               box-shadow 0.2s;
   z-index: 7;
 }
-#wz-mosaic.wz-visible #wz-aviso-btn   { opacity: 1; transform: translateX(-50%) translateY(0); }
-#wz-aviso-btn:hover { box-shadow: 0 6px 26px rgba(0,0,0,0.18); transform: translateX(-50%) translateY(-2px); }
+#wz-mosaic.wz-visible #wz-aviso-btn {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}
+#wz-aviso-btn:hover {
+  box-shadow: 0 6px 26px rgba(0,0,0,0.18);
+  transform: translateX(-50%) translateY(-2px);
+}
 #wz-aviso-dot {
   width: 9px; height: 9px; border-radius: 50%;
   background: #e05c00; flex-shrink: 0;
   animation: wzDot 2s ease-in-out infinite;
 }
 @keyframes wzDot {
-  0%,100% { transform: scale(1);   box-shadow: 0 0 0 0   rgba(224,92,0,0.5); }
-  50%      { transform: scale(1.2); box-shadow: 0 0 0 5px rgba(224,92,0,0);   }
+  0%,100% { transform:scale(1);   box-shadow:0 0 0 0   rgba(224,92,0,0.5); }
+  50%      { transform:scale(1.2); box-shadow:0 0 0 5px rgba(224,92,0,0);   }
 }
 
-/* ── MODAL HORÁRIOS ── */
+/* ── MODAL HORÁRIOS ───────────────────────────────────────────── */
 #wz-hor-modal {
   display: none; position: fixed; inset: 0; z-index: 9000;
   align-items: center; justify-content: center;
@@ -3308,14 +3302,13 @@ body.wz-mosaic-active #container-tables {
 }
 #wz-hor-modal.wz-visible #wz-hor-modal-bg { opacity: 1; }
 #wz-hor-modal-box {
-  position: relative; z-index: 1;
-  background: #fff; border-radius: 18px;
-  box-shadow: 0 20px 70px rgba(0,0,0,0.18);
+  position: relative; z-index: 1; background: #fff;
+  border-radius: 18px; box-shadow: 0 20px 70px rgba(0,0,0,0.18);
   width: min(95vw, 1080px); max-height: 88vh;
-  overflow-y: auto; overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
   opacity: 0; transform: translateY(16px) scale(0.98);
-  transition: opacity 0.4s cubic-bezier(0.22,1,0.36,1), transform 0.4s cubic-bezier(0.22,1,0.36,1);
+  transition: opacity 0.4s cubic-bezier(0.22,1,0.36,1),
+              transform 0.4s cubic-bezier(0.22,1,0.36,1);
 }
 #wz-hor-modal.wz-visible #wz-hor-modal-box { opacity: 1; transform: none; }
 #wz-hor-modal-bar {
@@ -3336,13 +3329,9 @@ body.wz-mosaic-active #container-tables {
 }
 #wz-hor-modal-bar button:hover { background: #f0f0f0; }
 #wz-hor-modal-body { padding: 20px; }
-#wz-hor-modal-body #legal-notice    { display: none !important; }
-#wz-hor-modal-body #container-tables {
-  min-width: 0 !important; width: 100% !important;
-  display: flex !important; opacity: 1 !important; visibility: visible !important;
-}
+#wz-hor-modal-body #legal-notice { display: none !important; }
 
-/* ── MODAL AVISO ── */
+/* ── MODAL AVISO ──────────────────────────────────────────────── */
 #wz-aviso-modal {
   display: none; position: fixed; inset: 0; z-index: 9100;
   align-items: center; justify-content: center;
@@ -3357,15 +3346,14 @@ body.wz-mosaic-active #container-tables {
 #wz-aviso-modal img {
   position: relative; z-index: 1;
   max-width: min(94vw, 1100px); max-height: 90vh;
-  border-radius: 16px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.22);
+  border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,0.22);
   opacity: 0; transform: scale(0.96);
-  transition: opacity 0.38s cubic-bezier(0.22,1,0.36,1), transform 0.38s cubic-bezier(0.22,1,0.36,1);
+  transition: opacity 0.38s cubic-bezier(0.22,1,0.36,1),
+              transform 0.38s cubic-bezier(0.22,1,0.36,1);
   object-fit: contain;
 }
 #wz-aviso-modal.wz-visible img { opacity: 1; transform: scale(1); }
 </style>
-
 </head>
 <body>
 
@@ -3462,8 +3450,7 @@ body.wz-mosaic-active #container-tables {
     </div>
   </div>
   <div id="wz-aviso-btn">
-    <span id="wz-aviso-dot"></span>
-    aviso
+    <span id="wz-aviso-dot"></span>aviso
   </div>
 </div>
 
@@ -3475,9 +3462,7 @@ body.wz-mosaic-active #container-tables {
       <span>horários</span>
       <button id="wz-hor-close">✕</button>
     </div>
-    <div id="wz-hor-modal-body">
-      <!-- #container-tables é movido aqui em runtime -->
-    </div>
+    <div id="wz-hor-modal-body"></div>
   </div>
 </div>
 
@@ -3491,31 +3476,30 @@ body.wz-mosaic-active #container-tables {
 (function () {
   'use strict';
 
-  var PORTO_SANTO = 'porto santo';
-  var _shown = false;
   var _horOpen = false;
 
-  /* ── detecção de loja ── */
-  function isPortoSanto() {
-    var sel = document.getElementById('h-store-select');
-    if (sel && sel.value) return sel.value.trim().toLowerCase() === PORTO_SANTO;
-    return false;
-  }
-
-  /* ── mostrar mosaico ── */
+  /* ─────────────────────────────────────────────────────────────
+     MOSTRAR MOSAICO
+     Chamado logo após shared.js definir main-header.style.display='flex'
+     e container-tables.style.display='flex'.
+     Precisamos reverter esses inline styles imediatamente.
+  ───────────────────────────────────────────────────────────── */
   function showMosaic() {
-    if (_shown) return;
-    _shown = true;
-
+    var hdr = document.getElementById('main-header');
+    var ct  = document.getElementById('container-tables');
     var mosaic = document.getElementById('wz-mosaic');
     var grid   = document.getElementById('wz-grid');
     if (!mosaic) return;
 
-    /* porto santo mostra pvp, outras lojas não */
-    if (!isPortoSanto()) grid.classList.add('wz-no-pvp');
+    /* Reverter os inline styles que shared.js acabou de aplicar */
+    if (hdr) { hdr.style.display = 'none'; hdr.style.opacity = '0'; }
+    if (ct)  { ct.style.display  = 'none'; }
 
-    /* ocultar header e container via class no body */
-    document.body.classList.add('wz-mosaic-active');
+    /* Porto Santo = mostra PVP; outras lojas = esconde */
+    var tienda = (window._currentStoreGlobal || '').toLowerCase().trim();
+    if (tienda !== 'porto santo') {
+      grid.classList.add('wz-no-pvp');
+    }
 
     mosaic.classList.add('wz-on');
     requestAnimationFrame(function () {
@@ -3525,20 +3509,28 @@ body.wz-mosaic-active #container-tables {
     });
   }
 
-  /* ── observer: esperar que main-header receba .show ── */
+  /* ─────────────────────────────────────────────────────────────
+     OBSERVER: esperar que main-header receba class 'show'
+     (shared.js linha 160: main-header.classList.add('show'))
+     Isso acontece DENTRO do callback do greeting, que é quando
+     window._currentStoreGlobal já está definido (linha 155).
+  ───────────────────────────────────────────────────────────── */
   var _hdr = document.getElementById('main-header');
-  if (_hdr) {
-    var _obs = new MutationObserver(function () {
+  var _obs = new MutationObserver(function (mutations) {
+    for (var i = 0; i < mutations.length; i++) {
       if (_hdr.classList.contains('show')) {
         _obs.disconnect();
-        /* delay mínimo para shared.js popular h-store-select */
-        setTimeout(showMosaic, 80);
+        /* Executar no mesmo tick — antes do browser pintar */
+        showMosaic();
+        return;
       }
-    });
-    _obs.observe(_hdr, { attributes: true, attributeFilter: ['class'] });
-  }
+    }
+  });
+  _obs.observe(_hdr, { attributes: true, attributeFilter: ['class'] });
 
-  /* ── MODAL HORÁRIOS ── */
+  /* ─────────────────────────────────────────────────────────────
+     MODAL HORÁRIOS
+  ───────────────────────────────────────────────────────────── */
   function openHor() {
     if (_horOpen) return;
     _horOpen = true;
@@ -3546,7 +3538,12 @@ body.wz-mosaic-active #container-tables {
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
 
+    /* Mover container-tables para dentro do modal e torná-lo visível */
     if (ct && body && !body.contains(ct)) {
+      ct.style.display    = 'flex';
+      ct.style.opacity    = '1';
+      ct.style.minWidth   = '0';
+      ct.style.width      = '100%';
       body.appendChild(ct);
     }
     modal.classList.add('wz-on');
@@ -3564,11 +3561,17 @@ body.wz-mosaic-active #container-tables {
     setTimeout(function () {
       modal.classList.remove('wz-on');
       _horOpen = false;
-      if (ct && body.contains(ct)) document.body.appendChild(ct);
+      /* Devolver ao body e esconder novamente */
+      if (ct && body.contains(ct)) {
+        ct.style.display = 'none';
+        document.body.appendChild(ct);
+      }
     }, 420);
   }
 
-  /* ── MODAL AVISO ── */
+  /* ─────────────────────────────────────────────────────────────
+     MODAL AVISO
+  ───────────────────────────────────────────────────────────── */
   function openAviso() {
     var m = document.getElementById('wz-aviso-modal');
     m.classList.add('wz-on');
@@ -3582,43 +3585,39 @@ body.wz-mosaic-active #container-tables {
     setTimeout(function () { m.classList.remove('wz-on'); }, 400);
   }
 
-  /* ── eventos ── */
+  /* ─────────────────────────────────────────────────────────────
+     EVENTOS
+  ───────────────────────────────────────────────────────────── */
   document.addEventListener('DOMContentLoaded', function () {
-    /* horários */
+
     document.getElementById('wz-c-horarios').addEventListener('click', openHor);
     document.getElementById('wz-hor-close').addEventListener('click', closeHor);
     document.getElementById('wz-hor-modal-bg').addEventListener('click', closeHor);
 
-    /* pvp — só porto santo (célula oculta para outras lojas) */
+    /* PVP — só Porto Santo (célula hidden via CSS para outras lojas) */
     document.getElementById('wz-c-pvp').addEventListener('click', function () {
       if (typeof openVentasOverlay === 'function') openVentasOverlay();
     });
 
-    /* etiquetas */
     document.getElementById('wz-c-etiquetas').addEventListener('click', function () {
       if (typeof openEtiquetasOverlay === 'function') openEtiquetasOverlay();
     });
 
-    /* recibos */
     document.getElementById('wz-c-recibo').addEventListener('click', function () {
       if (typeof openRecibosOverlay === 'function') openRecibosOverlay();
     });
 
-    /* vendas */
     document.getElementById('wz-c-vendas').addEventListener('click', function () {
       if (typeof openVentasOverlay === 'function') openVentasOverlay();
     });
 
-    /* aviso */
     document.getElementById('wz-aviso-btn').addEventListener('click', openAviso);
     document.getElementById('wz-aviso-modal-bg').addEventListener('click', closeAviso);
 
-    /* ESC */
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { closeHor(); closeAviso(); }
     });
 
-    /* SFX */
     document.querySelectorAll('.wz-cell').forEach(function (c) {
       c.addEventListener('mouseenter', function () { if (window.WZ_SFX) WZ_SFX.hover(); });
       c.addEventListener('click',      function () { if (window.WZ_SFX) WZ_SFX.click(); });

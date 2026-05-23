@@ -3345,12 +3345,27 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #wz-aviso-modal.wz-visible #wz-aviso-modal-bg { opacity: 1; }
 #wz-aviso-modal img {
   position: relative; z-index: 1;
-  max-width: min(94vw, 1100px); max-height: 90vh;
+  max-width: min(96vw, 1440px); max-height: 92vh;
+  width: min(96vw, 1440px);
   border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,0.22);
   opacity: 0; transform: scale(0.96);
   transition: opacity 0.38s cubic-bezier(0.22,1,0.36,1),
               transform 0.38s cubic-bezier(0.22,1,0.36,1);
   object-fit: contain;
+}
+@media (max-width: 600px) {
+  #wz-aviso-modal img {
+    max-width: 99vw; width: 99vw;
+    max-height: 88vh;
+    border-radius: 10px;
+  }
+}
+@media (min-width: 601px) and (max-width: 1024px) {
+  #wz-aviso-modal img {
+    max-width: 97vw; width: 97vw;
+    max-height: 90vh;
+    border-radius: 13px;
+  }
 }
 #wz-aviso-modal.wz-visible img { opacity: 1; transform: scale(1); }
 </style>
@@ -3537,6 +3552,15 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var modal = document.getElementById('wz-hor-modal');
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
+    var bar   = document.getElementById('wz-hor-modal-bar');
+
+    /* Mover week-select para a barra do modal */
+    var ws = document.getElementById('week-select');
+    if (ws && bar && !bar.contains(ws)) {
+      ws.style.display = 'inline-block';
+      var closeBtn = document.getElementById('wz-hor-close');
+      bar.insertBefore(ws, closeBtn || null);
+    }
 
     /* Mover container-tables para dentro do modal e torná-lo visível */
     if (ct && body && !body.contains(ct)) {
@@ -3557,11 +3581,19 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var modal = document.getElementById('wz-hor-modal');
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
+    var bar   = document.getElementById('wz-hor-modal-bar');
     modal.classList.remove('wz-visible');
     setTimeout(function () {
       modal.classList.remove('wz-on');
       _horOpen = false;
-      /* Devolver ao body e esconder novamente */
+      /* Devolver week-select ao main-header-center */
+      var ws  = document.getElementById('week-select');
+      var mhc = document.getElementById('main-header-center');
+      if (ws && bar && bar.contains(ws) && mhc) {
+        ws.style.display = 'none';
+        mhc.appendChild(ws);
+      }
+      /* Devolver container-tables ao body e esconder */
       if (ct && body.contains(ct)) {
         ct.style.display = 'none';
         document.body.appendChild(ct);
@@ -3596,7 +3628,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 
     /* PVP — só Porto Santo (célula hidden via CSS para outras lojas) */
     document.getElementById('wz-c-pvp').addEventListener('click', function () {
-      if (typeof openVentasOverlay === 'function') openVentasOverlay();
+      if (typeof pfPvpOpenEmployee === 'function') pfPvpOpenEmployee();
     });
 
     document.getElementById('wz-c-etiquetas').addEventListener('click', function () {
@@ -3876,7 +3908,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
         <option value="parfois arcadas são francisco">Parfois Arcadas São Francisco</option>
         <option value="porto santo">Porto Santo</option>
       </select>
-      <select id="h-week-select" style="display:none;"></select>
+      <select id="h-week-select"></select>
     </div>
     <div id="h-dashboard"></div>
     <div id="h-table-area"><div id="h-status-msg">selecione uma loja para ver o horário</div></div>

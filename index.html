@@ -3552,6 +3552,15 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var modal = document.getElementById('wz-hor-modal');
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
+    var bar   = document.getElementById('wz-hor-modal-bar');
+
+    /* Mover week-select para a barra do modal */
+    var ws = document.getElementById('week-select');
+    if (ws && bar && !bar.contains(ws)) {
+      ws.style.display = 'inline-block';
+      var closeBtn = document.getElementById('wz-hor-close');
+      bar.insertBefore(ws, closeBtn || null);
+    }
 
     /* Mover container-tables para dentro do modal e torná-lo visível */
     if (ct && body && !body.contains(ct)) {
@@ -3572,11 +3581,19 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     var modal = document.getElementById('wz-hor-modal');
     var body  = document.getElementById('wz-hor-modal-body');
     var ct    = document.getElementById('container-tables');
+    var bar   = document.getElementById('wz-hor-modal-bar');
     modal.classList.remove('wz-visible');
     setTimeout(function () {
       modal.classList.remove('wz-on');
       _horOpen = false;
-      /* Devolver ao body e esconder novamente */
+      /* Devolver week-select ao main-header-center */
+      var ws  = document.getElementById('week-select');
+      var mhc = document.getElementById('main-header-center');
+      if (ws && bar && bar.contains(ws) && mhc) {
+        ws.style.display = 'none';
+        mhc.appendChild(ws);
+      }
+      /* Devolver container-tables ao body e esconder */
       if (ct && body.contains(ct)) {
         ct.style.display = 'none';
         document.body.appendChild(ct);

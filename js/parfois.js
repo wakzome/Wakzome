@@ -1760,9 +1760,13 @@
   function pfPvpBuildEmployeeOverlay() {
     if (document.getElementById('pf-pvp-emp-overlay')) return;
 
-    // Only inject for Porto Santo employees — never for other stores
-    if (typeof window._currentStoreGlobal === 'undefined') return;
-    if (String(window._currentStoreGlobal).toLowerCase().trim() !== 'porto santo') return;
+    // Usa o estado visual da UI como fonte de verdade em vez de _currentStoreGlobal.
+    // O CSS de index.html ja esconde #wz-c-pvp para lojas != porto santo (wz-no-pvp),
+    // pelo que esta verificacao e sincrona e imune a latencia de rede / race conditions.
+    var pvpCell = document.getElementById('wz-c-pvp');
+    if (!pvpCell) return;
+    var isPortoSanto = getComputedStyle(pvpCell).display !== 'none';
+    if (!isPortoSanto) return;
 
     // Create overlay
     var ov = document.createElement('div');
@@ -2226,15 +2230,10 @@
     }, 15000);
   }
 
-  // Registo defensivo: usa DOMContentLoaded se o parser ainda não terminou;
-  // caso contrário executa imediatamente com setTimeout(0) para garantir que
-  // todos os scripts inline anteriores já foram avaliados (evita race em
-  // Firefox/Safari onde readyState pode ser 'interactive' mas o DOM de outros
-  // módulos ainda não está completo).
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', pfInit);
   } else {
-    setTimeout(pfInit, 0);
+    pfInit();
   }
 
   /* Watch for:
@@ -2247,48 +2246,25 @@
     if (cardGone && gridExists) { pfBuildDOM(); pfHook(); }
 
     // Detect employee login: main-header gets class 'show'
-    // _currentStoreGlobal pode ainda nao estar definido no tick da mutacao
-    // (Firefox/Safari sao mais lentos a propagar globals de scripts inline).
-    // Usamos retry com backoff limitado para garantir que nao se perde.
+    // pfPvpBuildEmployeeOverlay usa getComputedStyle(#wz-c-pvp) como fonte de verdade —
+    // nao depende de _currentStoreGlobal, logo e seguro chamar directamente.
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       var mh = document.getElementById('main-header');
       if (mh && mh.classList.contains('show')) {
-        (function tryBuildOverlay(attempts) {
-          if (document.getElementById('pf-pvp-emp-overlay')) return;
-          if (typeof window._currentStoreGlobal !== 'undefined') {
-            if (String(window._currentStoreGlobal).toLowerCase().trim() === 'porto santo') {
-              pfPvpBuildEmployeeOverlay();
-            }
-            return;
-          }
-          if (attempts > 0) {
-            setTimeout(function() { tryBuildOverlay(attempts - 1); }, 80);
-          }
-        })(5);
+        pfPvpBuildEmployeeOverlay();
       }
     }
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
-  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir.
-     Se pfPvpBuildEmployeeOverlay retornou cedo (store ainda desconhecida), retem a
-     abertura ate o overlay estar disponivel ou desistir ao fim de 5 tentativas. */
+  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir */
   window.pfPvpOpenEmployee = function() {
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       pfPvpBuildEmployeeOverlay();
     }
-    // Se o overlay ainda nao existe (store nao era porto santo ou global ainda nao
-    // definido), retry ate 5x com intervalo de 80ms antes de abrir
-    (function tryOpen(attempts) {
-      var ov = document.getElementById('pf-pvp-emp-overlay');
-      if (ov) {
-        pfPvpOpenEmployee();
-        return;
-      }
-      if (attempts > 0) {
-        pfPvpBuildEmployeeOverlay();
-        setTimeout(function() { tryOpen(attempts - 1); }, 80);
-      }
-    })(5);
+    // So abre se o overlay foi de facto criado (loja e porto santo e DOM pronto)
+    if (document.getElementById('pf-pvp-emp-overlay')) {
+      pfPvpOpenEmployee();
+    }
   };
 
 })();

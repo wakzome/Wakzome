@@ -1760,13 +1760,9 @@
   function pfPvpBuildEmployeeOverlay() {
     if (document.getElementById('pf-pvp-emp-overlay')) return;
 
-    // Usa o estado visual da UI como fonte de verdade em vez de _currentStoreGlobal.
-    // O CSS de index.html ja esconde #wz-c-pvp para lojas != porto santo (wz-no-pvp),
-    // pelo que esta verificacao e sincrona e imune a latencia de rede / race conditions.
-    var pvpCell = document.getElementById('wz-c-pvp');
-    if (!pvpCell) return;
-    var isPortoSanto = getComputedStyle(pvpCell).display !== 'none';
-    if (!isPortoSanto) return;
+    // Sem guardas de store aqui — o overlay so e acessivel via #wz-c-pvp
+    // que o CSS de index.html ja esconde para lojas != porto santo (wz-no-pvp).
+    // Qualquer verificacao de _currentStoreGlobal aqui e um race condition.
 
     // Create overlay
     var ov = document.createElement('div');
@@ -2238,16 +2234,13 @@
 
   /* Watch for:
      1. pf-card removed from DOM → re-inject
-     2. #main-header getting class 'show' → employee logged in → inject PVP button */
+     2. #main-header getting class 'show' → tentar pre-construir overlay (best-effort)
+        A criacao definitiva acontece sempre no clique via window.pfPvpOpenEmployee */
   new MutationObserver(function(mutations) {
-    // Re-inject admin card if removed
     var cardGone   = !document.getElementById('pf-card');
     var gridExists = !!document.getElementById('faturas-sub-grid');
     if (cardGone && gridExists) { pfBuildDOM(); pfHook(); }
 
-    // Detect employee login: main-header gets class 'show'
-    // pfPvpBuildEmployeeOverlay usa getComputedStyle(#wz-c-pvp) como fonte de verdade —
-    // nao depende de _currentStoreGlobal, logo e seguro chamar directamente.
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       var mh = document.getElementById('main-header');
       if (mh && mh.classList.contains('show')) {
@@ -2256,12 +2249,13 @@
     }
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
-  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir */
+  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir.
+     O overlay e criado aqui no momento do clique, quando o DOM ja esta estavel.
+     Nao depende de MutationObserver nem de _currentStoreGlobal. */
   window.pfPvpOpenEmployee = function() {
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       pfPvpBuildEmployeeOverlay();
     }
-    // So abre se o overlay foi de facto criado (loja e porto santo e DOM pronto)
     if (document.getElementById('pf-pvp-emp-overlay')) {
       pfPvpOpenEmployee();
     }

@@ -83,7 +83,7 @@
           'js/admin-horarios.js','js/ferias.js','js/editor-pdf.js',
           'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
           'js/ventas-empleada.js','js/ventas-admin.js',
-          'js/historico-admin.js','js/predictivo.js'
+          'js/historico-admin.js','js/predictivo.js','js/parfois.js'
         ];
         return scripts.reduce(function(p, src) {
           return p.then(function() {

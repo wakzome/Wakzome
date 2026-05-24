@@ -803,6 +803,151 @@
     }
     c.appendChild(hdr);
 
+    // ── ANÁLISE MÊS A MÊS — ano atual ──────────────────────────
+    (function _renderMesAMes() {
+      // Domingos do ano atual agrupados por mês
+      var byMes = {};
+      currentYearRows.forEach(function(r) {
+        var mo = r.data.substring(5, 7);
+        if (!byMes[mo]) byMes[mo] = [];
+        byMes[mo].push(r);
+      });
+      var meses = Object.keys(byMes).sort();
+      if (!meses.length) return;
+
+      var mesCard = _el('div', 'border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;');
+      mesCard.style.setProperty('background', '#ffffff', 'important');
+
+      var mesCardTitle = _el('div', 'font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:14px;');
+      mesCardTitle.style.setProperty('color', '#999999', 'important');
+      mesCardTitle.textContent = 'ANÁLISE MÊS A MÊS — ' + currentYear;
+      mesCard.appendChild(mesCardTitle);
+
+      meses.forEach(function(mo, idx) {
+        var moRows = byMes[mo];
+        // Total do mês (todas as lojas, todos os domingos do mês)
+        var moTotal = moRows.reduce(function(s, r) { return s + (parseFloat(r.montante) || 0); }, 0);
+        // Nº de domingos únicos neste mês
+        var domDates = {};
+        moRows.forEach(function(r) { domDates[r.data] = true; });
+        var nDom = Object.keys(domDates).length;
+        var moName = MESES_PT[parseInt(mo, 10) - 1];
+        var moKey = 'DOM:MES:' + currentYear + ':' + mo;
+        var moOpen = !!_expanded[moKey];
+
+        // Separador entre meses
+        if (idx > 0) {
+          var sep = _el('div', 'height:1px;margin:0 0 0 0;');
+          sep.style.setProperty('background', '#f0f0f0', 'important');
+          mesCard.appendChild(sep);
+        }
+
+        // Fila del mes (clickable)
+        var moRow = _el('div', 'display:flex;align-items:center;justify-content:space-between;padding:11px 8px;cursor:pointer;border-radius:8px;user-select:none;');
+        moRow.style.setProperty('background', 'transparent', 'important');
+        moRow.addEventListener('mouseenter', function() { moRow.style.setProperty('background', '#f8f8f8', 'important'); });
+        moRow.addEventListener('mouseleave', function() { moRow.style.setProperty('background', 'transparent', 'important'); });
+
+        var moLeft = _el('div', 'display:flex;align-items:center;gap:10px;');
+        var moArrow = _el('span', 'font-size:.7rem;width:12px;display:inline-block;');
+        moArrow.style.setProperty('color', '#999999', 'important');
+        moArrow.textContent = moOpen ? '▼' : '▶';
+        var moNom = _el('span', 'font-size:.88rem;font-weight:800;');
+        moNom.style.setProperty('color', '#111111', 'important');
+        moNom.textContent = moName;
+        var moBadge = _el('span', 'font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:10px;');
+        moBadge.style.setProperty('background', '#f0f0f0', 'important');
+        moBadge.style.setProperty('color', '#666666', 'important');
+        moBadge.textContent = nDom + ' dom.';
+        moLeft.appendChild(moArrow);
+        moLeft.appendChild(moNom);
+        moLeft.appendChild(moBadge);
+
+        var moRight = _el('span', 'font-size:.88rem;font-weight:800;');
+        moRight.style.setProperty('color', '#111111', 'important');
+        moRight.textContent = _fmtEur(moTotal);
+
+        moRow.appendChild(moLeft);
+        moRow.appendChild(moRight);
+        mesCard.appendChild(moRow);
+
+        // Contenedor expandible — tiendas del mes
+        var moDetail = _el('div', 'padding:0 0 6px 22px;');
+        moDetail.style.display = moOpen ? 'block' : 'none';
+
+        // Agrupar por loja dentro del mes
+        var byLojaM = {};
+        moRows.forEach(function(r) {
+          if (!byLojaM[r.loja]) byLojaM[r.loja] = 0;
+          byLojaM[r.loja] += (parseFloat(r.montante) || 0);
+        });
+
+        ZONA_DOMINGO.forEach(function(loja) {
+          if (byLojaM[loja] === undefined) return;
+          var lojaVal = byLojaM[loja];
+          var lojaLabel = LOJA_LABELS[loja] || loja;
+          var pct = moTotal > 0 ? (lojaVal / moTotal * 100) : 0;
+
+          var lojaRow = _el('div', 'display:flex;align-items:center;justify-content:space-between;padding:7px 8px 7px 0;border-bottom:1px solid #f5f5f5;');
+
+          var lojaLeft = _el('div', 'display:flex;flex-direction:column;gap:3px;flex:1;margin-right:12px;');
+          var lojaNameLine = _el('div', 'display:flex;align-items:center;justify-content:space-between;');
+          var lojaNom = _el('span', 'font-size:.78rem;font-weight:700;');
+          lojaNom.style.setProperty('color', '#333333', 'important');
+          lojaNom.textContent = lojaLabel;
+          var lojaPct = _el('span', 'font-size:.68rem;font-weight:600;');
+          lojaPct.style.setProperty('color', '#999999', 'important');
+          lojaPct.textContent = pct.toFixed(1) + '%';
+          lojaNameLine.appendChild(lojaNom);
+          lojaNameLine.appendChild(lojaPct);
+          lojaLeft.appendChild(lojaNameLine);
+
+          // Barra de progreso proporcional
+          var barOuter = _el('div', 'height:3px;border-radius:2px;overflow:hidden;');
+          barOuter.style.setProperty('background', '#f0f0f0', 'important');
+          var barInner = _el('div', 'height:100%;border-radius:2px;');
+          barInner.style.setProperty('width', pct.toFixed(1) + '%', 'important');
+          barInner.style.setProperty('background', '#4a7c59', 'important');
+          barOuter.appendChild(barInner);
+          lojaLeft.appendChild(barOuter);
+
+          var lojaVal2 = _el('span', 'font-size:.78rem;font-weight:700;white-space:nowrap;');
+          lojaVal2.style.setProperty('color', '#222222', 'important');
+          lojaVal2.textContent = _fmtEur(lojaVal);
+
+          lojaRow.appendChild(lojaLeft);
+          lojaRow.appendChild(lojaVal2);
+          moDetail.appendChild(lojaRow);
+        });
+
+        mesCard.appendChild(moDetail);
+
+        // Toggle expand/collapse
+        moRow.addEventListener('click', function() {
+          _expanded[moKey] = !_expanded[moKey];
+          var o = _expanded[moKey];
+          moArrow.textContent = o ? '▼' : '▶';
+          moDetail.style.display = o ? 'block' : 'none';
+        });
+      });
+
+      // Total general al pie del card
+      var grandTotal = currentYearRows.reduce(function(s, r) { return s + (parseFloat(r.montante) || 0); }, 0);
+      var totalFooter = _el('div', 'display:flex;align-items:center;justify-content:space-between;padding:12px 8px 0;margin-top:8px;border-top:2px solid #e8e8e8;');
+      var totalLbl = _el('span', 'font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;');
+      totalLbl.style.setProperty('color', '#555555', 'important');
+      totalLbl.textContent = 'Total ' + currentYear + ' · ' + currentCount + ' dom.';
+      var totalVal = _el('span', 'font-size:.92rem;font-weight:900;');
+      totalVal.style.setProperty('color', '#111111', 'important');
+      totalVal.textContent = _fmtEur(grandTotal);
+      totalFooter.appendChild(totalLbl);
+      totalFooter.appendChild(totalVal);
+      mesCard.appendChild(totalFooter);
+
+      c.appendChild(mesCard);
+    })();
+    // ── fin ANÁLISE MÊS A MÊS ──────────────────────────────────
+
     // Detalhe: cada año con sus domingos
     var treeLabel=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px;');
     treeLabel.style.setProperty('color','#999999','important');

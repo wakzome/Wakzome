@@ -2226,10 +2226,15 @@
     }, 15000);
   }
 
+  // Registo defensivo: usa DOMContentLoaded se o parser ainda não terminou;
+  // caso contrário executa imediatamente com setTimeout(0) para garantir que
+  // todos os scripts inline anteriores já foram avaliados (evita race em
+  // Firefox/Safari onde readyState pode ser 'interactive' mas o DOM de outros
+  // módulos ainda não está completo).
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', pfInit);
   } else {
-    pfInit();
+    setTimeout(pfInit, 0);
   }
 
   /* Watch for:
@@ -2242,22 +2247,48 @@
     if (cardGone && gridExists) { pfBuildDOM(); pfHook(); }
 
     // Detect employee login: main-header gets class 'show'
+    // _currentStoreGlobal pode ainda nao estar definido no tick da mutacao
+    // (Firefox/Safari sao mais lentos a propagar globals de scripts inline).
+    // Usamos retry com backoff limitado para garantir que nao se perde.
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       var mh = document.getElementById('main-header');
-      if (mh && mh.classList.contains('show') &&
-          typeof window._currentStoreGlobal !== 'undefined' &&
-          String(window._currentStoreGlobal).toLowerCase().trim() === 'porto santo') {
-        pfPvpBuildEmployeeOverlay();
+      if (mh && mh.classList.contains('show')) {
+        (function tryBuildOverlay(attempts) {
+          if (document.getElementById('pf-pvp-emp-overlay')) return;
+          if (typeof window._currentStoreGlobal !== 'undefined') {
+            if (String(window._currentStoreGlobal).toLowerCase().trim() === 'porto santo') {
+              pfPvpBuildEmployeeOverlay();
+            }
+            return;
+          }
+          if (attempts > 0) {
+            setTimeout(function() { tryBuildOverlay(attempts - 1); }, 80);
+          }
+        })(5);
       }
     }
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
-  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir */
+  /* Expor pfPvpOpenEmployee globalmente — garante que o overlay existe antes de abrir.
+     Se pfPvpBuildEmployeeOverlay retornou cedo (store ainda desconhecida), retem a
+     abertura ate o overlay estar disponivel ou desistir ao fim de 5 tentativas. */
   window.pfPvpOpenEmployee = function() {
     if (!document.getElementById('pf-pvp-emp-overlay')) {
       pfPvpBuildEmployeeOverlay();
     }
-    pfPvpOpenEmployee();
+    // Se o overlay ainda nao existe (store nao era porto santo ou global ainda nao
+    // definido), retry ate 5x com intervalo de 80ms antes de abrir
+    (function tryOpen(attempts) {
+      var ov = document.getElementById('pf-pvp-emp-overlay');
+      if (ov) {
+        pfPvpOpenEmployee();
+        return;
+      }
+      if (attempts > 0) {
+        pfPvpBuildEmployeeOverlay();
+        setTimeout(function() { tryOpen(attempts - 1); }, 80);
+      }
+    })(5);
   };
 
 })();

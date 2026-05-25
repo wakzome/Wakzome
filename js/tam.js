@@ -7277,17 +7277,33 @@
 
       // DN buttons listeners
       var dnBarI = bar.querySelector('#tam-dn-file-input');
-      if (dnBarI) dnBarI.addEventListener('change', function(e){
-        var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
-        if (files.length) tamHandleDeliveryNoteFiles(files);
-        e.target.value = '';
-      });
+      if (dnBarI) {
+        dnBarI.addEventListener('change', function(e){
+          var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
+          if (files.length) tamHandleDeliveryNoteFiles(files);
+          e.target.value = '';
+        });
+        // EAN listener registered HERE — same event, same moment — never misses a file
+        dnBarI._tamEanHooked = true;
+        dnBarI.addEventListener('change', function(e){
+          Array.from(e.target.files)
+            .filter(function(f){ return f.type === 'application/pdf'; })
+            .forEach(function(f){ tamEanExtractFromDNPdf(f); });
+        });
+      }
       var dnBarX = bar.querySelector('#tam-dn-excel-input');
-      if (dnBarX) dnBarX.addEventListener('change', function(e){
-        var file = e.target.files[0];
-        if (file) tamHandleDNExcelFile(file);
-        e.target.value = '';
-      });
+      if (dnBarX) {
+        dnBarX.addEventListener('change', function(e){
+          var file = e.target.files[0];
+          if (file) tamHandleDNExcelFile(file);
+          e.target.value = '';
+        });
+        // EAN listener for Excel DN — same moment
+        dnBarX._tamEanHooked = true;
+        dnBarX.addEventListener('change', function(e){
+          if (e.target.files[0]) tamEanExtractFromExcel(e.target.files[0]);
+        });
+      }
       var dnBarC = bar.querySelector('#tam-dn-cam-input');
       if (dnBarC) dnBarC.addEventListener('change', function(e){
         var file = e.target.files[0];
@@ -7464,7 +7480,10 @@
     }
   }
 
-  /* ── Hooks sobre los inputs DN (listeners adicionales, no reemplaza los originales) ── */
+  /* ── Hooks sobre los inputs DN ──
+     Los listeners EAN se registran en tamInjectHTML al mismo tiempo que los
+     listeners originales, así nunca se pierde ningún archivo. Esta función
+     queda como fallback de seguridad. ── */
   function tamEanHookDNInputs() {
     var dnPdf = document.getElementById('tam-dn-file-input');
     if (dnPdf && !dnPdf._tamEanHooked) {

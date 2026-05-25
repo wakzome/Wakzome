@@ -7452,8 +7452,6 @@
     tamEanUpdateBtnVisibility();
   }
 
-  tamEanLoadCatalog();
-
   /* ── Visibilidad del botón ── */
   function tamEanUpdateBtnVisibility() {
     var btn = document.getElementById('tam-ean-btn');
@@ -7827,7 +7825,7 @@
   (function() {
     function tamEanInit() {
       tamEanHookDNInputs();
-      tamEanUpdateBtnVisibility();
+      tamEanLoadCatalog();
     }
     if (document.getElementById('tam-dn-file-input')) {
       tamEanInit();

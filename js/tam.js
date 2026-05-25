@@ -7340,4 +7340,611 @@
     })();
   })();
 
+
+  /* ══════════════════════════════════════════════════════════════
+     TAM EAN CATALOG — v1
+     Funcionalidad completamente nueva y aislada.
+     NO modifica ningún motor existente.
+     NO interfiere con ninguna función existente.
+
+     Flujo:
+       PDF DN  → tamEanExtractFromDNPdf()  → tamEanMerge()
+       Excel DN → tamEanExtractFromExcel() → tamEanMerge()
+       Botón   → tamEanShowModal()
+
+     Almacenamiento:
+       tamEanStore (memoria de sesión, por ref → { name, pvp, eans: Set })
+       Supabase tam_ean_catalog (persistente, upsert por ref+ean)
+       localStorage 'tam_ean_catalog' (fallback offline)
+  ══════════════════════════════════════════════════════════════ */
+
+  /* ── Estado en memoria ── */
+  var tamEanStore = {};   /* { "REF": { ref, name, pvp, eans: Set<string> } } */
+
+  /* ── Constante tabla Supabase ── */
+  var TAM_EAN_TABLE = 'tam_ean_catalog';
+
+  /* ══════════════════════════════════════════════════════════════
+     MERGE — punto de entrada único para añadir datos al store
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanMerge(ref, name, pvp, eans, source) {
+    if (!ref) return;
+    var key = ref.toUpperCase();
+    if (!tamEanStore[key]) {
+      tamEanStore[key] = { ref: ref, name: name || '', pvp: pvp || null, eans: new Set() };
+    }
+    var entry = tamEanStore[key];
+    if (!entry.name && name) entry.name = name;
+    if (!entry.pvp && pvp && pvp > 0) entry.pvp = pvp;
+    (eans || []).forEach(function(e) {
+      var s = String(e).trim();
+      if (/^\d{13}$/.test(s)) entry.eans.add(s);
+    });
+    tamEanPersist(key, entry, source || 'unknown');
+    tamEanUpdateBtnVisibility();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     PERSISTENCIA — localStorage inmediato + Supabase async
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanPersist(refKey, entry, source) {
+    try {
+      var raw = localStorage.getItem('tam_ean_catalog');
+      var all = raw ? JSON.parse(raw) : {};
+      if (!all[refKey]) all[refKey] = { ref: entry.ref, name: entry.name, pvp: entry.pvp, eans: [] };
+      var existing = new Set(all[refKey].eans);
+      entry.eans.forEach(function(e) { existing.add(e); });
+      all[refKey].eans = Array.from(existing);
+      all[refKey].name = all[refKey].name || entry.name;
+      all[refKey].pvp  = all[refKey].pvp  || entry.pvp;
+      localStorage.setItem('tam_ean_catalog', JSON.stringify(all));
+    } catch(e) { console.warn('TAM EAN: localStorage error', e); }
+    tamEanPersistSupabase(entry, source);
+  }
+
+  async function tamEanPersistSupabase(entry, source) {
+    var sb = tamSB();
+    if (!sb) return;
+    try {
+      var rows = Array.from(entry.eans).map(function(ean) {
+        return {
+          ref:    entry.ref.toUpperCase(),
+          ean:    ean,
+          name:   entry.name || null,
+          pvp:    entry.pvp  || null,
+          source: source     || null
+        };
+      });
+      if (!rows.length) return;
+      var res = await sb.from(TAM_EAN_TABLE)
+        .upsert(rows, { onConflict: 'ref,ean', ignoreDuplicates: false });
+      if (res && res.error) console.error('TAM EAN Supabase upsert:', res.error);
+    } catch(e) { console.warn('TAM EAN: Supabase error', e); }
+  }
+
+  async function tamEanLoadCatalog() {
+    try {
+      var raw = localStorage.getItem('tam_ean_catalog');
+      if (raw) {
+        var all = JSON.parse(raw);
+        Object.keys(all).forEach(function(key) {
+          var entry = all[key];
+          if (!tamEanStore[key]) {
+            tamEanStore[key] = { ref: entry.ref, name: entry.name || '', pvp: entry.pvp || null, eans: new Set() };
+          }
+          (entry.eans || []).forEach(function(e) { tamEanStore[key].eans.add(e); });
+        });
+      }
+    } catch(e) {}
+
+    var sb = tamSB();
+    if (!sb) return;
+    try {
+      var res = await sb.from(TAM_EAN_TABLE).select('ref,ean,name,pvp');
+      if (res.error) { console.warn('TAM EAN: Supabase load error', res.error); return; }
+      (res.data || []).forEach(function(row) {
+        var key = (row.ref || '').toUpperCase();
+        if (!tamEanStore[key]) {
+          tamEanStore[key] = { ref: row.ref, name: row.name || '', pvp: row.pvp || null, eans: new Set() };
+        }
+        if (/^\d{13}$/.test(row.ean)) tamEanStore[key].eans.add(row.ean);
+        if (!tamEanStore[key].name && row.name) tamEanStore[key].name = row.name;
+        if (!tamEanStore[key].pvp  && row.pvp)  tamEanStore[key].pvp  = row.pvp;
+      });
+      try {
+        var out = {};
+        Object.keys(tamEanStore).forEach(function(k) {
+          var e = tamEanStore[k];
+          out[k] = { ref: e.ref, name: e.name, pvp: e.pvp, eans: Array.from(e.eans) };
+        });
+        localStorage.setItem('tam_ean_catalog', JSON.stringify(out));
+      } catch(e2) {}
+    } catch(e) { console.warn('TAM EAN: Supabase load exception', e); }
+    tamEanUpdateBtnVisibility();
+  }
+
+  tamEanLoadCatalog();
+
+  /* ══════════════════════════════════════════════════════════════
+     EXTRACCIÓN DESDE PDF DN
+     Parser independiente — NO toca tamParseDNFromItems ni ningún
+     motor existente. Lee los mismos allPageItems pero de forma
+     autónoma para extraer ref, nombre, PVP y EANs.
+  ══════════════════════════════════════════════════════════════ */
+  async function tamEanExtractFromDNPdf(file) {
+    try {
+      var buf = await file.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      var allPageItems = [];
+      var PAGE_OFFSET  = 1200;
+      for (var p = 1; p <= pdf.numPages; p++) {
+        var page  = await pdf.getPage(p);
+        var vp    = page.getViewport({ scale: 1 });
+        var pageH = vp.height;
+        var off   = (p - 1) * PAGE_OFFSET;
+        var tc    = await page.getTextContent();
+        tc.items.forEach(function(item) {
+          var s = (item.str || '').trim();
+          if (!s) return;
+          allPageItems.push({ str: s, x: item.transform[4], y: pageH - item.transform[5] + off });
+        });
+      }
+      tamEanParseItemsPDF(allPageItems);
+    } catch(e) { console.warn('TAM EAN: PDF extract error', file.name, e); }
+  }
+
+  function tamEanParseItemsPDF(allPageItems) {
+    var EAN_RE   = /^\d{13}$/;
+    var NOISE_RE = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|FedEx|Hailys|Zabaione|Z-ONE|Versand|Lieferschein|Gesamtst|Bruttogewicht|Nettogewicht|Kunden|Konto|Karton|Datum|Seite|Modell|Farbe|Gr|Stck|Auftr|Herkunft|TAM\s|Valvo|Essener|Daimler|Hamburg|Michelfeld|Stuttgart|Volksbank|info@)/i;
+    var ADDR_RE  = /^[A-Za-z]{1,2}\d+-\d+$/;
+    var DN_REF_RE = /^(?!ZY-)[A-Za-z]{2,6}[-_](?:[A-Za-z]{1,4}[-_]){0,3}[A-Za-z0-9]*\d[A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+){0,4}$/;
+
+    function isRef(s) {
+      if (!s || s.length < 4 || s.length > 30) return false;
+      if (NOISE_RE.test(s)) return false;
+      if (ADDR_RE.test(s))  return false;
+      if (/^\d/.test(s))    return false;
+      if (!/\d/.test(s))    return false;
+      return DN_REF_RE.test(s);
+    }
+
+    /* Agrupar items en filas por Y (tolerancia 6pt), luego ordenar por X */
+    var sorted = allPageItems.slice().sort(function(a, b) { return a.y - b.y; });
+    var rows = [], curRow = [], lastY = -9999;
+    sorted.forEach(function(it) {
+      if (Math.abs(it.y - lastY) > 6) {
+        if (curRow.length) rows.push(curRow);
+        curRow = [it]; lastY = it.y;
+      } else {
+        curRow.push(it);
+      }
+    });
+    if (curRow.length) rows.push(curRow);
+    rows.forEach(function(r) { r.sort(function(a, b) { return a.x - b.x; }); });
+
+    var currentRef  = null;
+    var currentName = '';
+
+    rows.forEach(function(row) {
+      var tokens = row.map(function(it) { return it.str; });
+
+      /* Fin de documento */
+      if (/^Gesamtst/i.test(tokens[0])) { currentRef = null; return; }
+
+      /* Detectar nueva ref en la fila */
+      var possibleRef = null;
+      for (var i = 0; i < tokens.length; i++) {
+        if (isRef(tokens[i])) { possibleRef = tokens[i]; break; }
+      }
+      if (possibleRef && !EAN_RE.test(tokens[0])) {
+        currentRef  = possibleRef;
+        currentName = '';
+        return;
+      }
+
+      /* Línea de datos: buscar EAN */
+      if (!currentRef) return;
+      for (var j = 0; j < tokens.length; j++) {
+        if (!EAN_RE.test(tokens[j])) continue;
+        var ean = tokens[j];
+
+        /* Nombre del producto: tokens anteriores al EAN, limpios */
+        if (!currentName) {
+          var nameParts = [];
+          for (var k = 0; k < j; k++) {
+            var t = tokens[k];
+            if (NOISE_RE.test(t))              continue;
+            if (/^\d+$/.test(t))               continue;
+            if (isRef(t))                       continue;
+            if (/^[A-Z0-9]{4,8}$/.test(t) && k === j - 1) continue; /* código color/talla inmediato al EAN */
+            nameParts.push(t);
+          }
+          /* Eliminar últimos tokens si parecen códigos de color/talla */
+          while (nameParts.length && /^[A-Z0-9]{3,8}$/.test(nameParts[nameParts.length - 1])) {
+            nameParts.pop();
+          }
+          if (nameParts.length) currentName = nameParts.join(' · ');
+        }
+
+        /* UVP: último token de la fila con formato europeo dd,dd */
+        var pvp = null;
+        for (var m = tokens.length - 1; m > j; m--) {
+          var uvpM = tokens[m].match(/^(\d{1,3}),(\d{2})$/);
+          if (uvpM) { pvp = parseFloat(uvpM[1] + '.' + uvpM[2]); break; }
+        }
+
+        tamEanMerge(currentRef, currentName, pvp, [ean], 'pdf');
+        break;
+      }
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     EXTRACCIÓN DESDE EXCEL DN
+     Mapea columnas por título (fila 1), independiente del orden.
+  ══════════════════════════════════════════════════════════════ */
+  async function tamEanExtractFromExcel(file) {
+    try {
+      var buf  = await file.arrayBuffer();
+      var wb   = XLSX.read(buf, { type: 'array' });
+      var ws   = wb.Sheets[wb.SheetNames[0]];
+      var data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (data.length < 2) return;
+
+      var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
+
+      function colIdx(candidates) {
+        for (var ci = 0; ci < candidates.length; ci++) {
+          var idx = headers.indexOf(candidates[ci].toLowerCase());
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      }
+
+      var colRef  = colIdx(['referencia','ref','reference','artikel','article']);
+      var colEan  = colIdx(['ean','ean code','barcode','gtin']);
+      var colName = colIdx(['article name','name','artikel name','description','modelo','nombre']);
+      var colPvp  = colIdx(['sales price','pvp','uvp','price','precio','retail price']);
+
+      if (colRef < 0 || colEan < 0) {
+        console.warn('TAM EAN Excel: columnas ref/ean no encontradas. Headers:', headers);
+        return;
+      }
+
+      for (var r = 1; r < data.length; r++) {
+        var row = data[r];
+        var ref = String(row[colRef] || '').trim();
+        var ean = String(row[colEan] || '').trim();
+        if (!ref || !ean) continue;
+
+        var name   = colName >= 0 ? String(row[colName] || '').trim() : '';
+        var pvpRaw = colPvp  >= 0 ? row[colPvp] : null;
+        var pvp    = null;
+        if (pvpRaw !== null && pvpRaw !== '') {
+          var pvpNum = parseFloat(String(pvpRaw).replace(',', '.'));
+          if (!isNaN(pvpNum) && pvpNum > 0) pvp = Math.round(pvpNum * 100) / 100;
+        }
+
+        tamEanMerge(ref, name, pvp, [ean], 'excel');
+      }
+    } catch(e) { console.warn('TAM EAN: Excel extract error', e); }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     HOOK — listeners adicionales sobre los inputs DN existentes.
+     No reemplaza ni modifica los listeners originales.
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanHookDNInputs() {
+    var dnPdfInput = document.getElementById('tam-dn-file-input');
+    if (dnPdfInput && !dnPdfInput._tamEanHooked) {
+      dnPdfInput._tamEanHooked = true;
+      dnPdfInput.addEventListener('change', function(e) {
+        Array.from(e.target.files)
+          .filter(function(f) { return f.type === 'application/pdf'; })
+          .forEach(function(f) { tamEanExtractFromDNPdf(f); });
+      });
+    }
+
+    var dnExcelInput = document.getElementById('tam-dn-excel-input');
+    if (dnExcelInput && !dnExcelInput._tamEanHooked) {
+      dnExcelInput._tamEanHooked = true;
+      dnExcelInput.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (file) tamEanExtractFromExcel(file);
+      });
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     BOTÓN EAN — inyectado junto al botón de cámara
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanInjectButton() {
+    var bar = document.getElementById('tam-session-bar');
+    if (!bar || document.getElementById('tam-ean-btn')) return;
+
+    var camBtn = document.getElementById('tam-dn-cam-bar-btn');
+    var btn    = document.createElement('button');
+    btn.id        = 'tam-ean-btn';
+    btn.className = 'tam-session-btn';
+    btn.title     = 'catálogo EAN';
+    btn.innerHTML = '&#127991; EAN';
+    btn.style.display = 'none';
+    btn.addEventListener('click', function() { tamEanShowModal(); });
+
+    if (camBtn && camBtn.parentNode) {
+      camBtn.parentNode.insertBefore(btn, camBtn.nextSibling);
+    } else {
+      bar.appendChild(btn);
+    }
+  }
+
+  function tamEanUpdateBtnVisibility() {
+    var btn = document.getElementById('tam-ean-btn');
+    if (!btn) return;
+    var hasData = Object.keys(tamEanStore).some(function(k) {
+      return tamEanStore[k].eans.size > 0;
+    });
+    btn.style.display = hasData ? 'inline-flex' : 'none';
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     MODAL EAN
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanShowModal() {
+    var old = document.getElementById('tam-ean-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    var refs = Object.keys(tamEanStore)
+      .filter(function(k) { return tamEanStore[k].eans.size > 0; })
+      .sort();
+
+    if (!refs.length) { tamEanToast('Nenhum EAN carregado ainda.'); return; }
+
+    var totalEans = refs.reduce(function(s, k) { return s + tamEanStore[k].eans.size; }, 0);
+
+    var rowsHtml = refs.map(function(key) {
+      var entry   = tamEanStore[key];
+      var eanArr  = Array.from(entry.eans);
+      var safeKey = key.replace(/[^a-z0-9]/gi, '_');
+      var pvpDisp = entry.pvp != null ? entry.pvp.toFixed(2).replace('.', ',') + '\u00a0\u20ac' : '\u2014';
+      var nameDisp = entry.name || '\u2014';
+
+      var headerHtml =
+        '<div class="tam-ean-row-header">' +
+          '<span class="tam-ean-ref tam-ean-copyable" data-copy="' + tamEsc(entry.ref) + '" title="clica para copiar refer\u00eancia">' +
+            '<strong>' + tamEsc(entry.ref) + '</strong>' +
+            '<span class="tam-ean-check" id="tam-ean-chk-ref-' + safeKey + '"></span>' +
+          '</span>' +
+          '<span class="tam-ean-name' + (nameDisp !== '\u2014' ? ' tam-ean-copyable' : '') + '"' +
+            (nameDisp !== '\u2014' ? ' data-copy="' + tamEsc(entry.name) + '" title="clica para copiar nome"' : '') + '>' +
+            tamEsc(nameDisp) +
+            (nameDisp !== '\u2014' ? '<span class="tam-ean-check" id="tam-ean-chk-name-' + safeKey + '"></span>' : '') +
+          '</span>' +
+          '<span class="tam-ean-pvp' + (entry.pvp != null ? ' tam-ean-copyable' : '') + '"' +
+            (entry.pvp != null ? ' data-copy="' + tamEsc(entry.pvp.toFixed(2)) + '" title="clica para copiar PVP"' : '') + '>' +
+            pvpDisp +
+            (entry.pvp != null ? '<span class="tam-ean-check" id="tam-ean-chk-pvp-' + safeKey + '"></span>' : '') +
+          '</span>' +
+        '</div>';
+
+      var eansHtml = '<div class="tam-ean-codes">';
+      eanArr.forEach(function(ean, idx) {
+        if (idx === 0) {
+          eansHtml +=
+            '<span class="tam-ean-code tam-ean-code-first" ' +
+              'data-key="' + tamEsc(key) + '" ' +
+              'title="clica para copiar todos os EANs (formato Excel: UN + EAN)">' +
+              tamEsc(ean) +
+              '<span class="tam-ean-check" id="tam-ean-chk-eans-' + safeKey + '"></span>' +
+            '</span>';
+        } else {
+          eansHtml += '<span class="tam-ean-code">' + tamEsc(ean) + '</span>';
+        }
+      });
+      eansHtml += '</div>';
+
+      return '<div class="tam-ean-row" data-ref="' + tamEsc(key) + '">' + headerHtml + eansHtml + '</div>';
+    }).join('');
+
+    var modal = document.createElement('div');
+    modal.id = 'tam-ean-modal';
+    modal.innerHTML =
+      '<div id="tam-ean-backdrop"></div>' +
+      '<div id="tam-ean-panel">' +
+        '<div id="tam-ean-header">' +
+          '<div id="tam-ean-title">' +
+            '<span>\uD83C\uDFF7 Cat\u00e1logo EAN</span>' +
+            '<span id="tam-ean-subtitle">' + refs.length + ' refer\u00eancias \u00b7 ' + totalEans + ' EANs \u00fanicos</span>' +
+          '</div>' +
+          '<div id="tam-ean-header-right">' +
+            '<input type="text" id="tam-ean-filter" placeholder="\uD83D\uDD0D filtrar\u2026" autocomplete="off" spellcheck="false">' +
+            '<button id="tam-ean-close-btn">&times;</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="tam-ean-hint">Clica em <strong>Ref</strong>, <strong>Nome</strong> ou <strong>PVP</strong> para copiar individualmente \u00b7 Clica no <strong>primeiro EAN</strong> para copiar todos em formato Excel (UN\u2009+\u2009EAN)</div>' +
+        '<div id="tam-ean-col-headers">' +
+          '<span class="tam-ean-col-ref">Refer\u00eancia</span>' +
+          '<span class="tam-ean-col-name">Nome</span>' +
+          '<span class="tam-ean-col-pvp">PVP</span>' +
+        '</div>' +
+        '<div id="tam-ean-scroll"><div id="tam-ean-rows">' + rowsHtml + '</div></div>' +
+      '</div>';
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(function() { modal.classList.add('tam-ean-visible'); });
+
+    function closeModal() {
+      modal.classList.remove('tam-ean-visible');
+      setTimeout(function() { if (modal.parentNode) modal.parentNode.removeChild(modal); }, 250);
+    }
+    modal.querySelector('#tam-ean-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#tam-ean-close-btn').addEventListener('click', closeModal);
+    document.addEventListener('keydown', function escEan(e) {
+      if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escEan); }
+    });
+
+    /* Filtro */
+    modal.querySelector('#tam-ean-filter').addEventListener('input', function(e) {
+      var q = e.target.value.trim().toLowerCase();
+      modal.querySelectorAll('.tam-ean-row').forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.indexOf(q) >= 0) ? '' : 'none';
+      });
+    });
+
+    /* Copiar campo individual */
+    modal.querySelectorAll('.tam-ean-copyable').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var text = el.getAttribute('data-copy');
+        if (!text) return;
+        tamEanCopyText(text, function() {
+          var chk = el.querySelector('.tam-ean-check');
+          if (chk) tamEanFlashCheck(chk);
+        });
+      });
+    });
+
+    /* Copiar todos los EANs de una ref en formato UN\tEAN */
+    modal.querySelectorAll('.tam-ean-code-first').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var key   = el.getAttribute('data-key');
+        var entry = tamEanStore[key];
+        if (!entry) return;
+        var clipText = Array.from(entry.eans).map(function(ean) { return 'UN\t' + ean; }).join('\n');
+        tamEanCopyText(clipText, function() {
+          var safeKey = key.replace(/[^a-z0-9]/gi, '_');
+          var chk = modal.querySelector('#tam-ean-chk-eans-' + safeKey);
+          if (chk) tamEanFlashCheck(chk);
+        });
+      });
+    });
+  }
+
+  function tamEanCopyText(text, onSuccess) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(function() { tamEanCopyFallback(text, onSuccess); });
+    } else {
+      tamEanCopyFallback(text, onSuccess);
+    }
+  }
+
+  function tamEanCopyFallback(text, onSuccess) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); onSuccess && onSuccess(); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+
+  function tamEanFlashCheck(el) {
+    el.textContent = ' \u2713';
+    el.classList.add('tam-ean-check-visible');
+    clearTimeout(el._tamEanTimer);
+    el._tamEanTimer = setTimeout(function() {
+      el.textContent = '';
+      el.classList.remove('tam-ean-check-visible');
+    }, 1500);
+  }
+
+  function tamEanToast(msg) {
+    var t = document.createElement('div');
+    t.className = 'tam-ean-toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('tam-ean-toast-show'); }, 10);
+    setTimeout(function() {
+      t.classList.remove('tam-ean-toast-show');
+      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 400);
+    }, 3000);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     ESTILOS EAN
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanEnsureStyles() {
+    if (document.getElementById('tam-ean-styles')) return;
+    var s = document.createElement('style');
+    s.id = 'tam-ean-styles';
+    s.textContent = [
+      '#tam-ean-modal{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;pointer-events:none;}',
+      '#tam-ean-modal.tam-ean-visible{opacity:1;pointer-events:auto;}',
+      '#tam-ean-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}',
+      '#tam-ean-panel{position:relative;background:#fff;border-radius:16px;width:min(860px,96vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 70px rgba(0,0,0,.22);font-family:\'MontserratLight\',sans-serif;overflow:hidden;transform:translateY(8px);transition:transform .2s;}',
+      '#tam-ean-modal.tam-ean-visible #tam-ean-panel{transform:translateY(0);}',
+      '#tam-ean-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px 12px;border-bottom:1px solid #e0e0e0;flex-shrink:0;flex-wrap:wrap;}',
+      '#tam-ean-title{display:flex;flex-direction:column;gap:2px;}',
+      '#tam-ean-title span:first-child{font-size:1rem;font-weight:700;color:#000;}',
+      '#tam-ean-subtitle{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#000;opacity:.4;}',
+      '#tam-ean-header-right{display:flex;align-items:center;gap:8px;}',
+      '#tam-ean-filter{padding:6px 10px;font-size:.78rem;font-weight:700;font-family:\'MontserratLight\',sans-serif;border:1px solid #e0e0e0;border-radius:8px;outline:none;width:200px;background:#fafafa;color:#000;transition:border-color .15s;}',
+      '#tam-ean-filter:focus{border-color:#000;background:#fff;}',
+      '#tam-ean-close-btn{background:none;border:none;font-size:1.4rem;cursor:pointer;color:#000;opacity:.4;line-height:1;padding:2px 6px;transition:opacity .15s;}',
+      '#tam-ean-close-btn:hover{opacity:1;}',
+      '#tam-ean-hint{padding:8px 20px;font-size:.72rem;color:#000;opacity:.5;font-weight:600;border-bottom:1px solid #f0f0f0;flex-shrink:0;line-height:1.5;}',
+      '#tam-ean-col-headers{display:grid;grid-template-columns:190px 1fr 100px;gap:0;padding:8px 20px 6px;background:#fafafa;border-bottom:1px solid #e0e0e0;flex-shrink:0;}',
+      '.tam-ean-col-ref,.tam-ean-col-name,.tam-ean-col-pvp{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#000;opacity:.4;}',
+      '#tam-ean-scroll{overflow-y:auto;flex:1;}',
+      '#tam-ean-rows{padding:0 0 16px;}',
+      '.tam-ean-row{padding:10px 20px;border-bottom:1px solid #f5f5f5;transition:background .12s;}',
+      '.tam-ean-row:hover{background:#fafafa;}',
+      '.tam-ean-row:last-child{border-bottom:none;}',
+      '.tam-ean-row-header{display:grid;grid-template-columns:190px 1fr 100px;gap:0;align-items:center;margin-bottom:6px;}',
+      '.tam-ean-copyable{display:inline-flex;align-items:center;gap:4px;cursor:pointer;border-radius:5px;padding:2px 5px;transition:background .12s;user-select:none;-webkit-user-select:none;}',
+      '.tam-ean-copyable:hover{background:#f0f0f0;}',
+      '.tam-ean-ref{font-size:.88rem;color:#000;}',
+      '.tam-ean-name{font-size:.8rem;color:#000;opacity:.7;}',
+      '.tam-ean-pvp{font-size:.82rem;font-weight:700;color:#000;}',
+      '.tam-ean-check{font-size:.75rem;color:#4A7C6F;font-weight:700;display:inline-block;min-width:14px;}',
+      '.tam-ean-codes{display:flex;flex-wrap:wrap;gap:4px 8px;padding-left:4px;}',
+      '.tam-ean-code{font-size:.75rem;font-family:\'Courier New\',monospace;color:#000;opacity:.6;padding:1px 5px;border-radius:3px;background:#f5f5f5;letter-spacing:.04em;}',
+      '.tam-ean-code-first{cursor:pointer;background:#e8f0e8;color:#2a5a2a;opacity:1;font-weight:700;border:1px solid #b8d8b8;display:inline-flex;align-items:center;gap:3px;transition:background .12s,border-color .12s;}',
+      '.tam-ean-code-first:hover{background:#c8e8c8;border-color:#4A7C6F;}',
+      '.tam-ean-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:.82rem;font-family:\'MontserratLight\',sans-serif;font-weight:700;opacity:0;transition:opacity .3s,transform .3s;z-index:99999;pointer-events:none;white-space:nowrap;}',
+      '.tam-ean-toast.tam-ean-toast-show{opacity:1;transform:translateX(-50%) translateY(0);}',
+      '@media (max-width:600px){',
+      '#tam-ean-panel{width:100vw;max-height:100vh;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;right:0;}',
+      '#tam-ean-modal{align-items:flex-end;}',
+      '.tam-ean-row-header{grid-template-columns:140px 1fr 80px;}',
+      '#tam-ean-col-headers{grid-template-columns:140px 1fr 80px;}',
+      '#tam-ean-filter{width:140px;}',
+      '}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     INIT
+  ══════════════════════════════════════════════════════════════ */
+  function tamEanInit() {
+    tamEanEnsureStyles();
+    tamEanInjectButton();
+    tamEanHookDNInputs();
+
+    /* MutationObserver: re-hookear si la session bar se reconstruye */
+    var bar = document.getElementById('tam-session-bar');
+    if (bar) {
+      new MutationObserver(function() {
+        tamEanInjectButton();
+        tamEanHookDNInputs();
+        tamEanUpdateBtnVisibility();
+      }).observe(bar, { childList: true, subtree: false });
+    }
+  }
+
+  (function() {
+    if (document.getElementById('tam-session-bar')) {
+      tamEanInit();
+    } else {
+      var _t = setInterval(function() {
+        if (document.getElementById('tam-session-bar')) {
+          clearInterval(_t);
+          tamEanInit();
+        }
+      }, 200);
+    }
+  })();
+
+
 })();

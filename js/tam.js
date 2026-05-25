@@ -7099,7 +7099,7 @@
           '\ud83d\udcf7' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
         '</label>' +
-        '<button class="tam-session-btn" id="tam-ean-btn" title="catálogo EAN" style="display:none">&#127991; EAN</button>';
+        '<button class="tam-session-btn" id="tam-ean-btn" title="catálogo EAN">&#127991; EAN</button>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
@@ -7472,9 +7472,9 @@
   function tamEanUpdateBtnVisibility() {
     var btn = document.getElementById('tam-ean-btn');
     if (!btn) return;
-    var hasData = Object.keys(tamEanStore).some(function(k) { return tamEanStore[k].eans.size > 0; });
-    btn.style.display = hasData ? 'inline-flex' : 'none';
-    if (hasData && !btn._tamEanBound) {
+    // El botón siempre visible — no depende de si hay datos en el store
+    btn.style.display = 'inline-flex';
+    if (!btn._tamEanBound) {
       btn._tamEanBound = true;
       btn.addEventListener('click', function() { tamEanShowModal(); });
     }

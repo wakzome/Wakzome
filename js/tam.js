@@ -4280,6 +4280,344 @@
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     DN ENGINE 2 — Column-walk: reads left-to-right pairs (ref · qty)
+     Scans each row of items sorted by Y. For each row, tries to
+     identify a (ref, qty) pair: ref left of EAN, qty right of EAN.
+     Works well when EAN is centered and ref/qty are on the same line.
+  ══════════════════════════════════════════════════════════════ */
+  function tamDNEngine2(allPageItems, fileName) {
+    var EAN_RE  = /^\d{13}$/;
+    var BAD_STR = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|FedEx|Hailys|Zabaione|Z-ONE|Versand|Lieferschein|Gesamtst|Bruttogewicht|Nettogewicht|Kunden|Konto|Karton|Datum|Seite|Modell|Farbe|Größe|Stück|Auftr|Herkunft|TAM\s|Valvo|Essener|Daimler|Hamburg|Michelfeld|Stuttgart|Volksbank|IBAN|info@)/i;
+    var ADDR_RE = /^[A-Za-z]{1,2}\d+-\d+$/;
+    var DN_REF_RE = /^(?!ZY-)[A-Za-z]{2,6}[-_](?:[A-Za-z]{1,4}[-_]){0,3}[A-Za-z0-9]*\d[A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+){0,4}$/;
+    function isDNRef(s) {
+      if (!s || s.length < 4 || s.length > 30) return false;
+      if (BAD_STR.test(s)) return false;
+      if (ADDR_RE.test(s)) return false;
+      if (/^\d/.test(s)) return false;
+      if (!/\d/.test(s)) return false;
+      if (DN_REF_RE.test(s)) return true;
+      return KNOWN_REFS.has(s.toUpperCase());
+    }
+
+    /* ZY code */
+    var zyCode = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      var m = allPageItems[i].str.match(/ZY-\d{8}/);
+      if (m) { zyCode = m[0]; break; }
+    }
+    if (!zyCode) return null;
+
+    /* Gesamtstückzahl */
+    var gesamtPcs = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      if (/Gesamtst/i.test(allPageItems[i].str)) {
+        for (var j = i + 1; j < Math.min(i + 8, allPageItems.length); j++) {
+          var gn = parseInt(allPageItems[j].str);
+          if (!isNaN(gn) && gn >= 1 && gn <= 99999) { gesamtPcs = gn; break; }
+        }
+        break;
+      }
+    }
+
+    /* Group items into Y-rows (tolerance 4pt) */
+    var sorted = allPageItems.slice().sort(function(a,b){ return a.y - b.y; });
+    var yRows = [];
+    sorted.forEach(function(it) {
+      var found = false;
+      for (var ri = 0; ri < yRows.length; ri++) {
+        if (Math.abs(yRows[ri].y - it.y) <= 4) {
+          yRows[ri].items.push(it);
+          found = true; break;
+        }
+      }
+      if (!found) yRows.push({ y: it.y, items: [it] });
+    });
+
+    /* For each row containing an EAN: ref is leftmost valid ref-like token,
+       qty is the rightmost integer 1-9999 that is NOT the EAN itself */
+    var refAccum = {}, refOrder = [];
+    yRows.forEach(function(row) {
+      var eanItem = null;
+      row.items.forEach(function(it) { if (EAN_RE.test(it.str)) eanItem = it; });
+      if (!eanItem) return;
+
+      /* ref = leftmost isDNRef token left of EAN X */
+      var refCandidates = row.items.filter(function(it){
+        return it.x < eanItem.x && isDNRef(it.str);
+      });
+      if (!refCandidates.length) return;
+      refCandidates.sort(function(a,b){ return a.x - b.x; });
+      var ref = refCandidates[0].str;
+
+      /* qty = rightmost 1-9999 integer right of EAN X */
+      var qtyCandidates = row.items.filter(function(it){
+        return it.x > eanItem.x && /^\d{1,4}$/.test(it.str);
+      });
+      if (!qtyCandidates.length) {
+        /* Fallback: look in the next Y-row (qty sometimes on next line) */
+        /* qty on same row left of EAN (some layouts) */
+        qtyCandidates = row.items.filter(function(it){
+          return it.x > (eanItem.x - 60) && /^\d{1,4}$/.test(it.str) && it.str !== eanItem.str;
+        });
+      }
+      if (!qtyCandidates.length) return;
+      qtyCandidates.sort(function(a,b){ return b.x - a.x; });
+      var qty = parseInt(qtyCandidates[0].str);
+      if (qty < 1 || qty > 9999) return;
+
+      if (!refAccum.hasOwnProperty(ref)) { refAccum[ref] = 0; refOrder.push(ref); }
+      refAccum[ref] += qty;
+    });
+
+    var refs = refOrder.map(function(r){ return { ref:r, qty:refAccum[r] }; }).filter(function(r){ return r.qty > 0; });
+    if (!refs.length) return null;
+    return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs, _engine:'E2' };
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     DN ENGINE 3 — Block-descent: reads Lot-Nr blocks exhaustively
+     Parses the entire document as a sequence of Lot-Nr product blocks.
+     For each block: collects ALL integers between the ref and the next
+     block boundary (Lot-Nr or Gesamtstückzahl), covering multi-size
+     and multi-EAN entries robustly.
+  ══════════════════════════════════════════════════════════════ */
+  function tamDNEngine3(allPageItems, fileName) {
+    var BAD_STR = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|FedEx|Hailys|Zabaione|Z-ONE|Versand|Lieferschein|Gesamtst|Bruttogewicht|Nettogewicht|Kunden|Konto|Karton|Datum|Seite|Modell|Farbe|Größe|Stück|Auftr|Herkunft|TAM\s|Valvo|Essener|Daimler|Hamburg|Michelfeld|Stuttgart|Volksbank|IBAN|info@)/i;
+    var ADDR_RE = /^[A-Za-z]{1,2}\d+-\d+$/;
+    var DN_REF_RE = /^(?!ZY-)[A-Za-z]{2,6}[-_](?:[A-Za-z]{1,4}[-_]){0,3}[A-Za-z0-9]*\d[A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+){0,4}$/;
+    function isDNRef(s) {
+      if (!s || s.length < 4 || s.length > 30) return false;
+      if (BAD_STR.test(s)) return false;
+      if (ADDR_RE.test(s)) return false;
+      if (/^\d/.test(s)) return false;
+      if (!/\d/.test(s)) return false;
+      if (DN_REF_RE.test(s)) return true;
+      return KNOWN_REFS.has(s.toUpperCase());
+    }
+
+    var zyCode = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      var m = allPageItems[i].str.match(/ZY-\d{8}/);
+      if (m) { zyCode = m[0]; break; }
+    }
+    if (!zyCode) return null;
+
+    var gesamtPcs = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      if (/Gesamtst/i.test(allPageItems[i].str)) {
+        for (var j = i + 1; j < Math.min(i + 8, allPageItems.length); j++) {
+          var gn = parseInt(allPageItems[j].str);
+          if (!isNaN(gn) && gn >= 1 && gn <= 99999) { gesamtPcs = gn; break; }
+        }
+        break;
+      }
+    }
+
+    var sorted = allPageItems.slice().sort(function(a,b){ return a.y - b.y; });
+
+    /* Walk through all items; a Lot-Nr. line starts a new block.
+       Within each block, the first ref-like token is the product code.
+       ALL subsequent integers (1-9999) up to the next boundary are sizes/quantities.
+       The total for the product = sum of all those integers.
+       This is more exhaustive than v5 because it sums ALL integers per block,
+       not just the one in the QTY column. */
+    var refAccum = {}, refOrder = [];
+    var currentRef = null;
+    var inBlock = false;
+
+    for (var i = 0; i < sorted.length; i++) {
+      var s = sorted[i].str;
+      if (/^Lot-Nr/i.test(s)) {
+        /* Commit any open block, start fresh */
+        currentRef = null; inBlock = true; continue;
+      }
+      if (/^Gesamtst/i.test(s)) break;
+      if (!inBlock) continue;
+
+      if (currentRef === null && isDNRef(s)) {
+        currentRef = s;
+        if (!refAccum.hasOwnProperty(currentRef)) { refAccum[currentRef] = 0; refOrder.push(currentRef); }
+        continue;
+      }
+      if (currentRef !== null && /^\d{1,4}$/.test(s)) {
+        var v = parseInt(s);
+        if (v >= 1 && v <= 9999) refAccum[currentRef] += v;
+      }
+    }
+
+    var refs = refOrder.map(function(r){ return { ref:r, qty:refAccum[r] }; }).filter(function(r){ return r.qty > 0; });
+    if (!refs.length) return null;
+    return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs, _engine:'E3' };
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     DN ENGINE 4 — Full-text scan: no structural assumptions
+     Reads every token in reading order (Y-sorted).
+     Builds a sliding window: whenever a valid ref is seen, opens
+     an accumulation window. Every EAN and integer encountered within
+     a 200pt vertical window below that ref is considered belonging
+     to it — until a new ref or boundary is found.
+     This catches layouts where Lot-Nr headers are absent, the ref
+     appears inline with sizes, or the document uses non-standard
+     structure (e.g. portrait vs landscape, missing block separators).
+  ══════════════════════════════════════════════════════════════ */
+  function tamDNEngine4(allPageItems, fileName) {
+    var EAN_RE  = /^\d{13}$/;
+    var BAD_STR = /^(ZY-|B2B-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|DPD|FedEx|Hailys|Zabaione|Z-ONE|Versand|Lieferschein|Gesamtst|Bruttogewicht|Nettogewicht|Kunden|Konto|Karton|Datum|Seite|Modell|Farbe|Größe|Stück|Auftr|Herkunft|TAM\s|Valvo|Essener|Daimler|Hamburg|Michelfeld|Stuttgart|Volksbank|IBAN|info@)/i;
+    var ADDR_RE = /^[A-Za-z]{1,2}\d+-\d+$/;
+    var DN_REF_RE = /^(?!ZY-)[A-Za-z]{2,6}[-_](?:[A-Za-z]{1,4}[-_]){0,3}[A-Za-z0-9]*\d[A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+){0,4}$/;
+    function isDNRef(s) {
+      if (!s || s.length < 4 || s.length > 30) return false;
+      if (BAD_STR.test(s)) return false;
+      if (ADDR_RE.test(s)) return false;
+      if (/^\d/.test(s)) return false;
+      if (!/\d/.test(s)) return false;
+      if (DN_REF_RE.test(s)) return true;
+      return KNOWN_REFS.has(s.toUpperCase());
+    }
+
+    var zyCode = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      var mm = allPageItems[i].str.match(/ZY-\d{8}/);
+      if (mm) { zyCode = mm[0]; break; }
+    }
+    if (!zyCode) return null;
+
+    var gesamtPcs = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      if (/Gesamtst/i.test(allPageItems[i].str)) {
+        for (var j = i + 1; j < Math.min(i + 8, allPageItems.length); j++) {
+          var gn = parseInt(allPageItems[j].str);
+          if (!isNaN(gn) && gn >= 1 && gn <= 99999) { gesamtPcs = gn; break; }
+        }
+        break;
+      }
+    }
+
+    var REF_WINDOW = 200;  /* pt below a ref — all integers in this window belong to it */
+    var sorted = allPageItems.slice().sort(function(a,b){ return a.y - b.y; });
+
+    /* Pass 1: find all ref items and their Y */
+    var refItems = [];
+    sorted.forEach(function(it) {
+      if (isDNRef(it.str)) refItems.push({ ref: it.str, y: it.y, x: it.x });
+    });
+    if (!refItems.length) return null;
+
+    /* Merge duplicate ref names (same ref appearing at different Y → keep first occurrence) */
+    var seenRefs = {};
+    refItems = refItems.filter(function(ri) {
+      var up = ri.ref.toUpperCase();
+      if (seenRefs[up]) return false;
+      seenRefs[up] = true; return true;
+    });
+
+    /* Pass 2: for each ref, accumulate ALL integers found within its window
+       (from ref.y to min(next_ref.y, ref.y + REF_WINDOW)) */
+    var refAccum = {};
+    var refOrder = refItems.map(function(ri){ return ri.ref; });
+    refItems.forEach(function(ri, idx) {
+      refAccum[ri.ref] = 0;
+      var windowEnd = ri.y + REF_WINDOW;
+      if (idx + 1 < refItems.length) windowEnd = Math.min(windowEnd, refItems[idx+1].y);
+
+      sorted.forEach(function(it) {
+        if (it.y < ri.y) return;
+        if (it.y > windowEnd) return;
+        /* Skip EANs and the ref itself */
+        if (EAN_RE.test(it.str)) return;
+        if (it.str === ri.ref) return;
+        if (/^\d{1,4}$/.test(it.str)) {
+          var v = parseInt(it.str);
+          if (v >= 1 && v <= 9999) refAccum[ri.ref] += v;
+        }
+      });
+    });
+
+    var refs = refOrder
+      .map(function(r){ return { ref:r, qty:refAccum[r] }; })
+      .filter(function(r){ return r.qty > 0; });
+    if (!refs.length) return null;
+    return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs, _engine:'E4' };
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     DN MERGE — Combine results from 4 engines
+     Strategy:
+       · ZY code: agreed across all engines (must match)
+       · For each ref: collect ALL refs found by ANY engine
+       · Quantity per ref: weighted consensus
+           - If 3+ engines agree on same qty → use it (high confidence)
+           - If 2 engines agree → use that qty
+           - If all disagree → use the value closest to gesamtPcs balance
+           - Single-engine ref → use that engine's qty (better than nothing)
+       · gesamtPcs: use declared value; warn if merged total diverges
+  ══════════════════════════════════════════════════════════════ */
+  function tamDNMergeEngines(results, fileName) {
+    /* Filter out nulls */
+    var valid = results.filter(function(r){ return r && r.zyCode && r.refs && r.refs.length; });
+    if (!valid.length) return null;
+
+    /* All must agree on zyCode */
+    var zyCode = valid[0].zyCode;
+    /* Use gesamtPcs from whichever engine found it */
+    var gesamtPcs = null;
+    valid.forEach(function(r){ if (r.gesamtPcs !== null && gesamtPcs === null) gesamtPcs = r.gesamtPcs; });
+
+    /* Build a map: ref → list of quantities from each engine that found it */
+    var refQtys = {};   /* { ref: [qty, qty, ...] } */
+    var refOrder = [];
+
+    valid.forEach(function(result) {
+      result.refs.forEach(function(r) {
+        var key = r.ref.toUpperCase();
+        if (!refQtys[key]) { refQtys[key] = []; refOrder.push(r.ref); }
+        refQtys[key].push(r.qty);
+      });
+    });
+
+    /* Deduplicate refOrder (case-insensitive) */
+    var seenRO = {};
+    refOrder = refOrder.filter(function(r) {
+      var k = r.toUpperCase();
+      if (seenRO[k]) return false;
+      seenRO[k] = true; return true;
+    });
+
+    var mergedRefs = refOrder.map(function(ref) {
+      var qtys = refQtys[ref.toUpperCase()];
+      var qty;
+      if (qtys.length === 1) {
+        qty = qtys[0];
+      } else {
+        /* Majority vote */
+        var freq = {};
+        qtys.forEach(function(q){ freq[q] = (freq[q] || 0) + 1; });
+        var best = null, bestCount = 0;
+        Object.keys(freq).forEach(function(q) {
+          if (freq[q] > bestCount) { bestCount = freq[q]; best = parseInt(q); }
+        });
+        if (bestCount >= 2) {
+          qty = best;
+        } else {
+          /* All disagree — use median (middle value when sorted) */
+          var sorted = qtys.slice().sort(function(a,b){ return a-b; });
+          qty = sorted[Math.floor(sorted.length / 2)];
+        }
+      }
+      return { ref: ref, qty: qty };
+    }).filter(function(r){ return r.qty > 0; });
+
+    if (!mergedRefs.length) return null;
+
+    var engineLabels = valid.map(function(r){ return r._engine || 'E1'; }).join('+');
+    console.log('TAM DN 4-engines merge [' + engineLabels + '] → ' + mergedRefs.length + ' refs for ' + zyCode);
+
+    return { zyCode:zyCode, refs:mergedRefs, fileName:fileName, gesamtPcs:gesamtPcs, _engine: engineLabels };
+  }
+
   async function tamHandleDeliveryNoteFiles(files) {
     var count = 0;
     for (var fi = 0; fi < files.length; fi++) {
@@ -4306,7 +4644,35 @@
             });
           });
         }
-        var dn = tamParseDNFromItems(allPageItems, file.name);
+
+        /* ── Run all 4 engines in parallel ── */
+        var e1Result = tamParseDNFromItems(allPageItems, file.name);
+        if (e1Result) e1Result._engine = 'E1';
+        var e2Result = tamDNEngine2(allPageItems, file.name);
+        var e3Result = tamDNEngine3(allPageItems, file.name);
+        var e4Result = tamDNEngine4(allPageItems, file.name);
+
+        console.log('TAM DN engines for', file.name, '→',
+          'E1:', e1Result ? e1Result.refs.length + ' refs' : 'null',
+          'E2:', e2Result ? e2Result.refs.length + ' refs' : 'null',
+          'E3:', e3Result ? e3Result.refs.length + ' refs' : 'null',
+          'E4:', e4Result ? e4Result.refs.length + ' refs' : 'null'
+        );
+
+        /* ── Merge all engines ── */
+        var dn = tamDNMergeEngines([e1Result, e2Result, e3Result, e4Result], file.name);
+
+        /* Fallback: if merge returned nothing but individual engines have results,
+           use the engine with most refs */
+        if (!dn) {
+          var candidates = [e1Result, e2Result, e3Result, e4Result].filter(function(r){ return r && r.refs && r.refs.length; });
+          if (candidates.length) {
+            candidates.sort(function(a,b){ return b.refs.length - a.refs.length; });
+            dn = candidates[0];
+            console.log('TAM DN: merge failed, using best single engine', dn._engine, 'with', dn.refs.length, 'refs');
+          }
+        }
+
         if (dn) { tamDeliveryNotes[dn.zyCode] = dn; count++; }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }

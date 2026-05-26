@@ -95,7 +95,7 @@ select, select option {
 html, body {
   margin:0; padding:0; height:100%;
   font-family:'MontserratLight', sans-serif;
-  background:#fff; color:#000; overflow:hidden;
+  background:#fff !important; color:#000 !important; overflow:hidden;
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -3413,6 +3413,92 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 }
 #wz-aviso-modal.wz-visible img { opacity: 1; transform: scale(1); }
 </style>
+
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   ESCUDO GLOBAL DE CONTRASTE — WAKZOME
+   ---------------------------------------------------------------
+   REGLA DE ORO IRREVOCABLE:
+     Fondo oscuro  → letras CLARAS  (color: #fff o similar)
+     Fondo claro   → letras OSCURAS (color: #000/#111 o similar)
+
+   Este bloque se aplica a TODOS los módulos JS inyectados
+   (tam.js, ean-tool.js, y cualquier futuro módulo).
+   Usa !important en todo para ganar sobre herencias del body.
+
+   NUNCA ELIMINAR NI MODIFICAR SIN REVISAR EL CONTRASTE.
+   Si añades un nuevo módulo con fondo oscuro, NO necesitas
+   añadir !important en su CSS — este escudo ya lo cubre.
+══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Fondos oscuros conocidos → texto blanco forzado ──────── */
+/* Cubre headers de modales, toasts, overlays oscuros             */
+[style*="background:#1a1a1a"],
+[style*="background: #1a1a1a"],
+[style*="background:#111"],
+[style*="background: #111"],
+[style*="background:#000"],
+[style*="background: #000"],
+[style*="background:#222"],
+[style*="background: #222"],
+[style*="background:#333"],
+[style*="background: #333"] {
+  color: #fff !important;
+}
+
+/* ── 2. Protección de overlays/modales inyectados por JS ─────── */
+/* Cualquier elemento con position:fixed y z-index alto           */
+/* que tenga fondo oscuro no hereda color:#000 del body           */
+[id$="-overlay"],
+[id$="-modal"],
+[id$="-wrap"],
+[id$="-header"],
+[id$="-hdr"] {
+  color: inherit;
+}
+
+/* ── 3. Reglas específicas por ID de módulos conocidos ────────── */
+/* ean-tool.js */
+#ean-tool-header,
+#ean-tool-header *,
+#ean-modal-hdr,
+#ean-modal-hdr * {
+  color: #fff !important;
+}
+#ean-tool-wrap,
+#ean-modal-box {
+  color: #111 !important;
+}
+#ean-drop-zone {
+  color: #fff !important;
+  background: #111 !important;
+}
+#ean-copy-toast {
+  color: #fff !important;
+  background: #222 !important;
+}
+
+/* ── 4. Clases de botones con fondo oscuro (tam + ean + futuros)  */
+.tam-action-btn,
+.tam-session-btn,
+.ean-btn-download-excel,
+.ean-btn-save-sb {
+  /* hereda color del contexto — se sobreescribe por regla específica */
+}
+
+/* ── 5. Clase utilitaria reutilizable para futuros módulos ────── */
+/* Uso: añade class=wz-dark-surface a cualquier div con bg oscuro */
+.wz-dark-surface,
+.wz-dark-surface * {
+  color: #fff !important;
+}
+/* Uso: añade class=wz-light-surface a cualquier div con bg claro */
+.wz-light-surface,
+.wz-light-surface * {
+  color: #111 !important;
+}
+</style>
+
 </head>
 <body>
 

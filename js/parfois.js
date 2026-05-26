@@ -263,6 +263,11 @@
       '.pf-bc-code{font-size:.85rem;font-weight:bold;color:#000!important;letter-spacing:.1em;background:#f5f5f5;padding:5px 12px;border-radius:6px;border:1px solid #e0e0e0;white-space:nowrap;font-variant-numeric:tabular-nums;cursor:pointer;display:inline-block;transition:background .15s,border-color .15s;}',
       '.pf-bc-code:hover{background:#e8e8e8;border-color:#bbb;}',
       '.pf-bc-copied{background:#e8f5e8!important;border-color:#a0c8a0!important;color:#1a4a1a!important;}',
+      '#pf-bc-hdr-actions{display:flex;align-items:center;gap:8px;}',
+      '#pf-bc-save-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:5px;border:1px solid #3a6a3a!important;background:none!important;color:#5caa5c!important;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:color .12s,border-color .12s,opacity .12s;white-space:nowrap;font-family:\'MontserratLight\',sans-serif;line-height:1;}',
+      '#pf-bc-save-btn:hover:not(:disabled){color:#7fd17f!important;border-color:#7fd17f!important;}',
+      '#pf-bc-save-btn:disabled{opacity:.4;cursor:default;}',
+      '#pf-bc-loading{padding:32px 20px;text-align:center;font-size:.78rem;color:#aaa!important;font-family:\'MontserratLight\',sans-serif;}',
       /* ── Stock modal (same pattern as TAM tamShowStockModal) ── */
       '#pf-st-modal{display:none;position:fixed;inset:0;z-index:310;}',
       '#pf-st-modal.pf-st-visible{display:block;}',
@@ -1248,16 +1253,85 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     BARCODE OVERLAY
+     BARCODE OVERLAY — Supabase integration
+     · Fetches all known EANs with cursor-based pagination
+       (handles 100 000+ codes without hitting PostgREST limits)
+     · Filters out already-loaded EANs before rendering
+     · Save button pushes only new EANs in batches of 500
   ══════════════════════════════════════════════════════════════ */
-  function pfOpenBC(idx) {
+  var PF_EAN_SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
+  var PF_EAN_SB_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
+  var PF_EAN_TABLE  = 'tam_ean_catalog';
+  var PF_EAN_BATCH  = 500;
+  var PF_EAN_PAGE   = 1000;
+
+  /* Fetches every EAN stored in Supabase using cursor-based pagination.
+     Uses range requests (Range header) to reliably iterate beyond the
+     default PostgREST 1 000-row cap without needing count=exact,
+     supporting 100 000+ rows safely. */
+  async function pfFetchKnownEans() {
+    var known = new Set();
+    var from  = 0;
+    var keepGoing = true;
+    while (keepGoing) {
+      var to = from + PF_EAN_PAGE - 1;
+      var resp = await fetch(
+        PF_EAN_SB_URL + '/rest/v1/' + PF_EAN_TABLE + '?select=ean',
+        {
+          headers: {
+            'apikey':        PF_EAN_SB_KEY,
+            'Authorization': 'Bearer ' + PF_EAN_SB_KEY,
+            'Range':         from + '-' + to,
+            'Range-Unit':    'items',
+            'Prefer':        'count=none'
+          }
+        }
+      );
+      if (!resp.ok) break;
+      var rows = await resp.json();
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      rows.forEach(function(r){ if (r.ean) known.add(r.ean.trim()); });
+      keepGoing = rows.length === PF_EAN_PAGE;
+      from += PF_EAN_PAGE;
+    }
+    return known;
+  }
+
+  /* Saves an array of { ref, ean } objects to Supabase in batches,
+     ignoring duplicates via the Prefer header. */
+  async function pfSaveEansToSupabase(records) {
+    var errors = 0;
+    for (var i = 0; i < records.length; i += PF_EAN_BATCH) {
+      var batch = records.slice(i, i + PF_EAN_BATCH);
+      try {
+        var resp = await fetch(PF_EAN_SB_URL + '/rest/v1/' + PF_EAN_TABLE, {
+          method:  'POST',
+          headers: {
+            'apikey':        PF_EAN_SB_KEY,
+            'Authorization': 'Bearer ' + PF_EAN_SB_KEY,
+            'Content-Type':  'application/json',
+            'Prefer':        'resolution=ignore-duplicates'
+          },
+          body: JSON.stringify(batch)
+        });
+        if (!resp.ok) errors++;
+      } catch(e) { errors++; }
+    }
+    return errors;
+  }
+
+  async function pfOpenBC(idx) {
     var inv = pfState.invoices[idx];
     if (!inv) return;
     var items = pfGetActiveItems(inv);
-    var ov    = document.getElementById('pf-bc-overlay');
-    var body  = document.getElementById('pf-bc-body');
-    var ttl   = document.getElementById('pf-bc-title');
-    ttl.textContent = inv.invoiceNo + ' · códigos de barras';
+    var ov      = document.getElementById('pf-bc-overlay');
+    var body    = document.getElementById('pf-bc-body');
+    var ttl     = document.getElementById('pf-bc-title');
+    var saveBtn = document.getElementById('pf-bc-save-btn');
+
+    ttl.textContent     = inv.invoiceNo + ' \u00b7 c\u00f3digos de barras';
+    saveBtn.disabled    = true;
+    saveBtn.textContent = '\u2b06 Guardar EAN';
 
     // Normalize: session may have old format (ean string) or new (eans array)
     items.forEach(function(it) {
@@ -1271,8 +1345,41 @@
       return;
     }
 
+    // Show overlay immediately with loading state while fetching Supabase
+    ov.classList.add('open');
+    body.innerHTML = '<div id="pf-bc-loading">a verificar EANs j\u00e1 carregados\u2026</div>';
+
+    var knownEans = new Set();
+    try {
+      knownEans = await pfFetchKnownEans();
+    } catch(e) {
+      console.warn('Parfois: erro ao consultar EANs conhecidos (filtro omitido):', e);
+    }
+
+    // Filter each item's eans — keep only those not yet in Supabase
+    var newItems = [];
+    withEan.forEach(function(it) {
+      var newEans = it.eans.filter(function(ean){ return !knownEans.has(ean); });
+      if (newEans.length) {
+        newItems.push({ ref: it.ref, desc: it.desc, eans: newEans });
+      }
+    });
+
+    if (!newItems.length) {
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;font-size:.82rem;">todos os EANs j\u00e1 est\u00e3o guardados</div>';
+      return;
+    }
+
+    // Build records for potential save (flat list of { ref, ean })
+    var pendingRecords = [];
+    newItems.forEach(function(it) {
+      it.eans.forEach(function(ean) {
+        pendingRecords.push({ ref: it.ref, ean: ean });
+      });
+    });
+
     // Build grouped HTML
-    body.innerHTML = withEan.map(function(it) {
+    body.innerHTML = newItems.map(function(it) {
       var eansJoined = it.eans.join('|');
       var eanBtns = it.eans.map(function(ean) {
         return '<span class="pf-bc-code" data-eans="' + eansJoined + '">' + esc(ean) + '</span>';
@@ -1285,6 +1392,31 @@
         '<div class="pf-bc-eans">' + eanBtns + '</div>' +
       '</div>';
     }).join('');
+
+    // Enable save button now that we have pending records
+    saveBtn.disabled = false;
+
+    // Remove any previous save listener by replacing the node
+    var newSaveBtn = saveBtn.cloneNode(true);
+    saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+    newSaveBtn.disabled = false;
+
+    newSaveBtn.addEventListener('click', async function() {
+      newSaveBtn.disabled    = true;
+      newSaveBtn.textContent = '\u2b06 guardando\u2026';
+      var errors = await pfSaveEansToSupabase(pendingRecords);
+      newSaveBtn.textContent = errors === 0
+        ? '\u2714 ' + pendingRecords.length + ' guardados'
+        : '\u26a0 ' + errors + ' erro(s)';
+      if (errors === 0) {
+        // Grey out all chips to signal they are now stored
+        body.querySelectorAll('.pf-bc-code').forEach(function(el) {
+          el.style.opacity = '0.4';
+          el.style.cursor  = 'default';
+          el.style.pointerEvents = 'none';
+        });
+      }
+    });
 
     // Copy helper
     function pfCopyText(text, el) {
@@ -1327,8 +1459,6 @@
         pfCopyText(text, el);
       });
     });
-
-    ov.classList.add('open');
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -2115,7 +2245,10 @@
         '<div id="pf-bc-panel">' +
           '<div id="pf-bc-hdr">' +
             '<span id="pf-bc-title">códigos de barras</span>' +
-            '<button id="pf-bc-close">✕</button>' +
+            '<div id="pf-bc-hdr-actions">' +
+              '<button id="pf-bc-save-btn" disabled>\u2b06 Guardar EAN</button>' +
+              '<button id="pf-bc-close">\u2715</button>' +
+            '</div>' +
           '</div>' +
           '<div id="pf-bc-body"></div>' +
         '</div>';

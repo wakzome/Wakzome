@@ -37,7 +37,7 @@
      Fondo claro  → letras oscuras (color:#111 !important o similar)
      Cualquier cambio en colores de fondo DEBE revisar el color del texto.
     ══════════════════════════════════════════════════════════════ */
-    '#ean-tool-header { background:#1a1a1 !importanta !important; color:#fff !important; padding:12px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
+    '#ean-tool-header { background:#1a1a1a !important; color:#fff !important; padding:12px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
     '#ean-tool-header-title { font-size:.9rem; font-weight:700; letter-spacing:.04em; flex:1; color:#fff !important; }',
     '#ean-tool-close { width:28px; height:28px; border-radius:6px; border:1px solid #444 !important; background:none !important; color:#aaa !important; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
     '#ean-tool-close:hover { color:#fff !important; border-color:#888 !important; }',
@@ -75,7 +75,7 @@
     '#ean-modal-overlay { display:none; position:fixed; inset:0; z-index:10001; background:rgba(0,0,0,.5) !important; align-items:center; justify-content:center; padding:16px; }',
     '#ean-modal-overlay.ean-open { display:flex; }',
     '#ean-modal-box { background:#fff !important; color:#111 !important; border-radius:12px; width:100%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
-    '#ean-modal-hdr { background:#1a1a1 !importanta !important; color:#fff !important; padding:14px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
+    '#ean-modal-hdr { background:#1a1a1a !important; color:#fff !important; padding:14px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
     '#ean-modal-hdr-texts { flex:1; }',
     '#ean-modal-hdr-title { font-size:.92rem; font-weight:700; color:#fff !important; }',
     '#ean-modal-hdr-actions { display:flex; align-items:center; gap:8px; }',
@@ -83,8 +83,8 @@
     '#ean-modal-close:hover { color:#fff !important; border-color:#888 !important; }',
     '.ean-btn-download-excel { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #444 !important; background:none !important; color:#aaa !important; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
     '.ean-btn-download-excel:hover { color:#fff !important; border-color:#aaa !important; }',
-    '.ean-btn-save-sb { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #3a6a3a !important; background:none !important; color:#5caa5 !importantc !important; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s,opacity .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
-    '.ean-btn-save-sb:hover { color:#7fd17 !importantf !important; border-color:#7fd17 !importantf !important; }',
+    '.ean-btn-save-sb { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #3a6a3a !important; background:none !important; color:#5caa5c !important; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s,opacity .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
+    '.ean-btn-save-sb:hover { color:#7fd17f !important; border-color:#7fd17f !important; }',
     '.ean-btn-save-sb:disabled { opacity:.4; cursor:default; }',
     '#ean-modal-stats { padding:9px 18px; background:#f8f8f8 !important; border-bottom:1px solid #eee; display:flex; gap:20px; flex-shrink:0; align-items:center; }',
     '.ean-stat-item { display:flex; flex-direction:column; gap:1px; }',

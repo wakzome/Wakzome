@@ -7089,7 +7089,8 @@
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
           '\ud83d\udcf7' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
-        '</label>';
+        '</label>' +
+        '<button id="tam-ean-tool-btn" title="Códigos EAN" style="padding:0;width:28px;height:28px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:#000;line-height:1;">&#9654;</button>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
@@ -7103,6 +7104,22 @@
 
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
+
+      // ── Botón EAN Tool ──
+      var eanToolBtn = bar.querySelector('#tam-ean-tool-btn');
+      if (eanToolBtn) {
+        eanToolBtn.addEventListener('click', function() {
+          if (typeof window.tamOpenEanTool === 'function') {
+            window.tamOpenEanTool();
+          } else {
+            // Cargar ean-tool.js bajo demanda la primera vez
+            var s = document.createElement('script');
+            s.src = 'js/ean-tool.js';
+            s.onload = function() { if (typeof window.tamOpenEanTool === 'function') window.tamOpenEanTool(); };
+            document.head.appendChild(s);
+          }
+        });
+      }
 
       /* ── Helper: perform actual session close (called after confirmation) ── */
       function tamDoCloseSession() {

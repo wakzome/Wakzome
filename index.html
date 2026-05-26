@@ -877,16 +877,18 @@ body {
 #horarios-sub-grid .adm-mod-card[data-horarios-module]::after  { display: none; }
 
 /* ── Horarios sub-grid: full image card effect ── */
+#horarios-sub-grid .adm-mod-card {
+  min-height: 0;
+  height: 260px;
+  padding: 0;
+  background: #e8e8e8;
+}
 .hsub-card-img {
   position: absolute;
   inset: 0;
   overflow: hidden;
   border-radius: 22px;
   z-index: 0;
-  background: #e8e8e8;
-}
-#horarios-sub-grid .adm-mod-card {
-  min-height: 260px;
 }
 .hsub-card-img img {
   width: 100%; height: 100%;

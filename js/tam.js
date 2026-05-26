@@ -2506,14 +2506,17 @@
     var saveBtn  = document.getElementById('tam-save-btn');
     var guiaBarBtn = document.getElementById('tam-guia-bar-btn');
     var stEl    = document.getElementById('tam-session-status');
+    var eanToolBtn = document.getElementById('tam-ean-tool-btn');
     if (tamSession) {
       if (nameEl) nameEl.value = tamSession.name;
       if (saveBtn) saveBtn.classList.add('visible');
       if (guiaBarBtn) guiaBarBtn.style.display = 'inline-block';
+      if (eanToolBtn) eanToolBtn.style.display = 'flex';
     } else {
       if (nameEl) nameEl.value = '';
       if (saveBtn) saveBtn.classList.remove('visible');
       if (guiaBarBtn) guiaBarBtn.style.display = 'none';
+      if (eanToolBtn) eanToolBtn.style.display = 'none';
     }
     if (stEl) stEl.textContent = '';
   }
@@ -7090,7 +7093,7 @@
           '\ud83d\udcf7' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
         '</label>' +
-        '<button id="tam-ean-tool-btn" title="Códigos EAN" style="padding:0;width:28px;height:28px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:#000;line-height:1;">&#9654;</button>';
+        '<button id="tam-ean-tool-btn" title="Códigos EAN" style="padding:0;width:28px;height:28px;border:none;background:transparent;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:#000;line-height:1;">&#9654;</button>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
@@ -7126,10 +7129,13 @@
         // Save current session first, then close after save completes
         tamSaveSession(false);
         // Reset state
-        tamInvoices      = [];
-        tamEngineCache   = {};
-        tamActiveEngines = {};
-        tamSession       = null;
+        tamInvoices       = [];
+        tamEngineCache    = {};
+        tamActiveEngines  = {};
+        tamSession        = null;
+        tamDeliveryNotes  = {};   // ← DN nunca deben persistir entre sesiones
+        tamDNVerifyState  = {};   // ← ídem estado de escalación
+        tamDNtoInvIdx     = {};   // ← ídem índice de asignación DN→factura
         tamRefCompleting.clear();
         tamRefDone.clear();
         Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
@@ -7167,7 +7173,7 @@
         var guiaBarBtnClose = document.getElementById('tam-guia-bar-btn');
         if (guiaBarBtnClose) guiaBarBtnClose.style.display = 'none';
         var dnCount = document.getElementById('tam-dn-count');
-        if (dnCount) dnCount.style.display = 'none';
+        if (dnCount) { dnCount.style.display = 'none'; dnCount.textContent = ''; }
         // Reset upload zone
         var lbl = document.getElementById('upload-label') || document.getElementById('tam-upload-label');
         if (lbl) lbl.classList.remove('loaded');

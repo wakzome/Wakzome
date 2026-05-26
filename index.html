@@ -874,14 +874,14 @@ body {
 }
 
 #horarios-sub-grid .adm-mod-card[data-horarios-module]::before { display: none; }
+#horarios-sub-grid .adm-mod-card[data-horarios-module]::after  { display: none; }
 
-/* ── Horarios sub-grid: image card effect ── */
+/* ── Horarios sub-grid: full image card effect ── */
 .hsub-card-img {
   position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 55%;
+  inset: 0;
   overflow: hidden;
-  border-radius: 22px 22px 0 0;
+  border-radius: 22px;
   z-index: 0;
 }
 .hsub-card-img img {
@@ -891,16 +891,30 @@ body {
 }
 .hsub-card-img-overlay {
   position: absolute; inset: 0;
-  background: transparent;
+  background: linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.52) 100%);
   transition: background 0.38s ease;
   pointer-events: none;
 }
+#horarios-sub-grid .adm-mod-card > div:not(.adm-mod-arrow) {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: transparent !important;
+  border-radius: 0;
+  padding: 14px 18px 40px;
+  z-index: 2;
+}
+#horarios-sub-grid .adm-mod-card .adm-mod-name {
+  color: #fff;
+}
+#horarios-sub-grid .adm-mod-card .adm-mod-desc {
+  display: none;
+}
 #horarios-sub-grid .adm-mod-card:hover .hsub-card-img img {
   transform: scale(1.08);
-  filter: brightness(0.82);
+  filter: brightness(0.78);
 }
 #horarios-sub-grid .adm-mod-card:hover .hsub-card-img-overlay {
-  background: linear-gradient(180deg, rgba(0,0,0,0.18) 0%, transparent 70%);
+  background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.62) 100%);
 }
 
 .adm-mod-card[data-module="horarios-group"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }

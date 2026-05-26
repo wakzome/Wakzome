@@ -28,7 +28,7 @@
     '#ean-tool-overlay.ean-open { display:flex; }',
 
     /* ── ventana flotante ── */
-    '#ean-tool-wrap { background:#fff; color:#111; border-radius:12px; width:min(820px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-tool-wrap { background:#fff !important; color:#111 !important; border-radius:12px; width:min(820px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
 
     /* ── cabecera interna de la ventana ── */
     /* ══════════════════════════════════════════════════════════════
@@ -37,10 +37,10 @@
      Fondo claro  → letras oscuras (color:#111 o similar)
      Cualquier cambio en colores de fondo DEBE revisar el color del texto.
     ══════════════════════════════════════════════════════════════ */
-    '#ean-tool-header { background:#1a1a1a; color:#fff; padding:12px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
-    '#ean-tool-header-title { font-size:.9rem; font-weight:700; letter-spacing:.04em; flex:1; color:#fff; }',
-    '#ean-tool-close { width:28px; height:28px; border-radius:6px; border:1px solid #444; background:none; color:#aaa; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
-    '#ean-tool-close:hover { color:#fff; border-color:#888; }',
+    '#ean-tool-header { background:#1a1a1a !important; color:#fff !important; padding:12px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
+    '#ean-tool-header-title { font-size:.9rem; font-weight:700; letter-spacing:.04em; flex:1; color:#fff !important; }',
+    '#ean-tool-close { width:28px; height:28px; border-radius:6px; border:1px solid #444 !important; background:none !important; color:#aaa !important; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-tool-close:hover { color:#fff !important; border-color:#888 !important; }',
 
     /* ── zona de acción (botones EAN + progreso + error) ── */
     '#ean-action-row { display:flex; align-items:center; gap:10px; padding:14px 18px 0; flex-shrink:0; }',
@@ -74,17 +74,17 @@
     /* ── MODAL RESULTADOS ── */
     '#ean-modal-overlay { display:none; position:fixed; inset:0; z-index:10001; background:rgba(0,0,0,.5); align-items:center; justify-content:center; padding:16px; }',
     '#ean-modal-overlay.ean-open { display:flex; }',
-    '#ean-modal-box { background:#fff; border-radius:12px; width:100%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
-    '#ean-modal-hdr { background:#1a1a1a; color:#fff; padding:14px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
+    '#ean-modal-box { background:#fff !important; color:#111 !important; border-radius:12px; width:100%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-modal-hdr { background:#1a1a1a !important; color:#fff !important; padding:14px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
     '#ean-modal-hdr-texts { flex:1; }',
-    '#ean-modal-hdr-title { font-size:.92rem; font-weight:700; color:#fff; }',
+    '#ean-modal-hdr-title { font-size:.92rem; font-weight:700; color:#fff !important; }',
     '#ean-modal-hdr-actions { display:flex; align-items:center; gap:8px; }',
-    '#ean-modal-close { width:28px; height:28px; border-radius:6px; border:1px solid #444; background:none; color:#aaa; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
-    '#ean-modal-close:hover { color:#fff; border-color:#888; }',
-    '.ean-btn-download-excel { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #444; background:none; color:#aaa; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
-    '.ean-btn-download-excel:hover { color:#fff; border-color:#aaa; }',
-    '.ean-btn-save-sb { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #3a6a3a; background:none; color:#5caa5c; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s,opacity .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
-    '.ean-btn-save-sb:hover { color:#7fd17f; border-color:#7fd17f; }',
+    '#ean-modal-close { width:28px; height:28px; border-radius:6px; border:1px solid #444 !important; background:none !important; color:#aaa !important; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-modal-close:hover { color:#fff !important; border-color:#888 !important; }',
+    '.ean-btn-download-excel { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #444 !important; background:none !important; color:#aaa !important; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
+    '.ean-btn-download-excel:hover { color:#fff !important; border-color:#aaa !important; }',
+    '.ean-btn-save-sb { display:flex; align-items:center; gap:5px; padding:5px 11px; border-radius:5px; border:1px solid #3a6a3a !important; background:none !important; color:#5caa5c !important; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:color .12s,border-color .12s,opacity .12s; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
+    '.ean-btn-save-sb:hover { color:#7fd17f !important; border-color:#7fd17f !important; }',
     '.ean-btn-save-sb:disabled { opacity:.4; cursor:default; }',
     '#ean-modal-stats { padding:9px 18px; background:#f8f8f8; border-bottom:1px solid #eee; display:flex; gap:20px; flex-shrink:0; align-items:center; }',
     '.ean-stat-item { display:flex; flex-direction:column; gap:1px; }',
@@ -144,7 +144,7 @@
     '.ean-dn-chip.ean-copied { color:#2a6b2a; border-color:#9cc49c; background:#e6f4e6; }',
 
     /* ── toast ── */
-    '#ean-copy-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(8px); background:#222; color:#fff; font-size:.7rem; padding:7px 16px; border-radius:100px; pointer-events:none; opacity:0; transition:opacity .18s,transform .18s; z-index:10002; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-copy-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(8px); background:#222 !important; color:#fff !important; font-size:.7rem; padding:7px 16px; border-radius:100px; pointer-events:none; opacity:0; transition:opacity .18s,transform .18s; z-index:10002; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
     '#ean-copy-toast.ean-show { opacity:1; transform:translateX(-50%) translateY(0); }'
   ].join('\n');
 

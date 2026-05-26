@@ -7172,6 +7172,8 @@
         if (dnExcelBtn) dnExcelBtn.style.display = 'none';
         var guiaBarBtnClose = document.getElementById('tam-guia-bar-btn');
         if (guiaBarBtnClose) guiaBarBtnClose.style.display = 'none';
+        var eanToolBtnClose = document.getElementById('tam-ean-tool-btn');
+        if (eanToolBtnClose) eanToolBtnClose.style.display = 'none';
         var dnCount = document.getElementById('tam-dn-count');
         if (dnCount) { dnCount.style.display = 'none'; dnCount.textContent = ''; }
         // Reset upload zone

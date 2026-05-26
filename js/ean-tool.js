@@ -28,11 +28,17 @@
     '#ean-tool-overlay.ean-open { display:flex; }',
 
     /* ── ventana flotante ── */
-    '#ean-tool-wrap { background:#fff; border-radius:12px; width:min(820px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-tool-wrap { background:#fff; color:#111; border-radius:12px; width:min(820px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
 
     /* ── cabecera interna de la ventana ── */
+    /* ══════════════════════════════════════════════════════════════
+     REGLA DE ORO — NUNCA VIOLAR:
+     Fondo oscuro → letras claras (color:#fff o similar)
+     Fondo claro  → letras oscuras (color:#111 o similar)
+     Cualquier cambio en colores de fondo DEBE revisar el color del texto.
+    ══════════════════════════════════════════════════════════════ */
     '#ean-tool-header { background:#1a1a1a; color:#fff; padding:12px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
-    '#ean-tool-header-title { font-size:.9rem; font-weight:700; letter-spacing:.04em; flex:1; }',
+    '#ean-tool-header-title { font-size:.9rem; font-weight:700; letter-spacing:.04em; flex:1; color:#fff; }',
     '#ean-tool-close { width:28px; height:28px; border-radius:6px; border:1px solid #444; background:none; color:#aaa; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
     '#ean-tool-close:hover { color:#fff; border-color:#888; }',
 
@@ -71,7 +77,7 @@
     '#ean-modal-box { background:#fff; border-radius:12px; width:100%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
     '#ean-modal-hdr { background:#1a1a1a; color:#fff; padding:14px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }',
     '#ean-modal-hdr-texts { flex:1; }',
-    '#ean-modal-hdr-title { font-size:.92rem; font-weight:700; }',
+    '#ean-modal-hdr-title { font-size:.92rem; font-weight:700; color:#fff; }',
     '#ean-modal-hdr-actions { display:flex; align-items:center; gap:8px; }',
     '#ean-modal-close { width:28px; height:28px; border-radius:6px; border:1px solid #444; background:none; color:#aaa; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:color .12s,border-color .12s; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
     '#ean-modal-close:hover { color:#fff; border-color:#888; }',

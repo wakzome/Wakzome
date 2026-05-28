@@ -210,7 +210,7 @@
     var channelName = 'sl_' + this._module + '_' + sessionName.replace(/\s/g, '_') + '_send';
 
     return new Promise(function (resolve) {
-      var sendCh = self._sb.channel(channelName);
+      var sendCh = self._sb.channel(channelName, { config: { broadcast: { self: false, ack: false } } });
       var done   = false;
       var finish = function () {
         if (done) return;
@@ -242,7 +242,7 @@
     var self        = this;
     var channelName = 'sl_' + this._module + '_' + this._sessionName.replace(/\s/g, '_') + '_send';
 
-    this._channel = this._sb.channel(channelName);
+    this._channel = this._sb.channel(channelName, { config: { broadcast: { self: false, ack: false } } });
     this._channel
       .on('broadcast', { event: 'evict' }, function (msg) {
         if (msg && msg.payload && msg.payload.from === self._tabId) return;

@@ -246,7 +246,8 @@
     this._channel
       .on('broadcast', { event: 'evict' }, function (msg) {
         if (msg && msg.payload && msg.payload.from === self._tabId) return;
-        self._handleEviction();
+        /* Use setTimeout to detach from the Supabase message handler context */
+        setTimeout(function () { self._handleEviction(); }, 0);
       })
       .subscribe(function (status) {
         console.log('SessionLock [' + self._module + '] status:', status);

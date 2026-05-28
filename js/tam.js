@@ -28,15 +28,6 @@
   var tamDNVerifyState      = {};         // { zyCode: { dnConfirmed: bool } } — escalation state
 
   /* ── Motor D ── */
-  /* ── Session lock (anti-concurrent-access mutex) ── */
-  var tamLock = null;
-  function tamGetLock() {
-    if (!tamLock && typeof SessionLock !== 'undefined') {
-      tamLock = SessionLock.create('tam', tamSB());
-    }
-    return tamLock;
-  }
-
   var TAM_MOTOR_D_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/functions/v1/Motor-D';
   var TAM_MOTOR_D_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
   var tamMotorDCost   = 0;
@@ -593,12 +584,9 @@
         for (var i = 0; i < pkgs; i++) boxes.push({ total:null, refs:{}, locked:false, invIdx:invIdx });
       });
       tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
-      /* Acquire session lock */
-      (function() {
-        var _n = tamSession.name;
-        var _l = tamGetLock();
-        if (_l) _l.acquire(_n, function() { window._tamDoClose && window._tamDoClose(); });
-      })();
+      if (typeof SessionLock !== 'undefined') {
+        SessionLock.acquire('tam', tamSession.name, tamSB(), function(){if(typeof window._tamDoClose==='function'){window._tamDoClose();}});
+      }
     } else {
       tamInvoices = parsedInvoices;
       tamEngineCache = {};
@@ -684,12 +672,9 @@
       }
     });
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
-    /* Acquire session lock */
-    (function() {
-      var _n = sessionName;
-      var _l = tamGetLock();
-      if (_l) _l.acquire(_n, function() { window._tamDoClose && window._tamDoClose(); });
-    })();
+    if (typeof SessionLock !== 'undefined') {
+      SessionLock.acquire('tam', sessionName, tamSB(), function(){if(typeof window._tamDoClose==='function'){window._tamDoClose();}});
+    }
   }
 
   /* Dialog: existing session found on fresh load */
@@ -2936,12 +2921,9 @@
       tamRenderAll();
       tamStartAutoSave();
       tamShowDNBarButtons();
-      /* Acquire session lock */
-      (function() {
-        var _n = tamSession ? tamSession.name : key;
-        var _l = tamGetLock();
-        if (_l) _l.acquire(_n, function() { window._tamDoClose && window._tamDoClose(); });
-      })();
+      if (typeof SessionLock !== 'undefined' && tamSession) {
+        SessionLock.acquire('tam', tamSession.name, tamSB(), function(){if(typeof window._tamDoClose==='function'){window._tamDoClose();}});
+      }
     }
   }
 
@@ -7153,9 +7135,7 @@
 
       /* ── Helper: perform actual session close (called after confirmation) ── */
       function tamDoCloseSession() {
-        // Release session lock
-        var _cl = tamGetLock();
-        if (_cl) _cl.release();
+        if (typeof SessionLock !== 'undefined') SessionLock.release();
         // Save current session first, then close after save completes
         tamSaveSession(false);
         // Reset state
@@ -7216,7 +7196,7 @@
         var fileName = document.getElementById('tam-file-name');
         if (fileName) fileName.textContent = '';
       }
-      window._tamDoClose = tamDoCloseSession;  // expose for session-lock callbacks
+      window._tamDoClose = tamDoCloseSession;
 
 
       /* ── Confirmation modal for closing session ── */

@@ -34,8 +34,12 @@
   /* ── Session lock (anti-concurrent-access mutex) ── */
   var pfLock = null;
   function pfGetLock() {
+    var sb = pfSB();
+    if (!sb) return null;
     if (!pfLock && typeof SessionLock !== 'undefined') {
-      pfLock = SessionLock.create('parfois', pfSB());
+      pfLock = SessionLock.create('parfois', sb);
+    } else if (pfLock && pfLock._sb === null && sb) {
+      pfLock._sb = sb;
     }
     return pfLock;
   }

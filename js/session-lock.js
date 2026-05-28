@@ -1,18 +1,23 @@
 // ══════════════════════════════════════════════════════════════
 //  SESSION LOCK — Generic mutex for module sessions
 //
-//  Each module calls window.SessionLock.acquire(sessionName, sbClient, onEvicted)
-//  when a session is opened, and window.SessionLock.release() when closed.
-//  onEvicted() is called when another tab opens the same session.
+//  API A (Parfois — instance-based):
+//    var lock = SessionLock.create('parfois', sbAdmin);
+//    await lock.acquire(sessionName, onEvicted);
+//    await lock.release();
+//
+//  API B (TAM — static):
+//    SessionLock.acquire('tam', sessionName, sbAdmin, onEvicted);
+//    SessionLock.release();
 // ══════════════════════════════════════════════════════════════
 (function (global) {
   'use strict';
 
   var SL_TABLE     = 'module_session_locks';
-  var SL_HEARTBEAT = 10000;  // 10s heartbeat
-  var SL_TTL       = 25000;  // 25s stale threshold
+  var SL_HEARTBEAT = 10000;
+  var SL_TTL       = 25000;
 
-  /* ── Unique tab ID stored in sessionStorage ── */
+  /* ── Unique tab ID ── */
   var TAB_ID = (function () {
     try {
       var k = '__sl_tab__';
@@ -21,14 +26,6 @@
       return v;
     } catch (e) { return 'T' + Date.now() + Math.random().toString(36).slice(2, 7); }
   })();
-
-  /* ── Internal state ── */
-  var _sb          = null;
-  var _module      = null;
-  var _session     = null;
-  var _channel     = null;
-  var _heartbeat   = null;
-  var _onEvicted   = null;
 
   /* ══════════════════════════════════════════════════════════════
      TOAST
@@ -67,7 +64,9 @@
       'O seu trabalho foi guardado automaticamente e o m\u00f3dulo foi encerrado para evitar conflitos.</div>' +
       '</div></div><div id="sl-tbar"><div id="sl-tprog"></div></div>';
     document.body.appendChild(t);
-    requestAnimationFrame(function () { requestAnimationFrame(function () { t.classList.add('sl-on'); }); });
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { t.classList.add('sl-on'); });
+    });
     setTimeout(function () {
       t.classList.remove('sl-on');
       setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 400);
@@ -75,157 +74,171 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     CORE
+     SHARED CORE LOGIC
   ══════════════════════════════════════════════════════════════ */
-  function channelName() {
-    return 'sl__' + _module + '__' + _session.replace(/\W/g, '_');
+  function chName(moduleName, sessionName) {
+    return 'sl__' + moduleName + '__' + sessionName.replace(/\W/g, '_');
   }
 
-  function upsertLock() {
-    if (!_sb || !_session) return;
-    _sb.from(SL_TABLE).upsert({
-      module_name:  _module,
-      session_name: _session,
+  function doUpsert(sb, moduleName, sessionName) {
+    sb.from(SL_TABLE).upsert({
+      module_name:  moduleName,
+      session_name: sessionName,
       tab_id:       TAB_ID,
       locked_at:    new Date().toISOString()
-    }, { onConflict: 'module_name,session_name' }).then(function(){}).catch(function(e){
-      console.warn('SessionLock upsert error', e);
+    }, { onConflict: 'module_name,session_name' })
+    .then(function(){}).catch(function(e){ console.warn('SessionLock upsert', e); });
+  }
+
+  function doDelete(sb, moduleName, sessionName) {
+    if (!sb || !sessionName) return;
+    sb.from(SL_TABLE).delete()
+      .eq('module_name', moduleName)
+      .eq('session_name', sessionName)
+      .eq('tab_id', TAB_ID)
+      .then(function(){}).catch(function(){});
+  }
+
+  function doSubscribe(sb, moduleName, sessionName, onEvict) {
+    var ch = sb.channel(chName(moduleName, sessionName));
+    ch.on('broadcast', { event: 'evict' }, function (msg) {
+      if (msg && msg.payload && msg.payload.from === TAB_ID) return;
+      onEvict();
+    }).subscribe(function (status) {
+      console.log('SessionLock [' + moduleName + '] channel:', status);
     });
+    return ch;
   }
 
-  function startHeartbeat() {
-    stopHeartbeat();
-    _heartbeat = setInterval(upsertLock, SL_HEARTBEAT);
-  }
-
-  function stopHeartbeat() {
-    if (_heartbeat) { clearInterval(_heartbeat); _heartbeat = null; }
-  }
-
-  function unsubscribe() {
-    if (_channel && _sb) {
-      try { _sb.removeChannel(_channel); } catch (e) {}
-      _channel = null;
-    }
-  }
-
-  function handleEviction() {
-    stopHeartbeat();
-    unsubscribe();
-    _session = null;
-    showToast();
-    var cb = _onEvicted;
-    _onEvicted = null;
-    setTimeout(function () {
-      try { if (cb) cb(); } catch (e) { console.warn('SessionLock eviction cb error', e); }
-    }, 700);
-  }
-
-  function subscribe() {
-    unsubscribe();
-    _channel = _sb.channel(channelName());
-    _channel
-      .on('broadcast', { event: 'evict' }, function (msg) {
-        /* Ignore messages we sent ourselves */
-        if (msg && msg.payload && msg.payload.from === TAB_ID) return;
-        handleEviction();
-      })
-      .subscribe(function (status) {
-        console.log('SessionLock channel status:', status);
-      });
-  }
-
-  function sendEviction(onDone) {
-    /* Send on the same channel name — all subscribers including pestaña 1 will receive it */
-    var ch = _sb.channel(channelName());
+  function doSendEviction(sb, moduleName, sessionName, onDone) {
+    var ch = sb.channel(chName(moduleName, sessionName));
+    var fired = false;
+    var finish = function () {
+      if (fired) return; fired = true;
+      setTimeout(function () {
+        try { sb.removeChannel(ch); } catch (e) {}
+        if (onDone) onDone();
+      }, 3000);
+    };
     ch.subscribe(function (status) {
       if (status !== 'SUBSCRIBED') return;
       ch.send({ type: 'broadcast', event: 'evict', payload: { from: TAB_ID } })
-        .then(function () {
-          console.log('SessionLock: eviction broadcast sent');
-          /* Keep channel alive 3s so Supabase delivers the message, then clean up */
-          setTimeout(function () {
-            try { _sb.removeChannel(ch); } catch (e) {}
-            if (onDone) onDone();
-          }, 3000);
-        })
-        .catch(function (e) {
-          console.warn('SessionLock: send error', e);
-          try { _sb.removeChannel(ch); } catch (e2) {}
-          if (onDone) onDone();
-        });
+        .then(finish).catch(finish);
     });
-    /* Safety: if subscribe never fires, proceed after 5s */
-    setTimeout(function () { if (onDone) { onDone = null; if (onDone) onDone(); } }, 5000);
+    setTimeout(function () { if (!fired) { fired = true; try { sb.removeChannel(ch); } catch(e){} if (onDone) onDone(); } }, 5000);
+  }
+
+  function doAcquire(sb, moduleName, sessionName, onEvicted, onChannelReady) {
+    /* 1. Subscribe first */
+    var channel   = doSubscribe(sb, moduleName, sessionName, function () {
+      showToast();
+      setTimeout(function () {
+        try { if (onEvicted) onEvicted(); } catch (e) { console.warn('SessionLock eviction cb', e); }
+      }, 700);
+    });
+
+    /* 2. Check existing lock */
+    sb.from(SL_TABLE)
+      .select('tab_id, locked_at')
+      .eq('module_name', moduleName)
+      .eq('session_name', sessionName)
+      .limit(1)
+      .then(function (res) {
+        var proceed = function () {
+          doUpsert(sb, moduleName, sessionName);
+          if (onChannelReady) onChannelReady(channel);
+        };
+        if (!res.error && res.data && res.data.length) {
+          var row     = res.data[0];
+          var age     = Date.now() - new Date(row.locked_at).getTime();
+          var isOther = row.tab_id !== TAB_ID;
+          var isStale = age > SL_TTL;
+          if (isOther && !isStale) {
+            console.log('SessionLock: evicting', row.tab_id);
+            doSendEviction(sb, moduleName, sessionName, proceed);
+            return;
+          }
+        }
+        proceed();
+      })
+      .catch(function (e) {
+        console.warn('SessionLock check error', e);
+        doUpsert(sb, moduleName, sessionName);
+        if (onChannelReady) onChannelReady(channel);
+      });
   }
 
   /* ══════════════════════════════════════════════════════════════
-     PUBLIC API  — called from each module
+     API A — Instance-based (used by Parfois)
+  ══════════════════════════════════════════════════════════════ */
+  function Instance(moduleName, sb) {
+    this._mod  = moduleName;
+    this._sb   = sb;
+    this._ses  = null;
+    this._ch   = null;
+    this._hb   = null;
+  }
+
+  Instance.prototype.acquire = async function (sessionName, onEvicted) {
+    var self = this;
+    self._ses = sessionName;
+
+    doAcquire(self._sb, self._mod, sessionName, onEvicted, function (ch) {
+      self._ch = ch;
+      /* Heartbeat */
+      if (self._hb) clearInterval(self._hb);
+      self._hb = setInterval(function () {
+        doUpsert(self._sb, self._mod, self._ses);
+      }, SL_HEARTBEAT);
+    });
+  };
+
+  Instance.prototype.release = async function () {
+    if (this._hb) { clearInterval(this._hb); this._hb = null; }
+    if (this._ch && this._sb) { try { this._sb.removeChannel(this._ch); } catch(e){} this._ch = null; }
+    doDelete(this._sb, this._mod, this._ses);
+    this._ses = null;
+  };
+
+  /* ══════════════════════════════════════════════════════════════
+     API B — Static (used by TAM)
+  ══════════════════════════════════════════════════════════════ */
+  var _static = { sb: null, mod: null, ses: null, ch: null, hb: null };
+
+  /* ══════════════════════════════════════════════════════════════
+     PUBLIC
   ══════════════════════════════════════════════════════════════ */
   global.SessionLock = {
 
-    /**
-     * acquire(moduleName, sessionName, sbClient, onEvicted)
-     * Call when a session is opened.
-     */
-    acquire: function (moduleName, sessionName, sbClient, onEvicted) {
-      _module    = moduleName;
-      _session   = sessionName;
-      _sb        = sbClient;
-      _onEvicted = onEvicted || function () {};
-
-      /* Subscribe first so we receive any future evictions */
-      subscribe();
-
-      /* Check if another tab holds a fresh lock */
-      _sb.from(SL_TABLE)
-        .select('tab_id, locked_at')
-        .eq('module_name', _module)
-        .eq('session_name', _session)
-        .limit(1)
-        .then(function (res) {
-          var proceed = function () {
-            upsertLock();
-            startHeartbeat();
-          };
-
-          if (!res.error && res.data && res.data.length) {
-            var row     = res.data[0];
-            var age     = Date.now() - new Date(row.locked_at).getTime();
-            var isOther = row.tab_id !== TAB_ID;
-            var isStale = age > SL_TTL;
-
-            if (isOther && !isStale) {
-              /* Evict the other tab, then take the lock */
-              console.log('SessionLock: evicting tab', row.tab_id);
-              sendEviction(proceed);
-              return;
-            }
-          }
-          proceed();
-        })
-        .catch(function (e) {
-          console.warn('SessionLock: check error', e);
-          upsertLock();
-          startHeartbeat();
-        });
+    /* API A */
+    create: function (moduleName, sbClient) {
+      return new Instance(moduleName, sbClient);
     },
 
-    /**
-     * release()
-     * Call when a session is closed normally.
-     */
+    /* API B */
+    acquire: function (moduleName, sessionName, sbClient, onEvicted) {
+      /* Release any previous static lock */
+      if (_static.hb) { clearInterval(_static.hb); _static.hb = null; }
+      if (_static.ch && _static.sb) { try { _static.sb.removeChannel(_static.ch); } catch(e){} _static.ch = null; }
+
+      _static.sb  = sbClient;
+      _static.mod = moduleName;
+      _static.ses = sessionName;
+
+      doAcquire(sbClient, moduleName, sessionName, onEvicted, function (ch) {
+        _static.ch = ch;
+        if (_static.hb) clearInterval(_static.hb);
+        _static.hb = setInterval(function () {
+          doUpsert(_static.sb, _static.mod, _static.ses);
+        }, SL_HEARTBEAT);
+      });
+    },
+
     release: function () {
-      stopHeartbeat();
-      unsubscribe();
-      if (!_sb || !_session) return;
-      _sb.from(SL_TABLE)
-        .delete()
-        .eq('module_name', _module)
-        .eq('session_name', _session)
-        .eq('tab_id', TAB_ID)
-        .then(function(){}).catch(function(){});
-      _session = null;
+      if (_static.hb) { clearInterval(_static.hb); _static.hb = null; }
+      if (_static.ch && _static.sb) { try { _static.sb.removeChannel(_static.ch); } catch(e){} _static.ch = null; }
+      doDelete(_static.sb, _static.mod, _static.ses);
+      _static.ses = null;
     }
   };
 

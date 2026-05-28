@@ -33,7 +33,8 @@
   var tamMotorDCost   = 0;
 
   /* ── Session lock (anti-concurrent-access mutex) ── */
-  var tamLock = null;
+  var tamLock  = null;
+  var tamEvict = null;   // set when tamDoCloseSession is in scope
   function tamGetLock() {
     if (!tamLock && typeof SessionLock !== 'undefined') {
       tamLock = SessionLock.create('tam', tamSB());
@@ -599,7 +600,7 @@
         if (_lock) {
           _lock.acquire(_sname, function () {
             tamSaveSession(false);
-            tamDoCloseSession();
+            if (typeof tamEvict === 'function') tamEvict();
           });
         }
       })();
@@ -693,7 +694,7 @@
     if (_lock) {
       _lock.acquire(sessionName, function () {
         tamSaveSession(false);
-        tamDoCloseSession();
+        if (typeof tamEvict === 'function') tamEvict();
       });
     }
   }
@@ -2949,7 +2950,7 @@
         if (_lock) {
           _lock.acquire(_sname, function () {
             tamSaveSession(false);
-            tamDoCloseSession();
+            if (typeof tamEvict === 'function') tamEvict();
           });
         }
       })();
@@ -7227,6 +7228,7 @@
         var fileName = document.getElementById('tam-file-name');
         if (fileName) fileName.textContent = '';
       }
+      tamEvict = tamDoCloseSession;   // expose to outer scope for lock callbacks
 
       /* ── Confirmation modal for closing session ── */
       function tamShowCloseConfirmModal() {

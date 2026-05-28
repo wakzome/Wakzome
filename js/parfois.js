@@ -22,6 +22,15 @@
   var PF_PVP_TABLE = 'parfois_pvp_lists';
   function pfSB() { return (typeof sbAdmin !== 'undefined') ? sbAdmin : null; }
 
+  /* ── Session lock ── */
+  var pfLock = null;
+  function pfGetLock() {
+    if (!pfLock && typeof SessionLock !== 'undefined') {
+      pfLock = SessionLock.create('parfois', pfSB());
+    }
+    return pfLock;
+  }
+
   var pfState = {
     invoices:      [],
     activeEngines: {},   // { fileName: 'A'|'B'|'C' }
@@ -30,19 +39,6 @@
     sessionName:   '',
     createdAt:     null
   };
-
-  /* ── Session lock (anti-concurrent-access mutex) ── */
-  var pfLock = null;
-  function pfGetLock() {
-    var sb = pfSB();
-    if (!sb) return null;
-    if (!pfLock && typeof SessionLock !== 'undefined') {
-      pfLock = SessionLock.create('parfois', sb);
-    } else if (pfLock && pfLock._sb === null && sb) {
-      pfLock._sb = sb;
-    }
-    return pfLock;
-  }
 
   /* ══════════════════════════════════════════════════════════════
      WEEK SESSION
@@ -161,12 +157,9 @@
     pfState.invoices      = data.invoices      || [];
     pfState.activeEngines = data.activeEngines || {};
     pfState.collapsed     = data.collapsed     || {};
-
-    /* Acquire session lock — evicts any other tab on the same session */
     var lock = pfGetLock();
     if (lock) {
       await lock.acquire(name, function () {
-        /* Eviction callback: save & close immediately */
         if (pfState.sessionName && pfState.invoices.length) pfSave();
         pfCloseSessionPicker();
         var ov = document.getElementById('pf-overlay');
@@ -180,7 +173,6 @@
         }
       });
     }
-
     return true;
   }
 
@@ -1143,13 +1135,10 @@
     pfRender();
     pfUpdateLbl();
     pfOpen();
-
-    /* Acquire session lock for the new session */
     var name = pfState.sessionName;
     var lock = pfGetLock();
     if (lock) {
       lock.acquire(name, function () {
-        /* Eviction callback: save & close immediately */
         if (pfState.sessionName && pfState.invoices.length) pfSave();
         pfCloseSessionPicker();
         var ov = document.getElementById('pf-overlay');
@@ -2371,7 +2360,6 @@
   function pfClose() {
     // Save before closing
     if (pfState.sessionName && pfState.invoices.length) pfSave();
-    // Release session lock
     var lock = pfGetLock();
     if (lock) lock.release();
     pfCloseSessionPicker();

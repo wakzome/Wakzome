@@ -98,7 +98,7 @@
           'height:100%;width:100%;' +
           'background:#fff!important;' +
           'transform-origin:left;' +
-          'animation:sl-shrink 4s linear forwards;' +
+          'animation:sl-shrink 7s linear forwards;' +
         '}' +
         '@keyframes sl-shrink{from{transform:scaleX(1);}to{transform:scaleX(0);}}';
       document.head.appendChild(st);
@@ -110,10 +110,9 @@
       '<div id="sl-toast-inner">' +
         '<div id="sl-toast-icon">⚠</div>' +
         '<div id="sl-toast-body">' +
-          '<div id="sl-toast-title">sessão encerrada automaticamente</div>' +
+          '<div id="sl-toast-title">sessão encerrada por segurança</div>' +
           '<div id="sl-toast-msg">' +
-            'Outro utilizador abriu esta sessão.<br>' +
-            'Os seus dados foram guardados e o módulo foi fechado.' +
+            'Outro utilizador acedeu a esta sess\u00e3o. O seu trabalho foi guardado automaticamente e o m\u00f3dulo foi encerrado para evitar conflitos.' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -128,13 +127,13 @@
       });
     });
 
-    /* Auto-remove after 4.5 s */
+    /* Auto-remove after 7.5 s */
     setTimeout(function () {
       toast.classList.remove('sl-toast-visible');
       setTimeout(function () {
         if (toast.parentNode) toast.parentNode.removeChild(toast);
       }, 400);
-    }, 4500);
+    }, 7500);
   }
 
   /* ══════════════════════════════════════════════════════════════

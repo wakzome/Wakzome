@@ -190,12 +190,11 @@
     /* 4. Start heartbeat */
     this._startHeartbeat();
 
-    /* 5. Always release on tab close/refresh */
+    /* 5. Always release on tab close/refresh via sendBeacon */
     var self = this;
-    window.addEventListener('beforeunload', function () {
+    var _unloadHandler = function () {
       self._stopHeartbeat();
       if (!self._sessionName) return;
-      /* Synchronous XHR so it fires before the tab dies */
       try {
         var sbUrl = self._sb.supabaseUrl;
         var sbKey = self._sb.supabaseKey;
@@ -203,13 +202,16 @@
           '?module_name=eq.' + encodeURIComponent(self._module) +
           '&session_name=eq.' + encodeURIComponent(self._sessionName) +
           '&tab_id=eq.' + encodeURIComponent(self._tabId);
-        var xhr = new XMLHttpRequest();
-        xhr.open('DELETE', url, false);
-        xhr.setRequestHeader('apikey', sbKey);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + sbKey);
-        xhr.send();
+        /* sendBeacon with DELETE via fetch keepalive — works in beforeunload */
+        fetch(url, {
+          method: 'DELETE',
+          headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
+          keepalive: true
+        }).catch(function(){});
       } catch (e) {}
-    });
+    };
+    window.addEventListener('beforeunload', _unloadHandler);
+    window.addEventListener('pagehide', _unloadHandler);
   };
 
   /* ── Release lock (call on module close) ── */

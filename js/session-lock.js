@@ -189,6 +189,27 @@
 
     /* 4. Start heartbeat */
     this._startHeartbeat();
+
+    /* 5. Always release on tab close/refresh */
+    var self = this;
+    window.addEventListener('beforeunload', function () {
+      self._stopHeartbeat();
+      if (!self._sessionName) return;
+      /* Synchronous XHR so it fires before the tab dies */
+      try {
+        var sbUrl = self._sb.supabaseUrl;
+        var sbKey = self._sb.supabaseKey;
+        var url = sbUrl + '/rest/v1/' + SL_TABLE +
+          '?module_name=eq.' + encodeURIComponent(self._module) +
+          '&session_name=eq.' + encodeURIComponent(self._sessionName) +
+          '&tab_id=eq.' + encodeURIComponent(self._tabId);
+        var xhr = new XMLHttpRequest();
+        xhr.open('DELETE', url, false);
+        xhr.setRequestHeader('apikey', sbKey);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + sbKey);
+        xhr.send();
+      } catch (e) {}
+    });
   };
 
   /* ── Release lock (call on module close) ── */

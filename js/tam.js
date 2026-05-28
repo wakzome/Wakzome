@@ -32,6 +32,14 @@
   var TAM_MOTOR_D_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
   var tamMotorDCost   = 0;
 
+  /* ── Session lock (anti-concurrent-access mutex) ── */
+  var tamLock = null;
+  function tamGetLock() {
+    if (!tamLock && typeof SessionLock !== 'undefined') {
+      tamLock = SessionLock.create('tam', tamSB());
+    }
+    return tamLock;
+  }
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var tamEditingBoxBi       = -1;         // bi of the box being edited — renders first
   var TAM_UNDO_MAX          = 50;         // max undo steps
@@ -584,6 +592,17 @@
         for (var i = 0; i < pkgs; i++) boxes.push({ total:null, refs:{}, locked:false, invIdx:invIdx });
       });
       tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
+      /* Acquire session lock for the new session */
+      (function() {
+        var _sname = tamSession.name;
+        var _lock = tamGetLock();
+        if (_lock) {
+          _lock.acquire(_sname, function () {
+            tamSaveSession(false);
+            tamDoCloseSession();
+          });
+        }
+      })();
     } else {
       tamInvoices = parsedInvoices;
       tamEngineCache = {};
@@ -669,6 +688,14 @@
       }
     });
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
+    /* Acquire session lock — evicts any other tab on the same session */
+    var _lock = tamGetLock();
+    if (_lock) {
+      _lock.acquire(sessionName, function () {
+        tamSaveSession(false);
+        tamDoCloseSession();
+      });
+    }
   }
 
   /* Dialog: existing session found on fresh load */
@@ -2915,6 +2942,17 @@
       tamRenderAll();
       tamStartAutoSave();
       tamShowDNBarButtons();
+      /* Acquire session lock — evicts any other tab on the same session */
+      (function() {
+        var _sname = tamSession ? tamSession.name : key;
+        var _lock = tamGetLock();
+        if (_lock) {
+          _lock.acquire(_sname, function () {
+            tamSaveSession(false);
+            tamDoCloseSession();
+          });
+        }
+      })();
     }
   }
 
@@ -7126,6 +7164,9 @@
 
       /* ── Helper: perform actual session close (called after confirmation) ── */
       function tamDoCloseSession() {
+        // Release session lock before closing
+        var _lock = tamGetLock();
+        if (_lock) _lock.release();
         // Save current session first, then close after save completes
         tamSaveSession(false);
         // Reset state

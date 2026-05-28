@@ -31,6 +31,15 @@
     createdAt:     null
   };
 
+  /* ── Session lock (anti-concurrent-access mutex) ── */
+  var pfLock = null;
+  function pfGetLock() {
+    if (!pfLock && typeof SessionLock !== 'undefined') {
+      pfLock = SessionLock.create('parfois', pfSB());
+    }
+    return pfLock;
+  }
+
   /* ══════════════════════════════════════════════════════════════
      WEEK SESSION
   ══════════════════════════════════════════════════════════════ */
@@ -148,6 +157,26 @@
     pfState.invoices      = data.invoices      || [];
     pfState.activeEngines = data.activeEngines || {};
     pfState.collapsed     = data.collapsed     || {};
+
+    /* Acquire session lock — evicts any other tab on the same session */
+    var lock = pfGetLock();
+    if (lock) {
+      await lock.acquire(name, function () {
+        /* Eviction callback: save & close immediately */
+        if (pfState.sessionName && pfState.invoices.length) pfSave();
+        pfCloseSessionPicker();
+        var ov = document.getElementById('pf-overlay');
+        if (ov) {
+          ov.classList.remove('visible');
+          setTimeout(function () {
+            ov.classList.remove('open');
+            var admBack = document.getElementById('adm-back-btn');
+            if (admBack) admBack.click();
+          }, 650);
+        }
+      });
+    }
+
     return true;
   }
 
@@ -1110,6 +1139,26 @@
     pfRender();
     pfUpdateLbl();
     pfOpen();
+
+    /* Acquire session lock for the new session */
+    var name = pfState.sessionName;
+    var lock = pfGetLock();
+    if (lock) {
+      lock.acquire(name, function () {
+        /* Eviction callback: save & close immediately */
+        if (pfState.sessionName && pfState.invoices.length) pfSave();
+        pfCloseSessionPicker();
+        var ov = document.getElementById('pf-overlay');
+        if (ov) {
+          ov.classList.remove('visible');
+          setTimeout(function () {
+            ov.classList.remove('open');
+            var admBack = document.getElementById('adm-back-btn');
+            if (admBack) admBack.click();
+          }, 650);
+        }
+      });
+    }
   }
 
     function pfRender() {
@@ -2318,6 +2367,9 @@
   function pfClose() {
     // Save before closing
     if (pfState.sessionName && pfState.invoices.length) pfSave();
+    // Release session lock
+    var lock = pfGetLock();
+    if (lock) lock.release();
     pfCloseSessionPicker();
     var ov = document.getElementById('pf-overlay');
     if (!ov) return;

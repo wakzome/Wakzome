@@ -153,6 +153,15 @@
     return (typeof sbAdmin !== "undefined") ? sbAdmin : null;
   }
 
+  /* ── Session lock ── */
+  var tamLock = null;
+  function tamGetLock() {
+    if (!tamLock && typeof SessionLock !== 'undefined') {
+      tamLock = SessionLock.create('tam', tamSB());
+    }
+    return tamLock;
+  }
+
   /* ══════════════════════════════════════════════════════════════
      DRAG & DROP + FILE INPUT
   ══════════════════════════════════════════════════════════════ */
@@ -584,9 +593,37 @@
         for (var i = 0; i < pkgs; i++) boxes.push({ total:null, refs:{}, locked:false, invIdx:invIdx });
       });
       tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
-      if (typeof SessionLock !== 'undefined') {
-        SessionLock.acquire('tam', tamSession.name, tamSB(), function(){if(typeof window._tamDoClose==='function'){window._tamDoClose();}});
-      }
+      var _lock = tamGetLock();
+      if (_lock) _lock.acquire(tamSession.name, function () {
+        tamSaveSession(false);
+        /* Reset state — mirrors tamDoCloseSession without calling it */
+        tamInvoices = []; tamEngineCache = {}; tamActiveEngines = {};
+        tamSession = null; tamDeliveryNotes = {}; tamDNVerifyState = {}; tamDNtoInvIdx = {};
+        tamRefCompleting.clear(); tamRefDone.clear();
+        Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+        Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+        tamBoxLockPending = {}; tamUndoStack = []; tamRedoStack = [];
+        if (tamAutoSaveTimer) { clearInterval(tamAutoSaveTimer); tamAutoSaveTimer = null; }
+        ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
+          var el = document.getElementById(id); if (el) { el.className = ''; el.innerHTML = ''; }
+        });
+        ['tam-reception-area','tam-anomaly-area','tam-dn-verify-area'].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.innerHTML = '';
+        });
+        var _sn = document.getElementById('tam-session-name'); if (_sn) _sn.value = '';
+        var _ss = document.getElementById('tam-session-status'); if (_ss) _ss.textContent = '';
+        var _eb = document.getElementById('tam-export-btn'); if (_eb) _eb.classList.remove('show');
+        var _sb2 = document.getElementById('tam-save-btn'); if (_sb2) _sb2.classList.remove('visible');
+        ['tam-dn-load-bar-btn','tam-dn-cam-bar-btn','tam-dn-excel-bar-btn','tam-guia-bar-btn','tam-ean-tool-btn'].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.style.display = 'none';
+        });
+        var _dc = document.getElementById('tam-dn-count'); if (_dc) { _dc.style.display='none'; _dc.textContent=''; }
+        var _ul = document.getElementById('upload-label') || document.getElementById('tam-upload-label'); if (_ul) _ul.classList.remove('loaded');
+        var _tt = document.getElementById('tab-tam'); if (_tt) _tt.classList.remove('tam-loaded');
+        var _aa = document.getElementById('admin-app'); if (_aa) _aa.classList.remove('tam-loaded');
+        var _sm = document.getElementById('tam-status-msg'); if (_sm) _sm.textContent = '';
+        var _fn = document.getElementById('tam-file-name'); if (_fn) _fn.textContent = '';
+      });
     } else {
       tamInvoices = parsedInvoices;
       tamEngineCache = {};
@@ -672,9 +709,37 @@
       }
     });
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
-    if (typeof SessionLock !== 'undefined') {
-      SessionLock.acquire('tam', sessionName, tamSB(), function(){if(typeof window._tamDoClose==='function'){window._tamDoClose();}});
-    }
+    var _lock = tamGetLock();
+    if (_lock) _lock.acquire(sessionName, function () {
+        tamSaveSession(false);
+        /* Reset state — mirrors tamDoCloseSession without calling it */
+        tamInvoices = []; tamEngineCache = {}; tamActiveEngines = {};
+        tamSession = null; tamDeliveryNotes = {}; tamDNVerifyState = {}; tamDNtoInvIdx = {};
+        tamRefCompleting.clear(); tamRefDone.clear();
+        Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+        Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+        tamBoxLockPending = {}; tamUndoStack = []; tamRedoStack = [];
+        if (tamAutoSaveTimer) { clearInterval(tamAutoSaveTimer); tamAutoSaveTimer = null; }
+        ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
+          var el = document.getElementById(id); if (el) { el.className = ''; el.innerHTML = ''; }
+        });
+        ['tam-reception-area','tam-anomaly-area','tam-dn-verify-area'].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.innerHTML = '';
+        });
+        var _sn = document.getElementById('tam-session-name'); if (_sn) _sn.value = '';
+        var _ss = document.getElementById('tam-session-status'); if (_ss) _ss.textContent = '';
+        var _eb = document.getElementById('tam-export-btn'); if (_eb) _eb.classList.remove('show');
+        var _sb2 = document.getElementById('tam-save-btn'); if (_sb2) _sb2.classList.remove('visible');
+        ['tam-dn-load-bar-btn','tam-dn-cam-bar-btn','tam-dn-excel-bar-btn','tam-guia-bar-btn','tam-ean-tool-btn'].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.style.display = 'none';
+        });
+        var _dc = document.getElementById('tam-dn-count'); if (_dc) { _dc.style.display='none'; _dc.textContent=''; }
+        var _ul = document.getElementById('upload-label') || document.getElementById('tam-upload-label'); if (_ul) _ul.classList.remove('loaded');
+        var _tt = document.getElementById('tab-tam'); if (_tt) _tt.classList.remove('tam-loaded');
+        var _aa = document.getElementById('admin-app'); if (_aa) _aa.classList.remove('tam-loaded');
+        var _sm = document.getElementById('tam-status-msg'); if (_sm) _sm.textContent = '';
+        var _fn = document.getElementById('tam-file-name'); if (_fn) _fn.textContent = '';
+      });
   }
 
   /* Dialog: existing session found on fresh load */
@@ -2921,8 +2986,38 @@
       tamRenderAll();
       tamStartAutoSave();
       tamShowDNBarButtons();
-      if (typeof SessionLock !== 'undefined' && tamSession) {
-        SessionLock.acquire('tam', tamSession.name, tamSB(), function(){if(typeof window._tamDoClose==='function'){window._tamDoClose();}});
+      if (tamSession) {
+        var _lock = tamGetLock();
+        if (_lock) _lock.acquire(tamSession.name, function () {
+        tamSaveSession(false);
+        /* Reset state — mirrors tamDoCloseSession without calling it */
+        tamInvoices = []; tamEngineCache = {}; tamActiveEngines = {};
+        tamSession = null; tamDeliveryNotes = {}; tamDNVerifyState = {}; tamDNtoInvIdx = {};
+        tamRefCompleting.clear(); tamRefDone.clear();
+        Object.keys(tamRefCompletingTimers).forEach(function(k){ clearTimeout(tamRefCompletingTimers[k]); delete tamRefCompletingTimers[k]; });
+        Object.keys(tamBoxLockTimers).forEach(function(k){ clearTimeout(tamBoxLockTimers[k]); delete tamBoxLockTimers[k]; });
+        tamBoxLockPending = {}; tamUndoStack = []; tamRedoStack = [];
+        if (tamAutoSaveTimer) { clearInterval(tamAutoSaveTimer); tamAutoSaveTimer = null; }
+        ['tam-results-wrap','tam-invoice-meta','tam-validation-banner'].forEach(function(id){
+          var el = document.getElementById(id); if (el) { el.className = ''; el.innerHTML = ''; }
+        });
+        ['tam-reception-area','tam-anomaly-area','tam-dn-verify-area'].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.innerHTML = '';
+        });
+        var _sn = document.getElementById('tam-session-name'); if (_sn) _sn.value = '';
+        var _ss = document.getElementById('tam-session-status'); if (_ss) _ss.textContent = '';
+        var _eb = document.getElementById('tam-export-btn'); if (_eb) _eb.classList.remove('show');
+        var _sb2 = document.getElementById('tam-save-btn'); if (_sb2) _sb2.classList.remove('visible');
+        ['tam-dn-load-bar-btn','tam-dn-cam-bar-btn','tam-dn-excel-bar-btn','tam-guia-bar-btn','tam-ean-tool-btn'].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.style.display = 'none';
+        });
+        var _dc = document.getElementById('tam-dn-count'); if (_dc) { _dc.style.display='none'; _dc.textContent=''; }
+        var _ul = document.getElementById('upload-label') || document.getElementById('tam-upload-label'); if (_ul) _ul.classList.remove('loaded');
+        var _tt = document.getElementById('tab-tam'); if (_tt) _tt.classList.remove('tam-loaded');
+        var _aa = document.getElementById('admin-app'); if (_aa) _aa.classList.remove('tam-loaded');
+        var _sm = document.getElementById('tam-status-msg'); if (_sm) _sm.textContent = '';
+        var _fn = document.getElementById('tam-file-name'); if (_fn) _fn.textContent = '';
+      });
       }
     }
   }
@@ -7135,7 +7230,7 @@
 
       /* ── Helper: perform actual session close (called after confirmation) ── */
       function tamDoCloseSession() {
-        if (typeof SessionLock !== 'undefined') SessionLock.release();
+        var _lock = tamGetLock(); if (_lock) _lock.release();
         // Save current session first, then close after save completes
         tamSaveSession(false);
         // Reset state
@@ -7196,8 +7291,6 @@
         var fileName = document.getElementById('tam-file-name');
         if (fileName) fileName.textContent = '';
       }
-      window._tamDoClose = tamDoCloseSession;
-
 
       /* ── Confirmation modal for closing session ── */
       function tamShowCloseConfirmModal() {

@@ -28,18 +28,19 @@
   var tamDNVerifyState      = {};         // { zyCode: { dnConfirmed: bool } } — escalation state
 
   /* ── Motor D ── */
-  var TAM_MOTOR_D_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/functions/v1/Motor-D';
-  var TAM_MOTOR_D_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
-  var tamMotorDCost   = 0;
-
   /* ── Session lock (anti-concurrent-access mutex) ── */
-  var tamLock  = null;
+  var tamLock = null;
   function tamGetLock() {
     if (!tamLock && typeof SessionLock !== 'undefined') {
       tamLock = SessionLock.create('tam', tamSB());
     }
     return tamLock;
   }
+
+  var TAM_MOTOR_D_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/functions/v1/Motor-D';
+  var TAM_MOTOR_D_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
+  var tamMotorDCost   = 0;
+
   var tamRedoStack          = [];         // redo stack (cleared on new action)
   var tamEditingBoxBi       = -1;         // bi of the box being edited — renders first
   var TAM_UNDO_MAX          = 50;         // max undo steps
@@ -592,16 +593,11 @@
         for (var i = 0; i < pkgs; i++) boxes.push({ total:null, refs:{}, locked:false, invIdx:invIdx });
       });
       tamSession = { name: baseName + ' (' + suffix + ')', boxes: boxes, createdAt: Date.now(), quickDistrib: {} };
-      /* Acquire session lock for the new session */
+      /* Acquire session lock */
       (function() {
-        var _sname = tamSession.name;
-        var _lock = tamGetLock();
-        if (_lock) {
-          _lock.acquire(_sname, function () {
-            tamSaveSession(false);
-            if (typeof window._tamEvict === 'function') window._tamEvict();
-          });
-        }
+        var _n = tamSession.name;
+        var _l = tamGetLock();
+        if (_l) _l.acquire(_n, function() { window._tamDoClose && window._tamDoClose(); });
       })();
     } else {
       tamInvoices = parsedInvoices;
@@ -688,14 +684,12 @@
       }
     });
     tamSession = { name: sessionName, boxes: boxes, createdAt: Date.now(), quickDistrib: {}, sentRefs: {} };
-    /* Acquire session lock — evicts any other tab on the same session */
-    var _lock = tamGetLock();
-    if (_lock) {
-      _lock.acquire(sessionName, function () {
-        tamSaveSession(false);
-        if (typeof window._tamEvict === 'function') window._tamEvict();
-      });
-    }
+    /* Acquire session lock */
+    (function() {
+      var _n = sessionName;
+      var _l = tamGetLock();
+      if (_l) _l.acquire(_n, function() { window._tamDoClose && window._tamDoClose(); });
+    })();
   }
 
   /* Dialog: existing session found on fresh load */
@@ -2942,16 +2936,11 @@
       tamRenderAll();
       tamStartAutoSave();
       tamShowDNBarButtons();
-      /* Acquire session lock — evicts any other tab on the same session */
+      /* Acquire session lock */
       (function() {
-        var _sname = tamSession ? tamSession.name : key;
-        var _lock = tamGetLock();
-        if (_lock) {
-          _lock.acquire(_sname, function () {
-            tamSaveSession(false);
-            if (typeof window._tamEvict === 'function') window._tamEvict();
-          });
-        }
+        var _n = tamSession ? tamSession.name : key;
+        var _l = tamGetLock();
+        if (_l) _l.acquire(_n, function() { window._tamDoClose && window._tamDoClose(); });
       })();
     }
   }
@@ -7164,9 +7153,9 @@
 
       /* ── Helper: perform actual session close (called after confirmation) ── */
       function tamDoCloseSession() {
-        // Release session lock before closing
-        var _lock = tamGetLock();
-        if (_lock) _lock.release();
+        // Release session lock
+        var _cl = tamGetLock();
+        if (_cl) _cl.release();
         // Save current session first, then close after save completes
         tamSaveSession(false);
         // Reset state
@@ -7227,7 +7216,8 @@
         var fileName = document.getElementById('tam-file-name');
         if (fileName) fileName.textContent = '';
       }
-      window._tamEvict = tamDoCloseSession;   // expose to window for lock callbacks
+      window._tamDoClose = tamDoCloseSession;  // expose for session-lock callbacks
+
 
       /* ── Confirmation modal for closing session ── */
       function tamShowCloseConfirmModal() {

@@ -995,6 +995,79 @@
   /* Current active save key (set when a session is loaded or a new one starts) */
   var _activeSessionKey = null;
 
+  /* ══════════════════════════════════════════════════════════════
+     SESSION LOCK — reutiliza el SessionLock global (session-lock.js).
+     Comparte la tabla 'module_session_locks' en Supabase con otros
+     módulos discriminando por module_name='processamento'.
+     Si dos dispositivos abren EXACTAMENTE la misma sesión (mismo key),
+     el nuevo expulsa al anterior y éste vuelve al dashboard.
+  ══════════════════════════════════════════════════════════════ */
+  var _procLock      = null;
+  var _procLockedKey = null;
+
+  function procGetLock() {
+    if (!_procLock &&
+        typeof SessionLock !== 'undefined' &&
+        typeof sbAdmin     !== 'undefined' && sbAdmin) {
+      _procLock = SessionLock.create('processamento', sbAdmin);
+    }
+    return _procLock;
+  }
+
+  /* Tomar el lock para una sesión. Idempotente para la misma sesión;
+     si se cambia de sesión sin cerrar, libera la anterior primero. */
+  function procLockAcquire(key) {
+    if (!key) return;
+    var lock = procGetLock();
+    if (!lock) return;
+    if (_procLockedKey === key) return;          /* ya la tenemos */
+    if (_procLockedKey) { try { lock.release(); } catch (e) {} }  /* cambio de sesión */
+    _procLockedKey = key;
+    lock.acquire(key, procLockOnEvicted);
+  }
+
+  /* Liberar el lock (cierre normal: volver al dashboard, inactividad, etc.) */
+  function procLockRelease() {
+    _procLockedKey = null;
+    var lock = procGetLock();
+    if (lock) { try { lock.release(); } catch (e) {} }
+  }
+
+  /* Desalojo: otro dispositivo abrió la misma sesión.
+     Guarda el trabajo, cierra la sesión y vuelve al dashboard.
+     El toast lo muestra el propio SessionLock. */
+  function procLockOnEvicted() {
+    _procLockedKey = null;
+    try { if (_isSynced && _activeSessionKey) procSaveSession(true); } catch (e) {}
+
+    procHideFloatingButtons();
+    _isSynced         = false;
+    _activeSessionKey = null;
+    _procInited       = false;
+    faturaCount       = 0;
+    activeFaturas     = [];
+    Object.keys(rowCounts).forEach(function (k) { delete rowCounts[k]; });
+    _procSentRefs = {};
+    var cont = document.getElementById('proc-faturasContainer');
+    if (cont) cont.innerHTML = '';
+
+    function backToDashboard() {
+      var backBtn = document.getElementById('adm-back-btn');
+      if (backBtn) { backBtn._procBound = false; backBtn.click(); }
+    }
+
+    var overlay = document.getElementById('processamento-overlay');
+    if (overlay) {
+      overlay.classList.remove('visible');
+      setTimeout(function () {
+        overlay.classList.remove('open');
+        backToDashboard();
+      }, 650);
+    } else {
+      backToDashboard();
+    }
+  }
+
   function labelFromKey(key) {
     var stripped = key.replace(SESSION_PREFIX, '');
     /* detect suffix like _2, _3 */
@@ -1211,7 +1284,7 @@
           cb: function() {
             procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key), { method: 'DELETE' }).catch(function(){});
             try { localStorage.removeItem(key); } catch(e) {}
-            if (_activeSessionKey === key) _activeSessionKey = null;
+            if (_activeSessionKey === key) { _activeSessionKey = null; procLockRelease(); }
             procRenderSessionMenu();
           }
         },
@@ -3251,6 +3324,7 @@
 
   /* Show/hide between start panel and main work area */
   function procShowMainArea(key) {
+    procLockAcquire(key);   /* sesión activa → tomar lock (expulsa a otro dispositivo en la misma sesión) */
     var start = document.getElementById('proc-session-start');
     var main  = document.getElementById('proc-main-area');
     var addBtn = document.getElementById('proc-addFaturaBtn');
@@ -3308,6 +3382,7 @@
           style: 'background:#F5EAEA;border:1px solid #e8c5c5;color:#9B4D4D;font-weight:700;',
           cb: function() {
             if (_isSynced) procSaveSession(true);
+            procLockRelease();
             setTimeout(function() {
               _isSynced = false;
               _activeSessionKey = null;
@@ -3361,6 +3436,7 @@
         var backBtn = document.getElementById('adm-back-btn');
         if (!backBtn) return;
         if (_isSynced) procSaveSession(false);
+        procLockRelease();
         procHideFloatingButtons();
         _isSynced         = false;
         _activeSessionKey = null;
@@ -3396,6 +3472,7 @@
         if (!_isSynced || !_activeSessionKey) return;
         e.stopImmediatePropagation();
         if (_isSynced) procSaveSession(false);
+        procLockRelease();
         procHideFloatingButtons();
         _isSynced         = false;
         _activeSessionKey = null;
@@ -3440,6 +3517,7 @@
   /* ── procDoCloseSession: guarda e reseta o estado da sessão ── */
   function procDoCloseSession() {
     if (_isSynced && _activeSessionKey) procSaveSession(false);
+    procLockRelease();
     _isSynced         = false;
     _activeSessionKey = null;
     _procInited       = false;

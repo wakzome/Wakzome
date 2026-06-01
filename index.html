@@ -1356,6 +1356,11 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 @media (min-width: 601px) and (max-width: 860px) {
   #adm-module-grid { grid-template-columns: repeat(3, 1fr); }
 }
+/* Inicio: reservar la franja del panel lateral en la banda donde el mosaico centrado lo pisaría.
+   Simétrico para mantener el mosaico centrado y sin saltos al redimensionar. */
+@media (min-width: 1025px) and (max-width: 1244px) {
+  #adm-dashboard { padding-left: 192px; padding-right: 192px; }
+}
 
 .results-wrap { width: 100%; max-width: 700px; overflow-x: auto; }
 .row-num { color: #000; font-size: .78rem; text-align: center !important; min-width: 24px; }
@@ -2017,6 +2022,8 @@ input, textarea { cursor: text !important; }
 #saft-faturas-count.warn   { color: #c05000; }
 #saft-agenda-btn:hover { border-color: #555; color: #000; background: #f7f7f7; }
 @media (max-width: 1024px) { #saft-reminder { display: none !important; } }
+/* Panel lateral oculto mientras hay un módulo abierto (libera o botão início y evita solapamiento) */
+#admin-app.module-open ~ #saft-reminder { display: none !important; }
 
 #tab-editor.active {
   display: flex; flex-direction: column;

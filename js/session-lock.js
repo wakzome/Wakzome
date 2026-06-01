@@ -31,25 +31,55 @@
   var SL_HEARTBEAT = 5000;    // 5 s — renew + reconcile ownership
   var SL_LOCK_TTL  = 20000;   // 20 s — lock considered stale if no heartbeat
 
-  /* ── Generate a unique tab identifier (survives page JS reloads) ── */
+  /* ── Unique client identifier, generated ONCE per page load, in memory ──
+     Deliberately NOT persisted in sessionStorage: that storage is copied on
+     "duplicate tab" and can be restored across contexts, producing identical
+     ids on what should be independent clients — which silently disables the
+     mutex. An in-memory id guarantees every page context (any tab, any
+     device, incognito or not) is treated as a distinct client.
+     A page reload generates a new id and the tab simply re-claims its own
+     lock; that transition is harmless (no self-eviction toast).            */
+  var SL_TAB_ID = null;
   function slTabId() {
-    var key = '__sl_tab_id__';
+    if (SL_TAB_ID) return SL_TAB_ID;
+    var id = null;
     try {
-      var id = sessionStorage.getItem(key);
-      if (!id) {
-        id = 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-        sessionStorage.setItem(key, id);
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        id = 'tab_' + crypto.randomUUID();
       }
-      return id;
-    } catch (e) {
-      return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+    } catch (e) {}
+    if (!id) {
+      id = 'tab_' + Date.now() +
+           '_' + Math.random().toString(36).slice(2, 11) +
+           '_' + Math.random().toString(36).slice(2, 11);
     }
+    SL_TAB_ID = id;
+    return id;
   }
 
-  /* ── Resolve the PostgREST endpoint + auth headers from the client ──
+  /* ── Resolve the PostgREST endpoint + auth headers ──
      Used for the keepalive DELETE on browser close, where a normal
-     supabase-js async call would be cancelled mid-flight.            */
+     supabase-js async call would be cancelled mid-flight.
+     Primary source: the globals published by supabase-config.js
+     (SUPABASE_URL / SUPABASE_KEY / ADMIN_TOKEN). Fallback: client
+     internals, whose shape varies between supabase-js versions.       */
   function slRestEndpoint(sb) {
+    /* 1. App globals (authoritative, version-independent). */
+    try {
+      if (typeof window !== 'undefined' && window.SUPABASE_URL && window.SUPABASE_KEY) {
+        var headers = {
+          apikey:        window.SUPABASE_KEY,
+          Authorization: 'Bearer ' + window.SUPABASE_KEY,
+          'Content-Type': 'application/json'
+        };
+        if (window.ADMIN_TOKEN) headers['x-admin-token'] = window.ADMIN_TOKEN;
+        return {
+          url: String(window.SUPABASE_URL).replace(/\/+$/, '') + '/rest/v1',
+          headers: headers
+        };
+      }
+    } catch (e) {}
+    /* 2. Fallback: supabase-js v2 client internals. */
     try {
       if (sb && sb.rest && sb.rest.url && sb.rest.headers) {
         return { url: String(sb.rest.url).replace(/\/+$/, ''), headers: sb.rest.headers };
@@ -193,6 +223,7 @@
     this._evicting    = false;
 
     var sb = this._sb;
+    console.info('SessionLock: acquire', { module: this._module, session: sessionName, tab: this._tabId });
 
     /* 1. Check for an existing, non-stale lock held by a different tab. */
     try {
@@ -211,6 +242,7 @@
 
         if (isOther && !isStale) {
           /* Another tab holds a fresh lock — notify it (fast path) and take over. */
+          console.info('SessionLock: taking over from', row.tab_id, '→ broadcasting evict');
           await this._notifyEviction(sessionName);
         }
       }
@@ -368,6 +400,7 @@
   SessionLockInstance.prototype._handleEviction = function () {
     if (this._evicting || !this._sessionName) return;
     this._evicting = true;
+    console.info('SessionLock: evicted — another client took session', this._sessionName);
 
     this._stopHeartbeat();
     this._unsubscribe();

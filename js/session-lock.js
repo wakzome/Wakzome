@@ -1,21 +1,35 @@
 // ══════════════════════════════════════════════════════════════
 //  SESSION LOCK — Generic mutex for module sessions
-//  Prevents two tabs from working on the same session simultaneously.
+//  Prevents two tabs/devices from working on the same session at once.
 //
 //  Usage (in each module):
 //    var lock = SessionLock.create('parfois', sbAdmin);
 //    await lock.acquire(sessionName, onEvicted);   // when opening
 //    await lock.release();                          // when closing
 //
-//  onEvicted: function called when another tab claims the same session.
-//             Should save and close the module.
+//  onEvicted: function called when another tab/device claims the same
+//             session. Should save and close the module.
+//
+//  Eviction is detected by TWO independent mechanisms:
+//    1. Realtime broadcast  — fast path, near-instant when available.
+//    2. Heartbeat reconciliation — authoritative fallback that works
+//       even if Realtime is disabled/unreachable (latency ≤ heartbeat).
+//
+//  The lock row is removed when the session ends, both when the user
+//  closes the module (release) and when the browser/tab closes
+//  (pagehide / beforeunload via keepalive fetch).
+//
+//  Schema expected:
+//    module_session_locks(module_name text, session_name text,
+//                          tab_id text, locked_at timestamptz)
+//    UNIQUE (module_name, session_name)
 // ══════════════════════════════════════════════════════════════
 (function (global) {
   'use strict';
 
   var SL_TABLE     = 'module_session_locks';
-  var SL_HEARTBEAT = 10000;   // 10 s — renew lock
-  var SL_LOCK_TTL  = 25000;   // 25 s — lock considered stale if no heartbeat
+  var SL_HEARTBEAT = 5000;    // 5 s — renew + reconcile ownership
+  var SL_LOCK_TTL  = 20000;   // 20 s — lock considered stale if no heartbeat
 
   /* ── Generate a unique tab identifier (survives page JS reloads) ── */
   function slTabId() {
@@ -30,6 +44,26 @@
     } catch (e) {
       return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
     }
+  }
+
+  /* ── Resolve the PostgREST endpoint + auth headers from the client ──
+     Used for the keepalive DELETE on browser close, where a normal
+     supabase-js async call would be cancelled mid-flight.            */
+  function slRestEndpoint(sb) {
+    try {
+      if (sb && sb.rest && sb.rest.url && sb.rest.headers) {
+        return { url: String(sb.rest.url).replace(/\/+$/, ''), headers: sb.rest.headers };
+      }
+    } catch (e) {}
+    try {
+      if (sb && sb.supabaseUrl && sb.supabaseKey) {
+        return {
+          url: String(sb.supabaseUrl).replace(/\/+$/, '') + '/rest/v1',
+          headers: { apikey: sb.supabaseKey, Authorization: 'Bearer ' + sb.supabaseKey }
+        };
+      }
+    } catch (e) {}
+    return null;
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -140,24 +174,27 @@
      LOCK INSTANCE
   ══════════════════════════════════════════════════════════════ */
   function SessionLockInstance(moduleName, sb) {
-    this._module      = moduleName;
-    this._sb          = sb;
-    this._tabId       = slTabId();
-    this._sessionName = null;
-    this._channel     = null;
-    this._heartbeat   = null;
-    this._onEvicted   = null;
+    this._module       = moduleName;
+    this._sb           = sb;
+    this._tabId        = slTabId();
+    this._sessionName  = null;
+    this._channel      = null;
+    this._heartbeat    = null;
+    this._onEvicted    = null;
+    this._evicting     = false;
+    this._unloadBound  = false;
+    this._unloadHandler = null;
   }
 
   /* ── Acquire lock for a session ── */
   SessionLockInstance.prototype.acquire = async function (sessionName, onEvicted) {
     this._sessionName = sessionName;
     this._onEvicted   = onEvicted || function () {};
+    this._evicting    = false;
 
-    var self = this;
-    var sb   = this._sb;
+    var sb = this._sb;
 
-    /* 1. Check for existing non-stale lock from a different tab */
+    /* 1. Check for an existing, non-stale lock held by a different tab. */
     try {
       var existing = await sb
         .from(SL_TABLE)
@@ -167,13 +204,13 @@
         .limit(1);
 
       if (!existing.error && existing.data && existing.data.length) {
-        var row      = existing.data[0];
-        var age      = Date.now() - new Date(row.locked_at).getTime();
-        var isOther  = row.tab_id !== this._tabId;
-        var isStale  = age > SL_LOCK_TTL;
+        var row     = existing.data[0];
+        var age     = Date.now() - new Date(row.locked_at).getTime();
+        var isOther = row.tab_id !== this._tabId;
+        var isStale = age > SL_LOCK_TTL;
 
         if (isOther && !isStale) {
-          /* Another tab holds a fresh lock — notify via Realtime and take over */
+          /* Another tab holds a fresh lock — notify it (fast path) and take over. */
           await this._notifyEviction(sessionName);
         }
       }
@@ -181,36 +218,42 @@
       console.warn('SessionLock: error checking existing lock', e);
     }
 
-    /* 2. Upsert our lock */
+    /* 2. Claim the lock (upsert wins by last write). */
     await this._upsertLock();
 
-    /* 3. Subscribe to eviction events from other tabs */
+    /* 3. Subscribe to eviction broadcasts from other tabs (fast path). */
     this._subscribe();
 
-    /* 4. Start heartbeat */
+    /* 4. Ensure the row is removed if the browser/tab closes. */
+    this._bindUnload();
+
+    /* 5. Start heartbeat (renew + authoritative reconciliation). */
     this._startHeartbeat();
   };
 
-  /* ── Release lock (call on module close) ── */
+  /* ── Release lock (call on module close → dashboard) ── */
   SessionLockInstance.prototype.release = async function () {
     this._stopHeartbeat();
     this._unsubscribe();
+    this._unbindUnload();
 
-    if (!this._sessionName) return;
+    var name = this._sessionName;
+    this._sessionName = null;
+    if (!name) return;
+
     try {
       await this._sb
         .from(SL_TABLE)
         .delete()
         .eq('module_name', this._module)
-        .eq('session_name', this._sessionName)
+        .eq('session_name', name)
         .eq('tab_id', this._tabId);
     } catch (e) {
       console.warn('SessionLock: error releasing lock', e);
     }
-    this._sessionName = null;
   };
 
-  /* ── Upsert our lock row ── */
+  /* ── Claim/reclaim our lock row (last-write-wins) ── */
   SessionLockInstance.prototype._upsertLock = async function () {
     if (!this._sessionName) return;
     try {
@@ -225,32 +268,33 @@
     }
   };
 
-  /* ── Notify existing tab via Realtime broadcast ── */
+  /* ── Notify existing tab via Realtime broadcast (best-effort) ── */
   SessionLockInstance.prototype._notifyEviction = async function (sessionName) {
     var channelName = 'sl_' + this._module + '_' + sessionName.replace(/\s/g, '_');
     var ch = this._sb.channel(channelName);
+    var sb = this._sb;
     try {
       await new Promise(function (resolve) {
         ch.subscribe(function (status) {
           if (status === 'SUBSCRIBED') {
-            ch.send({
-              type:    'broadcast',
-              event:   'evict',
-              payload: {}
-            }).then(resolve).catch(resolve);
+            ch.send({ type: 'broadcast', event: 'evict', payload: {} })
+              .then(resolve)
+              .catch(resolve);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            resolve();
           }
         });
-        /* Safety timeout */
+        /* Safety timeout — never block acquisition on Realtime. */
         setTimeout(resolve, 3000);
       });
     } catch (e) {
       console.warn('SessionLock: error sending eviction broadcast', e);
     } finally {
-      try { this._sb.removeChannel(ch); } catch (e2) {}
+      try { sb.removeChannel(ch); } catch (e2) {}
     }
   };
 
-  /* ── Subscribe to eviction events targeting this tab ── */
+  /* ── Subscribe to eviction events for our session ── */
   SessionLockInstance.prototype._subscribe = function () {
     if (!this._sessionName) return;
     var self        = this;
@@ -261,7 +305,12 @@
       .on('broadcast', { event: 'evict' }, function () {
         self._handleEviction();
       })
-      .subscribe();
+      .subscribe(function (status) {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          /* Realtime unavailable — heartbeat reconciliation covers it. */
+          console.warn('SessionLock: realtime subscribe status', status);
+        }
+      });
   };
 
   /* ── Unsubscribe from Realtime channel ── */
@@ -272,30 +321,134 @@
     }
   };
 
-  /* ── Handle incoming eviction ── */
+  /* ── Browser/tab close → remove our lock row reliably ── */
+  SessionLockInstance.prototype._bindUnload = function () {
+    if (this._unloadBound) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    var self = this;
+    this._unloadHandler = function () { self._beaconRelease(); };
+    window.addEventListener('pagehide', this._unloadHandler);
+    window.addEventListener('beforeunload', this._unloadHandler);
+    this._unloadBound = true;
+  };
+
+  SessionLockInstance.prototype._unbindUnload = function () {
+    if (!this._unloadBound) return;
+    try {
+      window.removeEventListener('pagehide', this._unloadHandler);
+      window.removeEventListener('beforeunload', this._unloadHandler);
+    } catch (e) {}
+    this._unloadHandler = null;
+    this._unloadBound   = false;
+  };
+
+  /* ── Best-effort, survives page unload (keepalive). Deletes ONLY our row. ── */
+  SessionLockInstance.prototype._beaconRelease = function () {
+    if (!this._sessionName) return;
+    if (typeof fetch !== 'function') return;
+    var ep = slRestEndpoint(this._sb);
+    if (!ep) return;
+
+    var q = '/' + SL_TABLE +
+      '?module_name=eq.'  + encodeURIComponent(this._module) +
+      '&session_name=eq.' + encodeURIComponent(this._sessionName) +
+      '&tab_id=eq.'       + encodeURIComponent(this._tabId);
+
+    try {
+      fetch(ep.url + q, {
+        method:    'DELETE',
+        headers:   ep.headers,
+        keepalive: true,
+        cache:     'no-store'
+      }).catch(function () {});
+    } catch (e) {}
+  };
+
+  /* ── Handle incoming eviction (broadcast or heartbeat). Idempotent. ── */
   SessionLockInstance.prototype._handleEviction = function () {
+    if (this._evicting || !this._sessionName) return;
+    this._evicting = true;
+
     this._stopHeartbeat();
     this._unsubscribe();
+    this._unbindUnload();   /* the new owner holds the row now — do not delete it */
     this._sessionName = null;
 
-    /* Show toast, then call the module's onEvicted callback */
     slShowEvictionToast();
 
     var cb = this._onEvicted;
     this._onEvicted = null;
 
-    /* Small delay so toast renders before the UI closes */
+    /* Small delay so the toast renders before the UI closes. */
     setTimeout(function () {
-      try { cb(); } catch (e) {}
+      try { if (cb) cb(); } catch (e) {}
     }, 600);
   };
 
-  /* ── Heartbeat: renew locked_at every SL_HEARTBEAT ms ── */
+  /* ── Heartbeat: renew ownership (race-safe) and reconcile against DB ── */
+  SessionLockInstance.prototype._tick = async function () {
+    if (!this._sessionName || this._evicting) return;
+    var sb   = this._sb;
+    var name = this._sessionName;
+
+    try {
+      /* Conditional renew: only touches the row if WE still own it.
+         A concurrent take-over (different tab_id) makes this match 0 rows. */
+      var upd = await sb
+        .from(SL_TABLE)
+        .update({ locked_at: new Date().toISOString() })
+        .eq('module_name', this._module)
+        .eq('session_name', name)
+        .eq('tab_id', this._tabId)
+        .select('tab_id');
+
+      /* Network/DB error → skip this tick; never evict on uncertainty. */
+      if (upd.error) return;
+
+      /* Still ours → done. */
+      if (upd.data && upd.data.length) return;
+
+      /* Session changed underneath us while awaiting → abort. */
+      if (this._sessionName !== name || this._evicting) return;
+
+      /* 0 rows updated → we no longer own the row. Find out why. */
+      var cur = await sb
+        .from(SL_TABLE)
+        .select('tab_id, locked_at')
+        .eq('module_name', this._module)
+        .eq('session_name', name)
+        .limit(1);
+
+      if (cur.error) return;                              /* skip on error */
+      if (this._sessionName !== name || this._evicting) return;
+
+      if (!cur.data || !cur.data.length) {
+        /* Row was deleted by someone — reclaim it for ourselves. */
+        await this._upsertLock();
+        return;
+      }
+
+      var row = cur.data[0];
+      var age = Date.now() - new Date(row.locked_at).getTime();
+
+      if (row.tab_id !== this._tabId && age <= SL_LOCK_TTL) {
+        /* A live tab/device has taken the session → we are evicted. */
+        this._handleEviction();
+        return;
+      }
+
+      /* Owner is stale (dead) → reclaim. */
+      await this._upsertLock();
+    } catch (e) {
+      /* Swallow: a transient failure must never evict the active user. */
+    }
+  };
+
   SessionLockInstance.prototype._startHeartbeat = function () {
     var self = this;
     this._stopHeartbeat();
     this._heartbeat = setInterval(function () {
-      self._upsertLock();
+      self._tick();
     }, SL_HEARTBEAT);
   };
 

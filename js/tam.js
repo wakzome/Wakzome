@@ -154,6 +154,53 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     SESSION LOCK — reutiliza el SessionLock global (session-lock.js).
+     Comparte la tabla 'module_session_locks' discriminando por
+     module_name='tam'. Si dos dispositivos abren EXACTAMENTE la misma
+     sesión (mismo session_name), el nuevo expulsa al anterior, que
+     guarda y vuelve al dashboard.
+  ══════════════════════════════════════════════════════════════ */
+  var _tamLock      = null;
+  var _tamLockedKey = null;
+
+  function tamGetLock() {
+    if (!_tamLock && typeof SessionLock !== 'undefined') {
+      var sb = tamSB();
+      if (sb) _tamLock = SessionLock.create('tam', sb);
+    }
+    return _tamLock;
+  }
+
+  /* Desalojo: otro dispositivo abrió la misma sesión. Reutiliza el
+     camino real de cierre (botão voltar): guarda, cierra y vuelve al
+     dashboard. El toast lo muestra el propio SessionLock. */
+  function tamLockOnEvicted() {
+    _tamLockedKey = null;
+    var backBtn = document.getElementById('adm-back-btn');
+    if (backBtn) backBtn.click();
+  }
+
+  /* Sincroniza el lock con la sesión activa. Idempotente: no re-adquiere
+     la misma sesión; si se cambió de sesión, libera la anterior primero. */
+  function tamLockSync() {
+    var name = (tamSession && tamSession.name) ? tamSession.name : null;
+    if (!name) return;
+    var lock = tamGetLock();
+    if (!lock) return;
+    if (_tamLockedKey === name) return;
+    if (_tamLockedKey) { try { lock.release(); } catch (e) {} }
+    _tamLockedKey = name;
+    lock.acquire(name, tamLockOnEvicted);
+  }
+
+  /* Libera el lock (cierre normal de sesión). */
+  function tamLockRelease() {
+    _tamLockedKey = null;
+    var lock = tamGetLock();
+    if (lock) { try { lock.release(); } catch (e) {} }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      DRAG & DROP + FILE INPUT
   ══════════════════════════════════════════════════════════════ */
   var upLabel = document.getElementById('tam-upload-label') || document.getElementById('upload-label');
@@ -2528,6 +2575,7 @@
     if (tamAutoSaveTimer) clearInterval(tamAutoSaveTimer);
     // Guardar cada 15s de forma incondicional
     tamAutoSaveTimer = setInterval(function(){ tamSaveSession(false); }, 15000);
+    tamLockSync();   /* sesión activa → tomar/sincronizar lock */
   }
 
   function tamScheduleSave() {
@@ -2952,6 +3000,7 @@
     var all = tamLoadAllSessionsLocal();
     delete all[key];
     localStorage.setItem('tam_sessions', JSON.stringify(all));
+    if (tamSession && tamSession.name === key) tamLockRelease();
     // Supabase async
     var sb = tamSB();
     if (sb) {
@@ -7128,6 +7177,7 @@
       function tamDoCloseSession() {
         // Save current session first, then close after save completes
         tamSaveSession(false);
+        tamLockRelease();
         // Reset state
         tamInvoices       = [];
         tamEngineCache    = {};

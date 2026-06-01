@@ -327,6 +327,7 @@ function agInjectStyle() {
 }
 
 var _agHtmlInjected = false;
+var _agRefreshDate = null;
 function agInjectHtml() {
   if (_agHtmlInjected) return;
   _agHtmlInjected = true;
@@ -342,6 +343,7 @@ window.openAgendaOverlay = function () {
   ov.classList.add('open');
   requestAnimationFrame(function () { requestAnimationFrame(function () { ov.classList.add('visible'); }); });
   agInjectHtml();
+  if (_agRefreshDate) _agRefreshDate();
   var yn = document.getElementById('ag-year-nav');
   if (yn) yn.classList.add('ag-visible');
 };
@@ -873,6 +875,42 @@ function agBindLogic() {
     if(btn.classList.contains('ag-del')){if(isReadonly())return;if(confirm('Eliminar esta fatura?')){agF=agF.filter(function(f){return f.id!==id;});save();rAll();snack('×','fatura eliminada');}}
     if(btn.classList.contains('ag-tp')){var f=agF.find(function(x){return x.id===id;});if(f){var ev=est(f);f.estado=(ev==='pago'||ev==='nc')?'pendente':'pago';save();if(f.estado==='pago')animPaid(id);else{rAll();snack('↩','marcada como pendente');}}}
   });
+
+  /* ── Blindaje de fecha ──────────────────────────────────────────
+     Evita que TODAY quede congelado en el día de la primera carga.
+     agBindLogic() solo corre una vez (guard _agHtmlInjected), por lo
+     que TODAY debe recalcularse activamente. Esta función reasigna las
+     variables de fecha del scope (TODAY, DAYS_TO_SUNDAY), refresca el
+     encabezado y re-renderiza. Es no-op si el día real no cambió, así
+     que invocarla repetidamente no tiene coste de render. */
+  function agRefreshDate(force){
+    var now=new Date();now.setHours(0,0,0,0);
+    if(!force&&now.getTime()===TODAY.getTime())return;
+    TODAY=now;
+    DAYS_TO_SUNDAY=(7-TODAY.getDay())%7;
+    var te=document.getElementById('ag-today');
+    if(te)te.textContent=TODAY.toLocaleDateString('pt-PT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toLowerCase();
+    rAll();
+  }
+  _agRefreshDate=agRefreshDate;
+  /* (1) Reapertura del módulo → openAgendaOverlay() llama a _agRefreshDate. */
+  /* (2) Pestaña/ventana que recupera el foco. */
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState!=='visible')return;
+    var ov=document.getElementById('agenda-overlay');
+    if(ov&&ov.classList.contains('open'))agRefreshDate();
+  });
+  window.addEventListener('focus',function(){
+    var ov=document.getElementById('agenda-overlay');
+    if(ov&&ov.classList.contains('open'))agRefreshDate();
+  });
+  /* (3) Vigía de medianoche: cubre el caso de la pestaña abierta y
+     enfocada cruzando las 00:00 sin interacción. Comprueba cada 30 s;
+     solo re-renderiza el día en que detecta el cambio. */
+  setInterval(function(){
+    var ov=document.getElementById('agenda-overlay');
+    if(ov&&ov.classList.contains('open'))agRefreshDate();
+  },30000);
 
   load(activeYear);
   setTimeout(function(){

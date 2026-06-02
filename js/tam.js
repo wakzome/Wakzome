@@ -883,8 +883,8 @@
               '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + idx + '" data-mode="undo">↩ desfazer</button>' +
             '</div>'
           : '<div class="tam-inv-quick-wrap">' +
-              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">100%FNC</button>' +
-              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">100%PXO</button>' +
+              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">FNC</button>' +
+              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">PS</button>' +
               '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + idx + '" data-mode="split">50/50</button>' +
             '</div>';
 

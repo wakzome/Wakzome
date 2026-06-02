@@ -805,8 +805,8 @@
       } else {
         singleQuick.innerHTML =
           '<span class="tam-quick-label">distribuição rápida:</span>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">100%FNC</button>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">100%PXO</button>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">FNC</button>' +
+          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">PS</button>' +
           '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50 / 50</button>';
       }
       singleQuick.querySelectorAll('[data-mode]').forEach(function(btn){

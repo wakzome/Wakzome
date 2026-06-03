@@ -889,20 +889,28 @@
             '</div>';
 
         hdr.innerHTML =
-          '<button class="tam-inv-toggle-btn" data-inv="' + idx + '" title="expandir / minimizar">&#9660;</button>' +
-          '<span class="tam-inv-num">' + tamEsc(r.invoiceNo) + '</span>' +
-          '<span class="tam-inv-meta">' + tamEsc(r.invoiceDate) + ' · ' +
-          r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
-          r.shipPkgs + ' pac.</span>' +
-          '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
-          quickBtnsHtml +
-          '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
-            (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
-          '</button>' +
-          '<button class="tam-inv-stock-btn" data-inv="' + idx + '">📦 Ingreso de Stock</button>' +
-          '<button class="tam-inv-guia-btn" data-inv="' + idx + '">📋 Guía</button>' +
-          '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
-          '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>';
+          '<div class="tam-inv-hdr-row1">' +
+            '<button class="tam-inv-toggle-btn" data-inv="' + idx + '" title="expandir / minimizar">&#9660;</button>' +
+            '<span class="tam-inv-num">' + tamEsc(r.invoiceNo) + '</span>' +
+            '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>' +
+          '</div>' +
+          '<div class="tam-inv-hdr-row2">' +
+            '<span class="tam-inv-meta">' + tamEsc(r.invoiceDate) + ' · ' +
+            r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
+            r.shipPkgs + ' pac.</span>' +
+          '</div>' +
+          '<div class="tam-inv-hdr-row3">' +
+            '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
+          '</div>' +
+          '<div class="tam-inv-hdr-btns">' +
+            quickBtnsHtml +
+            '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
+              (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
+            '</button>' +
+            '<button class="tam-inv-stock-btn" data-inv="' + idx + '">📦 Ingreso de Stock</button>' +
+            '<button class="tam-inv-guia-btn" data-inv="' + idx + '">📋 Guía</button>' +
+            '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
+          '</div>';
         block.appendChild(hdr);
         hdr.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn){
           btn.addEventListener('click', function(){
@@ -6438,7 +6446,13 @@
 /* ── Invoice blocks (proc style — clean, white) ── */
       '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:40px; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; }',
       '.tam-invoice-block:last-of-type { border-bottom:none; padding-bottom:0; }',
-      '.tam-invoice-block-header { display:flex; align-items:center; gap:10px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; border:1px solid #e0e0e0; border-bottom:none; flex-wrap:wrap; }',
+      '.tam-invoice-block-header { display:flex; flex-direction:column; align-items:center; gap:4px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; border:1px solid #e0e0e0; border-bottom:none; }',
+      '.tam-inv-hdr-row1 { display:flex; align-items:center; width:100%; justify-content:center; position:relative; }',
+      '.tam-inv-hdr-row1 .tam-inv-toggle-btn { position:absolute; left:0; }',
+      '.tam-inv-hdr-row1 .tam-inv-remove-btn { position:absolute; right:0; }',
+      '.tam-inv-hdr-row2 { text-align:center; }',
+      '.tam-inv-hdr-row3 { text-align:center; margin-bottom:4px; }',
+      '.tam-inv-hdr-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }',
       /* Single unified header look — no color variants */
       '.tam-inv-color-0,.tam-inv-color-1,.tam-inv-color-2,.tam-inv-color-3,.tam-inv-color-4,.tam-inv-color-5 { background:transparent!important; border-bottom:none!important; }',
       /* All text in header: black */
@@ -6456,8 +6470,8 @@
       '.tam-invoice-block-header .tam-inv-quick-undo { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
       '.tam-invoice-block-header .tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.12)!important; }',
       '.tam-inv-num { font-size:1.5rem; font-weight:800; color:#000!important; letter-spacing:.02em; }',
-      '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; flex:1; }',
-      '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; margin-left:auto; }',
+      '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; }',
+      '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; }',
       '.tam-inv-table-wrap { overflow-x:auto; border:1px solid #e0e0e0; border-top:none; border-radius:0 0 12px 12px; }',
       '.tam-inv-separator { height:3px; background:#000; margin:40px 0; width:100%; max-width:960px; }',
       /* Validation banner inside block */
@@ -7081,10 +7095,10 @@
       /* Sessions dropdown — prevent off-screen right */
       '  #tam-sessions-dropdown { position:fixed!important; top:auto!important; right:12px!important; left:12px!important; width:auto!important; max-width:none!important; border-radius:12px; }',
       /* Invoice block header — stack and shrink buttons */
-      '  .tam-invoice-block-header { gap:6px; padding:14px 14px; flex-wrap:wrap; }',
+      '  .tam-invoice-block-header { gap:4px; padding:14px 14px; }',
       '  .tam-inv-num { font-size:1.1rem!important; }',
-      '  .tam-inv-total { font-size:1rem!important; margin-left:0!important; }',
-      '  .tam-inv-meta { font-size:.7rem!important; opacity:.5; flex:1 1 100%; order:3; }',
+      '  .tam-inv-total { font-size:1rem!important; }',
+      '  .tam-inv-meta { font-size:.7rem!important; opacity:.5; }',
       '  .tam-invoice-block-header button:not(.tam-inv-toggle-btn) { font-size:.68rem!important; padding:3px 8px!important; }',
       '  .tam-inv-quick-wrap { flex-wrap:wrap; gap:3px; }',
       /* Invoice meta single (above table) */

@@ -6342,25 +6342,15 @@
       '.tam-dialog-btn-new { border-color:#555; background:#fff; color:#000; }',
       '.tam-dialog-btn-new:hover { background:#f0f0f0; border-color:#555; }',
       /* ── Session bar ── */
-      '#tam-session-name { font-size:.82rem; font-weight:700; flex:1; min-width:120px; max-width:240px; border:1px solid #e0e0e0; background:#fafafa!important; outline:none; color:#000!important; font-family:\'MontserratLight\',sans-serif; padding:6px 10px; border-radius:8px; transition:border-color 0.15s; }',
-      '#tam-session-name:focus { border-color:#000; background:#fff!important; color:#000!important; }',
-      '#tam-session-name::placeholder { color:#999!important; }',
-      '#tam-session-status { font-size:.72rem; font-weight:700; color:#4A7C6F; white-space:nowrap; min-width:90px; }',
+      '#tam-session-status { font-size:.62rem; font-weight:700; color:#4A7C6F; white-space:nowrap; flex-basis:100%; text-align:center; min-height:14px; order:10; }',
       '#tam-status-msg { font-weight:700!important; font-size:.82rem!important; color:#000; }',
       '#tam-dn-count { color:#000!important; font-weight:700!important; font-size:.75rem; }',
       '#tam-session-status.saved { color:#4A7C6F!important; }',
-      /* Save button */
-      '#tam-save-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
-      '#tam-save-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '#tam-save-btn.visible { display:inline-flex!important; align-items:center; justify-content:center; }',
-      /* Guia bar button (icon-only, same as save/fechar) */
-      '#tam-guia-bar-btn { display:none; padding:7px 12px; font-size:.92rem; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
-      '#tam-guia-bar-btn:hover { background:#f0f0f0; border-color:#555; }',
-      /* Fechar button icon-only sizing */
+      '#tam-save-btn { display:none; }',
+      '#tam-save-btn.visible { display:inline-flex!important; }',
+      '#tam-guia-bar-btn { display:none; }',
       '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
       '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
-      /* DN buttons icon-only sizing */
-      '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { padding:7px 12px!important; font-size:.92rem!important; line-height:1!important; }',
 
       /* ── Sessions dropdown (proc style) ── */
       '.tam-sessions-dropdown-wrap { position:relative; }',
@@ -6415,8 +6405,8 @@
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */
-      '.tam-session-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; }',
-      '.tam-session-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-session-btn { width:52px; height:52px; border-radius:50%; border:1px solid #ccc; background:transparent; color:#000; font-size:.48rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; text-align:center; transition:background .15s,border-color .15s,color .15s; white-space:normal; line-height:1.25; flex-shrink:0; padding:0; }',
+      '.tam-session-btn:hover { background:#000; border-color:#000; color:#fff; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6551,11 +6541,10 @@
       '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
 
       /* ── Session bar — responsive for mobile ── */
-      '#tam-session-bar { display:flex!important; align-items:center; justify-content:space-between; gap:8px; width:100%; max-width:1400px; padding:8px 0 12px; flex-wrap:wrap; box-sizing:border-box; }',
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:12px; width:100%; max-width:1400px; padding:12px 0; flex-wrap:wrap; box-sizing:border-box; }',
       '@media (max-width:600px) {',
-      '  #tam-session-bar { flex-wrap:wrap; gap:6px; }',
-      '  #tam-session-name { max-width:100%; min-width:0; flex:1 1 100%; }',
-      '  .tam-session-btn, #tam-save-btn, #tam-close-session-btn { font-size:.7rem!important; padding:6px 10px!important; }',
+      '  #tam-session-bar { gap:8px; padding:8px 0; }',
+      '  .tam-session-btn { width:44px!important; height:44px!important; font-size:.44rem!important; }',
       '}',
 
       /* ── Box column alternating (proc style — clean) ── */
@@ -7105,9 +7094,8 @@
       '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; }',
       '  #tam-invoice-meta button { font-size:.7rem!important; padding:5px 10px!important; }',
       /* Session bar */
-      '  #tam-session-bar { flex-wrap:wrap; gap:6px; padding:8px 0; }',
-      '  #tam-session-name { max-width:100%; min-width:0; flex:1 1 140px; font-size:.78rem; }',
-      '  .tam-session-btn, #tam-save-btn, #tam-close-session-btn { font-size:.7rem!important; padding:5px 10px!important; white-space:nowrap; }',
+      '  #tam-session-bar { gap:8px; padding:8px 0; }',
+      '  .tam-session-btn { width:44px!important; height:44px!important; font-size:.44rem!important; }',
       /* Reception area */
       '  .tam-rec-quick-btns { padding:8px 12px; gap:6px; }',
       '  .tam-quick-btn { font-size:.72rem!important; padding:5px 10px!important; }',
@@ -7141,34 +7129,26 @@
       bar.id = 'tam-session-bar';
       bar.style.cssText = 'display:flex!important;';   // visible desde el inicio
       bar.innerHTML =
-        '<input type="text" id="tam-session-name" placeholder="nome da sessão">' +
-        '<span id="tam-session-status"></span>' +
         '<div class="tam-sessions-dropdown-wrap">' +
-          '<button class="tam-session-btn" id="tam-sessions-btn">📋 sessões ▾</button>' +
+          '<button class="tam-session-btn" id="tam-sessions-btn">sessões</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>' +
-        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾</button>' +
-        '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">📋</button>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">' +
-          '\ud83d\udce6' +
+        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">save</button>' +
+        '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">guía</button>' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">DN' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf,.xlsx,.xls" multiple style="display:none">' +
         '</label>' +
         '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
-        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
-          '\ud83d\udcf7' +
+        '<button id="tam-ean-tool-btn" class="tam-session-btn" title="Códigos EAN" style="display:none">EAN</button>' +
+        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">CAM' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
         '</label>' +
-        '<button id="tam-ean-tool-btn" title="Códigos EAN" style="padding:0;width:28px;height:28px;border:none;background:transparent;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:#000;line-height:1;">&#9654;</button>';
+        '<span id="tam-session-status"></span>';
 
       // Insertar ANTES del upload-zone para que aparezca en la parte superior
       var uz = document.getElementById('tam-upload-zone');
       if (uz) uz.parentNode.insertBefore(bar, uz);
       else tab.insertBefore(bar, tab.firstChild);
-
-      bar.querySelector('#tam-session-name').addEventListener('change', function(e){
-        if (tamSession) tamSession.name = e.target.value;
-        tamScheduleSave();
-      });
 
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });

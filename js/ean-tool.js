@@ -110,19 +110,22 @@
     '.ean-ref-top-line { display:flex; align-items:baseline; gap:10px; }',
     '.ean-ref-code { font-size:.9rem; font-weight:800; color:#111 !important; cursor:pointer; padding:1px 5px; border-radius:4px; border:1px solid transparent; transition:background .12s,border-color .12s; white-space:nowrap; user-select:none; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
     '.ean-ref-code:hover { background:#f0f0f0 !important; border-color:#ddd !important; }',
-    '.ean-ref-code.ean-copied { background:#e6f4e6 !important; border-color:#9cc49c !important; color:#2a6b2a !important; }',
-    '.ean-ref-name { font-size:.82rem; color:#888 !important; flex:1; cursor:pointer; padding:1px 5px; border-radius:4px; border:1px solid transparent; transition:background .12s; user-select:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:\'MontserratLight\',sans-serif; }',
+    '.ean-ref-code.ean-copied { background:#f0f0f0 !important; border-color:#111 !important; color:#000 !important; }',
+    '.ean-ref-name { font-size:.82rem; color:#111 !important; flex:0 1 auto; cursor:pointer; padding:1px 5px; border-radius:4px; border:1px solid transparent; transition:background .12s; user-select:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:\'MontserratLight\',sans-serif; }',
     '.ean-ref-name:hover { background:#f0f0f0 !important; border-color:#ddd !important; color:#555 !important; }',
-    '.ean-ref-name.ean-copied { background:#e6f4e6 !important; border-color:#9cc49c !important; color:#2a6b2a !important; }',
+    '.ean-ref-name.ean-copied { background:#f0f0f0 !important; border-color:#111 !important; color:#000 !important; }',
     '.ean-ref-name.ean-empty { color:#ccc !important; font-style:italic; }',
     '.ean-ref-pvp { font-size:.82rem; font-weight:700; color:#111 !important; cursor:pointer; padding:1px 5px; border-radius:4px; border:1px solid transparent; transition:background .12s; white-space:nowrap; flex-shrink:0; user-select:none; font-family:\'MontserratLight\',sans-serif; }',
     '.ean-ref-pvp:hover { background:#f0f0f0 !important; border-color:#ddd !important; }',
-    '.ean-ref-pvp.ean-copied { background:#e6f4e6 !important; border-color:#9cc49c !important; color:#2a6b2a !important; }',
+    '.ean-ref-pvp.ean-copied { background:#f0f0f0 !important; border-color:#111 !important; color:#000 !important; }',
     '.ean-ref-pvp.ean-empty { color:#ccc !important; }',
     '.ean-list { margin-top:6px; display:flex; flex-direction:column; gap:4px; }',
     '.ean-chip { display:block; width:100%; background:#f5f5f5 !important; border:1px solid #e8e8e8; border-radius:6px; padding:7px 12px; font-family:\'Courier New\',Courier,monospace; font-size:.82rem; color:#333 !important; cursor:pointer; transition:background .12s,border-color .12s; user-select:none; }',
     '.ean-chip:hover { background:#eee !important; border-color:#ccc !important; color:#111 !important; }',
-    '.ean-chip.ean-copied { background:#e6f4e6 !important; border-color:#9cc49c !important; color:#2a6b2a !important; }',
+    '.ean-chip.ean-copied { background:#eee !important; border-color:#111 !important; color:#111 !important; }',
+    '.ean-ref-code.ean-done, .ean-ref-name.ean-done, .ean-ref-pvp.ean-done { border-color:#111 !important; }',
+    '.ean-ref-code.ean-done::after, .ean-ref-name.ean-done::after, .ean-ref-pvp.ean-done::after { content:" ✓"; font-size:.72em; font-weight:700; color:#111; }',
+    '.ean-chip.ean-done { border-color:#111 !important; }',
     '.ean-chip.ean-invalid { border-color:#f0a0a0 !important; background:#fde8e8 !important; color:#9b1c1c !important; }',
     '.ean-empty-state { text-align:center; padding:48px 20px; display:none; }',
     '.ean-empty-state.ean-visible { display:block; }',
@@ -141,7 +144,9 @@
     '.ean-dn-label { font-size:.55rem; text-transform:uppercase; letter-spacing:.1em; color:#bbb !important; margin-right:2px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
     '.ean-dn-chip { font-family:\'Courier New\',monospace; font-size:.67rem; color:#aaa !important; background:#f8f8f8 !important; border:1px solid #eee; border-radius:4px; padding:2px 8px; cursor:pointer; transition:color .12s,border-color .12s,background .12s; user-select:none; white-space:nowrap; }',
     '.ean-dn-chip:hover { color:#555 !important; border-color:#ccc !important; background:#f0f0f0 !important; }',
-    '.ean-dn-chip.ean-copied { color:#2a6b2a !important; border-color:#9cc49c !important; background:#e6f4e6 !important; }',
+    '.ean-dn-chip.ean-copied { color:#000 !important; border-color:#111 !important; background:#eee !important; }',
+    '.ean-dn-chip.ean-done { border-color:#111 !important; }',
+    '.ean-dn-chip.ean-done::after { content:" ✓"; font-size:.72em; font-weight:700; color:#111; }',
 
     /* ── toast ── */
     '#ean-copy-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(8px); background:#222 !important; color:#fff !important; font-size:.7rem; padding:7px 16px; border-radius:100px; pointer-events:none; opacity:0; transition:opacity .18s,transform .18s; z-index:10002; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
@@ -1256,7 +1261,12 @@
   //  COPY
   // ═══════════════════════════════════════════════════════════════
   function copySimple(text, el, msg){
-    var ok = function(){ el.classList.add('ean-copied'); toast(msg||'Copiado'); setTimeout(function(){ el.classList.remove('ean-copied'); }, 1200); };
+    var ok = function(){
+      el.classList.add('ean-copied');
+      el.classList.add('ean-done');
+      toast(msg||'Copiado');
+      setTimeout(function(){ el.classList.remove('ean-copied'); }, 1200);
+    };
     if (navigator.clipboard){ navigator.clipboard.writeText(text).then(ok).catch(function(){ fallback(text); ok(); }); }
     else { fallback(text); ok(); }
   }
@@ -1264,7 +1274,11 @@
     var tsv  = eans.map(function(e){ return 'UN\t'+e; }).join('\n');
     var html = '<table>'+eans.map(function(e){ return '<tr><td>UN</td><td>'+e+'</td></tr>'; }).join('')+'</table>';
     var flash = function(){
-      Array.from(eanListEl.querySelectorAll('.ean-chip')).forEach(function(c){ c.classList.add('ean-copied'); setTimeout(function(){ c.classList.remove('ean-copied'); }, 1400); });
+      Array.from(eanListEl.querySelectorAll('.ean-chip')).forEach(function(c){
+        c.classList.add('ean-copied');
+        c.classList.add('ean-done');
+        setTimeout(function(){ c.classList.remove('ean-copied'); }, 1400);
+      });
       toast(eans.length+' EANs copiados · Pega en Excel: col A=UN, col B=EAN');
     };
     if (navigator.clipboard && window.ClipboardItem){

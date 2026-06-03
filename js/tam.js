@@ -6395,11 +6395,11 @@
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */
-      '.tam-session-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
+      '.tam-session-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
       '.tam-session-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
       '.tam-session-btn:hover { transform:scale(1.13); }',
       '.tam-session-btn:hover::after { left:0; right:0; }',
-      '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#bbb; font-size:.9rem; font-weight:300; pointer-events:none; }',
+      '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#555; font-size:1rem; font-weight:400; pointer-events:none; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6429,7 +6429,7 @@
 /* ── Invoice blocks (proc style — clean, white) ── */
       '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:40px; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; }',
       '.tam-invoice-block:last-of-type { border-bottom:none; padding-bottom:0; }',
-      '.tam-invoice-block-header { display:flex; flex-direction:column; align-items:center; gap:4px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; border:1px solid #e0e0e0; border-bottom:none; }',
+      '.tam-invoice-block-header { display:flex; flex-direction:column; align-items:center; gap:4px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; }',
       '.tam-inv-hdr-row1 { display:flex; align-items:center; width:100%; justify-content:center; position:relative; }',
       '.tam-inv-hdr-row1 .tam-inv-toggle-btn { position:absolute; left:0; }',
       '.tam-inv-hdr-row1 .tam-inv-remove-btn { position:absolute; right:0; }',
@@ -6458,7 +6458,7 @@
       '.tam-inv-num { font-size:1.5rem; font-weight:800; color:#000!important; letter-spacing:.02em; }',
       '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; }',
       '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; }',
-      '.tam-inv-table-wrap { overflow-x:auto; border:1px solid #e0e0e0; border-top:none; border-radius:0 0 12px 12px; }',
+      '.tam-inv-table-wrap { overflow-x:auto; border-radius:0 0 12px 12px; }',
       '.tam-inv-separator { height:3px; background:#000; margin:40px 0; width:100%; max-width:960px; }',
       /* Validation banner inside block */
       '.tam-inv-banner { display:flex; flex-wrap:wrap; gap:4px 20px; padding:10px 20px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border-bottom:1px solid #e0e0e0; border-left:1px solid #e0e0e0; border-right:1px solid #e0e0e0; }',

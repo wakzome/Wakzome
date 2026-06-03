@@ -6399,7 +6399,7 @@
       '.tam-session-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
       '.tam-session-btn:hover { transform:scale(1.13); }',
       '.tam-session-btn:hover::after { left:0; right:0; }',
-      '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#555; font-size:1rem; font-weight:400; pointer-events:none; }',
+      '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6537,7 +6537,7 @@
       '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
 
       /* ── Session bar — responsive for mobile ── */
-      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:8px 24px; flex-wrap:wrap; box-sizing:border-box; background:#f5f5f5; border-radius:10px; }',
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:8px 24px; flex-wrap:wrap; box-sizing:border-box; }',
       '@media (max-width:600px) {',
       '  #tam-session-bar { gap:16px; padding:8px 0; }',
       '  .tam-session-btn { font-size:.62rem!important; }',

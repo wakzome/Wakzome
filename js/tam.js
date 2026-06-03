@@ -6400,6 +6400,7 @@
       '.tam-session-btn:hover { transform:scale(1.13); }',
       '.tam-session-btn:hover::after { left:0; right:0; }',
       '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
+      '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { font-size:.72rem!important; letter-spacing:.12em!important; font-weight:700!important; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6708,7 +6709,7 @@
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
       '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:opacity .15s; }',
       '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { opacity:.55; }',
-      '.tam-inv-hdr-btns .tam-inv-stock-btn::before, .tam-inv-hdr-btns .tam-inv-guia-btn::before, .tam-inv-hdr-btns .tam-inv-export-btn::before { content:"·"; position:absolute; left:-10px; top:50%; transform:translateY(-50%); color:#bbb; font-size:.9rem; font-weight:300; pointer-events:none; }',
+      '.tam-inv-hdr-btns .tam-inv-stock-btn::before, .tam-inv-hdr-btns .tam-inv-guia-btn::before, .tam-inv-hdr-btns .tam-inv-export-btn::before { content:"·"; position:absolute; left:-10px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
 
       /* ── Edit mode button (proc style) ── */
       '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:opacity .15s; }',

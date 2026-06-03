@@ -6395,9 +6395,9 @@
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */
-      '.tam-session-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
+      '.tam-session-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s ease; transform-origin:center bottom; overflow:visible; }',
       '.tam-session-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
-      '.tam-session-btn:hover { transform:scale(1.13); }',
+      '.tam-session-btn:hover { transform:scale(1.15); }',
       '.tam-session-btn:hover::after { left:0; right:0; }',
       '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
       '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { font-size:.72rem!important; letter-spacing:.12em!important; font-weight:700!important; }',
@@ -6707,14 +6707,19 @@
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
-      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:opacity .15s; }',
-      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { opacity:.55; }',
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s ease; transform-origin:center bottom; overflow:visible; }',
+      '.tam-inv-stock-btn::after, .tam-inv-guia-btn::after, .tam-inv-export-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { transform:scale(1.15); }',
+      '.tam-inv-stock-btn:hover::after, .tam-inv-guia-btn:hover::after, .tam-inv-export-btn:hover::after { left:0; right:0; }',
       '.tam-inv-hdr-btns .tam-inv-stock-btn::before, .tam-inv-hdr-btns .tam-inv-guia-btn::before, .tam-inv-hdr-btns .tam-inv-export-btn::before { content:"·"; position:absolute; left:-10px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
 
       /* ── Edit mode button (proc style) ── */
-      '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:opacity .15s; }',
-      '.tam-inv-edit-btn:hover { opacity:.55; }',
+      '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s ease; transform-origin:center bottom; overflow:visible; }',
+      '.tam-inv-edit-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
+      '.tam-inv-edit-btn:hover { transform:scale(1.15); }',
+      '.tam-inv-edit-btn:hover::after { left:0; right:0; }',
       '.tam-inv-edit-btn.active { color:#4A7C6F; }',
+      '.tam-inv-edit-btn.active::after { background:#4A7C6F; left:0; right:0; }',
 
       /* ── Edit mode table (proc style) ── */
       '.tam-edit-notice { padding:7px 16px; font-size:.72rem; font-weight:700; color:#000; background:#fafafa; border-bottom:1px solid #e0e0e0; font-family:\'MontserratLight\',sans-serif; letter-spacing:.02em; opacity:.6; }',

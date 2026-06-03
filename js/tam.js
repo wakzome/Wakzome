@@ -760,7 +760,23 @@
     var totalPieces = tamInvoices.reduce(function(s,r){ return s+r.totalPieces; },0);
     var totalRefs   = tamConsolidatedRefs().length;
     var statusMsgEl = document.getElementById('tam-status-msg');
-    statusMsgEl.textContent = tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
+    var baseStatus = tamInvoices.length + ' fatura(s) · ' + totalRefs + ' referências · ' + totalPieces + ' unidades';
+    var boxSuffix = '';
+    if (tamSession && tamSession.boxes.length > 0) {
+      var qd0 = tamSession.quickDistrib || {};
+      var vBoxes = tamSession.boxes.map(function(box, bi){ return { box:box, bi:bi }; })
+        .filter(function(item){ return !(item.box.invIdx !== undefined && qd0[item.box.invIdx] !== undefined); });
+      if (vBoxes.some(function(item){ return !!item.box.total; })) {
+        var cBoxes = vBoxes.filter(function(item){
+          if (!item.box.total) return false;
+          var r = 0;
+          Object.keys(item.box.refs || {}).forEach(function(ref){ r += (item.box.refs[ref].f||0)+(item.box.refs[ref].p||0); });
+          return r >= item.box.total && !tamBoxLockPending[item.bi];
+        }).length;
+        boxSuffix = ' · ' + cBoxes + '/' + vBoxes.length + ' cajas';
+      }
+    }
+    statusMsgEl.textContent = baseStatus + boxSuffix;
     statusMsgEl.style.setProperty('font-weight', 'bold', 'important');
     statusMsgEl.style.setProperty('font-size', '1rem', 'important');
     document.getElementById('tam-file-name').textContent =
@@ -2436,68 +2452,8 @@
   }
   function tamRenderProgress() {
     var area = document.getElementById('tam-progress-area');
-    if (!area) return;
-    if (!tamSession || !tamInvoices.length) { area.innerHTML = ''; return; }
-
-    /* ── Cajas completas ── */
-    var quickDistrib = tamSession.quickDistrib || {};
-    var visibleBoxes = tamSession.boxes.map(function(box, bi) {
-      var isHidden = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
-      return { box: box, bi: bi, isHidden: isHidden };
-    }).filter(function(b) { return !b.isHidden; });
-
-    var anyTotal = visibleBoxes.some(function(b) { return !!b.box.total; });
-    var completedBoxes = visibleBoxes.filter(function(b) {
-      if (!b.box.total) return false;
-      var received = 0;
-      Object.keys(b.box.refs || {}).forEach(function(ref) {
-        received += (b.box.refs[ref].f || 0) + (b.box.refs[ref].p || 0);
-      });
-      return received >= b.box.total && !tamBoxLockPending[b.bi];
-    });
-    var totalBoxes = visibleBoxes.length;
-
-    /* ── DNs faltantes ── */
-    var dnBlocks = [];
-    tamInvoices.forEach(function(inv) {
-      var dnList = inv.dnList || [];
-      if (!dnList.length) return;
-      var expectedDNs = inv.shipPkgs || dnList.length;
-      var loadedDNs   = dnList.filter(function(zy) { return tamDeliveryNotes[zy]; });
-      var missingDNs  = dnList.filter(function(zy) { return !tamDeliveryNotes[zy]; });
-      if (loadedDNs.length >= expectedDNs) return;
-      var missingHtml = missingDNs.map(function(zy) {
-        return '<div class="tam-progress-dn-item">' + tamEsc(zy) + '</div>';
-      }).join('');
-      dnBlocks.push(
-        '<div class="tam-progress-dn-block">' +
-          '<div class="tam-progress-dn-hdr">⚠ <strong>' + tamEsc(inv.invoiceNo) + '</strong>' +
-            ' &mdash; ' + loadedDNs.length + ' / ' + expectedDNs + ' DNs carregadas' +
-          '</div>' +
-          (missingHtml ? '<div class="tam-progress-dn-list">' + missingHtml + '</div>' : '') +
-        '</div>'
-      );
-    });
-
-    var lines = [];
-    if (anyTotal && totalBoxes > 0) {
-      var allFull = completedBoxes.length === totalBoxes;
-      lines.push(
-        '<div class="tam-progress-box' + (allFull ? ' tam-progress-full' : '') + '">' +
-          (allFull ? '✓ ' : '') +
-          '<strong>' + completedBoxes.length + ' / ' + totalBoxes + '</strong> cajas completas' +
-        '</div>'
-      );
-    }
-    if (dnBlocks.length) {
-      lines.push('<div class="tam-progress-dn-section">' + dnBlocks.join('') + '</div>');
-    }
-
-    area.innerHTML = lines.length
-      ? '<div class="tam-progress-wrap">' + lines.join('') + '</div>'
-      : '';
-
-    /* ── Highlight Ingreso de Stock cuando factura completamente distribuida ── */
+    if (area) area.innerHTML = '';
+    if (!tamSession || !tamInvoices.length) return;
     tamInvoices.forEach(function(inv, invIdx) {
       var totalNeeded  = inv.totalPieces;
       var totalDistrib = inv.grouped.reduce(function(s, g) {
@@ -5448,24 +5404,23 @@
 
       /* ── Warning: invoice declares more packages than DN codes parsed ── */
       var parsedShortHtml = parsedShort
-        ? '<div class="tam-dnv-progress tam-dnv-partial" style="background:#fff3cd;border-color:#e0a800;">'
-            + '<span class="tam-dnv-prog-icon">⚠️</span>'
-            + '<span class="tam-dnv-prog-text">'
-            + tamEsc(inv.invoiceNo) + ' &mdash; a fatura declara <strong>' + expectedDNs + ' pacotes</strong>'
-            + ' mas apenas <strong>' + totalDNs + ' códigos DN</strong> foram encontrados no PDF.'
-            + ' Verifica se o ficheiro está completo.'
-            + '</span></div>'
+        ? '<div class="tam-dnv-missing-block">' +
+            '<div class="tam-dnv-missing-hdr">⚠ <strong>' + tamEsc(inv.invoiceNo) + '</strong>' +
+              ' &mdash; a fatura declara ' + expectedDNs + ' pacotes mas apenas ' + totalDNs + ' códigos DN foram encontrados no PDF.' +
+            '</div>' +
+          '</div>'
         : '';
 
       if (!allLoaded) {
+        var missingListHtml = missingDNs.map(function(zy) {
+          return '<div class="tam-dnv-missing-item">' + tamEsc(zy) + '</div>';
+        }).join('');
         progressHtml = parsedShortHtml +
-          '<div class="tam-dnv-progress tam-dnv-partial">' +
-            '<span class="tam-dnv-prog-icon">📦</span>' +
-            '<span class="tam-dnv-prog-text">' +
-              tamEsc(inv.invoiceNo) + ' &mdash; ' +
-              '<strong>' + loadedDNs.length + ' / ' + expectedDNs + '</strong> delivery notes carregadas' +
-              (missingDNs.length ? ' &middot; falta: <span class="tam-dnv-missing">' + missingDNs.map(tamEsc).join(', ') + '</span>' : '') +
-            '</span>' +
+          '<div class="tam-dnv-missing-block">' +
+            '<div class="tam-dnv-missing-hdr">⚠ <strong>' + tamEsc(inv.invoiceNo) + '</strong>' +
+              ' &mdash; ' + loadedDNs.length + ' / ' + expectedDNs + ' DNs carregadas' +
+            '</div>' +
+            (missingListHtml ? '<div class="tam-dnv-missing-list">' + missingListHtml + '</div>' : '') +
           '</div>';
       } else {
         /* All loaded — compare ref by ref */
@@ -7091,28 +7046,14 @@
       '.tam-dnv-btn-motord:hover { background:#f0f0f0!important; border-color:#555!important; }',
 
       /* ── DN Verification area (proc style) ── */
-      '#tam-dn-verify-area { width:100%; max-width:960px; margin-top:16px; }',
-      '#tam-progress-area { width:100%; max-width:960px; margin-bottom:12px; }',
-      '.tam-progress-wrap { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',
-      '.tam-progress-box { font-size:.82rem; font-weight:700; color:#000; padding:8px 16px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; display:inline-block; }',
-      '.tam-progress-box.tam-progress-full { border-color:#000; background:#fff; }',
-      '.tam-progress-dn-section { display:flex; flex-direction:column; gap:6px; }',
-      '.tam-progress-dn-block { padding:8px 14px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; }',
-      '.tam-progress-dn-hdr { font-size:.78rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
-      '.tam-progress-dn-list { margin-top:5px; display:flex; flex-direction:column; gap:3px; padding-left:12px; }',
-      '.tam-progress-dn-item { font-size:.72rem; color:#000; font-family:\'Courier New\',monospace; }',
+      '#tam-dn-verify-area { width:100%; max-width:520px; margin-top:16px; }',
+      '#tam-progress-area { display:none; }',
       '.tam-inv-stock-btn.tam-inv-stock-active::after { left:0!important; right:0!important; }',
-      '.tam-dnv-area { display:flex; flex-direction:column; gap:10px; font-family:\'MontserratLight\',sans-serif; }',
-
-      /* Progress bars */
-      '.tam-dnv-progress { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:.84rem; font-weight:700; }',
-      '.tam-dnv-prog-icon { font-size:1.1rem; flex-shrink:0; }',
-      '.tam-dnv-prog-text { color:#000; }',
-      '.tam-dnv-partial { background:#FFFBF5; border:1px solid #E8A44A; }',
-      '.tam-dnv-partial .tam-dnv-prog-text { color:#000; }',
-      '.tam-dnv-missing { color:#9B4D4D; font-weight:700; }',
-      '.tam-dnv-ok { background:transparent; border:1px solid #e0e0e0; }',
-      '.tam-dnv-ok .tam-dnv-prog-text { color:#4A7C6F; }',
+      '.tam-dnv-area { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-dnv-missing-block { padding:10px 14px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; }',
+      '.tam-dnv-missing-hdr { font-size:.78rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-dnv-missing-list { margin-top:5px; display:flex; flex-direction:column; gap:2px; padding-left:10px; }',
+      '.tam-dnv-missing-item { font-size:.72rem; color:#000; font-family:\'Courier New\',monospace; }',
 
       /* Diff block (proc style) */
       '.tam-dnv-block { border:1px solid #E8A44A; border-radius:14px; overflow:hidden; background:#fff; }',

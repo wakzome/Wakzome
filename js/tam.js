@@ -791,31 +791,6 @@
       tamRenderInvoiceBanner(tamInvoices[0], ban);
       ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
 
-      // Quick distribution buttons for single invoice
-      var qd0 = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[0];
-      var singleQuick = document.createElement('div');
-      singleQuick.className = 'tam-inv-quick-wrap';
-      singleQuick.style.marginTop = '6px';
-      if (qd0) {
-        singleQuick.innerHTML =
-          '<span class="tam-inv-quick-active">' +
-            (qd0 === 'funchal' ? '100%FNC' : qd0 === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
-          '</span>' +
-          '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="0" data-mode="undo">↩ desfazer</button>';
-      } else {
-        singleQuick.innerHTML =
-          '<span class="tam-quick-label">distribuição rápida:</span>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="funchal">FNC</button>' +
-          '<button class="tam-inv-quick-btn" data-inv="0" data-mode="porto">PS</button>' +
-          '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="0" data-mode="split">50 / 50</button>';
-      }
-      singleQuick.querySelectorAll('[data-mode]').forEach(function(btn){
-        btn.addEventListener('click', function(){
-          tamQuickDistribInvoice(0, btn.getAttribute('data-mode'));
-        });
-      });
-      meta.appendChild(singleQuick);
-
       var singleToggle = document.createElement('button');
       singleToggle.className = 'tam-inv-toggle-btn tam-single-toggle-btn';
       singleToggle.id = 'tam-single-toggle-btn';
@@ -829,31 +804,31 @@
 
       var singleEdit = document.createElement('button');
       singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
-      singleEdit.textContent = tamEditMode[0] ? '✓ fechar edição' : '✏ editar tabela';
+      singleEdit.textContent = tamEditMode[0] ? 'fechar edição' : 'editar';
       singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
       meta.appendChild(singleEdit);
       var singleRemove = document.createElement('button');
       singleRemove.className = 'tam-inv-remove-btn';
       singleRemove.title = 'remover fatura da sessão';
-      singleRemove.textContent = '✕ remover fatura';
+      singleRemove.textContent = 'remover fatura';
       singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
       meta.appendChild(singleRemove);
 
       var singleStock = document.createElement('button');
       singleStock.className = 'tam-inv-stock-btn';
-      singleStock.textContent = '📦 ingreso de stock';
+      singleStock.textContent = 'ingreso de stock';
       singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
       meta.appendChild(singleStock);
 
       var singleGuia = document.createElement('button');
       singleGuia.className = 'tam-inv-guia-btn';
-      singleGuia.textContent = '📋 guía';
+      singleGuia.textContent = 'guía';
       singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
       meta.appendChild(singleGuia);
 
       var singleExport = document.createElement('button');
       singleExport.className = 'tam-inv-export-btn';
-      singleExport.textContent = '⬇ exportar';
+      singleExport.textContent = 'exportar';
       singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
       meta.appendChild(singleExport);
       if (tamEditMode[0]) {
@@ -874,19 +849,6 @@
         var hdr = document.createElement('div');
         var invColorIdx = idx % 6;
         hdr.className = 'tam-invoice-block-header tam-inv-color-' + invColorIdx;
-        var qd = (tamSession && tamSession.quickDistrib && tamSession.quickDistrib[idx]);
-        var quickBtnsHtml = qd
-          ? '<div class="tam-inv-quick-wrap">' +
-              '<span class="tam-inv-quick-active">' +
-                (qd === 'funchal' ? '100%FNC' : qd === 'porto' ? '100%PXO' : '50/50') + ' ativo' +
-              '</span>' +
-              '<button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + idx + '" data-mode="undo">↩ desfazer</button>' +
-            '</div>'
-          : '<div class="tam-inv-quick-wrap">' +
-              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="funchal">FNC</button>' +
-              '<button class="tam-inv-quick-btn" data-inv="' + idx + '" data-mode="porto">PS</button>' +
-              '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + idx + '" data-mode="split">50/50</button>' +
-            '</div>';
 
         hdr.innerHTML =
           '<div class="tam-inv-hdr-row1">' +
@@ -903,22 +865,14 @@
             '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
           '</div>' +
           '<div class="tam-inv-hdr-btns">' +
-            quickBtnsHtml +
             '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
-              (tamEditMode[idx] ? '✓ fechar edição' : '✏ editar') +
+              (tamEditMode[idx] ? 'fechar edição' : 'editar') +
             '</button>' +
-            '<button class="tam-inv-stock-btn" data-inv="' + idx + '">📦 Ingreso de Stock</button>' +
-            '<button class="tam-inv-guia-btn" data-inv="' + idx + '">📋 Guía</button>' +
-            '<button class="tam-inv-export-btn" data-inv="' + idx + '">⬇ exportar</button>' +
+            '<button class="tam-inv-stock-btn" data-inv="' + idx + '">ingreso de stock</button>' +
+            '<button class="tam-inv-guia-btn" data-inv="' + idx + '">guía</button>' +
+            '<button class="tam-inv-export-btn" data-inv="' + idx + '">exportar</button>' +
           '</div>';
         block.appendChild(hdr);
-        hdr.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn){
-          btn.addEventListener('click', function(){
-            var i    = parseInt(btn.getAttribute('data-inv'));
-            var mode = btn.getAttribute('data-mode');
-            tamQuickDistribInvoice(i, mode);
-          });
-        });
         hdr.querySelector('.tam-inv-toggle-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-toggle-btn').getAttribute('data-inv'));
           tamCollapseState['inv_' + i] = !tamCollapseState['inv_' + i];
@@ -1311,9 +1265,37 @@
 
     var showAnomalyCol = anyDistrib;
 
+    var qd = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[invIdx];
+    var anomalyExtra = showAnomalyCol ? '<th class="tam-th-empty"></th>' : '';
+    var quickHeaderHtml = qd
+      ? '<tr class="tam-quick-header-row">' +
+          '<th colspan="6" class="tam-th-empty"></th>' +
+          '<th colspan="2" class="tam-th tam-th-funchal" style="text-align:center;padding:4px;">' +
+            '<span class="tam-inv-quick-active">' + (qd === 'funchal' ? '100% FNC' : qd === 'porto' ? '100% PS' : '50/50') + ' ativo</span>' +
+            ' <button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + invIdx + '" data-mode="undo">↩ desfazer</button>' +
+          '</th>' + anomalyExtra +
+        '</tr>'
+      : '<tr class="tam-quick-header-row">' +
+          '<th colspan="6" class="tam-th-empty"></th>' +
+          '<th class="tam-th tam-th-funchal" style="text-align:center;padding:3px;">' +
+            '<button class="tam-inv-quick-btn" data-inv="' + invIdx + '" data-mode="funchal">FNC</button>' +
+          '</th>' +
+          '<th class="tam-th tam-th-porto" style="text-align:center;padding:3px;">' +
+            '<button class="tam-inv-quick-btn" data-inv="' + invIdx + '" data-mode="porto">PS</button>' +
+          '</th>' + anomalyExtra +
+        '</tr>' +
+        '<tr class="tam-quick-split-row">' +
+          '<th colspan="6" class="tam-th-empty"></th>' +
+          '<th colspan="2" class="tam-th-split-cell" style="text-align:center;padding:3px;">' +
+            '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + invIdx + '" data-mode="split">50 / 50</button>' +
+          '</th>' + anomalyExtra +
+        '</tr>';
+
     var html =
       '<table class="tam-table">' +
-      '<thead><tr>' +
+      '<thead>' +
+      quickHeaderHtml +
+      '<tr>' +
         '<th class="tam-th">#</th>' +
         '<th class="tam-th">referência</th>' +
         '<th class="tam-th">tipo · nome</th>' +
@@ -1321,7 +1303,7 @@
         '<th class="tam-th">P.Unit/T</th>' +
         '<th class="tam-th">Total</th>' +
         '<th class="tam-th tam-th-funchal">FNC</th>' +
-        '<th class="tam-th tam-th-porto">PXO</th>' +
+        '<th class="tam-th tam-th-porto">PS</th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
@@ -1406,6 +1388,13 @@
       '</tfoot></table>';
 
     container.innerHTML = html;
+    container.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var i    = parseInt(btn.getAttribute('data-inv'));
+        var mode = btn.getAttribute('data-mode');
+        tamQuickDistribInvoice(i, mode);
+      });
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -6380,6 +6369,9 @@
       /* FNC/PXO defined below with their specific background */
       '.tam-th-funchal { background:#f0f0f0!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
       '.tam-th-porto   { background:#e8e8e8!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
+      '.tam-th-empty { background:transparent!important; border:none!important; padding:0!important; }',
+      '.tam-quick-header-row th, .tam-quick-split-row th { border-bottom:none!important; padding:4px 6px!important; text-align:center; vertical-align:middle; }',
+      '.tam-th-split-cell { text-align:center!important; background:#ececec!important; }',
       '.tam-td { padding:5px 12px; border:none; border-bottom:1px solid #f0f0f0; font-size:.88rem; font-weight:800; vertical-align:middle; text-align:center; white-space:nowrap; color:#000; }',
       '.tam-td-num { font-variant-numeric:tabular-nums; }',
       '.tam-cell-funchal { color:#000; font-weight:800; }',
@@ -6454,8 +6446,8 @@
       /* Toggle button: dark on white */
       '.tam-inv-color-0 .tam-inv-toggle-btn,.tam-inv-color-1 .tam-inv-toggle-btn,.tam-inv-color-2 .tam-inv-toggle-btn,.tam-inv-color-3 .tam-inv-toggle-btn,.tam-inv-color-4 .tam-inv-toggle-btn,.tam-inv-color-5 .tam-inv-toggle-btn { color:#bbb!important; }',
       /* Buttons inside header: proc style */
-      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
-      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):not(.tam-inv-edit-btn):not(.tam-inv-stock-btn):not(.tam-inv-guia-btn):not(.tam-inv-export-btn):not(.tam-inv-remove-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
+      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):not(.tam-inv-edit-btn):not(.tam-inv-stock-btn):not(.tam-inv-guia-btn):not(.tam-inv-export-btn):not(.tam-inv-remove-btn):hover { background:#f0f0f0!important; border-color:#555!important; }',
       /* Quick active badge */
       '.tam-inv-color-0 .tam-inv-quick-active,.tam-inv-color-1 .tam-inv-quick-active,.tam-inv-color-2 .tam-inv-quick-active,.tam-inv-color-3 .tam-inv-quick-active,.tam-inv-color-4 .tam-inv-quick-active,.tam-inv-color-5 .tam-inv-quick-active { color:#000!important; font-weight:700!important; text-shadow:none!important; border:1px solid #e0e0e0!important; background:#f5f5f5!important; border-radius:6px; padding:3px 8px; }',
       /* Quick undo: red tint like proc */
@@ -6543,7 +6535,7 @@
       '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
 
       /* ── Session bar — responsive for mobile ── */
-      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:14px 0; flex-wrap:wrap; box-sizing:border-box; }',
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:14px 0; flex-wrap:wrap; box-sizing:border-box; background:#f5f5f5; border-radius:10px; }',
       '@media (max-width:600px) {',
       '  #tam-session-bar { gap:16px; padding:8px 0; }',
       '  .tam-session-btn { font-size:.62rem!important; }',
@@ -6712,14 +6704,18 @@
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
-      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { padding:5px 13px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
-      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
+      '.tam-inv-stock-btn::after, .tam-inv-guia-btn::after, .tam-inv-export-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { transform:scale(1.13); }',
+      '.tam-inv-stock-btn:hover::after, .tam-inv-guia-btn:hover::after, .tam-inv-export-btn:hover::after { left:0; right:0; }',
 
       /* ── Edit mode button (proc style) ── */
-      '.tam-inv-edit-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
-      '.tam-inv-edit-btn:hover { background:#f0f0f0; border-color:#555; }',
-      '.tam-inv-edit-btn.active { background:#4A7C6F; color:#fff; border-color:#4A7C6F; }',
-      '.tam-inv-edit-btn.active:hover { background:#3a6b60; border-color:#3a6b60; }',
+      '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
+      '.tam-inv-edit-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
+      '.tam-inv-edit-btn:hover { transform:scale(1.13); }',
+      '.tam-inv-edit-btn:hover::after { left:0; right:0; }',
+      '.tam-inv-edit-btn.active { color:#4A7C6F; }',
+      '.tam-inv-edit-btn.active::after { background:#4A7C6F; }',
 
       /* ── Edit mode table (proc style) ── */
       '.tam-edit-notice { padding:7px 16px; font-size:.72rem; font-weight:700; color:#000; background:#fafafa; border-bottom:1px solid #e0e0e0; font-family:\'MontserratLight\',sans-serif; letter-spacing:.02em; opacity:.6; }',

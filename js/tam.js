@@ -3969,10 +3969,8 @@
   function tamShowDNBarButtons() {
     var loadBtn  = document.getElementById('tam-dn-load-bar-btn');
     var camBtn   = document.getElementById('tam-dn-cam-bar-btn');
-    var excelBtn = document.getElementById('tam-dn-excel-bar-btn');
     if (loadBtn)  loadBtn.style.display  = 'inline-flex';
     if (camBtn)   camBtn.style.display   = 'inline-flex';
-    if (excelBtn) excelBtn.style.display = 'inline-flex';
     tamUpdateDNCount();
   }
 
@@ -7129,13 +7127,9 @@
         '</div>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">💾</button>' +
         '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">📋</button>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF" style="display:none">' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">' +
           '\ud83d\udce6' +
-          '<input type="file" id="tam-dn-file-input" accept="application/pdf" multiple style="display:none">' +
-        '</label>' +
-        '<label class="tam-session-btn" id="tam-dn-excel-bar-btn" for="tam-dn-excel-input" title="delivery notes Excel" style="display:none">' +
-          '\ud83d\udcc5' +
-          '<input type="file" id="tam-dn-excel-input" accept=".xlsx,.xls" style="display:none">' +
+          '<input type="file" id="tam-dn-file-input" accept="application/pdf,.xlsx,.xls" multiple style="display:none">' +
         '</label>' +
         '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
         '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">' +
@@ -7218,8 +7212,6 @@
         if (dnLoadBtn) dnLoadBtn.style.display = 'none';
         var dnCamBtn = document.getElementById('tam-dn-cam-bar-btn');
         if (dnCamBtn) dnCamBtn.style.display = 'none';
-        var dnExcelBtn = document.getElementById('tam-dn-excel-bar-btn');
-        if (dnExcelBtn) dnExcelBtn.style.display = 'none';
         var guiaBarBtnClose = document.getElementById('tam-guia-bar-btn');
         if (guiaBarBtnClose) guiaBarBtnClose.style.display = 'none';
         var eanToolBtnClose = document.getElementById('tam-ean-tool-btn');
@@ -7337,14 +7329,11 @@
       // DN buttons listeners
       var dnBarI = bar.querySelector('#tam-dn-file-input');
       if (dnBarI) dnBarI.addEventListener('change', function(e){
-        var files = Array.from(e.target.files).filter(function(f){ return f.type==='application/pdf'; });
-        if (files.length) tamHandleDeliveryNoteFiles(files);
-        e.target.value = '';
-      });
-      var dnBarX = bar.querySelector('#tam-dn-excel-input');
-      if (dnBarX) dnBarX.addEventListener('change', function(e){
-        var file = e.target.files[0];
-        if (file) tamHandleDNExcelFile(file);
+        var allFiles = Array.from(e.target.files);
+        var pdfs   = allFiles.filter(function(f){ return f.type === 'application/pdf'; });
+        var excels = allFiles.filter(function(f){ return /\.(xlsx|xls)$/i.test(f.name); });
+        if (pdfs.length)   tamHandleDeliveryNoteFiles(pdfs);
+        if (excels.length) excels.forEach(function(f){ tamHandleDNExcelFile(f); });
         e.target.value = '';
       });
       var dnBarC = bar.querySelector('#tam-dn-cam-input');

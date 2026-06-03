@@ -649,12 +649,20 @@
   // ═══════════════════════════════════════════════════════════════
   //  EXCEL UTIL
   // ═══════════════════════════════════════════════════════════════
+  function normalizeXlsxCell(v) {
+    if (typeof v === 'number') {
+      return Number.isInteger(v) ? String(v) : v.toFixed(2);
+    }
+    return (v === null || v === undefined) ? '' : String(v);
+  }
+
   async function readXlsx(file) {
     var ab = await file.arrayBuffer();
-    var wb = XLSX.read(ab, { type:'array', raw:false });
+    var wb = XLSX.read(ab, { type:'array', raw:true });
     return wb.SheetNames.map(function(name){
       var ws = wb.Sheets[name];
-      return { name:name, rows: XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false }) };
+      var rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+      return { name:name, rows: rows.map(function(row){ return row.map(normalizeXlsxCell); }) };
     });
   }
 

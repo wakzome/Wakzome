@@ -6405,8 +6405,10 @@
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */
-      '.tam-session-btn { width:52px; height:52px; border-radius:50%; border:1px solid #ccc; background:transparent; color:#000; font-size:.48rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; text-align:center; transition:background .15s,border-color .15s,color .15s; white-space:normal; line-height:1.25; flex-shrink:0; padding:0; }',
-      '.tam-session-btn:hover { background:#000; border-color:#000; color:#fff; }',
+      '.tam-session-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
+      '.tam-session-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
+      '.tam-session-btn:hover { transform:scale(1.13); }',
+      '.tam-session-btn:hover::after { left:0; right:0; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6541,10 +6543,10 @@
       '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
 
       /* ── Session bar — responsive for mobile ── */
-      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:12px; width:100%; max-width:1400px; padding:12px 0; flex-wrap:wrap; box-sizing:border-box; }',
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:14px 0; flex-wrap:wrap; box-sizing:border-box; }',
       '@media (max-width:600px) {',
-      '  #tam-session-bar { gap:8px; padding:8px 0; }',
-      '  .tam-session-btn { width:44px!important; height:44px!important; font-size:.44rem!important; }',
+      '  #tam-session-bar { gap:16px; padding:8px 0; }',
+      '  .tam-session-btn { font-size:.62rem!important; }',
       '}',
 
       /* ── Box column alternating (proc style — clean) ── */
@@ -7094,8 +7096,8 @@
       '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; }',
       '  #tam-invoice-meta button { font-size:.7rem!important; padding:5px 10px!important; }',
       /* Session bar */
-      '  #tam-session-bar { gap:8px; padding:8px 0; }',
-      '  .tam-session-btn { width:44px!important; height:44px!important; font-size:.44rem!important; }',
+      '  #tam-session-bar { gap:16px; padding:8px 0; }',
+      '  .tam-session-btn { font-size:.62rem!important; }',
       /* Reception area */
       '  .tam-rec-quick-btns { padding:8px 12px; gap:6px; }',
       '  .tam-quick-btn { font-size:.72rem!important; padding:5px 10px!important; }',
@@ -7133,14 +7135,14 @@
           '<button class="tam-session-btn" id="tam-sessions-btn">sessões</button>' +
           '<div id="tam-sessions-dropdown"></div>' +
         '</div>' +
-        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">save</button>' +
+        '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">guardar</button>' +
         '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">guía</button>' +
-        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">DN' +
+        '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">delivery note' +
           '<input type="file" id="tam-dn-file-input" accept="application/pdf,.xlsx,.xls" multiple style="display:none">' +
         '</label>' +
         '<span id="tam-dn-count" style="display:none;color:#000;font-weight:700;font-size:.75rem;white-space:nowrap"></span>' +
         '<button id="tam-ean-tool-btn" class="tam-session-btn" title="Códigos EAN" style="display:none">EAN</button>' +
-        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">CAM' +
+        '<label class="tam-session-btn" id="tam-dn-cam-bar-btn" for="tam-dn-cam-input" title="fotografar caixa" style="display:none">câmara' +
           '<input type="file" id="tam-dn-cam-input" accept="image/*" capture="environment" style="display:none">' +
         '</label>' +
         '<span id="tam-session-status"></span>';

@@ -4044,50 +4044,40 @@
   }
 
   function tamShowDNListPanel() {
-    var existing = document.getElementById('tam-dn-list-panel');
+    var existing = document.getElementById('tam-dn-list-backdrop');
     if (existing) { existing.remove(); return; }
     var el = document.getElementById('tam-dn-count');
-    var rect = el ? el.getBoundingClientRect() : { left: 100, bottom: 60 };
+    var backdrop = document.createElement('div');
+    backdrop.id = 'tam-dn-list-backdrop';
+    backdrop.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'z-index:99997',
+      'background:rgba(0,0,0,0.35)',
+      'backdrop-filter:blur(4px)',
+      '-webkit-backdrop-filter:blur(4px)',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'padding:16px'
+    ].join(';');
+
     var panel = document.createElement('div');
     panel.id = 'tam-dn-list-panel';
-    var isMobilePhone = window.innerWidth < 640;
-    if (isMobilePhone) {
-      panel.style.cssText = [
-        'position:fixed',
-        'top:' + Math.min(rect.bottom + 6, window.innerHeight - Math.round(window.innerHeight * 0.72)) + 'px',
-        'left:8px',
-        'right:8px',
-        'z-index:99998',
-        'background:#fff',
-        'border:1px solid #e0e0e0',
-        'border-radius:12px',
-        'box-shadow:0 8px 30px rgba(0,0,0,.14)',
-        "font-family:'MontserratLight',sans-serif",
-        'max-height:70vh',
-        'display:flex',
-        'flex-direction:column',
-        'overflow:hidden'
-      ].join(';');
-    } else {
-      panel.style.cssText = [
-        'position:fixed',
-        'top:' + (rect.bottom + 6) + 'px',
-        'left:' + Math.min(rect.left, window.innerWidth - 580) + 'px',
-        'z-index:99998',
-        'background:#fff',
-        'border:1px solid #e0e0e0',
-        'border-radius:12px',
-        'box-shadow:0 8px 30px rgba(0,0,0,.14)',
-        "font-family:'MontserratLight',sans-serif",
-        'min-width:340px',
-        'max-width:560px',
-        'width:560px',
-        'max-height:600px',
-        'display:flex',
-        'flex-direction:column',
-        'overflow:hidden'
-      ].join(';');
-    }
+    panel.style.cssText = [
+      'background:#fff',
+      'border:1px solid #e0e0e0',
+      'border-radius:12px',
+      'box-shadow:0 8px 30px rgba(0,0,0,.18)',
+      "font-family:'MontserratLight',sans-serif",
+      'width:min(560px,calc(100vw - 32px))',
+      'max-height:80vh',
+      'display:flex',
+      'flex-direction:column',
+      'overflow:hidden'
+    ].join(';');
+
+    backdrop.appendChild(panel);
 
     var dns = Object.values(tamDeliveryNotes);
     if (!dns.length) {
@@ -4132,6 +4122,11 @@
           'border:1px solid #ccc;border-radius:6px;background:transparent;' +
           "color:#000;font-family:'MontserratLight',sans-serif;" +
           'transition:all .12s;white-space:nowrap;flex-shrink:0;">✏ distribuir</button>';
+        var deleteBtn = '<button class="tam-dn-delete-btn" data-zy="' + tamEsc(dn.zyCode) + '" style="' +
+          'padding:3px 8px;font-size:.68rem;font-weight:700;cursor:pointer;' +
+          'border:1px solid #f5c0c0;border-radius:6px;background:transparent;' +
+          "color:#c00;font-family:'MontserratLight',sans-serif;" +
+          'transition:all .12s;white-space:nowrap;flex-shrink:0;">✕</button>';
         var dnRefs = (dn.refs || []).map(function(r){ return r.ref.toLowerCase(); }).join(' ');
         return '<div class="tam-dn-row-item" data-zy="' + tamEsc(dn.zyCode) + '" data-refs="' + tamEsc(dnRefs) + '" style="display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid #f5f5f5;">' +
           '<div style="flex:1;min-width:0;">' +
@@ -4145,13 +4140,14 @@
           '</div>' +
           photoBtn +
           distribBtn +
+          deleteBtn +
         '</div>';
       }).join('');
 
       panel.innerHTML = hdrHtml + rowsHtml + '</div>';
     }
 
-    document.body.appendChild(panel);
+    document.body.appendChild(backdrop);
 
     /* Filtro en tiempo real */
     /* ── Excel export button ── */
@@ -4177,7 +4173,7 @@
       });
       filterInp.addEventListener('click', function(e){ e.stopPropagation(); });
       /* Focus automático al abrir — solo en desktop/iPad, no en móvil (evita teclado) */
-      if (!isMobilePhone) {
+      if (window.innerWidth >= 640) {
         setTimeout(function(){ filterInp.focus(); }, 60);
       }
     }
@@ -4208,12 +4204,24 @@
       });
     });
 
-    function onOutside(e) {
-      if (!panel.contains(e.target) && e.target !== el) {
-        panel.remove(); document.removeEventListener('click', onOutside);
-      }
-    }
-    setTimeout(function(){ document.addEventListener('click', onOutside); }, 50);
+    panel.querySelectorAll('.tam-dn-delete-btn').forEach(function(btn) {
+      btn.addEventListener('mouseenter', function(){ btn.style.background='#fff0f0'; });
+      btn.addEventListener('mouseleave', function(){ btn.style.background='transparent'; });
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var zy = btn.getAttribute('data-zy');
+        delete tamDeliveryNotes[zy];
+        tamUpdateDNCount();
+        tamRebuildDNMap();
+        var bd = document.getElementById('tam-dn-list-backdrop');
+        if (bd) bd.remove();
+        if (Object.keys(tamDeliveryNotes).length > 0) tamShowDNListPanel();
+      });
+    });
+
+    backdrop.addEventListener('click', function(e) {
+      if (e.target === backdrop) backdrop.remove();
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════

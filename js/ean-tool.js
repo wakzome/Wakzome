@@ -28,7 +28,7 @@
     '#ean-tool-overlay.ean-open { display:flex; }',
 
     /* ── ventana flotante ── */
-    '#ean-tool-wrap { background:#fff !important; color:#111 !important; border-radius:12px; width:min(820px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-tool-wrap { background:#fff !important; color:#111 !important; border-radius:12px; width:min(480px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.22); font-family:\'MontserratLight\',sans-serif; }',
 
     /* ── cabecera interna de la ventana ── */
     /* ══════════════════════════════════════════════════════════════
@@ -43,18 +43,18 @@
     '#ean-tool-close:hover { color:#fff !important; border-color:#888 !important; }',
 
     /* ── zona de acción (botones EAN + progreso + error) ── */
-    '#ean-action-row { display:flex; align-items:center; gap:10px; padding:14px 18px 0; flex-shrink:0; }',
+    '#ean-action-row { display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 18px 0; flex-shrink:0; }',
 
     /* ── botón EAN (drag zone) ── */
-    '#ean-drop-zone { width:46px; height:46px; border-radius:50%; border:2px solid #111; background:#111 !important; color:#fff !important; font-size:.62rem; font-weight:800; letter-spacing:.06em; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:background .14s,color .14s; user-select:none; text-transform:uppercase; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-drop-zone { width:46px; height:46px; border-radius:50%; border:2px solid #111; background:#111 !important; color:#fff !important; font-size:.62rem; font-weight:800; letter-spacing:.06em; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; align-self:center; transition:background .14s,color .14s; user-select:none; text-transform:uppercase; line-height:1; font-family:\'MontserratLight\',sans-serif; }',
     '#ean-drop-zone:hover, #ean-drop-zone.ean-drag-over { background:#333 !important; border-color:#333 !important; }',
 
     /* ── contador de archivos ── */
-    '#ean-file-count { font-size:.7rem; color:#888 !important; letter-spacing:0; display:none; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-file-count { font-size:.7rem; color:#111 !important; letter-spacing:0; display:none; white-space:nowrap; font-family:\'MontserratLight\',sans-serif; }',
     '#ean-file-count.ean-visible { display:inline-block; }',
 
     /* ── botón círculo (abrir modal de resultados) ── */
-    '#ean-btn-open-modal { width:46px; height:46px; border-radius:50%; border:2px solid #111; background:#fff !important; color:#111 !important; font-size:1.3rem; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:background .14s,color .14s; line-height:1; }',
+    '#ean-btn-open-modal { width:46px; height:46px; border-radius:50%; border:2px solid #111; background:#fff !important; color:#111 !important; font-size:1.3rem; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; align-self:center; transition:background .14s,color .14s; line-height:1; }',
     '#ean-btn-open-modal:hover:not(:disabled) { background:#111 !important; color:#fff !important; }',
     '#ean-btn-open-modal:disabled { border-color:#ccc !important; color:#ccc !important; cursor:not-allowed; }',
     '#ean-btn-open-modal.ean-has-results { border-color:#111 !important; color:#111 !important; }',
@@ -141,9 +141,9 @@
 
     /* ── DN footer ── */
     '.ean-dn-footer { margin-top:8px; padding-top:7px; border-top:1px dashed #ebebeb; display:flex; flex-wrap:wrap; gap:5px; align-items:center; }',
-    '.ean-dn-label { font-size:.55rem; text-transform:uppercase; letter-spacing:.1em; color:#bbb !important; margin-right:2px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
-    '.ean-dn-chip { font-family:\'Courier New\',monospace; font-size:.67rem; color:#aaa !important; background:#f8f8f8 !important; border:1px solid #eee; border-radius:4px; padding:2px 8px; cursor:pointer; transition:color .12s,border-color .12s,background .12s; user-select:none; white-space:nowrap; }',
-    '.ean-dn-chip:hover { color:#555 !important; border-color:#ccc !important; background:#f0f0f0 !important; }',
+    '.ean-dn-label { font-size:.62rem; text-transform:uppercase; letter-spacing:.1em; color:#111 !important; margin-right:2px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
+    '.ean-dn-chip { font-family:\'Courier New\',monospace; font-size:.72rem; color:#111 !important; background:#f0f0f0 !important; border:1px solid #ddd; border-radius:4px; padding:2px 8px; cursor:pointer; transition:color .12s,border-color .12s,background .12s; user-select:none; white-space:nowrap; }',
+    '.ean-dn-chip:hover { color:#000 !important; border-color:#111 !important; background:#e8e8e8 !important; }',
     '.ean-dn-chip.ean-copied { color:#000 !important; border-color:#111 !important; background:#eee !important; }',
     '.ean-dn-chip.ean-done { border-color:#111 !important; }',
     '.ean-dn-chip.ean-done::after { content:" ✓"; font-size:.72em; font-weight:700; color:#111; }',

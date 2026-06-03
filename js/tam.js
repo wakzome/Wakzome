@@ -770,6 +770,7 @@
     tamRenderReception();
     tamRenderAnomalies();
     tamRenderDNVerification();
+    tamRenderProgress();
     tamRenderSessionBar();
   }
 
@@ -2433,6 +2434,88 @@
     dialog.querySelector('#tam-odd-porto').addEventListener('click',   function(){ choose(half, half+1); });
     dialog.querySelector('#tam-odd-skip').addEventListener('click',    function(){ choose(half, half); }); // leaves 1 unassigned
   }
+  function tamRenderProgress() {
+    var area = document.getElementById('tam-progress-area');
+    if (!area) return;
+    if (!tamSession || !tamInvoices.length) { area.innerHTML = ''; return; }
+
+    /* ── Cajas completas ── */
+    var quickDistrib = tamSession.quickDistrib || {};
+    var visibleBoxes = tamSession.boxes.map(function(box, bi) {
+      var isHidden = box.invIdx !== undefined && quickDistrib[box.invIdx] !== undefined;
+      return { box: box, bi: bi, isHidden: isHidden };
+    }).filter(function(b) { return !b.isHidden; });
+
+    var anyTotal = visibleBoxes.some(function(b) { return !!b.box.total; });
+    var completedBoxes = visibleBoxes.filter(function(b) {
+      if (!b.box.total) return false;
+      var received = 0;
+      Object.keys(b.box.refs || {}).forEach(function(ref) {
+        received += (b.box.refs[ref].f || 0) + (b.box.refs[ref].p || 0);
+      });
+      return received >= b.box.total && !tamBoxLockPending[b.bi];
+    });
+    var totalBoxes = visibleBoxes.length;
+
+    /* ── DNs faltantes ── */
+    var dnBlocks = [];
+    tamInvoices.forEach(function(inv) {
+      var dnList = inv.dnList || [];
+      if (!dnList.length) return;
+      var expectedDNs = inv.shipPkgs || dnList.length;
+      var loadedDNs   = dnList.filter(function(zy) { return tamDeliveryNotes[zy]; });
+      var missingDNs  = dnList.filter(function(zy) { return !tamDeliveryNotes[zy]; });
+      if (loadedDNs.length >= expectedDNs) return;
+      var missingHtml = missingDNs.map(function(zy) {
+        return '<div class="tam-progress-dn-item">' + tamEsc(zy) + '</div>';
+      }).join('');
+      dnBlocks.push(
+        '<div class="tam-progress-dn-block">' +
+          '<div class="tam-progress-dn-hdr">⚠ <strong>' + tamEsc(inv.invoiceNo) + '</strong>' +
+            ' &mdash; ' + loadedDNs.length + ' / ' + expectedDNs + ' DNs carregadas' +
+          '</div>' +
+          (missingHtml ? '<div class="tam-progress-dn-list">' + missingHtml + '</div>' : '') +
+        '</div>'
+      );
+    });
+
+    var lines = [];
+    if (anyTotal && totalBoxes > 0) {
+      var allFull = completedBoxes.length === totalBoxes;
+      lines.push(
+        '<div class="tam-progress-box' + (allFull ? ' tam-progress-full' : '') + '">' +
+          (allFull ? '✓ ' : '') +
+          '<strong>' + completedBoxes.length + ' / ' + totalBoxes + '</strong> cajas completas' +
+        '</div>'
+      );
+    }
+    if (dnBlocks.length) {
+      lines.push('<div class="tam-progress-dn-section">' + dnBlocks.join('') + '</div>');
+    }
+
+    area.innerHTML = lines.length
+      ? '<div class="tam-progress-wrap">' + lines.join('') + '</div>'
+      : '';
+
+    /* ── Highlight Ingreso de Stock cuando factura completamente distribuida ── */
+    tamInvoices.forEach(function(inv, invIdx) {
+      var totalNeeded  = inv.totalPieces;
+      var totalDistrib = inv.grouped.reduce(function(s, g) {
+        var d = tamGetRefDistribForInvoice(g.ref, invIdx);
+        return s + d.f + d.p;
+      }, 0);
+      var complete = totalNeeded > 0 && totalDistrib >= totalNeeded;
+      document.querySelectorAll('.tam-inv-stock-btn').forEach(function(btn) {
+        var di = btn.getAttribute('data-inv');
+        if (di !== null && parseInt(di) === invIdx) {
+          btn.classList.toggle('tam-inv-stock-active', complete);
+        } else if (di === null && invIdx === 0) {
+          btn.classList.toggle('tam-inv-stock-active', complete);
+        }
+      });
+    });
+  }
+
   function tamRenderAnomalies() {
     var area = document.getElementById('tam-anomaly-area');
     if (!area) return;
@@ -7009,6 +7092,16 @@
 
       /* ── DN Verification area (proc style) ── */
       '#tam-dn-verify-area { width:100%; max-width:960px; margin-top:16px; }',
+      '#tam-progress-area { width:100%; max-width:960px; margin-bottom:12px; }',
+      '.tam-progress-wrap { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-progress-box { font-size:.82rem; font-weight:700; color:#000; padding:8px 16px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; display:inline-block; }',
+      '.tam-progress-box.tam-progress-full { border-color:#000; background:#fff; }',
+      '.tam-progress-dn-section { display:flex; flex-direction:column; gap:6px; }',
+      '.tam-progress-dn-block { padding:8px 14px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; }',
+      '.tam-progress-dn-hdr { font-size:.78rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-progress-dn-list { margin-top:5px; display:flex; flex-direction:column; gap:3px; padding-left:12px; }',
+      '.tam-progress-dn-item { font-size:.72rem; color:#000; font-family:\'Courier New\',monospace; }',
+      '.tam-inv-stock-btn.tam-inv-stock-active::after { left:0!important; right:0!important; }',
       '.tam-dnv-area { display:flex; flex-direction:column; gap:10px; font-family:\'MontserratLight\',sans-serif; }',
 
       /* Progress bars */
@@ -7203,6 +7296,8 @@
         if (aa) aa.innerHTML = '';
         var dva = document.getElementById('tam-dn-verify-area');
         if (dva) dva.innerHTML = '';
+        var pra = document.getElementById('tam-progress-area');
+        if (pra) pra.innerHTML = '';
         // Reset session name field and status
         var sn = document.getElementById('tam-session-name');
         if (sn) sn.value = '';
@@ -7355,6 +7450,15 @@
           dd.classList.remove('open');
         }
       });
+    }
+
+    // Progress area — injected before results-wrap
+    if (!document.getElementById('tam-progress-area')) {
+      var pa = document.createElement('div');
+      pa.id = 'tam-progress-area';
+      var rw0 = document.getElementById('tam-results-wrap');
+      if (rw0) rw0.parentNode.insertBefore(pa, rw0);
+      else tab.appendChild(pa);
     }
 
     // Reception area

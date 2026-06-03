@@ -1268,23 +1268,14 @@
     var qd = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[invIdx];
     var anomalyExtra = showAnomalyCol ? '<th class="tam-th-empty"></th>' : '';
     var quickHeaderHtml = qd
-      ? '<tr class="tam-quick-header-row">' +
+      ? '<tr class="tam-quick-split-row">' +
           '<th colspan="6" class="tam-th-empty"></th>' +
           '<th colspan="2" class="tam-th tam-th-funchal" style="text-align:center;padding:4px;">' +
             '<span class="tam-inv-quick-active">' + (qd === 'funchal' ? '100% FNC' : qd === 'porto' ? '100% PS' : '50/50') + ' ativo</span>' +
             ' <button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + invIdx + '" data-mode="undo">↩ desfazer</button>' +
           '</th>' + anomalyExtra +
         '</tr>'
-      : '<tr class="tam-quick-header-row">' +
-          '<th colspan="6" class="tam-th-empty"></th>' +
-          '<th class="tam-th tam-th-funchal" style="text-align:center;padding:3px;">' +
-            '<button class="tam-inv-quick-btn" data-inv="' + invIdx + '" data-mode="funchal">FNC</button>' +
-          '</th>' +
-          '<th class="tam-th tam-th-porto" style="text-align:center;padding:3px;">' +
-            '<button class="tam-inv-quick-btn" data-inv="' + invIdx + '" data-mode="porto">PS</button>' +
-          '</th>' + anomalyExtra +
-        '</tr>' +
-        '<tr class="tam-quick-split-row">' +
+      : '<tr class="tam-quick-split-row">' +
           '<th colspan="6" class="tam-th-empty"></th>' +
           '<th colspan="2" class="tam-th-split-cell" style="text-align:center;padding:3px;">' +
             '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + invIdx + '" data-mode="split">50 / 50</button>' +
@@ -1302,8 +1293,8 @@
         '<th class="tam-th">UND</th>' +
         '<th class="tam-th">P.Unit/T</th>' +
         '<th class="tam-th">Total</th>' +
-        '<th class="tam-th tam-th-funchal">FNC</th>' +
-        '<th class="tam-th tam-th-porto">PS</th>' +
+        '<th class="tam-th tam-th-funchal"><button class="tam-th-quick-col-btn" data-inv="' + invIdx + '" data-mode="funchal">FNC</button></th>' +
+        '<th class="tam-th tam-th-porto"><button class="tam-th-quick-col-btn" data-inv="' + invIdx + '" data-mode="porto">PS</button></th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
@@ -1389,6 +1380,13 @@
 
     container.innerHTML = html;
     container.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var i    = parseInt(btn.getAttribute('data-inv'));
+        var mode = btn.getAttribute('data-mode');
+        tamQuickDistribInvoice(i, mode);
+      });
+    });
+    container.querySelectorAll('.tam-th-quick-col-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var i    = parseInt(btn.getAttribute('data-inv'));
         var mode = btn.getAttribute('data-mode');
@@ -6401,6 +6399,7 @@
       '.tam-session-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
       '.tam-session-btn:hover { transform:scale(1.13); }',
       '.tam-session-btn:hover::after { left:0; right:0; }',
+      '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#bbb; font-size:.9rem; font-weight:300; pointer-events:none; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6436,7 +6435,10 @@
       '.tam-inv-hdr-row1 .tam-inv-remove-btn { position:absolute; right:0; }',
       '.tam-inv-hdr-row2 { text-align:center; }',
       '.tam-inv-hdr-row3 { text-align:center; margin-bottom:4px; }',
-      '.tam-inv-hdr-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }',
+      '.tam-inv-hdr-btns { display:flex; align-items:center; gap:20px; flex-wrap:wrap; justify-content:center; }',
+      '.tam-th-quick-col-btn { display:block; width:100%; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:7px 4px; box-shadow:inset 0 -2px 0 rgba(0,0,0,.18); transition:background .15s,box-shadow .15s,transform .1s; }',
+      '.tam-th-quick-col-btn:hover { background:rgba(0,0,0,.07); box-shadow:inset 0 -3px 0 rgba(0,0,0,.28); }',
+      '.tam-th-quick-col-btn:active { transform:translateY(1px); box-shadow:inset 0 2px 0 rgba(0,0,0,.15); }',
       /* Single unified header look — no color variants */
       '.tam-inv-color-0,.tam-inv-color-1,.tam-inv-color-2,.tam-inv-color-3,.tam-inv-color-4,.tam-inv-color-5 { background:transparent!important; border-bottom:none!important; }',
       /* All text in header: black */
@@ -6535,7 +6537,7 @@
       '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
 
       /* ── Session bar — responsive for mobile ── */
-      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:14px 0; flex-wrap:wrap; box-sizing:border-box; background:#f5f5f5; border-radius:10px; }',
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:8px 24px; flex-wrap:wrap; box-sizing:border-box; background:#f5f5f5; border-radius:10px; }',
       '@media (max-width:600px) {',
       '  #tam-session-bar { gap:16px; padding:8px 0; }',
       '  .tam-session-btn { font-size:.62rem!important; }',
@@ -6704,18 +6706,14 @@
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
-      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
-      '.tam-inv-stock-btn::after, .tam-inv-guia-btn::after, .tam-inv-export-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
-      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { transform:scale(1.13); }',
-      '.tam-inv-stock-btn:hover::after, .tam-inv-guia-btn:hover::after, .tam-inv-export-btn:hover::after { left:0; right:0; }',
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:opacity .15s; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { opacity:.55; }',
+      '.tam-inv-hdr-btns .tam-inv-stock-btn::before, .tam-inv-hdr-btns .tam-inv-guia-btn::before, .tam-inv-hdr-btns .tam-inv-export-btn::before { content:"·"; position:absolute; left:-10px; top:50%; transform:translateY(-50%); color:#bbb; font-size:.9rem; font-weight:300; pointer-events:none; }',
 
       /* ── Edit mode button (proc style) ── */
-      '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s; transform-origin:center bottom; }',
-      '.tam-inv-edit-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
-      '.tam-inv-edit-btn:hover { transform:scale(1.13); }',
-      '.tam-inv-edit-btn:hover::after { left:0; right:0; }',
+      '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:opacity .15s; }',
+      '.tam-inv-edit-btn:hover { opacity:.55; }',
       '.tam-inv-edit-btn.active { color:#4A7C6F; }',
-      '.tam-inv-edit-btn.active::after { background:#4A7C6F; }',
 
       /* ── Edit mode table (proc style) ── */
       '.tam-edit-notice { padding:7px 16px; font-size:.72rem; font-weight:700; color:#000; background:#fafafa; border-bottom:1px solid #e0e0e0; font-family:\'MontserratLight\',sans-serif; letter-spacing:.02em; opacity:.6; }',

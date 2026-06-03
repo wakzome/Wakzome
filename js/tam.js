@@ -4186,7 +4186,7 @@
         var zy = btn.getAttribute('data-zy');
         var dn = tamDeliveryNotes[zy];
         if (!dn) return;
-        panel.remove();
+        backdrop.remove();
         tamShowDNDistribModal(dn, dn.lastPhotoDistrib || null, dn.lastPhotoConf || null, false);
       });
     });
@@ -4199,7 +4199,7 @@
         var zy = btn.getAttribute('data-zy');
         var dn = tamDeliveryNotes[zy];
         if (!dn) return;
-        panel.remove();
+        backdrop.remove();
         tamShowDNDistribModal(dn, null, null, false);
       });
     });

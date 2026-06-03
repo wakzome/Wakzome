@@ -5797,7 +5797,7 @@
   var BRANDS_SET = new Set(['hailys','zabaione']);
 
   function tamExtractTypeAndName(beforeHS) {
-    var cleaned = beforeHS.replace(/\bModell\s*:\s*/gi,'').replace(/\b\d{8}\b/g,'').replace(/\b\d{4,}\b/g,'').trim();
+    var cleaned = beforeHS.replace(/\bModell\s*:\s*/gi,'').replace(/\b\d{8}\b/g,'').replace(/\b\d{4,}\b/g,'').replace(/([A-Za-z])44([A-Za-z])/g,'$1$2').trim();
     var words = cleaned.split(/\s+/).filter(Boolean);
     var start = 0;
     while (start < words.length && BRANDS_SET.has(words[start].toLowerCase())) start++;

@@ -3769,6 +3769,50 @@
     });
   }
 
+  function tamAdjustStockPrices(rows, grandTotal) {
+    if (!rows.length) return rows;
+
+    /* Piezas totales por referencia (A4 + A5 sumadas) */
+    var refPieces = {};
+    rows.forEach(function(rw) {
+      refPieces[rw.ref] = (refPieces[rw.ref] || 0) + rw.qty;
+    });
+
+    /* Diferencia actual en céntimos (positivo = falta, negativo = sobra) */
+    var currentTotal = rows.reduce(function(s, rw) {
+      return s + tamRound2(rw.price * rw.qty);
+    }, 0);
+    var diffCents = Math.round((grandTotal - currentTotal) * 100);
+    if (diffCents === 0) return rows;
+
+    /* Ordenar referencias por piezas ascendente (menor impacto primero) */
+    var sortedRefs = Object.keys(refPieces).sort(function(a, b) {
+      return refPieces[a] - refPieces[b];
+    });
+
+    /* Greedy: aplicar ±0,01 a las referencias de menor pieza */
+    var adjustments = {};
+    for (var i = 0; i < sortedRefs.length && diffCents !== 0; i++) {
+      var ref = sortedRefs[i];
+      var impact = refPieces[ref]; /* céntimos que mueve ajustar 0,01 a este ref */
+      var sign   = diffCents > 0 ? 1 : -1;
+      /* Aplicar si reduce la diferencia o la acerca más a 0 */
+      var afterDiff = diffCents - sign * impact;
+      if (Math.abs(afterDiff) <= Math.abs(diffCents)) {
+        adjustments[ref] = sign * 0.01;
+        diffCents = afterDiff;
+      }
+    }
+
+    /* Aplicar ajustes al array de filas */
+    return rows.map(function(rw) {
+      if (adjustments[rw.ref] !== undefined) {
+        return { ref:rw.ref, city:rw.city, iva:rw.iva, price:tamRound2(rw.price + adjustments[rw.ref]), qty:rw.qty };
+      }
+      return rw;
+    });
+  }
+
   function tamShowStockModal(invIdx) {
     var r = tamInvoices[invIdx];
     if (!r) return;
@@ -3791,6 +3835,15 @@
         });
       });
     });
+
+    rows = tamAdjustStockPrices(rows, r.grandTotal);
+
+    /* Delta residual tras ajuste */
+    var adjustedSum = rows.reduce(function(s, rw){ return s + tamRound2(rw.price * rw.qty); }, 0);
+    var deltaCents  = Math.round((r.grandTotal - adjustedSum) * 100);
+    var deltaLabel  = deltaCents === 0
+      ? '· Δ 0,00 €'
+      : '· Δ ' + (deltaCents > 0 ? '+' : '-') + tamFmtEU(Math.abs(deltaCents) / 100) + ' €';
 
     // ── Build modal HTML ──────────────────────────────────────
     var old = document.getElementById('tam-stock-modal');
@@ -3845,7 +3898,8 @@
         '<div id="tam-stock-footer">' +
           rows.length + ' linhas · ' +
           rows.filter(function(rw){ return rw.city==='A4'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Funchal · ' +
-          rows.filter(function(rw){ return rw.city==='A5'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Porto Santo' +
+          rows.filter(function(rw){ return rw.city==='A5'; }).reduce(function(s,rw){ return s+rw.qty; },0) + ' uds Porto Santo ' +
+          deltaLabel +
           '<span class="tam-guia-copy-msg" id="tam-stock-copy-msg" style="margin-left:10px;"></span>' +
         '</div>' +
       '</div>';

@@ -4292,10 +4292,10 @@
       var pendCount = dns.length - confCount;
       var hdrHtml =
         '<div style="padding:10px 14px 8px;font-size:.6rem;font-weight:700;text-transform:uppercase;' +
-        'letter-spacing:.12em;color:#000;opacity:.5;border-bottom:1px solid #f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">' +
+        'letter-spacing:.12em;color:#000;border-bottom:1px solid #f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">' +
         '<span>' + dns.length + ' Delivery Note' + (dns.length !== 1 ? 's' : '') + ' carregadas</span>' +
-        '<span style="margin-left:8px;font-size:.6rem;font-weight:700;opacity:.7;color:#4A7C6F;">' + confCount + '</span>' +
-        '<span style="font-size:.6rem;font-weight:700;opacity:.4;color:#000;">/' + pendCount + '</span>' +
+        '<span style="margin-left:8px;font-size:.6rem;font-weight:700;color:#4A7C6F;">' + confCount + '</span>' +
+        '<span style="font-size:.6rem;font-weight:700;color:#000;">/' + pendCount + '</span>' +
         '<button id="tam-dn-export-xls-btn" style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;' +
         'padding:3px 9px;border-radius:6px;border:1px solid #bbb;background:transparent;color:#000;opacity:.7;cursor:pointer;' +
         'font-family:MontserratLight,sans-serif;transition:all .15s;">↓ excel</button>' +
@@ -4500,6 +4500,7 @@
       }
 
       var count = 0;
+      var newZyCodes = [];
       Object.keys(accumulator).forEach(function(zyCode) {
         /* Do not overwrite a DN that was loaded from PDF (has refs already) */
         if (tamDeliveryNotes[zyCode] && tamDeliveryNotes[zyCode].refs && tamDeliveryNotes[zyCode].refs.length) {
@@ -4518,6 +4519,7 @@
           gesamtPcs:  gesamtPcs,
           fromExcel:  true
         };
+        newZyCodes.push(zyCode);
         count++;
       });
 
@@ -4543,6 +4545,7 @@
                 fromExcel: true,
                 motorD:    true
               };
+              newZyCodes.push(dn.zyCode);
               count++;
             });
             if (count > 0) console.log('TAM DN Excel Motor D: imported', count, 'DNs');
@@ -4555,6 +4558,7 @@
         }
       }
       tamRebuildDNMap();
+      tamCheckOrphanDNs(newZyCodes);
       tamUpdateDNCount();
       tamScheduleSave();
       tamRenderDNVerification();
@@ -4568,6 +4572,7 @@
 
   async function tamHandleDeliveryNoteFiles(files) {
     var count = 0;
+    var newZyCodes = [];
     for (var fi = 0; fi < files.length; fi++) {
       var file = files[fi];
       try {
@@ -4593,9 +4598,11 @@
           });
         }
         var dn = tamParseDNFromItems(allPageItems, file.name);
-        if (dn) { tamDeliveryNotes[dn.zyCode] = dn; count++; }
+        if (dn) { tamDeliveryNotes[dn.zyCode] = dn; newZyCodes.push(dn.zyCode); count++; }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
+    tamRebuildDNMap();
+    tamCheckOrphanDNs(newZyCodes);
     tamUpdateDNCount();
     tamScheduleSave();
     console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
@@ -5054,6 +5061,25 @@
       tamRenderDNVerification();
       tamRenderAll();
     }
+  }
+
+  function tamCheckOrphanDNs(newZyCodes) {
+    if (!newZyCodes || !newZyCodes.length) return;
+    if (!tamInvoices || !tamInvoices.length) return;
+    var knownZYs = Object.keys(tamDNtoInvIdx);
+    if (!knownZYs.length) return; /* facturas sem dnList — não é possível validar */
+    var orphans = newZyCodes.filter(function(zy) {
+      return !tamDNtoInvIdx.hasOwnProperty(zy);
+    });
+    if (!orphans.length) return;
+    orphans.forEach(function(zy) { delete tamDeliveryNotes[zy]; });
+    var msg = orphans.length === newZyCodes.length
+      ? 'Nenhuma das delivery notes carregadas pertence a uma fatura da sessão.'
+      : orphans.length + ' delivery note' + (orphans.length > 1 ? 's' : '') +
+        ' ignorada' + (orphans.length > 1 ? 's' : '') +
+        ' — não pertence' + (orphans.length > 1 ? 'm' : '') +
+        ' a nenhuma fatura da sessão: ' + orphans.join(', ');
+    tamShowDNError(msg);
   }
 
     function tamShowDNError(msg) {

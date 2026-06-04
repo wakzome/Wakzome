@@ -477,7 +477,18 @@
           }
           // choice === 'add' → fall through to add normally
         }
-        // allAlreadyIn or mixed → add normally (skip duplicates)
+
+        if (allAlreadyIn) {
+          tamShowDNError('Fatura' + (parsed.length > 1 ? 's' : '') + ' já carregada' + (parsed.length > 1 ? 's' : '') + ' nesta sessão: ' + parsed.map(function(r){ return r.invoiceNo; }).join(', ') + '.');
+          return;
+        }
+
+        /* Mixed: filter out duplicates and warn */
+        var dups = parsed.filter(function(r){ return existingNos.indexOf(r.invoiceNo) >= 0; });
+        if (dups.length) {
+          tamShowDNError(dups.length + ' fatura' + (dups.length > 1 ? 's' : '') + ' ignorada' + (dups.length > 1 ? 's' : '') + ' — já carregada' + (dups.length > 1 ? 's' : '') + ' na sessão: ' + dups.map(function(r){ return r.invoiceNo; }).join(', ') + '.');
+        }
+        parsed = parsed.filter(function(r){ return existingNos.indexOf(r.invoiceNo) < 0; });
       }
 
       // Add parsed invoices to current state
@@ -819,35 +830,41 @@
       });
       meta.appendChild(singleToggle);
 
+      var singleHdrBtns = document.createElement('div');
+      singleHdrBtns.className = 'tam-inv-hdr-btns';
+      singleHdrBtns.style.cssText = 'width:100%;margin-top:4px;';
+
       var singleEdit = document.createElement('button');
       singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
       singleEdit.textContent = tamEditMode[0] ? 'fechar edição' : 'editar';
       singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
-      meta.appendChild(singleEdit);
+      singleHdrBtns.appendChild(singleEdit);
       var singleRemove = document.createElement('button');
       singleRemove.className = 'tam-inv-remove-btn';
       singleRemove.title = 'remover fatura da sessão';
       singleRemove.textContent = 'remover fatura';
       singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
-      meta.appendChild(singleRemove);
+      singleHdrBtns.appendChild(singleRemove);
 
       var singleStock = document.createElement('button');
       singleStock.className = 'tam-inv-stock-btn';
       singleStock.textContent = 'ingreso de stock';
       singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
-      meta.appendChild(singleStock);
+      singleHdrBtns.appendChild(singleStock);
 
       var singleGuia = document.createElement('button');
       singleGuia.className = 'tam-inv-guia-btn';
       singleGuia.textContent = 'guía';
       singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
-      meta.appendChild(singleGuia);
+      singleHdrBtns.appendChild(singleGuia);
 
       var singleExport = document.createElement('button');
       singleExport.className = 'tam-inv-export-btn';
       singleExport.textContent = 'exportar';
       singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
-      meta.appendChild(singleExport);
+      singleHdrBtns.appendChild(singleExport);
+
+      meta.appendChild(singleHdrBtns);
       if (tamEditMode[0]) {
         tamRenderEditTable(tamInvoices[0], wrap, 0);
       } else {

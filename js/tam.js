@@ -119,28 +119,16 @@
 
   /* ── Collapse / expand invoice blocks and distribution area ── */
   function tamApplyCollapseState() {
-    if (tamInvoices.length === 1) {
-      // Single invoice — toggle class on the results wrap (contains one table)
-      var singleWrap = document.getElementById('tam-results-wrap');
-      var singleToggleBtn = document.getElementById('tam-single-toggle-btn');
-      if (singleWrap) {
-        var sc = !!tamCollapseState['inv_0'];
-        singleWrap.classList.toggle('tam-single-inv-collapsed', sc);
-        if (singleToggleBtn) singleToggleBtn.innerHTML = sc ? '&#9654;' : '&#9660;';
-      }
-    } else {
-      // Multi-invoice — each block is independent; ensure wrap never has single-mode class
-      var wrap = document.getElementById('tam-results-wrap');
-      if (wrap) wrap.classList.remove('tam-single-inv-collapsed');
-      tamInvoices.forEach(function(_, idx) {
-        var block = document.getElementById('tam-invoice-block-' + idx);
-        if (!block) return;
-        var collapsed = !!tamCollapseState['inv_' + idx];
-        block.classList.toggle('tam-inv-collapsed', collapsed);
-        var btn = block.querySelector('.tam-inv-toggle-btn');
-        if (btn) btn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
-      });
-    }
+    var wrap = document.getElementById('tam-results-wrap');
+    if (wrap) wrap.classList.remove('tam-single-inv-collapsed');
+    tamInvoices.forEach(function(_, idx) {
+      var block = document.getElementById('tam-invoice-block-' + idx);
+      if (!block) return;
+      var collapsed = !!tamCollapseState['inv_' + idx];
+      block.classList.toggle('tam-inv-collapsed', collapsed);
+      var btn = block.querySelector('.tam-inv-toggle-btn');
+      if (btn) btn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
+    });
   }
 
 
@@ -815,60 +803,65 @@
     ban.className  = '';
 
     if (tamInvoices.length === 1) {
-      tamRenderSingleMeta(tamInvoices[0], meta);
-      tamRenderInvoiceBanner(tamInvoices[0], ban);
-      ban.classList.add(tamInvoices[0].xv.fullyAgree ? 'ok' : 'err');
+      meta.style.display = 'none';
+      ban.style.display  = 'none';
 
-      var singleToggle = document.createElement('button');
-      singleToggle.className = 'tam-inv-toggle-btn tam-single-toggle-btn';
-      singleToggle.id = 'tam-single-toggle-btn';
-      singleToggle.title = 'expandir / minimizar';
-      singleToggle.innerHTML = tamCollapseState['inv_0'] ? '&#9654;' : '&#9660;';
-      singleToggle.addEventListener('click', function(){
+      var r0   = tamInvoices[0];
+      var block0 = document.createElement('div');
+      block0.className = 'tam-invoice-block';
+      block0.id = 'tam-invoice-block-0';
+
+      var hdr0 = document.createElement('div');
+      hdr0.className = 'tam-invoice-block-header tam-inv-color-0';
+      hdr0.innerHTML =
+        '<div class="tam-inv-hdr-row1">' +
+          '<button class="tam-inv-toggle-btn" data-inv="0" title="expandir / minimizar">&#9660;</button>' +
+          '<span class="tam-inv-num">' + tamEsc(r0.invoiceNo) + '</span>' +
+          '<button class="tam-inv-remove-btn" data-inv="0" title="remover fatura da sessão">✕</button>' +
+        '</div>' +
+        '<div class="tam-inv-hdr-row2">' +
+          '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' · ' +
+          r0.grouped.length + ' refs · ' + r0.totalPieces + ' un · ' +
+          r0.shipPkgs + ' pac.</span>' +
+        '</div>' +
+        '<div class="tam-inv-hdr-row3">' +
+          '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' €</span>' +
+        '</div>' +
+        '<div class="tam-inv-hdr-btns">' +
+          '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '" data-inv="0">' +
+            (tamEditMode[0] ? 'fechar edição' : 'editar') +
+          '</button>' +
+          '<button class="tam-inv-stock-btn" data-inv="0">ingreso de stock</button>' +
+          '<button class="tam-inv-guia-btn" data-inv="0">guía</button>' +
+          '<button class="tam-inv-export-btn" data-inv="0">exportar</button>' +
+        '</div>';
+
+      block0.appendChild(hdr0);
+
+      hdr0.querySelector('.tam-inv-toggle-btn').addEventListener('click', function(){
         tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
         tamApplyCollapseState();
       });
-      meta.appendChild(singleToggle);
+      hdr0.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){ tamToggleEditMode(0); });
+      hdr0.querySelector('.tam-inv-export-btn').addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
+      hdr0.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){ tamShowStockModal(0); });
+      hdr0.querySelector('.tam-inv-guia-btn').addEventListener('click', function(){ tamShowGuiaModal(0); });
+      hdr0.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
 
-      var singleHdrBtns = document.createElement('div');
-      singleHdrBtns.className = 'tam-inv-hdr-btns';
-      singleHdrBtns.style.cssText = 'width:100%;margin-top:4px;';
+      var banEl0 = document.createElement('div');
+      banEl0.className = 'tam-inv-banner';
+      tamRenderInvoiceBanner(r0, banEl0);
+      block0.appendChild(banEl0);
 
-      var singleEdit = document.createElement('button');
-      singleEdit.className = 'tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '');
-      singleEdit.textContent = tamEditMode[0] ? 'fechar edição' : 'editar';
-      singleEdit.addEventListener('click', function(){ tamToggleEditMode(0); });
-      singleHdrBtns.appendChild(singleEdit);
-      var singleRemove = document.createElement('button');
-      singleRemove.className = 'tam-inv-remove-btn';
-      singleRemove.title = 'remover fatura da sessão';
-      singleRemove.textContent = 'remover fatura';
-      singleRemove.addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
-      singleHdrBtns.appendChild(singleRemove);
+      var tWrap0 = document.createElement('div');
+      tWrap0.className = 'tam-inv-table-wrap';
+      block0.appendChild(tWrap0);
+      wrap.appendChild(block0);
 
-      var singleStock = document.createElement('button');
-      singleStock.className = 'tam-inv-stock-btn';
-      singleStock.textContent = 'ingreso de stock';
-      singleStock.addEventListener('click', function(){ tamShowStockModal(0); });
-      singleHdrBtns.appendChild(singleStock);
-
-      var singleGuia = document.createElement('button');
-      singleGuia.className = 'tam-inv-guia-btn';
-      singleGuia.textContent = 'guía';
-      singleGuia.addEventListener('click', function(){ tamShowGuiaModal(0); });
-      singleHdrBtns.appendChild(singleGuia);
-
-      var singleExport = document.createElement('button');
-      singleExport.className = 'tam-inv-export-btn';
-      singleExport.textContent = 'exportar';
-      singleExport.addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
-      singleHdrBtns.appendChild(singleExport);
-
-      meta.appendChild(singleHdrBtns);
       if (tamEditMode[0]) {
-        tamRenderEditTable(tamInvoices[0], wrap, 0);
+        tamRenderEditTable(r0, tWrap0, 0);
       } else {
-        tamRenderInvoiceTable(tamInvoices[0], wrap, 0);
+        tamRenderInvoiceTable(r0, tWrap0, 0);
       }
       tamApplyCollapseState();
     } else {

@@ -6642,12 +6642,9 @@
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */
-      '.tam-session-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s ease!important; transform-origin:center bottom!important; overflow:visible; }',
-      '.tam-session-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
-      '.tam-session-btn:hover { transform:scale(1.15)!important; }',
-      '.tam-session-btn:hover::after { left:0; right:0; }',
-      '#tam-save-btn::before, #tam-guia-bar-btn::before, #tam-dn-load-bar-btn::before, #tam-ean-tool-btn::before, #tam-dn-cam-bar-btn::before { content:"·"; position:absolute; left:-14px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
-      '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { font-size:.72rem!important; letter-spacing:.12em!important; font-weight:700!important; }',
+      '.tam-session-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-session-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
+      '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { font-size:.72rem!important; letter-spacing:.10em!important; font-weight:700!important; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
@@ -6683,7 +6680,7 @@
       '.tam-inv-hdr-row1 .tam-inv-remove-btn { position:absolute; right:0; }',
       '.tam-inv-hdr-row2 { text-align:center; }',
       '.tam-inv-hdr-row3 { text-align:center; margin-bottom:4px; }',
-      '.tam-inv-hdr-btns { display:flex; align-items:center; gap:20px; flex-wrap:wrap; justify-content:center; }',
+      '.tam-inv-hdr-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }',
       '.tam-th-quick-col-btn { display:block; width:100%; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:7px 4px; box-shadow:inset 0 -2px 0 rgba(0,0,0,.18); transition:background .15s,box-shadow .15s,transform .1s; }',
       '.tam-th-quick-col-btn:hover { background:rgba(0,0,0,.07); box-shadow:inset 0 -3px 0 rgba(0,0,0,.28); }',
       '.tam-th-quick-col-btn:active { transform:translateY(1px); box-shadow:inset 0 2px 0 rgba(0,0,0,.15); }',
@@ -6785,10 +6782,10 @@
       '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
 
       /* ── Session bar — responsive for mobile ── */
-      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:28px; width:100%; max-width:1400px; padding:8px 24px; flex-wrap:wrap; box-sizing:border-box; }',
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:10px; width:100%; max-width:1400px; padding:8px 24px; flex-wrap:wrap; box-sizing:border-box; }',
       '@media (max-width:600px) {',
-      '  #tam-session-bar { gap:16px; padding:8px 0; }',
-      '  .tam-session-btn { font-size:.62rem!important; }',
+      '  #tam-session-bar { gap:8px; padding:8px 12px; }',
+      '  .tam-session-btn { font-size:.62rem!important; padding:4px 10px!important; }',
       '}',
 
       /* ── Box column alternating (proc style — clean) ── */
@@ -6954,19 +6951,13 @@
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
-      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s ease!important; transform-origin:center bottom!important; overflow:visible; }',
-      '.tam-inv-stock-btn::after, .tam-inv-guia-btn::after, .tam-inv-export-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
-      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { transform:scale(1.15)!important; }',
-      '.tam-inv-stock-btn:hover::after, .tam-inv-guia-btn:hover::after, .tam-inv-export-btn:hover::after { left:0; right:0; }',
-      '.tam-inv-hdr-btns .tam-inv-stock-btn::before, .tam-inv-hdr-btns .tam-inv-guia-btn::before, .tam-inv-hdr-btns .tam-inv-export-btn::before { content:"·"; position:absolute; left:-10px; top:50%; transform:translateY(-50%); color:#000; font-size:1.2rem; font-weight:700; pointer-events:none; }',
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
 
       /* ── Edit mode button (proc style) ── */
-      '.tam-inv-edit-btn { position:relative; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:4px 0 6px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:transform .2s ease!important; transform-origin:center bottom!important; overflow:visible; }',
-      '.tam-inv-edit-btn::after { content:""; position:absolute; bottom:0; left:50%; right:50%; height:1.5px; background:#000; transition:left .25s ease,right .25s ease; }',
-      '.tam-inv-edit-btn:hover { transform:scale(1.15)!important; }',
-      '.tam-inv-edit-btn:hover::after { left:0; right:0; }',
-      '.tam-inv-edit-btn.active { color:#4A7C6F; }',
-      '.tam-inv-edit-btn.active::after { background:#4A7C6F; left:0; right:0; }',
+      '.tam-inv-edit-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-inv-edit-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
+      '.tam-inv-edit-btn.active { background:#4A7C6F!important; border-color:#4A7C6F!important; color:#fff!important; }',
 
       /* ── Edit mode table (proc style) ── */
       '.tam-edit-notice { padding:7px 16px; font-size:.72rem; font-weight:700; color:#000; background:#fafafa; border-bottom:1px solid #e0e0e0; font-family:\'MontserratLight\',sans-serif; letter-spacing:.02em; opacity:.6; }',
@@ -7257,7 +7248,7 @@
       /* ── DN Verification area (proc style) ── */
       '#tam-dn-verify-area { width:100%; max-width:520px; margin-top:16px; }',
       '#tam-progress-area { display:none; }',
-      '.tam-inv-stock-btn.tam-inv-stock-active::after { left:0!important; right:0!important; }',
+      '.tam-inv-stock-btn.tam-inv-stock-active { background:#111!important; border-color:#111!important; color:#fff!important; }',
       '.tam-dnv-area { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',
       '.tam-dnv-missing-block { padding:10px 14px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; }',
       '.tam-dnv-missing-hdr { font-size:.78rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
@@ -7339,8 +7330,8 @@
       '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; }',
       '  #tam-invoice-meta button { font-size:.7rem!important; padding:5px 10px!important; }',
       /* Session bar */
-      '  #tam-session-bar { gap:16px; padding:8px 0; }',
-      '  .tam-session-btn { font-size:.62rem!important; }',
+      '  #tam-session-bar { gap:8px; padding:8px 12px; }',
+      '  .tam-session-btn { font-size:.62rem!important; padding:4px 10px!important; }',
       /* Reception area */
       '  .tam-rec-quick-btns { padding:8px 12px; gap:6px; }',
       '  .tam-quick-btn { font-size:.72rem!important; padding:5px 10px!important; }',

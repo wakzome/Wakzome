@@ -1349,6 +1349,10 @@
         }
       }
 
+        var btnFActive = (fVal === g.pieces && pVal === 0)                          ? ' tam-row-action-active' : '';
+        var btnPActive = (pVal === g.pieces && fVal === 0)                          ? ' tam-row-action-active' : '';
+        var btnSActive = (fVal > 0 && pVal > 0 && fVal + pVal === g.pieces)        ? ' tam-row-action-active' : '';
+
       html +=
         '<tr class="' + trClass + '"' + (conf==='CONFLICT' ? ' title="' + tamEsc(g.conflictDetail||'') + '"' : '') + '>' +
         '<td class="tam-td tam-td-num">' + (i+1) + '</td>' +
@@ -1357,13 +1361,13 @@
         '<td class="tam-td tam-td-num">' + g.pieces + '</td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(g.unitPriceWithShip) + '</td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
-        '<td class="tam-td tam-td-num tam-cell-funchal">' + (fVal > 0 ? fVal : '—') + '</td>' +
-        '<td class="tam-td tam-td-num tam-cell-porto">'   + (pVal > 0 ? pVal : '—') + '</td>' +
+        '<td class="tam-td tam-td-num tam-cell-funchal" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-city="f">' + (fVal > 0 ? fVal : '—') + '</td>' +
+        '<td class="tam-td tam-td-num tam-cell-porto"   data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-city="p">' + (pVal > 0 ? pVal : '—') + '</td>' +
         '<td class="tam-td tam-cell-actions">' +
           '<div class="tam-row-action-cell">' +
-            '<button class="tam-row-action-btn" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="funchal">F</button>' +
-            '<button class="tam-row-action-btn" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="porto">P</button>' +
-            '<button class="tam-row-action-btn" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="split">½</button>' +
+            '<button class="tam-row-action-btn' + btnFActive + '" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="funchal">F</button>' +
+            '<button class="tam-row-action-btn' + btnPActive + '" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="porto">P</button>' +
+            '<button class="tam-row-action-btn' + btnSActive + '" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="split">½</button>' +
           '</div>' +
         '</td>' +
         anomalyCell +
@@ -1430,6 +1434,46 @@
         var pieces = parseInt(btn.getAttribute('data-pieces'));
         var mode   = btn.getAttribute('data-mode');
         tamQuickDistribRef(i, ref, pieces, mode);
+      });
+    });
+
+    container.querySelectorAll('.tam-cell-funchal[data-ref], .tam-cell-porto[data-ref]').forEach(function(cell) {
+      cell.addEventListener('dblclick', function(e) {
+        e.stopPropagation();
+        var invI   = parseInt(cell.getAttribute('data-inv'));
+        var ref    = cell.getAttribute('data-ref');
+        var pieces = parseInt(cell.getAttribute('data-pieces'));
+        var city   = cell.getAttribute('data-city');
+        var d      = tamGetRefDistribForInvoice(ref, invI);
+        var currVal = city === 'f' ? (d.f || 0) : (d.p || 0);
+
+        var inp = document.createElement('input');
+        inp.type = 'number'; inp.min = '0'; inp.max = String(pieces);
+        inp.value = currVal > 0 ? currVal : '';
+        inp.style.cssText = 'width:46px;border:1.5px solid #111;border-radius:4px;padding:2px 4px;font-size:.75rem;text-align:center;font-family:\'MontserratLight\',sans-serif;outline:none;';
+        cell.innerHTML = '';
+        cell.appendChild(inp);
+        inp.focus(); inp.select();
+
+        function applyEdit() {
+          var v    = Math.max(0, Math.min(parseInt(inp.value) || 0, pieces));
+          var newF = city === 'f' ? v : Math.max(0, pieces - v);
+          var newP = city === 'p' ? v : Math.max(0, pieces - v);
+          if (newF + newP > pieces) newP = pieces - newF;
+          tamPushUndo();
+          var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invI; });
+          tamDistribToBoxesFiltered(ref, pieces, newF, newP, invBoxes);
+          tamDetectRefCompletions();
+          invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
+          tamRenderAll();
+          tamSaveSession(false);
+        }
+
+        inp.addEventListener('keydown', function(ev) {
+          if (ev.key === 'Enter')  { applyEdit(); ev.preventDefault(); }
+          if (ev.key === 'Escape') { tamRenderAll(); }
+        });
+        inp.addEventListener('blur', applyEdit);
       });
     });
   }
@@ -2241,6 +2285,28 @@
     if (!tamSession) return;
     tamRepairBoxInvIdx();
     var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+    var distrib  = tamGetRefDistribForInvoice(ref, invIdx);
+    var fCurr = distrib.f || 0;
+    var pCurr = distrib.p || 0;
+
+    /* Toggle: si el modo ya está activo → limpiar distribución */
+    var isActive = false;
+    if (mode === 'funchal' && fCurr === pieces && pCurr === 0) isActive = true;
+    if (mode === 'porto'   && pCurr === pieces && fCurr === 0) isActive = true;
+    if (mode === 'split'   && fCurr > 0 && pCurr > 0 && fCurr + pCurr === pieces) isActive = true;
+
+    if (isActive) {
+      tamPushUndo();
+      invBoxes.forEach(function(box) {
+        if (box.refs[ref]) { box.refs[ref].f = 0; box.refs[ref].p = 0; }
+      });
+      tamDetectRefCompletions();
+      invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
+      tamRenderAll();
+      tamSaveSession(false);
+      return;
+    }
+
     tamPushUndo();
     if (mode === 'funchal') {
       tamDistribToBoxesFiltered(ref, pieces, pieces, 0, invBoxes);
@@ -6514,7 +6580,8 @@
       '.tam-cell-actions { padding:3px 4px!important; }',
       '.tam-row-action-cell { display:flex; gap:3px; align-items:center; justify-content:center; }',
       '.tam-row-action-btn { border:1px solid #ccc; background:transparent; border-radius:4px; font-size:.58rem; font-weight:700; padding:2px 5px; cursor:pointer; color:#000; transition:background .12s,border-color .12s; line-height:1; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
-      '.tam-row-action-btn:hover { background:#111; border-color:#111; color:#fff; }',
+      '.tam-row-action-btn:hover { background:#111; border-color:#111; color:#fff!important; }',
+      '.tam-row-action-active { background:#111!important; border-color:#111!important; color:#fff!important; }',
       '.tam-th-empty { background:transparent!important; border:none!important; padding:0!important; }',
       '.tam-quick-header-row th, .tam-quick-split-row th { border-bottom:none!important; padding:4px 6px!important; text-align:center; vertical-align:middle; }',
       '.tam-th-split-cell { text-align:center!important; background:#ececec!important; }',

@@ -270,7 +270,7 @@
       /* Success — clear any deprecation warning */
       tamMotorDSetDeprecated(false);
       /* Track cost */
-      var cost = payload.mode === 'photo' ? 0.004 : payload.mode === 'invoice' ? 0.014 : 0.006;
+      var cost = payload.mode === 'photo' ? 0.004 : payload.mode === 'invoice' ? 0.014 : payload.mode === 'excel_dn' ? 0.008 : 0.006;
       tamMotorDCost = Math.round((tamMotorDCost + cost) * 1000) / 1000;
       console.log('TAM Motor D coste acumulado: $' + tamMotorDCost.toFixed(3));
       var sb = tamSB();
@@ -4522,6 +4522,38 @@
       });
 
       console.log('TAM DN Excel: imported', count, 'DNs from', file.name);
+
+      /* ── Fallback Motor D: si la detección local no encontró nada ── */
+      if (count === 0) {
+        tamMotorDSpinner('Motor D a analisar Excel…');
+        try {
+          var sampleRows = rows.slice(0, 60);
+          var mdRes = await tamMotorDCall({ mode: 'excel_dn', rows: sampleRows });
+          tamMotorDSpinner(null);
+          if (mdRes && mdRes.dns && mdRes.dns.length) {
+            mdRes.dns.forEach(function(dn) {
+              if (!dn.zyCode || !dn.refs || !dn.refs.length) return;
+              if (tamDeliveryNotes[dn.zyCode] && tamDeliveryNotes[dn.zyCode].refs && tamDeliveryNotes[dn.zyCode].refs.length) return;
+              var gesamtPcs = dn.gesamtPcs || dn.refs.reduce(function(s, r){ return s + (r.qty||0); }, 0);
+              tamDeliveryNotes[dn.zyCode] = {
+                zyCode:    dn.zyCode,
+                refs:      dn.refs,
+                fileName:  file.name,
+                gesamtPcs: gesamtPcs,
+                fromExcel: true,
+                motorD:    true
+              };
+              count++;
+            });
+            if (count > 0) console.log('TAM DN Excel Motor D: imported', count, 'DNs');
+          }
+          if (count === 0) tamShowDNError('Motor D não conseguiu identificar DNs no Excel. Verifica o formato do ficheiro.');
+        } catch(emd) {
+          tamMotorDSpinner(null);
+          console.warn('TAM DN Excel Motor D fallback failed', emd);
+          tamShowDNError('Erro ao ler Excel: formato não reconhecido.');
+        }
+      }
       tamRebuildDNMap();
       tamUpdateDNCount();
       tamScheduleSave();

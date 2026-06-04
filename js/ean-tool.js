@@ -325,6 +325,27 @@
   // ═══════════════════════════════════════════════════════════════
   var SUPABASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
+  var MOTOR_D_URL  = 'https://wmvucabpkixdzeanfrzx.supabase.co/functions/v1/Motor-D';
+
+  async function eanMotorDCall(payload) {
+    try {
+      var res = await fetch(MOTOR_D_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'apikey': SUPABASE_KEY
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) return null;
+      var data = await res.json();
+      return data.ok ? data.result : null;
+    } catch(e) {
+      console.warn('EAN Motor D failed:', e.message);
+      return null;
+    }
+  }
 
   async function fetchKnownEans() {
     var known    = new Set();
@@ -434,7 +455,23 @@
       setProg(Math.round((done/total)*85+5), 'PDF '+(pi+1)+'/'+pdfFiles.length+': '+pf.file.name);
       try {
         var words = await extractPdfItems(pf.file);
+        var beforeCount = Object.keys(merged).length;
         parsePDF(words, mergeRef);
+        /* Motor D fallback si el parser local no encontró nada */
+        if (Object.keys(merged).length === beforeCount) {
+          setProg(Math.round((done/total)*85+5), '🤖 Motor D: '+pf.file.name+'…');
+          try {
+            var pdfText = buildRows(words, 14)
+              .map(function(row){ return row.items.map(function(it){ return it.str; }).join(' '); })
+              .join('\n').slice(0, 12000);
+            var mdResPdf = await eanMotorDCall({ mode: 'ean', text: pdfText });
+            if (mdResPdf && mdResPdf.refs && mdResPdf.refs.length) {
+              mdResPdf.refs.forEach(function(r) {
+                if (r.ref && r.eans && r.eans.length) mergeRef(r.ref, r.name||'', r.pvp||'', r.eans, 'pdf-motord', '');
+              });
+            }
+          } catch(emd) { console.warn('EAN Motor D PDF fallback failed', emd); }
+        }
       } catch(err) { console.error('PDF error', pf.file.name, err); }
       done++;
     }
@@ -443,7 +480,26 @@
       setProg(Math.round((done/total)*85+5), 'Excel '+(xi+1)+'/'+xlsxFiles.length+': '+xf.file.name);
       try {
         var sheets = await readXlsx(xf.file);
+        var beforeXlCount = Object.keys(merged).length;
         parseXLSX(sheets, mergeRef);
+        /* Motor D fallback si los motores locales C+D no reconocieron el formato */
+        if (Object.keys(merged).length === beforeXlCount) {
+          setProg(Math.round((done/total)*85+5), '🤖 Motor D: '+xf.file.name+'…');
+          try {
+            var xlText = sheets.map(function(sheet) {
+              return '=== ' + sheet.name + ' ===\n' +
+                sheet.rows.slice(0, 80).map(function(row) {
+                  return row.filter(function(c){ return String(c).trim(); }).join('\t');
+                }).filter(Boolean).join('\n');
+            }).join('\n\n').slice(0, 12000);
+            var mdResXl = await eanMotorDCall({ mode: 'ean', text: xlText });
+            if (mdResXl && mdResXl.refs && mdResXl.refs.length) {
+              mdResXl.refs.forEach(function(r) {
+                if (r.ref && r.eans && r.eans.length) mergeRef(r.ref, r.name||'', r.pvp||'', r.eans, 'xlsx-motord', '');
+              });
+            }
+          } catch(emd) { console.warn('EAN Motor D Excel fallback failed', emd); }
+        }
       } catch(err) { console.error('XLSX error', xf.file.name, err); }
       done++;
     }

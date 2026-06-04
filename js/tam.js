@@ -1290,13 +1290,17 @@
           '<th colspan="2" class="tam-th tam-th-funchal" style="text-align:center;padding:4px;">' +
             '<span class="tam-inv-quick-active">' + (qd === 'funchal' ? '100% FNC' : qd === 'porto' ? '100% PS' : '50/50') + ' ativo</span>' +
             ' <button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + invIdx + '" data-mode="undo">↩ desfazer</button>' +
-          '</th>' + anomalyExtra +
+          '</th>' +
+          '<th class="tam-th-empty"></th>' +
+          anomalyExtra +
         '</tr>'
       : '<tr class="tam-quick-split-row">' +
           '<th colspan="6" class="tam-th-empty"></th>' +
           '<th colspan="2" class="tam-th-split-cell" style="text-align:center;padding:3px;">' +
             '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + invIdx + '" data-mode="split">50 / 50</button>' +
-          '</th>' + anomalyExtra +
+          '</th>' +
+          '<th class="tam-th-empty"></th>' +
+          anomalyExtra +
         '</tr>';
 
     var html =
@@ -1312,6 +1316,7 @@
         '<th class="tam-th">Total</th>' +
         '<th class="tam-th tam-th-funchal"><button class="tam-th-quick-col-btn" data-inv="' + invIdx + '" data-mode="funchal">FNC</button></th>' +
         '<th class="tam-th tam-th-porto"><button class="tam-th-quick-col-btn" data-inv="' + invIdx + '" data-mode="porto">PS</button></th>' +
+        '<th class="tam-th tam-th-actions"></th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
@@ -1354,6 +1359,13 @@
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
         '<td class="tam-td tam-td-num tam-cell-funchal">' + (fVal > 0 ? fVal : '—') + '</td>' +
         '<td class="tam-td tam-td-num tam-cell-porto">'   + (pVal > 0 ? pVal : '—') + '</td>' +
+        '<td class="tam-td tam-cell-actions">' +
+          '<div class="tam-row-action-cell">' +
+            '<button class="tam-row-action-btn" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="funchal">F</button>' +
+            '<button class="tam-row-action-btn" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="porto">P</button>' +
+            '<button class="tam-row-action-btn" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="split">½</button>' +
+          '</div>' +
+        '</td>' +
         anomalyCell +
         '</tr>';
     });
@@ -1376,14 +1388,14 @@
         '<td class="tam-td tam-td-num"><strong>' + r.totalPieces + '</strong></td>' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.subtotalGoods) + '</strong></td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
+        '<td class="tam-td"></td><td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '<tr class="tam-tr-ship' + (r._externalShipping ? ' tam-tr-ship-ext' : '') + '">' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td" colspan="2">' + shipLabel + '</td>' +
         '<td class="tam-td"></td><td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(r.shipping) + '</td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
+        '<td class="tam-td"></td><td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '<tr class="tam-tr-grand">' +
         '<td class="tam-td"></td>' +
@@ -1391,7 +1403,7 @@
         '<td class="tam-td tam-td-num"><strong>' + r.totalPieces + '</strong></td>' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.grandTotal) + '</strong></td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
+        '<td class="tam-td"></td><td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '</tfoot></table>';
 
@@ -1408,6 +1420,16 @@
         var i    = parseInt(btn.getAttribute('data-inv'));
         var mode = btn.getAttribute('data-mode');
         tamQuickDistribInvoice(i, mode);
+      });
+    });
+    container.querySelectorAll('.tam-row-action-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var i      = parseInt(btn.getAttribute('data-inv'));
+        var ref    = btn.getAttribute('data-ref');
+        var pieces = parseInt(btn.getAttribute('data-pieces'));
+        var mode   = btn.getAttribute('data-mode');
+        tamQuickDistribRef(i, ref, pieces, mode);
       });
     });
   }
@@ -2215,6 +2237,35 @@
   }
 
   /* Per-invoice quick distribution */
+  function tamQuickDistribRef(invIdx, ref, pieces, mode) {
+    if (!tamSession) return;
+    tamRepairBoxInvIdx();
+    var invBoxes = tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+    tamPushUndo();
+    if (mode === 'funchal') {
+      tamDistribToBoxesFiltered(ref, pieces, pieces, 0, invBoxes);
+    } else if (mode === 'porto') {
+      tamDistribToBoxesFiltered(ref, pieces, 0, pieces, invBoxes);
+    } else if (mode === 'split') {
+      var half  = Math.floor(pieces / 2);
+      var isOdd = pieces % 2 !== 0;
+      tamDistribToBoxesFiltered(ref, pieces, half, pieces - half - (isOdd ? 1 : 0), invBoxes);
+      if (isOdd) {
+        tamOddPieceDialogFiltered([{ ref:ref, totalPieces:pieces, invBoxes:invBoxes }], 0, invBoxes, function(){
+          tamDetectRefCompletions();
+          invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
+          tamRenderAll();
+          tamSaveSession(false);
+        });
+        return;
+      }
+    }
+    tamDetectRefCompletions();
+    invBoxes.forEach(function(box){ var bi = tamSession.boxes.indexOf(box); if (bi >= 0) tamCheckBoxLock(bi); });
+    tamRenderAll();
+    tamSaveSession(false);
+  }
+
   function tamQuickDistribInvoice(invIdx, mode) {
     if (!tamSession) return;
     tamRepairBoxInvIdx();  // ensure all boxes have invIdx
@@ -6459,6 +6510,11 @@
       /* FNC/PXO defined below with their specific background */
       '.tam-th-funchal { background:#f0f0f0!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
       '.tam-th-porto   { background:#e8e8e8!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
+      '.tam-th-actions { background:transparent!important; border-bottom:2px solid #e0e0e0!important; width:58px; }',
+      '.tam-cell-actions { padding:3px 4px!important; }',
+      '.tam-row-action-cell { display:flex; gap:3px; align-items:center; justify-content:center; }',
+      '.tam-row-action-btn { border:1px solid #ccc; background:transparent; border-radius:4px; font-size:.58rem; font-weight:700; padding:2px 5px; cursor:pointer; color:#000; transition:background .12s,border-color .12s; line-height:1; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
+      '.tam-row-action-btn:hover { background:#111; border-color:#111; color:#fff; }',
       '.tam-th-empty { background:transparent!important; border:none!important; padding:0!important; }',
       '.tam-quick-header-row th, .tam-quick-split-row th { border-bottom:none!important; padding:4px 6px!important; text-align:center; vertical-align:middle; }',
       '.tam-th-split-cell { text-align:center!important; background:#ececec!important; }',

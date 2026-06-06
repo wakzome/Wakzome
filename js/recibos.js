@@ -198,7 +198,7 @@ function rInjectDOM() {
   var tab = document.getElementById('tab-recibos');
   if (tab && !document.getElementById('r-upload-outer')) {
     tab.innerHTML =
-      '<button id="r-gestao-admin-btn">⚙ gerir colaboradoras</button>' +
+      '<button id="r-gestao-admin-btn">⚙ gerir colaboradoras *</button>' +
       '<div id="r-upload-outer">' +
         '<div id="r-hint-pdf" class="r-inline-hint"></div>' +
         '<div id="r-upload-grid">' +

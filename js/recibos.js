@@ -70,12 +70,13 @@ function rShowMesBadge(mes) {
 let rPdfFile = null;
 
 async function rFetchSenhas() {
-  const { data, error } = await sbClient
-    .from('recibos_funcionarias')
-    .select('nome, senha')
-    .eq('ativo', true);
-  if (error) throw new Error('Erro ao carregar senhas da base de dados: ' + error.message);
-  return (data || []).map(function(row) {
+  const res = await fetch('/api/recibos-senhas', { credentials: 'same-origin' });
+  if (!res.ok) {
+    const err = await res.json().catch(function() { return {}; });
+    throw new Error(err.error || 'Erro ao carregar senhas (' + res.status + ')');
+  }
+  const body = await res.json();
+  return (body.senhas || []).map(function(row) {
     return { name: rNormalize(row.nome), pwd: row.senha || null };
   });
 }

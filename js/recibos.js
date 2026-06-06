@@ -60,7 +60,7 @@ function rShowMesBadge(mes) {
     badge.id = 'r-mes-badge';
     badge.style.cssText = 'display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 18px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:10px;font-size:.93rem;font-weight:600;color:#333;';
     // Insere antes dos uploads
-    const anchor = document.getElementById('r-label-pdf') || document.getElementById('r-status-msg');
+    const anchor = document.getElementById('r-upload-outer') || document.getElementById('r-status-msg');
     if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(badge, anchor);
     else document.body.prepend(badge);
   }
@@ -154,7 +154,41 @@ function rInjectStyles() {
     '.modal-btn.primary{border-color:#555;}',
     '.modal-btn.primary:hover{background:#555;color:#fff;}',
     /* ── Mes badge ── */
-    '#r-mes-badge{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 18px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:10px;font-size:.93rem;font-weight:600;color:#333;}'
+    '#r-mes-badge{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 18px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:10px;font-size:.93rem;font-weight:600;color:#333;}',
+    /* ── Admin: gestão de colaboradoras ── */
+    '#r-gestao-admin-btn{display:none;padding:6px 16px;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid #e0e0e0;border-radius:20px;background:#fafafa;font-family:"MontserratLight",sans-serif;margin-bottom:14px;color:#555;transition:background .15s,color .15s,border-color .15s;}',
+    '#r-gestao-admin-btn:hover{background:#111!important;color:#fff!important;border-color:#111!important;}',
+    '#r-gestao-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;justify-content:center;align-items:center;}',
+    '#r-gestao-overlay.show{display:flex;}',
+    '#r-gestao-box{background:#fff;border-radius:18px;padding:28px;max-width:580px;width:93%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}',
+    '#r-gestao-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-shrink:0;}',
+    '#r-gestao-title{font-size:.95rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#000;}',
+    '#r-gestao-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}',
+    '#r-gestao-close:hover{background:#f0f0f0;}',
+    '#r-gestao-list{flex:1;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:8px;}',
+    '.r-gestao-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e0e0e0;border-radius:10px;background:#fafafa;}',
+    '.r-gestao-nome{font-size:.82rem;font-weight:bold;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+    '.r-gestao-senha-wrap{display:flex;align-items:center;gap:6px;margin-top:3px;}',
+    '.r-gestao-senha{font-size:.76rem;font-family:"Courier New",monospace;color:#555;letter-spacing:.05em;}',
+    '.r-gestao-toggle-pwd{background:transparent;border:none;font-size:.75rem;cursor:pointer;color:#aaa;padding:0 2px;line-height:1;}',
+    '.r-gestao-toggle-pwd:hover{color:#000;}',
+    '.r-gestao-actions{display:flex;gap:6px;flex-shrink:0;}',
+    '.r-gestao-btn{padding:5px 10px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid #ccc;border-radius:7px;background:#fff;font-family:"MontserratLight",sans-serif;transition:background .15s,border-color .15s;}',
+    '.r-gestao-btn:hover{background:#f0f0f0;border-color:#999;}',
+    '.r-gestao-btn.del:hover{background:#fff0f0;border-color:#e00;color:#c00;}',
+    '#r-gestao-add-form{border-top:1px solid #e0e0e0;padding-top:16px;flex-shrink:0;}',
+    '#r-gestao-add-title{font-size:.78rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;margin-bottom:10px;}',
+    '#r-gestao-aviso{font-size:.74rem;color:#555;margin-bottom:12px;line-height:1.55;padding:8px 12px;background:#fffbe6;border:1px solid #f0d060;border-radius:8px;}',
+    '.r-gestao-field{margin-bottom:10px;}',
+    '.r-gestao-field label{display:block;font-size:.73rem;font-weight:bold;color:#000;text-transform:uppercase;margin-bottom:4px;letter-spacing:.04em;}',
+    '.r-gestao-field input{width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:8px;font-size:.86rem;font-family:"MontserratLight",sans-serif;font-weight:600;outline:none;box-sizing:border-box;}',
+    '.r-gestao-field input:focus{border-color:#555;}',
+    '#r-gestao-pwd-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;}',
+    '#r-gestao-pwd-row .r-gestao-field{flex:1;margin-bottom:0;}',
+    '#r-gestao-gen-btn{padding:8px 14px;font-size:.76rem;font-weight:600;cursor:pointer;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;font-family:"MontserratLight",sans-serif;white-space:nowrap;flex-shrink:0;transition:background .15s;}',
+    '#r-gestao-gen-btn:hover{background:#e0e0e0;}',
+    '#r-gestao-save-btn{width:100%;padding:10px;font-size:.88rem;font-weight:600;cursor:pointer;border:1.5px solid #555;border-radius:10px;background:#fff;font-family:"MontserratLight",sans-serif;transition:background .15s,color .15s;}',
+    '#r-gestao-save-btn:hover{background:#555;color:#fff;}'
   ].join('');
   document.head.appendChild(s);
 }
@@ -164,6 +198,7 @@ function rInjectDOM() {
   var tab = document.getElementById('tab-recibos');
   if (tab && !document.getElementById('r-upload-outer')) {
     tab.innerHTML =
+      '<button id="r-gestao-admin-btn">⚙ gerir colaboradoras</button>' +
       '<div id="r-upload-outer">' +
         '<div id="r-hint-pdf" class="r-inline-hint"></div>' +
         '<div id="r-upload-grid">' +
@@ -192,7 +227,38 @@ function rInjectDOM() {
         '<p id="r-conferir-note">⚠ pode demorar alguns minutos a atualizar.</p>' +
       '</div>';
   }
-  /* ── Modal (injected into body) ── */
+  /* ── Modal de gestão de colaboradoras ── */
+  if (!document.getElementById('r-gestao-overlay')) {
+    var gestao = document.createElement('div');
+    gestao.id = 'r-gestao-overlay';
+    gestao.innerHTML =
+      '<div id="r-gestao-box">' +
+        '<div id="r-gestao-header">' +
+          '<span id="r-gestao-title">Gestão de Colaboradoras</span>' +
+          '<button id="r-gestao-close">✕</button>' +
+        '</div>' +
+        '<div id="r-gestao-list"></div>' +
+        '<div id="r-gestao-add-form">' +
+          '<div id="r-gestao-add-title">Adicionar nova colaboradora</div>' +
+          '<div id="r-gestao-aviso">⚠ O nome deve ser introduzido exactamente como figura no recibo de salário — com todos os apelidos e sem abreviaturas.</div>' +
+          '<div class="r-gestao-field">' +
+            '<label>Nome completo</label>' +
+            '<input type="text" id="r-gestao-nome-input" placeholder="NOME COMPLETO DA COLABORADORA" autocomplete="off">' +
+          '</div>' +
+          '<div id="r-gestao-pwd-row">' +
+            '<div class="r-gestao-field">' +
+              '<label>Senha de acesso</label>' +
+              '<input type="text" id="r-gestao-pwd-input" placeholder="senha" autocomplete="off">' +
+            '</div>' +
+            '<button id="r-gestao-gen-btn">🎲 gerar senha</button>' +
+          '</div>' +
+          '<button id="r-gestao-save-btn">Guardar colaboradora</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(gestao);
+  }
+
+  /* ── Modal de aviso de senha em falta ── */
   if (!document.getElementById('r-modal-overlay')) {
     var modal = document.createElement('div');
     modal.id = 'r-modal-overlay';
@@ -234,6 +300,140 @@ async function rFetchSenhas() {
   });
 }
 
+/* ══════════════════════════════════════════════════════════════
+   GESTÃO DE COLABORADORAS — apenas para admin
+   ══════════════════════════════════════════════════════════════ */
+
+async function rGestaoApi(method, body) {
+  const opts = { method, credentials: 'same-origin' };
+  if (body) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body); }
+  const res  = await fetch('/api/recibos-gerir', opts);
+  const data = await res.json().catch(function() { return {}; });
+  if (!res.ok) throw new Error(data.error || 'Erro ' + res.status);
+  return data;
+}
+
+function rGestaoGenPwd() {
+  const upper = 'ABCDFGHJKLMNPQRSTVWXYZ';
+  const lower = 'abcdfghjklmnpqrstvwxyz';
+  const c1 = upper[Math.floor(Math.random() * upper.length)];
+  const c2 = lower[Math.floor(Math.random() * lower.length)];
+  const c3 = lower[Math.floor(Math.random() * lower.length)];
+  const n  = String(Math.floor(Math.random() * 89) + 11);
+  return c1 + c2 + c3 + '#' + n;
+}
+
+async function rGestaoOpen() {
+  var overlay = document.getElementById('r-gestao-overlay');
+  if (!overlay) return;
+  overlay.classList.add('show');
+  document.getElementById('r-gestao-nome-input').value = '';
+  document.getElementById('r-gestao-pwd-input').value  = '';
+  var list = document.getElementById('r-gestao-list');
+  list.innerHTML = '<div style="text-align:center;padding:24px;color:#aaa;font-size:.85rem;">a carregar...</div>';
+  try {
+    var data = await rGestaoApi('GET');
+    rGestaoRenderList(data.funcionarias || []);
+  } catch(e) {
+    list.innerHTML = '<div style="color:#c00;text-align:center;padding:24px;font-size:.85rem;">' + e.message + '</div>';
+  }
+}
+
+function rGestaoRenderList(list) {
+  var container = document.getElementById('r-gestao-list');
+  if (!list.length) {
+    container.innerHTML = '<div style="text-align:center;padding:24px;color:#aaa;font-size:.85rem;">Nenhuma colaboradora registada.</div>';
+    return;
+  }
+  container.innerHTML = list.map(function(f) {
+    var inativo = !f.ativo ? ' <span style="font-size:.68rem;color:#e00;font-weight:bold;">(inativa)</span>' : '';
+    return '<div class="r-gestao-row" data-id="' + f.id + '">' +
+      '<div>' +
+        '<div class="r-gestao-nome">' + escHtml(f.nome) + inativo + '</div>' +
+        '<div class="r-gestao-senha-wrap">' +
+          '<span class="r-gestao-senha" data-pwd="' + escHtml(f.senha || '') + '" data-visible="0">••••••••</span>' +
+          '<button class="r-gestao-toggle-pwd" title="mostrar/ocultar senha">👁</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="r-gestao-actions">' +
+        '<button class="r-gestao-btn del" data-id="' + f.id + '" title="Eliminar">🗑</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  container.querySelectorAll('.r-gestao-toggle-pwd').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var senhaEl = btn.closest('.r-gestao-senha-wrap').querySelector('.r-gestao-senha');
+      var visible = senhaEl.getAttribute('data-visible') === '1';
+      senhaEl.textContent = visible ? '••••••••' : (senhaEl.getAttribute('data-pwd') || '—');
+      senhaEl.setAttribute('data-visible', visible ? '0' : '1');
+    });
+  });
+
+  container.querySelectorAll('.r-gestao-btn.del').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var id   = parseInt(btn.getAttribute('data-id'));
+      var nome = btn.closest('.r-gestao-row').querySelector('.r-gestao-nome').textContent.trim();
+      if (!confirm('Tem a certeza que pretende eliminar "' + nome + '"?\nEsta acção é irreversível.')) return;
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        await rGestaoApi('POST', { action: 'delete', id: id });
+        var data = await rGestaoApi('GET');
+        rGestaoRenderList(data.funcionarias || []);
+      } catch(e) {
+        alert('Erro ao eliminar: ' + e.message);
+        btn.disabled = false; btn.textContent = '🗑';
+      }
+    });
+  });
+}
+
+async function rGestaoAddNew() {
+  var nome   = (document.getElementById('r-gestao-nome-input').value || '').trim().toUpperCase();
+  var senha  = (document.getElementById('r-gestao-pwd-input').value  || '').trim();
+  if (!nome) { document.getElementById('r-gestao-nome-input').focus(); return; }
+  var saveBtn = document.getElementById('r-gestao-save-btn');
+  saveBtn.disabled = true; saveBtn.textContent = 'a guardar...';
+  try {
+    await rGestaoApi('POST', { action: 'add', nome: nome, senha: senha || null });
+    document.getElementById('r-gestao-nome-input').value = '';
+    document.getElementById('r-gestao-pwd-input').value  = '';
+    var data = await rGestaoApi('GET');
+    rGestaoRenderList(data.funcionarias || []);
+  } catch(e) {
+    alert('Erro ao adicionar colaboradora: ' + e.message);
+  } finally {
+    saveBtn.disabled = false; saveBtn.textContent = 'Guardar colaboradora';
+  }
+}
+
+function rInitAdmin() {
+  var adminBtn = document.getElementById('r-gestao-admin-btn');
+  var overlay  = document.getElementById('r-gestao-overlay');
+  var closeBtn = document.getElementById('r-gestao-close');
+  var genBtn   = document.getElementById('r-gestao-gen-btn');
+  var saveBtn  = document.getElementById('r-gestao-save-btn');
+  if (!adminBtn) return;
+
+  /* Mostrar apenas para admin */
+  if (window._rol === 'admin') adminBtn.style.display = 'inline-block';
+
+  adminBtn.addEventListener('click', rGestaoOpen);
+
+  if (closeBtn) closeBtn.addEventListener('click', function() {
+    overlay.classList.remove('show');
+  });
+  if (overlay) overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.classList.remove('show');
+  });
+  if (genBtn) genBtn.addEventListener('click', function() {
+    document.getElementById('r-gestao-pwd-input').value = rGestaoGenPwd();
+  });
+  if (saveBtn) saveBtn.addEventListener('click', rGestaoAddNew);
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+
 function rSetupUpload(labelId, inputId, nameId, type) {
   const label = document.getElementById(labelId);
   const input = document.getElementById(inputId);
@@ -255,6 +455,7 @@ function rSetupUpload(labelId, inputId, nameId, type) {
   });
 }
 rSetupUpload('r-label-pdf', 'r-input-pdf', 'r-name-pdf', 'pdf');
+rInitAdmin();
 
 // ── Guide helpers — geometric shapes with SVG text ──
 function rShowGuide(side, title, note) {

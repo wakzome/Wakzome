@@ -67,7 +67,18 @@ function rShowMesBadge(mes) {
   badge.innerHTML = `<span style="color:#888;font-weight:400;font-size:.82rem;">a processar</span><strong style="font-size:1.05em;">${label}</strong>`;
 }
 
-let rPdfFile = null, rCsvFile = null;
+let rPdfFile = null;
+
+async function rFetchSenhas() {
+  const { data, error } = await sbClient
+    .from('recibos_funcionarias')
+    .select('nome, senha')
+    .eq('ativo', true);
+  if (error) throw new Error('Erro ao carregar senhas da base de dados: ' + error.message);
+  return (data || []).map(function(row) {
+    return { name: rNormalize(row.nome), pwd: row.senha || null };
+  });
+}
 
 function rSetupUpload(labelId, inputId, nameId, type) {
   const label = document.getElementById(labelId);
@@ -75,10 +86,8 @@ function rSetupUpload(labelId, inputId, nameId, type) {
   const nameEl = document.getElementById(nameId);
   input.addEventListener('change', e => {
     const f = e.target.files[0]; if (!f) return;
-    if (type === 'pdf') {
-      rPdfFile = f;
-      rShowGuide('right', '③ carrega\no csv\nde senhas', '');
-    } else { rCsvFile = f; }
+    rPdfFile = f;
+    rShowGuide('right', '② clica em\nprocessar\nrecibos', '');
     nameEl.textContent = f.name; rCheckReady();
   });
   label.addEventListener('dragover',  e => { e.preventDefault(); label.classList.add('drag-over'); });
@@ -86,15 +95,12 @@ function rSetupUpload(labelId, inputId, nameId, type) {
   label.addEventListener('drop', e => {
     e.preventDefault(); label.classList.remove('drag-over');
     const f = e.dataTransfer.files[0]; if (!f) return;
-    if (type === 'pdf') {
-      rPdfFile = f;
-      rShowGuide('right', '③ carrega\no csv\nde senhas', '');
-    } else { rCsvFile = f; }
+    rPdfFile = f;
+    rShowGuide('right', '② clica em\nprocessar\nrecibos', '');
     nameEl.textContent = f.name; rCheckReady();
   });
 }
 rSetupUpload('r-label-pdf', 'r-input-pdf', 'r-name-pdf', 'pdf');
-rSetupUpload('r-label-csv', 'r-input-csv', 'r-name-csv', 'csv');
 
 // ── Guide helpers — geometric shapes with SVG text ──
 function rShowGuide(side, title, note) {
@@ -163,16 +169,11 @@ function rHideAllGuides() {
 
 function rCheckReady() {
   const btn = document.getElementById('r-process-btn');
-  const hasPdf = !!rPdfFile;
-  const hasCsv = !!rCsvFile;
-  if (hasPdf && hasCsv) {
+  if (rPdfFile) {
     btn.classList.add('show');
     rShowGuide('left', '', '');
     rShowGuide('right', '', '');
-    rSetStatus('③ Clica em processar recibos · Atenção: recibos sem senha (pessoal administrativo ou sem chave) não serão publicados — podes actualizar o CSV ou introduzir a senha no aviso que aparecerá.');
-  } else if (hasPdf && !hasCsv) {
-    btn.classList.remove('show');
-    rShowGuide('right', '③ carrega\no csv\nde senhas', '');
+    rSetStatus('② Clica em processar recibos · Atenção: recibos sem senha na base de dados não serão publicados — poderás introduzir a senha no aviso que aparecerá.');
   } else {
     btn.classList.remove('show');
   }
@@ -189,9 +190,10 @@ async function rProcessRecibos() {
   rSetProgressDetail('a ler ficheiros…');
   rHideWarnings();
   try {
-    const csvText    = await rCsvFile.text();
-    const csvEntries = rParseCSV(csvText);
-    if (!csvEntries.length) { rSetStatus('⚠️ CSV vazio ou formato inválido. use nome;senha'); rSetProgressDetail(''); btn.disabled = false; return; }
+    rSetStatus('a carregar senhas da base de dados…');
+    rSetProgressDetail('a consultar base de dados…');
+    const csvEntries = await rFetchSenhas();
+    if (!csvEntries.length) { rSetStatus('⚠️ Nenhuma senha encontrada na base de dados. Verifica a tabela recibos_funcionarias.'); rSetProgressDetail(''); btn.disabled = false; return; }
     const pdfBytes = await rPdfFile.arrayBuffer();
     rSetStatus('a ler páginas do pdf…');
     rSetProgressDetail('a extrair páginas…');

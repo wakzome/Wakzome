@@ -169,7 +169,7 @@ function rInjectStyles() {
     '.r-gestao-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e0e0e0;border-radius:10px;background:#fafafa;}',
     '.r-gestao-nome{font-size:.82rem;font-weight:bold;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
     '.r-gestao-senha-wrap{display:flex;align-items:center;gap:6px;margin-top:3px;}',
-    '.r-gestao-senha{font-size:.76rem;font-family:"Courier New",monospace;color:#555;letter-spacing:.05em;}',
+    '.r-gestao-senha{font-size:.85rem;font-family:"Courier New",monospace;color:#555;letter-spacing:.05em;}',
     '.r-gestao-toggle-pwd{background:transparent;border:none;font-size:.75rem;cursor:pointer;color:#aaa;padding:0 2px;line-height:1;}',
     '.r-gestao-toggle-pwd:hover{color:#000;}',
     '.r-gestao-actions{display:flex;gap:6px;flex-shrink:0;}',
@@ -309,6 +309,9 @@ async function rGestaoApi(method, body) {
   if (body) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body); }
   const res  = await fetch('/api/recibos-gerir', opts);
   const data = await res.json().catch(function() { return {}; });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('A tua sessão expirou. Actualiza a página para continuar.');
+  }
   if (!res.ok) throw new Error(data.error || 'Erro ' + res.status);
   return data;
 }

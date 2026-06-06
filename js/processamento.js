@@ -3053,6 +3053,15 @@
     var totalPortoSanto = lines.filter(function(l) { return l.cod==='A5'; }).reduce(function(s,l) { return s+l.qty; }, 0);
     var totalStock      = lines.reduce(function(s,l) { return s + l.qty * l.precio; }, 0);
 
+    /* Delta residual após ajuste de cêntimos */
+    var deltaLabel = '';
+    if (ftValAdj > 0) {
+      var residualCents = Math.round((ftValAdj - totalStock) * 100);
+      deltaLabel = residualCents === 0
+        ? ' \u00b7 \u0394 0,00 \u20ac'
+        : ' \u00b7 \u0394 ' + (residualCents > 0 ? '+' : '') + (residualCents / 100).toFixed(2) + ' \u20ac';
+    }
+
     var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
 
     var modal = document.createElement('div');
@@ -3086,6 +3095,7 @@
       +   '<div class="proc-or-panel-footer">'
       +     lines.length + ' linhas \u00b7 ' + totalFunchal + ' un. Funchal \u00b7 ' + totalPortoSanto + ' un. Porto Santo'
       +     ' \u00b7 <strong style="color:#000;font-size:1rem;letter-spacing:-.01em">Total: ' + totalStock.toFixed(2) + '</strong>'
+      +     deltaLabel
       +     '<span class="proc-or-copy-msg" id="proc-stock-copy-msg" style="margin-left:10px;font-size:.72rem;font-weight:700;"></span>'
       +   '</div>'
       + '</div>';

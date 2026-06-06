@@ -67,6 +67,159 @@ function rShowMesBadge(mes) {
   badge.innerHTML = `<span style="color:#888;font-weight:400;font-size:.82rem;">a processar</span><strong style="font-size:1.05em;">${label}</strong>`;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   RECIBOS — auto-inject: estilos + DOM
+   Cualquier cambio visual o estructural va aquí, nunca en index.html
+   ══════════════════════════════════════════════════════════════ */
+
+function rInjectStyles() {
+  if (document.getElementById('r-styles')) return;
+  var s = document.createElement('style');
+  s.id = 'r-styles';
+  s.textContent = [
+    /* ── Upload area ── */
+    '#r-upload-outer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;width:100%;max-width:700px;margin-bottom:14px;}',
+    '#r-hint-pdf{grid-column:1;display:flex;justify-content:flex-end;}',
+    '#r-upload-grid{grid-column:2;display:grid;grid-template-columns:220px;gap:14px;}',
+    '#r-hint-csv{grid-column:3;display:flex;justify-content:flex-start;}',
+    '@media(max-width:700px){#r-upload-outer{grid-template-columns:1fr;}#r-hint-pdf,#r-hint-csv{display:none;}#r-upload-grid{grid-column:1;grid-template-columns:1fr;}}',
+    '@media(max-width:400px){#r-upload-grid{grid-template-columns:1fr;}.upload-box{min-height:90px;}}',
+    /* ── Upload box ── */
+    '.upload-box{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;border:2px dashed #ccc;border-radius:16px;cursor:pointer;padding:14px;text-align:center;color:#000;font-size:.88rem;font-weight:600;transition:border-color .2s,background .2s;position:relative;}',
+    '.upload-box:hover,.upload-box.drag-over{border-color:#555;background:#f9f9f9;color:#000;}',
+    '.upload-box .upload-icon{font-size:1.7rem;margin-bottom:6px;}',
+    '.upload-box input[type="file"]{display:none;}',
+    '.upload-box .file-loaded{position:absolute;bottom:6px;left:0;right:0;font-size:.72rem;color:#000;text-align:center;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+    /* ── Hints ── */
+    '.r-inline-hint{display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(0.78) translateY(10px);transition:opacity .5s cubic-bezier(.22,1,.36,1),transform .5s cubic-bezier(.22,1,.36,1);pointer-events:none;}',
+    '.r-inline-hint.show{opacity:1;transform:scale(1) translateY(0);}',
+    '#r-hint-pdf{justify-content:flex-end;}',
+    '#r-hint-pdf .hint-shape{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;}',
+    '#r-hint-pdf .hint-shape svg.shape-bg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}',
+    '#r-hint-csv{justify-content:flex-start;}',
+    '#r-hint-csv .hint-shape{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;}',
+    '#r-hint-csv .hint-shape svg.shape-bg{position:absolute;inset:0;width:100%;height:100%;}',
+    '.hint-svg-text{font-family:"MontserratLight",sans-serif;font-weight:bold;font-size:11px;text-anchor:middle;dominant-baseline:middle;}',
+    /* ── Process button ── */
+    '#r-process-btn{padding:9px 36px;font-size:.95rem;font-weight:600;cursor:pointer;border:1px solid #555;border-radius:12px;background:#fff;transition:background .2s,color .2s,transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s cubic-bezier(.22,1,.36,1)!important;margin-bottom:12px;display:none;will-change:transform;}',
+    '#r-process-btn.show{display:inline-block;}',
+    '#r-process-btn:hover{background:#555;color:#fff;transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.07);}',
+    '#r-process-btn:disabled{opacity:.4;cursor:not-allowed;}',
+    '#r-process-btn:active{transform:translateY(1px) scale(.97)!important;box-shadow:none!important;}',
+    '@media(max-width:768px){#r-process-btn{width:100%;max-width:100%;box-sizing:border-box;}}',
+    /* ── Status ── */
+    '#r-status-area{width:100%;max-width:700px;margin-bottom:8px;}',
+    '#r-status-msg{font-size:.9rem;font-weight:600;color:#000;text-align:center;min-height:18px;margin-bottom:6px;}',
+    '#r-warnings-box{display:none;background:#fff8f0;border:1px solid #f0c080;border-radius:12px;padding:12px 16px;}',
+    '#r-warnings-box .warn-title{font-size:.83rem;font-weight:bold;color:#b05000;margin-bottom:6px;}',
+    '#r-warnings-box ul{list-style:none;padding:0;}',
+    '#r-warnings-box ul li{font-size:.83rem;font-weight:600;color:#b05000;padding:2px 0;}',
+    '#r-warnings-box ul li::before{content:"⚠️ ";}',
+    '@media(max-width:768px){#r-status-area{max-width:100%;}}',
+    /* ── Progress ── */
+    '#r-upload-progress{display:none;width:100%;max-width:700px;background:#f2f2f2;border-radius:10px;overflow:hidden;height:6px;margin-bottom:6px;}',
+    '#r-upload-progress-bar{height:100%;background:#555;width:0%;transition:width .3s;}',
+    '#r-progress-detail{font-size:.82rem;font-weight:bold;color:#000;text-align:center;min-height:18px;margin-bottom:6px;width:100%;max-width:700px;}',
+    '@media(max-width:768px){#r-upload-progress,#r-progress-detail{max-width:100%;}}',
+    /* ── Conferir ── */
+    '#r-conferir-fixed{position:fixed;top:50%;right:20px;transform:translateY(-50%);display:none;flex-direction:column;align-items:flex-end;gap:8px;z-index:51;max-width:160px;text-align:right;}',
+    '#r-conferir-fixed.show{display:flex;}',
+    '#r-conferir-btn{padding:9px 18px;font-size:.88rem;font-weight:bold;font-family:"MontserratLight",sans-serif;text-transform:lowercase;cursor:pointer;border:1.5px solid #555;border-radius:12px;background:#fff;transition:background .2s,color .2s,transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s cubic-bezier(.22,1,.36,1)!important;pointer-events:auto;will-change:transform;}',
+    '#r-conferir-btn:hover{background:#555;color:#fff;transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.07);}',
+    '#r-conferir-btn:active{transform:translateY(1px) scale(.97)!important;box-shadow:none!important;}',
+    '#r-conferir-note{font-size:.76rem;font-weight:bold;color:#e09000;margin:0;line-height:1.5;}',
+    '@media(max-width:1024px){#r-conferir-fixed{display:none!important;}}',
+    /* ── Recibos table ── */
+    '#r-recibos-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:15px;overflow:hidden;}',
+    '#r-recibos-table th{background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;}',
+    '#r-recibos-table td{padding:9px 14px;border:1px solid #efefef;font-size:.88rem;font-weight:bold;vertical-align:middle;}',
+    '#r-recibos-table tbody tr:hover td{background:#f5f5f5;}',
+    '.r-status-ok{color:#2a8a2a;font-size:.8rem;}',
+    '.r-status-err{color:#c03000;font-size:.8rem;}',
+    /* ── Modal ── */
+    '#r-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:500;justify-content:center;align-items:center;}',
+    '#r-modal-overlay.show{display:flex;}',
+    '#r-modal-box{background:#fff;border-radius:18px;padding:28px 30px;max-width:420px;width:90%;font-family:"MontserratLight",sans-serif;box-shadow:0 8px 32px rgba(0,0,0,.12);}',
+    '#r-modal-box .modal-title{font-size:.8rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;margin-bottom:6px;}',
+    '#r-modal-box .modal-name{font-size:1.05rem;font-weight:bold;color:#000;margin-bottom:18px;word-break:break-word;}',
+    '#r-modal-box .modal-counter{font-size:.75rem;color:#000;font-weight:600;margin-bottom:16px;}',
+    '#r-modal-pwd-row{display:none;flex-direction:column;gap:6px;margin-bottom:16px;}',
+    '#r-modal-pwd-row label{font-size:.78rem;font-weight:bold;color:#000;text-transform:uppercase;}',
+    '#r-modal-pwd-input{padding:8px 12px;border:1px solid #ccc;border-radius:8px;font-size:.9rem;outline:none;font-family:"MontserratLight",sans-serif;font-weight:600;transition:border-color .25s,box-shadow .25s!important;}',
+    '#r-modal-pwd-input:focus{border-color:#555;box-shadow:0 2px 14px rgba(0,0,0,.06)!important;}',
+    '.modal-btns{display:flex;flex-direction:column;gap:8px;}',
+    '.modal-btn{padding:10px 16px;font-size:.88rem;font-weight:600;cursor:pointer;border-radius:10px;border:1px solid #ccc;background:#fff;text-align:left;transition:background .15s,transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s cubic-bezier(.22,1,.36,1)!important;font-family:"MontserratLight",sans-serif;will-change:transform;}',
+    '.modal-btn:hover{background:#f5f5f5;transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.07);}',
+    '.modal-btn:active{transform:translateY(1px) scale(.97)!important;box-shadow:none!important;}',
+    '.modal-btn.primary{border-color:#555;}',
+    '.modal-btn.primary:hover{background:#555;color:#fff;}',
+    /* ── Mes badge ── */
+    '#r-mes-badge{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 18px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:10px;font-size:.93rem;font-weight:600;color:#333;}'
+  ].join('');
+  document.head.appendChild(s);
+}
+
+function rInjectDOM() {
+  /* ── Tab content ── */
+  var tab = document.getElementById('tab-recibos');
+  if (tab && !document.getElementById('r-upload-outer')) {
+    tab.innerHTML =
+      '<div id="r-upload-outer">' +
+        '<div id="r-hint-pdf" class="r-inline-hint"></div>' +
+        '<div id="r-upload-grid">' +
+          '<label class="upload-box" id="r-label-pdf">' +
+            '<span class="upload-icon">📄</span>' +
+            'pdf de recibos<br>' +
+            '<small style="font-size:.75rem;opacity:.6">clique ou arraste</small>' +
+            '<input type="file" id="r-input-pdf" accept="application/pdf">' +
+            '<span class="file-loaded" id="r-name-pdf"></span>' +
+          '</label>' +
+        '</div>' +
+        '<div id="r-hint-csv" class="r-inline-hint r-inline-hint-right"></div>' +
+      '</div>' +
+      '<button id="r-process-btn">processar recibos</button>' +
+      '<div id="r-status-area">' +
+        '<div id="r-status-msg"></div>' +
+        '<div id="r-warnings-box">' +
+          '<div class="warn-title">senhas em falta — nenhum recibo foi gerado</div>' +
+          '<ul id="r-warnings-list"></ul>' +
+        '</div>' +
+      '</div>' +
+      '<div id="r-upload-progress"><div id="r-upload-progress-bar"></div></div>' +
+      '<div id="r-progress-detail"></div>' +
+      '<div id="r-conferir-fixed">' +
+        '<button id="r-conferir-btn">🔍 conferir recibos</button>' +
+        '<p id="r-conferir-note">⚠ pode demorar alguns minutos a atualizar.</p>' +
+      '</div>';
+  }
+  /* ── Modal (injected into body) ── */
+  if (!document.getElementById('r-modal-overlay')) {
+    var modal = document.createElement('div');
+    modal.id = 'r-modal-overlay';
+    modal.innerHTML =
+      '<div id="r-modal-box">' +
+        '<div class="modal-title">senha em falta</div>' +
+        '<div class="modal-name" id="r-modal-name"></div>' +
+        '<div class="modal-counter" id="r-modal-counter"></div>' +
+        '<div id="r-modal-pwd-row">' +
+          '<label>senha</label>' +
+          '<input type="text" id="r-modal-pwd-input" placeholder="introduza a senha">' +
+        '</div>' +
+        '<div class="modal-btns">' +
+          '<button class="modal-btn primary" id="r-modal-btn-pwd">🔑 introduzir senha agora</button>' +
+          '<button class="modal-btn" id="r-modal-btn-no-pwd">📄 gerar recibo sem senha</button>' +
+          '<button class="modal-btn" id="r-modal-btn-skip">⏭ não gerar recibo</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  }
+}
+
+rInjectStyles();
+rInjectDOM();
+
+/* ══════════════════════════════════════════════════════════════ */
+
 let rPdfFile = null;
 
 async function rFetchSenhas() {

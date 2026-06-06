@@ -37,10 +37,10 @@ function rDetectMes() {
 }
 
 function rLoadConfig() {
-  // Já não há campo manual — o mês é sempre calculado automaticamente
   const mes = rDetectMes();
   localStorage.setItem('gh_mes', mes);
   rShowMesBadge(mes);
+  rInitAdmin();
 }
 
 function rShowMesBadge(mes) {
@@ -198,7 +198,7 @@ function rInjectDOM() {
   var tab = document.getElementById('tab-recibos');
   if (tab && !document.getElementById('r-upload-outer')) {
     tab.innerHTML =
-      '<button id="r-gestao-admin-btn">⚙ gerir colaboradoras *</button>' +
+      '<button id="r-gestao-admin-btn">⚙ gerir colaboradoras</button>' +
       '<div id="r-upload-outer">' +
         '<div id="r-hint-pdf" class="r-inline-hint"></div>' +
         '<div id="r-upload-grid">' +
@@ -415,8 +415,8 @@ function rInitAdmin() {
   var saveBtn  = document.getElementById('r-gestao-save-btn');
   if (!adminBtn) return;
 
-  /* Mostrar apenas para admin */
-  if (window._rol === 'admin') adminBtn.style.display = 'inline-block';
+  /* rLoadConfig() só é chamado no branch admin — mostrar botão directamente */
+  adminBtn.style.display = 'inline-block';
 
   adminBtn.addEventListener('click', rGestaoOpen);
 
@@ -455,7 +455,6 @@ function rSetupUpload(labelId, inputId, nameId, type) {
   });
 }
 rSetupUpload('r-label-pdf', 'r-input-pdf', 'r-name-pdf', 'pdf');
-rInitAdmin();
 
 // ── Guide helpers — geometric shapes with SVG text ──
 function rShowGuide(side, title, note) {

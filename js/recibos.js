@@ -431,7 +431,7 @@ async function rProcessRecibos() {
 
     rSetProgress(100); rHideProgress();
     const uploaded = uploadResults.filter(r => r.uploaded).length;
-    rSetStatus(`✓ ${uploaded} recibos enviados · index.json atualizado (${mes})`);
+    rSetStatus(`✓ ${uploaded} recibos publicados`);
     rSetProgressDetail('');
     rRenderResults(uploadResults, true);
     document.getElementById('r-conferir-fixed').classList.add('show');

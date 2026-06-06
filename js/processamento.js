@@ -3010,6 +3010,29 @@
       l.precio = Math.round(l.precio * 100) / 100;
     });
 
+    /* ── Ajuste de cêntimos: aproximar o total ao valor da fatura ── */
+    var vElAdj  = document.getElementById('proc-valorFactura-' + fid);
+    var ftValAdj = parseFloat(vElAdj ? vElAdj.value : 0) || 0;
+    if (ftValAdj > 0) {
+      var stockTotal = lines.reduce(function(s, l) {
+        return s + Math.round(l.precio * l.qty * 100) / 100;
+      }, 0);
+      var diffCents = Math.round((ftValAdj - stockTotal) * 100);
+      if (diffCents !== 0) {
+        /* Ordenar por qty ascendente — menos peças = menos impacto por cêntimo */
+        var sortedAdj = lines.slice().sort(function(a, b) { return a.qty - b.qty; });
+        for (var ai = 0; ai < sortedAdj.length && diffCents !== 0; ai++) {
+          var ll   = sortedAdj[ai];
+          var sign = diffCents > 0 ? 1 : -1;
+          var afterDiff = diffCents - sign * ll.qty;
+          if (Math.abs(afterDiff) <= Math.abs(diffCents)) {
+            ll.precio = Math.round((ll.precio + sign * 0.01) * 100) / 100;
+            diffCents = afterDiff;
+          }
+        }
+      }
+    }
+
     /* ── Render helpers ── */
     var currentIva = '23';
 

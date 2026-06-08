@@ -1528,17 +1528,74 @@
     return { f: f, p: p };
   }
 
-  /* Distribuir F/P de un ref para uma fatura — soma só as caixas dessa fatura */
+  /* Distribuir F/P de un ref para uma fatura.
+
+     Reglas de atribución (sólo afecta a la distribución MANUAL):
+     · Cajas confirmadas por delivery note (box.dnZyCode): autoritativas — se
+       atribuyen estrictamente por su box.invIdx. El flujo de DN no se altera.
+     · Cajas MANUALES (sin dnZyCode): su invIdx es posicional/arbitrario porque al
+       abrir la caja no se sabe a qué factura pertenece. Por eso su contenido NO se
+       atribuye por caja, sino que se reparte entre las facturas que realmente deben
+       esa referencia, llenando cada una hasta lo que debe (descontando lo que ya
+       cubre la DN) y desbordando a la siguiente. Así, "10 + 10" siempre queda
+       10 en una factura y 10 en la otra, se metan las piezas como se metan. */
   function tamGetRefDistribForInvoice(ref, invIdx) {
     if (!tamSession) return { f: 0, p: 0 };
-    var f = 0, p = 0;
+
+    // 1. Separar contenido DN (por factura) del contenido manual (global).
+    var dnF = {}, dnP = {};
+    var manualF = 0, manualP = 0;
     tamSession.boxes.forEach(function(box){
-      if (box.invIdx === invIdx && box.refs[ref]) {
-        f += (box.refs[ref].f || 0);
-        p += (box.refs[ref].p || 0);
+      var cell = box.refs[ref];
+      if (!cell) return;
+      var f = cell.f || 0, p = cell.p || 0;
+      if (f === 0 && p === 0) return;
+      if (box.dnZyCode) {
+        dnF[box.invIdx] = (dnF[box.invIdx] || 0) + f;
+        dnP[box.invIdx] = (dnP[box.invIdx] || 0) + p;
+      } else {
+        manualF += f;
+        manualP += p;
       }
     });
-    return { f: f, p: p };
+
+    // 2. Facturas que facturan esta referencia, en orden, con lo que deben.
+    var billing = [];
+    tamInvoices.forEach(function(r, i){
+      var owed = 0;
+      r.grouped.forEach(function(g){ if (g.ref === ref) owed += g.pieces; });
+      if (owed > 0) billing.push({ invIdx: i, owed: owed });
+    });
+    if (!billing.length) {
+      // Referencia sin factura asociada: devolver lo que haya por caja DN.
+      return { f: (dnF[invIdx] || 0), p: (dnP[invIdx] || 0) };
+    }
+
+    // 3. Repartir el total manual por deuda restante (llenar y desbordar).
+    var allocTotal = {}, allocF = {};
+    var remTotal = manualF + manualP;
+    billing.forEach(function(b, idx){
+      var isLast    = (idx === billing.length - 1);
+      var dnCovered = (dnF[b.invIdx] || 0) + (dnP[b.invIdx] || 0);
+      var room      = Math.max(0, b.owed - dnCovered);
+      var take      = isLast ? remTotal : Math.min(remTotal, room);
+      if (take < 0) take = 0;
+      allocTotal[b.invIdx] = take;
+      remTotal -= take;
+    });
+    // Split F/P: se asigna F primero (preserva los totales de ciudad globales).
+    var fRem = manualF;
+    billing.forEach(function(b){
+      var t = allocTotal[b.invIdx] || 0;
+      var f = Math.min(t, fRem);
+      allocF[b.invIdx] = f;
+      fRem -= f;
+    });
+
+    // 4. Resultado = porción DN (por invIdx) + porción manual asignada.
+    var totalForInv = (dnF[invIdx] || 0) + (dnP[invIdx] || 0) + (allocTotal[invIdx] || 0);
+    var fForInv     = (dnF[invIdx] || 0) + (allocF[invIdx] || 0);
+    return { f: fForInv, p: totalForInv - fForInv };
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -1818,16 +1875,21 @@
         var targetBox = tamSession.boxes[bi];
         var boxList = targetBox ? [targetBox] : [];
         if (!boxList.length) return;
+        // Use only the portion of this reference that belongs to THIS box's invoice,
+        // so a reference shared across invoices is not fully credited to a single one.
+        var invEntry = c.invoices.find(function(iv){ return iv.invIdx === targetBox.invIdx; });
+        var amount   = invEntry ? invEntry.pieces : (c.invoices.length === 1 ? c.totalPieces : 0);
+        if (!amount) return;
         if (mode === 'funchal') {
-          tamDistribToBoxesFiltered(ref, c.totalPieces, c.totalPieces, 0, boxList);
+          tamDistribToBoxesFiltered(ref, amount, amount, 0, boxList);
         } else if (mode === 'porto') {
-          tamDistribToBoxesFiltered(ref, c.totalPieces, 0, c.totalPieces, boxList);
+          tamDistribToBoxesFiltered(ref, amount, 0, amount, boxList);
         } else if (mode === 'split') {
-          var half  = Math.floor(c.totalPieces / 2);
-          var isOdd = c.totalPieces % 2 !== 0;
-          tamDistribToBoxesFiltered(ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0), boxList);
+          var half  = Math.floor(amount / 2);
+          var isOdd = amount % 2 !== 0;
+          tamDistribToBoxesFiltered(ref, amount, half, amount - half - (isOdd ? 1 : 0), boxList);
           if (isOdd) {
-            tamOddPieceDialogFiltered([{ ref:ref, totalPieces:c.totalPieces }], 0, boxList, function(){
+            tamOddPieceDialogFiltered([{ ref:ref, totalPieces:amount, invBoxes:boxList }], 0, boxList, function(){
               tamDetectRefCompletions();
               tamCheckBoxLock(bi);
               tamRenderAll(); tamSaveSession(false);
@@ -2458,7 +2520,9 @@
     document.body.appendChild(dialog);
 
     function choose(f, p) {
-      tamDistribToBoxesFiltered(c.ref, c.totalPieces, f, p, invBoxes);
+      // Each odd entry may target a different invoice's boxes; prefer its own list.
+      var boxesForThis = c.invBoxes || invBoxes;
+      tamDistribToBoxesFiltered(c.ref, c.totalPieces, f, p, boxesForThis);
       dialog.parentNode.removeChild(dialog);
       tamOddPieceDialogFiltered(oddRefs, idx + 1, invBoxes, onComplete);
     }
@@ -2467,7 +2531,11 @@
     dialog.querySelector('#tam-odd-s').addEventListener('click', function(){ choose(half, half); });
   }
 
-  /* Global quick distribution (area de resumen buttons) */
+  /* Global quick distribution (area de resumen buttons).
+     Invoice-aware: a reference shared across several invoices is split so that
+     EACH invoice receives exactly its own requested pieces (c.invoices[].pieces),
+     distributed only within that invoice's boxes. This prevents the whole
+     consolidated quantity from landing in a single invoice. */
   function tamQuickDistrib(mode) {
     if (!tamSession) return;
     tamPushUndo();
@@ -2480,11 +2548,20 @@
       tamSession.boxes.forEach(function(box, bi){ tamCheckBoxLock(bi); });
     }
 
+    function invBoxesFor(invIdx) {
+      return tamSession.boxes.filter(function(box){ return box.invIdx === invIdx; });
+    }
+
     if (mode === 'funchal' || mode === 'porto') {
       consolidated.forEach(function(c){
-        tamDistribToBoxes(c.ref, c.totalPieces,
-          mode === 'funchal' ? c.totalPieces : 0,
-          mode === 'porto'   ? c.totalPieces : 0);
+        c.invoices.forEach(function(inv){
+          var boxes = invBoxesFor(inv.invIdx);
+          if (!boxes.length || !inv.pieces) return;
+          tamDistribToBoxesFiltered(c.ref, inv.pieces,
+            mode === 'funchal' ? inv.pieces : 0,
+            mode === 'porto'   ? inv.pieces : 0,
+            boxes);
+        });
       });
       afterDistrib();
       tamRenderAll();
@@ -2495,13 +2572,18 @@
     if (mode === 'split') {
       var oddRefs = [];
       consolidated.forEach(function(c){
-        var half  = Math.floor(c.totalPieces / 2);
-        var isOdd = c.totalPieces % 2 !== 0;
-        tamDistribToBoxes(c.ref, c.totalPieces, half, c.totalPieces - half - (isOdd ? 1 : 0));
-        if (isOdd) oddRefs.push(c);
+        c.invoices.forEach(function(inv){
+          var boxes = invBoxesFor(inv.invIdx);
+          if (!boxes.length || !inv.pieces) return;
+          var half  = Math.floor(inv.pieces / 2);
+          var isOdd = inv.pieces % 2 !== 0;
+          tamDistribToBoxesFiltered(c.ref, inv.pieces, half, inv.pieces - half - (isOdd ? 1 : 0), boxes);
+          // Carry the invoice's own boxes so the odd-piece dialog targets them.
+          if (isOdd) oddRefs.push({ ref: c.ref, totalPieces: inv.pieces, invBoxes: boxes });
+        });
       });
       if (oddRefs.length) {
-        tamOddPieceDialog(oddRefs, 0, function(){
+        tamOddPieceDialogFiltered(oddRefs, 0, tamSession.boxes, function(){
           afterDistrib();
           tamRenderAll(); tamSaveSession(false);
         });
@@ -2512,71 +2594,12 @@
     }
   }
 
-  /* Distribute f and p across ALL boxes — works without box.total declared */
-  function tamDistribToBoxes(ref, totalPieces, fTotal, pTotal) {
-    var boxes = tamSession.boxes;
-    if (!boxes.length) return;
-    var declared = boxes.filter(function(b){ return b.total; });
-    var targets  = declared.length ? declared : boxes;
-    var fRem = fTotal, pRem = pTotal, pieceRem = totalPieces;
-    targets.forEach(function(box, i){
-      if (!box.refs[ref]) box.refs[ref] = { f:0, p:0 };
-      var isLast   = (i === targets.length - 1);
-      var capacity = box.total || Math.ceil(totalPieces / targets.length);
-      var share    = isLast ? pieceRem : Math.min(pieceRem, capacity);
-      var fShare   = isLast ? fRem : Math.round(fTotal * share / (totalPieces || 1));
-      var pShare   = share - fShare;
-      fShare = Math.max(0, Math.min(fShare, fRem));
-      pShare = Math.max(0, Math.min(pShare, pRem));
-      box.refs[ref].f = fShare;
-      box.refs[ref].p = pShare;
-      fRem -= fShare; pRem -= pShare; pieceRem -= share;
-    });
-  }
-
   function tamGetBoxRefTotal(box, ref) {
     if (!box.refs[ref]) return 0;
     return (box.refs[ref].f || 0) + (box.refs[ref].p || 0);
   }
 
   /* Sequential dialog for odd-piece refs */
-  function tamOddPieceDialog(oddRefs, idx, onComplete) {
-    if (idx >= oddRefs.length) { onComplete(); return; }
-    var c = oddRefs[idx];
-    var half = Math.floor(c.totalPieces / 2);
-
-    var old = document.getElementById('tam-session-dialog');
-    if (old) old.parentNode.removeChild(old);
-
-    var dialog = document.createElement('div');
-    dialog.id = 'tam-session-dialog';
-    dialog.innerHTML =
-      '<div id="tam-session-dialog-box">' +
-        '<div class="tam-dialog-title">peça impar — ' + (idx+1) + ' de ' + oddRefs.length + '</div>' +
-        '<div class="tam-dialog-body">' +
-          'Referência <strong>' + tamEsc(c.ref) + '</strong><br>' +
-          'Total: <strong>' + c.totalPieces + ' peças</strong> · ' +
-          'Funchal: ' + half + ' · Porto Santo: ' + half + '<br><br>' +
-          'Sobra <strong>1 peça</strong>. Para onde vai?' +
-        '</div>' +
-        '<div class="tam-dialog-btns">' +
-          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-odd-funchal">→ Funchal (' + (half+1) + ' F / ' + half + ' PS)</button>' +
-          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-odd-porto">→ Porto Santo (' + half + ' F / ' + (half+1) + ' PS)</button>' +
-          '<button class="tam-dialog-btn" id="tam-odd-skip">deixar pendente (não distribuir esta peça)</button>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(dialog);
-
-    function choose(f, p) {
-      tamDistribToBoxes(c.ref, c.totalPieces, f, p);
-      dialog.parentNode.removeChild(dialog);
-      tamOddPieceDialog(oddRefs, idx + 1, onComplete);
-    }
-
-    dialog.querySelector('#tam-odd-funchal').addEventListener('click', function(){ choose(half+1, half); });
-    dialog.querySelector('#tam-odd-porto').addEventListener('click',   function(){ choose(half, half+1); });
-    dialog.querySelector('#tam-odd-skip').addEventListener('click',    function(){ choose(half, half); }); // leaves 1 unassigned
-  }
   function tamRenderProgress() {
     var area = document.getElementById('tam-progress-area');
     if (area) area.innerHTML = '';

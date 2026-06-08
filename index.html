@@ -1034,8 +1034,6 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 .tab-btn.active { color: #000; border-bottom-color: #555; }
 .tab-panel { display: none; flex-direction: column; align-items: center; width: 100%; }
 .tab-panel.active { display: flex; flex: 1; overflow: hidden; }
-#tab-salarios.active.s-loaded { flex: none; overflow: visible; }
-#admin-app.s-loaded { overflow-y: auto; overflow-x: hidden; }
 #tab-horarios.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; width: 100%; }
 
 #admin-app #tab-nav { display: none !important; }
@@ -1316,8 +1314,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
     padding-top: 0 !important;
   }
   
-  #admin-app.module-open.tam-loaded,
-  #admin-app.module-open.s-loaded {
+  #admin-app.module-open.tam-loaded {
     overflow-y: auto !important;
     height: 100vh !important;
   }
@@ -1338,8 +1335,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
     padding: 20px 16px 60px !important;
   }
   
-  #admin-app.module-open #tab-tam.active.tam-loaded,
-  #admin-app.module-open #tab-salarios.active.s-loaded {
+  #admin-app.module-open #tab-tam.active.tam-loaded {
     flex: none !important;
     overflow: visible !important;
   }
@@ -1364,47 +1360,6 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 
 .results-wrap { width: 100%; max-width: 700px; overflow-x: auto; }
 .row-num { color: #000; font-size: .78rem; text-align: center !important; min-width: 24px; }
-
-#s-upload-zone {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 14px; margin-bottom: 28px; width: 100%; max-width: 480px;
-}
-#s-upload-label {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; width: 100%; min-height: 130px;
-  border: 2px dashed #ccc; border-radius: 16px; cursor: pointer;
-  transition: border-color .2s, background .2s, min-height .3s, padding .3s; padding: 20px;
-  text-align: center; color: #000; font-size: .95rem; font-weight: 600;
-}
-#s-upload-label.loaded {
-  min-height: 0; padding: 10px 20px;
-}
-#s-upload-label:hover, #s-upload-label.drag-over { border-color: #555; background: #f9f9f9; color: #000; }
-#s-upload-label .upload-icon { font-size: 2.2rem; margin-bottom: 8px; }
-#s-file-input { display: none; }
-#s-file-name { font-size: .85rem; color: #000; font-weight: 600; min-height: 18px; }
-#s-status-msg { font-size: .9rem; font-weight: 600; color: #000; min-height: 20px; text-align: center; }
-#s-salary-table {
-  width: 100%; border-collapse: separate; border-spacing: 0;
-  border-radius: 15px; overflow: hidden; font-family: 'MontserratLight', sans-serif;
-}
-#s-salary-table th {
-  background: #e0e0e0; padding: 10px 14px; text-align: left;
-  font-size: .85rem; font-weight: bold; text-transform: uppercase;
-  letter-spacing: .04em; border: 1px solid #e6e6e6;
-}
-#s-salary-table th:last-child { text-align: right; }
-#s-salary-table td {
-  padding: 9px 14px; border: 1px solid #efefef;
-  font-size: .92rem; font-weight: bold; vertical-align: middle;
-}
-#s-salary-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-#s-salary-table tbody tr:hover td { background: #f5f5f5; }
-#s-salary-table tfoot td {
-  background: #f2f2f2; font-weight: bold;
-  border-top: 2px solid #ccc; padding: 10px 14px;
-}
-#s-salary-table tfoot td:last-child { text-align: right; }
 
 /* ── recibos styles injected by recibos.js ── */
 
@@ -2164,7 +2119,6 @@ input, textarea { cursor: text !important; }
   #tab-ferias.active { min-height: 60vh; overflow: visible !important; }
   #f-area { overflow: visible !important; flex: none !important; min-height: 200px; }
   
-  #tab-salarios.active,
   #tab-recibos.active,
   #tab-ferias.active,
   #tab-editor.active {
@@ -2172,10 +2126,6 @@ input, textarea { cursor: text !important; }
     width: 100%;
     max-width: 100%;
   }
-
-  
-  #s-upload-zone { max-width: 100%; }
-  #s-upload-label { min-height: 100px; }
 
   
   #h-store-selector { flex-direction: row; flex-wrap: wrap; justify-content: center; }

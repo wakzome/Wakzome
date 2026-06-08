@@ -855,3 +855,270 @@ function rSanitizeName(name) {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').toLowerCase();
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MOTOR DE FISCALIZAÇÃO — v1.0
+   Complemento ao sistema de recibos existente.
+   Zero alterações a funções existentes (separação, encriptação,
+   upload). Monkey-patch cirúrgico em rExtractPages + MutationObserver.
+   ══════════════════════════════════════════════════════════════ */
+
+(function rFiscInit() {
+
+  /* ─────────────────────────────────────────────────────────────
+     PADRÕES DE DETECÇÃO
+     Derivados da análise de Jan–Mai 2026.
+     ──────────────────────────────────────────────────────────── */
+
+  // Marca única de recibo tipo "Subsídio Férias" — nota gerada pelo TOConline
+  const RX_TIPO_FERIAS = /O ABONO VENCIMENTO BASE CONTRIBUIU COM O VALOR DE/i;
+
+  // Marca de recibo tipo "Encerramento" (cabeçalho)
+  const RX_TIPO_ENCERRAMENTO = /\bENCERRAMENTO\b/i;
+
+  // Marcadores de liquidação legítima: só aparecem em Encerramento
+  const RX_LIQUIDACAO = /SUBSIDIO NATAL FIM CONTRATO|NATAL FIM CONTRATO/i;
+
+  // Subsídio de Alimentação com dias reais (QTD > 0): "SUBS. ALIMENTACAO 22D"
+  const RX_ALIM_DIAS = /SUBS\.?\s*ALIMENTACAO\s+(\d+)D/i;
+
+  // Abono para Falhas de Caixa seguido do valor (captura o número)
+  const RX_FALHAS_VALOR = /ABONO PARA FALHAS DE CAIXA\s+([\d.,]+)/i;
+
+  /* ─────────────────────────────────────────────────────────────
+     UTILITÁRIO: parse de valor monetário português
+     "35,00" → 35.00   |   "1.289,60" → 1289.60
+     ──────────────────────────────────────────────────────────── */
+  function parsePT(str) {
+    return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     MOTOR 1 — Classificador de Tipo de Recibo
+     Determina o tipo de cada página pelo texto extraído.
+     Retorna: 'ENCERRAMENTO' | 'SUBSIDIO_FERIAS' | 'NORMAL'
+     ──────────────────────────────────────────────────────────── */
+  function m1_classificarTipo(pageText) {
+    if (RX_TIPO_ENCERRAMENTO.test(pageText)) return 'ENCERRAMENTO';
+    if (RX_TIPO_FERIAS.test(pageText))       return 'SUBSIDIO_FERIAS';
+    return 'NORMAL';
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     MOTOR 2 — Detector de Subsídios Proibidos
+     Analisa a página Normal de um grupo multi-recibo.
+     Retorna: { alimentacao: bool, falhas: bool }
+     ──────────────────────────────────────────────────────────── */
+  function m2_detectarProibidos(pageText) {
+    const resultado = { alimentacao: false, falhas: false };
+
+    const mAlim = pageText.match(RX_ALIM_DIAS);
+    if (mAlim && parseInt(mAlim[1], 10) > 0) {
+      resultado.alimentacao = true;
+    }
+
+    const mFalhas = pageText.match(RX_FALHAS_VALOR);
+    if (mFalhas && parsePT(mFalhas[1]) > 0) {
+      resultado.falhas = true;
+    }
+
+    return resultado;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     MOTOR 3 — Verificador de Contexto Legítimo (Anti-falso-positivo)
+     Um grupo com marcadores de liquidação é sempre legítimo,
+     mesmo que contenha Subsídio de Férias.
+     ──────────────────────────────────────────────────────────── */
+  function m3_ehLiquidacaoLegitima(paginasGrupo) {
+    return paginasGrupo.some(function(p) {
+      return RX_LIQUIDACAO.test(p.text);
+    });
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     MOTOR 4 — Analisador de Estrutura do Par
+     Só actua sobre pares Normal + Subsídio Férias canónicos.
+     Pares inesperados (ex: dois Normais) são ignorados.
+     ──────────────────────────────────────────────────────────── */
+  function m4_analisarPar(paginasGrupo, tipos) {
+    if (paginasGrupo.length < 2) return { valido: false };
+    var temNormal  = tipos.indexOf('NORMAL')          !== -1;
+    var temFerias  = tipos.indexOf('SUBSIDIO_FERIAS') !== -1;
+    var temEnc     = tipos.indexOf('ENCERRAMENTO')    !== -1;
+    if (temEnc)                return { valido: false }; // Encerramento nunca é par
+    if (temNormal && temFerias) return { valido: true  };
+    return { valido: false };
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     FISCALIZADOR — Árbitro dos 4 motores
+     Exige consenso antes de emitir qualquer alerta.
+     ──────────────────────────────────────────────────────────── */
+  function rFiscalizar(pages) {
+    // Agrupar por detectedName (espelha a lógica do motor principal)
+    var grouped = {};
+    for (var i = 0; i < pages.length; i++) {
+      var page = pages[i];
+      var key  = page.detectedName || ('pagina_' + page.pageIndex);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(page);
+    }
+
+    var alertas = [];
+    var nomes   = Object.keys(grouped);
+
+    for (var n = 0; n < nomes.length; n++) {
+      var nome = nomes[n];
+      var pgs  = grouped[nome];
+
+      // Só interessa quem tem mais de um recibo
+      if (pgs.length < 2) continue;
+
+      // Motor 1: determinar tipo de cada página
+      var tipos = pgs.map(function(p) { return m1_classificarTipo(p.text); });
+
+      // Motor 3: excepção de liquidação → legítimo, nunca alertar
+      if (m3_ehLiquidacaoLegitima(pgs)) continue;
+
+      // Motor 4: só actua em pares canónicos Normal + Subsídio Férias
+      var estrutura = m4_analisarPar(pgs, tipos);
+      if (!estrutura.valido) continue;
+
+      // Isolar a página Normal (onde os subsídios não devem aparecer)
+      var normalIdx  = tipos.indexOf('NORMAL');
+      var normalPage = pgs[normalIdx];
+      if (!normalPage) continue;
+
+      // Motor 2: detectar subsídios proibidos na página Normal
+      var proibidos = m2_detectarProibidos(normalPage.text);
+      if (!proibidos.alimentacao && !proibidos.falhas) continue;
+
+      // Consensus de todos os motores → emitir alerta
+      var itens = [];
+      if (proibidos.alimentacao) itens.push('Subsídio de Alimentação');
+      if (proibidos.falhas)      itens.push('Abono para Falhas de Caixa');
+
+      alertas.push({
+        nome : nome,
+        itens: itens,
+        msg  : 'Rever o recibo de ' + nome + ': recebeu Subsídio de Férias e o recibo Normal inclui ' + itens.join(' e ') + '.'
+      });
+    }
+
+    return alertas;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     UI — Caixa de alertas do fiscalizador
+     Independente do #r-warnings-box existente.
+     ──────────────────────────────────────────────────────────── */
+  function rFiscInjectUI() {
+    if (document.getElementById('r-fisc-box')) return;
+
+    var style = document.createElement('style');
+    style.id  = 'r-fisc-styles';
+    style.textContent = [
+      '#r-fisc-box{display:none;width:100%;max-width:700px;margin-top:8px;background:#fff5f5;border:1.5px solid #e8a0a0;border-radius:12px;padding:12px 16px;box-sizing:border-box;}',
+      '@media(max-width:768px){#r-fisc-box{max-width:100%;}}',
+      '#r-fisc-box .fisc-title{font-size:.83rem;font-weight:bold;color:#9a0000;margin-bottom:8px;}',
+      '#r-fisc-box ul{list-style:none;padding:0;margin:0;}',
+      '#r-fisc-box ul li{font-size:.82rem;font-weight:600;color:#9a0000;padding:3px 0;border-bottom:1px solid rgba(220,150,150,.35);line-height:1.5;}',
+      '#r-fisc-box ul li:last-child{border-bottom:none;}',
+      '#r-fisc-box ul li::before{content:"🔴 ";}'
+    ].join('');
+    document.head.appendChild(style);
+
+    var box = document.createElement('div');
+    box.id  = 'r-fisc-box';
+    box.innerHTML = '<div class="fisc-title">⚠️ Fiscalização — Irregularidades Detectadas</div><ul id="r-fisc-list"></ul>';
+
+    var anchor = document.getElementById('r-status-area');
+    if (anchor) {
+      anchor.appendChild(box);
+    }
+  }
+
+  function rFiscMostrar(alertas) {
+    var box  = document.getElementById('r-fisc-box');
+    var list = document.getElementById('r-fisc-list');
+    if (!box || !list) return;
+    if (!alertas || !alertas.length) { box.style.display = 'none'; return; }
+    list.innerHTML = alertas.map(function(a) {
+      return '<li>' + escHtml(a.msg) + '</li>';
+    }).join('');
+    box.style.display = 'block';
+  }
+
+  function rFiscLimpar() {
+    var box = document.getElementById('r-fisc-box');
+    if (box) box.style.display = 'none';
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     MONKEY-PATCH CIRÚRGICO em rExtractPages
+     Captura as páginas como efeito lateral, sem alterar retorno.
+     ──────────────────────────────────────────────────────────── */
+  var _origExtractPages = rExtractPages;
+  rExtractPages = async function(pdfBytes) {
+    var pages = await _origExtractPages(pdfBytes);
+    window._rFiscPages = pages;
+    return pages;
+  };
+
+  /* ─────────────────────────────────────────────────────────────
+     OBSERVER — Dispara fiscalização quando upload termina
+     Observa #r-conferir-fixed.show (sinal de conclusão do processo).
+     ──────────────────────────────────────────────────────────── */
+  function rFiscObservar() {
+    var conferirFixed = document.getElementById('r-conferir-fixed');
+    if (!conferirFixed) return;
+
+    var jaFiscalizou = false;
+
+    // Limpa estado no início de cada novo processamento
+    var btnProcess = document.getElementById('r-process-btn');
+    if (btnProcess) {
+      btnProcess.addEventListener('click', function() {
+        jaFiscalizou      = false;
+        window._rFiscPages = null;
+        rFiscLimpar();
+      }, { capture: true });
+    }
+
+    var observer = new MutationObserver(function() {
+      var ativo = conferirFixed.classList.contains('show');
+
+      if (ativo && !jaFiscalizou && window._rFiscPages) {
+        jaFiscalizou = true;
+        try {
+          var alertas = rFiscalizar(window._rFiscPages);
+          rFiscMostrar(alertas);
+        } catch (err) {
+          console.error('[Fiscalizador]', err);
+        }
+      }
+
+      if (!ativo) {
+        jaFiscalizou = false;
+      }
+    });
+
+    observer.observe(conferirFixed, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     BOOTSTRAP
+     ──────────────────────────────────────────────────────────── */
+  function rFiscBootstrap() {
+    rFiscInjectUI();
+    rFiscObservar();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', rFiscBootstrap);
+  } else {
+    rFiscBootstrap();
+  }
+
+})();

@@ -1129,8 +1129,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   pointer-events: none;
 }
 
-.adm-mod-card[data-module="salarios"]::before  { background: linear-gradient(145deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); }
-.adm-mod-card[data-module="recibos"]::before   { background: linear-gradient(145deg, #0d1b2a 0%, #1b2838 60%, #1e3a5f 100%); }
+.adm-mod-card[data-module="pagamentos"]::before { background: linear-gradient(145deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); }
 .adm-mod-card[data-module="agenda"]::before    { background: linear-gradient(145deg, #1a1a2e 0%, #2d1b4e 60%, #3b1f6b 100%); }
 .adm-mod-card[data-module="rotulos"]::before   { background: linear-gradient(145deg, #1c1410 0%, #2e1f0e 60%, #4a2f10 100%); }
 .adm-mod-card[data-module="horarios"]::before  { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
@@ -3605,7 +3604,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       <div class="adm-tagline">SELECIONE UM MÓDULO</div>
     </div>
     <div id="adm-module-grid">
-      <div class="adm-mod-card" data-module="salarios" style="animation-delay:0.05s">
+      <div class="adm-mod-card" data-module="pagamentos" style="animation-delay:0.05s">
         <span class="adm-mod-icon">
           <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
@@ -3613,21 +3612,8 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
           </svg>
         </span>
         <div>
-          <div class="adm-mod-name">SALÁRIOS</div>
-          <div class="adm-mod-desc">processamento de salários</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      <div class="adm-mod-card" data-module="recibos" style="animation-delay:0.10s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="5" y="3" width="14" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">RECIBOS</div>
-          <div class="adm-mod-desc">encriptação e envio de recibos</div>
+          <div class="adm-mod-name">PAGAMENTOS</div>
+          <div class="adm-mod-desc">salários · recibos</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
@@ -3720,8 +3706,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   </div>
 
   <div id="tab-nav" class="reveal-item" style="opacity:0;">
-    <button class="tab-btn active" data-tab="salarios">salários</button>
-    <button class="tab-btn" data-tab="recibos">recibos</button>
+    <button class="tab-btn active" data-tab="pagamentos">pagamentos</button>
     <button class="tab-btn" data-tab="agenda">agenda</button>
     <button class="tab-btn" data-tab="rotulos">rótulos</button>
     <button class="tab-btn" data-tab="horarios">horários</button>
@@ -3735,8 +3720,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   
   <div id="admin-menu-overlay"></div>
   <div id="admin-menu-drawer">
-    <button class="drawer-tab-btn active" data-tab="salarios">salários</button>
-    <button class="drawer-tab-btn" data-tab="recibos">recibos</button>
+    <button class="drawer-tab-btn active" data-tab="pagamentos">pagamentos</button>
     <button class="drawer-tab-btn" data-tab="agenda">agenda</button>
     <button class="drawer-tab-btn" data-tab="rotulos">rótulos</button>
     <button class="drawer-tab-btn" data-tab="horarios">horários</button>
@@ -3748,23 +3732,28 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   </div>
 
   
-  <div id="tab-salarios" class="tab-panel active">
-    <div id="s-upload-zone">
-      <label id="s-upload-label" for="s-file-input">
-        <span class="upload-icon">📄</span>
-        carregar pdf de salários<br>
-        <small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro aqui</small>
-      </label>
-      <input type="file" id="s-file-input" accept="application/pdf">
-      <div id="s-file-name"></div>
-      <div id="s-status-msg"></div>
+  <div id="tab-pagamentos" class="tab-panel active">
+    <div id="pag-split">
+      <div id="pag-col-salarios">
+        <div id="s-upload-zone">
+          <label id="s-upload-label" for="s-file-input">
+            <span class="upload-icon">📄</span>
+            carregar pdf de salários<br>
+            <small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro aqui</small>
+          </label>
+          <input type="file" id="s-file-input" accept="application/pdf">
+          <div id="s-file-name"></div>
+          <div id="s-status-msg"></div>
+        </div>
+        <div class="results-wrap" id="s-results-wrap"></div>
+      </div>
+      <div id="pag-divider"></div>
+      <div id="pag-col-recibos">
+        <div id="tab-recibos">
+          <!-- DOM injected by recibos.js -->
+        </div>
+      </div>
     </div>
-    <div class="results-wrap" id="s-results-wrap"></div>
-  </div>
-
-  
-  <div id="tab-recibos" class="tab-panel">
-    <!-- DOM injected by recibos.js -->
   </div>
   
   <div id="tab-agenda" class="tab-panel"></div>
@@ -4543,8 +4532,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 
 (function () {
   var MODULE_LABELS = {
-    salarios:      'salários',
-    recibos:       'recibos',
+    pagamentos:    'pagamentos',
     agenda:        'agenda',
     rotulos:       'rótulos',
     horarios:      'horários',
@@ -4834,7 +4822,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 <script>
 
 (function () {
-  var _lastTab = 'salarios';
+  var _lastTab = 'pagamentos';
 
   function interceptOverlayTabs() {
     document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(function (btn) {

@@ -17,7 +17,7 @@
     st.id = sid;
     st.textContent = [
       // ── Layout do tab e scroll de página ──
-      '#tab-salarios.active.s-loaded { flex: none; overflow: visible; }',
+      '#tab-pagamentos.active.s-loaded { flex: none; overflow: visible; }',
       '#admin-app.s-loaded { overflow-y: auto; overflow-x: hidden; }',
 
       // ── Zona de upload ──
@@ -70,13 +70,33 @@
       '#s-errors-summary li { margin-bottom:2px; }',
       '#s-errors-summary strong { font-weight:700; }',
 
+      // ── Layout split pagamentos ──
+      '#pag-split { display:grid; grid-template-columns:1fr 1px 1fr; gap:0; width:100%; min-height:100%; align-items:start; }',
+      '#pag-divider { background:#e8e8e8; align-self:stretch; min-height:300px; }',
+      '#pag-col-salarios { display:flex; flex-direction:column; align-items:center; padding:32px 24px 40px; box-sizing:border-box; }',
+      '#pag-col-recibos { display:flex; flex-direction:column; align-items:center; padding:32px 24px 40px; box-sizing:border-box; }',
+      '#pag-col-recibos #tab-recibos { width:100%; display:flex; flex-direction:column; align-items:center; }',
+
+      // ── Modal de resultados de salários ──
+      '#s-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:600; justify-content:center; align-items:flex-start; padding:40px 16px 40px; box-sizing:border-box; overflow-y:auto; }',
+      '#s-modal-overlay.show { display:flex; }',
+      '#s-modal-box { background:#fff; border-radius:18px; width:100%; max-width:760px; padding:28px 28px 32px; box-shadow:0 12px 48px rgba(0,0,0,0.18); font-family:"MontserratLight",sans-serif; position:relative; margin:auto; }',
+      '#s-modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }',
+      '#s-modal-title { font-size:.82rem; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#000; }',
+      '#s-modal-close { background:transparent; border:none; font-size:1.2rem; cursor:pointer; color:#888; padding:4px 8px; border-radius:6px; line-height:1; transition:color .15s, background .15s; }',
+      '#s-modal-close:hover { background:#f0f0f0; color:#000; }',
+      '#s-modal-body { width:100%; }',
+
       // ── Media queries ──
       '@media (max-width: 768px) {',
-      '  #tab-salarios.active { overflow:visible !important; width:100%; max-width:100%; }',
+      '  #tab-pagamentos.active { overflow:visible !important; width:100%; max-width:100%; }',
+      '  #pag-split { grid-template-columns:1fr; grid-template-rows:auto auto auto; }',
+      '  #pag-divider { min-height:1px; height:1px; align-self:auto; }',
+      '  #pag-col-salarios, #pag-col-recibos { padding:24px 16px 32px; }',
       '  #s-upload-zone { max-width:100%; }',
       '  #s-upload-label { min-height:100px; }',
       '  #admin-app.module-open.s-loaded { overflow-y:auto !important; height:100vh !important; }',
-      '  #admin-app.module-open #tab-salarios.active.s-loaded { flex:none !important; overflow:visible !important; }',
+      '  #admin-app.module-open #tab-pagamentos.active.s-loaded { flex:none !important; overflow:visible !important; }',
       '}',
     ].join('\n');
     document.head.appendChild(st);
@@ -85,6 +105,31 @@
   // ══════════════════════════════════════════════════════════════
   //  ADMIN: SALÁRIOS
   // ══════════════════════════════════════════════════════════════
+
+  // ── Injectar modal de resultados en el DOM ──
+  (function () {
+    if (document.getElementById('s-modal-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'z-modal-overlay';
+    overlay.innerHTML =
+      '<div id="s-modal-overlay">' +
+        '<div id="s-modal-box">' +
+          '<div id="s-modal-header">' +
+            '<span id="s-modal-title">processamento de salários</span>' +
+            '<button id="s-modal-close" title="Fechar">✕</button>' +
+          '</div>' +
+          '<div id="s-modal-body"></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay.firstElementChild);
+    document.getElementById('s-modal-close').addEventListener('click', function () {
+      document.getElementById('s-modal-overlay').classList.remove('show');
+    });
+    document.getElementById('s-modal-overlay').addEventListener('click', function (e) {
+      if (e.target === this) this.classList.remove('show');
+    });
+  })();
+
   let sTableData = [];
 
   const sUploadLabel = document.getElementById('s-upload-label');
@@ -103,10 +148,12 @@
     document.getElementById('s-file-name').innerHTML = '';
     document.getElementById('s-status-msg').textContent = '';
     document.getElementById('s-results-wrap').innerHTML = '';
+    document.getElementById('s-modal-body').innerHTML = '';
+    document.getElementById('s-modal-overlay').classList.remove('show');
     document.getElementById('s-file-input').value = '';
     sUploadLabel.style.display = '';
     sResetBtn.classList.remove('visible');
-    document.getElementById('tab-salarios').classList.remove('s-loaded');
+    document.getElementById('tab-pagamentos').classList.remove('s-loaded');
     const adminApp = document.getElementById('admin-app');
     adminApp.classList.remove('s-loaded');
     delete adminApp.dataset.sLoaded;
@@ -166,11 +213,13 @@
       sUploadLabel.style.display = 'none';
       sResetBtn.classList.add('visible');
       document.getElementById('s-upload-label').classList.add('loaded');
-      document.getElementById('tab-salarios').classList.add('s-loaded');
+      document.getElementById('tab-pagamentos').classList.add('s-loaded');
       const adminApp = document.getElementById('admin-app');
       adminApp.classList.add('s-loaded');
       adminApp.dataset.sLoaded = '1';
       document.body.style.overflow = 'auto';
+      // Abrir modal con los resultados
+      document.getElementById('s-modal-overlay').classList.add('show');
     } catch (err) {
       console.error(err);
       document.getElementById('s-status-msg').textContent = 'erro ao processar o ficheiro.';
@@ -226,7 +275,7 @@
       return !isNaN(n) && n > 0;
     });
     if (!filtered.length) {
-      document.getElementById('s-results-wrap').innerHTML = '<p style="text-align:center;color:#888;font-weight:600;margin-top:20px;">nenhum colaborador com vencimento positivo.</p>';
+      document.getElementById('s-modal-body').innerHTML = '<p style="text-align:center;color:#888;font-weight:600;margin-top:20px;">nenhum colaborador com vencimento positivo.</p>';
       return;
     }
     filtered.sort((a, b) => a.name.localeCompare(b.name, 'pt'));
@@ -271,7 +320,7 @@
       <td class="row-num"></td><td>total</td>
       <td>${total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     </tr></tfoot></table>`;
-    document.getElementById('s-results-wrap').innerHTML = html;
+    document.getElementById('s-modal-body').innerHTML = html;
   }
 
   // Timeout handle para limpar o highlight anterior

@@ -47,6 +47,11 @@
       '.s-liq-cell { display:inline-flex; align-items:center; gap:5px; width:100%; justify-content:flex-end; color:inherit; }',
       '.s-liq-check { display:none; flex-shrink:0; }',
 
+      // ── Botão de ver resultados (reabre el modal) ──
+      '#s-view-btn { display:none; margin:0 auto 0 auto; padding:8px 22px; border-radius:20px; border:1.5px solid #555; background:#fff; cursor:pointer; color:#555; font-size:.82rem; font-weight:600; font-family:"MontserratLight",sans-serif; letter-spacing:.04em; transition:background .18s, color .18s, border-color .18s; }',
+      '#s-view-btn:hover { background:#555; color:#fff; border-color:#555; }',
+      '#s-view-btn.visible { display:inline-block; }',
+
       // ── Botão de reset ──
       '#s-reset-btn { display:none; margin:0 auto 24px auto; width:48px; height:48px; border-radius:50%; border:2px solid #d0d0d0; background:#fff; cursor:pointer; color:#888; font-size:22px; align-items:center; justify-content:center; transition:all .2s; }',
       '#s-reset-btn:hover { border-color:#555; color:#222; transform:rotate(-30deg); }',
@@ -141,6 +146,14 @@
   sResetBtn.innerHTML = '↺';
   sUploadLabel.parentNode.insertBefore(sResetBtn, sUploadLabel.nextSibling);
 
+  const sViewBtn = document.createElement('button');
+  sViewBtn.id = 's-view-btn';
+  sViewBtn.textContent = 'ver resultados';
+  sResetBtn.parentNode.insertBefore(sViewBtn, sResetBtn.nextSibling);
+  sViewBtn.addEventListener('click', () => {
+    document.getElementById('s-modal-overlay').classList.add('show');
+  });
+
   sResetBtn.addEventListener('click', () => {
     sTableData = [];
     sCopiedRow = null;
@@ -153,6 +166,7 @@
     document.getElementById('s-file-input').value = '';
     sUploadLabel.style.display = '';
     sResetBtn.classList.remove('visible');
+    sViewBtn.classList.remove('visible');
     document.getElementById('tab-pagamentos').classList.remove('s-loaded');
     const adminApp = document.getElementById('admin-app');
     adminApp.classList.remove('s-loaded');
@@ -212,6 +226,7 @@
       document.getElementById('s-status-msg').textContent = countFinal + ' colaboradores encontrados';
       sUploadLabel.style.display = 'none';
       sResetBtn.classList.add('visible');
+      sViewBtn.classList.add('visible');
       document.getElementById('s-upload-label').classList.add('loaded');
       document.getElementById('tab-pagamentos').classList.add('s-loaded');
       const adminApp = document.getElementById('admin-app');

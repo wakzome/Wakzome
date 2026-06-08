@@ -875,7 +875,7 @@ function rSanitizeName(name) {
   // Marcadores de liquidação legítima (só existem em Encerramento)
   const RX_LIQUIDACAO      = /SUBSIDIO NATAL FIM CONTRATO|NATAL FIM CONTRATO/i;
   // Subsídio de Alimentação com dias reais: "SUBS. ALIMENTACAO 22D"
-  const RX_ALIM_DIAS       = /SUBS\.?\s*ALIMENTACAO\s+(\d+)D/i;
+  const RX_ALIM_DIAS       = /ALIMENTACAO\s+(\d+)\s*D\b/i;
   // Abono de Falhas seguido do valor
   const RX_FALHAS_VALOR    = /ABONO PARA FALHAS DE CAIXA\s+([\d.,]+)/i;
 

@@ -558,74 +558,74 @@
         if(effectiveTodayProj>_todayNow) effectiveTodayProj=_todayNow;
 
         // ── Caso simple: Maxx NO está en la zona → proyección normal directa
-        if(!_maxxNaZonaVendas){
+        if(!_maxxNaZonaVendas||!_maxxConfig.inicio||!_maxxConfig.fin){
           var projSimple=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projSimple);
           return;
         }
 
-        // ── Maxx está en la zona. Detectar su rango REAL de operación este año
-        // dentro del período, a partir de los datos (primer día con venta ≠ 0).
-        // La realidad de los datos manda — sin configuración manual.
-        var _mr=_maxxRangoReal(f.from, effectiveTodayProj);
-
-        // Maxx sin ventas aún en el período → proyección normal de las demás
-        if(!_mr){
-          var projSinMaxx=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
-          _buildProjBlock(projSinMaxx);
-          return;
-        }
-
-        // ¿Maxx empezó a facturar después del inicio del período? → abrió a mitad
-        var _maxxAbreEnPeriodo=_mr.desde>f.from;
+        // ── Maxx está en la zona: tratarla SIEMPRE por separado para no distorsionar
+        // el ratio histórico de las tiendas estables (que operan el período completo).
+        var _mr=_maxxRangoParaPeriodo(f.from,_projTo);
+        var _maxxAbreEnPeriodo=_mr&&_maxxConfig.inicio>f.from; // Maxx abre dentro del período
 
         if(!_maxxAbreEnPeriodo){
-          // Maxx operó desde el inicio del período igual que las demás → cálculo normal
+          // Maxx abrió antes o justo al inicio del período → operó todo el período igual
+          // que las demás → cálculo normal con toda la zona, sin separar.
           var projNormal=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projNormal);
           return;
         }
 
-        // Maxx abrió a mitad del período → separar.
-        // Tiendas estables: proyección sobre el período completo (fecha calendario).
-        // Maxx: motor de TEMPORADA — compara sus días de operación con los de
-        // temporadas anteriores, sin importar en qué fecha de calendario abrió.
+        // Maxx abre a mitad del período → separar.
+        // 1) Proyección base SIN Maxx (tiendas estables, período completo)
         var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
-        var anoActualStr=f.from.substring(0,4);
-        var projMaxx=_calcProjectionMaxxTemporada(anoActualStr, effectiveTodayProj);
+        // 2) Contribución real de Maxx ya facturada (desde apertura hasta hoy)
+        var maxxRealAcum=rows.filter(function(r){
+          return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
 
-        if(projBase&&projMaxx){
-          _buildProjBlock({
-            realAcum: projBase.realAcum+projMaxx.realAcum,
-            valorProjetado: projBase.valorProjetado+projMaxx.valorProjetado,
-            pctDone: projBase.pctDone,
-            diasRestantes: projBase.diasRestantes,
-            anosBase: projBase.anosBase,
-            maxxContribFutura: projMaxx.valorProjetado-projMaxx.realAcum
-          });
-        } else if(projBase&&!projMaxx){
-          var maxxRealAcum=rows.filter(function(r){return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj;})
-            .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-          _buildProjBlock({
-            realAcum: projBase.realAcum+maxxRealAcum,
-            valorProjetado: projBase.valorProjetado+maxxRealAcum,
-            pctDone: projBase.pctDone,
-            diasRestantes: projBase.diasRestantes,
-            anosBase: projBase.anosBase,
-            maxxContribFutura: 0
-          });
-        } else if(!projBase&&projMaxx){
-          _buildProjBlock(projMaxx);
-        } else {
-          _buildProjBlock(null);
+        // 3) Contribución futura de Maxx (días restantes desde hoy hasta fin período)
+        var maxxFuturoDesde=null;
+        if(effectiveTodayProj<_projTo){
+          var _diaSig=new Date(_strToDate(effectiveTodayProj).getTime()+86400000);
+          maxxFuturoDesde=_dateToStr(_diaSig);
+          if(maxxFuturoDesde<_mr.desde) maxxFuturoDesde=_mr.desde;
         }
+        var maxxFuturo=0, maxxDetalleFut=[];
+        if(maxxFuturoDesde&&maxxFuturoDesde<=_projTo){
+          var _projMaxxFut=_calcProjectionMaxxTramo(maxxFuturoDesde,_projTo);
+          maxxFuturo=_projMaxxFut.total;
+          maxxDetalleFut=_projMaxxFut.detalle;
+        }
+
+        // 4) Combinar — si projBase es null (no hay tiendas estables), usar solo Maxx
+        var baseReal=projBase?projBase.realAcum:0;
+        var baseProj=projBase?projBase.valorProjetado:0;
+        var combinado={
+          realAcum: baseReal+maxxRealAcum,
+          valorProjetado: baseProj+maxxRealAcum+maxxFuturo,
+          pctDone: projBase?projBase.pctDone:0,
+          diasRestantes: projBase?projBase.diasRestantes:0,
+          anosBase: projBase?projBase.anosBase:[],
+          maxxContribFutura: maxxFuturo
+        };
+        _buildProjBlock(combinado);
       }
 
-      // La detección del rango de Maxx es directa desde _allRows (ya en memoria),
-      // no requiere cargar configuración manual.
-      _doCalcProj();
+      // Si Maxx está en zona y config no cargada: cargar y re-renderizar todo
+      // (no operar sobre DOM que puede ser destruido por el callback)
+      if(_maxxNaZonaVendas&&!_maxxConfig.loaded){
+        var pLoad=_el('div','font-size:.6rem;');
+        pLoad.style.setProperty('color','#555555','important');
+        pLoad.textContent='a calcular…';
+        hRight.appendChild(pLoad);
+        _loadMaxxConfig(function(){ _render(); });
+      } else {
+        _doCalcProj();
+      }
 
       hMainRow.appendChild(hRight);
     }
@@ -1254,93 +1254,6 @@
   // ════════════════════════════════════════════════════════════
 
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
-
-  // Detecta automáticamente el rango real de operación de Maxx dentro de [from, to]
-  // basándose en los datos: primer y último día con venta ≠ 0.
-  // La realidad de los datos manda — no depende de configuración manual.
-  // Devuelve {desde, hasta} o null si Maxx no tiene ventas en el rango.
-  function _maxxRangoReal(from, to) {
-    var dias=_allRows.filter(function(r){
-      return r.loja==='MAXX' && r.data>=from && r.data<=to && (parseFloat(r.montante)||0)>0;
-    }).map(function(r){return r.data;}).sort();
-    if(!dias.length) return null;
-    return {desde:dias[0], hasta:dias[dias.length-1]};
-  }
-
-  // Detecta la temporada completa de Maxx en un año dado (primer→último día con venta).
-  // Devuelve {desde, hasta, dias:[{data,val}]} ordenado, o null si no hay datos.
-  function _maxxTemporadaAno(anoStr) {
-    var dias=_allRows.filter(function(r){
-      return r.loja==='MAXX' && r.data.substring(0,4)===anoStr && (parseFloat(r.montante)||0)>0;
-    }).map(function(r){return {data:r.data,val:parseFloat(r.montante)||0};})
-      .sort(function(a,b){return a.data<b.data?-1:1;});
-    if(!dias.length) return null;
-    return {desde:dias[0].data, hasta:dias[dias.length-1].data, dias:dias};
-  }
-
-  // Proyección de Maxx comparando TEMPORADA con TEMPORADA (no fecha calendario).
-  // Toma lo facturado este año en sus primeros N días de operación y estima el
-  // total de temporada según qué % representaban esos primeros N días en años
-  // anteriores (ponderado por recencia). Estacional-agnóstico al calendario.
-  // Devuelve {realAcum, valorProjetado, pctDone, diasRestantes, anosBase} o null.
-  function _calcProjectionMaxxTemporada(anoActualStr, hastaFecha) {
-    var temp=_maxxTemporadaAno(anoActualStr);
-    if(!temp) return null;
-    // Días de operación reales este año hasta hoy
-    var diasActuales=temp.dias.filter(function(d){return d.data<=hastaFecha;});
-    if(!diasActuales.length) return null;
-    var realAcum=diasActuales.reduce(function(s,d){return s+d.val;},0);
-    var nDiasOperados=diasActuales.length;
-
-    // Para cada año histórico: % que representaban los primeros nDiasOperados
-    // días de su temporada respecto al total de esa temporada.
-    var anosDisponibles={};
-    _allRows.forEach(function(r){
-      if(r.loja!=='MAXX') return;
-      var yr=r.data.substring(0,4);
-      if(yr===anoActualStr||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
-      if((parseFloat(r.montante)||0)<=0) return;
-      anosDisponibles[yr]=true;
-    });
-    var sortedYrs=Object.keys(anosDisponibles).sort(function(a,b){return b-a;});
-
-    var wSum=0, wRatioSum=0, anosBase=[];
-    sortedYrs.forEach(function(yr,i){
-      var t=_maxxTemporadaAno(yr);
-      if(!t||t.dias.length<nDiasOperados) return; // necesita al menos esos días para comparar
-      var totalTemp=t.dias.reduce(function(s,d){return s+d.val;},0);
-      var primerosN=t.dias.slice(0,nDiasOperados).reduce(function(s,d){return s+d.val;},0);
-      if(totalTemp<=0||primerosN<=0) return;
-      var ratio=primerosN/totalTemp; // % del total que son los primeros N días
-      var w=Math.pow(0.45,i);
-      wSum+=w; wRatioSum+=w*ratio;
-      anosBase.push(yr);
-    });
-
-    if(wSum<=0) return null; // sin histórico comparable
-    var pctHistorico=wRatioSum/wSum;
-    var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum;
-
-    // Días restantes estimados de temporada = media ponderada de duración de temporada
-    var wDur=0, wDurSum=0;
-    sortedYrs.forEach(function(yr,i){
-      var t=_maxxTemporadaAno(yr);
-      if(!t) return;
-      var dur=t.dias.length;
-      var w=Math.pow(0.45,i);
-      wDur+=w; wDurSum+=w*dur;
-    });
-    var duracionEsperada=wDur>0?Math.round(wDurSum/wDur):nDiasOperados;
-    var diasRestantes=Math.max(0, duracionEsperada-nDiasOperados);
-
-    return {
-      realAcum:realAcum,
-      valorProjetado:valorProjetado,
-      pctDone:pctHistorico*100,
-      diasRestantes:diasRestantes,
-      anosBase:anosBase
-    };
-  }
 
   // Calcula la contribución estimada de Maxx para un tramo [from, to]
   // usando media histórica por mes ponderada por recencia (mismo método que _calcProjection).

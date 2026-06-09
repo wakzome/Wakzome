@@ -776,10 +776,10 @@ body {
 }
 #faturas-sub-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   width: 100%;
-  max-width: 500px;
+  max-width: 760px;
 }
 #faturas-sub-header {
   text-align: center;
@@ -4167,22 +4167,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     </div>
     <div id="faturas-sub-grid">
       
-      <div class="adm-mod-card" data-faturas-module="tam" style="animation-delay:0.05s">
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">TAM</div>
-          <div class="adm-mod-desc">faturas TAM Fashion</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      </div>
-      
-      <div class="adm-mod-card" data-faturas-module="processamento" style="animation-delay:0.10s">
+      <div class="adm-mod-card" data-faturas-module="processamento" style="animation-delay:0.05s">
         <span class="adm-mod-icon">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
@@ -4193,6 +4178,21 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
         <div>
           <div class="adm-mod-name">FATURAS LISBOA</div>
           <div class="adm-mod-desc">processamento de faturas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      
+      <div class="adm-mod-card" data-faturas-module="tam" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">TAM</div>
+          <div class="adm-mod-desc">faturas TAM Fashion</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>

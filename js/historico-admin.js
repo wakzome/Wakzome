@@ -588,20 +588,23 @@
 
         // Maxx abrió a mitad del período → separar.
         // Tiendas estables: proyección normal sobre el período completo.
-        // Maxx: proyección por su propio ritmo dentro del período visible —
-        // media diaria real × días del período en que Maxx opera. Simple y coherente.
+        // Maxx: media diaria sobre días de CALENDARIO desde su apertura hasta hoy,
+        // extendida a los días de calendario restantes. Coherente: misma unidad
+        // (días calendario) en numerador y denominador → T2 ≥ Mes siempre.
         var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
-        // Días que Maxx lleva operando dentro del período (desde su 1er día con venta hasta hoy)
-        var maxxDiasOperados=_allRows.filter(function(r){
-          return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj&&(parseFloat(r.montante)||0)>0;
-        });
-        var maxxRealAcum=maxxDiasOperados.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var maxxNDias=maxxDiasOperados.length;
-        var maxxMediaDia=maxxNDias>0?maxxRealAcum/maxxNDias:0;
+        // Acumulado real de Maxx desde su 1er día con venta hasta hoy
+        var maxxRealAcum=_allRows.filter(function(r){
+          return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
 
-        // Días restantes del período de calendario (desde mañana hasta fin período)
+        // Días de calendario transcurridos desde apertura hasta hoy (inclusive)
+        var maxxDiasTranscurridos=Math.round((_strToDate(effectiveTodayProj)-_strToDate(_mr.desde))/86400000)+1;
+        if(maxxDiasTranscurridos<1) maxxDiasTranscurridos=1;
+        var maxxMediaDia=maxxRealAcum/maxxDiasTranscurridos;
+
+        // Días de calendario restantes (desde mañana hasta fin del período)
         var maxxDiasRest=0;
         if(effectiveTodayProj<_projTo){
           maxxDiasRest=Math.round((_strToDate(_projTo)-_strToDate(effectiveTodayProj))/86400000);
@@ -620,12 +623,11 @@
           });
         } else if(maxxRealAcum>0){
           // Maxx es la única tienda
-          var maxxTotalDiasPeriodo=Math.round((_strToDate(_projTo)-_strToDate(_mr.desde))/86400000)+1;
-          var maxxDoneDiasPeriodo=Math.round((_strToDate(effectiveTodayProj)-_strToDate(_mr.desde))/86400000)+1;
+          var maxxTotalDiasPeriodo=maxxDiasTranscurridos+maxxDiasRest;
           _buildProjBlock({
             realAcum: maxxRealAcum,
             valorProjetado: maxxProyTotal,
-            pctDone: maxxTotalDiasPeriodo>0?(maxxDoneDiasPeriodo/maxxTotalDiasPeriodo*100):0,
+            pctDone: maxxTotalDiasPeriodo>0?(maxxDiasTranscurridos/maxxTotalDiasPeriodo*100):0,
             diasRestantes: maxxDiasRest,
             anosBase: ['ritmo Maxx'],
             maxxContribFutura: maxxFuturo

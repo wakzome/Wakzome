@@ -499,18 +499,112 @@
       hdr.appendChild(eqBtn);
     }
 
-    var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;padding-right:36px;');
+    var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;padding-right:36px;');
     hLbl.style.setProperty('color','#888888','important');
     hLbl.textContent=dataLabel;
     hdr.appendChild(hLbl);
+
+    // ── Fila principal: izquierda=total, derecha=proyección
+    var hMainRow=_el('div','display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;');
+
+    // Columna izquierda — total + media
+    var hLeft=_el('div','flex:1;min-width:160px;');
     var hVal=_el('div','font-size:2rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px;');
     hVal.style.setProperty('color','#ffffff','important');
     hVal.textContent=_fmtEur(periodTotal);
-    hdr.appendChild(hVal);
+    hLeft.appendChild(hVal);
     var hSub=_el('div','font-size:.72rem;');
     hSub.style.setProperty('color','#aaaaaa','important');
     hSub.textContent=(isTotal?periodRows.length+' registos':'Média diária: '+_fmtEur(periodTotal/nDays)+' · '+periodRows.length+' registos');
-    hdr.appendChild(hSub);
+    hLeft.appendChild(hSub);
+    hMainRow.appendChild(hLeft);
+
+    // Columna derecha — proyección (solo períodos en curso, no Total, no búsqueda manual)
+    var _proyBtns=['hadm-btn-mes','hadm-btn-ano','hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'];
+    var _isPeriodoCurso=_proyBtns.indexOf(_activePeriodBtn)>=0;
+    var _periodoAbierto=_todayStr()<=f.to&&_todayStr()>=f.from;
+
+    if(!isTotal&&_isPeriodoCurso&&_periodoAbierto){
+      var hRight=_el('div','flex:0 0 auto;min-width:160px;max-width:240px;border-left:1px solid #333333;padding-left:16px;');
+
+      // Función interna que renderiza el bloque de proyección
+      function _renderProjBlock(proj, periodoLabel){
+        hRight.innerHTML='';
+        if(!proj){ hMainRow.removeChild(hRight); return; }
+        var pLbl=_el('div','font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px;');
+        pLbl.style.setProperty('color','#4a7c59','important');
+        pLbl.textContent='Projecção '+periodoLabel;
+        hRight.appendChild(pLbl);
+        var pVal=_el('div','font-size:1.55rem;font-weight:900;letter-spacing:-.02em;margin-bottom:3px;');
+        pVal.style.setProperty('color','#5ecf8a','important');
+        pVal.textContent=_fmtEur(proj.valorProjetado);
+        hRight.appendChild(pVal);
+        var pSub=_el('div','font-size:.62rem;line-height:1.5;');
+        pSub.style.setProperty('color','#777777','important');
+        var pctLine=proj.pctDone.toFixed(1)+'% concluído · '+proj.diasRestantes+' dias restantes';
+        var anosLine='Base: '+proj.anosBase.join(', ');
+        pSub.textContent=pctLine;
+        hRight.appendChild(pSub);
+        var pAnos=_el('div','font-size:.58rem;margin-top:2px;');
+        pAnos.style.setProperty('color','#555555','important');
+        pAnos.textContent=anosLine;
+        hRight.appendChild(pAnos);
+        if(proj.maxxContribFutura>0){
+          var pMaxx=_el('div','font-size:.58rem;margin-top:3px;');
+          pMaxx.style.setProperty('color','#4a7c59','important');
+          pMaxx.textContent='+ Maxx desde '+_fmtDate(_maxxConfig.inicio)+': '+_fmtEur(proj.maxxContribFutura);
+          hRight.appendChild(pMaxx);
+        }
+      }
+
+      // Determinar label del período activo
+      var _periodoLabel={
+        'hadm-btn-mes':'Mês','hadm-btn-ano':'Ano',
+        'hadm-btn-q1':'Q1','hadm-btn-q2':'Q2','hadm-btn-q3':'Q3','hadm-btn-q4':'Q4'
+      }[_activePeriodBtn]||'';
+
+      // Determinar si Maxx está en la zona activa
+      var _maxxNaZonaVendas=zonaLojas.indexOf('MAXX')>=0;
+
+      // Calcular proyección — con config Maxx si corresponde
+      function _computeAndRender(){
+        var effectiveTodayProj=_lastCompleteDay(zonaLojas);
+        if(effectiveTodayProj>_todayStr()) effectiveTodayProj=_todayStr();
+        // Determinar fin real del período (para Q, el fin del trimestre; para Mes/Ano, f.to)
+        var projTo=f.to;
+        var _qEnds={'hadm-btn-q1':f.from.substring(0,4)+'-03-31','hadm-btn-q2':f.from.substring(0,4)+'-06-30','hadm-btn-q3':f.from.substring(0,4)+'-09-30','hadm-btn-q4':f.from.substring(0,4)+'-12-31'};
+        if(_qEnds[_activePeriodBtn]) projTo=_qEnds[_activePeriodBtn];
+        if(_activePeriodBtn==='hadm-btn-ano') projTo=f.from.substring(0,4)+'-12-31';
+        if(_activePeriodBtn==='hadm-btn-mes'){
+          var _mD=_strToDate(f.from);
+          projTo=_dateToStr(new Date(_mD.getFullYear(),_mD.getMonth()+1,0));
+        }
+        // Maxx: solo si está en la zona y tiene config cargada con fecha futura
+        var _maxxDesdeProj=null;
+        if(_maxxNaZonaVendas&&_maxxConfig.inicio&&_maxxConfig.fin){
+          var _mr=_maxxRangoParaPeriodo(f.from,projTo);
+          // Solo sumar contribución futura si Maxx aún no ha abierto en el período
+          if(_mr&&_mr.desde>effectiveTodayProj) _maxxDesdeProj=_mr.desde;
+        }
+        var proj=_calcProjection(rows,f.from,projTo,effectiveTodayProj,_maxxDesdeProj);
+        _renderProjBlock(proj,_periodoLabel);
+      }
+
+      // Si config Maxx no está cargada y Maxx está en la zona, cargar primero
+      if(_maxxNaZonaVendas&&!_maxxConfig.loaded){
+        var pLblLoading=_el('div','font-size:.58rem;');
+        pLblLoading.style.setProperty('color','#555555','important');
+        pLblLoading.textContent='a calcular…';
+        hRight.appendChild(pLblLoading);
+        _loadMaxxConfig(function(){ _computeAndRender(); });
+      } else {
+        _computeAndRender();
+      }
+
+      hMainRow.appendChild(hRight);
+    }
+
+    hdr.appendChild(hMainRow);
 
     if(!isTotal&&comps.length){
       var cRow=_el('div','display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:12px;padding-top:12px;border-top:2px solid #444444;');

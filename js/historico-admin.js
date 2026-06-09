@@ -166,12 +166,12 @@
         // conector vertical
         '<div class="hadm-cv"></div>'+
 
-        // ── FILA 2: Q1 Q2 Q3 Q4 · Mes ──
+        // ── FILA 2: T1 T2 T3 T4 · Mes ──
         '<div class="hadm-row">'+
-          '<button id="hadm-btn-q1">Q1</button>'+
-          '<button id="hadm-btn-q2">Q2</button>'+
-          '<button id="hadm-btn-q3">Q3</button>'+
-          '<button id="hadm-btn-q4">Q4</button>'+
+          '<button id="hadm-btn-q1">T1</button>'+
+          '<button id="hadm-btn-q2">T2</button>'+
+          '<button id="hadm-btn-q3">T3</button>'+
+          '<button id="hadm-btn-q4">T4</button>'+
           '<span class="hadm-dot">·</span>'+
           '<button id="hadm-btn-mes">Mes</button>'+
         '</div>'+
@@ -471,7 +471,7 @@
       var qEnd=_strToDate(qEndDateStr);
       if(today<qEnd){
         var dr=Math.round((qEnd-today)/86400000);
-        if(dr>0) diasRestantes=', faltan '+dr+' para terminar Q';
+        if(dr>0) diasRestantes=', faltan '+dr+' para terminar T';
       }
     }
     var dataLabel=isTotal?'TOTAL HISTÓRICO':(_fmtDate(f.from)+' → '+_fmtDate(f.to)+(isToday?' · até hoje':' · até ontem')+' ('+nDays+' dias'+diasRestantes+')'+(_equalDates?' · datas exactas':''));
@@ -541,7 +541,7 @@
 
     if(!isTotal&&_isPeriodoCurso&&_periodoAbierto){
       var hRight=_el('div','flex:0 0 auto;min-width:160px;max-width:220px;border-left:1px solid #333333;padding-left:16px;');
-      var _periodoLabel={'hadm-btn-mes':'Mês','hadm-btn-ano':'Ano','hadm-btn-q1':'Q1','hadm-btn-q2':'Q2','hadm-btn-q3':'Q3','hadm-btn-q4':'Q4'}[_activePeriodBtn]||'';
+      var _periodoLabel={'hadm-btn-mes':'Mês','hadm-btn-ano':'Ano','hadm-btn-q1':'T1','hadm-btn-q2':'T2','hadm-btn-q3':'T3','hadm-btn-q4':'T4'}[_activePeriodBtn]||'';
 
       function _buildProjBlock(proj){
         hRight.innerHTML='';
@@ -573,12 +573,31 @@
       function _doCalcProj(){
         var effectiveTodayProj=_lastCompleteDay(zonaLojas);
         if(effectiveTodayProj>_todayNow) effectiveTodayProj=_todayNow;
+
+        // ── Lógica inteligente para Maxx con apertura parcial en trimestres/año ──
+        // Si la zona incluye Maxx y Maxx tiene config, detectar si abrió dentro del período
+        var _projFrom=f.from;
         var _maxxDesdeProj=null;
+
         if(_maxxNaZonaVendas&&_maxxConfig.inicio&&_maxxConfig.fin){
           var _mr=_maxxRangoParaPeriodo(f.from,_projTo);
-          if(_mr&&_mr.desde>effectiveTodayProj) _maxxDesdeProj=_mr.desde;
+          if(_mr){
+            var _maxxAbrio=_mr.desde<=effectiveTodayProj; // Maxx ya tiene datos reales
+            var _maxxAbreAntesPeriodo=_maxxConfig.inicio<=f.from; // abrió antes del período
+
+            if(_maxxAbrio&&!_maxxAbreAntesPeriodo){
+              // Maxx abrió dentro del período — proyectar solo desde su apertura real
+              // para no distorsionar con días donde no existía
+              _projFrom=_mr.desde;
+            } else if(!_maxxAbrio){
+              // Maxx aún no abrió en este período — su contribución es futura
+              _maxxDesdeProj=_mr.desde;
+            }
+            // Si abrió antes del período o exactamente en f.from → cálculo normal sin ajuste
+          }
         }
-        var proj=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,_maxxDesdeProj);
+
+        var proj=_calcProjection(rows,_projFrom,_projTo,effectiveTodayProj,_maxxDesdeProj);
         _buildProjBlock(proj);
       }
 
@@ -1870,7 +1889,7 @@
 
       if(maxxHasConfig){
         var qRanges={Q1:{from:currentYear+'-01-01',to:currentYear+'-03-31'},Q2:{from:currentYear+'-04-01',to:currentYear+'-06-30'},Q3:{from:currentYear+'-07-01',to:currentYear+'-09-30'},Q4:{from:currentYear+'-10-01',to:currentYear+'-12-31'}};
-        var qAfect=['Q1','Q2','Q3','Q4'].filter(function(q){return !!_maxxRangoParaPeriodo(qRanges[q].from,qRanges[q].to);});
+        var qAfect=['T1','T2','T3','T4'].filter(function(q){return !!_maxxRangoParaPeriodo(qRanges[q.replace('T','Q')].from,qRanges[q.replace('T','Q')].to);});
         var qBadge=_el('span','font-size:.62rem;font-weight:700;padding:2px 10px;border-radius:10px;');
         qBadge.style.setProperty('background','#e6f4ed','important');
         qBadge.style.setProperty('color','#2a6a40','important');
@@ -1933,10 +1952,10 @@
 
     // Cards Q1-Q4 + Año
     var periods=[
-      {id:'Q1',label:'Q1',from:currentYear+'-01-01',to:currentYear+'-03-31'},
-      {id:'Q2',label:'Q2',from:currentYear+'-04-01',to:currentYear+'-06-30'},
-      {id:'Q3',label:'Q3',from:currentYear+'-07-01',to:currentYear+'-09-30'},
-      {id:'Q4',label:'Q4',from:currentYear+'-10-01',to:currentYear+'-12-31'},
+      {id:'Q1',label:'T1',from:currentYear+'-01-01',to:currentYear+'-03-31'},
+      {id:'Q2',label:'T2',from:currentYear+'-04-01',to:currentYear+'-06-30'},
+      {id:'Q3',label:'T3',from:currentYear+'-07-01',to:currentYear+'-09-30'},
+      {id:'Q4',label:'T4',from:currentYear+'-10-01',to:currentYear+'-12-31'},
       {id:'ANO',label:'Ano '+currentYear,from:currentYear+'-01-01',to:currentYear+'-12-31'}
     ];
 

@@ -213,8 +213,8 @@
               '<button id="hadm-btn-mezkafnc">Mezka Funchal</button>'+
 
               // Mezka Porto Santo + sus 4 hijos
-              '<div class="hadm-zbranch">'+
-                '<button id="hadm-btn-mezkaps">Mezka Porto Santo</button>'+
+              '<div class="hadm-zbranch hadm-porto-branch">'+
+                '<button id="hadm-btn-mezkaps" class="hadm-porto-root">Mezka Porto Santo</button>'+
                 '<div class="hadm-connector-wrap hadm-conn-4">'+
                   '<div class="hadm-conn-v"></div>'+
                   '<div class="hadm-conn-h"></div>'+
@@ -4195,6 +4195,7 @@
       '.hadm-zleaves{display:flex !important;gap:7px !important;flex-wrap:wrap !important;justify-content:center !important;align-items:flex-start !important;}'+
       // Primavera: correr el botón raíz a la izquierda para centrarlo entre Funchal y Porto Santo
       '.hadm-prima-branch>.hadm-prima-root{align-self:flex-start !important;margin-left:90px !important;}'+
+      '.hadm-porto-branch>.hadm-porto-root{align-self:center !important;}'+
       // conectores ocultos — optimización de espacio vertical
       '.hadm-connector-wrap{display:none !important;}'+
       '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:14px !important;}.hadm-zleaves{gap:5px !important;}.hadm-prima-branch>.hadm-prima-root{align-self:center !important;margin-left:0 !important;}}';

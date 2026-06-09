@@ -513,18 +513,20 @@
     hdr.appendChild(hSub);
 
     if(!isTotal&&comps.length){
-      var cRow=_el('div','display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
+      var cRow=_el('div','display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:12px;padding-top:12px;border-top:2px solid #444444;');
       comps.forEach(function(comp,idx){
         var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
         var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
         var diff=cTotal>0?(periodTotal-cTotal)/cTotal*100:null;
         var diffEur=periodTotal-cTotal;
-        var cBox=_el('div','');
-        // Añadir separador antes de cada bloque excepto el primero
-        if(idx>0){
-          cBox.style.setProperty('border-top','1px solid #444444','important');
-          cBox.style.setProperty('padding-top','12px','important');
-          cBox.style.setProperty('margin-top','12px','important');
+        var cBox=_el('div','padding:10px 14px;');
+        // Separador superior en cada fila nueva (cada 3 items excepto la primera fila)
+        if(idx>=3){
+          cBox.style.setProperty('border-top','2px solid #444444','important');
+        }
+        // Separador vertical entre columnas (no en la última de cada fila)
+        if(idx%3!==2){
+          cBox.style.setProperty('border-right','1px solid #3a3a3a','important');
         }
         var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
         cYear.style.setProperty('color','#aaaaaa','important');

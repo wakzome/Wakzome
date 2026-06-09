@@ -578,56 +578,44 @@
         }
 
         // Maxx abre a mitad del período → separar.
-        // 1) Proyección base SIN Maxx (tiendas estables, período completo)
+        // Las tiendas estables se proyectan sobre el período completo.
+        // Maxx se proyecta con el MISMO motor (_calcProjection) pero sobre su
+        // período real de operación (desde su apertura hasta el fin del período),
+        // exactamente igual que se calcularía un Mes.
         var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
-        // 2) Contribución real de Maxx ya facturada (desde apertura hasta hoy)
-        var maxxRealAcum=rows.filter(function(r){
-          return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj;
-        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+        // Proyección de Maxx sobre su período de operación real
+        var rowsSoloMaxx=rows.filter(function(r){return r.loja==='MAXX';});
+        var projMaxx=_calcProjection(rowsSoloMaxx,_mr.desde,_mr.hasta,effectiveTodayProj,null);
 
-        // 3) Contribución futura de Maxx (días restantes desde hoy hasta fin período)
-        var maxxFuturoDesde=null;
-        if(effectiveTodayProj<_projTo){
-          var _diaSig=new Date(_strToDate(effectiveTodayProj).getTime()+86400000);
-          maxxFuturoDesde=_dateToStr(_diaSig);
-          if(maxxFuturoDesde<_mr.desde) maxxFuturoDesde=_mr.desde;
-        }
-        var maxxFuturo=0;
-        if(maxxFuturoDesde&&maxxFuturoDesde<=_projTo){
-          maxxFuturo=_calcProjectionMaxxTramo(maxxFuturoDesde,_projTo).total;
-        }
-
-        if(projBase){
-          // Hay tiendas estables → combinar base + Maxx
-          var combinado={
-            realAcum: projBase.realAcum+maxxRealAcum,
-            valorProjetado: projBase.valorProjetado+maxxRealAcum+maxxFuturo,
+        if(projBase&&projMaxx){
+          // Estables + Maxx
+          _buildProjBlock({
+            realAcum: projBase.realAcum+projMaxx.realAcum,
+            valorProjetado: projBase.valorProjetado+projMaxx.valorProjetado,
             pctDone: projBase.pctDone,
             diasRestantes: projBase.diasRestantes,
             anosBase: projBase.anosBase,
-            maxxContribFutura: maxxFuturo
-          };
-          _buildProjBlock(combinado);
+            maxxContribFutura: projMaxx.valorProjetado-projMaxx.realAcum
+          });
+        } else if(projBase&&!projMaxx){
+          // Solo estables proyectables (Maxx sin histórico suficiente) → sumar Maxx real
+          var maxxRealAcum=rowsSoloMaxx.filter(function(r){return r.data<=effectiveTodayProj;})
+            .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+          _buildProjBlock({
+            realAcum: projBase.realAcum+maxxRealAcum,
+            valorProjetado: projBase.valorProjetado+maxxRealAcum,
+            pctDone: projBase.pctDone,
+            diasRestantes: projBase.diasRestantes,
+            anosBase: projBase.anosBase,
+            maxxContribFutura: 0
+          });
+        } else if(!projBase&&projMaxx){
+          // Maxx es la única tienda → su proyección directa
+          _buildProjBlock(projMaxx);
         } else {
-          // Maxx es la única tienda → % y días sobre SU período de operación real
-          var maxxIniD=_strToDate(_mr.desde);
-          var maxxFinD=_strToDate(_mr.hasta);
-          var maxxTotalDias=Math.round((maxxFinD-maxxIniD)/86400000)+1;
-          var maxxHoyD=_strToDate(effectiveTodayProj);
-          var maxxDoneDias=Math.min(Math.round((maxxHoyD-maxxIniD)/86400000)+1, maxxTotalDias);
-          if(maxxDoneDias<0) maxxDoneDias=0;
-          var maxxPctDone=maxxTotalDias>0?(maxxDoneDias/maxxTotalDias*100):0;
-          var soloMaxx={
-            realAcum: maxxRealAcum,
-            valorProjetado: maxxRealAcum+maxxFuturo,
-            pctDone: maxxPctDone,
-            diasRestantes: Math.max(0,maxxTotalDias-maxxDoneDias),
-            anosBase: ['Maxx histórico'],
-            maxxContribFutura: maxxFuturo
-          };
-          _buildProjBlock(soloMaxx);
+          _buildProjBlock(null);
         }
       }
 

@@ -931,7 +931,7 @@
     var hdr=_el('div','border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #e0e0e0;');
     hdr.style.setProperty('background','#1a1a1a','important');
     var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;');
-    hLbl.style.setProperty('color','#888888','important');
+    hLbl.style.setProperty('color','#d8d8d8','important');
     hLbl.textContent='DOMINGOS '+currentYear+' — MEZKA PS (Avenida · Mercado · Shana · Maxx)';
     hdr.appendChild(hLbl);
     var hVal=_el('div','font-size:2rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px;');
@@ -939,40 +939,46 @@
     hVal.textContent=_fmtEur(currentTotal);
     hdr.appendChild(hVal);
     var hSub=_el('div','font-size:.72rem;');
-    hSub.style.setProperty('color','#aaaaaa','important');
-    hSub.textContent=currentCount+' domingos reais · média: '+_fmtEur(currentCount?currentTotal/currentCount:0)+'/domingo';
+    hSub.style.setProperty('color','#e8e8e8','important');
+    hSub.textContent=currentCount+' domingos reais';
     hdr.appendChild(hSub);
 
-    // Comparações com anos anteriores
+    // Comparações com anos anteriores — total vs total, 3 por fila
     var prevYears=years.filter(function(y){return y!==currentYear;});
     if(prevYears.length){
-      var cRow=_el('div','display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #333333;');
-      prevYears.forEach(function(yr){
+      var cRow=_el('div','display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:12px;padding-top:12px;border-top:2px solid #444444;');
+      prevYears.forEach(function(yr,idx){
         var yrRows=byYear[yr];
         var yrTotal=yrRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
         var yrCount=(function(){var d={};yrRows.forEach(function(r){d[r.data]=true;});return Object.keys(d).length;})();
-        // Comparar médias por domingo para que sea justo aunque haya distinto nº de domingos
-        var avgCur=currentCount?currentTotal/currentCount:0;
-        var avgPrev=yrCount?yrTotal/yrCount:0;
-        var diff=avgPrev>0?(avgCur-avgPrev)/avgPrev*100:null;
-        var cBox=_el('div','');
-        var cLbl=_el('div','font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px;');
-        cLbl.style.setProperty('color','#666666','important');
-        cLbl.textContent='vs '+yr+' ('+yrCount+' dom.)';
-        cBox.appendChild(cLbl);
-        var cLine=_el('div','display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;');
+        var diff=yrTotal>0?(currentTotal-yrTotal)/yrTotal*100:null;
+        var diffEur=currentTotal-yrTotal;
+        var cBox=_el('div','padding:10px 14px;');
+        // Separador superior en cada fila nueva (cada 3 items)
+        if(idx>=3){
+          cBox.style.setProperty('border-top','2px solid #444444','important');
+        }
+        // Separador vertical entre columnas (no en la última de cada fila)
+        if(idx%3!==2){
+          cBox.style.setProperty('border-right','1px solid #3a3a3a','important');
+        }
+        var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
+        cYear.style.setProperty('color','#d8d8d8','important');
+        var yearLabel='vs '+yr+' ('+yrCount+' dom.)';
+        if(yrTotal>0){
+          yearLabel+=' · '+_fmtNumber(Math.abs(diffEur));
+        }
+        cYear.textContent=yearLabel;
+        cBox.appendChild(cYear);
+        var cLine=_el('div','display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:3px;');
         var cVal=_el('span','font-size:.88rem;font-weight:800;');
-        cVal.style.setProperty('color','#cccccc','important');
+        cVal.style.setProperty('color','#ffffff','important');
         cVal.textContent=_fmtEur(yrTotal);
         cLine.appendChild(cVal);
-        var cAvg=_el('span','font-size:.72rem;');
-        cAvg.style.setProperty('color','#777777','important');
-        cAvg.textContent='('+_fmtEur(avgPrev)+'/dom)';
-        cLine.appendChild(cAvg);
         if(diff!==null){
           var cD=_el('span','font-size:.78rem;font-weight:800;');
           cD.style.setProperty('color',diff>=0?'#4caf82':'#e05a5a','important');
-          cD.textContent=(diff>=0?'↑ +':'↓ ')+diff.toFixed(1)+'% média/dom';
+          cD.textContent=(diff>=0?'↑ +':'↓ ')+diff.toFixed(1)+'%';
           cLine.appendChild(cD);
         }
         cBox.appendChild(cLine);

@@ -199,21 +199,38 @@
           '</div>'+
 
           // ── PRIMAVERA ──
-          '<div class="hadm-zbranch hadm-prima-branch">'+
-            '<button id="hadm-btn-primavera" class="hadm-prima-root">Primavera</button>'+
-            '<div class="hadm-prima-children">'+
-              // Fila 1: Funchal + Porto Santo (centro de esta fila = posición de Primavera)
-              '<div class="hadm-prima-top">'+
-                '<button id="hadm-btn-mezkafnc">Mezka Funchal</button>'+
-                '<button id="hadm-btn-mezkaps" class="hadm-porto-root">Mezka Porto Santo</button>'+
+          '<div class="hadm-zbranch">'+
+            '<button id="hadm-btn-primavera">Primavera</button>'+
+            '<div class="hadm-connector-wrap hadm-conn-2">'+
+              '<div class="hadm-conn-v"></div>'+
+              '<div class="hadm-conn-h"></div>'+
+              '<div class="hadm-conn-vl"></div>'+
+              '<div class="hadm-conn-vr"></div>'+
+            '</div>'+
+            '<div class="hadm-zleaves">'+
+
+              // Mezka Funchal — hoja directa
+              '<button id="hadm-btn-mezkafnc">Mezka Funchal</button>'+
+
+              // Mezka Porto Santo + sus 4 hijos
+              '<div class="hadm-zbranch">'+
+                '<button id="hadm-btn-mezkaps">Mezka Porto Santo</button>'+
+                '<div class="hadm-connector-wrap hadm-conn-4">'+
+                  '<div class="hadm-conn-v"></div>'+
+                  '<div class="hadm-conn-h"></div>'+
+                  '<div class="hadm-conn-v1"></div>'+
+                  '<div class="hadm-conn-v2"></div>'+
+                  '<div class="hadm-conn-v3"></div>'+
+                  '<div class="hadm-conn-v4"></div>'+
+                '</div>'+
+                '<div class="hadm-zleaves">'+
+                  '<button id="hadm-btn-mezkaavenida">Mezka Avenida</button>'+
+                  '<button id="hadm-btn-mezkamercado">Mezka Mercado</button>'+
+                  '<button id="hadm-btn-shana">Shana</button>'+
+                  '<button id="hadm-btn-maxx">Maxx</button>'+
+                '</div>'+
               '</div>'+
-              // Fila 2: las 4 sub-tiendas de Porto Santo
-              '<div class="hadm-porto-children">'+
-                '<button id="hadm-btn-mezkaavenida">Mezka Avenida</button>'+
-                '<button id="hadm-btn-mezkamercado">Mezka Mercado</button>'+
-                '<button id="hadm-btn-shana">Shana</button>'+
-                '<button id="hadm-btn-maxx">Maxx</button>'+
-              '</div>'+
+
             '</div>'+
           '</div>'+
 
@@ -4176,15 +4193,9 @@
       '.hadm-zone-roots{display:flex !important;justify-content:center !important;gap:28px !important;flex-wrap:wrap !important;align-items:flex-start !important;width:100% !important;}'+
       '.hadm-zbranch{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;}'+
       '.hadm-zleaves{display:flex !important;gap:7px !important;flex-wrap:wrap !important;justify-content:center !important;align-items:flex-start !important;}'+
-      // Primavera: se centra sobre la fila Funchal+Porto Santo (align-items:center del branch)
-      '.hadm-prima-branch{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;}'+
-      '.hadm-prima-children{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;}'+
-      '.hadm-prima-top{display:flex !important;gap:7px !important;justify-content:center !important;align-items:flex-start !important;}'+
-      // Porto Santo: se centra sobre la fila de sus 4 sub-tiendas
-      '.hadm-porto-children{display:flex !important;gap:5px !important;flex-wrap:wrap !important;justify-content:center !important;}'+
       // conectores ocultos — optimización de espacio vertical
       '.hadm-connector-wrap{display:none !important;}'+
-      '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:14px !important;}.hadm-zleaves{gap:5px !important;}.hadm-porto-children{gap:4px !important;}}';
+      '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:14px !important;}.hadm-zleaves{gap:5px !important;}}';
     document.head.appendChild(s);
   }
 

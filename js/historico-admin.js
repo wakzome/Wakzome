@@ -4194,7 +4194,7 @@
       '.hadm-zbranch{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;}'+
       '.hadm-zleaves{display:flex !important;gap:7px !important;flex-wrap:wrap !important;justify-content:center !important;align-items:flex-start !important;}'+
       // Primavera: correr el botón raíz a la izquierda para centrarlo entre Funchal y Porto Santo
-      '.hadm-prima-branch>.hadm-prima-root{align-self:flex-start !important;margin-left:90px !important;}'+
+      '.hadm-prima-branch>.hadm-prima-root{align-self:flex-start !important;margin-left:200px !important;}'+
       '.hadm-porto-branch>.hadm-porto-root{align-self:flex-start !important;margin-left:90px !important;}'+
       // conectores ocultos — optimización de espacio vertical
       '.hadm-connector-wrap{display:none !important;}'+

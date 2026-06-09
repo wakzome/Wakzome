@@ -500,7 +500,7 @@
     }
 
     var hLbl=_el('div','font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;padding-right:36px;');
-    hLbl.style.setProperty('color','#888888','important');
+    hLbl.style.setProperty('color','#d8d8d8','important');
     hLbl.textContent=dataLabel;
     hdr.appendChild(hLbl);
 
@@ -514,7 +514,7 @@
     hVal.textContent=_fmtEur(periodTotal);
     hLeft.appendChild(hVal);
     var hSub=_el('div','font-size:.72rem;');
-    hSub.style.setProperty('color','#aaaaaa','important');
+    hSub.style.setProperty('color','#e8e8e8','important');
     hSub.textContent=(isTotal?periodRows.length+' registos':'Média diária: '+_fmtEur(periodTotal/nDays)+' · '+periodRows.length+' registos');
     hLeft.appendChild(hSub);
     hMainRow.appendChild(hLeft);
@@ -555,11 +555,11 @@
         pVal.textContent=_fmtEur(proj.valorProjetado);
         hRight.appendChild(pVal);
         var pSub=_el('div','font-size:.62rem;line-height:1.5;');
-        pSub.style.setProperty('color','#777777','important');
+        pSub.style.setProperty('color','#e8e8e8','important');
         pSub.textContent=proj.pctDone.toFixed(1)+'% concluído · '+proj.diasRestantes+' dias rest.';
         hRight.appendChild(pSub);
         var pAnos=_el('div','font-size:.58rem;margin-top:2px;');
-        pAnos.style.setProperty('color','#555555','important');
+        pAnos.style.setProperty('color','#c0c0c0','important');
         pAnos.textContent='Base: '+proj.anosBase.join(', ');
         hRight.appendChild(pAnos);
         if(proj.maxxContribFutura>0){
@@ -635,7 +635,7 @@
           cBox.style.setProperty('border-right','1px solid #3a3a3a','important');
         }
         var cYear=_el('div','font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;');
-        cYear.style.setProperty('color','#aaaaaa','important');
+        cYear.style.setProperty('color','#d8d8d8','important');
         var yearLabel='vs '+comp.label;
         if(cTotal>0){
           var eur=_fmtEur(Math.abs(diffEur));
@@ -644,12 +644,12 @@
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);
         var cDates=_el('div','font-size:.56rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px;');
-        cDates.style.setProperty('color','#555555','important');
+        cDates.style.setProperty('color','#b0b0b0','important');
         cDates.textContent=_fmtDate(comp.from)+'→'+_fmtDate(comp.to);
         cBox.appendChild(cDates);
         var cLine=_el('div','display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;');
         var cVal=_el('span','font-size:.88rem;font-weight:800;');
-        cVal.style.setProperty('color','#cccccc','important');
+        cVal.style.setProperty('color','#ffffff','important');
         cVal.textContent=_fmtEur(cTotal);
         cLine.appendChild(cVal);
         if(diff!==null){
@@ -4086,34 +4086,20 @@
       '#adm-historico-panel input[type="number"]::-webkit-outer-spin-button,#adm-historico-panel input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}'+
       '#adm-historico-panel input[type="number"]{-moz-appearance:textfield;}'+
       '#adm-historico-panel select option{background:#ffffff !important;color:#111111 !important;}'+
-      '.hadm-filter-container{display:flex !important;flex-direction:column !important;align-items:center !important;gap:10px !important;background:#f5f5f5 !important;padding:16px 14px !important;border-radius:15px !important;margin:16px auto !important;width:fit-content !important;max-width:calc(100% - 24px) !important;border:1px solid #e0e0e0 !important;box-sizing:border-box !important;}'+
+      '.hadm-filter-container{display:flex !important;flex-direction:column !important;align-items:center !important;gap:7px !important;background:#f5f5f5 !important;padding:12px 14px !important;border-radius:15px !important;margin:12px auto !important;width:fit-content !important;max-width:calc(100% - 24px) !important;border:1px solid #e0e0e0 !important;box-sizing:border-box !important;}'+
       '.hadm-row{display:flex !important;gap:8px !important;justify-content:center !important;align-items:center !important;flex-wrap:wrap !important;}'+
       '.hadm-dot{color:#bbbbbb !important;font-size:.9rem !important;padding:0 2px !important;line-height:1 !important;user-select:none !important;}'+
-      '.hadm-cv{width:1px !important;height:10px !important;background:#cccccc !important;margin:0 auto !important;}'+
-      '.hadm-zdiv{display:flex !important;align-items:center !important;gap:8px !important;width:100% !important;margin:2px 0 !important;}'+
+      '.hadm-cv{display:none !important;}'+
+      '.hadm-zdiv{display:flex !important;align-items:center !important;gap:8px !important;width:100% !important;margin:1px 0 !important;}'+
       '.hadm-zdiv-line{flex:1 !important;height:1px !important;background:#dddddd !important;}'+
       '.hadm-zdiv span{font-size:.6rem !important;color:#aaaaaa !important;letter-spacing:.08em !important;text-transform:uppercase !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;}'+
-      // árbol de zonas
+      // árbol de zonas — sin conectores, espaciado compacto
       '.hadm-zone-roots{display:flex !important;justify-content:center !important;gap:28px !important;flex-wrap:wrap !important;align-items:flex-start !important;width:100% !important;}'+
-      '.hadm-zbranch{display:flex !important;flex-direction:column !important;align-items:center !important;}'+
+      '.hadm-zbranch{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;}'+
       '.hadm-zleaves{display:flex !important;gap:7px !important;flex-wrap:wrap !important;justify-content:center !important;align-items:flex-start !important;}'+
-      // conectores CSS — barra horizontal centrada con patas verticales
-      '.hadm-connector-wrap{position:relative !important;width:100% !important;height:18px !important;display:flex !important;flex-direction:column !important;align-items:center !important;}'+
-      '.hadm-conn-v{width:1.5px !important;height:8px !important;background:#cccccc !important;margin:0 auto !important;}'+
-      '.hadm-conn-h{width:calc(100% - 20px) !important;height:1.5px !important;background:#cccccc !important;}'+
-      // patas para 2 hijos
-      '.hadm-conn-2{display:flex !important;flex-direction:column !important;align-items:center !important;width:100% !important;position:relative !important;}'+
-      '.hadm-conn-2 .hadm-conn-vl,.hadm-conn-2 .hadm-conn-vr{position:absolute !important;top:9px !important;width:1.5px !important;height:9px !important;background:#cccccc !important;}'+
-      '.hadm-conn-2 .hadm-conn-vl{left:25% !important;}'+
-      '.hadm-conn-2 .hadm-conn-vr{right:25% !important;}'+
-      // patas para 4 hijos
-      '.hadm-conn-4{display:flex !important;flex-direction:column !important;align-items:center !important;width:100% !important;position:relative !important;}'+
-      '.hadm-conn-4 .hadm-conn-v1,.hadm-conn-4 .hadm-conn-v2,.hadm-conn-4 .hadm-conn-v3,.hadm-conn-4 .hadm-conn-v4{position:absolute !important;top:9px !important;width:1.5px !important;height:9px !important;background:#cccccc !important;}'+
-      '.hadm-conn-4 .hadm-conn-v1{left:12.5% !important;}'+
-      '.hadm-conn-4 .hadm-conn-v2{left:37.5% !important;}'+
-      '.hadm-conn-4 .hadm-conn-v3{left:62.5% !important;}'+
-      '.hadm-conn-4 .hadm-conn-v4{left:87.5% !important;}'+
-      '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:18px !important;}.hadm-zleaves{gap:5px !important;}}';
+      // conectores ocultos — optimización de espacio vertical
+      '.hadm-connector-wrap{display:none !important;}'+
+      '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:14px !important;}.hadm-zleaves{gap:5px !important;}}';
     document.head.appendChild(s);
   }
 

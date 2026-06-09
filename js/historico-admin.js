@@ -644,6 +644,7 @@
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);
         var cDates=_el('div','font-size:.56rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px;');
+        cDates.className='hadm-comp-dates';
         cDates.style.setProperty('color','#b0b0b0','important');
         cDates.textContent=_fmtDate(comp.from)+'→'+_fmtDate(comp.to);
         cBox.appendChild(cDates);
@@ -4068,6 +4069,7 @@
         '.hadm-date-group input[type="date"]{width:100%;box-sizing:border-box;font-size:.82rem;padding:7px 8px;}'+
         '.hadm-row-dates .hadm-filter-group:not(.hadm-date-group){flex:1;min-width:140px;}'+
         '.hadm-row-dates .hadm-buscar-btn{align-self:flex-end;}'+
+        '.hadm-comp-dates{display:none !important;}'+
       '}'+
       // ── Desktop (min-width: 769px) ──
       '@media (min-width: 769px){'+

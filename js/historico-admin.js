@@ -587,14 +587,14 @@
         }
 
         // Maxx abrió a mitad del período → separar.
-        // Tiendas estables: proyección sobre el período completo.
-        // Maxx: mismo motor, pero sobre su período real de operación
-        // (desde su primer día con venta hasta el fin del período).
+        // Tiendas estables: proyección sobre el período completo (fecha calendario).
+        // Maxx: motor de TEMPORADA — compara sus días de operación con los de
+        // temporadas anteriores, sin importar en qué fecha de calendario abrió.
         var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
-        var rowsSoloMaxx=rows.filter(function(r){return r.loja==='MAXX';});
-        var projMaxx=_calcProjection(rowsSoloMaxx,_mr.desde,_projTo,effectiveTodayProj,null);
+        var anoActualStr=f.from.substring(0,4);
+        var projMaxx=_calcProjectionMaxxTemporada(anoActualStr, effectiveTodayProj);
 
         if(projBase&&projMaxx){
           _buildProjBlock({
@@ -606,7 +606,7 @@
             maxxContribFutura: projMaxx.valorProjetado-projMaxx.realAcum
           });
         } else if(projBase&&!projMaxx){
-          var maxxRealAcum=rowsSoloMaxx.filter(function(r){return r.data>=_mr.desde&&r.data<=effectiveTodayProj;})
+          var maxxRealAcum=rows.filter(function(r){return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj;})
             .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
           _buildProjBlock({
             realAcum: projBase.realAcum+maxxRealAcum,
@@ -1265,6 +1265,81 @@
     }).map(function(r){return r.data;}).sort();
     if(!dias.length) return null;
     return {desde:dias[0], hasta:dias[dias.length-1]};
+  }
+
+  // Detecta la temporada completa de Maxx en un año dado (primer→último día con venta).
+  // Devuelve {desde, hasta, dias:[{data,val}]} ordenado, o null si no hay datos.
+  function _maxxTemporadaAno(anoStr) {
+    var dias=_allRows.filter(function(r){
+      return r.loja==='MAXX' && r.data.substring(0,4)===anoStr && (parseFloat(r.montante)||0)>0;
+    }).map(function(r){return {data:r.data,val:parseFloat(r.montante)||0};})
+      .sort(function(a,b){return a.data<b.data?-1:1;});
+    if(!dias.length) return null;
+    return {desde:dias[0].data, hasta:dias[dias.length-1].data, dias:dias};
+  }
+
+  // Proyección de Maxx comparando TEMPORADA con TEMPORADA (no fecha calendario).
+  // Toma lo facturado este año en sus primeros N días de operación y estima el
+  // total de temporada según qué % representaban esos primeros N días en años
+  // anteriores (ponderado por recencia). Estacional-agnóstico al calendario.
+  // Devuelve {realAcum, valorProjetado, pctDone, diasRestantes, anosBase} o null.
+  function _calcProjectionMaxxTemporada(anoActualStr, hastaFecha) {
+    var temp=_maxxTemporadaAno(anoActualStr);
+    if(!temp) return null;
+    // Días de operación reales este año hasta hoy
+    var diasActuales=temp.dias.filter(function(d){return d.data<=hastaFecha;});
+    if(!diasActuales.length) return null;
+    var realAcum=diasActuales.reduce(function(s,d){return s+d.val;},0);
+    var nDiasOperados=diasActuales.length;
+
+    // Para cada año histórico: % que representaban los primeros nDiasOperados
+    // días de su temporada respecto al total de esa temporada.
+    var anosDisponibles={};
+    _allRows.forEach(function(r){
+      if(r.loja!=='MAXX') return;
+      var yr=r.data.substring(0,4);
+      if(yr===anoActualStr||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
+      if((parseFloat(r.montante)||0)<=0) return;
+      anosDisponibles[yr]=true;
+    });
+    var sortedYrs=Object.keys(anosDisponibles).sort(function(a,b){return b-a;});
+
+    var wSum=0, wRatioSum=0, anosBase=[];
+    sortedYrs.forEach(function(yr,i){
+      var t=_maxxTemporadaAno(yr);
+      if(!t||t.dias.length<nDiasOperados) return; // necesita al menos esos días para comparar
+      var totalTemp=t.dias.reduce(function(s,d){return s+d.val;},0);
+      var primerosN=t.dias.slice(0,nDiasOperados).reduce(function(s,d){return s+d.val;},0);
+      if(totalTemp<=0||primerosN<=0) return;
+      var ratio=primerosN/totalTemp; // % del total que son los primeros N días
+      var w=Math.pow(0.45,i);
+      wSum+=w; wRatioSum+=w*ratio;
+      anosBase.push(yr);
+    });
+
+    if(wSum<=0) return null; // sin histórico comparable
+    var pctHistorico=wRatioSum/wSum;
+    var valorProjetado=pctHistorico>0?realAcum/pctHistorico:realAcum;
+
+    // Días restantes estimados de temporada = media ponderada de duración de temporada
+    var wDur=0, wDurSum=0;
+    sortedYrs.forEach(function(yr,i){
+      var t=_maxxTemporadaAno(yr);
+      if(!t) return;
+      var dur=t.dias.length;
+      var w=Math.pow(0.45,i);
+      wDur+=w; wDurSum+=w*dur;
+    });
+    var duracionEsperada=wDur>0?Math.round(wDurSum/wDur):nDiasOperados;
+    var diasRestantes=Math.max(0, duracionEsperada-nDiasOperados);
+
+    return {
+      realAcum:realAcum,
+      valorProjetado:valorProjetado,
+      pctDone:pctHistorico*100,
+      diasRestantes:diasRestantes,
+      anosBase:anosBase
+    };
   }
 
   // Calcula la contribución estimada de Maxx para un tramo [from, to]

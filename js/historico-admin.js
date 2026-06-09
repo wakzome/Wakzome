@@ -157,7 +157,7 @@
       '<div class="hadm-filter-container">'+
 
         // ── FILA 1: Total · Ano ──
-        '<div class="hadm-row hadm-row-period1">'+
+        '<div class="hadm-row">'+
           '<button id="hadm-btn-total">Total</button>'+
           '<span class="hadm-dot">·</span>'+
           '<button id="hadm-btn-ano">Ano</button>'+
@@ -167,7 +167,7 @@
         '<div class="hadm-cv"></div>'+
 
         // ── FILA 2: Q1 Q2 Q3 Q4 · Mes ──
-        '<div class="hadm-row hadm-row-period2">'+
+        '<div class="hadm-row">'+
           '<button id="hadm-btn-q1">Q1</button>'+
           '<button id="hadm-btn-q2">Q2</button>'+
           '<button id="hadm-btn-q3">Q3</button>'+
@@ -180,53 +180,54 @@
         '<div class="hadm-zdiv"><div class="hadm-zdiv-line"></div><span>zonas</span><div class="hadm-zdiv-line"></div></div>'+
 
         // ── ÁRBOL DE ZONAS ──
+        // Parfois y Primavera en la misma fila
         '<div class="hadm-zone-roots">'+
 
-          // rama Parfois
+          // ── PARFOIS ──
           '<div class="hadm-zbranch">'+
-            '<button id="hadm-btn-parfois" class="hadm-zroot hadm-zroot-parf">Parfois</button>'+
-            '<svg class="hadm-branch-svg" width="180" height="22" viewBox="0 0 180 22">'+
-              '<line x1="90" y1="0" x2="90" y2="11" stroke="#cccccc" stroke-width="1.5"/>'+
-              '<line x1="38" y1="11" x2="142" y2="11" stroke="#cccccc" stroke-width="1.5"/>'+
-              '<line x1="38" y1="11" x2="38" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-              '<line x1="142" y1="11" x2="142" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-            '</svg>'+
+            '<button id="hadm-btn-parfois">Parfois</button>'+
+            '<div class="hadm-connector-wrap hadm-conn-2">'+
+              '<div class="hadm-conn-v"></div>'+
+              '<div class="hadm-conn-h"></div>'+
+              '<div class="hadm-conn-vl"></div>'+
+              '<div class="hadm-conn-vr"></div>'+
+            '</div>'+
             '<div class="hadm-zleaves">'+
-              '<button id="hadm-btn-parfois-arc" class="hadm-zleaf hadm-zleaf-parf">Parfois Arcadas</button>'+
-              '<button id="hadm-btn-parfois-mad" class="hadm-zleaf hadm-zleaf-parf">Parfois Madeira</button>'+
+              '<button id="hadm-btn-parfois-arc">Parfois Arcadas</button>'+
+              '<button id="hadm-btn-parfois-mad">Parfois Madeira</button>'+
             '</div>'+
           '</div>'+
 
-          // rama Primavera
+          // ── PRIMAVERA ──
           '<div class="hadm-zbranch">'+
-            '<button id="hadm-btn-primavera" class="hadm-zroot hadm-zroot-prima">Primavera</button>'+
-            '<svg class="hadm-branch-svg" width="240" height="22" viewBox="0 0 240 22">'+
-              '<line x1="120" y1="0" x2="120" y2="11" stroke="#cccccc" stroke-width="1.5"/>'+
-              '<line x1="52" y1="11" x2="188" y2="11" stroke="#cccccc" stroke-width="1.5"/>'+
-              '<line x1="52" y1="11" x2="52" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-              '<line x1="188" y1="11" x2="188" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-            '</svg>'+
-            '<div class="hadm-zleaves hadm-prima-row">'+
+            '<button id="hadm-btn-primavera">Primavera</button>'+
+            '<div class="hadm-connector-wrap hadm-conn-2">'+
+              '<div class="hadm-conn-v"></div>'+
+              '<div class="hadm-conn-h"></div>'+
+              '<div class="hadm-conn-vl"></div>'+
+              '<div class="hadm-conn-vr"></div>'+
+            '</div>'+
+            '<div class="hadm-zleaves">'+
 
-              // Funchal (hoja simple)
-              '<button id="hadm-btn-mezkafnc" class="hadm-zleaf hadm-zleaf-prima">Mezka Funchal</button>'+
+              // Mezka Funchal — hoja directa
+              '<button id="hadm-btn-mezkafnc">Mezka Funchal</button>'+
 
-              // Porto Santo + sus 4 hijos
-              '<div class="hadm-zbranch hadm-porto-branch">'+
-                '<button id="hadm-btn-mezkaps" class="hadm-zleaf hadm-zleaf-prima">Mezka Porto Santo</button>'+
-                '<svg class="hadm-branch-svg" width="264" height="22" viewBox="0 0 264 22">'+
-                  '<line x1="132" y1="0" x2="132" y2="11" stroke="#cccccc" stroke-width="1.5"/>'+
-                  '<line x1="30" y1="11" x2="234" y2="11" stroke="#cccccc" stroke-width="1.5"/>'+
-                  '<line x1="30" y1="11" x2="30" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-                  '<line x1="98" y1="11" x2="98" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-                  '<line x1="166" y1="11" x2="166" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-                  '<line x1="234" y1="11" x2="234" y2="22" stroke="#cccccc" stroke-width="1.5"/>'+
-                '</svg>'+
-                '<div class="hadm-zleaves hadm-porto-children">'+
-                  '<button id="hadm-btn-mezkaavenida" class="hadm-zsub">Mezka Avenida</button>'+
-                  '<button id="hadm-btn-mezkamercado" class="hadm-zsub">Mezka Mercado</button>'+
-                  '<button id="hadm-btn-shana" class="hadm-zsub">Shana</button>'+
-                  '<button id="hadm-btn-maxx" class="hadm-zsub">Maxx</button>'+
+              // Mezka Porto Santo + sus 4 hijos
+              '<div class="hadm-zbranch">'+
+                '<button id="hadm-btn-mezkaps">Mezka Porto Santo</button>'+
+                '<div class="hadm-connector-wrap hadm-conn-4">'+
+                  '<div class="hadm-conn-v"></div>'+
+                  '<div class="hadm-conn-h"></div>'+
+                  '<div class="hadm-conn-v1"></div>'+
+                  '<div class="hadm-conn-v2"></div>'+
+                  '<div class="hadm-conn-v3"></div>'+
+                  '<div class="hadm-conn-v4"></div>'+
+                '</div>'+
+                '<div class="hadm-zleaves">'+
+                  '<button id="hadm-btn-mezkaavenida">Mezka Avenida</button>'+
+                  '<button id="hadm-btn-mezkamercado">Mezka Mercado</button>'+
+                  '<button id="hadm-btn-shana">Shana</button>'+
+                  '<button id="hadm-btn-maxx">Maxx</button>'+
                 '</div>'+
               '</div>'+
 
@@ -3984,21 +3985,27 @@
       '.hadm-zdiv{display:flex !important;align-items:center !important;gap:8px !important;width:100% !important;margin:2px 0 !important;}'+
       '.hadm-zdiv-line{flex:1 !important;height:1px !important;background:#dddddd !important;}'+
       '.hadm-zdiv span{font-size:.6rem !important;color:#aaaaaa !important;letter-spacing:.08em !important;text-transform:uppercase !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;}'+
-      '.hadm-zone-roots{display:flex !important;justify-content:center !important;gap:20px !important;flex-wrap:wrap !important;align-items:flex-start !important;width:100% !important;}'+
-      '.hadm-zbranch{display:flex !important;flex-direction:column !important;align-items:center !important;gap:0 !important;}'+
-      '.hadm-porto-branch{gap:0 !important;}'+
-      '.hadm-branch-svg{display:block !important;overflow:visible !important;}'+
-      '.hadm-zleaves{display:flex !important;gap:6px !important;flex-wrap:wrap !important;justify-content:center !important;}'+
-      '.hadm-prima-row{align-items:flex-start !important;}'+
-      '.hadm-porto-children{display:flex !important;gap:5px !important;flex-wrap:wrap !important;justify-content:center !important;}'+
-      '.hadm-zroot{border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;border:1.5px solid !important;}'+
-      '.hadm-zroot-parf{background:#ede9fe !important;color:#4c2d9c !important;border-color:#a78bfa !important;}'+
-      '.hadm-zroot-prima{background:#d1fae5 !important;color:#065f46 !important;border-color:#6ee7b7 !important;}'+
-      '.hadm-zleaf{border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;border:1.5px solid !important;}'+
-      '.hadm-zleaf-parf{background:#f5f3ff !important;color:#5b21b6 !important;border-color:#c4b5fd !important;}'+
-      '.hadm-zleaf-prima{background:#ecfdf5 !important;color:#047857 !important;border-color:#6ee7b7 !important;}'+
-      '.hadm-zsub{border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;border:1.5px solid !important;background:#f0fdf4 !important;color:#166534 !important;border-color:#86efac !important;}'+
-      '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:16px !important;}.hadm-porto-children{gap:4px !important;}.hadm-zsub{font-size:.7rem !important;padding:4px 7px !important;}}';
+      // árbol de zonas
+      '.hadm-zone-roots{display:flex !important;justify-content:center !important;gap:28px !important;flex-wrap:wrap !important;align-items:flex-start !important;width:100% !important;}'+
+      '.hadm-zbranch{display:flex !important;flex-direction:column !important;align-items:center !important;}'+
+      '.hadm-zleaves{display:flex !important;gap:7px !important;flex-wrap:wrap !important;justify-content:center !important;align-items:flex-start !important;}'+
+      // conectores CSS — barra horizontal centrada con patas verticales
+      '.hadm-connector-wrap{position:relative !important;width:100% !important;height:18px !important;display:flex !important;flex-direction:column !important;align-items:center !important;}'+
+      '.hadm-conn-v{width:1.5px !important;height:8px !important;background:#cccccc !important;margin:0 auto !important;}'+
+      '.hadm-conn-h{width:calc(100% - 20px) !important;height:1.5px !important;background:#cccccc !important;}'+
+      // patas para 2 hijos
+      '.hadm-conn-2{display:flex !important;flex-direction:column !important;align-items:center !important;width:100% !important;position:relative !important;}'+
+      '.hadm-conn-2 .hadm-conn-vl,.hadm-conn-2 .hadm-conn-vr{position:absolute !important;top:9px !important;width:1.5px !important;height:9px !important;background:#cccccc !important;}'+
+      '.hadm-conn-2 .hadm-conn-vl{left:25% !important;}'+
+      '.hadm-conn-2 .hadm-conn-vr{right:25% !important;}'+
+      // patas para 4 hijos
+      '.hadm-conn-4{display:flex !important;flex-direction:column !important;align-items:center !important;width:100% !important;position:relative !important;}'+
+      '.hadm-conn-4 .hadm-conn-v1,.hadm-conn-4 .hadm-conn-v2,.hadm-conn-4 .hadm-conn-v3,.hadm-conn-4 .hadm-conn-v4{position:absolute !important;top:9px !important;width:1.5px !important;height:9px !important;background:#cccccc !important;}'+
+      '.hadm-conn-4 .hadm-conn-v1{left:12.5% !important;}'+
+      '.hadm-conn-4 .hadm-conn-v2{left:37.5% !important;}'+
+      '.hadm-conn-4 .hadm-conn-v3{left:62.5% !important;}'+
+      '.hadm-conn-4 .hadm-conn-v4{left:87.5% !important;}'+
+      '@media (max-width:520px){.hadm-zone-roots{flex-direction:column !important;align-items:center !important;gap:18px !important;}.hadm-zleaves{gap:5px !important;}}';
     document.head.appendChild(s);
   }
 
@@ -4011,26 +4018,9 @@
       var el=document.getElementById(id);
       if(el) el.setAttribute('style',id===_activePeriodBtn?S.pillAct:S.pill);
     });
-    // Zona: raíces Parfois/Primavera tienen sus propias clases de color — solo gestionar active
-    var zoneColorMap={
-      'hadm-btn-parfois':      {base:'background:#ede9fe !important;color:#4c2d9c !important;border:1.5px solid #a78bfa !important;border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#4c2d9c !important;color:#ffffff !important;border:1.5px solid #4c2d9c !important;border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-parfois-arc':  {base:'background:#f5f3ff !important;color:#5b21b6 !important;border:1.5px solid #c4b5fd !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#5b21b6 !important;color:#ffffff !important;border:1.5px solid #5b21b6 !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-parfois-mad':  {base:'background:#f5f3ff !important;color:#5b21b6 !important;border:1.5px solid #c4b5fd !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#5b21b6 !important;color:#ffffff !important;border:1.5px solid #5b21b6 !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-primavera':    {base:'background:#d1fae5 !important;color:#065f46 !important;border:1.5px solid #6ee7b7 !important;border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#065f46 !important;color:#ffffff !important;border:1.5px solid #065f46 !important;border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-mezkafnc':     {base:'background:#ecfdf5 !important;color:#047857 !important;border:1.5px solid #6ee7b7 !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#047857 !important;color:#ffffff !important;border:1.5px solid #047857 !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-mezkaps':      {base:'background:#ecfdf5 !important;color:#047857 !important;border:1.5px solid #6ee7b7 !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#047857 !important;color:#ffffff !important;border:1.5px solid #047857 !important;border-radius:8px !important;padding:4px 11px !important;font-size:.74rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-mezkaavenida': {base:'background:#f0fdf4 !important;color:#166534 !important;border:1.5px solid #86efac !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#166534 !important;color:#ffffff !important;border:1.5px solid #166534 !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-mezkamercado': {base:'background:#f0fdf4 !important;color:#166534 !important;border:1.5px solid #86efac !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#166534 !important;color:#ffffff !important;border:1.5px solid #166534 !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-shana':        {base:'background:#f0fdf4 !important;color:#166534 !important;border:1.5px solid #86efac !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#166534 !important;color:#ffffff !important;border:1.5px solid #166534 !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-maxx':         {base:'background:#f0fdf4 !important;color:#166534 !important;border:1.5px solid #86efac !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#166534 !important;color:#ffffff !important;border:1.5px solid #166534 !important;border-radius:8px !important;padding:4px 9px !important;font-size:.72rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'},
-      'hadm-btn-domingo':      {base:'background:#fef3c7 !important;color:#92400e !important;border:1.5px solid #fcd34d !important;border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;', act:'background:#92400e !important;color:#ffffff !important;border:1.5px solid #92400e !important;border-radius:20px !important;padding:5px 15px !important;font-size:.78rem !important;font-weight:bold !important;cursor:pointer !important;white-space:nowrap !important;font-family:MontserratLight,sans-serif !important;'}
-    };
     _ZONE_BTNS.forEach(function(id){
       var el=document.getElementById(id);
-      if(!el) return;
-      var map=zoneColorMap[id];
-      if(map) el.setAttribute('style',id===_activeZoneBtn?map.act:map.base);
-      else el.setAttribute('style',id===_activeZoneBtn?S.pillAct:S.pill);
+      if(el) el.setAttribute('style',id===_activeZoneBtn?S.pillAct:S.pill);
     });
     ['hadm-tab-vendas','hadm-tab-carregar','hadm-tab-proyeccion','hadm-tab-premios'].forEach(function(id){
       var el=document.getElementById(id);if(!el)return;

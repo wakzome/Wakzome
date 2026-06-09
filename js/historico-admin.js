@@ -565,7 +565,7 @@
         if(proj.maxxContribFutura>0){
           var pMaxx=_el('div','font-size:.58rem;margin-top:3px;');
           pMaxx.style.setProperty('color','#4a7c59','important');
-          pMaxx.textContent='+ Maxx a partir de '+_fmtDate(_maxxConfig.inicio)+': '+_fmtEur(proj.maxxContribFutura);
+          pMaxx.textContent='+ Maxx (dias restantes): '+_fmtEur(proj.maxxContribFutura);
           hRight.appendChild(pMaxx);
         }
       }
@@ -574,31 +574,62 @@
         var effectiveTodayProj=_lastCompleteDay(zonaLojas);
         if(effectiveTodayProj>_todayNow) effectiveTodayProj=_todayNow;
 
-        // ── Lógica inteligente para Maxx con apertura parcial en trimestres/año ──
-        // Si la zona incluye Maxx y Maxx tiene config, detectar si abrió dentro del período
-        var _projFrom=f.from;
-        var _maxxDesdeProj=null;
-
-        if(_maxxNaZonaVendas&&_maxxConfig.inicio&&_maxxConfig.fin){
-          var _mr=_maxxRangoParaPeriodo(f.from,_projTo);
-          if(_mr){
-            var _maxxAbrio=_mr.desde<=effectiveTodayProj; // Maxx ya tiene datos reales
-            var _maxxAbreAntesPeriodo=_maxxConfig.inicio<=f.from; // abrió antes del período
-
-            if(_maxxAbrio&&!_maxxAbreAntesPeriodo){
-              // Maxx abrió dentro del período — proyectar solo desde su apertura real
-              // para no distorsionar con días donde no existía
-              _projFrom=_mr.desde;
-            } else if(!_maxxAbrio){
-              // Maxx aún no abrió en este período — su contribución es futura
-              _maxxDesdeProj=_mr.desde;
-            }
-            // Si abrió antes del período o exactamente en f.from → cálculo normal sin ajuste
-          }
+        // ── Caso simple: Maxx NO está en la zona → proyección normal directa
+        if(!_maxxNaZonaVendas||!_maxxConfig.inicio||!_maxxConfig.fin){
+          var projSimple=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
+          _buildProjBlock(projSimple);
+          return;
         }
 
-        var proj=_calcProjection(rows,_projFrom,_projTo,effectiveTodayProj,_maxxDesdeProj);
-        _buildProjBlock(proj);
+        // ── Maxx está en la zona: tratarla SIEMPRE por separado para no distorsionar
+        // el ratio histórico de las tiendas estables (que operan el período completo).
+        var _mr=_maxxRangoParaPeriodo(f.from,_projTo);
+        var _maxxAbreEnPeriodo=_mr&&_maxxConfig.inicio>f.from; // Maxx abre dentro del período
+
+        if(!_maxxAbreEnPeriodo){
+          // Maxx abrió antes o justo al inicio del período → operó todo el período igual
+          // que las demás → cálculo normal con toda la zona, sin separar.
+          var projNormal=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
+          _buildProjBlock(projNormal);
+          return;
+        }
+
+        // Maxx abre a mitad del período → separar.
+        // 1) Proyección base SIN Maxx (tiendas estables, período completo)
+        var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
+        var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
+
+        // 2) Contribución real de Maxx ya facturada (desde apertura hasta hoy)
+        var maxxRealAcum=rows.filter(function(r){
+          return r.loja==='MAXX'&&r.data>=_mr.desde&&r.data<=effectiveTodayProj;
+        }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+
+        // 3) Contribución futura de Maxx (días restantes desde hoy hasta fin período)
+        var maxxFuturoDesde=null;
+        if(effectiveTodayProj<_projTo){
+          var _diaSig=new Date(_strToDate(effectiveTodayProj).getTime()+86400000);
+          maxxFuturoDesde=_dateToStr(_diaSig);
+          if(maxxFuturoDesde<_mr.desde) maxxFuturoDesde=_mr.desde;
+        }
+        var maxxFuturo=0, maxxDetalleFut=[];
+        if(maxxFuturoDesde&&maxxFuturoDesde<=_projTo){
+          var _projMaxxFut=_calcProjectionMaxxTramo(maxxFuturoDesde,_projTo);
+          maxxFuturo=_projMaxxFut.total;
+          maxxDetalleFut=_projMaxxFut.detalle;
+        }
+
+        // 4) Combinar — si projBase es null (no hay tiendas estables), usar solo Maxx
+        var baseReal=projBase?projBase.realAcum:0;
+        var baseProj=projBase?projBase.valorProjetado:0;
+        var combinado={
+          realAcum: baseReal+maxxRealAcum,
+          valorProjetado: baseProj+maxxRealAcum+maxxFuturo,
+          pctDone: projBase?projBase.pctDone:0,
+          diasRestantes: projBase?projBase.diasRestantes:0,
+          anosBase: projBase?projBase.anosBase:[],
+          maxxContribFutura: maxxFuturo
+        };
+        _buildProjBlock(combinado);
       }
 
       // Si Maxx está en zona y config no cargada: cargar y re-renderizar todo
@@ -1240,6 +1271,63 @@
   // ════════════════════════════════════════════════════════════
 
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
+
+  // Calcula la contribución estimada de Maxx para un tramo [from, to]
+  // usando media histórica por mes ponderada por recencia (mismo método que _calcProjection).
+  // Devuelve {total, detalle:[{mes, diasAbertos, media, total}]}
+  function _calcProjectionMaxxTramo(from, to) {
+    var currentYrStr=from.substring(0,4);
+    var maxxByMes={};
+    _allRows.forEach(function(r){
+      if(r.loja!=='MAXX') return;
+      var yr=r.data.substring(0,4);
+      if(yr===currentYrStr||ANOS_EXCLUIDOS.indexOf(yr)>=0) return;
+      var val=parseFloat(r.montante)||0;
+      if(val<=0) return;
+      var mes=parseInt(r.data.substring(5,7));
+      if(!maxxByMes[mes]) maxxByMes[mes]={};
+      if(!maxxByMes[mes][yr]) maxxByMes[mes][yr]={sum:0,dias:0};
+      maxxByMes[mes][yr].sum+=val;
+      maxxByMes[mes][yr].dias++;
+    });
+
+    var dIter=new Date(_strToDate(from).getTime());
+    var diasPorMes={};
+    while(_dateToStr(dIter)<=to){
+      var mes=dIter.getMonth()+1;
+      diasPorMes[mes]=(diasPorMes[mes]||0)+1;
+      dIter.setDate(dIter.getDate()+1);
+    }
+
+    var total=0, detalle=[];
+    Object.keys(diasPorMes).sort(function(a,b){return a-b;}).forEach(function(mes){
+      var nDias=diasPorMes[mes];
+      var mData=maxxByMes[parseInt(mes)];
+      if(!mData||!Object.keys(mData).length){
+        detalle.push({mes:parseInt(mes),nDias:nDias,media:0,total:0,nota:'sem histórico'});
+        return;
+      }
+      var anosYrs=Object.keys(mData).sort(function(a,b){return b-a;});
+      var yw=0,ywSum=0,ywDias=0,ywDiasSum=0;
+      anosYrs.forEach(function(yr,i){
+        var ad=mData[yr];
+        var mediaDiaAno=ad.dias>0?ad.sum/ad.dias:0;
+        if(mediaDiaAno>0){
+          var w=Math.pow(0.45,i);
+          yw+=w; ywSum+=w*mediaDiaAno;
+          ywDias+=w; ywDiasSum+=w*ad.dias;
+        }
+      });
+      var mediaDia=yw>0?ywSum/yw:0;
+      var diasAbiertosEsperados=ywDias>0?Math.round(ywDiasSum/ywDias):nDias;
+      // Limitar días esperados a los días reales disponibles en el tramo
+      if(diasAbiertosEsperados>nDias) diasAbiertosEsperados=nDias;
+      var contrib=diasAbiertosEsperados*mediaDia;
+      total+=contrib;
+      detalle.push({mes:parseInt(mes),nDias:nDias,diasAbertos:diasAbiertosEsperados,media:mediaDia,total:contrib,anos:anosYrs.length});
+    });
+    return {total:total, detalle:detalle};
+  }
 
   // Calcula proyección con trazabilidad completa
   // maxxDesde: fecha ISO desde la cual Maxx abrirá (opcional) — suma su contribución futura

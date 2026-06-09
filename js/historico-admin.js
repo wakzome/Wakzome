@@ -522,18 +522,33 @@
     // Columna derecha — proyección (solo períodos en curso, no Total, no búsqueda manual)
     var _proyBtns=['hadm-btn-mes','hadm-btn-ano','hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'];
     var _isPeriodoCurso=_proyBtns.indexOf(_activePeriodBtn)>=0;
-    var _periodoAbierto=_todayStr()<=f.to&&_todayStr()>=f.from;
+
+    // Calcular fin real del período (Q y Ano van hasta su fin natural, no lastDay)
+    var _projTo=f.to;
+    var _todayNow=_todayStr();
+    if(_activePeriodBtn==='hadm-btn-q1') _projTo=_strToDate(f.from).getFullYear()+'-03-31';
+    else if(_activePeriodBtn==='hadm-btn-q2') _projTo=_strToDate(f.from).getFullYear()+'-06-30';
+    else if(_activePeriodBtn==='hadm-btn-q3') _projTo=_strToDate(f.from).getFullYear()+'-09-30';
+    else if(_activePeriodBtn==='hadm-btn-q4') _projTo=_strToDate(f.from).getFullYear()+'-12-31';
+    else if(_activePeriodBtn==='hadm-btn-ano') _projTo=_strToDate(f.from).getFullYear()+'-12-31';
+    else if(_activePeriodBtn==='hadm-btn-mes'){
+      var _mD=_strToDate(f.from);
+      _projTo=_dateToStr(new Date(_mD.getFullYear(),_mD.getMonth()+1,0));
+    }
+    // Período en curso = hoy está dentro del rango real del período
+    var _periodoAbierto=_todayNow>=f.from&&_todayNow<=_projTo;
+    var _maxxNaZonaVendas=zonaLojas.indexOf('MAXX')>=0;
 
     if(!isTotal&&_isPeriodoCurso&&_periodoAbierto){
-      var hRight=_el('div','flex:0 0 auto;min-width:160px;max-width:240px;border-left:1px solid #333333;padding-left:16px;');
+      var hRight=_el('div','flex:0 0 auto;min-width:160px;max-width:220px;border-left:1px solid #333333;padding-left:16px;');
+      var _periodoLabel={'hadm-btn-mes':'Mês','hadm-btn-ano':'Ano','hadm-btn-q1':'Q1','hadm-btn-q2':'Q2','hadm-btn-q3':'Q3','hadm-btn-q4':'Q4'}[_activePeriodBtn]||'';
 
-      // Función interna que renderiza el bloque de proyección
-      function _renderProjBlock(proj, periodoLabel){
+      function _buildProjBlock(proj){
         hRight.innerHTML='';
-        if(!proj){ hMainRow.removeChild(hRight); return; }
+        if(!proj) return;
         var pLbl=_el('div','font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px;');
         pLbl.style.setProperty('color','#4a7c59','important');
-        pLbl.textContent='Projecção '+periodoLabel;
+        pLbl.textContent='Projecção '+_periodoLabel;
         hRight.appendChild(pLbl);
         var pVal=_el('div','font-size:1.55rem;font-weight:900;letter-spacing:-.02em;margin-bottom:3px;');
         pVal.style.setProperty('color','#5ecf8a','important');
@@ -541,64 +556,42 @@
         hRight.appendChild(pVal);
         var pSub=_el('div','font-size:.62rem;line-height:1.5;');
         pSub.style.setProperty('color','#777777','important');
-        var pctLine=proj.pctDone.toFixed(1)+'% concluído · '+proj.diasRestantes+' dias restantes';
-        var anosLine='Base: '+proj.anosBase.join(', ');
-        pSub.textContent=pctLine;
+        pSub.textContent=proj.pctDone.toFixed(1)+'% concluído · '+proj.diasRestantes+' dias rest.';
         hRight.appendChild(pSub);
         var pAnos=_el('div','font-size:.58rem;margin-top:2px;');
         pAnos.style.setProperty('color','#555555','important');
-        pAnos.textContent=anosLine;
+        pAnos.textContent='Base: '+proj.anosBase.join(', ');
         hRight.appendChild(pAnos);
         if(proj.maxxContribFutura>0){
           var pMaxx=_el('div','font-size:.58rem;margin-top:3px;');
           pMaxx.style.setProperty('color','#4a7c59','important');
-          pMaxx.textContent='+ Maxx desde '+_fmtDate(_maxxConfig.inicio)+': '+_fmtEur(proj.maxxContribFutura);
+          pMaxx.textContent='+ Maxx a partir de '+_fmtDate(_maxxConfig.inicio)+': '+_fmtEur(proj.maxxContribFutura);
           hRight.appendChild(pMaxx);
         }
       }
 
-      // Determinar label del período activo
-      var _periodoLabel={
-        'hadm-btn-mes':'Mês','hadm-btn-ano':'Ano',
-        'hadm-btn-q1':'Q1','hadm-btn-q2':'Q2','hadm-btn-q3':'Q3','hadm-btn-q4':'Q4'
-      }[_activePeriodBtn]||'';
-
-      // Determinar si Maxx está en la zona activa
-      var _maxxNaZonaVendas=zonaLojas.indexOf('MAXX')>=0;
-
-      // Calcular proyección — con config Maxx si corresponde
-      function _computeAndRender(){
+      function _doCalcProj(){
         var effectiveTodayProj=_lastCompleteDay(zonaLojas);
-        if(effectiveTodayProj>_todayStr()) effectiveTodayProj=_todayStr();
-        // Determinar fin real del período (para Q, el fin del trimestre; para Mes/Ano, f.to)
-        var projTo=f.to;
-        var _qEnds={'hadm-btn-q1':f.from.substring(0,4)+'-03-31','hadm-btn-q2':f.from.substring(0,4)+'-06-30','hadm-btn-q3':f.from.substring(0,4)+'-09-30','hadm-btn-q4':f.from.substring(0,4)+'-12-31'};
-        if(_qEnds[_activePeriodBtn]) projTo=_qEnds[_activePeriodBtn];
-        if(_activePeriodBtn==='hadm-btn-ano') projTo=f.from.substring(0,4)+'-12-31';
-        if(_activePeriodBtn==='hadm-btn-mes'){
-          var _mD=_strToDate(f.from);
-          projTo=_dateToStr(new Date(_mD.getFullYear(),_mD.getMonth()+1,0));
-        }
-        // Maxx: solo si está en la zona y tiene config cargada con fecha futura
+        if(effectiveTodayProj>_todayNow) effectiveTodayProj=_todayNow;
         var _maxxDesdeProj=null;
         if(_maxxNaZonaVendas&&_maxxConfig.inicio&&_maxxConfig.fin){
-          var _mr=_maxxRangoParaPeriodo(f.from,projTo);
-          // Solo sumar contribución futura si Maxx aún no ha abierto en el período
+          var _mr=_maxxRangoParaPeriodo(f.from,_projTo);
           if(_mr&&_mr.desde>effectiveTodayProj) _maxxDesdeProj=_mr.desde;
         }
-        var proj=_calcProjection(rows,f.from,projTo,effectiveTodayProj,_maxxDesdeProj);
-        _renderProjBlock(proj,_periodoLabel);
+        var proj=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,_maxxDesdeProj);
+        _buildProjBlock(proj);
       }
 
-      // Si config Maxx no está cargada y Maxx está en la zona, cargar primero
+      // Si Maxx está en zona y config no cargada: cargar y re-renderizar todo
+      // (no operar sobre DOM que puede ser destruido por el callback)
       if(_maxxNaZonaVendas&&!_maxxConfig.loaded){
-        var pLblLoading=_el('div','font-size:.58rem;');
-        pLblLoading.style.setProperty('color','#555555','important');
-        pLblLoading.textContent='a calcular…';
-        hRight.appendChild(pLblLoading);
-        _loadMaxxConfig(function(){ _computeAndRender(); });
+        var pLoad=_el('div','font-size:.6rem;');
+        pLoad.style.setProperty('color','#555555','important');
+        pLoad.textContent='a calcular…';
+        hRight.appendChild(pLoad);
+        _loadMaxxConfig(function(){ _render(); });
       } else {
-        _computeAndRender();
+        _doCalcProj();
       }
 
       hMainRow.appendChild(hRight);

@@ -594,25 +594,41 @@
           maxxFuturoDesde=_dateToStr(_diaSig);
           if(maxxFuturoDesde<_mr.desde) maxxFuturoDesde=_mr.desde;
         }
-        var maxxFuturo=0, maxxDetalleFut=[];
+        var maxxFuturo=0;
         if(maxxFuturoDesde&&maxxFuturoDesde<=_projTo){
-          var _projMaxxFut=_calcProjectionMaxxTramo(maxxFuturoDesde,_projTo);
-          maxxFuturo=_projMaxxFut.total;
-          maxxDetalleFut=_projMaxxFut.detalle;
+          maxxFuturo=_calcProjectionMaxxTramo(maxxFuturoDesde,_projTo).total;
         }
 
-        // 4) Combinar — si projBase es null (no hay tiendas estables), usar solo Maxx
-        var baseReal=projBase?projBase.realAcum:0;
-        var baseProj=projBase?projBase.valorProjetado:0;
-        var combinado={
-          realAcum: baseReal+maxxRealAcum,
-          valorProjetado: baseProj+maxxRealAcum+maxxFuturo,
-          pctDone: projBase?projBase.pctDone:0,
-          diasRestantes: projBase?projBase.diasRestantes:0,
-          anosBase: projBase?projBase.anosBase:[],
-          maxxContribFutura: maxxFuturo
-        };
-        _buildProjBlock(combinado);
+        if(projBase){
+          // Hay tiendas estables → combinar base + Maxx
+          var combinado={
+            realAcum: projBase.realAcum+maxxRealAcum,
+            valorProjetado: projBase.valorProjetado+maxxRealAcum+maxxFuturo,
+            pctDone: projBase.pctDone,
+            diasRestantes: projBase.diasRestantes,
+            anosBase: projBase.anosBase,
+            maxxContribFutura: maxxFuturo
+          };
+          _buildProjBlock(combinado);
+        } else {
+          // Maxx es la única tienda → % y días sobre SU período de operación real
+          var maxxIniD=_strToDate(_mr.desde);
+          var maxxFinD=_strToDate(_mr.hasta);
+          var maxxTotalDias=Math.round((maxxFinD-maxxIniD)/86400000)+1;
+          var maxxHoyD=_strToDate(effectiveTodayProj);
+          var maxxDoneDias=Math.min(Math.round((maxxHoyD-maxxIniD)/86400000)+1, maxxTotalDias);
+          if(maxxDoneDias<0) maxxDoneDias=0;
+          var maxxPctDone=maxxTotalDias>0?(maxxDoneDias/maxxTotalDias*100):0;
+          var soloMaxx={
+            realAcum: maxxRealAcum,
+            valorProjetado: maxxRealAcum+maxxFuturo,
+            pctDone: maxxPctDone,
+            diasRestantes: Math.max(0,maxxTotalDias-maxxDoneDias),
+            anosBase: ['Maxx histórico'],
+            maxxContribFutura: maxxFuturo
+          };
+          _buildProjBlock(soloMaxx);
+        }
       }
 
       // Si Maxx está en zona y config no cargada: cargar y re-renderizar todo

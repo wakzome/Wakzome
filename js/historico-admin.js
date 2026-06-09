@@ -558,39 +558,45 @@
         if(effectiveTodayProj>_todayNow) effectiveTodayProj=_todayNow;
 
         // ── Caso simple: Maxx NO está en la zona → proyección normal directa
-        if(!_maxxNaZonaVendas||!_maxxConfig.inicio||!_maxxConfig.fin){
+        if(!_maxxNaZonaVendas){
           var projSimple=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projSimple);
           return;
         }
 
-        // ── Maxx está en la zona: tratarla SIEMPRE por separado para no distorsionar
-        // el ratio histórico de las tiendas estables (que operan el período completo).
-        var _mr=_maxxRangoParaPeriodo(f.from,_projTo);
-        var _maxxAbreEnPeriodo=_mr&&_maxxConfig.inicio>f.from; // Maxx abre dentro del período
+        // ── Maxx está en la zona. Detectar su rango REAL de operación este año
+        // dentro del período, a partir de los datos (primer día con venta ≠ 0).
+        // La realidad de los datos manda — sin configuración manual.
+        var _mr=_maxxRangoReal(f.from, effectiveTodayProj);
+
+        // Maxx sin ventas aún en el período → proyección normal de las demás
+        if(!_mr){
+          var projSinMaxx=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
+          _buildProjBlock(projSinMaxx);
+          return;
+        }
+
+        // ¿Maxx empezó a facturar después del inicio del período? → abrió a mitad
+        var _maxxAbreEnPeriodo=_mr.desde>f.from;
 
         if(!_maxxAbreEnPeriodo){
-          // Maxx abrió antes o justo al inicio del período → operó todo el período igual
-          // que las demás → cálculo normal con toda la zona, sin separar.
+          // Maxx operó desde el inicio del período igual que las demás → cálculo normal
           var projNormal=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projNormal);
           return;
         }
 
-        // Maxx abre a mitad del período → separar.
-        // Las tiendas estables se proyectan sobre el período completo.
-        // Maxx se proyecta con el MISMO motor (_calcProjection) pero sobre su
-        // período real de operación (desde su apertura hasta el fin del período),
-        // exactamente igual que se calcularía un Mes.
+        // Maxx abrió a mitad del período → separar.
+        // Tiendas estables: proyección sobre el período completo.
+        // Maxx: mismo motor, pero sobre su período real de operación
+        // (desde su primer día con venta hasta el fin del período).
         var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
-        // Proyección de Maxx sobre su período de operación real
         var rowsSoloMaxx=rows.filter(function(r){return r.loja==='MAXX';});
-        var projMaxx=_calcProjection(rowsSoloMaxx,_mr.desde,_mr.hasta,effectiveTodayProj,null);
+        var projMaxx=_calcProjection(rowsSoloMaxx,_mr.desde,_projTo,effectiveTodayProj,null);
 
         if(projBase&&projMaxx){
-          // Estables + Maxx
           _buildProjBlock({
             realAcum: projBase.realAcum+projMaxx.realAcum,
             valorProjetado: projBase.valorProjetado+projMaxx.valorProjetado,
@@ -600,8 +606,7 @@
             maxxContribFutura: projMaxx.valorProjetado-projMaxx.realAcum
           });
         } else if(projBase&&!projMaxx){
-          // Solo estables proyectables (Maxx sin histórico suficiente) → sumar Maxx real
-          var maxxRealAcum=rowsSoloMaxx.filter(function(r){return r.data<=effectiveTodayProj;})
+          var maxxRealAcum=rowsSoloMaxx.filter(function(r){return r.data>=_mr.desde&&r.data<=effectiveTodayProj;})
             .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
           _buildProjBlock({
             realAcum: projBase.realAcum+maxxRealAcum,
@@ -612,24 +617,15 @@
             maxxContribFutura: 0
           });
         } else if(!projBase&&projMaxx){
-          // Maxx es la única tienda → su proyección directa
           _buildProjBlock(projMaxx);
         } else {
           _buildProjBlock(null);
         }
       }
 
-      // Si Maxx está en zona y config no cargada: cargar y re-renderizar todo
-      // (no operar sobre DOM que puede ser destruido por el callback)
-      if(_maxxNaZonaVendas&&!_maxxConfig.loaded){
-        var pLoad=_el('div','font-size:.6rem;');
-        pLoad.style.setProperty('color','#555555','important');
-        pLoad.textContent='a calcular…';
-        hRight.appendChild(pLoad);
-        _loadMaxxConfig(function(){ _render(); });
-      } else {
-        _doCalcProj();
-      }
+      // La detección del rango de Maxx es directa desde _allRows (ya en memoria),
+      // no requiere cargar configuración manual.
+      _doCalcProj();
 
       hMainRow.appendChild(hRight);
     }
@@ -1258,6 +1254,18 @@
   // ════════════════════════════════════════════════════════════
 
   var ANOS_EXCLUIDOS = ['2020','2021']; // COVID — distorsionan proyecciones
+
+  // Detecta automáticamente el rango real de operación de Maxx dentro de [from, to]
+  // basándose en los datos: primer y último día con venta ≠ 0.
+  // La realidad de los datos manda — no depende de configuración manual.
+  // Devuelve {desde, hasta} o null si Maxx no tiene ventas en el rango.
+  function _maxxRangoReal(from, to) {
+    var dias=_allRows.filter(function(r){
+      return r.loja==='MAXX' && r.data>=from && r.data<=to && (parseFloat(r.montante)||0)>0;
+    }).map(function(r){return r.data;}).sort();
+    if(!dias.length) return null;
+    return {desde:dias[0], hasta:dias[dias.length-1]};
+  }
 
   // Calcula la contribución estimada de Maxx para un tramo [from, to]
   // usando media histórica por mes ponderada por recencia (mismo método que _calcProjection).

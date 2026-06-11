@@ -81,15 +81,12 @@ var RT_CSS = `
 .rt-btn-sm:hover { border-color: #000; }
 .rt-btn-sm.bk { background: #000; color: #fff !important; border-color: #000; }
 .rt-lbl-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; max-height: 560px; overflow-y: auto; }
-.rt-lp { border: 1px solid #e6e6e6; border-radius: 10px; padding: 14px; font-family: Arial,sans-serif; display: flex; gap: 10px; align-items: stretch; }
-.rt-lp-info { flex: 1; min-width: 0; }
+.rt-lp { border: 1px solid #e6e6e6; border-radius: 10px; padding: 14px; font-family: Arial,sans-serif; }
 .rt-lp-send { font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px; color: #000; font-weight: 700; }
 .rt-lp-st { font-size: 14px; font-weight: 900; text-transform: uppercase; padding-bottom: 7px; margin-bottom: 7px; border-bottom: 2px solid #000; color: #000; }
 .rt-lp-ad,.rt-lp-cp { font-size: 10px; color: #000; font-weight: 600; }
 .rt-lp-cp { margin-bottom: 9px; }
 .rt-lp-cd { font-size: 10px; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 6px 8px; border-radius: 3px; border-left: 3px solid #000; word-break: break-all; color: #000; }
-.rt-lp-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 110px; }
-.rt-lp-qr canvas,.rt-lp-qr img { width: 110px !important; height: 110px !important; display: block; }
 .rt-filters { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
 .rt-fl { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-right: 4px; color: #000; }
 .rt-fb { padding: 6px 14px; border-radius: 20px; font-size: .76rem; font-weight: 700; cursor: pointer; border: 1px solid #e6e6e6; background: #fff; color: #000; text-transform: lowercase; transition: all .15s; font-family: inherit; }
@@ -139,17 +136,14 @@ var RT_CSS = `
 .rt-mp-close:hover { border-color: #c00; color: #c00; }
 .rt-pg-lbl { font-size: .68rem; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
 .rt-psheet { display: flex; flex-direction: column; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-.rt-rot { padding: 10px 20px; border-bottom: 1px solid #ccc; font-family: Arial,sans-serif; background: #fff; display: flex; gap: 12px; align-items: center; }
+.rt-rot { padding: 10px 20px; border-bottom: 1px solid #ccc; font-family: Arial,sans-serif; background: #fff; }
 .rt-rot:last-child { border-bottom: none; }
-.rt-rot.empty { background: #fafafa; min-height: 50px; display: block; }
-.rt-rot-info { flex: 1; min-width: 0; }
+.rt-rot.empty { background: #fafafa; min-height: 50px; }
 .rt-rot .rs { font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 3px; color: #000; font-weight: 700; }
 .rt-rot .rn { font-size: 15px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; color: #000; }
 .rt-rot .ra,.rt-rot .rc { font-size: 10px; color: #000; font-weight: 600; }
 .rt-rot .rc { margin-bottom: 6px; }
 .rt-rot .rk { font-size: 10px; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 5px 8px; border-radius: 3px; border-left: 3px solid #000; display: inline-block; word-break: break-all; color: #000; }
-.rt-rot-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 100px; }
-.rt-rot-qr canvas,.rt-rot-qr img { width: 100px !important; height: 100px !important; display: block; }
 #rt-print-area { display: none; }
 @media print {
   @page { size: A4 portrait; margin: 0; }
@@ -420,268 +414,6 @@ window.closeRotulosOverlay = function () {
   setTimeout(function () { ov.classList.remove('open'); }, 600);
 };
 
-/* ── QR Generator — self-contained, zero dependencies ──────────────
-   Implementación correcta de QR Code (versiones 1-10, modo byte, ECC M).
-   Genera un <canvas> listo para usar.
-─────────────────────────────────────────────────────────────────── */
-var rtQR = (function(){
-  /* GF(256) tables */
-  var EXP=new Array(512),LOG=new Array(256);
-  (function(){var x=1;for(var i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x>=256)x^=285;}for(var i=255;i<512;i++)EXP[i]=EXP[i-255];}());
-  function mul(a,b){return(a&&b)?EXP[LOG[a]+LOG[b]]:0;}
-
-  function rsECC(data,n){
-    var g=[1];
-    for(var i=0;i<n;i++){var ng=new Array(g.length+1).fill(0);for(var j=0;j<g.length;j++){ng[j]^=mul(g[j],EXP[i]);ng[j+1]^=g[j];}g=ng;}
-    var r=new Array(n).fill(0);
-    for(var i=0;i<data.length;i++){var c=r[0]^data[i];r.shift();r.push(0);for(var j=0;j<n;j++)r[j]^=mul(c,g[j]);}
-    return r;
-  }
-
-  /* Version capacity [ver] = {data bytes for ECC-M, ecc bytes, blocks} */
-  var VCAP=[null,
-    {d:16,e:10,b:1},{d:28,e:16,b:1},{d:44,e:26,b:2},{d:64,e:18,b:2},
-    {d:86,e:24,b:2},{d:108,e:16,b:4},{d:124,e:18,b:4},{d:154,e:22,b:2},
-    {d:182,e:22,b:3},{d:216,e:26,b:4}
-  ];
-  var APOS=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,28,46],[6,32,50]];
-
-  /* Format strings for mask 0-7, ECC M */
-  var FMTM=[0x5BC0,0x5489,0x551E,0x5657,0x57C4,0x507B,0x51E8,0x5201];
-
-  function makeGrid(n){var g=[];for(var i=0;i<n;i++)g.push(new Int8Array(n).fill(-1));return g;}
-
-  function setBlock(g,r,c,pat){for(var i=0;i<pat.length;i++)for(var j=0;j<pat[i].length;j++)if(r+i>=0&&r+i<g.length&&c+j>=0&&c+j<g.length)g[r+i][c+j]=pat[i][j];}
-
-  var FINDER=[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]];
-  var ALIGN=[[1,1,1,1,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[1,1,1,1,1]];
-
-  function reserveFormat(g,n){
-    var fp=[0,1,2,3,4,5,7,8,n-7,n-6,n-5,n-4,n-3,n-2,n-1];
-    for(var i=0;i<8;i++){g[8][fp[i]]=0;g[fp[i]][8]=0;}
-    g[n-8][8]=1; // dark module
-  }
-
-  function writeFormat(g,n,mask){
-    var f=FMTM[mask];
-    var seq=[0,1,2,3,4,5,7,8,n-7,n-6,n-5,n-4,n-3,n-2,n-1];
-    for(var i=0;i<15;i++){
-      var b=(f>>(14-i))&1;
-      if(i<8){g[8][seq[i]]=b;g[seq[14-i]][8]=b;}
-      else{g[8][seq[i]]=b;g[seq[14-i]][8]=b;}
-    }
-    // simpler: horizontal strip on row 8, vertical strip on col 8
-    var hseq=[0,1,2,3,4,5,7,8]; var vseq=[8,7,5,4,3,2,1,0];
-    var bits15=[];for(var i=14;i>=0;i--)bits15.push((f>>i)&1);
-    for(var i=0;i<8;i++)g[8][hseq[i]]=bits15[i];
-    for(var i=0;i<7;i++)g[vseq[i]][8]=bits15[8+i];
-    for(var i=0;i<8;i++)g[n-8+i][8]=bits15[6-i<0?0:6-i];
-    for(var i=0;i<7;i++)g[8][n-8+i]=bits15[8+i];
-  }
-
-  function isFunc(g,r,c){return g[r][c]!=-1&&g[r][c]!=-2;}
-
-  function placeData(g,n,bits){
-    var idx=0,dir=-1,row=n-1;
-    for(var col=n-1;col>=0;col-=2){
-      if(col==6)col=5;
-      for(var cnt=0;cnt<n;cnt++){
-        var r=(dir==-1)?(n-1-cnt):cnt;
-        for(var d=0;d<2;d++){
-          var c=col-d;
-          if(g[r][c]==-1){g[r][c]=(idx<bits.length?bits[idx++]:0);}
-        }
-      }
-      dir=-dir;
-    }
-  }
-
-  function applyMask(g,n,mask){
-    for(var r=0;r<n;r++)for(var c=0;c<n;c++){
-      if(g[r][c]==-2||g[r][c]>1)continue; // skip function
-      if(isFunc(g,r,c))continue;
-      var inv=false;
-      switch(mask){
-        case 0:inv=(r+c)%2==0;break;case 1:inv=r%2==0;break;
-        case 2:inv=c%3==0;break;case 3:inv=(r+c)%3==0;break;
-        case 4:inv=(Math.floor(r/2)+Math.floor(c/3))%2==0;break;
-        case 5:inv=(r*c)%2+(r*c)%3==0;break;
-        case 6:inv=((r*c)%2+(r*c)%3)%2==0;break;
-        case 7:inv=((r+c)%2+(r*c)%3)%2==0;break;
-      }
-      if(inv)g[r][c]^=1;
-    }
-  }
-
-  function penalty(g,n){
-    var p=0;
-    for(var r=0;r<n;r++){
-      var run=1;
-      for(var c=1;c<n;c++){
-        if(g[r][c]==g[r][c-1]){run++;if(run==5)p+=3;else if(run>5)p++;}else run=1;
-      }
-    }
-    for(var c=0;c<n;c++){
-      var run=1;
-      for(var r=1;r<n;r++){
-        if(g[r][c]==g[r-1][c]){run++;if(run==5)p+=3;else if(run>5)p++;}else run=1;
-      }
-    }
-    return p;
-  }
-
-  function encode(text){
-    /* UTF-8 encode */
-    var bytes=[];
-    for(var i=0;i<text.length;){
-      var cp=text.codePointAt(i);
-      if(cp<0x80)bytes.push(cp);
-      else if(cp<0x800){bytes.push(0xC0|(cp>>6));bytes.push(0x80|(cp&63));}
-      else if(cp<0x10000){bytes.push(0xE0|(cp>>12));bytes.push(0x80|((cp>>6)&63));bytes.push(0x80|(cp&63));}
-      else{bytes.push(0xF0|(cp>>18));bytes.push(0x80|((cp>>12)&63));bytes.push(0x80|((cp>>6)&63));bytes.push(0x80|(cp&63));}
-      i+=cp>0xFFFF?2:1;
-    }
-
-    /* Pick version */
-    var ver=1;
-    for(;ver<=10;ver++){if(VCAP[ver]&&bytes.length<=VCAP[ver].d)break;}
-    if(ver>10)ver=10;
-    var cap=VCAP[ver];
-    var n=ver*4+17;
-
-    /* Data bits */
-    var bits=[];
-    function pb(v,len){for(var i=len-1;i>=0;i--)bits.push((v>>i)&1);}
-    pb(4,4); pb(bytes.length,8);
-    for(var i=0;i<bytes.length;i++)pb(bytes[i],8);
-    while(bits.length%8)bits.push(0);
-    var pads=[0xEC,0x11],pi=0;
-    while(bits.length<cap.d*8){pb(pads[pi],8);pi^=1;}
-
-    /* Codewords */
-    var cw=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}
-
-    /* Split blocks + ECC */
-    var bsz=Math.floor(cap.d/cap.b),rem=cap.d%cap.b,esz=Math.floor((cap.d*cap.e/cap.d)),pos=0;
-    esz=Math.round((cap.e));
-    // recompute: total=d+e per block
-    var totalBlk=Math.round((cap.d+cap.e)/cap.b);
-    esz=totalBlk-Math.ceil(cap.d/cap.b);
-    // simpler: ecc bytes per block
-    esz=Math.round(cap.e/cap.b);
-    var dblk=[],eblk=[];
-    pos=0;
-    for(var b=0;b<cap.b;b++){
-      var len=bsz+(b>=(cap.b-rem)?1:0);
-      var blk=cw.slice(pos,pos+len);pos+=len;
-      dblk.push(blk);eblk.push(rsECC(blk,esz));
-    }
-
-    /* Interleave */
-    var final=[];
-    var maxD=Math.max.apply(null,dblk.map(function(b){return b.length;}));
-    for(var i=0;i<maxD;i++)for(var b=0;b<cap.b;b++)if(i<dblk[b].length)final.push(dblk[b][i]);
-    for(var i=0;i<esz;i++)for(var b=0;b<cap.b;b++)final.push(eblk[b][i]);
-
-    /* To bits */
-    var allBits=[];
-    for(var i=0;i<final.length;i++)pb(final[i],8);
-    allBits=bits.slice(); // pb wrote into bits — reset
-    bits=[];
-    for(var i=0;i<final.length;i++){var v=final[i];for(var j=7;j>=0;j--)bits.push((v>>j)&1);}
-    // remainder bits
-    var REM=[0,0,7,7,7,7,7,0,0,0,0,0,0,0,3,3,3,3,3,3,3,4,4,4,4,4,4,4];
-    for(var i=0;i<(REM[ver]||0);i++)bits.push(0);
-
-    /* Build matrix */
-    var g=makeGrid(n);
-
-    // Finder patterns + separators
-    setBlock(g,0,0,FINDER); setBlock(g,n-7,0,FINDER); setBlock(g,0,n-7,FINDER);
-    // Separators (white border around finders)
-    for(var i=0;i<8;i++){
-      if(g[7][i]==-1)g[7][i]=0; if(g[i][7]==-1)g[i][7]=0;
-      if(g[n-8][i]==-1)g[n-8][i]=0; if(n-8+0<n&&g[i][n-8]==-1)g[i][n-8]=0;
-    }
-    g[7][7]=0; if(g[n-8][7]==-1)g[n-8][7]=0; if(g[7][n-8]==-1)g[7][n-8]=0;
-
-    // Timing
-    for(var i=8;i<n-8;i++){g[6][i]=(i%2==0)?1:0;g[i][6]=(i%2==0)?1:0;}
-
-    // Alignment
-    var ap=APOS[ver];
-    if(ap&&ap.length>1){
-      for(var a=0;a<ap.length;a++)for(var b2=0;b2<ap.length;b2++){
-        var r=ap[a]-2,c=ap[b2]-2;
-        if(g[r+2][c+2]==-1)setBlock(g,r,c,ALIGN);
-      }
-    }
-
-    // Dark module + reserve format
-    g[n-8][8]=1;
-    reserveFormat(g,n);
-
-    // Find best mask
-    var bestMask=0,bestPen=Infinity;
-    for(var mk=0;mk<8;mk++){
-      var tg=makeGrid(n);
-      setBlock(tg,0,0,FINDER);setBlock(tg,n-7,0,FINDER);setBlock(tg,0,n-7,FINDER);
-      for(var i=0;i<8;i++){if(tg[7][i]==-1)tg[7][i]=0;if(tg[i][7]==-1)tg[i][7]=0;if(tg[n-8][i]==-1)tg[n-8][i]=0;if(tg[i][n-8]==-1)tg[i][n-8]=0;}
-      tg[7][7]=0;if(tg[n-8][7]==-1)tg[n-8][7]=0;if(tg[7][n-8]==-1)tg[7][n-8]=0;
-      for(var i=8;i<n-8;i++){tg[6][i]=(i%2==0)?1:0;tg[i][6]=(i%2==0)?1:0;}
-      if(ap&&ap.length>1)for(var a=0;a<ap.length;a++)for(var b2=0;b2<ap.length;b2++){var r=ap[a]-2,c=ap[b2]-2;if(tg[r+2][c+2]==-1)setBlock(tg,r,c,ALIGN);}
-      tg[n-8][8]=1;
-      reserveFormat(tg,n);
-      placeData(tg,n,bits);
-      applyMask(tg,n,mk);
-      writeFormat(tg,n,mk);
-      var pen=penalty(tg,n);
-      if(pen<bestPen){bestPen=pen;bestMask=mk;}
-    }
-
-    // Build final
-    setBlock(g,0,0,FINDER);setBlock(g,n-7,0,FINDER);setBlock(g,0,n-7,FINDER);
-    for(var i=0;i<8;i++){if(g[7][i]==-1)g[7][i]=0;if(g[i][7]==-1)g[i][7]=0;if(g[n-8][i]==-1)g[n-8][i]=0;if(g[i][n-8]==-1)g[i][n-8]=0;}
-    g[7][7]=0;if(g[n-8][7]==-1)g[n-8][7]=0;if(g[7][n-8]==-1)g[7][n-8]=0;
-    for(var i=8;i<n-8;i++){g[6][i]=(i%2==0)?1:0;g[i][6]=(i%2==0)?1:0;}
-    if(ap&&ap.length>1)for(var a=0;a<ap.length;a++)for(var b2=0;b2<ap.length;b2++){var r=ap[a]-2,c=ap[b2]-2;if(g[r+2][c+2]==-1)setBlock(g,r,c,ALIGN);}
-    g[n-8][8]=1;
-    reserveFormat(g,n);
-    placeData(g,n,bits);
-    applyMask(g,n,bestMask);
-    writeFormat(g,n,bestMask);
-
-    return {matrix:g,size:n};
-  }
-
-  function toCanvas(text,px){
-    var q=encode(text);
-    var sz=q.size,m=q.matrix;
-    var quiet=4;
-    var cell=Math.max(1,Math.floor(px/(sz+quiet*2)));
-    var dim=(sz+quiet*2)*cell;
-    var cv=document.createElement('canvas');
-    cv.width=cv.height=dim;
-    var ctx=cv.getContext('2d');
-    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,dim,dim);
-    ctx.fillStyle='#000000';
-    for(var r=0;r<sz;r++)for(var c=0;c<sz;c++){
-      if(m[r][c]===1)ctx.fillRect((c+quiet)*cell,(r+quiet)*cell,cell,cell);
-    }
-    return cv;
-  }
-
-  return {toCanvas:toCanvas};
-}());
-
-
-
-/* Genera canvas QR y llama cb(canvas) — interfaz usada por rtRPreview/rtShowPrintModal/rtDoPrint */
-function rtMakeQRCanvas(text, size, cb) {
-  try { cb(rtQR.toCanvas(text, size)); }
-  catch(e) { console.warn('RT QR error', e); cb(null); }
-}
-
 function rtBindLogic() {
   var YEAR    = new Date().getFullYear();
   var SK      = 'wkz_rt_' + YEAR;
@@ -887,14 +619,8 @@ function rtBindLogic() {
     items.forEach(function(it){
       var code=mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0);
       var d=document.createElement('div'); d.className='rt-lp';
-      var info=document.createElement('div'); info.className='rt-lp-info';
-      info.innerHTML='<div class="rt-lp-send">WAKZOME</div><div class="rt-lp-st">'+it.s.name+'</div><div class="rt-lp-ad">'+(it.s.addr||'')+'</div><div class="rt-lp-cp">'+(it.s.cp||'')+'</div><div class="rt-lp-cd">'+code+'</div>';
-      var qrWrap=document.createElement('div'); qrWrap.className='rt-lp-qr';
-      d.appendChild(info);
-      d.appendChild(qrWrap);
+      d.innerHTML='<div class="rt-lp-send">WAKZOME</div><div class="rt-lp-st">'+it.s.name+'</div><div class="rt-lp-ad">'+(it.s.addr||'')+'</div><div class="rt-lp-cp">'+(it.s.cp||'')+'</div><div class="rt-lp-cd">'+code+'</div>';
       g.appendChild(d);
-      var qrUrl='https://www.wakzome.com?scan='+encodeURIComponent(code);
-      rtMakeQRCanvas(qrUrl, 110, function(el){ if(el) qrWrap.appendChild(el); });
     });
   }
 
@@ -1154,14 +880,8 @@ function rtBindLogic() {
       chunk.forEach(function(it){
         var code=it._preCode||mkCode(it.s,it.accBox,it.boxNum,it.total,it.extraN||0);
         var d=document.createElement('div'); d.className='rt-rot';
-        var info=document.createElement('div'); info.className='rt-rot-info';
-        info.innerHTML='<div class="rs">WAKZOME</div><div class="rn">'+(it.s.name||'')+'</div><div class="ra">'+(it.s.addr||'')+'</div><div class="rc">'+(it.s.cp||'')+'</div><div class="rk">'+code+'</div>';
-        var qrWrap=document.createElement('div'); qrWrap.className='rt-rot-qr';
-        d.appendChild(info);
-        d.appendChild(qrWrap);
+        d.innerHTML='<div class="rs">WAKZOME</div><div class="rn">'+(it.s.name||'')+'</div><div class="ra">'+(it.s.addr||'')+'</div><div class="rc">'+(it.s.cp||'')+'</div><div class="rk">'+code+'</div>';
         sheet.appendChild(d);
-        var qrUrl='https://www.wakzome.com?scan='+encodeURIComponent(code);
-        rtMakeQRCanvas(qrUrl, 100, function(el){ if(el) qrWrap.appendChild(el); });
       });
       while(sheet.children.length<8){ var e=document.createElement('div'); e.className='rt-rot empty'; sheet.appendChild(e); }
       body.appendChild(sheet);
@@ -1172,30 +892,22 @@ function rtBindLogic() {
   window.rtClosePrintModal = function(){ document.getElementById('rt-modal-print').style.display='none'; };
   window.rtDoPrint = function(){
     if(!PITEMS.length){ rtToast('sem rótulos'); return; }
-    var items = PITEMS.slice();
     var cs = 8;
     var pagesHtml = '';
-    for(var i=0; i<items.length; i+=cs){
-      var chunk = items.slice(i, i+cs);
+    for(var i=0; i<PITEMS.length; i+=cs){
+      var chunk = PITEMS.slice(i, i+cs);
       var rowsHtml = '';
       chunk.forEach(function(it){
         var code = it._preCode || mkCode(it.s, it.accBox, it.boxNum, it.total, it.extraN||0);
-        var qrImg = '';
-        try {
-          var cv = rtQR.toCanvas('https://www.wakzome.com?scan='+encodeURIComponent(code), 90);
-          qrImg = '<img src="'+cv.toDataURL('image/png')+'" width="90" height="90" style="display:block;flex-shrink:0;">';
-        } catch(e){}
         rowsHtml += '<div class="row">'
-          + '<div class="row-info">'
           + '<div class="send">WAKZOME</div>'
           + '<div class="st">' + (it.s.name||'').toUpperCase() + '</div>'
           + '<div class="ad">' + (it.s.addr||'').toUpperCase() + '</div>'
           + '<div class="cp">' + (it.s.cp||'').toUpperCase() + '</div>'
           + '<div class="cd">' + code + '</div>'
-          + '</div>'
-          + '<div class="row-qr">' + qrImg + '</div>'
           + '</div>';
       });
+      // pad to 8 rows
       for(var j=chunk.length; j<8; j++) rowsHtml += '<div class="row empty"></div>';
       pagesHtml += '<div class="page">' + rowsHtml + '</div>';
     }
@@ -1207,11 +919,9 @@ function rtBindLogic() {
       + '@page { size: A4 portrait; margin: 0; }'
       + '.page { width:210mm; height:297mm; display:flex; flex-direction:column; page-break-after:always; break-after:page; overflow:hidden; }'
       + '.page:last-child { page-break-after:avoid; break-after:avoid; }'
-      + '.row { flex: 0 0 calc(297mm / 8); height:calc(297mm / 8); padding:2mm 10mm; border-bottom:0.5pt solid #ccc; display:flex; flex-direction:row; align-items:center; gap:8pt; font-family:Arial,sans-serif; overflow:hidden; }'
+      + '.row { flex: 0 0 calc(297mm / 8); height:calc(297mm / 8); padding:2mm 12mm; border-bottom:0.5pt solid #ccc; display:flex; flex-direction:column; justify-content:center; font-family:Arial,sans-serif; overflow:hidden; }'
       + '.row:last-child { border-bottom:none; }'
       + '.row.empty { background:#fafafa; }'
-      + '.row-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }'
-      + '.row-qr { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:90pt; }'
       + '.send { font-size:6.5pt; text-transform:uppercase; letter-spacing:1px; margin-bottom:1mm; color:#000; font-weight:700; }'
       + '.st { font-size:16pt; font-weight:900; text-transform:uppercase; margin-bottom:1.5mm; line-height:1.1; color:#000; }'
       + '.ad { font-size:9pt; line-height:1.3; color:#000; font-weight:600; }'

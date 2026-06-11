@@ -420,49 +420,225 @@ window.closeRotulosOverlay = function () {
   setTimeout(function () { ov.classList.remove('open'); }, 600);
 };
 
-var _rtQRLibReady = false;
-var _rtQRLibLoading = false;
-var _rtQRLibCallbacks = [];
+/* ── QR Generator — self-contained, zero dependencies ──────────────
+   Implementación mínima de QR Code (versiones 1-10, modo byte, ECC M).
+   Genera un <canvas> listo para usar.
+   Basado en el algoritmo estándar ISO/IEC 18004.
+─────────────────────────────────────────────────────────────────── */
+var rtQR = (function(){
+  /* Reed-Solomon GF(256) con polinomio 0x11d */
+  function gfExp(i){ return _EXP[i % 255]; }
+  function gfLog(i){ return _LOG[i]; }
+  function gfMul(a,b){ return (a===0||b===0)?0:gfExp(gfLog(a)+gfLog(b)); }
+  var _EXP=new Uint8Array(512), _LOG=new Uint8Array(256);
+  (function(){var x=1; for(var i=0;i<255;i++){_EXP[i]=x;_LOG[x]=i;x<<=1;if(x>255)x^=0x11d;} for(var i=255;i<512;i++)_EXP[i]=_EXP[i-255];}());
 
-function rtLoadQRLib(cb) {
-  if (_rtQRLibReady) { cb(); return; }
-  _rtQRLibCallbacks.push(cb);
-  if (_rtQRLibLoading) return;
-  _rtQRLibLoading = true;
-  var s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-  s.onload = function() {
-    _rtQRLibReady = true;
-    _rtQRLibCallbacks.forEach(function(fn){ fn(); });
-    _rtQRLibCallbacks = [];
-  };
-  s.onerror = function() {
-    console.warn('RT: QRCode lib failed to load');
-    _rtQRLibCallbacks = [];
-  };
-  document.head.appendChild(s);
-}
+  function rsGen(n){var g=[1];for(var i=0;i<n;i++){var t=[1,gfExp(i)];var r=new Uint8Array(g.length+1);for(var j=0;j<g.length;j++)for(var k=0;k<t.length;k++)r[j+k]^=gfMul(g[j],t[k]);g=r;}return g;}
+  function rsEncode(data,n){var g=rsGen(n);var msg=new Uint8Array(data.length+n);for(var i=0;i<data.length;i++)msg[i]=data[i];for(var i=0;i<data.length;i++){var c=msg[i];if(c!==0)for(var j=0;j<g.length;j++)msg[i+j]^=gfMul(g[j],c);}return msg.slice(data.length);}
 
-/* Genera un canvas con el QR y llama cb(canvas). Usa QRCode.js. */
-function rtMakeQRCanvas(text, size, cb) {
-  rtLoadQRLib(function() {
-    if (typeof QRCode === 'undefined') { cb(null); return; }
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:'+size+'px;height:'+size+'px;';
-    document.body.appendChild(wrap);
-    try {
-      new QRCode(wrap, { text: text, width: size, height: size, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
-      /* QRCode.js appends a canvas (desktop) or img (some mobile) */
-      setTimeout(function() {
-        var el = wrap.querySelector('canvas') || wrap.querySelector('img');
-        document.body.removeChild(wrap);
-        cb(el || null);
-      }, 0);
-    } catch(e) {
-      document.body.removeChild(wrap);
-      cb(null);
+  /* Version/ECC capacity table [version][ecLevel=M] = {totalBytes, dataBytes, ecBytes, blocks} */
+  var CAP=[null,
+    {t:26,d:16,e:10,b:1},{t:44,d:28,e:16,b:1},{t:70,d:44,e:26,b:2},{t:100,d:64,e:18,b:2},
+    {t:134,d:86,e:24,b:2},{t:172,d:108,e:16,b:4},{t:196,d:124,e:18,b:4},{t:242,d:154,e:22,b:2},
+    {t:292,d:182,e:22,b:3},{t:346,d:216,e:26,b:4}
+  ];
+
+  /* Alignment pattern positions per version */
+  var ALIGN=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,28,46],[6,32,50]];
+
+  function makeMatrix(v){var s=v*4+17;var m=[];for(var i=0;i<s;i++){m.push(new Uint8Array(s).fill(2));}return m;}
+
+  function setFinder(m,r,c){
+    var pat=[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]];
+    for(var i=0;i<7;i++)for(var j=0;j<7;j++){m[r+i][c+j]=pat[i][j];}
+  }
+  function setTiming(m,s){
+    for(var i=8;i<s-8;i++){m[6][i]=m[i][6]=(i%2===0)?1:0;}
+  }
+  function setAlign(m,positions){
+    for(var a=0;a<positions.length;a++)for(var b=0;b<positions.length;b++){
+      var r=positions[a]-2, c=positions[b]-2;
+      if(m[r+2][c+2]!==2) continue;
+      var pat=[[1,1,1,1,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[1,1,1,1,1]];
+      for(var i=0;i<5;i++)for(var j=0;j<5;j++)m[r+i][c+j]=pat[i][j];
     }
-  });
+  }
+  function setDark(m){m[4*CAP.length-11+3][8]=1;} // version >=7 format
+
+  var FORMAT_M=[0x5BC0,0x5489,0x551E,0x5657,0x57C4,0x507B,0x51E8,0x5201,
+                0x5E34,0x5F0D,0x5C9A,0x5D73,0x5AE0,0x5B59,0x58CE,0x5927,
+                0x6541,0x6478,0x67EF,0x6706,0x6095,0x612C,0x62BB,0x6352,
+                0x6F67,0x6E7E,0x6DE9,0x6C00,0x6B93,0x6A2A,0x69BD,0x68A4];
+
+  function setFormat(m,s,mask){
+    var f=FORMAT_M[mask];
+    var bits=[];for(var i=14;i>=0;i--)bits.push((f>>i)&1);
+    var fp=[0,1,2,3,4,5,7,8];var sp=[s-8,s-7,s-6,s-5,s-4,s-3,s-2,s-1];
+    for(var i=0;i<8;i++){m[8][fp[i]]=bits[i];m[fp[i]][8]=bits[14-i];}
+    for(var i=0;i<7;i++){m[8][sp[i]]=bits[8+i];m[s-7+i][8]=bits[6-i];}
+  }
+
+  function isFunc(m,r,c){return m[r][c]!==2;}
+
+  function placeData(m,s,bits){
+    var idx=0; var up=true;
+    for(var col=s-1;col>=0;col-=2){
+      if(col===6)col=5;
+      for(var row=0;row<s;row++){
+        var r=up?(s-1-row):row;
+        for(var d=0;d<2;d++){
+          var c=(col-d);
+          if(!isFunc(m,r,c)){
+            m[r][c]=(idx<bits.length)?bits[idx++]:0;
+          }
+        }
+      }
+      up=!up;
+    }
+  }
+
+  function applyMask(m,s,mask){
+    for(var r=0;r<s;r++)for(var c=0;c<s;c++){
+      if(isFunc(m,r,c))continue;
+      var inv=false;
+      if(mask===0)inv=(r+c)%2===0;
+      else if(mask===1)inv=r%2===0;
+      else if(mask===2)inv=c%3===0;
+      else if(mask===3)inv=(r+c)%3===0;
+      else if(mask===4)inv=(Math.floor(r/2)+Math.floor(c/3))%2===0;
+      else if(mask===5)inv=(r*c)%2+(r*c)%3===0;
+      else if(mask===6)inv=((r*c)%2+(r*c)%3)%2===0;
+      else if(mask===7)inv=((r+c)%2+(r*c)%3)%2===0;
+      if(inv)m[r][c]^=1;
+    }
+  }
+
+  function encode(text){
+    var bytes=[];
+    for(var i=0;i<text.length;i++){
+      var c=text.charCodeAt(i);
+      if(c<128){bytes.push(c);}
+      else if(c<2048){bytes.push(0xC0|(c>>6));bytes.push(0x80|(c&63));}
+      else{bytes.push(0xE0|(c>>12));bytes.push(0x80|((c>>6)&63));bytes.push(0x80|(c&63));}
+    }
+
+    /* Find minimum version */
+    var ver=1;
+    for(;ver<=10;ver++){if(CAP[ver]&&bytes.length+2<=CAP[ver].d)break;}
+    if(ver>10)ver=10;
+    var cap=CAP[ver];
+
+    /* Build data bits */
+    var bits=[];
+    function pushBits(v,n){for(var i=n-1;i>=0;i--)bits.push((v>>i)&1);}
+    pushBits(0x4,4); // byte mode
+    pushBits(bytes.length, ver<10?8:16);
+    for(var i=0;i<bytes.length;i++)pushBits(bytes[i],8);
+    pushBits(0,4); // terminator
+    while(bits.length%8!==0)bits.push(0);
+    var pad=[0xEC,0x11],pi=0;
+    while(bits.length<cap.d*8){pushBits(pad[pi],8);pi=(pi+1)%2;}
+
+    /* Build codewords */
+    var dWords=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];dWords.push(b);}
+
+    /* Split into blocks and add EC */
+    var bsize=Math.floor(cap.d/cap.b), rem=cap.d%cap.b;
+    var ecsize=Math.floor((cap.t-cap.d)/cap.b);
+    var dblocks=[],ecblocks=[],pos=0;
+    for(var b=0;b<cap.b;b++){
+      var len=bsize+(b>=cap.b-rem?1:0);
+      var blk=dWords.slice(pos,pos+len); pos+=len;
+      dblocks.push(blk);
+      ecblocks.push(Array.from(rsEncode(new Uint8Array(blk),ecsize)));
+    }
+
+    /* Interleave */
+    var final=[];
+    var maxD=Math.max.apply(null,dblocks.map(function(b){return b.length;}));
+    for(var i=0;i<maxD;i++)for(var b=0;b<cap.b;b++)if(i<dblocks[b].length)final.push(dblocks[b][i]);
+    for(var i=0;i<ecsize;i++)for(var b=0;b<cap.b;b++)final.push(ecblocks[b][i]);
+
+    /* To bits */
+    var allBits=[];
+    for(var i=0;i<final.length;i++)pushBits(final[i],8); // reuse pushBits closure
+    // remainder bits
+    var rem2=[0,0,7,7,7,7,7,0,0,0,0,0,0,0,3,3,3,3,3,3,3,4,4,4,4,4,4,4];
+    for(var i=0;i<(rem2[ver]||0);i++)allBits.push(0);
+
+    /* Build matrix */
+    var s=ver*4+17;
+    var m=makeMatrix(ver);
+    setFinder(m,0,0); setFinder(m,s-7,0); setFinder(m,0,s-7);
+    /* Separators */
+    for(var i=0;i<8;i++){
+      if(m[7][i]===2)m[7][i]=0; if(m[i][7]===2)m[i][7]=0;
+      if(m[s-8][i]===2)m[s-8][i]=0; if(m[s-8+i-1<s?s-8+i-1:s-1][7]===2)m[s-8+i-1<s?s-8+i-1:s-1][7]=0;
+      if(m[i][s-8]===2)m[i][s-8]=0; if(m[7][s-8+i-1<s?s-8+i-1:s-1]===2)m[7][s-8+i-1<s?s-8+i-1:s-1]=0;
+    }
+    for(var i=0;i<8;i++){m[7][i]=0;m[i][7]=0;m[s-8][i]=0;m[i][s-8]=0;m[7][s-8+i]=0;m[s-8+i][7]=0;}
+    setTiming(m,s);
+    if(ALIGN[ver]&&ALIGN[ver].length)setAlign(m,ALIGN[ver]);
+    m[s-8][8]=1; // dark module
+    /* Reserve format areas */
+    setFormat(m,s,0);
+
+    /* Place data with mask 0, then find best mask */
+    var best=0, bestPen=Infinity;
+    for(var mk=0;mk<8;mk++){
+      var mc=makeMatrix(ver);
+      setFinder(mc,0,0);setFinder(mc,s-7,0);setFinder(mc,0,s-7);
+      for(var i=0;i<8;i++){mc[7][i]=0;mc[i][7]=0;mc[s-8][i]=0;mc[i][s-8]=0;mc[7][s-8+i]=0;mc[s-8+i][7]=0;}
+      setTiming(mc,s);
+      if(ALIGN[ver]&&ALIGN[ver].length)setAlign(mc,ALIGN[ver]);
+      mc[s-8][8]=1;
+      setFormat(mc,s,mk);
+      placeData(mc,s,allBits);
+      applyMask(mc,s,mk);
+      /* Penalty (simplified) */
+      var pen=0;
+      for(var r=0;r<s;r++){var run=1;for(var c=1;c<s;c++){if(mc[r][c]===mc[r][c-1]){run++;if(run===5)pen+=3;else if(run>5)pen++;}else run=1;}}
+      if(pen<bestPen){bestPen=pen;best=mk;}
+    }
+
+    /* Final matrix with best mask */
+    var fm=makeMatrix(ver);
+    setFinder(fm,0,0);setFinder(fm,s-7,0);setFinder(fm,0,s-7);
+    for(var i=0;i<8;i++){fm[7][i]=0;fm[i][7]=0;fm[s-8][i]=0;fm[i][s-8]=0;fm[7][s-8+i]=0;fm[s-8+i][7]=0;}
+    setTiming(fm,s);
+    if(ALIGN[ver]&&ALIGN[ver].length)setAlign(fm,ALIGN[ver]);
+    fm[s-8][8]=1;
+    setFormat(fm,s,best);
+    placeData(fm,s,allBits);
+    applyMask(fm,s,best);
+
+    return {matrix:fm,size:s};
+  }
+
+  /* Public: returns a <canvas> element with the QR rendered */
+  function toCanvas(text,px){
+    var q=encode(text);
+    var s=q.size, m=q.matrix;
+    var quiet=4, cell=Math.max(1,Math.floor((px-quiet*2*2)/s));
+    var dim=s*cell+quiet*2*cell;
+    var cv=document.createElement('canvas');
+    cv.width=cv.height=dim;
+    var ctx=cv.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,dim,dim);
+    ctx.fillStyle='#000';
+    for(var r=0;r<s;r++)for(var c=0;c<s;c++){
+      if(m[r][c]===1)ctx.fillRect((c+quiet)*cell,(r+quiet)*cell,cell,cell);
+    }
+    return cv;
+  }
+
+  return {toCanvas:toCanvas};
+}());
+
+/* Genera canvas QR y llama cb(canvas) — interfaz usada por rtRPreview/rtShowPrintModal/rtDoPrint */
+function rtMakeQRCanvas(text, size, cb) {
+  try { cb(rtQR.toCanvas(text, size)); }
+  catch(e) { console.warn('RT QR error', e); cb(null); }
 }
 
 function rtBindLogic() {
@@ -955,93 +1131,60 @@ function rtBindLogic() {
   window.rtClosePrintModal = function(){ document.getElementById('rt-modal-print').style.display='none'; };
   window.rtDoPrint = function(){
     if(!PITEMS.length){ rtToast('sem rótulos'); return; }
-
-    /* Generamos todos los QR como dataURL antes de abrir la ventana */
     var items = PITEMS.slice();
-    var codes = items.map(function(it){
-      return it._preCode || mkCode(it.s, it.accBox, it.boxNum, it.total, it.extraN||0);
-    });
-    var qrDataURLs = new Array(codes.length).fill('');
-    var pending = codes.length;
-
-    function buildAndPrint() {
-      var cs = 8;
-      var pagesHtml = '';
-      for(var i=0; i<items.length; i+=cs){
-        var chunk = items.slice(i, i+cs);
-        var rowsHtml = '';
-        chunk.forEach(function(it, ci){
-          var globalIdx = i + ci;
-          var code = codes[globalIdx];
-          var qrImg = qrDataURLs[globalIdx]
-            ? '<img src="'+qrDataURLs[globalIdx]+'" width="68" height="68" style="display:block;flex-shrink:0;">'
-            : '';
-          rowsHtml += '<div class="row">'
-            + '<div class="row-info">'
-            + '<div class="send">WAKZOME</div>'
-            + '<div class="st">' + (it.s.name||'').toUpperCase() + '</div>'
-            + '<div class="ad">' + (it.s.addr||'').toUpperCase() + '</div>'
-            + '<div class="cp">' + (it.s.cp||'').toUpperCase() + '</div>'
-            + '<div class="cd">' + code + '</div>'
-            + '</div>'
-            + '<div class="row-qr">' + qrImg + '</div>'
-            + '</div>';
-        });
-        for(var j=chunk.length; j<8; j++) rowsHtml += '<div class="row empty"></div>';
-        pagesHtml += '<div class="page">' + rowsHtml + '</div>';
-      }
-      var html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        + '<title>rótulos</title>'
-        + '<style>'
-        + '* { margin:0; padding:0; box-sizing:border-box; }'
-        + 'body { background:#fff; }'
-        + '@page { size: A4 portrait; margin: 0; }'
-        + '.page { width:210mm; height:297mm; display:flex; flex-direction:column; page-break-after:always; break-after:page; overflow:hidden; }'
-        + '.page:last-child { page-break-after:avoid; break-after:avoid; }'
-        + '.row { flex: 0 0 calc(297mm / 8); height:calc(297mm / 8); padding:2mm 10mm; border-bottom:0.5pt solid #ccc; display:flex; flex-direction:row; align-items:center; gap:8pt; font-family:Arial,sans-serif; overflow:hidden; }'
-        + '.row:last-child { border-bottom:none; }'
-        + '.row.empty { background:#fafafa; }'
-        + '.row-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }'
-        + '.row-qr { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:68pt; }'
-        + '.send { font-size:6.5pt; text-transform:uppercase; letter-spacing:1px; margin-bottom:1mm; color:#000; font-weight:700; }'
-        + '.st { font-size:16pt; font-weight:900; text-transform:uppercase; margin-bottom:1.5mm; line-height:1.1; color:#000; }'
-        + '.ad { font-size:9pt; line-height:1.3; color:#000; font-weight:600; }'
-        + '.cp { font-size:9pt; margin-bottom:1.5mm; color:#000; font-weight:600; }'
-        + '.cd { font-size:9pt; font-weight:800; font-family:\'Courier New\',monospace; background:#e8e8e8; padding:1.5mm 2.5mm; border-left:3pt solid #000; display:inline-block; color:#000; }'
-        + '</style></head><body>'
-        + pagesHtml
-        + '<script>window.onload=function(){ window.focus(); window.print(); setTimeout(function(){ window.close(); }, 1000); };<\/script>'
-        + '</body></html>';
-      var w = window.open('', '_blank', 'width=900,height=700');
-      if(!w){ rtToast('permita popups para imprimir'); return; }
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-    }
-
-    /* Generamos QRs en paralelo; cuando todos estén listos imprimimos */
-    rtLoadQRLib(function() {
-      if(typeof QRCode === 'undefined') { buildAndPrint(); return; }
-      codes.forEach(function(code, idx) {
-        var wrap = document.createElement('div');
-        wrap.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:68px;height:68px;';
-        document.body.appendChild(wrap);
+    var cs = 8;
+    var pagesHtml = '';
+    for(var i=0; i<items.length; i+=cs){
+      var chunk = items.slice(i, i+cs);
+      var rowsHtml = '';
+      chunk.forEach(function(it){
+        var code = it._preCode || mkCode(it.s, it.accBox, it.boxNum, it.total, it.extraN||0);
+        var qrImg = '';
         try {
-          new QRCode(wrap, { text: 'https://www.wakzome.com?scan='+encodeURIComponent(code), width:68, height:68, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M });
-          setTimeout(function() {
-            var canvas = wrap.querySelector('canvas');
-            if(canvas) qrDataURLs[idx] = canvas.toDataURL('image/png');
-            document.body.removeChild(wrap);
-            pending--;
-            if(pending === 0) buildAndPrint();
-          }, 0);
-        } catch(e) {
-          document.body.removeChild(wrap);
-          pending--;
-          if(pending === 0) buildAndPrint();
-        }
+          var cv = rtQR.toCanvas('https://www.wakzome.com?scan='+encodeURIComponent(code), 68);
+          qrImg = '<img src="'+cv.toDataURL('image/png')+'" width="68" height="68" style="display:block;flex-shrink:0;">';
+        } catch(e){}
+        rowsHtml += '<div class="row">'
+          + '<div class="row-info">'
+          + '<div class="send">WAKZOME</div>'
+          + '<div class="st">' + (it.s.name||'').toUpperCase() + '</div>'
+          + '<div class="ad">' + (it.s.addr||'').toUpperCase() + '</div>'
+          + '<div class="cp">' + (it.s.cp||'').toUpperCase() + '</div>'
+          + '<div class="cd">' + code + '</div>'
+          + '</div>'
+          + '<div class="row-qr">' + qrImg + '</div>'
+          + '</div>';
       });
-    });
+      for(var j=chunk.length; j<8; j++) rowsHtml += '<div class="row empty"></div>';
+      pagesHtml += '<div class="page">' + rowsHtml + '</div>';
+    }
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+      + '<title>rótulos</title>'
+      + '<style>'
+      + '* { margin:0; padding:0; box-sizing:border-box; }'
+      + 'body { background:#fff; }'
+      + '@page { size: A4 portrait; margin: 0; }'
+      + '.page { width:210mm; height:297mm; display:flex; flex-direction:column; page-break-after:always; break-after:page; overflow:hidden; }'
+      + '.page:last-child { page-break-after:avoid; break-after:avoid; }'
+      + '.row { flex: 0 0 calc(297mm / 8); height:calc(297mm / 8); padding:2mm 10mm; border-bottom:0.5pt solid #ccc; display:flex; flex-direction:row; align-items:center; gap:8pt; font-family:Arial,sans-serif; overflow:hidden; }'
+      + '.row:last-child { border-bottom:none; }'
+      + '.row.empty { background:#fafafa; }'
+      + '.row-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }'
+      + '.row-qr { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:68pt; }'
+      + '.send { font-size:6.5pt; text-transform:uppercase; letter-spacing:1px; margin-bottom:1mm; color:#000; font-weight:700; }'
+      + '.st { font-size:16pt; font-weight:900; text-transform:uppercase; margin-bottom:1.5mm; line-height:1.1; color:#000; }'
+      + '.ad { font-size:9pt; line-height:1.3; color:#000; font-weight:600; }'
+      + '.cp { font-size:9pt; margin-bottom:1.5mm; color:#000; font-weight:600; }'
+      + '.cd { font-size:9pt; font-weight:800; font-family:\'Courier New\',monospace; background:#e8e8e8; padding:1.5mm 2.5mm; border-left:3pt solid #000; display:inline-block; color:#000; }'
+      + '</style></head><body>'
+      + pagesHtml
+      + '<script>window.onload=function(){ window.focus(); window.print(); setTimeout(function(){ window.close(); }, 1000); };<\/script>'
+      + '</body></html>';
+    var w = window.open('', '_blank', 'width=900,height=700');
+    if(!w){ rtToast('permita popups para imprimir'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
   window.rtExportPDF = function(){ rtToast('selecione "guardar como pdf" no diálogo de impressão','ok'); setTimeout(rtDoPrint,400); };
   window.rtSendEmail = function(){ rtToast('funcionalidade de email será configurada em breve'); };

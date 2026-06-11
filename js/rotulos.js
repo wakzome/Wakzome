@@ -88,8 +88,8 @@ var RT_CSS = `
 .rt-lp-ad,.rt-lp-cp { font-size: 10px; color: #000; font-weight: 600; }
 .rt-lp-cp { margin-bottom: 9px; }
 .rt-lp-cd { font-size: 10px; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 6px 8px; border-radius: 3px; border-left: 3px solid #000; word-break: break-all; color: #000; }
-.rt-lp-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 80px; }
-.rt-lp-qr canvas,.rt-lp-qr img { width: 80px !important; height: 80px !important; display: block; }
+.rt-lp-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 110px; }
+.rt-lp-qr canvas,.rt-lp-qr img { width: 110px !important; height: 110px !important; display: block; }
 .rt-filters { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
 .rt-fl { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-right: 4px; color: #000; }
 .rt-fb { padding: 6px 14px; border-radius: 20px; font-size: .76rem; font-weight: 700; cursor: pointer; border: 1px solid #e6e6e6; background: #fff; color: #000; text-transform: lowercase; transition: all .15s; font-family: inherit; }
@@ -148,8 +148,8 @@ var RT_CSS = `
 .rt-rot .ra,.rt-rot .rc { font-size: 10px; color: #000; font-weight: 600; }
 .rt-rot .rc { margin-bottom: 6px; }
 .rt-rot .rk { font-size: 10px; font-weight: 800; font-family: 'Courier New',monospace; background: #e8e8e8; padding: 5px 8px; border-radius: 3px; border-left: 3px solid #000; display: inline-block; word-break: break-all; color: #000; }
-.rt-rot-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 70px; }
-.rt-rot-qr canvas,.rt-rot-qr img { width: 70px !important; height: 70px !important; display: block; }
+.rt-rot-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 100px; }
+.rt-rot-qr canvas,.rt-rot-qr img { width: 100px !important; height: 100px !important; display: block; }
 #rt-print-area { display: none; }
 @media print {
   @page { size: A4 portrait; margin: 0; }
@@ -894,7 +894,7 @@ function rtBindLogic() {
       d.appendChild(qrWrap);
       g.appendChild(d);
       var qrUrl='https://www.wakzome.com?scan='+encodeURIComponent(code);
-      rtMakeQRCanvas(qrUrl, 80, function(el){ if(el) qrWrap.appendChild(el); });
+      rtMakeQRCanvas(qrUrl, 110, function(el){ if(el) qrWrap.appendChild(el); });
     });
   }
 
@@ -1161,7 +1161,7 @@ function rtBindLogic() {
         d.appendChild(qrWrap);
         sheet.appendChild(d);
         var qrUrl='https://www.wakzome.com?scan='+encodeURIComponent(code);
-        rtMakeQRCanvas(qrUrl, 70, function(el){ if(el) qrWrap.appendChild(el); });
+        rtMakeQRCanvas(qrUrl, 100, function(el){ if(el) qrWrap.appendChild(el); });
       });
       while(sheet.children.length<8){ var e=document.createElement('div'); e.className='rt-rot empty'; sheet.appendChild(e); }
       body.appendChild(sheet);
@@ -1182,8 +1182,8 @@ function rtBindLogic() {
         var code = it._preCode || mkCode(it.s, it.accBox, it.boxNum, it.total, it.extraN||0);
         var qrImg = '';
         try {
-          var cv = rtQR.toCanvas('https://www.wakzome.com?scan='+encodeURIComponent(code), 68);
-          qrImg = '<img src="'+cv.toDataURL('image/png')+'" width="68" height="68" style="display:block;flex-shrink:0;">';
+          var cv = rtQR.toCanvas('https://www.wakzome.com?scan='+encodeURIComponent(code), 90);
+          qrImg = '<img src="'+cv.toDataURL('image/png')+'" width="90" height="90" style="display:block;flex-shrink:0;">';
         } catch(e){}
         rowsHtml += '<div class="row">'
           + '<div class="row-info">'
@@ -1211,7 +1211,7 @@ function rtBindLogic() {
       + '.row:last-child { border-bottom:none; }'
       + '.row.empty { background:#fafafa; }'
       + '.row-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }'
-      + '.row-qr { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:68pt; }'
+      + '.row-qr { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:90pt; }'
       + '.send { font-size:6.5pt; text-transform:uppercase; letter-spacing:1px; margin-bottom:1mm; color:#000; font-weight:700; }'
       + '.st { font-size:16pt; font-weight:900; text-transform:uppercase; margin-bottom:1.5mm; line-height:1.1; color:#000; }'
       + '.ad { font-size:9pt; line-height:1.3; color:#000; font-weight:600; }'

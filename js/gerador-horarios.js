@@ -1993,21 +1993,34 @@
     // Read inputs scoped to container — avoids reading stale inputs from prior renders
     const inputs = c.querySelectorAll(`.gh-sh-time-inp[data-pid="${pid}"]`);
     if (!inputs.length) return; // no active inputs — nothing to commit
-    const dayShifts = {};
+    const dayShifts = {};   // work shifts: { day: { seg: [t1,t2] } }
+    const apoioEdits = {};  // apoio shifts: { day: [t1,t2] }
     inputs.forEach(inp => {
       const day = inp.dataset.day;
-      const seg = parseInt(inp.dataset.seg);
+      const kind = inp.dataset.kind || 'work';
       const part = parseInt(inp.dataset.part);
-      if (!dayShifts[day]) dayShifts[day] = {};
-      if (!dayShifts[day][seg]) dayShifts[day][seg] = ['',''];
-      dayShifts[day][seg][part] = inp.value.trim();
+      if (kind === 'apoio') {
+        if (!apoioEdits[day]) apoioEdits[day] = ['',''];
+        apoioEdits[day][part] = inp.value.trim();
+      } else {
+        const seg = parseInt(inp.dataset.seg);
+        if (!dayShifts[day]) dayShifts[day] = {};
+        if (!dayShifts[day][seg]) dayShifts[day][seg] = ['',''];
+        dayShifts[day][seg][part] = inp.value.trim();
+      }
     });
+    // Apply work-shift edits
     Object.entries(dayShifts).forEach(([day, segs]) => {
       const cell = S.schedule[pid]?.[day];
       if (!cell || cell.type !== 'work') return;
       const parts = Object.values(segs);
       const newShift = parts.map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
       S.schedule[pid][day] = { ...cell, shift: newShift };
+    });
+    // Apply apoio-shift edits
+    Object.entries(apoioEdits).forEach(([day, [t1, t2]]) => {
+      if (!S._apoioShifts?.[pid]?.[day]) return;
+      S._apoioShifts[pid][day].shift = normTime(t1) + '-' + normTime(t2);
     });
     // Update banco — always use current DB saldo as base, add weekly diff
     if (!S._banco) S._banco = {};
@@ -2235,22 +2248,40 @@
           }
           row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
             const day = td.dataset.day;
+            const tdStore = td.dataset.store; // the store this table/cell represents
             const cell = S.schedule[pid]?.[day];
-            if (!cell || cell.type !== 'work' || !cell.shift) return;
-            const parts = cell.shift.split('|');
-            // Replace content with editable inputs
+            if (!cell || cell.type !== 'work') return;
             const inner = td.querySelector('.gh-sh-inner');
             if (!inner) return;
-            inner.innerHTML = parts.map((seg, i) => {
-              const [t1, t2] = seg.split('-');
-              return `<div style="display:flex;align-items:center;gap:1px;justify-content:center;">
-                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="0" value="${t1}">
+
+            // Case A: this cell shows an APOIO shift for THIS store → edit the apoio range
+            const apoioHere = S._apoioShifts?.[pid]?.[day]?.store === tdStore;
+            if (apoioHere) {
+              const apoioShift = S._apoioShifts[pid][day].shift || '';
+              const [a1, a2] = apoioShift.split('-');
+              inner.innerHTML = `<div style="display:flex;align-items:center;gap:1px;justify-content:center;">
+                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-kind="apoio" data-seg="0" data-part="0" value="${a1 || ''}">
                 <span style="font-size:.65rem;color:#999">-</span>
-                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-seg="${i}" data-part="1" value="${t2}">
+                <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-kind="apoio" data-seg="0" data-part="1" value="${a2 || ''}">
               </div>`;
-            }).join('');
+            }
+            // Case B: this cell shows the person's real shift in THIS store → edit it
+            else if (cell.store === tdStore && cell.shift) {
+              const parts = cell.shift.split('|');
+              inner.innerHTML = parts.map((seg, i) => {
+                const [t1, t2] = seg.split('-');
+                return `<div style="display:flex;align-items:center;gap:1px;justify-content:center;">
+                  <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-kind="work" data-seg="${i}" data-part="0" value="${t1 || ''}">
+                  <span style="font-size:.65rem;color:#999">-</span>
+                  <input class="gh-sh-time-inp" data-pid="${pid}" data-day="${day}" data-kind="work" data-seg="${i}" data-part="1" value="${t2 || ''}">
+                </div>`;
+              }).join('');
+            }
+            // Case C: cell shows work ELSEWHERE (another store) → not editable from this table
+            else { return; }
+
             // Enter key or Tab to commit
-            row.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
+            inner.querySelectorAll('.gh-sh-time-inp').forEach(inp => {
               inp.setAttribute('onkeydown', `if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();window._ghCommit('${pid}');}`);
             });
           });

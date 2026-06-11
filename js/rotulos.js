@@ -421,212 +421,251 @@ window.closeRotulosOverlay = function () {
 };
 
 /* ── QR Generator — self-contained, zero dependencies ──────────────
-   Implementación mínima de QR Code (versiones 1-10, modo byte, ECC M).
+   Implementación correcta de QR Code (versiones 1-10, modo byte, ECC M).
    Genera un <canvas> listo para usar.
-   Basado en el algoritmo estándar ISO/IEC 18004.
 ─────────────────────────────────────────────────────────────────── */
 var rtQR = (function(){
-  /* Reed-Solomon GF(256) con polinomio 0x11d */
-  function gfExp(i){ return _EXP[i % 255]; }
-  function gfLog(i){ return _LOG[i]; }
-  function gfMul(a,b){ return (a===0||b===0)?0:gfExp(gfLog(a)+gfLog(b)); }
-  var _EXP=new Uint8Array(512), _LOG=new Uint8Array(256);
-  (function(){var x=1; for(var i=0;i<255;i++){_EXP[i]=x;_LOG[x]=i;x<<=1;if(x>255)x^=0x11d;} for(var i=255;i<512;i++)_EXP[i]=_EXP[i-255];}());
+  /* GF(256) tables */
+  var EXP=new Array(512),LOG=new Array(256);
+  (function(){var x=1;for(var i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x>=256)x^=285;}for(var i=255;i<512;i++)EXP[i]=EXP[i-255];}());
+  function mul(a,b){return(a&&b)?EXP[LOG[a]+LOG[b]]:0;}
 
-  function rsGen(n){var g=[1];for(var i=0;i<n;i++){var t=[1,gfExp(i)];var r=new Uint8Array(g.length+1);for(var j=0;j<g.length;j++)for(var k=0;k<t.length;k++)r[j+k]^=gfMul(g[j],t[k]);g=r;}return g;}
-  function rsEncode(data,n){var g=rsGen(n);var msg=new Uint8Array(data.length+n);for(var i=0;i<data.length;i++)msg[i]=data[i];for(var i=0;i<data.length;i++){var c=msg[i];if(c!==0)for(var j=0;j<g.length;j++)msg[i+j]^=gfMul(g[j],c);}return msg.slice(data.length);}
+  function rsECC(data,n){
+    var g=[1];
+    for(var i=0;i<n;i++){var ng=new Array(g.length+1).fill(0);for(var j=0;j<g.length;j++){ng[j]^=mul(g[j],EXP[i]);ng[j+1]^=g[j];}g=ng;}
+    var r=new Array(n).fill(0);
+    for(var i=0;i<data.length;i++){var c=r[0]^data[i];r.shift();r.push(0);for(var j=0;j<n;j++)r[j]^=mul(c,g[j]);}
+    return r;
+  }
 
-  /* Version/ECC capacity table [version][ecLevel=M] = {totalBytes, dataBytes, ecBytes, blocks} */
-  var CAP=[null,
-    {t:26,d:16,e:10,b:1},{t:44,d:28,e:16,b:1},{t:70,d:44,e:26,b:2},{t:100,d:64,e:18,b:2},
-    {t:134,d:86,e:24,b:2},{t:172,d:108,e:16,b:4},{t:196,d:124,e:18,b:4},{t:242,d:154,e:22,b:2},
-    {t:292,d:182,e:22,b:3},{t:346,d:216,e:26,b:4}
+  /* Version capacity [ver] = {data bytes for ECC-M, ecc bytes, blocks} */
+  var VCAP=[null,
+    {d:16,e:10,b:1},{d:28,e:16,b:1},{d:44,e:26,b:2},{d:64,e:18,b:2},
+    {d:86,e:24,b:2},{d:108,e:16,b:4},{d:124,e:18,b:4},{d:154,e:22,b:2},
+    {d:182,e:22,b:3},{d:216,e:26,b:4}
   ];
+  var APOS=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,28,46],[6,32,50]];
 
-  /* Alignment pattern positions per version */
-  var ALIGN=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,28,46],[6,32,50]];
+  /* Format strings for mask 0-7, ECC M */
+  var FMTM=[0x5BC0,0x5489,0x551E,0x5657,0x57C4,0x507B,0x51E8,0x5201];
 
-  function makeMatrix(v){var s=v*4+17;var m=[];for(var i=0;i<s;i++){m.push(new Uint8Array(s).fill(2));}return m;}
+  function makeGrid(n){var g=[];for(var i=0;i<n;i++)g.push(new Int8Array(n).fill(-1));return g;}
 
-  function setFinder(m,r,c){
-    var pat=[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]];
-    for(var i=0;i<7;i++)for(var j=0;j<7;j++){m[r+i][c+j]=pat[i][j];}
+  function setBlock(g,r,c,pat){for(var i=0;i<pat.length;i++)for(var j=0;j<pat[i].length;j++)if(r+i>=0&&r+i<g.length&&c+j>=0&&c+j<g.length)g[r+i][c+j]=pat[i][j];}
+
+  var FINDER=[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]];
+  var ALIGN=[[1,1,1,1,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[1,1,1,1,1]];
+
+  function reserveFormat(g,n){
+    var fp=[0,1,2,3,4,5,7,8,n-7,n-6,n-5,n-4,n-3,n-2,n-1];
+    for(var i=0;i<8;i++){g[8][fp[i]]=0;g[fp[i]][8]=0;}
+    g[n-8][8]=1; // dark module
   }
-  function setTiming(m,s){
-    for(var i=8;i<s-8;i++){m[6][i]=m[i][6]=(i%2===0)?1:0;}
-  }
-  function setAlign(m,positions){
-    for(var a=0;a<positions.length;a++)for(var b=0;b<positions.length;b++){
-      var r=positions[a]-2, c=positions[b]-2;
-      if(m[r+2][c+2]!==2) continue;
-      var pat=[[1,1,1,1,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[1,1,1,1,1]];
-      for(var i=0;i<5;i++)for(var j=0;j<5;j++)m[r+i][c+j]=pat[i][j];
+
+  function writeFormat(g,n,mask){
+    var f=FMTM[mask];
+    var seq=[0,1,2,3,4,5,7,8,n-7,n-6,n-5,n-4,n-3,n-2,n-1];
+    for(var i=0;i<15;i++){
+      var b=(f>>(14-i))&1;
+      if(i<8){g[8][seq[i]]=b;g[seq[14-i]][8]=b;}
+      else{g[8][seq[i]]=b;g[seq[14-i]][8]=b;}
     }
-  }
-  function setDark(m){m[4*CAP.length-11+3][8]=1;} // version >=7 format
-
-  var FORMAT_M=[0x5BC0,0x5489,0x551E,0x5657,0x57C4,0x507B,0x51E8,0x5201,
-                0x5E34,0x5F0D,0x5C9A,0x5D73,0x5AE0,0x5B59,0x58CE,0x5927,
-                0x6541,0x6478,0x67EF,0x6706,0x6095,0x612C,0x62BB,0x6352,
-                0x6F67,0x6E7E,0x6DE9,0x6C00,0x6B93,0x6A2A,0x69BD,0x68A4];
-
-  function setFormat(m,s,mask){
-    var f=FORMAT_M[mask];
-    var bits=[];for(var i=14;i>=0;i--)bits.push((f>>i)&1);
-    var fp=[0,1,2,3,4,5,7,8];var sp=[s-8,s-7,s-6,s-5,s-4,s-3,s-2,s-1];
-    for(var i=0;i<8;i++){m[8][fp[i]]=bits[i];m[fp[i]][8]=bits[14-i];}
-    for(var i=0;i<7;i++){m[8][sp[i]]=bits[8+i];m[s-7+i][8]=bits[6-i];}
+    // simpler: horizontal strip on row 8, vertical strip on col 8
+    var hseq=[0,1,2,3,4,5,7,8]; var vseq=[8,7,5,4,3,2,1,0];
+    var bits15=[];for(var i=14;i>=0;i--)bits15.push((f>>i)&1);
+    for(var i=0;i<8;i++)g[8][hseq[i]]=bits15[i];
+    for(var i=0;i<7;i++)g[vseq[i]][8]=bits15[8+i];
+    for(var i=0;i<8;i++)g[n-8+i][8]=bits15[6-i<0?0:6-i];
+    for(var i=0;i<7;i++)g[8][n-8+i]=bits15[8+i];
   }
 
-  function isFunc(m,r,c){return m[r][c]!==2;}
+  function isFunc(g,r,c){return g[r][c]!=-1&&g[r][c]!=-2;}
 
-  function placeData(m,s,bits){
-    var idx=0; var up=true;
-    for(var col=s-1;col>=0;col-=2){
-      if(col===6)col=5;
-      for(var row=0;row<s;row++){
-        var r=up?(s-1-row):row;
+  function placeData(g,n,bits){
+    var idx=0,dir=-1,row=n-1;
+    for(var col=n-1;col>=0;col-=2){
+      if(col==6)col=5;
+      for(var cnt=0;cnt<n;cnt++){
+        var r=(dir==-1)?(n-1-cnt):cnt;
         for(var d=0;d<2;d++){
-          var c=(col-d);
-          if(!isFunc(m,r,c)){
-            m[r][c]=(idx<bits.length)?bits[idx++]:0;
-          }
+          var c=col-d;
+          if(g[r][c]==-1){g[r][c]=(idx<bits.length?bits[idx++]:0);}
         }
       }
-      up=!up;
+      dir=-dir;
     }
   }
 
-  function applyMask(m,s,mask){
-    for(var r=0;r<s;r++)for(var c=0;c<s;c++){
-      if(isFunc(m,r,c))continue;
+  function applyMask(g,n,mask){
+    for(var r=0;r<n;r++)for(var c=0;c<n;c++){
+      if(g[r][c]==-2||g[r][c]>1)continue; // skip function
+      if(isFunc(g,r,c))continue;
       var inv=false;
-      if(mask===0)inv=(r+c)%2===0;
-      else if(mask===1)inv=r%2===0;
-      else if(mask===2)inv=c%3===0;
-      else if(mask===3)inv=(r+c)%3===0;
-      else if(mask===4)inv=(Math.floor(r/2)+Math.floor(c/3))%2===0;
-      else if(mask===5)inv=(r*c)%2+(r*c)%3===0;
-      else if(mask===6)inv=((r*c)%2+(r*c)%3)%2===0;
-      else if(mask===7)inv=((r+c)%2+(r*c)%3)%2===0;
-      if(inv)m[r][c]^=1;
+      switch(mask){
+        case 0:inv=(r+c)%2==0;break;case 1:inv=r%2==0;break;
+        case 2:inv=c%3==0;break;case 3:inv=(r+c)%3==0;break;
+        case 4:inv=(Math.floor(r/2)+Math.floor(c/3))%2==0;break;
+        case 5:inv=(r*c)%2+(r*c)%3==0;break;
+        case 6:inv=((r*c)%2+(r*c)%3)%2==0;break;
+        case 7:inv=((r+c)%2+(r*c)%3)%2==0;break;
+      }
+      if(inv)g[r][c]^=1;
     }
+  }
+
+  function penalty(g,n){
+    var p=0;
+    for(var r=0;r<n;r++){
+      var run=1;
+      for(var c=1;c<n;c++){
+        if(g[r][c]==g[r][c-1]){run++;if(run==5)p+=3;else if(run>5)p++;}else run=1;
+      }
+    }
+    for(var c=0;c<n;c++){
+      var run=1;
+      for(var r=1;r<n;r++){
+        if(g[r][c]==g[r-1][c]){run++;if(run==5)p+=3;else if(run>5)p++;}else run=1;
+      }
+    }
+    return p;
   }
 
   function encode(text){
+    /* UTF-8 encode */
     var bytes=[];
-    for(var i=0;i<text.length;i++){
-      var c=text.charCodeAt(i);
-      if(c<128){bytes.push(c);}
-      else if(c<2048){bytes.push(0xC0|(c>>6));bytes.push(0x80|(c&63));}
-      else{bytes.push(0xE0|(c>>12));bytes.push(0x80|((c>>6)&63));bytes.push(0x80|(c&63));}
+    for(var i=0;i<text.length;){
+      var cp=text.codePointAt(i);
+      if(cp<0x80)bytes.push(cp);
+      else if(cp<0x800){bytes.push(0xC0|(cp>>6));bytes.push(0x80|(cp&63));}
+      else if(cp<0x10000){bytes.push(0xE0|(cp>>12));bytes.push(0x80|((cp>>6)&63));bytes.push(0x80|(cp&63));}
+      else{bytes.push(0xF0|(cp>>18));bytes.push(0x80|((cp>>12)&63));bytes.push(0x80|((cp>>6)&63));bytes.push(0x80|(cp&63));}
+      i+=cp>0xFFFF?2:1;
     }
 
-    /* Find minimum version */
+    /* Pick version */
     var ver=1;
-    for(;ver<=10;ver++){if(CAP[ver]&&bytes.length+2<=CAP[ver].d)break;}
+    for(;ver<=10;ver++){if(VCAP[ver]&&bytes.length<=VCAP[ver].d)break;}
     if(ver>10)ver=10;
-    var cap=CAP[ver];
+    var cap=VCAP[ver];
+    var n=ver*4+17;
 
-    /* Build data bits */
+    /* Data bits */
     var bits=[];
-    function pushBits(v,n){for(var i=n-1;i>=0;i--)bits.push((v>>i)&1);}
-    pushBits(0x4,4); // byte mode
-    pushBits(bytes.length, ver<10?8:16);
-    for(var i=0;i<bytes.length;i++)pushBits(bytes[i],8);
-    pushBits(0,4); // terminator
-    while(bits.length%8!==0)bits.push(0);
-    var pad=[0xEC,0x11],pi=0;
-    while(bits.length<cap.d*8){pushBits(pad[pi],8);pi=(pi+1)%2;}
+    function pb(v,len){for(var i=len-1;i>=0;i--)bits.push((v>>i)&1);}
+    pb(4,4); pb(bytes.length,8);
+    for(var i=0;i<bytes.length;i++)pb(bytes[i],8);
+    while(bits.length%8)bits.push(0);
+    var pads=[0xEC,0x11],pi=0;
+    while(bits.length<cap.d*8){pb(pads[pi],8);pi^=1;}
 
-    /* Build codewords */
-    var dWords=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];dWords.push(b);}
+    /* Codewords */
+    var cw=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}
 
-    /* Split into blocks and add EC */
-    var bsize=Math.floor(cap.d/cap.b), rem=cap.d%cap.b;
-    var ecsize=Math.floor((cap.t-cap.d)/cap.b);
-    var dblocks=[],ecblocks=[],pos=0;
+    /* Split blocks + ECC */
+    var bsz=Math.floor(cap.d/cap.b),rem=cap.d%cap.b,esz=Math.floor((cap.d*cap.e/cap.d)),pos=0;
+    esz=Math.round((cap.e));
+    // recompute: total=d+e per block
+    var totalBlk=Math.round((cap.d+cap.e)/cap.b);
+    esz=totalBlk-Math.ceil(cap.d/cap.b);
+    // simpler: ecc bytes per block
+    esz=Math.round(cap.e/cap.b);
+    var dblk=[],eblk=[];
+    pos=0;
     for(var b=0;b<cap.b;b++){
-      var len=bsize+(b>=cap.b-rem?1:0);
-      var blk=dWords.slice(pos,pos+len); pos+=len;
-      dblocks.push(blk);
-      ecblocks.push(Array.from(rsEncode(new Uint8Array(blk),ecsize)));
+      var len=bsz+(b>=(cap.b-rem)?1:0);
+      var blk=cw.slice(pos,pos+len);pos+=len;
+      dblk.push(blk);eblk.push(rsECC(blk,esz));
     }
 
     /* Interleave */
     var final=[];
-    var maxD=Math.max.apply(null,dblocks.map(function(b){return b.length;}));
-    for(var i=0;i<maxD;i++)for(var b=0;b<cap.b;b++)if(i<dblocks[b].length)final.push(dblocks[b][i]);
-    for(var i=0;i<ecsize;i++)for(var b=0;b<cap.b;b++)final.push(ecblocks[b][i]);
+    var maxD=Math.max.apply(null,dblk.map(function(b){return b.length;}));
+    for(var i=0;i<maxD;i++)for(var b=0;b<cap.b;b++)if(i<dblk[b].length)final.push(dblk[b][i]);
+    for(var i=0;i<esz;i++)for(var b=0;b<cap.b;b++)final.push(eblk[b][i]);
 
     /* To bits */
     var allBits=[];
-    for(var i=0;i<final.length;i++)pushBits(final[i],8); // reuse pushBits closure
+    for(var i=0;i<final.length;i++)pb(final[i],8);
+    allBits=bits.slice(); // pb wrote into bits — reset
+    bits=[];
+    for(var i=0;i<final.length;i++){var v=final[i];for(var j=7;j>=0;j--)bits.push((v>>j)&1);}
     // remainder bits
-    var rem2=[0,0,7,7,7,7,7,0,0,0,0,0,0,0,3,3,3,3,3,3,3,4,4,4,4,4,4,4];
-    for(var i=0;i<(rem2[ver]||0);i++)allBits.push(0);
+    var REM=[0,0,7,7,7,7,7,0,0,0,0,0,0,0,3,3,3,3,3,3,3,4,4,4,4,4,4,4];
+    for(var i=0;i<(REM[ver]||0);i++)bits.push(0);
 
     /* Build matrix */
-    var s=ver*4+17;
-    var m=makeMatrix(ver);
-    setFinder(m,0,0); setFinder(m,s-7,0); setFinder(m,0,s-7);
-    /* Separators */
+    var g=makeGrid(n);
+
+    // Finder patterns + separators
+    setBlock(g,0,0,FINDER); setBlock(g,n-7,0,FINDER); setBlock(g,0,n-7,FINDER);
+    // Separators (white border around finders)
     for(var i=0;i<8;i++){
-      if(m[7][i]===2)m[7][i]=0; if(m[i][7]===2)m[i][7]=0;
-      if(m[s-8][i]===2)m[s-8][i]=0; if(m[s-8+i-1<s?s-8+i-1:s-1][7]===2)m[s-8+i-1<s?s-8+i-1:s-1][7]=0;
-      if(m[i][s-8]===2)m[i][s-8]=0; if(m[7][s-8+i-1<s?s-8+i-1:s-1]===2)m[7][s-8+i-1<s?s-8+i-1:s-1]=0;
+      if(g[7][i]==-1)g[7][i]=0; if(g[i][7]==-1)g[i][7]=0;
+      if(g[n-8][i]==-1)g[n-8][i]=0; if(n-8+0<n&&g[i][n-8]==-1)g[i][n-8]=0;
     }
-    for(var i=0;i<8;i++){m[7][i]=0;m[i][7]=0;m[s-8][i]=0;m[i][s-8]=0;m[7][s-8+i]=0;m[s-8+i][7]=0;}
-    setTiming(m,s);
-    if(ALIGN[ver]&&ALIGN[ver].length)setAlign(m,ALIGN[ver]);
-    m[s-8][8]=1; // dark module
-    /* Reserve format areas */
-    setFormat(m,s,0);
+    g[7][7]=0; if(g[n-8][7]==-1)g[n-8][7]=0; if(g[7][n-8]==-1)g[7][n-8]=0;
 
-    /* Place data with mask 0, then find best mask */
-    var best=0, bestPen=Infinity;
+    // Timing
+    for(var i=8;i<n-8;i++){g[6][i]=(i%2==0)?1:0;g[i][6]=(i%2==0)?1:0;}
+
+    // Alignment
+    var ap=APOS[ver];
+    if(ap&&ap.length>1){
+      for(var a=0;a<ap.length;a++)for(var b2=0;b2<ap.length;b2++){
+        var r=ap[a]-2,c=ap[b2]-2;
+        if(g[r+2][c+2]==-1)setBlock(g,r,c,ALIGN);
+      }
+    }
+
+    // Dark module + reserve format
+    g[n-8][8]=1;
+    reserveFormat(g,n);
+
+    // Find best mask
+    var bestMask=0,bestPen=Infinity;
     for(var mk=0;mk<8;mk++){
-      var mc=makeMatrix(ver);
-      setFinder(mc,0,0);setFinder(mc,s-7,0);setFinder(mc,0,s-7);
-      for(var i=0;i<8;i++){mc[7][i]=0;mc[i][7]=0;mc[s-8][i]=0;mc[i][s-8]=0;mc[7][s-8+i]=0;mc[s-8+i][7]=0;}
-      setTiming(mc,s);
-      if(ALIGN[ver]&&ALIGN[ver].length)setAlign(mc,ALIGN[ver]);
-      mc[s-8][8]=1;
-      setFormat(mc,s,mk);
-      placeData(mc,s,allBits);
-      applyMask(mc,s,mk);
-      /* Penalty (simplified) */
-      var pen=0;
-      for(var r=0;r<s;r++){var run=1;for(var c=1;c<s;c++){if(mc[r][c]===mc[r][c-1]){run++;if(run===5)pen+=3;else if(run>5)pen++;}else run=1;}}
-      if(pen<bestPen){bestPen=pen;best=mk;}
+      var tg=makeGrid(n);
+      setBlock(tg,0,0,FINDER);setBlock(tg,n-7,0,FINDER);setBlock(tg,0,n-7,FINDER);
+      for(var i=0;i<8;i++){if(tg[7][i]==-1)tg[7][i]=0;if(tg[i][7]==-1)tg[i][7]=0;if(tg[n-8][i]==-1)tg[n-8][i]=0;if(tg[i][n-8]==-1)tg[i][n-8]=0;}
+      tg[7][7]=0;if(tg[n-8][7]==-1)tg[n-8][7]=0;if(tg[7][n-8]==-1)tg[7][n-8]=0;
+      for(var i=8;i<n-8;i++){tg[6][i]=(i%2==0)?1:0;tg[i][6]=(i%2==0)?1:0;}
+      if(ap&&ap.length>1)for(var a=0;a<ap.length;a++)for(var b2=0;b2<ap.length;b2++){var r=ap[a]-2,c=ap[b2]-2;if(tg[r+2][c+2]==-1)setBlock(tg,r,c,ALIGN);}
+      tg[n-8][8]=1;
+      reserveFormat(tg,n);
+      placeData(tg,n,bits);
+      applyMask(tg,n,mk);
+      writeFormat(tg,n,mk);
+      var pen=penalty(tg,n);
+      if(pen<bestPen){bestPen=pen;bestMask=mk;}
     }
 
-    /* Final matrix with best mask */
-    var fm=makeMatrix(ver);
-    setFinder(fm,0,0);setFinder(fm,s-7,0);setFinder(fm,0,s-7);
-    for(var i=0;i<8;i++){fm[7][i]=0;fm[i][7]=0;fm[s-8][i]=0;fm[i][s-8]=0;fm[7][s-8+i]=0;fm[s-8+i][7]=0;}
-    setTiming(fm,s);
-    if(ALIGN[ver]&&ALIGN[ver].length)setAlign(fm,ALIGN[ver]);
-    fm[s-8][8]=1;
-    setFormat(fm,s,best);
-    placeData(fm,s,allBits);
-    applyMask(fm,s,best);
+    // Build final
+    setBlock(g,0,0,FINDER);setBlock(g,n-7,0,FINDER);setBlock(g,0,n-7,FINDER);
+    for(var i=0;i<8;i++){if(g[7][i]==-1)g[7][i]=0;if(g[i][7]==-1)g[i][7]=0;if(g[n-8][i]==-1)g[n-8][i]=0;if(g[i][n-8]==-1)g[i][n-8]=0;}
+    g[7][7]=0;if(g[n-8][7]==-1)g[n-8][7]=0;if(g[7][n-8]==-1)g[7][n-8]=0;
+    for(var i=8;i<n-8;i++){g[6][i]=(i%2==0)?1:0;g[i][6]=(i%2==0)?1:0;}
+    if(ap&&ap.length>1)for(var a=0;a<ap.length;a++)for(var b2=0;b2<ap.length;b2++){var r=ap[a]-2,c=ap[b2]-2;if(g[r+2][c+2]==-1)setBlock(g,r,c,ALIGN);}
+    g[n-8][8]=1;
+    reserveFormat(g,n);
+    placeData(g,n,bits);
+    applyMask(g,n,bestMask);
+    writeFormat(g,n,bestMask);
 
-    return {matrix:fm,size:s};
+    return {matrix:g,size:n};
   }
 
-  /* Public: returns a <canvas> element with the QR rendered */
   function toCanvas(text,px){
     var q=encode(text);
-    var s=q.size, m=q.matrix;
-    var quiet=4, cell=Math.max(1,Math.floor((px-quiet*2*2)/s));
-    var dim=s*cell+quiet*2*cell;
+    var sz=q.size,m=q.matrix;
+    var quiet=4;
+    var cell=Math.max(1,Math.floor(px/(sz+quiet*2)));
+    var dim=(sz+quiet*2)*cell;
     var cv=document.createElement('canvas');
     cv.width=cv.height=dim;
     var ctx=cv.getContext('2d');
-    ctx.fillStyle='#fff'; ctx.fillRect(0,0,dim,dim);
-    ctx.fillStyle='#000';
-    for(var r=0;r<s;r++)for(var c=0;c<s;c++){
+    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,dim,dim);
+    ctx.fillStyle='#000000';
+    for(var r=0;r<sz;r++)for(var c=0;c<sz;c++){
       if(m[r][c]===1)ctx.fillRect((c+quiet)*cell,(r+quiet)*cell,cell,cell);
     }
     return cv;
@@ -634,6 +673,8 @@ var rtQR = (function(){
 
   return {toCanvas:toCanvas};
 }());
+
+
 
 /* Genera canvas QR y llama cb(canvas) — interfaz usada por rtRPreview/rtShowPrintModal/rtDoPrint */
 function rtMakeQRCanvas(text, size, cb) {

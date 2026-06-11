@@ -143,19 +143,6 @@
   const SH_DEFAULT = SH_B;
   const SH_ALT     = SH_A;
 
-  // ── ESCENARIOS — tabla estática generada desde LIBRO_5.xlsx ──
-  // Clave: 'n_dom_l_opc'
-  //   n   = total personas activas
-  //   dom = personas que trabajan el domingo
-  //   l   = número de tiendas abiertas
-  //   opc = variante del modelo (1 o 2)
-  //
-  // Cada escenario define:
-  //   combinacion → códigos de patrón a asignar (en orden, primero los que trabajan DOM)
-  //   tiendas     → MIN/MAX de personas por tienda, en semana y en domingo
-  //
-  // La clave de tienda usa el campo 'short' de STORES en minúsculas.
-
   // ── MEMORY (sessionStorage) ──
   let MEM = (function () {
     try { const r = sessionStorage.getItem('mzk_gh8'); if (r) return JSON.parse(r); } catch (e) {}
@@ -226,17 +213,6 @@
     const toI   = a.to ? DAYS.indexOf(a.to) : 6;
     return fromI === 0 && toI === 6;
   }
-  // Pessoa com ausência que cobre a maior parte da semana (3+ dias desde SEG)?
-  // Usada para excluir do cálculo de padrões — não faz sentido atribuir padrão
-  // a alguém que só trabalha 1-2 dias.
-  function significantlyAbsent(pid) {
-    const a = absOf(pid); if (!a) return false;
-    const fromI = DAYS.indexOf(a.from);
-    const toI   = a.to ? DAYS.indexOf(a.to) : 6;
-    // Absent for 4+ days → exclude from pattern count
-    return (toI - fromI + 1) >= 4;
-  }
-
   // Verifica se um dia da semana cai APÓS a data de fim de contrato da pessoa.
   // p.end é uma string ISO (YYYY-MM-DD). Devolve true se o dia >= day após end_date.
   function isContractEnded(p, day) {
@@ -1265,27 +1241,11 @@
       </div>`;
     }).join('');
 
-    const activePeopleCount = PEOPLE.filter(p => !fullyAbsent(p.id) && !significantlyAbsent(p.id)).length;
-    const savedDomTrab = S.domTrabalhadores ?? '';
-
     c.innerHTML = `
       <div class="gh-wiz-box gh-wiz-box--wide">
         <div class="gh-wiz-label">Passo 3 de 3</div>
         <div class="gh-wiz-title">Lojas e dias</div>
         <div class="gh-store-cfg">${rows}</div>
-
-        <div class="gh-dom-trab-row">
-          <div class="gh-dom-trab-label">
-            <span class="gh-dom-trab-icon">☀️</span>
-            <div>
-              <div class="gh-dom-trab-title">Pessoas a trabalhar ao domingo</div>
-              <div class="gh-dom-trab-hint">${activePeopleCount} pessoas activas esta semana. Quantas trabalham ao domingo?</div>
-            </div>
-          </div>
-          <input type="number" id="gh-inp-dom-trab" class="gh-field-sm gh-dom-trab-inp"
-            min="0" max="${activePeopleCount}" value="${savedDomTrab}"
-            placeholder="0">
-        </div>
 
         <div class="gh-wiz-nav">
           <button class="gh-btn gh-btn-ghost gh-wiz-back" id="gh-back-2">← Voltar</button>
@@ -1325,11 +1285,6 @@
       S.openStores.push(st.id); S.openDays[st.id] = days;
     });
     if (!S.openStores.length) { alert('Selecione pelo menos uma loja.'); return; }
-
-    // Read domingo workers from Wizard 3 input
-    const domInp = document.getElementById('gh-inp-dom-trab');
-    const domVal = domInp ? parseInt(domInp.value) : NaN;
-    S.domTrabalhadores = (!isNaN(domVal) && domVal >= 0) ? domVal : null;
 
     // domingo open = any store has DOM in its days
     S.domingoAberto = S.openStores.some(sid => S.openDays[sid]?.includes('DOM'));
@@ -2214,16 +2169,9 @@
       </table></div>`;
     });
 
-    // ── PATTERN PANEL — compute scenario from current state ──
-    const patternHTML = buildPatternPanel(active);
-
-    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>` + patternHTML + `<div id="gh-equity-panel"></div>`;
-
-    // ── EQUITY PANEL — load async after render ──
-    renderEquityPanel();
+    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
-    document.getElementById('gh-btn-regen')?.addEventListener('click', regenSchedule);
     document.getElementById('gh-btn-borrador')?.addEventListener('click', () => saveBorrador());
     document.getElementById('gh-btn-confirm')?.addEventListener('click', () => {
       const weekKey = S.weekStart ? (S.weekStart.getFullYear() + '-' + String(S.weekStart.getMonth()+1).padStart(2,'0') + '-' + String(S.weekStart.getDate()).padStart(2,'0')) : null;
@@ -2232,9 +2180,6 @@
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       confirmSchedule(active);
     });
-
-    // ── Pattern panel bindings ──
-    bindPatternPanel(active);
 
     // Store name button — no toggle, + always visible
 
@@ -2376,459 +2321,6 @@
         openEdit(td.dataset.pid, td.dataset.day, td.dataset.store);
       });
     });
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // ── PATTERN ENGINE — Libro6 data embedded ──
-  // ══════════════════════════════════════════════════════════════════
-
-  // 17 weekly patterns from Libro6 (index = pattern number 1-17)
-  // Each entry: array of 7 booleans — true=work, false=FOLGA
-  // Days: [SEG, TER, QUA, QUI, SEX, SAB, DOM]
-  // Patterns verified directly from Libro6.xlsx
-  // Index [SEG, TER, QUA, QUI, SEX, SAB, DOM] — false = FOLGA
-  const PATTERNS = {
-     1: [false,true, true, false,true, true, true ],  // FOLGA SEG+QUI
-     2: [true, false,true, true, false,true, true ],  // FOLGA TER+SEX
-     3: [false,true, true, true, true, true, false],  // FOLGA SEG+DOM
-     4: [true, false,true, true, true, true, false],  // FOLGA TER+DOM
-     5: [true, true, false,true, true, true, false],  // FOLGA QUA+DOM
-     6: [true, true, true, false,true, true, false],  // FOLGA QUI+DOM
-     7: [true, true, true, true, false,true, false],  // FOLGA SEX+DOM
-     8: [true, true, true, true, true, false,false],  // FOLGA SAB+DOM
-     9: [true, false,true, true, true, true, false],  // FOLGA TER+DOM
-    10: [false,true, true, false,true, true, true ],  // FOLGA SEG+QUI
-    11: [true, true, false,true, true, true, false],  // FOLGA QUA+DOM
-    12: [true, false,true, true, false,true, true ],  // FOLGA TER+SEX
-    13: [true, true, true, true, true, false,false],  // FOLGA SAB+DOM
-    14: [true, false,true, true, false,true, true ],  // FOLGA TER+SEX ← verified from Libro6
-    15: [true, true, false,true, true, true, false],  // FOLGA QUA+DOM
-    16: [false,true, true, false,true, true, true ],  // FOLGA SEG+QUI
-    17: [true, true, true, true, true, false,false],  // FOLGA SAB+DOM
-  };
-
-  // Scenarios from Libro6 right-side table
-  // Key: "pessoas_domTrab_lojas"
-  //   pessoas   = total active people for pattern purposes
-  //   domTrab   = number of people that WORK on sunday (directly from Wizard 3)
-  //   lojas     = number of open stores
-  const SCENARIOS = {
-    '4_0_3':  [4,5,6,7],
-    '5_0_3':  [3,4,5,6,7],
-    '6_0_3':  [3,4,5,6,7,8],
-    '6_1_3':  [1,6,4,8,7,5],
-    '7_0_3':  [3,4,5,6,7,8,9],
-    '7_0_4':  [3,4,5,6,7,8,9],
-    '7_1_3':  [1,4,5,6,7,8,9],
-    '7_1_4':  [1,4,5,6,7,8,9],
-    '7_2_3':  [1,2,5,6,7,8,4],
-    '7_2_4':  [1,2,5,6,7,8,4],
-    '7_3_3':  [1,10,2,4,5,7,8],
-    '7_3_4':  [1,10,2,4,5,7,8],
-    '8_0_3':  [3,4,5,6,7,8,9,11],
-    '8_0_4':  [3,4,5,6,7,8,9,11],
-    '8_1_3':  [1,6,4,8,9,5,11,7],
-    '8_1_4':  [1,6,4,8,9,5,11,7],
-    '8_2_3':  [1,2,4,5,6,7,8,11],
-    '8_2_4':  [1,2,4,5,6,7,8,11],
-    '8_3_3':  [1,2,12,5,6,8,13,11],
-    '8_3_4':  [1,2,12,5,6,8,13,11],
-    '8_4_3':  [1,10,2,12,5,11,8,13],
-    '8_4_4':  [1,10,2,12,5,11,8,13],
-    '8_5_3':  [1,10,2,12,14,5,11,8],
-    '8_5_4':  [1,10,2,12,14,5,11,8],
-    '9_2_3':  [1,6,2,8,4,5,11,7,13],
-    '9_2_4':  [1,6,2,8,4,5,11,7,13],
-    '9_3_3':  [1,10,2,8,4,5,11,7,13],
-    '9_3_4':  [1,10,2,8,4,5,11,7,13],
-    '9_4_3':  [1,10,2,12,4,5,11,8,13],
-    '9_4_4':  [1,10,2,12,4,5,11,8,13],
-    '9_5_3':  [1,10,2,12,5,11,8,13,14],
-    '9_5_4':  [1,10,2,12,5,11,8,13,14],
-    '10_3_4': [1,10,2,8,4,5,6,7,13,11],
-    '10_4_4': [1,10,2,12,5,11,8,13,4,15],
-    '10_5_3': [1,10,2,12,5,11,8,13,4,16],
-    '10_5_4': [1,10,2,12,5,11,8,13,4,16],
-    '11_4_3': [1,10,16,2,4,5,9,11,8,13,7],
-    '11_4_4': [1,10,16,2,4,5,9,11,8,13,7],
-    '11_5_4': [1,10,2,12,5,11,8,13,4,16,15],
-    '12_4_3': [1,10,2,12,4,5,11,15,6,8,13,17],
-    '12_4_4': [1,10,2,12,4,5,11,15,6,8,13,17],
-    '12_5_3': [1,10,16,2,12,4,5,11,15,8,13,17],
-    '12_5_4': [1,10,16,2,12,4,5,11,15,8,13,17],
-  };
-
-  // Pattern number → folga days list (day keys)
-  function patternFolgas(pNum) {
-    const p = PATTERNS[pNum];
-    if (!p) return [];
-    return DAYS.filter((d, i) => p[i] === false);
-  }
-
-  // Compute the scenario key from current state + active people
-  // Compute the scenario key from Wizard 3 data.
-  // Key format: "nPessoas_domTrab_nLojas"
-  //   nPessoas  = active people for pattern (excludes significantly absent)
-  //   domTrab   = people that WORK on sunday — exactly what user typed in Wizard 3
-  //               if sunday is closed → 0
-  //   nLojas    = open stores from S.openStores
-  function computeScenarioKey(active) {
-    const patternActive = active.filter(p => !significantlyAbsent(p.id));
-    const nPessoas = patternActive.length;
-    const nLojas   = S.openStores.length;
-    const domTrab  = (!S.domingoAberto) ? 0
-                   : (S.domTrabalhadores !== null && S.domTrabalhadores !== undefined)
-                     ? S.domTrabalhadores
-                     : 0;
-    const key = `${nPessoas}_${domTrab}_${nLojas}`;
-    return { key, nPessoas, domTrab, nLojas };
-  }
-
-  // State: which pattern numbers have been assigned to people
-  if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {}; // pid → patternNum
-
-  // ── EQUITY PANEL — folga fairness tracker ──
-  async function renderEquityPanel() {
-    const el = document.getElementById('gh-equity-panel');
-    if (!el) return;
-
-    el.innerHTML = '<div style="text-align:center;padding:24px;color:#bbb;font-size:.75rem;">A carregar equidade de folgas…</div>';
-
-    const sb = await getSupabase();
-    if (!sb) { el.innerHTML = ''; return; }
-
-    try {
-      const { data: folgas } = await sb.from('gh_folgas').select('pessoa_id, semana, dias');
-      const { data: people } = await sb.from('gh_people').select('id, name').eq('active', true);
-      if (!folgas || !people) { el.innerHTML = ''; return; }
-
-      const DIAS_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
-      const DOM_START  = '2026-04-06'; // semana 14
-
-      // Acumular stats por persona
-      const stats = {};
-      people.forEach(p => {
-        stats[p.id] = {
-          name: (p.name || p.id).split(' ').filter((_,i,a) => i===0||i===a.length-1).join(' '),
-          semanas: 0,
-          domSemanas: 0,
-          dias: { SEG:0, TER:0, QUA:0, QUI:0, SEX:0, SAB:0, DOM:0 }
-        };
-      });
-
-      folgas.forEach(f => {
-        const s = stats[f.pessoa_id];
-        if (!s || !f.dias || !f.dias.length) return;
-        s.semanas++;
-        if (f.semana >= DOM_START) s.domSemanas++;
-        f.dias.forEach(d => {
-          if (!(d in s.dias)) return;
-          if (d === 'DOM' && f.semana < DOM_START) return; // DOM solo desde semana 14
-          s.dias[d]++;
-        });
-      });
-
-      const rows = Object.entries(stats)
-        .filter(([,s]) => s.semanas > 0)
-        .sort((a,b) => a[1].name.localeCompare(b[1].name));
-
-      if (!rows.length) { el.innerHTML = ''; return; }
-
-      // Normalización: diferencia respecto al mínimo por día
-      // El mínimo de cada día se resta a todos → quien tiene 0 le toca folgar
-      const colMin = {}, colMax = {};
-      DIAS_ORDER.forEach(d => {
-        const vals = rows.map(([pid]) => stats[pid].dias[d]);
-        colMin[d] = Math.min(...vals);
-        colMax[d] = Math.max(...vals);
-      });
-
-      // Diferencia respecto al mínimo (normalizado)
-      function diff(pid, d) {
-        return stats[pid].dias[d] - colMin[d];
-      }
-
-      // Color basado en diferencia: 0 (mínimo) → claro, le toca folgar
-      //                             máximo → oscuro, le toca trabajar
-      function cellStyle(pid, d) {
-        const dif = diff(pid, d);
-        const maxDif = colMax[d] - colMin[d];
-        if (maxDif === 0) return { bg: '#fff', color: '#111' }; // todos iguales
-        if (dif === 0)      return { bg: '#111', color: '#fff' }; // mínimo → le toca folgar
-        if (dif === maxDif) return { bg: '#ddd', color: '#666' }; // máximo → le toca trabajar
-        return { bg: '#fff', color: '#111' };
-      }
-
-      // Texto: número acumulado de folgas ese día
-      function cellText(pid, d) {
-        return String(stats[pid].dias[d]);
-      }
-
-      // Header
-      let thead = `<tr>
-        <th style="text-align:left;padding:8px 12px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.08em;border-bottom:2px solid #e8e8e8;background:#fafafa;">PESSOA</th>`;
-      DIAS_ORDER.forEach(d => {
-        thead += `<th style="padding:8px 6px;font-size:.6rem;color:#999;font-weight:700;letter-spacing:.06em;text-align:center;border-bottom:2px solid #e8e8e8;background:#fafafa;">${d}</th>`;
-      });
-      thead += `</tr>`;
-
-      // Rows
-      let tbody = '';
-      rows.forEach(([pid, s], ri) => {
-        const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
-        tbody += `<tr style="background:${rowBg}">`;
-        tbody += `<td style="padding:8px 12px;font-size:.75rem;font-weight:600;color:#111;white-space:nowrap;border-bottom:1px solid #f0f0f0;">${s.name}</td>`;
-        DIAS_ORDER.forEach(d => {
-          const { bg, color } = cellStyle(pid, d);
-          const txt = cellText(pid, d);
-          tbody += `<td style="padding:7px 6px;text-align:center;font-size:.72rem;font-weight:600;background:${bg} !important;color:${color} !important;-webkit-text-fill-color:${color} !important;border-bottom:1px solid #f0f0f0;border-left:1px solid #f0f0f0;">${txt}</td>`;
-        });
-        tbody += `</tr>`;
-      });
-
-      el.innerHTML = `
-        <div style="margin:24px auto 60px;max-width:700px;width:calc(100% - 40px);border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;box-sizing:border-box;">
-          <div style="padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;background:#fafafa;">
-            <div style="font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bbb;margin-bottom:4px;">Equidade de Folgas</div>
-            <div style="font-size:.68rem;color:#aaa;">Folgas acumuladas · <span style="background:#111;color:#fff !important;-webkit-text-fill-color:#fff !important;padding:1px 6px;border-radius:3px;font-size:.63rem;">oscuro</span> = menos descansado · debe folgar · <span style="background:#ddd;color:#666;padding:1px 6px;border-radius:3px;font-size:.63rem;">claro</span> = más descansado · debe trabajar · DOM desde semana 14</div>
-          </div>
-          <div style="overflow-x:auto;">
-            <table style="border-collapse:collapse;width:100%;table-layout:auto;">
-              <thead>${thead}</thead>
-              <tbody>${tbody}</tbody>
-            </table>
-          </div>
-        </div>`;
-
-    } catch(e) {
-      console.error('Erro ao carregar equidade:', e);
-      el.innerHTML = '';
-    }
-  }
-
-  function buildPatternPanel(active) {
-    const { key, nPessoas, domTrab, nLojas } = computeScenarioKey(active);
-    const scenario = SCENARIOS[key];
-    const assigned = window._GH_ASSIGNED_PATTERNS || {};
-
-    // Count how many times each pattern slot is used
-    const slotUsed = {}; // patternNum → count used
-    Object.values(assigned).forEach(pn => { slotUsed[pn] = (slotUsed[pn] || 0) + 1; });
-
-    // Build pattern table rows (only the patterns in the scenario)
-    let patternRows = '';
-    if (scenario) {
-      scenario.forEach((pNum, slotIdx) => {
-        const folgas = patternFolgas(pNum);
-        const usedCount = slotUsed[pNum] || 0;
-        // Find who is using this pattern
-        const usedBy = active.filter(p => assigned[p.id] === pNum && slotIdx === scenario.indexOf(pNum));
-        const isUsed = usedBy.length > 0 || (slotUsed[pNum] > 0 && slotIdx < Object.values(assigned).filter(v => v === pNum).length);
-
-        // Build 7-day cells
-        const cells = DAYS.map(d => {
-          const isFolga = folgas.includes(d);
-          return `<td class="gh-pt-cell ${isFolga ? 'gh-pt-folga' : 'gh-pt-work'}">${isFolga ? 'FOLGA' : '1'}</td>`;
-        }).join('');
-
-        // Who is assigned this slot
-        const assignedPid = Object.entries(assigned).find(([pid, pn], idx) => {
-          // Match slot position
-          const personSlots = Object.entries(assigned).filter(([,pn2]) => pn2 === pNum);
-          return pn === pNum && personSlots[slotIdx - scenario.slice(0,slotIdx).filter(x=>x===pNum).length] && personSlots[slotIdx - scenario.slice(0,slotIdx).filter(x=>x===pNum).length][0] === pid;
-        });
-
-        // Simpler: track assigned slots in order
-        const slotsForPattern = scenario.map((p,i) => [p,i]).filter(([p]) => p === pNum);
-        const mySlotRank = slotsForPattern.findIndex(([,i]) => i === slotIdx);
-        const assignedPeople = active.filter(p => assigned[p.id] === pNum);
-        const assignedPerson = assignedPeople[mySlotRank] || null;
-
-        const dimClass = assignedPerson ? ' gh-pt-row-used' : '';
-        const assignedTag = assignedPerson
-          ? `<span class="gh-pt-assigned-tag">✓ ${shortName(assignedPerson.name)}<button class="gh-pt-clear-row" data-pid="${assignedPerson.id}" title="Limpar">✕</button></span>`
-          : '';
-
-        patternRows += `
-          <tr class="gh-pt-row${dimClass}" data-slot="${slotIdx}" data-pattern="${pNum}">
-            <td class="gh-pt-num">${pNum}</td>
-            ${cells}
-            <td class="gh-pt-assigned-cell">${assignedTag}</td>
-          </tr>`;
-      });
-    }
-
-    const noScenario = !scenario
-      ? `<div class="gh-pt-no-scenario">Sem cenário definido para ${nPessoas} pessoas · ${domTrab} trabalham ao dom · ${nLojas} loja${nLojas!==1?'s':''}. Verifique os dados do Libro6.</div>`
-      : '';
-
-    return `
-    <div class="gh-pattern-panel" id="gh-pattern-panel">
-      <div class="gh-pt-header">
-        <div class="gh-pt-title">Padrão de Folgas</div>
-        <div class="gh-pt-meta">
-          <span class="gh-pt-badge">${nPessoas} pessoas p/ padrão</span>
-          <span class="gh-pt-badge gh-pt-badge-dom">${S.domingoAberto ? domTrab + ' trabalham dom' : 'dom fechado'}</span>
-          <span class="gh-pt-badge">${nLojas} loja${nLojas!==1?'s':''}</span>
-          ${scenario ? `<span class="gh-pt-badge gh-pt-badge-key">Cenário: ${key}</span>` : ''}
-        </div>
-        <div class="gh-pt-hint">Clique no nome de uma pessoa nas tabelas acima para lhe atribuir um padrão.</div>
-      </div>
-      ${noScenario}
-      ${scenario ? `
-      <div class="gh-pt-table-wrap">
-        <table class="gh-pt-table">
-          <thead>
-            <tr>
-              <th class="gh-pt-th-num">#</th>
-              <th>SEG</th><th>TER</th><th>QUA</th><th>QUI</th><th>SEX</th><th>SAB</th><th>DOM</th>
-              <th class="gh-pt-th-assigned">Atribuído a</th>
-            </tr>
-          </thead>
-          <tbody>${patternRows}</tbody>
-        </table>
-      </div>
-      <div class="gh-pt-footer">
-        <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-pt-clear-all">↺ Limpar tudo</button>
-      </div>
-      ` : ''}
-    </div>`;
-  }
-
-  // State: who is being assigned a pattern (pid awaiting click on a pattern row)
-  let _patternAssignCtx = null; // pid waiting for pattern selection
-
-  function bindPatternPanel(active) {
-    // Clear all button
-    document.getElementById('gh-pt-clear-all')?.addEventListener('click', () => {
-      const prevAssigned = { ...(window._GH_ASSIGNED_PATTERNS || {}) };
-      window._GH_ASSIGNED_PATTERNS = {};
-      active.forEach(p => {
-        const pNum = prevAssigned[p.id];
-        if (!pNum) return;
-        const folgas = patternFolgas(pNum);
-        DAYS.forEach(day => {
-          const cur = S.schedule[p.id]?.[day];
-          if (!cur) return;
-          if (['ferias','baixa','fim_contrato','na'].includes(cur.type)) return;
-          if (folgas.includes(day) && cur.type === 'folga') {
-            S.schedule[p.id][day] = { type: 'empty', shift: null, store: null };
-          }
-        });
-      });
-      showSchedule(active);
-    });
-
-    document.querySelectorAll('.gh-pt-clear-row').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const pid = btn.dataset.pid;
-        if (pid && window._GH_ASSIGNED_PATTERNS) {
-          const pNum = window._GH_ASSIGNED_PATTERNS[pid];
-          if (pNum) {
-            const folgas = patternFolgas(pNum);
-            DAYS.forEach(day => {
-              const cur = S.schedule[pid]?.[day];
-              if (!cur) return;
-              if (['ferias','baixa','fim_contrato','na'].includes(cur.type)) return;
-              if (folgas.includes(day) && cur.type === 'folga') {
-                S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
-              }
-            });
-          }
-          delete window._GH_ASSIGNED_PATTERNS[pid];
-          showSchedule(active);
-        }
-      });
-    });
-
-    // Click on person name in schedule tables → enter assign mode
-    // We intercept clicks on .gh-p-remove-btn (the name button in each row)
-    // but only if pattern panel exists
-    document.querySelectorAll('.gh-p-remove-btn').forEach(btn => {
-      // Wrap: add a name-click area that won't trigger the remove
-      const pid = btn.dataset.pid;
-      const nameSpan = btn.querySelector('.gh-p-dot')?.nextSibling || btn;
-      // Instead, add a separate clickable name tag over the button
-      // We'll use a data attribute approach: double-click = assign pattern
-    });
-
-    // Better: add click listeners to .gh-p-cell elements
-    document.querySelectorAll('.gh-p-cell').forEach(cell => {
-      const btn = cell.querySelector('.gh-p-remove-btn');
-      if (!btn) return;
-      const pid = btn.dataset.pid;
-      const hrsDiv = cell.querySelector('.gh-p-hrs');
-      const assignBtn = document.createElement('button');
-      assignBtn.className = 'gh-pt-assign-trigger';
-      assignBtn.dataset.pid = pid;
-      assignBtn.title = 'Atribuir padrão de folga';
-      assignBtn.innerHTML = '<span class="gh-pt-assign-trigger-dot"></span>';
-      if (hrsDiv) {
-        hrsDiv.style.display = 'flex';
-        hrsDiv.style.alignItems = 'center';
-        hrsDiv.appendChild(assignBtn);
-      } else {
-        cell.appendChild(assignBtn);
-      }
-
-      assignBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        _patternAssignCtx = pid;
-        document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.add('gh-pt-row-pick'));
-        document.querySelectorAll('.gh-pt-assign-trigger').forEach(b => {
-          b.classList.toggle('active', b.dataset.pid === pid);
-        });
-        document.getElementById('gh-pattern-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-
-    // Click on a pattern row → assign it to the waiting person
-    document.querySelectorAll('.gh-pt-row').forEach(row => {
-      row.addEventListener('click', () => {
-        if (!_patternAssignCtx) return;
-        const pid = _patternAssignCtx;
-        const pNum = parseInt(row.dataset.pattern);
-        const slotIdx = parseInt(row.dataset.slot);
-
-        // Apply folgas to schedule
-        if (!window._GH_ASSIGNED_PATTERNS) window._GH_ASSIGNED_PATTERNS = {};
-        window._GH_ASSIGNED_PATTERNS[pid] = pNum;
-
-        // Write folgas into S.schedule
-        const folgas = patternFolgas(pNum);
-        DAYS.forEach(day => {
-          const current = S.schedule[pid]?.[day];
-          if (!current) return;
-          // Don't overwrite férias/baixa/fim_contrato
-          if (['ferias','baixa','fim_contrato','na'].includes(current.type)) return;
-          if (folgas.includes(day)) {
-            S.schedule[pid][day] = { type: 'folga', shift: null, store: null };
-          } else {
-            // If it was a folga before (set by this panel), reset to empty
-            if (current.type === 'folga') {
-              S.schedule[pid][day] = { type: 'empty', shift: null, store: null };
-            }
-          }
-        });
-
-        _patternAssignCtx = null;
-        showSchedule(active);
-      });
-    });
-
-    // Cancel assign mode if clicking outside pattern rows
-    document.getElementById('gh-pattern-panel')?.addEventListener('click', (e) => {
-      if (!e.target.closest('.gh-pt-row') && !e.target.closest('.gh-pt-assign-trigger') && _patternAssignCtx) {
-        _patternAssignCtx = null;
-        document.querySelectorAll('.gh-pt-row').forEach(r => r.classList.remove('gh-pt-row-pick'));
-      }
-    });
-  }
-
-  function regenSchedule() {
-    const active = PEOPLE.filter(p => !fullyAbsent(p.id));
-    showSchedule(active);
   }
 
   function closeConfirmModal() {
@@ -3514,64 +3006,6 @@
         #tab-gerador .gh-banco-add-row { display:flex; flex-direction:row; gap:3px; align-items:center; }
         #tab-gerador .gh-inc-tag { font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
 
-        /* ── PATTERN PANEL ── */
-        #tab-gerador .gh-pattern-panel { margin:40px auto 80px; max-width:680px; width:calc(100% - 40px); border:1px solid #e8e8e8; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.05); overflow:visible; box-sizing:border-box; }
-        #tab-gerador .gh-pt-header { padding:12px 16px 10px; border-bottom:1px solid #f0f0f0; background:#fafafa; }
-        #tab-gerador .gh-pt-title { font-size:.58rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
-        #tab-gerador .gh-pt-meta { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; align-items:center; }
-        #tab-gerador .gh-pt-badge { background:#f0f0f0; border:1px solid #ddd; border-radius:20px; padding:3px 10px; font-size:.62rem; font-weight:700; color:#555; }
-        #tab-gerador .gh-pt-badge-dom { background:#e8f0fe; border-color:#c5d8fa; color:#1a4a9a; }
-        #tab-gerador .gh-pt-badge-key { background:#fff8e0; border-color:#f0d080; color:#8a6000; font-family:monospace; }
-        #tab-gerador .gh-pt-hint { font-size:.65rem; color:#bbb; font-style:italic; }
-        #tab-gerador .gh-pt-no-scenario { margin:14px 16px; padding:10px 14px; background:#fff8f0; border:1px solid #f0c8a0; border-radius:8px; font-size:.75rem; color:#a04000; }
-
-        /* Table */
-        #tab-gerador .gh-pt-table-wrap { overflow:hidden; padding:0; }
-        #tab-gerador .gh-pt-table { border-collapse:collapse; width:100%; table-layout:auto; }
-        #tab-gerador .gh-pt-table thead tr { background:#f7f7f7; }
-        #tab-gerador .gh-pt-table th { padding:4px 3px; font-size:.48rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#aaa; border-bottom:1px solid #ebebeb; text-align:center; white-space:nowrap; }
-        #tab-gerador .gh-pt-th-num { text-align:left !important; padding-left:6px !important; }
-        #tab-gerador .gh-pt-th-assigned { }
-        #tab-gerador .gh-pt-num { font-size:.55rem; font-weight:700; color:#ccc; padding:0 6px; text-align:left; font-family:monospace; }
-        #tab-gerador .gh-pt-cell { padding:5px 3px; text-align:center; border-right:1px solid #f5f5f5; font-size:.55rem; font-weight:600; white-space:nowrap; }
-        #tab-gerador .gh-pt-work  { color:#d5d5d5; }
-        #tab-gerador .gh-pt-folga { color:#c0392b; font-style:italic; background:#fff9f9; }
-        #tab-gerador .gh-pt-table tbody tr { border-bottom:1px solid #f5f5f5; transition:background .12s; }
-        #tab-gerador .gh-pt-table tbody tr:last-child { border-bottom:none; }
-
-        /* Rows */
-        #tab-gerador .gh-pt-row { cursor:default; }
-        #tab-gerador .gh-pt-row-used { background:#f9f9f9 !important; }
-        #tab-gerador .gh-pt-row-used .gh-pt-cell { color:#d0d0d0 !important; background:#f9f9f9 !important; }
-        #tab-gerador .gh-pt-row-used .gh-pt-num { color:#ddd !important; }
-        #tab-gerador .gh-pt-row-pick { cursor:pointer !important; outline:2px dashed #f0a030; outline-offset:-2px; }
-        #tab-gerador .gh-pt-row-pick:hover { background:#fffbf2 !important; }
-        #tab-gerador .gh-pt-row-pick .gh-pt-folga { background:#fff3d0 !important; color:#b07000 !important; }
-
-        /* Assigned cell */
-        #tab-gerador .gh-pt-assigned-cell { padding:4px 6px; text-align:left; }
-        #tab-gerador .gh-pt-assigned-tag { display:inline-flex; align-items:center; gap:3px; font-size:.55rem; font-weight:700; color:#1a6c1a; background:#e8f5e9; border-radius:10px; padding:2px 6px; white-space:nowrap; }
-        #tab-gerador .gh-pt-clear-row { background:none; border:none; cursor:pointer; font-size:.6rem; color:#bbb; padding:0 2px; line-height:1; margin-left:3px; opacity:.6; transition:opacity .15s; vertical-align:middle; }
-        #tab-gerador .gh-pt-clear-row:hover { opacity:1; color:#c0392b; }
-
-        /* Footer */
-        #tab-gerador .gh-pt-footer { padding:10px 16px; border-top:1px solid #f0f0f0; display:flex; gap:10px; background:#fafafa; }
-
-        /* Trigger button on person name cells — next to hours */
-        #tab-gerador .gh-pt-assign-trigger { background:none; border:none; cursor:pointer; padding:4px 0 0 0; line-height:1; margin-top:6px; display:flex; align-items:center; justify-content:center; width:100%; }
-        #tab-gerador .gh-pt-assign-trigger-dot { width:10px; height:10px; border-radius:50%; background:#999; display:inline-block; transition:background .15s, transform .15s; box-shadow:0 0 0 4px rgba(150,150,150,.22); }
-        #tab-gerador .gh-pt-assign-trigger:hover .gh-pt-assign-trigger-dot { background:#555; box-shadow:0 0 0 6px rgba(100,100,100,.28); transform:scale(1.2); }
-        #tab-gerador .gh-pt-assign-trigger.active .gh-pt-assign-trigger-dot { background:#444; box-shadow:0 0 0 6px rgba(80,80,80,.3); }
-
-        /* Wizard 3 — domingo workers input */
-        #tab-gerador .gh-dom-trab-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; margin-bottom:20px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:9px; }
-        #tab-gerador .gh-dom-trab-label { display:flex; align-items:center; gap:10px; flex:1; }
-        #tab-gerador .gh-dom-trab-icon { font-size:1.2rem; flex-shrink:0; }
-        #tab-gerador .gh-dom-trab-title { font-size:.82rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
-        #tab-gerador .gh-dom-trab-hint { font-size:.7rem; color:#4a6a9c; }
-        #tab-gerador .gh-dom-trab-inp { width:70px !important; text-align:center; font-size:1.1rem !important; font-weight:700 !important; padding:8px 10px !important; border-radius:7px !important; flex-shrink:0; }
-
-        /* ── LAYOUT del panel tab-gerador (movido desde index.html) ── */
         #tab-gerador.active { display:flex !important; flex-direction:column !important; flex:1 !important; overflow:hidden !important; width:100% !important; padding:0 !important; }
         #tab-gerador #gh-container { flex:1; display:flex; flex-direction:column; overflow-x:auto; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; width:100%; }
       `;

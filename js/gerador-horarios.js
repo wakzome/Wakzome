@@ -3081,24 +3081,24 @@
               <!-- HORÁRIO buttons — only times, no letter -->
               <div class="gh-form-grp">
                 <div class="gh-btn-group gh-btn-group-shifts" id="gh-me-shift-btns">
-                  <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00">10:00 – 13:00<br>14:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00">10:00 – 14:00<br>15:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00">10:00 – 15:00<br>16:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
-                  <button class="gh-pill gh-pill-shift" data-val="11:00-14:00|15:00-20:00">11:00 – 14:00<br>15:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|14:00-18:00">09:00 – 13:00<br>14:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-13:00|14:00-19:00">10:00 – 13:00<br>14:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-14:00|15:00-19:00">10:00 – 14:00<br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="10:00-15:00|16:00-19:00">10:00 – 15:00<br>16:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-14:00|15:00-20:00">11:00 – 14:00<br>15:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
                 </div>
                 <div class="gh-apoio-section-label">⚡ Reforço de almoço</div>
                 <div class="gh-btn-group gh-btn-group-apoio">
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>14:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>15:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">10:00 – 13:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>15:00 – 19:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>15:00 – 19:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">10:00 – 14:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>16:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-14:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 14:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>16:00 – 20:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">11:00 – 13:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>15:00 – 20:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>14:00 – 18:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>15:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-14:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 14:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>16:00 – 20:00</button>
                 </div>
                 <!-- APOIO store selector -->
                 <div id="gh-apoio-store-wrap" style="display:none;margin-top:12px;">

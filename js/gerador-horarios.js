@@ -2872,7 +2872,7 @@
         /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
         #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(4px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
         #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
-        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:16px; width:400px; max-width:96vw; overflow:hidden; transform:translateY(10px); transition:transform .22s cubic-bezier(.25,.8,.25,1); box-shadow:0 20px 60px rgba(0,0,0,.18); color:#111; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:16px; width:560px; max-width:96vw; overflow:hidden; transform:translateY(10px); transition:transform .22s cubic-bezier(.25,.8,.25,1); box-shadow:0 20px 60px rgba(0,0,0,.18); color:#111; }
         #gh-modal.open .gh-modal { transform:translateY(0); }
         #gh-modal .gh-modal-hdr { padding:16px 20px 14px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
         #gh-modal .gh-modal-ttl { font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#333; }
@@ -2897,7 +2897,10 @@
         /* STORE active — black, white text */
         #gh-modal .gh-pill-store.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
         /* ── Shift pills base ── */
-        #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+        #gh-modal .gh-apoio-section-label { font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#e67e22; margin:12px 0 8px; padding:6px 10px; background:#fff3e0; border-radius:6px; border-left:3px solid #e67e22; }
+        #gh-modal .gh-btn-group-apoio { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+        #gh-modal .gh-apoio-lbl { font-size:.68rem; color:#e67e22; font-weight:700; }
         #gh-modal .gh-pill-shift { border-radius:10px; padding:12px 8px; font-size:.82rem; font-weight:600; text-align:center; line-height:1.55; white-space:normal; color:#333; }
         #gh-modal .gh-pill-shift:hover { color:#111; }
         /* Subtle color tones per shift — matches table cell colors */
@@ -3086,13 +3089,16 @@
                   <button class="gh-pill gh-pill-shift" data-val="09:00-12:00|13:00-18:00">09:00 – 12:00<br>13:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|14:00-18:00">09:00 – 13:00<br>14:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift" data-val="09:00-13:00|19:00-23:00">09:00 – 13:00<br>19:00 – 23:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>15:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>15:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">10:00 – 14:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 19:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-14:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 14:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>16:00 – 20:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">11:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>15:00 – 20:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 13:00</span><br>14:00 – 18:00</button>
-                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span style="font-size:.7rem;color:#e67e22;">⚡ apoio 14:00</span><br>15:00 – 18:00</button>
+                </div>
+                <div class="gh-apoio-section-label">⚡ Reforço de almoço</div>
+                <div class="gh-btn-group gh-btn-group-apoio">
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">10:00 – 13:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO|15:00-19:00">10:00 – 13:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>15:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-14:00|APOIO:14:00-15:00|16:00-19:00">10:00 – 14:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>16:00 – 19:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-14:00|APOIO:14:00-15:00|16:00-20:00">11:00 – 14:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>16:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="11:00-13:00|APOIO:13:00-14:00|15:00-20:00">11:00 – 13:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>15:00 – 20:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>14:00 – 18:00</button>
+                  <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>15:00 – 18:00</button>
                 </div>
                 <!-- APOIO store selector -->
                 <div id="gh-apoio-store-wrap" style="display:none;margin-top:12px;">

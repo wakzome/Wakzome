@@ -186,6 +186,14 @@ var RT_CSS = `
 #rt-sync-dot.syncing { background: #e65100; }
 #rt-sync-dot.ok { background: #2e7d32; }
 
+/* ── Monthly group rows in summary table ── */
+.rt-month-row td { background: #f0f0f0 !important; cursor: pointer; user-select: none; }
+.rt-month-row:hover td { background: #e8e8e8 !important; }
+.rt-month-tri { display: inline-block; font-size: .65rem; margin-right: 6px; transition: transform .18s; color: #555; }
+.rt-month-row.open .rt-month-tri { transform: rotate(90deg); }
+.rt-month-detail { display: none; }
+.rt-month-detail.open { display: table-row; }
+
 /* ── Delete shipment button ── */
 .rt-del-btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #e6e6e6; background: #fff; color: #bbb; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .15s; margin-left: 6px; }
 .rt-del-btn:hover { border-color: #c00; color: #c00; background: #fff5f5; }
@@ -759,14 +767,60 @@ function rtBindLogic() {
       foot.innerHTML=''; return;
     }
     var tot={f:0,p:0}; stores.forEach(function(s){ tot[s.id]=0; });
-    body.innerHTML=D.shipments.map(function(sh){
-      var fc=sh.boxes.filter(function(b){ return b.dest==='f'; }).length;
-      var ps=sh.boxes.filter(function(b){ return b.dest==='p'; }).length;
-      tot.f+=fc; tot.p+=ps;
-      var cols=stores.map(function(s){ var c=sh.boxes.filter(function(b){ return b.storeId===s.id; }).length; tot[s.id]+=c; return c?'<td class="rt-num">'+c+'</td>':'<td>—</td>'; }).join('');
-      var pastMark = sh.historical ? ' <span style="font-size:.64rem;color:#e65100;font-weight:bold">hist</span>' : '';
-      return '<tr><td>'+sh.date+pastMark+'</td><td class="rt-num rt-col-fnc">'+(fc||'—')+'</td><td class="rt-num rt-col-pxo">'+(ps||'—')+'</td>'+cols+'</tr>';
-    }).join('');
+
+    /* Group shipments by month key "YYYY-MM" */
+    var monthOrder=[], monthMap={};
+    D.shipments.forEach(function(sh){
+      var iso = sh.iso || '';
+      var key, label;
+      if(iso){
+        var d=new Date(sh.iso);
+        key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        label=d.toLocaleDateString('pt-PT',{month:'long',year:'numeric'}).toLowerCase();
+      } else {
+        /* fallback: parse from sh.date "dd/mm/yyyy" */
+        var parts=sh.date.split('/');
+        if(parts.length===3){ key=parts[2]+'-'+parts[1].padStart(2,'0'); label=new Date(parseInt(parts[2]),parseInt(parts[1])-1,1).toLocaleDateString('pt-PT',{month:'long',year:'numeric'}).toLowerCase(); }
+        else { key='?'; label='?'; }
+      }
+      if(!monthMap[key]){ monthMap[key]={label:label,shipments:[]}; monthOrder.push(key); }
+      monthMap[key].shipments.push(sh);
+    });
+
+    var colSpan = 8 + extras.length;
+    var htmlRows = '';
+    var groupIdx = 0;
+    monthOrder.forEach(function(key){
+      var grp = monthMap[key];
+      var mTotF=0, mTotP=0; var mTotStore={};
+      stores.forEach(function(s){ mTotStore[s.id]=0; });
+      grp.shipments.forEach(function(sh){
+        var fc=sh.boxes.filter(function(b){ return b.dest==='f'; }).length;
+        var ps=sh.boxes.filter(function(b){ return b.dest==='p'; }).length;
+        mTotF+=fc; mTotP+=ps;
+        tot.f+=fc; tot.p+=ps;
+        stores.forEach(function(s){ var c=sh.boxes.filter(function(b){ return b.storeId===s.id; }).length; mTotStore[s.id]+=c; tot[s.id]+=c; });
+      });
+      var gid='rtmg'+groupIdx++;
+      /* Month header row */
+      htmlRows+='<tr class="rt-month-row" onclick="(function(el){el.classList.toggle(\'open\');var rows=document.querySelectorAll(\'.rt-detail-'+gid+'\');rows.forEach(function(r){r.classList.toggle(\'open\');});}).call(this,this)">';
+      htmlRows+='<td><span class="rt-month-tri">▶</span>'+grp.label+'</td>';
+      htmlRows+='<td class="rt-num rt-col-fnc">'+(mTotF||'—')+'</td><td class="rt-num rt-col-pxo">'+(mTotP||'—')+'</td>';
+      stores.forEach(function(s){ var t=mTotStore[s.id]; htmlRows+=t?'<td class="rt-num">'+t+'</td>':'<td>—</td>'; });
+      htmlRows+='</tr>';
+      /* Detail rows (collapsed by default) */
+      grp.shipments.forEach(function(sh){
+        var fc=sh.boxes.filter(function(b){ return b.dest==='f'; }).length;
+        var ps=sh.boxes.filter(function(b){ return b.dest==='p'; }).length;
+        var cols=stores.map(function(s){ var c=sh.boxes.filter(function(b){ return b.storeId===s.id; }).length; return c?'<td class="rt-num">'+c+'</td>':'<td>—</td>'; }).join('');
+        var pastMark=sh.historical?' <span style="font-size:.64rem;color:#e65100;font-weight:bold">hist</span>':'';
+        htmlRows+='<tr class="rt-month-detail rt-detail-'+gid+'">';
+        htmlRows+='<td style="padding-left:28px">'+sh.date+pastMark+'</td>';
+        htmlRows+='<td class="rt-num rt-col-fnc">'+(fc||'—')+'</td><td class="rt-num rt-col-pxo">'+(ps||'—')+'</td>'+cols+'</tr>';
+      });
+    });
+    body.innerHTML=htmlRows;
+
     var tc=stores.map(function(s){ var t=tot[s.id]||0; return t?'<td class="rt-num">'+t+'</td>':'<td>—</td>'; }).join('');
     foot.innerHTML='<tr><td style="font-weight:bold">total</td><td class="rt-num rt-col-fnc">'+tot.f+'</td><td class="rt-num rt-col-pxo">'+tot.p+'</td>'+tc+'</tr>';
   }

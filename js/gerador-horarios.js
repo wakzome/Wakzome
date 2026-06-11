@@ -1972,8 +1972,11 @@
   }
 
   function commitInlineEdit(pid) {
-    // Read inputs directly from DOM by pid+day attributes
-    const inputs = document.querySelectorAll(`.gh-sh-time-inp[data-pid="${pid}"]`);
+    const c = getContainer();
+    if (!c) return;
+    // Read inputs scoped to container — avoids reading stale inputs from prior renders
+    const inputs = c.querySelectorAll(`.gh-sh-time-inp[data-pid="${pid}"]`);
+    if (!inputs.length) return; // no active inputs — nothing to commit
     const dayShifts = {};
     inputs.forEach(inp => {
       const day = inp.dataset.day;
@@ -2201,10 +2204,8 @@
         c.querySelectorAll('tr').forEach(row => {
           const nameBtn = row.querySelector('.gh-p-remove-btn');
           if (!nameBtn || nameBtn.dataset.pid !== pid) return;
-          if (row.classList.contains('gh-editing')) {
-            commitInlineEdit(pid);
-            return;
-          }
+          // If already editing, do nothing — commit is handled by ✓ OK button and Enter/Tab
+          if (row.classList.contains('gh-editing')) return;
           row.classList.add('gh-editing');
           // Add confirm button to name cell
           const nameCell = row.querySelector('.gh-p-cell');

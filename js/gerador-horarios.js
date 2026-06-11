@@ -118,6 +118,18 @@
     window.GERADOR_PEOPLE = PEOPLE;
   }
 
+  // Exposed wrapper so the edit-from-admin watcher can load a published week safely,
+  // waiting for the knowledge base before parsing the CSV. Idempotent-safe: re-entry is
+  // prevented by the watcher's own `busy` flag.
+  window._ghLoadPortoWeekForEdit = async function (weekISO) {
+    if (!weekISO) return;
+    // Ensure STORES/PEOPLE are loaded before parsing the published CSV
+    if (!STORES.length || !PEOPLE.length) {
+      try { await loadKnowledgeBase(); } catch (e) { console.error('[GH] KB load failed before edit:', e); }
+    }
+    return loadPortoWeekForEdit(weekISO);
+  };
+
   const DAYS   = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
   const DAY_PT = { SEG:'Segunda', TER:'Terça', QUA:'Quarta', QUI:'Quinta', SEX:'Sexta', SAB:'Sábado', DOM:'Domingo' };
 
@@ -3148,19 +3160,22 @@
       });
     }
 
+    // Capture the edit-pending flag synchronously NOW. The watcher may clear the global
+    // flag before this init's async loadKnowledgeBase().then() resolves, so we must read
+    // it here, not inside the .then().
+    const editPending = !!window._ghLoadPortoWeek;
+
     // Load knowledge base from Supabase before rendering
     loadKnowledgeBase().then(async () => {
-      // Check if admin triggered an edit of a published week
-      if (window._ghLoadPortoWeek) {
-        const weekISO = window._ghLoadPortoWeek;
-        window._ghLoadPortoWeek = null;
-        await loadPortoWeekForEdit(weekISO);
-      } else {
+      // Edit-from-admin is handled exclusively by the watchEditTrigger() poller below,
+      // which calls window._ghLoadPortoWeekForEdit(weekISO). Here we only render the
+      // wizard when there is no pending edit request.
+      if (!editPending) {
         renderWiz();
       }
     }).catch(err => {
       console.error('Failed to load knowledge base:', err);
-      renderWiz();
+      if (!editPending) renderWiz();
     });
   };
 
@@ -3180,5 +3195,36 @@
       cleanupGeradorLayout();
     }
   }, true); // capture phase: fires before the tab's own handler shows/hides panels
+
+  // ── EDIT-FROM-ADMIN WATCHER ──
+  // The admin viewer (admin-horarios.js) sets window._ghLoadPortoWeek then clicks the
+  // gerador tab. That click can be interrupted by errors in other admin scripts before
+  // initGeradorHorarios runs, leaving the week unloaded. This watcher polls for the flag
+  // independently of the tab click, so the edit always loads once the panel exists.
+  (function watchEditTrigger() {
+    let busy = false;
+    setInterval(function () {
+      if (busy) return;
+      const weekISO = window._ghLoadPortoWeek;
+      if (!weekISO) return;
+      const panel = document.getElementById('tab-gerador');
+      if (!panel) return;
+      // Only proceed once the gerador panel is actually visible
+      const visible = panel.offsetParent !== null ||
+                      (panel.style.display !== 'none' && getComputedStyle(panel).display !== 'none');
+      if (!visible) return;
+      busy = true;
+      // Initialize the module WHILE the flag is still set, so initGeradorHorarios skips
+      // renderWiz() (it checks window._ghLoadPortoWeek) and doesn't paint the wizard over
+      // the week we're about to load.
+      window.initGeradorHorarios?.();
+      // Now consume the flag and load the published week through the safe wrapper.
+      window._ghLoadPortoWeek = null;
+      Promise.resolve()
+        .then(function () { return window._ghLoadPortoWeekForEdit?.(weekISO); })
+        .catch(function (err) { console.error('[GH] edit trigger watcher error:', err); })
+        .finally(function () { busy = false; });
+    }, 250);
+  })();
 
 })();

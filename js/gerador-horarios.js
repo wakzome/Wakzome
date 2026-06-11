@@ -1959,6 +1959,111 @@
     return Math.round(h * 10) / 10;
   }
 
+  // ── COVERAGE PANEL — people active per hour, per day, per store ──
+  // Counts how many people are working during each whole-hour slot, for each day,
+  // independently per store. A person counts for an hour H in a store if any of their
+  // shift segments in that store satisfies start <= H < end. APOIO shifts add to the
+  // store where the apoio takes place. Pure function — derives everything from state.
+  function buildCoveragePanel(active) {
+    const openStores = STORES
+      .filter(st => S.openStores.includes(st.id))
+      .sort((a, b) => a.priority - b.priority);
+    if (!openStores.length) return '';
+
+    // Helper: parse "HH:MM" → float hours; returns NaN on bad input
+    const toHrs = (s) => {
+      if (!s) return NaN;
+      const [h, m] = s.split(':').map(Number);
+      if (isNaN(h)) return NaN;
+      return h + (isNaN(m) ? 0 : m) / 60;
+    };
+
+    // For a store, gather all [start,end) segments per day across all active people,
+    // including apoio segments assigned to that store.
+    function storeSegmentsByDay(storeId) {
+      const byDay = {}; // day → array of [start,end]
+      DAYS.forEach(day => { byDay[day] = []; });
+      active.forEach(p => {
+        DAYS.forEach(day => {
+          const cell = S.schedule[p.id]?.[day];
+          if (cell?.type === 'work' && cell.store === storeId && cell.shift) {
+            cell.shift.split('|').forEach(seg => {
+              const [a, b] = seg.split('-');
+              const s = toHrs(a), e = toHrs(b);
+              if (!isNaN(s) && !isNaN(e) && e > s) byDay[day].push([s, e]);
+            });
+          }
+          // Apoio assigned to THIS store on this day
+          const apoio = S._apoioShifts?.[p.id]?.[day];
+          if (apoio?.store === storeId && apoio.shift) {
+            const [a, b] = apoio.shift.split('-');
+            const s = toHrs(a), e = toHrs(b);
+            if (!isNaN(s) && !isNaN(e) && e > s) byDay[day].push([s, e]);
+          }
+        });
+      });
+      return byDay;
+    }
+
+    let sectionsHTML = '';
+    openStores.forEach(st => {
+      const byDay = storeSegmentsByDay(st.id);
+
+      // Determine the hour range for this store (min start floor, max end ceil)
+      let minH = Infinity, maxH = -Infinity;
+      DAYS.forEach(day => {
+        byDay[day].forEach(([s, e]) => {
+          if (s < minH) minH = s;
+          if (e > maxH) maxH = e;
+        });
+      });
+      if (!isFinite(minH) || !isFinite(maxH)) {
+        sectionsHTML += `<div class="gh-cov-store">
+          <div class="gh-cov-store-name">${sshort(st.id)}</div>
+          <div class="gh-cov-empty">Sem turnos atribuídos</div>
+        </div>`;
+        return;
+      }
+      const startHour = Math.floor(minH);
+      const endHour = Math.ceil(maxH);
+
+      // Build header row (days)
+      const headCells = DAYS.map(d => `<th class="gh-cov-th">${d}</th>`).join('');
+
+      // For each whole-hour slot [H, H+1), count people active per day
+      let rowsHTML = '';
+      for (let H = startHour; H < endHour; H++) {
+        const dayCells = DAYS.map(day => {
+          let count = 0;
+          byDay[day].forEach(([s, e]) => {
+            // active during the hour slot if the segment overlaps [H, H+1)
+            if (s < H + 1 && e > H) count++;
+          });
+          const cls = count === 0 ? 'gh-cov-zero' : (count === 1 ? 'gh-cov-one' : 'gh-cov-many');
+          return `<td class="gh-cov-td ${cls}">${count || ''}</td>`;
+        }).join('');
+        const label = String(H).padStart(2, '0') + ':00';
+        rowsHTML += `<tr><td class="gh-cov-hour">${label}</td>${dayCells}</tr>`;
+      }
+
+      sectionsHTML += `<div class="gh-cov-store">
+        <div class="gh-cov-store-name">${sshort(st.id)}</div>
+        <table class="gh-cov-table">
+          <thead><tr><th class="gh-cov-th gh-cov-th-hour">h</th>${headCells}</tr></thead>
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>`;
+    });
+
+    return `<div class="gh-cov-panel" id="gh-cov-panel" style="display:none;">
+      <div class="gh-cov-header">
+        <span class="gh-cov-title">Cobertura por hora</span>
+        <button class="gh-cov-close" id="gh-cov-close" title="Fechar">✕</button>
+      </div>
+      <div class="gh-cov-body">${sectionsHTML}</div>
+    </div>`;
+  }
+
   function updateBancoBadge(pid) {
     const realHrs = calcPersonHrs(pid);
     const diff = Math.round((realHrs - 40) * 10) / 10;
@@ -2058,6 +2163,7 @@
           <div class="gh-sb-dates">${fmt(dates[0])} — ${fmt(dates[6])} ${dates[6].getFullYear()}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
+          <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-coverage">📊 Cobertura</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-nova">← Nova semana</button>
           <button class="gh-btn gh-btn-ghost gh-btn-sm" id="gh-btn-borrador">💾 Guardar rascunho</button>
           <button class="gh-btn gh-btn-solid gh-btn-sm" id="gh-btn-confirm">↑ Publicar horário</button>
@@ -2201,7 +2307,19 @@
       </table></div>`;
     });
 
-    c.innerHTML = topBar + `<div class="gh-sched-body">${bodyHTML}</div>`;
+    const coverageHTML = buildCoveragePanel(active);
+    c.innerHTML = topBar + `<div class="gh-sched-wrap"><div class="gh-sched-body">${bodyHTML}</div>${coverageHTML}</div>`;
+
+    // Coverage panel toggle
+    document.getElementById('gh-btn-coverage')?.addEventListener('click', () => {
+      const panel = document.getElementById('gh-cov-panel');
+      if (!panel) return;
+      panel.style.display = (panel.style.display === 'none' || !panel.style.display) ? 'block' : 'none';
+    });
+    document.getElementById('gh-cov-close')?.addEventListener('click', () => {
+      const panel = document.getElementById('gh-cov-panel');
+      if (panel) panel.style.display = 'none';
+    });
 
     document.getElementById('gh-btn-nova')?.addEventListener('click', startNew);
     document.getElementById('gh-btn-borrador')?.addEventListener('click', () => saveBorrador());
@@ -2798,6 +2916,28 @@
 
         /* ── TABLE LAYOUT ── */
         #tab-gerador .gh-sched-body { padding:20px 20px 0; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; overflow:visible; }
+
+        /* ── COVERAGE PANEL ── */
+        #tab-gerador .gh-sched-wrap { display:flex; flex-direction:row; align-items:flex-start; gap:0; width:100%; box-sizing:border-box; }
+        #tab-gerador .gh-sched-wrap > .gh-sched-body { flex:1 1 auto; min-width:0; }
+        #tab-gerador .gh-cov-panel { flex:0 0 auto; width:340px; max-width:42vw; margin:20px 20px 0 0; border:1px solid #e2e2e2; border-radius:10px; background:#fafafa; box-sizing:border-box; align-self:flex-start; position:sticky; top:64px; max-height:calc(100vh - 84px); overflow-y:auto; }
+        #tab-gerador .gh-cov-header { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #e8e8e8; position:sticky; top:0; background:#fafafa; }
+        #tab-gerador .gh-cov-title { font-size:.7rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#555; }
+        #tab-gerador .gh-cov-close { background:none !important; border:none !important; font-size:.9rem; color:#999 !important; cursor:pointer; padding:2px 6px; line-height:1; }
+        #tab-gerador .gh-cov-close:hover { color:#111 !important; }
+        #tab-gerador .gh-cov-body { padding:12px 14px; }
+        #tab-gerador .gh-cov-store { margin-bottom:18px; }
+        #tab-gerador .gh-cov-store:last-child { margin-bottom:0; }
+        #tab-gerador .gh-cov-store-name { font-size:.7rem; font-weight:700; color:#333; margin-bottom:6px; letter-spacing:.04em; }
+        #tab-gerador .gh-cov-empty { font-size:.7rem; color:#aaa; font-style:italic; padding:6px 0; }
+        #tab-gerador .gh-cov-table { width:100%; border-collapse:collapse; font-size:.62rem; }
+        #tab-gerador .gh-cov-th { padding:4px 2px; font-weight:700; color:#888; text-align:center; border-bottom:1px solid #e0e0e0; font-size:.58rem; letter-spacing:.03em; }
+        #tab-gerador .gh-cov-th-hour { text-align:left; color:#bbb; }
+        #tab-gerador .gh-cov-hour { padding:3px 4px; color:#999; font-weight:600; text-align:left; white-space:nowrap; font-size:.6rem; }
+        #tab-gerador .gh-cov-td { padding:3px 2px; text-align:center; font-weight:700; border-radius:3px; }
+        #tab-gerador .gh-cov-zero { color:#ddd; }
+        #tab-gerador .gh-cov-one  { color:#c08a00; background:#fff7e6; }
+        #tab-gerador .gh-cov-many { color:#1a6c1a; background:#eaf7ea; }
 
         /* 1. CONTENEDOR: bloque desplazable */
         #tab-gerador .gh-store-block {

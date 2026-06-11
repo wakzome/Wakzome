@@ -1993,12 +1993,12 @@
       const newShift = parts.map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
       S.schedule[pid][day] = { ...cell, shift: newShift };
     });
-    // Update banco
-    if (!S._bancoBase) S._bancoBase = {};
-    if (S._bancoBase[pid] === undefined) S._bancoBase[pid] = S._banco?.[pid] ?? 0;
+    // Update banco — always use current DB saldo as base, add weekly diff
+    if (!S._banco) S._banco = {};
     const realHrs = calcPersonHrs(pid);
     const diff = Math.round((realHrs - 40) * 10) / 10;
-    const saldoVivo = Math.round(((S._bancoBase[pid] ?? 0) + diff) * 10) / 10;
+    const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
+    const saldoVivo = Math.round((bancoBase + diff) * 10) / 10;
     S._banco[pid] = saldoVivo;
     // Re-render
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -2215,6 +2215,12 @@
             okBtn.textContent = '✓ OK';
             okBtn.dataset.pid = pid;
             okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;text-align:center;box-sizing:border-box;';
+            // Direct listener — does not rely on event bubbling
+            okBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              ev.preventDefault();
+              commitInlineEdit(pid);
+            });
             nameCell.appendChild(okBtn);
           }
           row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {

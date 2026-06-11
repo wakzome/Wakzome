@@ -830,7 +830,11 @@
 
       // Banco de horas
       const { data: banco } = await sb.from('gh_banco_horas').select('*');
-      (banco || []).forEach(b => { S._banco[b.pessoa_id] = b.saldo || 0; });
+      if (!S._bancoBase) S._bancoBase = {};
+      (banco || []).forEach(b => {
+        S._banco[b.pessoa_id] = b.saldo || 0;
+        S._bancoBase[b.pessoa_id] = b.saldo || 0;
+      });
 
       // Folgas dirigidas — datas exactas solicitadas com antecedência
       // Só carregamos se ainda não há dados em memória (_folgasDirigidas persiste na sessão)
@@ -2215,12 +2219,6 @@
             okBtn.textContent = '✓ OK';
             okBtn.dataset.pid = pid;
             okBtn.style.cssText = 'margin-top:6px;background:#111 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border-radius:5px;padding:3px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;display:block;width:100%;text-align:center;box-sizing:border-box;';
-            // Direct listener — does not rely on event bubbling
-            okBtn.addEventListener('click', (ev) => {
-              ev.stopPropagation();
-              ev.preventDefault();
-              commitInlineEdit(pid);
-            });
             nameCell.appendChild(okBtn);
           }
           row.querySelectorAll('.gh-sh-td[data-pid]').forEach(td => {
@@ -2280,18 +2278,21 @@
     // Edit on click — intercept if add mode is active
     // Container click — commit any editing rows when clicking outside them
     if (!c.dataset.hasClickDelegation) {
-      c.addEventListener('click', (e) => {
+      c.addEventListener('mousedown', (e) => {
         // 1. Intercept OK div click
         const okDiv = e.target.closest('.gh-inline-ok');
         if (okDiv) {
           e.preventDefault();
           e.stopPropagation();
-          commitInlineEdit(okDiv.dataset.pid);
+          const pid = okDiv.dataset.pid;
+          commitInlineEdit(pid);
           return;
         }
-        // 2. Click outside editing row — commit
+        // 2. mousedown inside an input — let it focus, don't commit
         if (e.target.closest('.gh-sh-time-inp')) return;
+        // 3. mousedown outside any editing row — commit that row
         const editingRows = c.querySelectorAll('tr.gh-editing');
+        if (!editingRows.length) return;
         editingRows.forEach(row => {
           if (!row.contains(e.target)) {
             const pid = row.querySelector('.gh-banco-badge')?.dataset?.pid ||

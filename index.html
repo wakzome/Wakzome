@@ -2968,20 +2968,21 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   opacity: 1; transform: translateY(-50%) translateX(0);
 }
 
-.wz-cell-horarios  { grid-column: 1; grid-row: 1 / 3; }
+.wz-cell-horarios  { grid-column: 1; grid-row: 1 / 4; }
 .wz-cell-pvp       { grid-column: 2; grid-row: 1; }
 .wz-cell-etiquetas { grid-column: 3; grid-row: 1; }
 .wz-cell-recibo    { grid-column: 2; grid-row: 2; }
 .wz-cell-vendas    { grid-column: 3; grid-row: 2; }
-/* Porto Santo: horários ocupa col1 fila1+2, rótulos ocupa col2/4 fila3 */
-#wz-grid { grid-template-rows: 1fr 1fr 0.75fr; }
+/* Porto Santo: horários ocupa col1 filas1-3, rótulos ocupa col2/4 fila3 */
+#wz-grid { grid-template-rows: 1fr 1fr 1fr; }
 .wz-cell-rotulos   { grid-column: 2 / 4; grid-row: 3; }
 
 #wz-grid.wz-no-pvp .wz-cell-pvp       { display: none; }
+#wz-grid.wz-no-pvp .wz-cell-horarios  { grid-column: 1; grid-row: 1 / 3; }
 #wz-grid.wz-no-pvp .wz-cell-etiquetas { grid-column: 2; grid-row: 1; }
 #wz-grid.wz-no-pvp .wz-cell-recibo    { grid-column: 3; grid-row: 1; }
 #wz-grid.wz-no-pvp .wz-cell-vendas    { grid-column: 2; grid-row: 2; }
-/* Funchal: rótulos ocupa col3 fila2 (encaixa perfecto en 3×2) */
+/* Funchal: rótulos ocupa col3 fila2, grid volta a 2 filas */
 #wz-grid.wz-no-pvp .wz-cell-rotulos   { grid-column: 3; grid-row: 2; }
 #wz-grid.wz-no-pvp                    { grid-template-rows: 1fr 1fr; }
 
@@ -3324,7 +3325,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     <div class="wz-cell wz-cell-rotulos" id="wz-c-rotulos">
       <img src="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/QR.png" alt="receção de caixas" draggable="false">
       <div class="wz-cell-overlay"></div>
-      <span class="wz-cell-label">receção de caixas</span>
+      <span class="wz-cell-label">receção · caixas</span>
     </div>
   </div>
   <div id="wz-aviso-btn">

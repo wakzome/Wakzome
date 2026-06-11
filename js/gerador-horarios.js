@@ -3260,7 +3260,7 @@
                   <button class="gh-pill gh-pill-shift" data-val="11:00-15:00|16:00-20:00">11:00 – 15:00<br>16:00 – 20:00</button>
                 </div>
                 <div class="gh-apoio-section-label">⚡ Reforço de almoço</div>
-                <div class="gh-btn-group gh-btn-group-apoio">
+                <div class="gh-btn-group gh-btn-group-apoio" id="gh-me-apoio-btns">
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-12:00|APOIO:13:00-14:00|14:00-18:00">09:00 – 12:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>14:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="09:00-13:00|APOIO:14:00-15:00|15:00-18:00">09:00 – 13:00<br><span class="gh-apoio-lbl">apoio 14:00</span><br>15:00 – 18:00</button>
                   <button class="gh-pill gh-pill-shift gh-pill-apoio" data-val="10:00-13:00|APOIO:13:00-14:00|15:00-19:00">10:00 – 13:00<br><span class="gh-apoio-lbl">apoio 13:00</span><br>15:00 – 19:00</button>
@@ -3300,12 +3300,14 @@
         meTypeChange();
         if (btn.dataset.val !== 'work') applyEdit();
       });
-      // HORARIO pill buttons
-      document.getElementById('gh-me-shift-btns').addEventListener('click', e => {
+      // HORARIO pill buttons — wired to BOTH the normal-shift group and the apoio group
+      const onShiftPillClick = (e) => {
         const btn = e.target.closest('.gh-pill[data-val]');
         if (!btn) return;
         document.getElementById('gh-me-shift').value = btn.dataset.val;
+        // Keep selection highlight correct across both groups
         ghSyncPillGroup('gh-me-shift-btns', btn.dataset.val);
+        ghSyncPillGroup('gh-me-apoio-btns', btn.dataset.val);
         // Show/hide apoio store selector and update its label
         const wrap = document.getElementById('gh-apoio-store-wrap');
         const isApoio = btn.dataset.val.includes('APOIO');
@@ -3320,7 +3322,9 @@
           }
         }
         if (!isApoio && document.getElementById('gh-me-store').value) applyEdit();
-      });
+      };
+      document.getElementById('gh-me-shift-btns').addEventListener('click', onShiftPillClick);
+      document.getElementById('gh-me-apoio-btns').addEventListener('click', onShiftPillClick);
       // LOJA pill buttons (dynamic)
       document.getElementById('gh-me-store-btns').addEventListener('click', e => {
         const btn = e.target.closest('.gh-pill[data-val]');

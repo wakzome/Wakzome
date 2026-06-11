@@ -2928,6 +2928,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   display: grid;
   width: 100%; height: 100%;
   grid-template-columns: 1.5fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
   gap: 3px;
   background: #ddd;
 }
@@ -2960,11 +2961,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   opacity: 0;
   transition: opacity 0.28s ease, transform 0.3s cubic-bezier(0.22,1,0.36,1);
 }
-.wz-cell-rotulos .wz-cell-label {
-  font-size: clamp(0.5rem, 0.7vw, 0.65rem);
-  letter-spacing: 0.12em;
-  padding: 10px 7px;
-}
 .wz-cell:hover img          { transform: scale(1.12); filter: brightness(0.82); }
 .wz-cell:hover .wz-cell-overlay {
   background: linear-gradient(90deg, rgba(0,0,0,0.32) 0%, transparent 55%);
@@ -2973,23 +2969,16 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   opacity: 1; transform: translateY(-50%) translateX(0);
 }
 
-.wz-cell-horarios  { grid-column: 1; grid-row: 1 / 4; }
+.wz-cell-horarios  { grid-column: 1; grid-row: 1 / 3; }
 .wz-cell-pvp       { grid-column: 2; grid-row: 1; }
 .wz-cell-etiquetas { grid-column: 3; grid-row: 1; }
 .wz-cell-recibo    { grid-column: 2; grid-row: 2; }
 .wz-cell-vendas    { grid-column: 3; grid-row: 2; }
-/* Porto Santo: horários ocupa col1 filas1-3, rótulos ocupa col2/4 fila3 */
-#wz-grid { grid-template-rows: 1fr 1fr 1fr; }
-.wz-cell-rotulos   { grid-column: 2 / 4; grid-row: 3; }
 
 #wz-grid.wz-no-pvp .wz-cell-pvp       { display: none; }
-#wz-grid.wz-no-pvp .wz-cell-horarios  { grid-column: 1; grid-row: 1 / 3; }
 #wz-grid.wz-no-pvp .wz-cell-etiquetas { grid-column: 2; grid-row: 1; }
 #wz-grid.wz-no-pvp .wz-cell-recibo    { grid-column: 3; grid-row: 1; }
-#wz-grid.wz-no-pvp .wz-cell-vendas    { grid-column: 2; grid-row: 2; }
-/* Funchal: rótulos ocupa col3 fila2, grid volta a 2 filas */
-#wz-grid.wz-no-pvp .wz-cell-rotulos   { grid-column: 3; grid-row: 2; }
-#wz-grid.wz-no-pvp                    { grid-template-rows: 1fr 1fr; }
+#wz-grid.wz-no-pvp .wz-cell-vendas    { grid-column: 2 / 4; grid-row: 2; }
 
 /* ── AVISO ────────────────────────────────────────────────────── */
 #wz-aviso-btn {
@@ -3327,11 +3316,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       <div class="wz-cell-overlay"></div>
       <span class="wz-cell-label">vendas</span>
     </div>
-    <div class="wz-cell wz-cell-rotulos" id="wz-c-rotulos">
-      <img src="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/QR.png" alt="receção de caixas" draggable="false">
-      <div class="wz-cell-overlay"></div>
-      <span class="wz-cell-label">receção · caixas</span>
-    </div>
   </div>
   <div id="wz-aviso-btn">
     <span id="wz-aviso-dot"></span>aviso
@@ -3572,10 +3556,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 
     document.getElementById('wz-c-vendas').addEventListener('click', function () {
       if (typeof openVentasOverlay === 'function') openVentasOverlay();
-    });
-
-    document.getElementById('wz-c-rotulos').addEventListener('click', function () {
-      if (typeof openRecepcionOverlay === 'function') openRecepcionOverlay();
     });
 
     document.getElementById('wz-aviso-btn').addEventListener('click', openAviso);
@@ -3994,455 +3974,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     <div id="rt-root" style="width:100%;"></div>
   </div>
 </div>
-
-<!-- ══ RECEÇÃO DE CAIXAS OVERLAY ════════════════════════════════ -->
-<style>
-#recepcion-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 200;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
-}
-#recepcion-overlay.open    { display: flex; }
-#recepcion-overlay.visible { opacity: 1; }
-#recepcion-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#recepcion-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-}
-#recepcion-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); }
-#recepcion-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#recepcion-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 20px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#rec-body { width: 100%; max-width: 440px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-
-/* States */
-#rec-state-scan, #rec-state-result, #rec-state-confirm, #rec-state-done, #rec-state-error { display: none; width: 100%; flex-direction: column; align-items: center; gap: 18px; }
-#rec-state-scan.rec-active, #rec-state-result.rec-active, #rec-state-confirm.rec-active, #rec-state-done.rec-active, #rec-state-error.rec-active { display: flex; }
-
-/* Scan button */
-#rec-scan-btn {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 14px; width: 200px; height: 200px;
-  border: 2px dashed #ccc; border-radius: 24px;
-  background: #fafafa; cursor: pointer;
-  transition: border-color .2s, background .2s;
-  font-family: 'MontserratLight', sans-serif;
-}
-#rec-scan-btn:hover { border-color: #000; background: #f5f5f5; }
-#rec-scan-btn svg { opacity: .35; }
-#rec-scan-btn span { font-size: .78rem; font-weight: bold; text-transform: lowercase; letter-spacing: .08em; color: #000; opacity: .5; }
-
-/* Video scanner */
-#rec-video-wrap {
-  position: relative; width: 100%; max-width: 340px;
-  border-radius: 16px; overflow: hidden;
-  border: 2px solid #e6e6e6; background: #000;
-  aspect-ratio: 1;
-}
-#rec-video { width: 100%; height: 100%; object-fit: cover; display: block; }
-#rec-scan-line {
-  position: absolute; left: 10%; right: 10%; height: 2px;
-  background: linear-gradient(90deg, transparent, #000, transparent);
-  animation: recScanAnim 1.8s ease-in-out infinite;
-  top: 50%;
-}
-@keyframes recScanAnim { 0%,100% { top: 20%; opacity: .6; } 50% { top: 80%; opacity: 1; } }
-#rec-scan-cancel {
-  padding: 9px 26px; font-size: .82rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
-  cursor: pointer; border: 1.5px solid #ccc; border-radius: 20px;
-  background: #fff; color: #000; transition: border-color .2s;
-}
-#rec-scan-cancel:hover { border-color: #000; }
-
-/* Result card */
-#rec-result-card {
-  width: 100%; border: 1.5px solid #e6e6e6; border-radius: 16px;
-  padding: 20px 22px; background: #fafafa;
-}
-#rec-result-store { font-size: 1.1rem; font-weight: 800; text-transform: uppercase; margin-bottom: 6px; color: #000; }
-#rec-result-code  { font-size: .78rem; font-weight: 700; font-family: 'Courier New', monospace; background: #e8e8e8; padding: 6px 10px; border-radius: 6px; border-left: 3px solid #000; color: #000; word-break: break-all; }
-#rec-result-date  { font-size: .75rem; font-weight: bold; color: #888; margin-top: 8px; }
-#rec-result-status { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; margin-top: 10px; }
-#rec-result-status.delivered { color: #2e7d32; }
-#rec-result-status.pending   { color: #e65100; }
-
-/* Buttons */
-#rec-confirm-btn {
-  width: 100%; padding: 14px; background: #000; color: #fff;
-  border: none; border-radius: 14px; font-size: .95rem; font-weight: 800;
-  text-transform: lowercase; letter-spacing: .05em; cursor: pointer;
-  font-family: 'MontserratLight', sans-serif; transition: background .2s;
-}
-#rec-confirm-btn:hover { background: #333; }
-#rec-confirm-btn:disabled { opacity: .4; cursor: not-allowed; }
-#rec-scan-again {
-  padding: 9px 26px; font-size: .82rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif; text-transform: lowercase;
-  cursor: pointer; border: 1.5px solid #ccc; border-radius: 20px;
-  background: #fff; color: #000; transition: border-color .2s;
-}
-#rec-scan-again:hover { border-color: #000; }
-
-/* Done */
-#rec-done-icon { font-size: 3rem; line-height: 1; }
-#rec-done-msg  { font-size: 1rem; font-weight: 800; text-transform: lowercase; color: #2e7d32; }
-#rec-done-sub  { font-size: .8rem; font-weight: bold; color: #888; text-align: center; }
-
-/* Error */
-#rec-error-msg { font-size: .9rem; font-weight: bold; color: #c03000; text-align: center; }
-
-/* Title */
-.rec-title { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; color: #000; opacity: .4; }
-</style>
-
-<div id="recepcion-overlay">
-  <div id="recepcion-overlay-bar">
-    <button id="recepcion-overlay-back" onclick="closeRecepcionOverlay()">← voltar</button>
-    <div id="recepcion-overlay-title">receção de caixas</div>
-  </div>
-  <div id="recepcion-overlay-content">
-    <div id="rec-body">
-
-      <!-- STATE: scan prompt -->
-      <div id="rec-state-scan" class="rec-active">
-        <div class="rec-title">escanear caixa</div>
-        <button id="rec-scan-btn">
-          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-            <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
-            <rect x="7" y="7" width="4" height="4" rx="1"/>
-            <rect x="13" y="7" width="4" height="4" rx="1"/>
-            <rect x="7" y="13" width="4" height="4" rx="1"/>
-            <path d="M13 13h4v4"/>
-          </svg>
-          <span>abrir câmara</span>
-        </button>
-      </div>
-
-      <!-- STATE: video scanning -->
-      <div id="rec-state-video" style="display:none;flex-direction:column;align-items:center;gap:16px;width:100%;">
-        <div class="rec-title">aproxime a câmara ao código QR</div>
-        <div id="rec-video-wrap">
-          <video id="rec-video" playsinline autoplay muted></video>
-          <div id="rec-scan-line"></div>
-        </div>
-        <button id="rec-scan-cancel">cancelar</button>
-      </div>
-
-      <!-- STATE: result -->
-      <div id="rec-state-result">
-        <div class="rec-title">caixa encontrada</div>
-        <div id="rec-result-card">
-          <div id="rec-result-store"></div>
-          <div id="rec-result-code"></div>
-          <div id="rec-result-date"></div>
-          <div id="rec-result-status"></div>
-        </div>
-        <button id="rec-confirm-btn">confirmar receção</button>
-        <button id="rec-scan-again">escanear outra</button>
-      </div>
-
-      <!-- STATE: done -->
-      <div id="rec-state-done">
-        <div id="rec-done-icon">✓</div>
-        <div id="rec-done-msg">caixa confirmada</div>
-        <div id="rec-done-sub"></div>
-        <button id="rec-scan-again-done" style="padding:9px 26px;font-size:.82rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;cursor:pointer;border:1.5px solid #ccc;border-radius:20px;background:#fff;color:#000;">escanear outra</button>
-      </div>
-
-      <!-- STATE: error -->
-      <div id="rec-state-error">
-        <div id="rec-error-msg"></div>
-        <button id="rec-error-retry" style="padding:9px 26px;font-size:.82rem;font-weight:bold;font-family:'MontserratLight',sans-serif;text-transform:lowercase;cursor:pointer;border:1.5px solid #ccc;border-radius:20px;background:#fff;color:#000;">tentar novamente</button>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<script>
-(function(){
-  'use strict';
-
-  /* ── State machine ────────────────────────────────────────── */
-  var _stream = null;
-  var _scanLoop = null;
-  var _currentBox = null; // {shipmentId, boxIndex, code, storeName, date}
-
-  function setState(name){
-    var states = ['scan','video','result','done','error'];
-    states.forEach(function(s){
-      var el = document.getElementById('rec-state-'+s);
-      if(!el) return;
-      if(s===name){ el.style.display='flex'; el.classList.add('rec-active'); }
-      else { el.style.display='none'; el.classList.remove('rec-active'); }
-    });
-    var vid = document.getElementById('rec-state-video');
-    if(vid){
-      if(name==='video'){ vid.style.display='flex'; }
-      else { vid.style.display='none'; }
-    }
-  }
-
-  /* ── Open / Close ─────────────────────────────────────────── */
-  window.openRecepcionOverlay = function(){
-    var ov = document.getElementById('recepcion-overlay');
-    if(!ov) return;
-    ov.classList.add('open');
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){ ov.classList.add('visible'); }); });
-    setState('scan');
-  };
-
-  window.closeRecepcionOverlay = function(){
-    stopCamera();
-    var ov = document.getElementById('recepcion-overlay');
-    if(!ov) return;
-    ov.classList.remove('visible');
-    setTimeout(function(){ ov.classList.remove('open'); }, 600);
-  };
-
-  /* ── Camera ───────────────────────────────────────────────── */
-  function startCamera(){
-    setState('video');
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-    }).then(function(stream){
-      _stream = stream;
-      var v = document.getElementById('rec-video');
-      v.srcObject = stream;
-      v.play();
-      v.addEventListener('loadedmetadata', startScanLoop, { once: true });
-    }).catch(function(e){
-      showError('não foi possível aceder à câmara. verifique as permissões.');
-    });
-  }
-
-  function stopCamera(){
-    if(_scanLoop){ cancelAnimationFrame(_scanLoop); _scanLoop = null; }
-    if(_stream){ _stream.getTracks().forEach(function(t){ t.stop(); }); _stream = null; }
-    var v = document.getElementById('rec-video');
-    if(v){ v.srcObject = null; }
-  }
-
-  /* ── QR scanning via BarcodeDetector or canvas fallback ─── */
-  function startScanLoop(){
-    var v = document.getElementById('rec-video');
-    var canvas = document.createElement('canvas');
-    var ctx = canvas.getContext('2d');
-
-    if(typeof BarcodeDetector !== 'undefined'){
-      var bd = new BarcodeDetector({ formats: ['qr_code'] });
-      (function tick(){
-        _scanLoop = requestAnimationFrame(function(){
-          if(!_stream){ return; }
-          bd.detect(v).then(function(codes){
-            if(codes.length){ onQRDetected(codes[0].rawValue); return; }
-            tick();
-          }).catch(function(){ tick(); });
-        });
-      }());
-    } else {
-      /* Fallback: draw frames to canvas and use jsQR if available,
-         otherwise prompt user to use a QR scanner app */
-      showError('o seu browser não suporta leitura de QR nativa. use o Google Chrome ou Safari 16+.');
-    }
-  }
-
-  /* ── QR decoded ───────────────────────────────────────────── */
-  function onQRDetected(raw){
-    stopCamera();
-    /* Extract code from URL: ?scan=ENCODED_CODE */
-    var code = null;
-    try {
-      var url = new URL(raw);
-      code = url.searchParams.get('scan');
-    } catch(e){
-      /* Maybe raw IS the code directly */
-      code = raw;
-    }
-    if(!code){ showError('qr inválido. tente novamente.'); return; }
-    findBox(code);
-  }
-
-  /* ── Find box in Supabase ─────────────────────────────────── */
-  function findBox(code){
-    var sb = (typeof sbAdmin !== 'undefined') ? sbAdmin : null;
-    var year = new Date().getFullYear();
-    var sk = 'wkz_rt_' + year;
-
-    function searchPayload(payload){
-      if(!payload || !payload.shipments) return null;
-      for(var i=0; i<payload.shipments.length; i++){
-        var sh = payload.shipments[i];
-        for(var j=0; j<sh.boxes.length; j++){
-          if(sh.boxes[j].code === code){
-            return { shipmentId: sh.id, boxIndex: j, code: code,
-                     storeName: sh.boxes[j].storeName, date: sh.date,
-                     delivered: sh.boxes[j].delivered,
-                     confirmedBy: sh.boxes[j].confirmedBy || null };
-          }
-        }
-      }
-      return null;
-    }
-
-    function showBoxResult(box){
-      _currentBox = box;
-      setState('result');
-      document.getElementById('rec-result-store').textContent = box.storeName || '';
-      document.getElementById('rec-result-code').textContent = box.code;
-      document.getElementById('rec-result-date').textContent = 'envio: ' + box.date;
-      var statusEl = document.getElementById('rec-result-status');
-      var confirmBtn = document.getElementById('rec-confirm-btn');
-      if(box.delivered){
-        statusEl.textContent = box.confirmedBy === 'store' ? '✓ confirmada em loja' : '✓ já entregue';
-        statusEl.className = 'rec-result-status delivered';
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'já confirmada';
-      } else {
-        statusEl.textContent = '● pendente';
-        statusEl.className = 'rec-result-status pending';
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = 'confirmar receção';
-      }
-    }
-
-    if(sb){
-      sb.from('rotulos_data').select('payload').eq('id', sk).single()
-        .then(function(res){
-          if(res.error || !res.data){ showError('erro ao carregar dados. tente novamente.'); return; }
-          var box = searchPayload(res.data.payload);
-          if(!box){ showError('caixa não encontrada. verifique o qr.'); return; }
-          showBoxResult(box);
-        })
-        .catch(function(){ showError('erro de ligação. tente novamente.'); });
-    } else {
-      /* Fallback: try localStorage */
-      try {
-        var raw = localStorage.getItem(sk);
-        if(raw){
-          var box = searchPayload(JSON.parse(raw));
-          if(box){ showBoxResult(box); return; }
-        }
-      } catch(e){}
-      showError('sem ligação à base de dados.');
-    }
-  }
-
-  /* ── Confirm delivery ─────────────────────────────────────── */
-  function confirmDelivery(){
-    if(!_currentBox) return;
-    var btn = document.getElementById('rec-confirm-btn');
-    btn.disabled = true; btn.textContent = 'a confirmar…';
-
-    var sb = (typeof sbAdmin !== 'undefined') ? sbAdmin : null;
-    var year = new Date().getFullYear();
-    var sk = 'wkz_rt_' + year;
-
-    function updatePayload(payload){
-      var updated = false;
-      (payload.shipments || []).forEach(function(sh){
-        if(sh.id == _currentBox.shipmentId){
-          var box = sh.boxes[_currentBox.boxIndex];
-          if(box && box.code === _currentBox.code){
-            box.delivered = true;
-            box.confirmedBy = 'store';
-            updated = true;
-          }
-        }
-      });
-      return updated ? payload : null;
-    }
-
-    function showDone(){
-      setState('done');
-      document.getElementById('rec-done-sub').textContent =
-        _currentBox.storeName + ' · ' + _currentBox.date;
-      _currentBox = null;
-    }
-
-    if(sb){
-      sb.from('rotulos_data').select('payload').eq('id', sk).single()
-        .then(function(res){
-          if(res.error || !res.data){ showError('erro ao carregar. tente novamente.'); return; }
-          var newPayload = updatePayload(res.data.payload);
-          if(!newPayload){ showError('erro ao atualizar. tente novamente.'); return; }
-          /* Save back */
-          localStorage.setItem(sk, JSON.stringify(newPayload));
-          return sb.from('rotulos_data')
-            .upsert({ id: sk, payload: newPayload }, { onConflict: 'id' });
-        })
-        .then(function(res){
-          if(res && res.error){ showError('erro ao guardar. tente novamente.'); return; }
-          showDone();
-        })
-        .catch(function(){ showError('erro de ligação. tente novamente.'); });
-    } else {
-      /* localStorage only */
-      try {
-        var raw = localStorage.getItem(sk);
-        if(raw){
-          var newPayload = updatePayload(JSON.parse(raw));
-          if(newPayload){ localStorage.setItem(sk, JSON.stringify(newPayload)); showDone(); return; }
-        }
-      } catch(e){}
-      showError('sem ligação à base de dados.');
-    }
-  }
-
-  function showError(msg){
-    stopCamera();
-    setState('error');
-    document.getElementById('rec-error-msg').textContent = msg;
-  }
-
-  /* ── Event listeners ──────────────────────────────────────── */
-  document.addEventListener('DOMContentLoaded', function(){
-    var scanBtn = document.getElementById('rec-scan-btn');
-    if(scanBtn) scanBtn.addEventListener('click', startCamera);
-
-    var cancelBtn = document.getElementById('rec-scan-cancel');
-    if(cancelBtn) cancelBtn.addEventListener('click', function(){ stopCamera(); setState('scan'); });
-
-    var confirmBtn = document.getElementById('rec-confirm-btn');
-    if(confirmBtn) confirmBtn.addEventListener('click', confirmDelivery);
-
-    var scanAgain = document.getElementById('rec-scan-again');
-    if(scanAgain) scanAgain.addEventListener('click', function(){ _currentBox=null; setState('scan'); });
-
-    var scanAgainDone = document.getElementById('rec-scan-again-done');
-    if(scanAgainDone) scanAgainDone.addEventListener('click', function(){ setState('scan'); });
-
-    var retryBtn = document.getElementById('rec-error-retry');
-    if(retryBtn) retryBtn.addEventListener('click', function(){ setState('scan'); });
-
-    document.addEventListener('keydown', function(e){
-      var ov = document.getElementById('recepcion-overlay');
-      if(!ov || !ov.classList.contains('open')) return;
-      if(e.key === 'Escape'){ closeRecepcionOverlay(); }
-    });
-  });
-
-})();
-</script>
 
 <div id="processamento-overlay">
   <div id="processamento-overlay-bar">

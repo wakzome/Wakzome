@@ -3228,6 +3228,221 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 }
 </style>
 
+<style>
+/* ══ EDITOR PDF EXTENDED ══════════════════════════════════════ */
+
+/* CSS custom props para cor/tamanho de texto (bypass !important global) */
+.ed-text-el:not(.ed-native-text) textarea {
+  color: var(--ed-txt-color, #000000) !important;
+  font-size: var(--ed-font-sz, 14px) !important;
+}
+.ed-sticky-el textarea {
+  color: var(--ed-txt-color, #333333) !important;
+  font-size: 12px !important;
+}
+
+/* Canvas de desenho livre */
+.ed-draw-canvas {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 5;
+}
+.ed-draw-canvas.ed-draw-active {
+  pointer-events: auto;
+  cursor: crosshair !important;
+}
+
+/* Overlay de anotação */
+.ed-annot-overlay {
+  pointer-events: none;
+  cursor: crosshair !important;
+}
+.ed-annot-overlay.ed-annot-active { pointer-events: auto; }
+
+/* Formas */
+.ed-shape-el {
+  position: absolute; box-sizing: border-box;
+  cursor: move; overflow: visible; background: transparent;
+}
+
+/* Nota adesiva */
+.ed-sticky-el {
+  position: absolute; box-sizing: border-box;
+  background: #fffde7 !important;
+  border: 1.5px solid #f9ca24 !important;
+  cursor: move; min-width: 120px;
+  box-shadow: 2px 3px 10px rgba(0,0,0,0.18);
+  z-index: 8;
+}
+.ed-sticky-header {
+  height: 20px; background: #f9ca24 !important;
+  cursor: move; display: flex; align-items: center;
+  padding: 0 6px; font-size: 10px; font-weight: bold;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: #7a6010 !important;
+  user-select: none;
+}
+.ed-sticky-el textarea {
+  display: block; width: 100%; min-height: 54px;
+  padding: 5px 7px; box-sizing: border-box;
+  border: none; outline: none; background: transparent;
+  resize: none; overflow: hidden; line-height: 1.4;
+  writing-mode: horizontal-tb; direction: ltr;
+  pointer-events: none; cursor: move;
+}
+.ed-sticky-el.editing textarea {
+  pointer-events: auto !important; cursor: text !important;
+}
+
+/* Carimbo */
+.ed-stamp-el {
+  position: absolute; cursor: move; box-sizing: border-box;
+  user-select: none;
+}
+
+/* Anotações */
+.ed-annot-el {
+  position: absolute; cursor: move;
+  pointer-events: auto; box-sizing: border-box;
+  min-width: 20px; min-height: 14px;
+}
+.ed-annot-el.annot-highlight    { background: rgba(255,220,0,0.38) !important; }
+.ed-annot-el.annot-strikethrough { background: transparent !important;
+  border-bottom: 2.5px solid #cc0000; margin-top: 9px; height: 4px !important; min-height: 4px !important; }
+.ed-annot-el.annot-underline-annot { background: transparent !important;
+  border-bottom: 2px solid #0000bb; height: 4px !important; min-height: 4px !important; }
+
+/* Botões de formatação ativos */
+#ed-bold-btn.ed-fmt-active,
+#ed-italic-btn.ed-fmt-active,
+#ed-underline-btn.ed-fmt-active,
+#ed-draw-btn.active,
+#ed-highlight-btn.active,
+#ed-sticky-btn.active {
+  background: #555 !important; color: #fff !important; border-color: #333 !important;
+}
+#ed-bold-btn { font-weight: bold !important; }
+#ed-italic-btn { font-style: italic !important; }
+#ed-underline-btn { text-decoration: underline !important; }
+
+/* Zoom display */
+#ed-zoom-display {
+  font-size: .78rem !important; font-weight: bold !important;
+  min-width: 44px; text-align: center;
+  border: 1px solid #ddd; border-radius: 8px;
+  padding: 4px 6px; background: #fff; color: #000 !important;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Font family select */
+#ed-font-family {
+  padding: 4px 6px; font-size: .78rem !important; font-weight: 600 !important;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1px solid #ddd; border-radius: 8px;
+  background: #fff; outline: none; cursor: pointer; color: #000 !important;
+}
+#ed-font-family:focus { border-color: #555; }
+
+/* Cor e espessura de desenho */
+#ed-draw-color {
+  width: 28px !important; height: 28px !important;
+  border: 1px solid #ddd; border-radius: 8px;
+  padding: 2px; cursor: pointer; background: none;
+}
+#ed-draw-size {
+  width: 44px; padding: 4px 5px;
+  font-size: .78rem !important; font-weight: 600 !important;
+  font-family: 'MontserratLight', sans-serif;
+  border: 1px solid #ddd; border-radius: 8px;
+  text-align: center; outline: none; color: #000 !important;
+}
+#ed-draw-size:focus { border-color: #555; }
+
+/* Picker de formas */
+#ed-shape-picker {
+  display: none; position: fixed; z-index: 1000;
+  background: #fff; border: 1px solid #ddd; border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.13);
+  padding: 8px; flex-wrap: wrap; gap: 5px; max-width: 190px;
+}
+#ed-shape-picker.show { display: flex; }
+#ed-shape-picker button {
+  flex: 1 1 calc(50% - 5px); min-width: 72px;
+  padding: 6px 8px; font-size: .74rem !important; font-weight: bold !important;
+  font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; border: 1px solid #ddd; border-radius: 7px;
+  background: #fff; text-align: center; color: #000 !important;
+  transition: background .15s, border-color .15s;
+}
+#ed-shape-picker button:hover { border-color: #555; background: #f5f5f5; }
+
+/* Picker de carimbos */
+#ed-stamp-picker {
+  display: none; position: fixed; z-index: 1000;
+  background: #fff; border: 1px solid #ddd; border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.13);
+  padding: 8px; flex-direction: column; gap: 5px; min-width: 165px;
+}
+#ed-stamp-picker.show { display: flex; }
+#ed-stamp-picker button {
+  padding: 7px 14px; font-size: .76rem !important; font-weight: bold !important;
+  font-family: 'MontserratLight', sans-serif; letter-spacing: .06em;
+  cursor: pointer; border: 1.5px solid; border-radius: 7px; background: #fff;
+  text-align: center; transition: opacity .15s;
+}
+#ed-stamp-picker button:hover { opacity: 0.75; }
+
+/* Modal de gestão de páginas */
+#ed-pages-modal {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.38); z-index: 700;
+  justify-content: center; align-items: center;
+}
+#ed-pages-modal.show { display: flex; }
+#ed-pages-modal-box {
+  background: #fff; border-radius: 16px; padding: 24px;
+  width: min(92vw, 740px); max-height: 82vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  font-family: 'MontserratLight', sans-serif;
+}
+#ed-pages-modal-title {
+  font-size: .78rem !important; font-weight: bold !important;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: #000 !important; margin-bottom: 16px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#ed-pages-modal-close {
+  background: none; border: none; cursor: pointer; font-size: 1rem;
+  color: #888 !important; padding: 2px 6px; border-radius: 6px; line-height: 1;
+}
+#ed-pages-modal-close:hover { background: #f0f0f0; color: #000 !important; }
+#ed-pages-modal-list {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  overflow-y: auto; flex: 1; padding-bottom: 4px;
+  padding-right: 4px;
+}
+.ed-pm-thumb {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 8px; border-radius: 10px; border: 1.5px solid #e6e6e6;
+  background: #fafafa; transition: border-color .15s; user-select: none;
+}
+.ed-pm-thumb:hover { border-color: #aaa; }
+.ed-pm-thumb canvas { border: 1px solid #e0e0e0; display: block; max-width: 100px; }
+.ed-pm-label {
+  font-size: .7rem !important; font-weight: bold !important; color: #000 !important;
+}
+.ed-pm-actions { display: flex; gap: 4px; }
+.ed-pm-actions button {
+  padding: 2px 7px; font-size: .68rem !important; font-weight: bold !important;
+  font-family: 'MontserratLight', sans-serif; cursor: pointer;
+  border: 1px solid #ddd; border-radius: 5px; background: #fff;
+  color: #000 !important; transition: background .15s;
+}
+.ed-pm-actions button:hover { background: #f0f0f0; border-color: #999; }
+.ed-pm-del { color: #c03000 !important; border-color: #f0c0b0 !important; }
+.ed-pm-del:hover { background: #fff0ec !important; }
+</style>
 </head>
 <body>
 
@@ -3809,15 +4024,42 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       </label>
       <button id="ed-edit-native-btn" title="Ativar edição do texto original do PDF">🔤 editar texto original</button>
       <div class="ed-sep"></div>
+      <button id="ed-bold-btn" title="Negrito">B</button>
+      <button id="ed-italic-btn" title="Itálico">I</button>
+      <button id="ed-underline-btn" title="Sublinhado">U</button>
+      <select id="ed-font-family" title="Família de fonte">
+        <option value="Helvetica">Arial</option>
+        <option value="Times-Roman">Times</option>
+        <option value="Courier">Courier</option>
+      </select>
+      <div class="ed-sep"></div>
       <label class="ed-tool-label" for="ed-font-size">tamanho</label>
       <input type="number" id="ed-font-size" value="14" min="6" max="120" step="1">
       <input type="color" id="ed-font-color" value="#000000" title="Cor do texto">
+      <div class="ed-sep"></div>
+      <button id="ed-draw-btn" title="Caneta livre">✏ desenhar</button>
+      <input type="color" id="ed-draw-color" value="#000000" title="Cor do desenho">
+      <input type="number" id="ed-draw-size" value="2" min="1" max="20" step="1" title="Espessura">
+      <button id="ed-shape-btn" title="Inserir forma">⬡ formas</button>
+      <div class="ed-sep"></div>
+      <button id="ed-highlight-btn" title="Destacar / riscar / sublinhar (arrastar sobre texto)">🖌 destacar</button>
+      <button id="ed-sticky-btn" title="Nota adesiva (clicar na página)">📌 nota</button>
+      <div class="ed-sep"></div>
+      <button id="ed-stamp-btn" title="Carimbo">🔖 carimbo</button>
+      <button id="ed-pages-btn" title="Gerir páginas" disabled>📄 páginas</button>
+      <label id="ed-concat-btn" for="ed-concat-input" title="Juntar outro PDF">➕ juntar pdf
+        <input type="file" id="ed-concat-input" accept="application/pdf" style="display:none">
+      </label>
       <div class="ed-sep"></div>
       <label class="ed-tool-label" for="ed-page-select">página</label>
       <select id="ed-page-select"></select>
       <div class="ed-sep"></div>
       <button id="ed-undo-btn" title="Desfazer (Ctrl+Z)">↩ desfazer</button>
       <button id="ed-redo-btn" title="Refazer (Ctrl+Y)">↪ refazer</button>
+      <div class="ed-sep"></div>
+      <button id="ed-zoom-out-btn" title="Reduzir zoom">−</button>
+      <span id="ed-zoom-display">100%</span>
+      <button id="ed-zoom-in-btn" title="Aumentar zoom">+</button>
       <div class="ed-sep"></div>
       <button id="ed-export-btn" title="Exportar PDF">⬇️ exportar pdf</button>
     </div>
@@ -3920,6 +4162,20 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       <button class="ed-modal-btn" id="ed-export-cancel">cancelar</button>
       <button class="ed-modal-btn primary" id="ed-export-confirm">⬇️ guardar</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ EDITOR PDF: PICKERS E MODAIS ════════════════════════════ -->
+<div id="ed-shape-picker"></div>
+<div id="ed-stamp-picker"></div>
+
+<div id="ed-pages-modal">
+  <div id="ed-pages-modal-box">
+    <div id="ed-pages-modal-title">
+      gerir páginas
+      <button id="ed-pages-modal-close">✕</button>
+    </div>
+    <div id="ed-pages-modal-list"></div>
   </div>
 </div>
 

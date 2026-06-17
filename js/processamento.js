@@ -2387,7 +2387,10 @@
         );
         var targetInput = targetInputs[colIdx];
         if (!targetInput) return;
-        targetInput.value = val;
+        var pasteVal = targetInput.type === 'number'
+          ? val.replace(/\s/g, '').replace(',', '.')
+          : val;
+        targetInput.value = pasteVal;
         targetInput.dispatchEvent(new Event('input', { bubbles: true }));
         /* Get row id from tr id: proc-row-{fid}-{id} */
         var rowId = parseInt((targetRow.id || '').split('-').pop(), 10);

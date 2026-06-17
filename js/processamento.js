@@ -2335,8 +2335,24 @@
       var lines = text.split('\n').map(function(l) { return l.replace(/\r/g, '').trim(); });
       if (lines[lines.length - 1] === '') lines.pop();
 
-      /* Only handle multi-line paste */
-      if (lines.length <= 1) return;
+      /* Single-line paste into a number input: normalize decimal separator and apply */
+      if (lines.length === 1) {
+        if (input.type === 'number') {
+          e.preventDefault();
+          var normalized = lines[0].replace(/\s/g, '').replace(',', '.');
+          var num = parseFloat(normalized);
+          if (!isNaN(num)) {
+            input.value = num;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            var tr0 = input.closest('tr');
+            if (tr0) {
+              var rowId0 = parseInt((tr0.id || '').split('-').pop(), 10);
+              if (!isNaN(rowId0)) procRecalcRow(fid, rowId0);
+            }
+          }
+        }
+        return;
+      }
 
       e.preventDefault();
 

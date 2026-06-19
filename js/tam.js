@@ -1878,7 +1878,20 @@
         // Use only the portion of this reference that belongs to THIS box's invoice,
         // so a reference shared across invoices is not fully credited to a single one.
         var invEntry = c.invoices.find(function(iv){ return iv.invIdx === targetBox.invIdx; });
-        var amount   = invEntry ? invEntry.pieces : (c.invoices.length === 1 ? c.totalPieces : 0);
+        var owed     = invEntry ? invEntry.pieces : (c.invoices.length === 1 ? c.totalPieces : 0);
+        if (!owed) return;
+        // Cap to what is still UNDISTRIBUTED for this reference: el botón rápido debe
+        // rellenar sólo las piezas restantes, nunca el total de la factura otra vez.
+        // Se restan las piezas ya colocadas en las demás cajas (incluidas las cajas
+        // bloqueadas/validadas). La caja destino se sobrescribe en
+        // tamDistribToBoxesFiltered, por eso su contenido actual se excluye de la suma.
+        var distributedElsewhere = 0;
+        tamSession.boxes.forEach(function(b, idx){
+          if (idx === bi) return;
+          var cell = b.refs[ref];
+          if (cell) distributedElsewhere += (cell.f || 0) + (cell.p || 0);
+        });
+        var amount = Math.max(0, Math.min(owed, c.totalPieces - distributedElsewhere));
         if (!amount) return;
         if (mode === 'funchal') {
           tamDistribToBoxesFiltered(ref, amount, amount, 0, boxList);

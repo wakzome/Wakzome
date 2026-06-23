@@ -3585,9 +3585,9 @@
         // Domingos 2026 — muestra descontados/total para trazabilidad
         var tdDom = document.createElement('td');
         if(nDomingos2026Total > 0) {
-          var domTxt = nDomingos2026Descontados+'d · -'+_fmtEur(totalDomingos2026);
-          if(nDomingos2026Descontados < nDomingos2026Total) {
-            domTxt += ' ('+nDomingos2026Total+'↓'+nDomingos2026Descontados+')';
+          var domTxt = nDescontar+'d · -'+_fmtEur(totalDomingos2026);
+          if(nDescontar < nDomingos2026Total) {
+            domTxt += ' ('+nDomingos2026Total+'↓'+nDescontar+')';
           }
           tdDom.textContent = domTxt;
         } else {

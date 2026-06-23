@@ -3526,17 +3526,49 @@
                  r.data <= moTo;
         }).reduce(function(s,r){ return s + (parseFloat(r.montante)||0); }, 0);
 
-        // Domingos 2026 de este mes (hasta lojaLastDay)
+        // ── Auditoría justa de domingos por tienda y mes ──
+        // Solo se descuenta un domingo de 2026 si en 2025 esta tienda NO tuvo
+        // un domingo comparable en posición ordinal equivalente dentro del mes.
+        // Regla: domingo de 2026 en posición ordinal N → se descuenta si 2025
+        // tuvo MENOS de N domingos con venta>0 en ese mismo mes.
+        // Esto maneja correctamente tiendas irregulares (abrieron tarde, saltaron
+        // semanas, cerraron antes) de forma automática sin configuración manual.
+
+        // Domingos de 2026 de este mes, ordenados cronológicamente
         var domingos2026 = lojaRows.filter(function(r){
           return r.data.substring(0,4) === String(currentYear) &&
                  parseInt(r.data.substring(5,7)) === mo &&
                  r.data <= moTo &&
                  _strToDate(r.data).getDay() === 0;
-        });
-        var totalDomingos2026 = domingos2026.reduce(function(s,r){ return s + (parseFloat(r.montante)||0); }, 0);
-        var nDomingos2026 = domingos2026.length;
+        }).sort(function(a,b){ return a.data < b.data ? -1 : 1; });
 
-        // 2026 ajustado: quitar domingos y ventas nocturnas
+        // Domingos de 2025 de este mes con venta real (>0) para esta tienda, ordenados
+        var domingos2025ConVenta = lojaRows.filter(function(r){
+          return r.data.substring(0,4) === '2025' &&
+                 parseInt(r.data.substring(5,7)) === mo &&
+                 _strToDate(r.data).getDay() === 0 &&
+                 (parseFloat(r.montante)||0) > 0;
+        }).sort(function(a,b){ return a.data < b.data ? -1 : 1; });
+        var nDomingos2025 = domingos2025ConVenta.length;
+
+        // Para cada domingo de 2026 en posición ordinal i (base-0):
+        // - Si 2025 ya tenía un domingo en posición i → comparación justa → NO descontar
+        // - Si 2025 no tenía domingo en posición i → diferencia operacional → descontar
+        var totalDomingos2026 = 0;
+        var nDomingos2026Descontados = 0;
+        var nDomingos2026Total = domingos2026.length;
+        domingos2026.forEach(function(r, idx){
+          var val = parseFloat(r.montante) || 0;
+          if(idx >= nDomingos2025) {
+            // 2025 no tuvo este domingo Nº (idx+1) en este mes → descontar
+            totalDomingos2026 += val;
+            nDomingos2026Descontados++;
+          }
+          // Si idx < nDomingos2025 → 2025 ya tenía domingo equivalente → no descontar
+        });
+        var nDomingos2026 = nDomingos2026Descontados;
+
+        // 2026 ajustado: quitar solo domingos sin par en 2025 y ventas nocturnas
         var total2026Ajust = total2026 - totalDomingos2026 - nocturnoVal;
 
         var hasDatos = total2025 > 0 || total2026 > 0;
@@ -3567,9 +3599,17 @@
         td25.style.setProperty('color','#333333','important');
         tr.appendChild(td25);
 
-        // Domingos 2026
+        // Domingos 2026 — muestra descontados/total para trazabilidad
         var tdDom = document.createElement('td');
-        tdDom.textContent = nDomingos2026 > 0 ? nDomingos2026+'d · -'+_fmtEur(totalDomingos2026) : '—';
+        if(nDomingos2026Total > 0) {
+          var domTxt = nDomingos2026Descontados+'d · -'+_fmtEur(totalDomingos2026);
+          if(nDomingos2026Descontados < nDomingos2026Total) {
+            domTxt += ' ('+nDomingos2026Total+'↓'+nDomingos2026Descontados+')';
+          }
+          tdDom.textContent = domTxt;
+        } else {
+          tdDom.textContent = '—';
+        }
         tdDom.setAttribute('style','padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:right;white-space:nowrap;font-size:.7rem;');
         tdDom.style.setProperty('background',bg,'important');
         tdDom.style.setProperty('color','#a03020','important');
@@ -3679,11 +3719,21 @@
             return r.data.substring(0,4)===String(currentYear) &&
                    parseInt(r.data.substring(5,7))===m && r.data<=pmoTo;
           }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-          var pDom = lojaRows.filter(function(r){
+          var pDomingos2026 = lojaRows.filter(function(r){
             return r.data.substring(0,4)===String(currentYear) &&
                    parseInt(r.data.substring(5,7))===m && r.data<=pmoTo &&
                    _strToDate(r.data).getDay()===0;
-          }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
+          }).sort(function(a,b){ return a.data < b.data ? -1 : 1; });
+          var pDomingos2025n = lojaRows.filter(function(r){
+            return r.data.substring(0,4)==='2025' &&
+                   parseInt(r.data.substring(5,7))===m &&
+                   _strToDate(r.data).getDay()===0 &&
+                   (parseFloat(r.montante)||0)>0;
+          }).length;
+          var pDom = 0;
+          pDomingos2026.forEach(function(r,idx){
+            if(idx >= pDomingos2025n) pDom += (parseFloat(r.montante)||0);
+          });
           var pNoct = parseFloat(_premiosNocturno[loja+':'+pmoStr])||0;
           var pDiff = (p2025>0||p2026>0) ? (p2026-pDom-pNoct-p2025) : null;
           premiosMesesActivos.push({mo:m, diff:pDiff});

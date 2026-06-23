@@ -3538,27 +3538,31 @@
                  r.data <= moTo;
         }).reduce(function(s,r){ return s + (parseFloat(r.montante)||0); }, 0);
 
-        // ── Auditoría de domingos: alineación por fin de mes ──
-        // Regla operativa: 2025 abrió los N ULTIMOS domingos del mes. En 2026 se
-        // protegen (no se descuentan) los N ultimos domingos del CALENDARIO del mes;
-        // todos los demas domingos de 2026 se descuentan.
-        // N = nº de domingos distintos que esta tienda abrió (venta>0) en ese mes de 2025.
+        // ── Auditoría de domingos: emparejamiento posicional desde el FIN del mes ──
+        // Cada domingo de 2026 se empareja con el domingo de 2025 que ocupa su misma
+        // posición contando desde el ULTIMO domingo del mes hacia atras (ultimo<->ultimo,
+        // penultimo<->penultimo, ...). Se descuenta el domingo de 2026 SOLO si su par
+        // de 2025 estuvo cerrado (venta 0) o no existe.
+        // Esto maneja correctamente tiendas irregulares: si 2025 abrio el penultimo
+        // domingo pero NO el ultimo, se protege exactamente el domingo de 2026 que cae
+        // en esa misma posicion desde el final, no el ultimo del mes.
 
-        // N = domingos abiertos por esta tienda en ese mes de 2025
-        var nDomingos2025 = lojaRows.filter(function(r){
-          return r.data.substring(0,4) === '2025' &&
-                 parseInt(r.data.substring(5,7)) === mo &&
-                 _strToDate(r.data).getDay() === 0 &&
-                 (parseFloat(r.montante)||0) > 0;
-        }).length;
+        // Domingos de 2025 del calendario del mes, con su venta real, ordenados ASC
+        var domsCal2025 = _domingosCalendarioMes(2025, mo);
+        var venta2025PorDom = {};
+        lojaRows.forEach(function(r){
+          if(r.data.substring(0,4)==='2025' && parseInt(r.data.substring(5,7))===mo &&
+             _strToDate(r.data).getDay()===0){
+            venta2025PorDom[r.data] = parseFloat(r.montante)||0;
+          }
+        });
+        // Flag abierto/cerrado por posición desde el final (índice 0 = último domingo)
+        var abierto2025DesdeFinal = [];
+        for(var k2025 = domsCal2025.length - 1; k2025 >= 0; k2025--){
+          abierto2025DesdeFinal.push((venta2025PorDom[domsCal2025[k2025]]||0) > 0);
+        }
 
-        // Los N ultimos domingos del calendario del mes en 2026 → protegidos
-        var domsCalMes = _domingosCalendarioMes(currentYear, mo);
-        var domsProtegidos = nDomingos2025 > 0
-          ? domsCalMes.slice(domsCalMes.length - nDomingos2025)
-          : [];
-
-        // Domingos de 2026 cargados de esta tienda (hasta moTo), ordenados
+        // Domingos de 2026 cargados de esta tienda (hasta moTo), ordenados ASC
         var domingos2026 = lojaRows.filter(function(r){
           return r.data.substring(0,4) === String(currentYear) &&
                  parseInt(r.data.substring(5,7)) === mo &&
@@ -3567,11 +3571,19 @@
         }).sort(function(a,b){ return a.data < b.data ? -1 : 1; });
         var nDomingos2026Total = domingos2026.length;
 
-        // Descontar todos los domingos de 2026 que NO esten protegidos
+        // Todos los domingos del calendario 2026 (para conocer la posición desde el final)
+        var domsCal2026 = _domingosCalendarioMes(currentYear, mo);
+
+        // Para cada domingo cargado de 2026: calcular su posición desde el final del mes
+        // y descontarlo si el par de 2025 en esa misma posición estuvo cerrado/ausente.
         var totalDomingos2026 = 0;
         var nDescontar = 0;
         domingos2026.forEach(function(r){
-          if(domsProtegidos.indexOf(r.data) < 0){
+          var posDesdeFinal = (domsCal2026.length - 1) - domsCal2026.indexOf(r.data);
+          var parAbierto = (posDesdeFinal < abierto2025DesdeFinal.length)
+            ? abierto2025DesdeFinal[posDesdeFinal]
+            : false; // 2025 no tenia domingo en esa posicion → sin par → descontar
+          if(!parAbierto){
             totalDomingos2026 += parseFloat(r.montante) || 0;
             nDescontar++;
           }
@@ -3729,16 +3741,20 @@
             return r.data.substring(0,4)===String(currentYear) &&
                    parseInt(r.data.substring(5,7))===m && r.data<=pmoTo;
           }).reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-          var pDom2025n = lojaRows.filter(function(r){
-            return r.data.substring(0,4)==='2025' &&
-                   parseInt(r.data.substring(5,7))===m &&
-                   _strToDate(r.data).getDay()===0 &&
-                   (parseFloat(r.montante)||0)>0;
-          }).length;
-          var pDomsCalMes = _domingosCalendarioMes(currentYear, m);
-          var pDomsProtegidos = pDom2025n > 0
-            ? pDomsCalMes.slice(pDomsCalMes.length - pDom2025n)
-            : [];
+          // Emparejamiento posicional desde el fin del mes (idéntico al de la tabla)
+          var pDomsCal2025 = _domingosCalendarioMes(2025, m);
+          var pVenta2025PorDom = {};
+          lojaRows.forEach(function(r){
+            if(r.data.substring(0,4)==='2025' && parseInt(r.data.substring(5,7))===m &&
+               _strToDate(r.data).getDay()===0){
+              pVenta2025PorDom[r.data] = parseFloat(r.montante)||0;
+            }
+          });
+          var pAbierto2025DesdeFinal = [];
+          for(var pk=pDomsCal2025.length-1; pk>=0; pk--){
+            pAbierto2025DesdeFinal.push((pVenta2025PorDom[pDomsCal2025[pk]]||0) > 0);
+          }
+          var pDomsCal2026 = _domingosCalendarioMes(currentYear, m);
           var pDomingos2026 = lojaRows.filter(function(r){
             return r.data.substring(0,4)===String(currentYear) &&
                    parseInt(r.data.substring(5,7))===m && r.data<=pmoTo &&
@@ -3746,7 +3762,9 @@
           }).sort(function(a,b){ return a.data < b.data ? -1 : 1; });
           var pDom = 0;
           pDomingos2026.forEach(function(r){
-            if(pDomsProtegidos.indexOf(r.data) < 0) pDom += parseFloat(r.montante)||0;
+            var pPos = (pDomsCal2026.length-1) - pDomsCal2026.indexOf(r.data);
+            var pPar = (pPos < pAbierto2025DesdeFinal.length) ? pAbierto2025DesdeFinal[pPos] : false;
+            if(!pPar) pDom += parseFloat(r.montante)||0;
           });
           var pNoct = parseFloat(_premiosNocturno[loja+':'+pmoStr])||0;
           var pDiff = (p2025>0||p2026>0) ? (p2026-pDom-pNoct-p2025) : null;

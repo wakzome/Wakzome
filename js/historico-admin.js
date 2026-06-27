@@ -437,9 +437,10 @@
       if(isQBtn){
         var qEndDates={'hadm-btn-q1':'03-31','hadm-btn-q2':'06-30','hadm-btn-q3':'09-30','hadm-btn-q4':'12-31'};
         var qEndStr=tD.getFullYear()+'-'+qEndDates[_activePeriodBtn];
-        // Si el trimestre ya terminó → usar fin del trimestre exacto
-        // Si el trimestre está en curso → usar lastDay (último día con datos)
-        toVal=qEndStr<lastDay?qEndStr:lastDay;
+        // Si el trimestre aún no empezó → ventana completa hacia adelante (fin del trimestre)
+        // Si ya terminó → fin del trimestre exacto · si está en curso → lastDay (último día con datos)
+        if(fromVal>lastDay) toVal=qEndStr;
+        else                toVal=qEndStr<lastDay?qEndStr:lastDay;
       }
       
       f={from:fromVal, to:toVal};

@@ -391,11 +391,15 @@
       '.pf-pvp-td-ref:hover{background:#e8e8e8;}',
       '.pf-pvp-td-ref.copied-dark{background:#333;color:#fff!important;}',
       '.pf-pvp-td-ref.copied-light{background:#ddd;color:#000!important;}',
+      '.pf-pvp-td-ref.pf-pvp-done{border:1px solid #111!important;}',
+      '.pf-pvp-td-ref.pf-pvp-done::after{content:" \\2713";font-size:.72em;font-weight:700;color:#111;}',
       /* PVP in admin: read-only clickable span */
       '.pf-pvp-val{display:inline-block;min-width:52px;text-align:right;cursor:pointer;border-radius:3px;padding:1px 4px;transition:background .12s,color .12s;font-variant-numeric:tabular-nums;}',
       '.pf-pvp-val:hover{background:#e8e8e8;}',
       '.pf-pvp-val.copied-dark{background:#333;color:#fff!important;}',
       '.pf-pvp-val.copied-light{background:#ddd;color:#000!important;}',
+      '.pf-pvp-val.pf-pvp-done{border:1px solid #111!important;}',
+      '.pf-pvp-val.pf-pvp-done::after{content:" \\2713";font-size:.72em;font-weight:700;color:#111;}',
       /* Obs asterisk */
       '.pf-pvp-obs-star{font-size:.9rem;color:#555;cursor:default;}',
       '.pf-pvp-obs-empty{color:#ddd;font-size:.8rem;}',
@@ -1894,6 +1898,7 @@
       if (!el || !text) return;
       var cls = text.length > 4 ? 'copied-light' : 'copied-dark';
       el.classList.add(cls);
+      el.classList.add('pf-pvp-done');
       setTimeout(function(){ el.classList.remove(cls); }, 700);
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(function(){});

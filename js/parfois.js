@@ -1468,8 +1468,27 @@
       });
     });
 
+    // Visual grouping only: unify every EAN that shares the same ref
+    // into a single card so they can be copied together, without
+    // altering the underlying per-code correctness (pfDedupe/eanMap)
+    // or the flat pendingRecords list used for the Supabase save.
+    var displayMap   = {};
+    var displayOrder = [];
+    newItems.forEach(function(it) {
+      var g = displayMap[it.ref];
+      if (!g) {
+        g = { ref: it.ref, desc: it.desc, eans: [] };
+        displayMap[it.ref] = g;
+        displayOrder.push(g);
+      }
+      it.eans.forEach(function(ean) {
+        if (g.eans.indexOf(ean) === -1) g.eans.push(ean);
+      });
+      if (it.desc && it.desc.length > (g.desc || '').length) g.desc = it.desc;
+    });
+
     // Build grouped HTML
-    body.innerHTML = newItems.map(function(it) {
+    body.innerHTML = displayOrder.map(function(it) {
       var eansJoined = it.eans.join('|');
       var eanBtns = it.eans.map(function(ean) {
         return '<span class="pf-bc-code" data-eans="' + eansJoined + '">' + esc(ean) + '</span>';

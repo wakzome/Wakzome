@@ -539,11 +539,60 @@
 
   var SKIP_ROW = /^(Barata|BARATA|Contribuinte|Rua|www\.|INVOICE|Pág\.|Total Qtd|TOTAL EUR|Subtotal|Desconto|Frete|Seguro|Total IVA|Nº total|Peso|Volume|Local de|Lugar de|Processado|ATCUD:|Em caso|Data:|Hora:|Matric|Cliente|WAK|WAKZOME|Morada|PORTUGAL|Porto Santo|Rua Dr|FT\s+\d{4}\/|% IVA|Incidência|Valor IVA|23,00\s+\d|Obs\.\:|O Gestor|Nuno|Caixa\s|Código|artigo|Descrição|Composição|País|Cód\.|Preço|Desc\.|Pronto Pag|Air|CIF|ORIGINAL)/i;
 
-  /* ── Deduplication (shared) ── */
+  /* ── Wrapped article-code reconstruction ──
+     Long article codes (e.g. "245766_DB37") can overflow the narrow
+     CODE column and wrap onto a second line inside the same cell,
+     splitting into two text fragments (e.g. "245766_DB3" + "7").
+     isArticleCode() has no end-anchor by design (it only detects the
+     START of a code), so the truncated first fragment already passes
+     as a "valid" code on its own — silently dropping the final
+     character and colliding with any other code sharing the same
+     truncated prefix (e.g. "245766_DB37" vs "245766_DB39" both
+     truncate to "245766_DB3").
+     This reconstructs the full code by looking, within the same tight
+     Y window already used for EAN fragment merging (±10), for a short
+     trailing fragment that is NOT itself a valid article code (so a
+     real next-row code is never absorbed) and appending it. */
+  function pfMergeWrappedCodes(allItems) {
+    var codeItems = allItems
+      .filter(function (it) { return it.x >= 15 && it.x <= 45; })
+      .filter(function (it) { return !isBoxCode(it.str) && !SKIP_ROW.test(it.str); })
+      .slice()
+      .sort(function (a, b) { return a.y - b.y; });
+
+    var consumed = {};
+    var merged = [];
+    for (var i = 0; i < codeItems.length; i++) {
+      if (consumed[i]) continue;
+      var cur = codeItems[i];
+      if (!isArticleCode(cur.str)) continue;
+      var fullCode = cur.str;
+      for (var j = i + 1; j < codeItems.length; j++) {
+        if (consumed[j]) continue;
+        var dy = codeItems[j].y - cur.y;
+        if (dy > 10) break;
+        if (dy <= 0) continue;
+        var frag = codeItems[j].str;
+        if (/^[A-Z0-9]{1,3}$/.test(frag) && !isArticleCode(frag)) {
+          fullCode += frag;
+          consumed[j] = true;
+          break;
+        }
+      }
+      merged.push({ x: cur.x, y: cur.y, str: fullCode });
+    }
+    return merged;
+  }
+
+  /* ── Deduplication (shared) ──
+     Groups by the full reconstructed article code (not just the
+     leading digits) so that distinct SKUs sharing the same numeric
+     ref but different suffixes (e.g. "245766_DB37" vs "245766_DB39")
+     are never merged into a single row/EAN set. */
   function pfDedupe(items) {
     var refMap = {};
     items.forEach(function(item) {
-      var key = item.ref;
+      var key = item.code;
       if (!refMap[key]) {
         refMap[key] = { ref: item.ref, desc: item.desc, eans: [],
                         totalQty: 0, totalPrice: 0, sumUnit: 0 };
@@ -589,8 +638,9 @@
      Uses article codes as Y-anchors, assigns other columns with
      per-column Y tolerances. Composition column (x≈260) ignored.
   ══════════════════════════════════════════════════════════════ */
-  function pfEngineA(allItems, meta, eanMap) {
+  function pfEngineA(allItems, meta, eanMap, codeAnchors) {
     eanMap = eanMap || {};
+    codeAnchors = codeAnchors || pfMergeWrappedCodes(allItems);
 
     // Column type by X coordinate
     function colType(x) {
@@ -608,19 +658,14 @@
       return 'UNKNOWN';
     }
 
-    // Pass 1 — identify article anchors (CODE column, skipping headers/boxes)
-    var anchors = [];
-    allItems.forEach(function(item) {
-      if (colType(item.x) !== 'CODE') return;
-      var s = item.str;
-      if (isBoxCode(s) || SKIP_ROW.test(s)) return;
-      if (!isArticleCode(s)) return;
-      anchors.push({
-        y: item.y, code: s,
+    // Pass 1 — identify article anchors (already reconstructed, wrap-safe)
+    var anchors = codeAnchors.map(function(item) {
+      return {
+        y: item.y, code: item.str,
         eanParts: [], descParts: [],
         pautal: '', country: '', qty: null,
         unitPrice: null, total: null
-      });
+      };
     });
 
     anchors.sort(function(a, b) { return a.y - b.y; });
@@ -720,8 +765,9 @@
      Same anchor strategy as A but uses tighter EAN tolerance (±8)
      and requires pautal to confirm desc column assignment.
   ══════════════════════════════════════════════════════════════ */
-  function pfEngineB(allItems, meta, eanMap) {
+  function pfEngineB(allItems, meta, eanMap, codeAnchors) {
     eanMap = eanMap || {};
+    codeAnchors = codeAnchors || pfMergeWrappedCodes(allItems);
 
     function colTypeB(x) {
       if (x >= 15  && x <= 45)  return 'CODE';
@@ -738,13 +784,10 @@
       return 'UNKNOWN';
     }
 
-    // Pass 1 — anchors
-    var anchors = [];
-    allItems.forEach(function(item) {
-      if (colTypeB(item.x) !== 'CODE') return;
-      if (isBoxCode(item.str) || SKIP_ROW.test(item.str) || !isArticleCode(item.str)) return;
-      anchors.push({ y: item.y, code: item.str, eanParts: [], descParts: [],
-                     pautal: '', country: '', qty: null, unitPrice: null, total: null });
+    // Pass 1 — anchors (already reconstructed, wrap-safe)
+    var anchors = codeAnchors.map(function(item) {
+      return { y: item.y, code: item.str, eanParts: [], descParts: [],
+               pautal: '', country: '', qty: null, unitPrice: null, total: null };
     });
     anchors.sort(function(a, b) { return a.y - b.y; });
 
@@ -814,8 +857,9 @@
      Differentiator: uses ±6 for non-EAN columns (catches more
      items when article rows are further from their fields).
   ══════════════════════════════════════════════════════════════ */
-  function pfEngineC(allItems, meta, eanMap) {
+  function pfEngineC(allItems, meta, eanMap, codeAnchors) {
     eanMap = eanMap || {};
+    codeAnchors = codeAnchors || pfMergeWrappedCodes(allItems);
 
     function colTypeC(x) {
       if (x >= 15  && x <= 45)  return 'CODE';
@@ -832,13 +876,10 @@
       return 'UNKNOWN';
     }
 
-    // Pass 1 — anchors
-    var anchors = [];
-    allItems.forEach(function(item) {
-      if (colTypeC(item.x) !== 'CODE') return;
-      if (isBoxCode(item.str) || SKIP_ROW.test(item.str) || !isArticleCode(item.str)) return;
-      anchors.push({ y: item.y, code: item.str, eanParts: [], descParts: [],
-                     pautal: '', country: '', qty: null, unitPrice: null, total: null });
+    // Pass 1 — anchors (already reconstructed, wrap-safe)
+    var anchors = codeAnchors.map(function(item) {
+      return { y: item.y, code: item.str, eanParts: [], descParts: [],
+               pautal: '', country: '', qty: null, unitPrice: null, total: null };
     });
     anchors.sort(function(a, b) { return a.y - b.y; });
 
@@ -982,11 +1023,11 @@
      In Parfois PDFs the EAN fragments appear at x~82.7, in rows BEFORE
      or AROUND the article row. We scan all items and reconstruct 13-digit
      EANs, then attach them to the nearest article code by Y proximity. */
-  function pfBuildEanMap(allItems) {
+  function pfBuildEanMap(allItems, codeAnchors) {
     var eanMap = {};
     // Collect EAN-column items (x=82.7 column)
     var eanItems = allItems.filter(function(i){ return i.x >= 70 && i.x < 135; });
-    var artItems = allItems.filter(function(i){ return isArticleCode(i.str); });
+    var artItems = codeAnchors || pfMergeWrappedCodes(allItems);
 
     // Reconstruct all EAN13s from fragments, sorted by Y
     var eansSorted = eanItems.slice().sort(function(a,b){ return a.y - b.y; });
@@ -1027,11 +1068,12 @@
   }
 
   function pfParseAll(allItems, fileName) {
-    var meta   = pfExtractMeta(allItems, fileName);
-    var eanMap = pfBuildEanMap(allItems);
-    var resA = pfEngineA(allItems, meta, eanMap);
-    var resB = pfEngineB(allItems, meta, eanMap);
-    var resC = pfEngineC(allItems, meta, eanMap);
+    var meta        = pfExtractMeta(allItems, fileName);
+    var codeAnchors = pfMergeWrappedCodes(allItems);
+    var eanMap      = pfBuildEanMap(allItems, codeAnchors);
+    var resA = pfEngineA(allItems, meta, eanMap, codeAnchors);
+    var resB = pfEngineB(allItems, meta, eanMap, codeAnchors);
+    var resC = pfEngineC(allItems, meta, eanMap, codeAnchors);
 
     var agree    = pfEnginesAgree(resA, resB, resC);
     var autoEng  = pfPickEngine(resA, resB, resC);

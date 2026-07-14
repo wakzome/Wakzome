@@ -5,10 +5,11 @@
 // ══════════════════════════════════════════════════════════════
 (function () {
 
-  var RATE      = 10; // euros por hora / por visita
-  var TABLE      = 'nadiya_horas';
-  var TABLE_COMPRAS = 'nadiya_compras';
-  var LANG_KEY   = 'nadiya_lang';
+  var DEFAULT_RATE  = 10; // fallback se ainda não houver nenhuma tarifa gravada
+  var TABLE          = 'nadiya_horas';
+  var TABLE_COMPRAS  = 'nadiya_compras';
+  var TABLE_TARIFAS  = 'nadiya_tarifas';
+  var LANG_KEY        = 'nadiya_lang';
 
   var CASA_DISPLAY = { manuel: 'Manuel', duarte: 'Duarte' };
   var LOCALE_MAP   = { pt: 'pt-PT', uk: 'uk-UA' };
@@ -41,7 +42,7 @@
       badgeOpen: 'em curso',
       tipoTrabalho: 'Trabalho',
       tipoVisita: 'Visita',
-      footnote1: 'Tarifa: 10,00 €/hora.',
+      footnote1: 'Tarifa atual: {rate}/hora.',
       ipLabel: 'IP',
       ipUnavailable: '—',
       invalidTimeOrder: 'A entrada não pode ser depois da saída.',
@@ -61,7 +62,14 @@
       comprasItemRequired: '⚠ Indica o que comprou.',
       comprasValorRequired: '⚠ Indica um valor válido.',
       comprasSaveError: '⚠ Erro ao guardar compra: {msg}',
-      comprasDeleteError: '⚠ Erro ao eliminar: {msg}'
+      comprasDeleteError: '⚠ Erro ao eliminar: {msg}',
+      tarifaModalTitle: 'Alterar tarifa',
+      tarifaValorLabel: 'Novo valor por hora',
+      tarifaHint: 'Aplica-se só a partir de agora — os registos anteriores mantêm a tarifa antiga.',
+      tarifaSave: 'Guardar',
+      tarifaCancel: 'Cancelar',
+      tarifaValorRequired: '⚠ Indica um valor válido.',
+      tarifaSaveError: '⚠ Erro ao guardar: {msg}'
     },
     uk: {
       eyebrow: 'Облік годин',
@@ -90,7 +98,7 @@
       badgeOpen: 'триває',
       tipoTrabalho: 'Робота',
       tipoVisita: 'Візит',
-      footnote1: 'Тариф: 10,00 €/година.',
+      footnote1: 'Поточний тариф: {rate}/годину.',
       ipLabel: 'IP',
       ipUnavailable: '—',
       invalidTimeOrder: 'Початок не може бути пізніше за кінець.',
@@ -110,15 +118,23 @@
       comprasItemRequired: '⚠ Вкажіть, що ви купили.',
       comprasValorRequired: '⚠ Вкажіть коректну суму.',
       comprasSaveError: '⚠ Помилка збереження покупки: {msg}',
-      comprasDeleteError: '⚠ Помилка видалення: {msg}'
+      comprasDeleteError: '⚠ Помилка видалення: {msg}',
+      tarifaModalTitle: 'Змінити тариф',
+      tarifaValorLabel: 'Нова сума за годину',
+      tarifaHint: 'Діє лише з цього моменту — попередні записи зберігають старий тариф.',
+      tarifaSave: 'Зберегти',
+      tarifaCancel: 'Скасувати',
+      tarifaValorRequired: '⚠ Вкажіть коректну суму.',
+      tarifaSaveError: '⚠ Помилка збереження: {msg}'
     }
   };
 
   // ── Estado ──
-  var _nRecords       = [];
-  var _nCompras       = [];
-  var _nLang          = _loadLang();
-  var _nSelectedCasa  = null;
+  var _nRecords        = [];
+  var _nCompras        = [];
+  var _nTarifas        = [];
+  var _nLang           = _loadLang();
+  var _nSelectedCasa   = null;
   var _nVisitaChoosing = false;
   var _nTransientStatus = null;
   var _nEditMode       = false;
@@ -126,8 +142,9 @@
   var _nMonthIndex     = 0;
   var _nBusy           = false; // bloqueia ações durante chamadas à BD
   var _nComprasBusy    = false; // bloqueia o modal de compras durante chamadas à BD
+  var _nTarifaBusy     = false; // bloqueia o modal de tarifa durante chamadas à BD
   var _nBuilt          = false; // DOM do overlay já construído
-  var _nLoadError       = null;
+  var _nLoadError      = null;
 
   function _loadLang() {
     try {
@@ -219,6 +236,20 @@
       .catch(function () { return null; });
   }
 
+  // ── Tarifa vigente em cada momento (histórico, nunca retroativo) ──
+  // _nTarifas está ordenado ascendentemente por vigente_desde.
+  function _rateFor(iso) {
+    var applicable = DEFAULT_RATE;
+    for (var i = 0; i < _nTarifas.length; i++) {
+      if (_nTarifas[i].vigente_desde <= iso) applicable = parseFloat(_nTarifas[i].valor);
+      else break;
+    }
+    return applicable;
+  }
+  function _currentRate() {
+    return _rateFor(_toLocalIso(new Date()));
+  }
+
   // ══════════════════════════════════════════════════════════════
   //  ESTILOS (injetados uma única vez — nunca em index.html)
   // ══════════════════════════════════════════════════════════════
@@ -294,8 +325,8 @@
       '.nad-compra-valor{font-size:.82rem;font-weight:700;white-space:nowrap;}' +
       '.nad-compra-del{width:26px;height:26px;border-radius:50%;border:1px solid #ddd;background:#fff;color:#999;font-size:.78rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s,border-color .2s;}' +
       '.nad-compra-del:hover{background:#c03000 !important;color:#fff !important;border-color:#c03000 !important;}' +
-      '#nadiya-compras-modal{display:none;position:fixed;inset:0;z-index:240;align-items:center;justify-content:center;padding:20px;}' +
-      '#nadiya-compras-modal.open{display:flex;}' +
+      '#nadiya-compras-modal,#nadiya-tarifa-modal{display:none;position:fixed;inset:0;z-index:240;align-items:center;justify-content:center;padding:20px;}' +
+      '#nadiya-compras-modal.open,#nadiya-tarifa-modal.open{display:flex;}' +
       '.nad-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);}' +
       '.nad-modal-box{position:relative;background:#fff;border-radius:18px;padding:22px 20px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.25);}' +
       '.nad-modal-title{font-size:.92rem;font-weight:700;margin:0 0 16px;text-align:center;}' +
@@ -303,6 +334,7 @@
       '.nad-modal-field label{font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;color:#888;}' +
       '.nad-modal-input{padding:10px 12px;font-size:.9rem;font-weight:600;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:10px;outline:none;background:#fff;color:#000;width:100%;box-sizing:border-box;transition:border-color .2s;}' +
       '.nad-modal-input:focus{border-color:#555;}' +
+      '.nad-modal-hint{font-size:.7rem;color:#888;text-align:center;line-height:1.4;margin:-4px 0 14px;}' +
       '.nad-modal-error{font-size:.76rem;color:#c03000;text-align:center;min-height:16px;margin-bottom:8px;}' +
       '.nad-modal-actions{display:flex;gap:10px;margin-top:6px;}' +
       '.nad-modal-btn{flex:1;padding:10px 14px;font-size:.82rem;font-weight:700;font-family:"MontserratLight",sans-serif;border-radius:10px;cursor:pointer;transition:background .2s,opacity .2s;}' +
@@ -332,7 +364,7 @@
       '.nad-day-card-euros{font-weight:700;}' +
       '.nad-badge{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:20px;background:#fbeee0;color:#a5691f;}' +
       '.nad-empty-state{text-align:center;color:#888;font-size:.8rem;padding:24px 16px;line-height:1.5;}' +
-      '.nad-footnote{margin-top:16px;font-size:.7rem;color:#999;text-align:center;line-height:1.5;}' +
+      '.nad-footnote{margin-top:16px;font-size:.7rem;color:#999;text-align:center;line-height:1.5;-webkit-tap-highlight-color:transparent;user-select:none;}' +
       '.nad-cat-icons{font-size:12px;line-height:1;}' +
       '.nad-day-card-ip{font-size:.65rem;color:#aaa;letter-spacing:.02em;}' +
       '.nad-edit-check{color:#2a8a2a;font-weight:700;font-size:11px;margin:0 2px;}' +
@@ -444,6 +476,22 @@
             '<button class="nad-modal-btn nad-modal-btn-save" id="nadiya-compras-save"></button>' +
           '</div>' +
         '</div>' +
+      '</div>' +
+      '<div id="nadiya-tarifa-modal">' +
+        '<div class="nad-modal-backdrop" id="nadiya-tarifa-backdrop"></div>' +
+        '<div class="nad-modal-box">' +
+          '<p class="nad-modal-title" id="nadiya-tarifa-modal-title">Alterar tarifa</p>' +
+          '<div class="nad-modal-field">' +
+            '<label for="nadiya-tarifa-valor" id="nadiya-tarifa-valor-label">Novo valor por hora</label>' +
+            '<input type="number" id="nadiya-tarifa-valor" class="nad-modal-input" min="0.01" step="0.01" placeholder="0,00">' +
+          '</div>' +
+          '<p class="nad-modal-hint" id="nadiya-tarifa-hint"></p>' +
+          '<div class="nad-modal-error" id="nadiya-tarifa-modal-error"></div>' +
+          '<div class="nad-modal-actions">' +
+            '<button class="nad-modal-btn nad-modal-btn-cancel" id="nadiya-tarifa-cancel"></button>' +
+            '<button class="nad-modal-btn nad-modal-btn-save" id="nadiya-tarifa-save"></button>' +
+          '</div>' +
+        '</div>' +
       '</div>';
     document.body.appendChild(overlay);
     _wireEvents();
@@ -492,14 +540,17 @@
 
     Promise.all([
       sbAdmin.from(TABLE).select('*').order('entrada', { ascending: true }),
-      sbAdmin.from(TABLE_COMPRAS).select('*').order('fecha', { ascending: true })
+      sbAdmin.from(TABLE_COMPRAS).select('*').order('fecha', { ascending: true }),
+      sbAdmin.from(TABLE_TARIFAS).select('*').order('vigente_desde', { ascending: true })
     ])
       .then(function (results) {
-        var resRecords = results[0], resCompras = results[1];
+        var resRecords = results[0], resCompras = results[1], resTarifas = results[2];
         if (resRecords.error) { _nLoadError = resRecords.error.message; render(); return; }
         if (resCompras.error) { _nLoadError = resCompras.error.message; render(); return; }
+        if (resTarifas.error) { _nLoadError = resTarifas.error.message; render(); return; }
         _nRecords = resRecords.data || [];
         _nCompras = resCompras.data || [];
+        _nTarifas = resTarifas.data || [];
         _nMonths = _allMonthKeys();
         _nMonthIndex = _nMonths.length - 1;
         render();
@@ -732,6 +783,59 @@
   }
 
   // ══════════════════════════════════════════════════════════════
+  //  TARIFA (histórico — só se aplica a partir de agora)
+  // ══════════════════════════════════════════════════════════════
+  function _openTarifaModal() {
+    var modal = document.getElementById('nadiya-tarifa-modal');
+    document.getElementById('nadiya-tarifa-valor').value = '';
+    document.getElementById('nadiya-tarifa-modal-error').textContent = '';
+    modal.classList.add('open');
+    setTimeout(function () { document.getElementById('nadiya-tarifa-valor').focus(); }, 50);
+  }
+
+  function _closeTarifaModal() {
+    if (_nTarifaBusy) return;
+    document.getElementById('nadiya-tarifa-modal').classList.remove('open');
+  }
+
+  function _saveTarifa() {
+    if (_nTarifaBusy) return;
+    if (typeof sbAdmin === 'undefined' || !sbAdmin) {
+      document.getElementById('nadiya-tarifa-modal-error').textContent = 'sem ligação à base de dados';
+      return;
+    }
+    var valorInput = document.getElementById('nadiya-tarifa-valor');
+    var errEl = document.getElementById('nadiya-tarifa-modal-error');
+    var valor = parseFloat(valorInput.value);
+
+    if (!(valor > 0) || isNaN(valor)) { errEl.textContent = t('tarifaValorRequired'); valorInput.focus(); return; }
+
+    errEl.textContent = '';
+    _nTarifaBusy = true;
+    document.getElementById('nadiya-tarifa-save').disabled = true;
+    document.getElementById('nadiya-tarifa-cancel').disabled = true;
+
+    var rec = { valor: valor, vigente_desde: _toLocalIso(new Date()) };
+    sbAdmin.from(TABLE_TARIFAS).insert(rec).select().single()
+      .then(function (res) {
+        _nTarifaBusy = false;
+        document.getElementById('nadiya-tarifa-save').disabled = false;
+        document.getElementById('nadiya-tarifa-cancel').disabled = false;
+        if (res.error) { errEl.textContent = t('tarifaSaveError', { msg: res.error.message }); return; }
+        _nTarifas.push(res.data);
+        _nTarifas.sort(function (a, b) { return a.vigente_desde < b.vigente_desde ? -1 : 1; });
+        document.getElementById('nadiya-tarifa-modal').classList.remove('open');
+        render();
+      })
+      .catch(function (err) {
+        _nTarifaBusy = false;
+        document.getElementById('nadiya-tarifa-save').disabled = false;
+        document.getElementById('nadiya-tarifa-cancel').disabled = false;
+        errEl.textContent = t('tarifaSaveError', { msg: err.message || String(err) });
+      });
+  }
+
+  // ══════════════════════════════════════════════════════════════
   //  RENDER
   // ══════════════════════════════════════════════════════════════
   function render() {
@@ -744,7 +848,7 @@
     document.getElementById('nadiya-stat-euros-label').textContent = t('statEurosLabel');
     document.getElementById('nadiya-per-house-label').textContent = t('perHouseLabel');
     document.getElementById('nadiya-ledger-head').textContent = t('ledgerHead');
-    document.getElementById('nadiya-footnote').textContent = t('footnote1');
+    document.getElementById('nadiya-footnote').textContent = t('footnote1', { rate: _fmtEuros(_currentRate()) });
     document.getElementById('nadiya-overlay-back').textContent = t('exitLabel');
     document.getElementById('nadiya-compras-btn-label').textContent = t('comprasBtnLabel');
     document.getElementById('nadiya-compras-head').textContent = t('comprasSectionLabel');
@@ -753,6 +857,11 @@
     document.getElementById('nadiya-compras-valor-label').textContent = t('comprasValorLabel');
     document.getElementById('nadiya-compras-save').textContent = t('comprasSave');
     document.getElementById('nadiya-compras-cancel').textContent = t('comprasCancel');
+    document.getElementById('nadiya-tarifa-modal-title').textContent = t('tarifaModalTitle');
+    document.getElementById('nadiya-tarifa-valor-label').textContent = t('tarifaValorLabel');
+    document.getElementById('nadiya-tarifa-hint').textContent = t('tarifaHint');
+    document.getElementById('nadiya-tarifa-save').textContent = t('tarifaSave');
+    document.getElementById('nadiya-tarifa-cancel').textContent = t('tarifaCancel');
     document.getElementById('nadiya-prev-month').setAttribute('aria-label', t('monthPrevAria'));
     document.getElementById('nadiya-next-month').setAttribute('aria-label', t('monthNextAria'));
     document.getElementById('nadiya-lang-pt').classList.toggle('selected', _nLang === 'pt');
@@ -797,13 +906,14 @@
         var timeInput = function (field, value) {
           return '<input type="time" class="nad-time-edit" data-id="' + r.id + '" data-field="' + field + '" value="' + value + '">';
         };
+        var rate = _rateFor(r.entrada);
 
         var timesHtml, moneyHtml;
         if (r.tipo === 'visita') {
           timesHtml = _nEditMode
             ? timeInput('entrada', _fmtTime(r.entrada)) + check('entrada')
             : _fmtTime(r.entrada) + check('entrada');
-          moneyHtml = '<span class="nad-day-card-euros">' + _fmtEuros(RATE) + '</span>';
+          moneyHtml = '<span class="nad-day-card-euros">' + _fmtEuros(rate) + '</span>';
         } else if (r.salida) {
           var h = _hoursBetween(r.entrada, r.salida);
           timesHtml = _nEditMode
@@ -811,7 +921,7 @@
             : _fmtTime(r.entrada) + check('entrada') + ' → ' + _fmtTime(r.salida) + check('salida');
           moneyHtml =
             '<span class="nad-day-card-hours">' + _fmtHours(h) + '</span>' +
-            '<span class="nad-day-card-euros">' + _fmtEuros(h * RATE) + '</span>';
+            '<span class="nad-day-card-euros">' + _fmtEuros(h * rate) + '</span>';
         } else {
           timesHtml = _nEditMode
             ? timeInput('entrada', _fmtTime(r.entrada)) + check('entrada') + ' → <span class="nad-badge">' + t('badgeOpen') + '</span>'
@@ -865,21 +975,23 @@
     }
     var totalCompras = monthCompras.reduce(function (sum, c) { return sum + (parseFloat(c.valor) || 0); }, 0);
 
-    // Totais
+    // Totais — cada registo usa a tarifa vigente no momento da SUA entrada
     var closedWork = monthRecords.filter(function (r) { return r.tipo === 'trabalho' && r.salida; });
-    var visitCount = monthRecords.filter(function (r) { return r.tipo === 'visita'; }).length;
+    var visitas = monthRecords.filter(function (r) { return r.tipo === 'visita'; });
     var totalHours = closedWork.reduce(function (sum, r) { return sum + _hoursBetween(r.entrada, r.salida); }, 0);
-    var totalEuros = (totalHours * RATE) + (visitCount * RATE) + totalCompras;
+    var workEuros = closedWork.reduce(function (sum, r) { return sum + _hoursBetween(r.entrada, r.salida) * _rateFor(r.entrada); }, 0);
+    var visitEuros = visitas.reduce(function (sum, r) { return sum + _rateFor(r.entrada); }, 0);
+    var totalEuros = workEuros + visitEuros + totalCompras;
     document.getElementById('nadiya-stat-horas').textContent = _fmtHours(totalHours);
     document.getElementById('nadiya-stat-euros').textContent = _fmtEuros(totalEuros);
 
     var perHouse = { manuel: { hours: 0, euros: 0 }, duarte: { hours: 0, euros: 0 } };
     closedWork.forEach(function (r) {
       var h = _hoursBetween(r.entrada, r.salida);
-      if (perHouse[r.casa]) { perHouse[r.casa].hours += h; perHouse[r.casa].euros += h * RATE; }
+      if (perHouse[r.casa]) { perHouse[r.casa].hours += h; perHouse[r.casa].euros += h * _rateFor(r.entrada); }
     });
-    monthRecords.filter(function (r) { return r.tipo === 'visita'; }).forEach(function (r) {
-      if (perHouse[r.casa]) perHouse[r.casa].euros += RATE;
+    visitas.forEach(function (r) {
+      if (perHouse[r.casa]) perHouse[r.casa].euros += _rateFor(r.entrada);
     });
     document.getElementById('nadiya-house-manuel-horas').textContent = _fmtHours(perHouse.manuel.hours) + ' ' + t('horasWord');
     document.getElementById('nadiya-house-manuel-euros').textContent = _fmtEuros(perHouse.manuel.euros);
@@ -968,6 +1080,30 @@
       var delBtn = e.target.closest('.nad-compra-del');
       if (!delBtn) return;
       _deleteCompra(delBtn.dataset.id);
+    });
+
+    document.getElementById('nadiya-tarifa-cancel').addEventListener('click', _closeTarifaModal);
+    document.getElementById('nadiya-tarifa-backdrop').addEventListener('click', _closeTarifaModal);
+    document.getElementById('nadiya-tarifa-save').addEventListener('click', _saveTarifa);
+    document.getElementById('nadiya-tarifa-valor').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') _saveTarifa();
+    });
+
+    // Gesto oculto: 7 toques na nota do rodapé para alterar a tarifa
+    var TARIFA_TAPS = 7;
+    var TARIFA_WINDOW_MS = 1400;
+    var _tarifaClickState = { count: 0, timer: null };
+    document.getElementById('nadiya-footnote').addEventListener('click', function () {
+      clearTimeout(_tarifaClickState.timer);
+      _tarifaClickState.count++;
+      if (_tarifaClickState.count >= TARIFA_TAPS) {
+        _tarifaClickState = { count: 0, timer: null };
+        _openTarifaModal();
+        return;
+      }
+      _tarifaClickState.timer = setTimeout(function () {
+        _tarifaClickState = { count: 0, timer: null };
+      }, TARIFA_WINDOW_MS);
     });
 
     document.getElementById('nadiya-ledger-body').addEventListener('click', function (e) {

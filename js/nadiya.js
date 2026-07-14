@@ -7,6 +7,7 @@
 
   var RATE      = 10; // euros por hora / por visita
   var TABLE      = 'nadiya_horas';
+  var TABLE_COMPRAS = 'nadiya_compras';
   var LANG_KEY   = 'nadiya_lang';
 
   var CASA_DISPLAY = { manuel: 'Manuel', duarte: 'Duarte' };
@@ -47,7 +48,20 @@
       editModeOn: 'Modo de edição ativo — toca na bolha para sair.',
       loadError: '⚠ Erro ao carregar registos: {msg}',
       saveError: '⚠ Erro ao guardar: {msg}',
-      exitLabel: 'sair'
+      exitLabel: 'sair',
+      comprasBtnLabel: 'Compras',
+      comprasSectionLabel: 'Compras deste mês',
+      comprasModalTitle: 'Nova compra',
+      comprasItemLabel: 'O que comprou',
+      comprasValorLabel: 'Valor',
+      comprasSave: 'Guardar',
+      comprasCancel: 'Cancelar',
+      comprasEmpty: 'Sem compras este mês.',
+      comprasDeleteConfirm: 'Eliminar esta compra?',
+      comprasItemRequired: '⚠ Indica o que comprou.',
+      comprasValorRequired: '⚠ Indica um valor válido.',
+      comprasSaveError: '⚠ Erro ao guardar compra: {msg}',
+      comprasDeleteError: '⚠ Erro ao eliminar: {msg}'
     },
     uk: {
       eyebrow: 'Облік годин',
@@ -83,12 +97,26 @@
       editModeOn: 'Режим редагування активний — натисни на бульбашку, щоб вийти.',
       loadError: '⚠ Помилка завантаження: {msg}',
       saveError: '⚠ Помилка збереження: {msg}',
-      exitLabel: 'вийти'
+      exitLabel: 'вийти',
+      comprasBtnLabel: 'Покупки',
+      comprasSectionLabel: 'Покупки цього місяця',
+      comprasModalTitle: 'Нова покупка',
+      comprasItemLabel: 'Що купили',
+      comprasValorLabel: 'Сума',
+      comprasSave: 'Зберегти',
+      comprasCancel: 'Скасувати',
+      comprasEmpty: 'Цього місяця немає покупок.',
+      comprasDeleteConfirm: 'Видалити цю покупку?',
+      comprasItemRequired: '⚠ Вкажіть, що ви купили.',
+      comprasValorRequired: '⚠ Вкажіть коректну суму.',
+      comprasSaveError: '⚠ Помилка збереження покупки: {msg}',
+      comprasDeleteError: '⚠ Помилка видалення: {msg}'
     }
   };
 
   // ── Estado ──
   var _nRecords       = [];
+  var _nCompras       = [];
   var _nLang          = _loadLang();
   var _nSelectedCasa  = null;
   var _nVisitaChoosing = false;
@@ -97,6 +125,7 @@
   var _nMonths         = [];
   var _nMonthIndex     = 0;
   var _nBusy           = false; // bloqueia ações durante chamadas à BD
+  var _nComprasBusy    = false; // bloqueia o modal de compras durante chamadas à BD
   var _nBuilt          = false; // DOM do overlay já construído
   var _nLoadError       = null;
 
@@ -126,9 +155,15 @@
       'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
   }
   function _monthKeyOf(iso) { return iso.slice(0, 7); }
+  function _todayStr() {
+    var d = new Date();
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
   function _allMonthKeys() {
     var set = {};
     _nRecords.forEach(function (r) { set[_monthKeyOf(r.entrada)] = true; });
+    _nCompras.forEach(function (c) { set[_monthKeyOf(c.fecha)] = true; });
     var now = new Date();
     set[now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')] = true;
     return Object.keys(set).sort();
@@ -149,6 +184,14 @@
   function _fmtDate(iso) {
     var d = new Date(iso);
     return d.getDate() + ' ' + I18N[_nLang].dayNames[d.getDay()];
+  }
+  function _fmtDateShort(fechaStr) {
+    var parts = fechaStr.split('-');
+    if (parts.length !== 3) return fechaStr;
+    return parts[2] + '/' + parts[1];
+  }
+  function _escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function _catIconsFor(casa) {
     return casa === 'manuel' ? '\u{1F408}‍⬛\u{1F408}‍⬛' : '\u{1F408}\u{1F406}';
@@ -227,6 +270,8 @@
       '.nad-visita-choice{display:flex;align-items:stretch;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap;}' +
       '.nad-visita-choice .nad-house-btn{flex:1 1 45%;min-width:100px;}' +
       '.nad-visita-cancel{flex:1 1 100%;background:none;border:none;color:#888;text-decoration:underline;cursor:pointer;padding:8px;font-family:"MontserratLight",sans-serif;font-size:.78rem;}' +
+      '.nad-compras-btn{width:100%;min-height:42px;border:1px solid #ddd;background:#fff;border-radius:12px;padding:10px 16px;margin-top:8px;font-family:"MontserratLight",sans-serif;font-weight:600;font-size:.82rem;cursor:pointer;color:#000;transition:border-color .2s,background .2s;}' +
+      '.nad-compras-btn:hover{border-color:#555;background:#f5f5f5;}' +
       '.nad-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 20px;}' +
       '.nad-stat{background:#fff;border:1.5px solid #e6e6e6;border-radius:14px;padding:16px 18px;}' +
       '.nad-stat-label{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:#888;font-weight:bold;margin:0 0 6px;}' +
@@ -238,6 +283,35 @@
       '.nad-house-stat-row span:first-child{font-size:.82rem;}' +
       '.nad-house-stat-row span:last-child{font-size:.72rem;opacity:.85;}' +
       '.nad-edit-mode-banner{font-size:.72rem;color:#a5691f;background:#fbeee0;border-radius:10px;padding:9px 14px;text-align:center;margin:0 0 14px;font-weight:600;}' +
+      '.nad-compras{background:#fff;border:1.5px solid #e6e6e6;border-radius:16px;overflow:hidden;margin:0 0 20px;}' +
+      '.nad-compras-head{padding:14px 18px 10px;border-bottom:1px solid #e6e6e6;font-weight:700;font-size:.9rem;}' +
+      '.nad-compras-list{display:flex;flex-direction:column;}' +
+      '.nad-compra-row{padding:11px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;}' +
+      '.nad-compras-list .nad-compra-row:last-child{border-bottom:none;}' +
+      '.nad-compra-item{font-size:.82rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+      '.nad-compra-date{font-size:.68rem;color:#999;display:block;font-weight:500;margin-top:2px;}' +
+      '.nad-compra-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}' +
+      '.nad-compra-valor{font-size:.82rem;font-weight:700;white-space:nowrap;}' +
+      '.nad-compra-del{width:26px;height:26px;border-radius:50%;border:1px solid #ddd;background:#fff;color:#999;font-size:.78rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s,border-color .2s;}' +
+      '.nad-compra-del:hover{background:#c03000 !important;color:#fff !important;border-color:#c03000 !important;}' +
+      '#nadiya-compras-modal{display:none;position:fixed;inset:0;z-index:240;align-items:center;justify-content:center;padding:20px;}' +
+      '#nadiya-compras-modal.open{display:flex;}' +
+      '.nad-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);}' +
+      '.nad-modal-box{position:relative;background:#fff;border-radius:18px;padding:22px 20px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.25);}' +
+      '.nad-modal-title{font-size:.92rem;font-weight:700;margin:0 0 16px;text-align:center;}' +
+      '.nad-modal-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}' +
+      '.nad-modal-field label{font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;color:#888;}' +
+      '.nad-modal-input{padding:10px 12px;font-size:.9rem;font-weight:600;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:10px;outline:none;background:#fff;color:#000;width:100%;box-sizing:border-box;transition:border-color .2s;}' +
+      '.nad-modal-input:focus{border-color:#555;}' +
+      '.nad-modal-error{font-size:.76rem;color:#c03000;text-align:center;min-height:16px;margin-bottom:8px;}' +
+      '.nad-modal-actions{display:flex;gap:10px;margin-top:6px;}' +
+      '.nad-modal-btn{flex:1;padding:10px 14px;font-size:.82rem;font-weight:700;font-family:"MontserratLight",sans-serif;border-radius:10px;cursor:pointer;transition:background .2s,opacity .2s;}' +
+      '.nad-modal-btn-cancel{background:#fff;border:1.5px solid #ddd;color:#000;}' +
+      '.nad-modal-btn-cancel:hover{background:#f5f5f5;}' +
+      '.nad-modal-btn-save{background:#000 !important;color:#fff !important;border:1.5px solid #000;}' +
+      '.nad-modal-btn-save,.nad-modal-btn-save *{color:#fff !important;}' +
+      '.nad-modal-btn-save:hover{background:#333 !important;}' +
+      '.nad-modal-btn:disabled{opacity:.5;cursor:default;}' +
       '.nad-ledger{background:#fff;border:1.5px solid #e6e6e6;border-radius:16px;overflow:hidden;}' +
       '.nad-ledger-head{padding:14px 18px 10px;border-bottom:1px solid #e6e6e6;font-weight:700;font-size:.9rem;}' +
       '.nad-day-list{display:flex;flex-direction:column;}' +
@@ -316,6 +390,7 @@
                 '<button class="nad-visita-cancel" id="nadiya-visita-cancel">Cancelar</button>' +
               '</div>' +
             '</div>' +
+            '<button class="nad-compras-btn" id="nadiya-compras-btn">🛒 <span id="nadiya-compras-btn-label">Compras</span></button>' +
           '</div>' +
           '<div class="nad-stats">' +
             '<div class="nad-stat">' +
@@ -338,6 +413,10 @@
               '<div class="nad-house-stat-row"><span id="nadiya-house-duarte-horas">0:00</span><span id="nadiya-house-duarte-euros">0,00 €</span></div>' +
             '</div>' +
           '</div>' +
+          '<div class="nad-compras">' +
+            '<div class="nad-compras-head" id="nadiya-compras-head">Compras deste mês</div>' +
+            '<div class="nad-compras-list" id="nadiya-compras-body"></div>' +
+          '</div>' +
           '<p class="nad-edit-mode-banner" id="nadiya-edit-banner" style="display:none;"></p>' +
           '<div class="nad-ledger">' +
             '<div class="nad-ledger-head" id="nadiya-ledger-head">Dias do mês</div>' +
@@ -346,7 +425,26 @@
           '<p class="nad-footnote" id="nadiya-footnote"></p>' +
         '</div>' +
       '</div>' +
-      '<button id="nadiya-edit-bubble" aria-label="edit"></button>';
+      '<button id="nadiya-edit-bubble" aria-label="edit"></button>' +
+      '<div id="nadiya-compras-modal">' +
+        '<div class="nad-modal-backdrop" id="nadiya-compras-backdrop"></div>' +
+        '<div class="nad-modal-box">' +
+          '<p class="nad-modal-title" id="nadiya-compras-modal-title">Nova compra</p>' +
+          '<div class="nad-modal-field">' +
+            '<label for="nadiya-compras-item" id="nadiya-compras-item-label">O que comprou</label>' +
+            '<input type="text" id="nadiya-compras-item" class="nad-modal-input" autocomplete="off">' +
+          '</div>' +
+          '<div class="nad-modal-field">' +
+            '<label for="nadiya-compras-valor" id="nadiya-compras-valor-label">Valor</label>' +
+            '<input type="number" id="nadiya-compras-valor" class="nad-modal-input" min="0" step="0.01" placeholder="0,00">' +
+          '</div>' +
+          '<div class="nad-modal-error" id="nadiya-compras-modal-error"></div>' +
+          '<div class="nad-modal-actions">' +
+            '<button class="nad-modal-btn nad-modal-btn-cancel" id="nadiya-compras-cancel"></button>' +
+            '<button class="nad-modal-btn nad-modal-btn-save" id="nadiya-compras-save"></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
     document.body.appendChild(overlay);
     _wireEvents();
   }
@@ -392,13 +490,16 @@
       return;
     }
 
-    sbAdmin
-      .from(TABLE)
-      .select('*')
-      .order('entrada', { ascending: true })
-      .then(function (res) {
-        if (res.error) { _nLoadError = res.error.message; render(); return; }
-        _nRecords = res.data || [];
+    Promise.all([
+      sbAdmin.from(TABLE).select('*').order('entrada', { ascending: true }),
+      sbAdmin.from(TABLE_COMPRAS).select('*').order('fecha', { ascending: true })
+    ])
+      .then(function (results) {
+        var resRecords = results[0], resCompras = results[1];
+        if (resRecords.error) { _nLoadError = resRecords.error.message; render(); return; }
+        if (resCompras.error) { _nLoadError = resCompras.error.message; render(); return; }
+        _nRecords = resRecords.data || [];
+        _nCompras = resCompras.data || [];
         _nMonths = _allMonthKeys();
         _nMonthIndex = _nMonths.length - 1;
         render();
@@ -560,6 +661,77 @@
   }
 
   // ══════════════════════════════════════════════════════════════
+  //  COMPRAS
+  // ══════════════════════════════════════════════════════════════
+  function _openComprasModal() {
+    var modal = document.getElementById('nadiya-compras-modal');
+    document.getElementById('nadiya-compras-item').value = '';
+    document.getElementById('nadiya-compras-valor').value = '';
+    document.getElementById('nadiya-compras-modal-error').textContent = '';
+    modal.classList.add('open');
+    setTimeout(function () { document.getElementById('nadiya-compras-item').focus(); }, 50);
+  }
+
+  function _closeComprasModal() {
+    if (_nComprasBusy) return;
+    document.getElementById('nadiya-compras-modal').classList.remove('open');
+  }
+
+  function _saveCompra() {
+    if (_nComprasBusy) return;
+    if (typeof sbAdmin === 'undefined' || !sbAdmin) {
+      document.getElementById('nadiya-compras-modal-error').textContent = 'sem ligação à base de dados';
+      return;
+    }
+    var itemInput = document.getElementById('nadiya-compras-item');
+    var valorInput = document.getElementById('nadiya-compras-valor');
+    var errEl = document.getElementById('nadiya-compras-modal-error');
+    var item = itemInput.value.trim();
+    var valor = parseFloat(valorInput.value);
+
+    if (!item) { errEl.textContent = t('comprasItemRequired'); itemInput.focus(); return; }
+    if (!(valor >= 0) || isNaN(valor)) { errEl.textContent = t('comprasValorRequired'); valorInput.focus(); return; }
+
+    errEl.textContent = '';
+    _nComprasBusy = true;
+    document.getElementById('nadiya-compras-save').disabled = true;
+    document.getElementById('nadiya-compras-cancel').disabled = true;
+
+    var rec = { fecha: _todayStr(), item: item, valor: valor };
+    sbAdmin.from(TABLE_COMPRAS).insert(rec).select().single()
+      .then(function (res) {
+        _nComprasBusy = false;
+        document.getElementById('nadiya-compras-save').disabled = false;
+        document.getElementById('nadiya-compras-cancel').disabled = false;
+        if (res.error) { errEl.textContent = t('comprasSaveError', { msg: res.error.message }); return; }
+        _nCompras.push(res.data);
+        _nMonths = _allMonthKeys();
+        var mk = _monthKeyOf(res.data.fecha), idx = _nMonths.indexOf(mk);
+        if (idx !== -1) _nMonthIndex = idx;
+        document.getElementById('nadiya-compras-modal').classList.remove('open');
+        render();
+      })
+      .catch(function (err) {
+        _nComprasBusy = false;
+        document.getElementById('nadiya-compras-save').disabled = false;
+        document.getElementById('nadiya-compras-cancel').disabled = false;
+        errEl.textContent = t('comprasSaveError', { msg: err.message || String(err) });
+      });
+  }
+
+  function _deleteCompra(id) {
+    if (!confirm(t('comprasDeleteConfirm'))) return;
+    if (typeof sbAdmin === 'undefined' || !sbAdmin) { _flashError('sem ligação à base de dados'); return; }
+    sbAdmin.from(TABLE_COMPRAS).delete().eq('id', id)
+      .then(function (res) {
+        if (res.error) { _flashError(t('comprasDeleteError', { msg: res.error.message })); return; }
+        _nCompras = _nCompras.filter(function (c) { return c.id !== id; });
+        render();
+      })
+      .catch(function (err) { _flashError(t('comprasDeleteError', { msg: err.message || String(err) })); });
+  }
+
+  // ══════════════════════════════════════════════════════════════
   //  RENDER
   // ══════════════════════════════════════════════════════════════
   function render() {
@@ -574,6 +746,13 @@
     document.getElementById('nadiya-ledger-head').textContent = t('ledgerHead');
     document.getElementById('nadiya-footnote').textContent = t('footnote1');
     document.getElementById('nadiya-overlay-back').textContent = t('exitLabel');
+    document.getElementById('nadiya-compras-btn-label').textContent = t('comprasBtnLabel');
+    document.getElementById('nadiya-compras-head').textContent = t('comprasSectionLabel');
+    document.getElementById('nadiya-compras-modal-title').textContent = t('comprasModalTitle');
+    document.getElementById('nadiya-compras-item-label').textContent = t('comprasItemLabel');
+    document.getElementById('nadiya-compras-valor-label').textContent = t('comprasValorLabel');
+    document.getElementById('nadiya-compras-save').textContent = t('comprasSave');
+    document.getElementById('nadiya-compras-cancel').textContent = t('comprasCancel');
     document.getElementById('nadiya-prev-month').setAttribute('aria-label', t('monthPrevAria'));
     document.getElementById('nadiya-next-month').setAttribute('aria-label', t('monthNextAria'));
     document.getElementById('nadiya-lang-pt').classList.toggle('selected', _nLang === 'pt');
@@ -599,6 +778,10 @@
     var monthRecords = _nRecords
       .filter(function (r) { return _monthKeyOf(r.entrada) === monthKey; })
       .sort(function (a, b) { return a.entrada.localeCompare(b.entrada); });
+
+    var monthCompras = _nCompras
+      .filter(function (c) { return _monthKeyOf(c.fecha) === monthKey; })
+      .sort(function (a, b) { return b.fecha.localeCompare(a.fecha); });
 
     // Ledger
     var body = document.getElementById('nadiya-ledger-body');
@@ -660,11 +843,33 @@
       });
     }
 
+    // Compras
+    var comprasBody = document.getElementById('nadiya-compras-body');
+    comprasBody.innerHTML = '';
+    if (monthCompras.length === 0) {
+      comprasBody.innerHTML = '<div class="nad-empty-state">' + t('comprasEmpty') + '</div>';
+    } else {
+      monthCompras.forEach(function (c) {
+        var row = document.createElement('div');
+        row.className = 'nad-compra-row';
+        row.innerHTML =
+          '<span class="nad-compra-item">' + _escapeHtml(c.item) +
+            '<span class="nad-compra-date">' + _fmtDateShort(c.fecha) + '</span>' +
+          '</span>' +
+          '<span class="nad-compra-right">' +
+            '<span class="nad-compra-valor">' + _fmtEuros(parseFloat(c.valor) || 0) + '</span>' +
+            '<button class="nad-compra-del" data-id="' + c.id + '" title="eliminar">×</button>' +
+          '</span>';
+        comprasBody.appendChild(row);
+      });
+    }
+    var totalCompras = monthCompras.reduce(function (sum, c) { return sum + (parseFloat(c.valor) || 0); }, 0);
+
     // Totais
     var closedWork = monthRecords.filter(function (r) { return r.tipo === 'trabalho' && r.salida; });
     var visitCount = monthRecords.filter(function (r) { return r.tipo === 'visita'; }).length;
     var totalHours = closedWork.reduce(function (sum, r) { return sum + _hoursBetween(r.entrada, r.salida); }, 0);
-    var totalEuros = (totalHours * RATE) + (visitCount * RATE);
+    var totalEuros = (totalHours * RATE) + (visitCount * RATE) + totalCompras;
     document.getElementById('nadiya-stat-horas').textContent = _fmtHours(totalHours);
     document.getElementById('nadiya-stat-euros').textContent = _fmtEuros(totalEuros);
 
@@ -748,6 +953,22 @@
     });
     document.getElementById('nadiya-visita-manuel').addEventListener('click', function () { _registerVisita('manuel'); });
     document.getElementById('nadiya-visita-duarte').addEventListener('click', function () { _registerVisita('duarte'); });
+
+    document.getElementById('nadiya-compras-btn').addEventListener('click', _openComprasModal);
+    document.getElementById('nadiya-compras-cancel').addEventListener('click', _closeComprasModal);
+    document.getElementById('nadiya-compras-backdrop').addEventListener('click', _closeComprasModal);
+    document.getElementById('nadiya-compras-save').addEventListener('click', _saveCompra);
+    document.getElementById('nadiya-compras-valor').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') _saveCompra();
+    });
+    document.getElementById('nadiya-compras-item').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('nadiya-compras-valor').focus(); }
+    });
+    document.getElementById('nadiya-compras-body').addEventListener('click', function (e) {
+      var delBtn = e.target.closest('.nad-compra-del');
+      if (!delBtn) return;
+      _deleteCompra(delBtn.dataset.id);
+    });
 
     document.getElementById('nadiya-ledger-body').addEventListener('click', function (e) {
       var tagEl = e.target.closest('.nad-tag-casa');

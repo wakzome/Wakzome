@@ -369,7 +369,7 @@
       '.nad-day-card-ip{font-size:.65rem;color:#aaa;letter-spacing:.02em;}' +
       '.nad-edit-check{color:#2a8a2a;font-weight:700;font-size:11px;margin:0 2px;}' +
       '.nad-time-edit{font-size:.76rem;border:1px solid #ccc;border-radius:6px;padding:2px 4px;background:#fff;color:#000;width:76px;font-family:"MontserratLight",sans-serif;}' +
-      '#nadiya-edit-bubble{position:fixed !important;right:16px;bottom:16px;width:44px;height:44px;border-radius:50%;border:none;background:#000 !important;color:#fff !important;font-size:18px;line-height:44px;text-align:center;padding:0;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:2147483000;pointer-events:auto;}' +
+      '#nadiya-edit-bubble{position:fixed !important;left:16px;bottom:16px;width:44px;height:44px;border-radius:50%;border:none;background:#000 !important;color:#fff !important;font-size:18px;line-height:44px;text-align:center;padding:0;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:2147483000;pointer-events:auto;}' +
       '#nadiya-edit-bubble.active{background:#a5691f !important;color:#fff !important;}' +
       '@media(max-width:340px){.nad-stats{grid-template-columns:1fr;}}';
     document.head.appendChild(s);

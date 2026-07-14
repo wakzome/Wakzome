@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+// Import estático só para forçar o bundler da Vercel a incluir o worker no
+// deploy — pdfjs-dist carrega-o com um require relativo em runtime que o
+// bundler não segue se não houver nenhuma referência estática a ele.
+import 'pdfjs-dist/legacy/build/pdf.worker.js';
 
 const BUCKET = 'recibos';
 

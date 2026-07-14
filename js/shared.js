@@ -83,7 +83,7 @@
           'js/admin-horarios.js','js/ferias.js','js/editor-pdf.js',
           'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
           'js/ventas-empleada.js','js/ventas-admin.js',
-          'js/historico-admin.js','js/predictivo.js','js/parfois.js'
+          'js/historico-admin.js','js/parfois.js'
         ];
         return scripts.reduce(function(p, src) {
           return p.then(function() {
@@ -139,15 +139,6 @@
             });
           });
         }
-
-      } else if (data.rol === 'predictivo') {
-        // ── LOGIN PREDICTIVO ──
-        sweepThen(function() {
-          document.getElementById('login-screen').style.display = 'none';
-          showGreeting('predictivo', function() {
-            if (typeof openPreditivoOverlay === 'function') openPreditivoOverlay();
-          });
-        });
 
       } else {
         // ── LOGIN TIENDA ──

@@ -247,7 +247,7 @@ export default async function handler(req, res) {
   const credito = dados.totalAReceber + dados.segurancaSocial;
 
   // ── 5. Resposta: apenas os valores calculados, nunca senha/pdf/texto cru ──
-  return res.json({
+  const payload = {
     mes,
     encontrado: true,
     avisoMultiplasPaginas,
@@ -257,5 +257,11 @@ export default async function handler(req, res) {
     segurancaSocial: dados.segurancaSocial,
     credito,
     camposEmFalta: dados.camposEmFalta,
-  });
+  };
+  // Diagnóstico temporário: com ?debug=1 devolve também o texto normalizado
+  // extraído do pdf, para afinar os regex de parsing. Remover depois.
+  if (req.query.debug === '1') {
+    payload.textoNormalizado = normalizeText(rawText);
+  }
+  return res.json(payload);
 }

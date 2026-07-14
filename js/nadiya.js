@@ -325,7 +325,7 @@
       '.nad-compra-valor{font-size:.82rem;font-weight:700;white-space:nowrap;}' +
       '.nad-compra-del{width:26px;height:26px;border-radius:50%;border:1px solid #ddd;background:#fff;color:#999;font-size:.78rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s,border-color .2s;}' +
       '.nad-compra-del:hover{background:#c03000 !important;color:#fff !important;border-color:#c03000 !important;}' +
-      '#nadiya-compras-modal,#nadiya-tarifa-modal{display:none;position:fixed;inset:0;z-index:240;align-items:center;justify-content:center;padding:20px;}' +
+      '#nadiya-compras-modal,#nadiya-tarifa-modal{display:none;position:fixed;inset:0;z-index:2147483000;align-items:center;justify-content:center;padding:20px;}' +
       '#nadiya-compras-modal.open,#nadiya-tarifa-modal.open{display:flex;}' +
       '.nad-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);}' +
       '.nad-modal-box{position:relative;background:#fff;border-radius:18px;padding:22px 20px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.25);}' +
@@ -369,7 +369,7 @@
       '.nad-day-card-ip{font-size:.65rem;color:#aaa;letter-spacing:.02em;}' +
       '.nad-edit-check{color:#2a8a2a;font-weight:700;font-size:11px;margin:0 2px;}' +
       '.nad-time-edit{font-size:.76rem;border:1px solid #ccc;border-radius:6px;padding:2px 4px;background:#fff;color:#000;width:76px;font-family:"MontserratLight",sans-serif;}' +
-      '#nadiya-edit-bubble{position:fixed;right:16px;bottom:16px;width:42px;height:42px;border-radius:50%;border:none;background:#000 !important;color:#fff !important;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:230;}' +
+      '#nadiya-edit-bubble{position:fixed !important;right:16px;bottom:16px;width:44px;height:44px;border-radius:50%;border:none;background:#000 !important;color:#fff !important;font-size:18px;line-height:44px;text-align:center;padding:0;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:2147483000;pointer-events:auto;}' +
       '#nadiya-edit-bubble.active{background:#a5691f !important;color:#fff !important;}' +
       '@media(max-width:340px){.nad-stats{grid-template-columns:1fr;}}';
     document.head.appendChild(s);

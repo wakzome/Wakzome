@@ -83,7 +83,7 @@
           'js/admin-horarios.js','js/ferias.js','js/editor-pdf.js',
           'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
           'js/ventas-empleada.js','js/ventas-admin.js',
-          'js/historico-admin.js','js/parfois.js'
+          'js/historico-admin.js','js/nadiya.js','js/parfois.js'
         ];
         return scripts.reduce(function(p, src) {
           return p.then(function() {
@@ -139,6 +139,15 @@
             });
           });
         }
+
+      } else if (data.rol === 'nadiya') {
+        // ── LOGIN NADIYA ──
+        sweepThen(function() {
+          document.getElementById('login-screen').style.display = 'none';
+          showGreeting(data.nombre || 'nadiya', function() {
+            if (typeof openNadiyaOverlay === 'function') openNadiyaOverlay();
+          });
+        });
 
       } else {
         // ── LOGIN TIENDA ──

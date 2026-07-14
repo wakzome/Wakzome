@@ -6,6 +6,7 @@
 (function () {
 
   var DEFAULT_RATE  = 10; // fallback se ainda não houver nenhuma tarifa gravada
+  var MAX_SHIFT_HOURS = 7; // tolerância: se esquecer de marcar saída, fecha-se sozinho a esta duração
   var TABLE          = 'nadiya_horas';
   var TABLE_COMPRAS  = 'nadiya_compras';
   var TABLE_TARIFAS  = 'nadiya_tarifas';
@@ -69,7 +70,9 @@
       tarifaSave: 'Guardar',
       tarifaCancel: 'Cancelar',
       tarifaValorRequired: '⚠ Indica um valor válido.',
-      tarifaSaveError: '⚠ Erro ao guardar: {msg}'
+      tarifaSaveError: '⚠ Erro ao guardar: {msg}',
+      autoClosedNotice: 'Um turno anterior foi fechado automaticamente por exceder 7h sem saída marcada.',
+      autoClosedTooltip: 'Fechado automaticamente (máx. 7h sem marcar saída)'
     },
     uk: {
       eyebrow: 'Облік годин',
@@ -125,7 +128,9 @@
       tarifaSave: 'Зберегти',
       tarifaCancel: 'Скасувати',
       tarifaValorRequired: '⚠ Вкажіть коректну суму.',
-      tarifaSaveError: '⚠ Помилка збереження: {msg}'
+      tarifaSaveError: '⚠ Помилка збереження: {msg}',
+      autoClosedNotice: 'Попередню зміну було закрито автоматично через перевищення 7 год без відмітки завершення.',
+      autoClosedTooltip: 'Закрито автоматично (макс. 7 год без відмітки завершення)'
     }
   };
 
@@ -368,6 +373,7 @@
       '.nad-cat-icons{font-size:12px;line-height:1;}' +
       '.nad-day-card-ip{font-size:.65rem;color:#aaa;letter-spacing:.02em;}' +
       '.nad-edit-check{color:#2a8a2a;font-weight:700;font-size:11px;margin:0 2px;}' +
+      '.nad-auto-mark{color:#999;font-size:11px;margin:0 2px;cursor:default;}' +
       '.nad-time-edit{font-size:.76rem;border:1px solid #ccc;border-radius:6px;padding:2px 4px;background:#fff;color:#000;width:76px;font-family:"MontserratLight",sans-serif;}' +
       '#nadiya-edit-bubble{position:fixed !important;left:16px;bottom:16px;width:44px;height:44px;border-radius:50%;border:none;background:#000 !important;color:#fff !important;font-size:18px;line-height:44px;text-align:center;padding:0;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:2147483000;pointer-events:auto;}' +
       '#nadiya-edit-bubble.active{background:#a5691f !important;color:#fff !important;}' +
@@ -545,12 +551,16 @@
     ])
       .then(function (results) {
         var resRecords = results[0], resCompras = results[1], resTarifas = results[2];
-        if (resRecords.error) { _nLoadError = resRecords.error.message; render(); return; }
-        if (resCompras.error) { _nLoadError = resCompras.error.message; render(); return; }
-        if (resTarifas.error) { _nLoadError = resTarifas.error.message; render(); return; }
+        if (resRecords.error) { _nLoadError = resRecords.error.message; render(); return null; }
+        if (resCompras.error) { _nLoadError = resCompras.error.message; render(); return null; }
+        if (resTarifas.error) { _nLoadError = resTarifas.error.message; render(); return null; }
         _nRecords = resRecords.data || [];
         _nCompras = resCompras.data || [];
         _nTarifas = resTarifas.data || [];
+        return _autoCloseStaleShifts();
+      })
+      .then(function (skip) {
+        if (skip === null) return; // erro já tratado e renderizado acima
         _nMonths = _allMonthKeys();
         _nMonthIndex = _nMonths.length - 1;
         render();
@@ -559,6 +569,28 @@
         _nLoadError = err && err.message ? err.message : String(err);
         render();
       });
+  }
+
+  // ── Fecha sozinho um turno aberto há mais de MAX_SHIFT_HOURS (esqueceu de marcar saída) ──
+  function _autoCloseStaleShifts() {
+    var nowIso = _toLocalIso(new Date());
+    var stale = _nRecords.filter(function (r) {
+      return r.tipo === 'trabalho' && !r.salida && _hoursBetween(r.entrada, nowIso) > MAX_SHIFT_HOURS;
+    });
+    if (stale.length === 0) return Promise.resolve();
+    if (typeof sbAdmin === 'undefined' || !sbAdmin) return Promise.resolve();
+
+    var closes = stale.map(function (r) {
+      var cappedIso = _toLocalIso(new Date(new Date(r.entrada).getTime() + MAX_SHIFT_HOURS * 3600000));
+      return sbAdmin.from(TABLE).update({ salida: cappedIso, auto_cerrado: true, updated_at: new Date().toISOString() }).eq('id', r.id).select().single()
+        .then(function (res) {
+          if (!res.error && res.data) Object.assign(r, res.data);
+        })
+        .catch(function () {});
+    });
+    return Promise.all(closes).then(function () {
+      _nTransientStatus = t('autoClosedNotice');
+    });
   }
 
   function _attachIp(rec, field) {
@@ -916,9 +948,10 @@
           moneyHtml = '<span class="nad-day-card-euros">' + _fmtEuros(rate) + '</span>';
         } else if (r.salida) {
           var h = _hoursBetween(r.entrada, r.salida);
+          var autoMark = r.auto_cerrado ? '<span class="nad-auto-mark" title="' + t('autoClosedTooltip') + '">⏱</span>' : '';
           timesHtml = _nEditMode
-            ? timeInput('entrada', _fmtTime(r.entrada)) + check('entrada') + ' → ' + timeInput('salida', _fmtTime(r.salida)) + check('salida')
-            : _fmtTime(r.entrada) + check('entrada') + ' → ' + _fmtTime(r.salida) + check('salida');
+            ? timeInput('entrada', _fmtTime(r.entrada)) + check('entrada') + ' → ' + timeInput('salida', _fmtTime(r.salida)) + check('salida') + autoMark
+            : _fmtTime(r.entrada) + check('entrada') + ' → ' + _fmtTime(r.salida) + check('salida') + autoMark;
           moneyHtml =
             '<span class="nad-day-card-hours">' + _fmtHours(h) + '</span>' +
             '<span class="nad-day-card-euros">' + _fmtEuros(h * rate) + '</span>';

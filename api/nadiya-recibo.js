@@ -137,9 +137,19 @@ function parseRecibo(rawText) {
     out.camposEmFalta.push('totalAbonos', 'totalDescontos');
   }
 
-  const mReceber = text.match(/TOTAL A RECEBER\s+([\d.,]+)/);
-  if (mReceber) out.totalAReceber = parsePT(mReceber[1]);
-  else out.camposEmFalta.push('totalAReceber');
+  // A caixa "Total Abonos / Total Descontos / Total a Receber" no rodapé é
+  // impressa como uma linha de 3 cabeçalhos seguida de uma linha com os 3
+  // valores (não "label valor" intercalado) — por isso a extração de texto
+  // linear devolve "...TOTAL A RECEBER 361,00 84,95 276,05" com os 3
+  // números juntos. O valor de "Total a Receber" é sempre o último desse
+  // grupo (alinhado com a 3ª coluna/rótulo).
+  const mReceber = text.match(/TOTAL A RECEBER\s+((?:[\d.,]+\s*)+)/);
+  if (mReceber) {
+    const nums = mReceber[1].trim().split(/\s+/).filter(Boolean);
+    out.totalAReceber = parsePT(nums[nums.length - 1]);
+  } else {
+    out.camposEmFalta.push('totalAReceber');
+  }
 
   return out;
 }

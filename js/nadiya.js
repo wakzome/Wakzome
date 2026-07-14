@@ -190,13 +190,14 @@
       '#nadiya-overlay *{box-sizing:border-box;}' +
       '#nadiya-overlay-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}' +
       '#nadiya-overlay-title{font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;cursor:pointer;}' +
-      '#nadiya-overlay-back{font-size:.78rem;font-weight:bold;font-family:"MontserratLight",sans-serif;cursor:pointer;color:#fff;background:#000;border:1.5px solid #000;padding:7px 16px;border-radius:10px;transition:background .2s,transform .15s;text-transform:lowercase;letter-spacing:.03em;}' +
+      '#nadiya-overlay-back{font-size:.78rem;font-weight:bold;font-family:"MontserratLight",sans-serif;cursor:pointer;color:#fff !important;background:#000 !important;border:1.5px solid #000;padding:7px 16px;border-radius:10px;transition:background .2s,transform .15s;text-transform:lowercase;letter-spacing:.03em;}' +
+      '#nadiya-overlay-back,#nadiya-overlay-back *{color:#fff !important;}' +
       '#nadiya-overlay-back:hover{background:#333;transform:translateY(-1px);}' +
       '#nadiya-overlay-content{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;padding:24px 16px 60px;-webkit-overflow-scrolling:touch;}' +
       '.nad-wrap{width:100%;max-width:460px;}' +
       '.nad-lang-switch{display:flex;gap:6px;justify-content:center;margin-bottom:22px;}' +
       '.nad-lang-btn{font-family:"MontserratLight",sans-serif;font-size:.72rem;font-weight:600;letter-spacing:.06em;border:1px solid #ccc;background:#fff;border-radius:20px;padding:6px 16px;cursor:pointer;color:#666;text-transform:uppercase;transition:background .2s,color .2s,border-color .2s;}' +
-      '.nad-lang-btn.selected{background:#000;color:#fff;border-color:#000;}' +
+      '.nad-lang-btn.selected{background:#000 !important;color:#fff !important;border-color:#000 !important;}' +
       '.nad-month-nav{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:24px;}' +
       '.nad-month-nav button{background:none;border:1px solid #ccc;border-radius:10px;width:38px;height:38px;flex-shrink:0;font-size:16px;color:#000;cursor:pointer;transition:border-color .2s,background .2s;}' +
       '.nad-month-nav button:hover:not(:disabled){border-color:#555;background:#f5f5f5;}' +
@@ -205,12 +206,14 @@
       '.nad-section-label{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#888;text-align:center;margin:0 0 8px;}' +
       '.nad-house-select{display:flex;gap:10px;margin-bottom:20px;}' +
       '.nad-house-btn{flex:1;min-height:44px;padding:10px;border-radius:12px;border:1.5px solid #ddd;background:#fff;font-family:"MontserratLight",sans-serif;font-weight:600;font-size:.88rem;cursor:pointer;color:#000;transition:border-color .2s,background .2s,color .2s;}' +
-      '.nad-house-btn.selected{border-color:#000;background:#000;color:#fff;}' +
+      '.nad-house-btn.selected{border-color:#000 !important;background:#000 !important;color:#fff !important;}' +
       '.nad-house-btn:disabled{opacity:.5;cursor:default;}' +
       '.nad-punch-card{background:#fff;border:1.5px solid #e6e6e6;border-radius:18px;padding:26px 18px 22px;display:flex;flex-direction:column;align-items:center;margin-bottom:22px;}' +
       '.nad-live-clock{font-size:.92rem;font-weight:600;color:#888;margin-bottom:16px;letter-spacing:.05em;}' +
-      '.nad-punch-btn{width:clamp(140px,42vw,180px);height:clamp(140px,42vw,180px);border-radius:50%;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#fff;background:#000;transition:transform .08s ease,background .2s ease;font-family:"MontserratLight",sans-serif;}' +
-      '.nad-punch-btn.active{background:#2a8a2a;}' +
+      '.nad-punch-btn{width:clamp(140px,42vw,180px);height:clamp(140px,42vw,180px);border-radius:50%;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#fff !important;background:#000 !important;transition:transform .08s ease,background .2s ease;font-family:"MontserratLight",sans-serif;}' +
+      '.nad-punch-btn,.nad-punch-btn *{color:#fff !important;}' +
+      '.nad-punch-btn.active{background:#2a8a2a !important;}' +
+      '.nad-punch-btn.active,.nad-punch-btn.active *{color:#fff !important;}' +
       '.nad-punch-btn:active{transform:scale(0.97);}' +
       '.nad-punch-btn:disabled{opacity:.55;cursor:default;}' +
       '.nad-punch-icon{font-size:clamp(22px,6vw,28px);line-height:1;}' +
@@ -246,7 +249,7 @@
       '.nad-tag{display:inline-block;font-size:.68rem;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;}' +
       '.nad-tag-tipo{background:#f0f0f0;color:#888;}' +
       '.nad-tag-casa{cursor:pointer;border-bottom:1px dashed currentColor;-webkit-tap-highlight-color:transparent;user-select:none;}' +
-      '.nad-tag-casa-manuel{background:#000;color:#fff;}' +
+      '.nad-tag-casa-manuel{background:#000 !important;color:#fff !important;}' +
       '.nad-tag-casa-duarte{background:#ddd;color:#333;}' +
       '.nad-day-card-bottom{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:.78rem;}' +
       '.nad-day-card-times{color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
@@ -260,8 +263,8 @@
       '.nad-day-card-ip{font-size:.65rem;color:#aaa;letter-spacing:.02em;}' +
       '.nad-edit-check{color:#2a8a2a;font-weight:700;font-size:11px;margin:0 2px;}' +
       '.nad-time-edit{font-size:.76rem;border:1px solid #ccc;border-radius:6px;padding:2px 4px;background:#fff;color:#000;width:76px;font-family:"MontserratLight",sans-serif;}' +
-      '#nadiya-edit-bubble{position:fixed;right:16px;bottom:16px;width:42px;height:42px;border-radius:50%;border:none;background:#000;color:#fff;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:230;}' +
-      '#nadiya-edit-bubble.active{background:#a5691f;}' +
+      '#nadiya-edit-bubble{position:fixed;right:16px;bottom:16px;width:42px;height:42px;border-radius:50%;border:none;background:#000 !important;color:#fff !important;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:230;}' +
+      '#nadiya-edit-bubble.active{background:#a5691f !important;color:#fff !important;}' +
       '@media(max-width:340px){.nad-stats{grid-template-columns:1fr;}}';
     document.head.appendChild(s);
   }

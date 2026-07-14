@@ -72,7 +72,8 @@
       tarifaValorRequired: '⚠ Indica um valor válido.',
       tarifaSaveError: '⚠ Erro ao guardar: {msg}',
       autoClosedNotice: 'Um turno anterior foi fechado automaticamente por exceder 7h sem saída marcada.',
-      autoClosedTooltip: 'Fechado automaticamente (máx. 7h sem marcar saída)'
+      autoClosedTooltip: 'Fechado automaticamente (máx. 7h sem marcar saída)',
+      saldoLabel: 'saldo'
     },
     uk: {
       eyebrow: 'Облік годин',
@@ -130,7 +131,8 @@
       tarifaValorRequired: '⚠ Вкажіть коректну суму.',
       tarifaSaveError: '⚠ Помилка збереження: {msg}',
       autoClosedNotice: 'Попередню зміну було закрито автоматично через перевищення 7 год без відмітки завершення.',
-      autoClosedTooltip: 'Закрито автоматично (макс. 7 год без відмітки завершення)'
+      autoClosedTooltip: 'Закрито автоматично (макс. 7 год без відмітки завершення)',
+      saldoLabel: 'баланс'
     }
   };
 
@@ -150,6 +152,7 @@
   var _nTarifaBusy     = false; // bloqueia o modal de tarifa durante chamadas à BD
   var _nBuilt          = false; // DOM do overlay já construído
   var _nLoadError      = null;
+  var _nRecibo         = {}; // cache por mês 'MM-YYYY': {loading, encontrado, credito, error}
 
   function _loadLang() {
     try {
@@ -255,6 +258,35 @@
     return _rateFor(_toLocalIso(new Date()));
   }
 
+  // ── Recibo mensal (endpoint server-side — nunca expõe senha nem pdf) ──
+  function _mesFromMonthKey(monthKey) {
+    var parts = monthKey.split('-'); // ['YYYY','MM']
+    return parts[1] + '-' + parts[0];
+  }
+  function _loadRecibo(mes) {
+    if (_nRecibo[mes]) return; // já carregado ou a carregar
+    _nRecibo[mes] = { loading: true };
+    fetch('/api/nadiya-recibo?mes=' + encodeURIComponent(mes), { credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (r) {
+        if (!r.ok) { _nRecibo[mes] = { loading: false, error: (r.data && r.data.error) || 'erro' }; render(); return; }
+        _nRecibo[mes] = {
+          loading: false,
+          encontrado: !!r.data.encontrado,
+          credito: parseFloat(r.data.credito) || 0
+        };
+        render();
+      })
+      .catch(function (err) {
+        _nRecibo[mes] = { loading: false, error: err && err.message ? err.message : String(err) };
+        render();
+      });
+  }
+
   // ══════════════════════════════════════════════════════════════
   //  ESTILOS (injetados uma única vez — nunca em index.html)
   // ══════════════════════════════════════════════════════════════
@@ -318,6 +350,7 @@
       '.nad-house-stat-row{display:flex;flex-direction:column;gap:2px;font-weight:600;color:#2a8a2a;}' +
       '.nad-house-stat-row span:first-child{font-size:.82rem;}' +
       '.nad-house-stat-row span:last-child{font-size:.72rem;opacity:.85;}' +
+      '.nad-saldo-line{display:none;font-size:.68rem;color:#aaa;text-align:right;margin:-10px 2px 16px;letter-spacing:.02em;}' +
       '.nad-edit-mode-banner{font-size:.72rem;color:#a5691f;background:#fbeee0;border-radius:10px;padding:9px 14px;text-align:center;margin:0 0 14px;font-weight:600;}' +
       '.nad-compras{background:#fff;border:1.5px solid #e6e6e6;border-radius:16px;overflow:hidden;margin:0 0 20px;}' +
       '.nad-compras-head{padding:14px 18px 10px;border-bottom:1px solid #e6e6e6;font-weight:700;font-size:.9rem;}' +
@@ -451,6 +484,7 @@
               '<div class="nad-house-stat-row"><span id="nadiya-house-duarte-horas">0:00</span><span id="nadiya-house-duarte-euros">0,00 €</span></div>' +
             '</div>' +
           '</div>' +
+          '<p class="nad-saldo-line" id="nadiya-saldo-line"></p>' +
           '<div class="nad-compras">' +
             '<div class="nad-compras-head" id="nadiya-compras-head">Compras deste mês</div>' +
             '<div class="nad-compras-list" id="nadiya-compras-body"></div>' +
@@ -1030,6 +1064,23 @@
     document.getElementById('nadiya-house-manuel-euros').textContent = _fmtEuros(perHouse.manuel.euros);
     document.getElementById('nadiya-house-duarte-horas').textContent = _fmtHours(perHouse.duarte.hours) + ' ' + t('horasWord');
     document.getElementById('nadiya-house-duarte-euros').textContent = _fmtEuros(perHouse.duarte.euros);
+
+    // Saldo (horas + visitas vs. crédito do recibo formal do mês — compras ficam fora, são reembolso à parte)
+    var saldoEl = document.getElementById('nadiya-saldo-line');
+    if (saldoEl) {
+      var mesRecibo = _mesFromMonthKey(monthKey);
+      var reciboState = _nRecibo[mesRecibo];
+      if (!reciboState) _loadRecibo(mesRecibo);
+      if (reciboState && !reciboState.loading && !reciboState.error && reciboState.encontrado) {
+        var horasEuros = workEuros + visitEuros;
+        var saldo = horasEuros - reciboState.credito;
+        saldoEl.textContent = t('saldoLabel') + ': ' + _fmtEuros(saldo);
+        saldoEl.style.display = 'block';
+      } else {
+        saldoEl.textContent = '';
+        saldoEl.style.display = 'none';
+      }
+    }
 
     // Estado do seletor / botão de ponto
     _ensureSelectedCasa();

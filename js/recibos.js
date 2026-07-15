@@ -538,6 +538,96 @@ function rCheckReady() {
 
 document.getElementById('r-process-btn').addEventListener('click', rProcessRecibos);
 
+/* ══════════════════════════════════════════════════════════════
+   MOTOR DE DETEÇÃO DE MÊS — v1.0
+   Determina a pasta do Supabase (mês/ano ou natal/ano) a partir do
+   CONTEÚDO do PDF, em vez da data do sistema no momento do upload.
+   rDetectMes() é mantida 100% intacta — continua a servir o badge
+   visual pré-upload e como reserva (fallback) final deste motor.
+   Zero alterações às funções existentes.
+   ══════════════════════════════════════════════════════════════ */
+
+// Ancora a data-base do lote: "De 1 de Junho 2026" / "De 1 de Dezembro 2025"
+const RX_DATA_INICIO = /\bDE\s+(\d{1,2})\s+DE\s+([A-Z]+)\s+(\d{4})\b/;
+
+// Tipo "Subsídio Natal" isolado — exclui "Subsídio Natal Fim Contrato"
+// (que surge nas páginas de Encerramento e não define o lote como Natal)
+const RX_TIPO_NATAL_OK = /SUBSIDIO NATAL(?!\s+FIM\b)/;
+
+const MESES_PT = ['JANEIRO','FEVEREIRO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+
+// Mínimo de colaboradoras distintas com tipo "Subsídio Natal" para confirmar o lote como Natal
+const MES_NATAL_MIN_COLABORADORAS = 5;
+// Mínima proporção de páginas que têm de concordar na mesma data para confiar no PDF
+const MES_DATA_CONFIANCA_MIN = 0.6;
+
+/**
+ * Motor 1 — Extração de Data por consenso.
+ * Lê a data-base ("De X de <mês> YYYY") de TODAS as páginas do PDF e
+ * devolve o valor mais frequente (moda), imune a páginas isoladas
+ * corrompidas ou com layout inesperado.
+ */
+function m1_extrairDataConsenso(pages) {
+  const contagem = {};
+  let validas = 0;
+  for (const p of pages) {
+    const m = p.text && p.text.match(RX_DATA_INICIO);
+    if (!m) continue;
+    const mesIdx = MESES_PT.indexOf(m[2]);
+    if (mesIdx === -1) continue;
+    const mm  = String(mesIdx + 1).padStart(2, '0');
+    const key = `${mm}-${m[3]}`;
+    contagem[key] = (contagem[key] || 0) + 1;
+    validas++;
+  }
+  if (validas === 0) return { mes: null, ano: null, confianca: 0 };
+  const [melhorKey, melhorCount] = Object.entries(contagem).sort((a, b) => b[1] - a[1])[0];
+  const [mm, yyyy] = melhorKey.split('-');
+  return { mes: mm, ano: yyyy, confianca: melhorCount / validas };
+}
+
+/**
+ * Motor 2 — Classificação de lote de Natal.
+ * Conta colaboradoras DISTINTAS (não páginas) cujo tipo de recibo é
+ * "Subsídio Natal", para evitar que uma única página de Encerramento
+ * com "Subsídio Natal Fim Contrato" classifique o lote inteiro.
+ */
+function m2_contarNatal(pages) {
+  const colaboradorasNatal = new Set();
+  for (const p of pages) {
+    if (!p.detectedName) continue;
+    if (p.text && RX_TIPO_NATAL_OK.test(p.text)) colaboradorasNatal.add(p.detectedName);
+  }
+  return colaboradorasNatal.size;
+}
+
+/**
+ * Motor 3 — Fiscalização / Árbitro.
+ * Cruza os Motores 1 e 2 e decide a fonte final do mês:
+ *  - Natal confirmado apenas se houver ≥5 colaboradoras com tipo
+ *    "Subsídio Natal" E a data-consenso do PDF cair em Dezembro.
+ *  - Caso contrário usa o mês/ano extraído do PDF, se a confiança
+ *    da data for suficiente.
+ *  - Em último caso — sem confiança nenhuma no conteúdo do PDF —
+ *    aplica-se rDetectMes(), a regra que já vigorava.
+ */
+function rDetermineMesFromPDF(pages) {
+  const dataInfo   = m1_extrairDataConsenso(pages);
+  const natalCount = m2_contarNatal(pages);
+  const dataConfiavel = dataInfo.mes !== null && dataInfo.confianca >= MES_DATA_CONFIANCA_MIN;
+
+  if (dataConfiavel && dataInfo.mes === '12' && natalCount >= MES_NATAL_MIN_COLABORADORAS) {
+    console.log(`[rDetermineMesFromPDF] Natal confirmado — ${natalCount} colaboradoras, ano ${dataInfo.ano}, confiança da data ${(dataInfo.confianca * 100).toFixed(0)}%`);
+    return `natal-${dataInfo.ano}`;
+  }
+  if (dataConfiavel) {
+    console.log(`[rDetermineMesFromPDF] Mês extraído do PDF: ${dataInfo.mes}-${dataInfo.ano} (confiança ${(dataInfo.confianca * 100).toFixed(0)}%)`);
+    return `${dataInfo.mes}-${dataInfo.ano}`;
+  }
+  console.warn('[rDetermineMesFromPDF] Não foi possível confirmar a data pelo conteúdo do PDF — a usar rDetectMes() (data do sistema) como reserva.');
+  return rDetectMes();
+}
+
 async function rProcessRecibos() {
   const btn = document.getElementById('r-process-btn');
   btn.disabled = true;
@@ -599,7 +689,7 @@ async function rProcessRecibos() {
         });
       }
     }
-    const mes = rDetectMes(); // sempre calculado automaticamente
+    const mes = rDetermineMesFromPDF(pages); // determinado pelo conteudo do PDF, com reserva em rDetectMes()
     localStorage.setItem('gh_mes', mes);
 
     rSetStatus('a enviar pdfs para supabase…');

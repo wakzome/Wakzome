@@ -1,10 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
-// Import estático só para forçar o bundler da Vercel a incluir o worker no
-// deploy — pdfjs-dist carrega-o com um require relativo em runtime que o
-// bundler não segue se não houver nenhuma referência estática a ele.
-import 'pdfjs-dist/legacy/build/pdf.worker.js';
 
 const BUCKET = 'recibos';
 
@@ -116,12 +112,13 @@ function parseRecibo(rawText) {
   if (mVenc) out.vencimentoBase = parsePT(mVenc[1]);
   else out.camposEmFalta.push('vencimentoBase');
 
-  // Linha de ganho: "SUBS. ALIMENTACAO 20D 5,80 116,00" (dias, v.unit, abono)
-  const mAlim = text.match(/ALIMENTACAO\s+(\d+)\s*D\s+([\d.,]+)\s+([\d.,]+)/);
+  // Linha de ganho: "SUBS. ALIMENTACAO 20D 5,80€ 116,00€" — o valor vem colado
+  // ao símbolo "€" sem espaço antes, por isso o € é opcional entre os grupos.
+  const mAlim = text.match(/ALIMENTACAO\s+(\d+)\s*D\s+([\d.,]+)€?\s+([\d.,]+)€?/);
   if (mAlim) out.subsAlimentacao = parsePT(mAlim[3]);
   else out.camposEmFalta.push('subsAlimentacao');
 
-  // Linha de desconto: "FALTAS ... SUBS. ALIMENTACAO 10D 58,00" (opcional — nem todo mês tem faltas)
+  // Linha de desconto: "FALTAS ... SUBS. ALIMENTACAO 10D 58,00€" (opcional — nem todo mês tem faltas)
   const mFaltas = text.match(/FALTAS[\s\S]*?ALIMENTACAO\s+(\d+)\s*D\s+([\d.,]+)/);
   if (mFaltas) out.faltasDesconto = parsePT(mFaltas[2]);
 
@@ -129,7 +126,8 @@ function parseRecibo(rawText) {
   if (mSS) out.segurancaSocial = parsePT(mSS[1]);
   else out.camposEmFalta.push('segurancaSocial');
 
-  const mTotal = text.match(/\bTOTAL\s+(?!A\s+RECEBER)([\d.,]+)\s+([\d.,]+)/);
+  // Linha "Total" da tabela de rubricas: "TOTAL 361,00€ 84,95€"
+  const mTotal = text.match(/\bTOTAL\s+(?!A\s+RECEBER)([\d.,]+)€?\s+([\d.,]+)€?/);
   if (mTotal) {
     out.totalAbonos = parsePT(mTotal[1]);
     out.totalDescontos = parsePT(mTotal[2]);
@@ -137,16 +135,12 @@ function parseRecibo(rawText) {
     out.camposEmFalta.push('totalAbonos', 'totalDescontos');
   }
 
-  // A caixa "Total Abonos / Total Descontos / Total a Receber" no rodapé é
-  // impressa como uma linha de 3 cabeçalhos seguida de uma linha com os 3
-  // valores (não "label valor" intercalado) — por isso a extração de texto
-  // linear devolve "...TOTAL A RECEBER 361,00 84,95 276,05" com os 3
-  // números juntos. O valor de "Total a Receber" é sempre o último desse
-  // grupo (alinhado com a 3ª coluna/rótulo).
-  const mReceber = text.match(/TOTAL A RECEBER\s+((?:[\d.,]+\s*)+)/);
-  if (mReceber) {
-    const nums = mReceber[1].trim().split(/\s+/).filter(Boolean);
-    out.totalAReceber = parsePT(nums[nums.length - 1]);
+  // Total a Receber = Total Abonos − Total Descontos (identidade contabilística
+  // do recibo). Mais robusto do que tentar apanhar o valor na caixa-resumo do
+  // rodapé, onde a ordem "valores antes dos rótulos" varia consoante o layout
+  // ORIGINAL/DUPLICADO lado a lado no mesmo texto extraído.
+  if (mTotal) {
+    out.totalAReceber = Math.round((out.totalAbonos - out.totalDescontos) * 100) / 100;
   } else {
     out.camposEmFalta.push('totalAReceber');
   }

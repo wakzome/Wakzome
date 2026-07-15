@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import { PDFParse } from 'pdf-parse';
+import { getDocumentProxy, extractText } from 'unpdf';
 
 const BUCKET = 'recibos';
 
@@ -74,13 +74,9 @@ function parsePT(str) {
 }
 
 async function extractFirstPageText(pdfBytes, password) {
-  const parser = new PDFParse({ data: pdfBytes, password: password || undefined });
-  try {
-    const result = await parser.getText({ first: 1 });
-    return result.text;
-  } finally {
-    await parser.destroy();
-  }
+  const pdf = await getDocumentProxy(pdfBytes, { password: password || undefined });
+  const { text } = await extractText(pdf, { mergePages: false });
+  return text[0] || '';
 }
 
 // ── Parser dos valores do recibo (texto já normalizado: maiúsculas, sem acentos) ──
@@ -248,4 +244,3 @@ export default async function handler(req, res) {
   }
   return res.json(payload);
 }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

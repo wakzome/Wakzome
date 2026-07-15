@@ -210,7 +210,7 @@
   function _loadRecibo(mes) {
     if (_nRecibo[mes]) return;
     _nRecibo[mes] = { loading: true };
-    fetch('/api/nadiya-recibo?mes=' + encodeURIComponent(mes), { credentials: 'same-origin' })
+    fetch('/api/nadiya-saldo?mes=' + encodeURIComponent(mes), { credentials: 'same-origin' })
       .then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (data) {
           return { ok: res.ok, data: data };

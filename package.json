@@ -1,6 +1,6 @@
 {
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
-    "pdfjs-dist": "3.11.174"
+    "pdf-parse": "2.4.5"
   }
 }

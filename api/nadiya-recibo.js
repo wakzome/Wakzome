@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+import { PDFParse } from 'pdf-parse';
 
 const BUCKET = 'recibos';
 
@@ -74,23 +74,12 @@ function parsePT(str) {
 }
 
 async function extractFirstPageText(pdfBytes, password) {
-  const loadingTask = pdfjsLib.getDocument({
-    data: pdfBytes,
-    password: password || undefined,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  });
-  const doc = await loadingTask.promise;
+  const parser = new PDFParse({ data: pdfBytes, password: password || undefined });
   try {
-    const page = await doc.getPage(1);
-    const content = await page.getTextContent();
-    const items = [...content.items].sort((a, b) => {
-      const yDiff = Math.round(b.transform[5]) - Math.round(a.transform[5]);
-      return yDiff !== 0 ? yDiff : a.transform[4] - b.transform[4];
-    });
-    return items.map(it => it.str).join(' ');
+    const result = await parser.getText({ first: 1 });
+    return result.text;
   } finally {
-    await doc.destroy();
+    await parser.destroy();
   }
 }
 
@@ -259,3 +248,4 @@ export default async function handler(req, res) {
   }
   return res.json(payload);
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

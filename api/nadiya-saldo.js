@@ -148,7 +148,10 @@ export default async function handler(req, res) {
 
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Sessão inválida' });
-  if (payload.rol !== 'nadiya') return res.status(403).json({ error: 'Acesso negado' });
+  // Roles com permissão para consultar o saldo: a própria Nadiya e a
+  // administração (dashboard wakzome.com — mesmo recibo fixo, sem dados extra).
+  const ALLOWED_ROLES = ['nadiya', 'admin'];
+  if (!ALLOWED_ROLES.includes(payload.rol)) return res.status(403).json({ error: 'Acesso negado' });
 
   const nomeRecibo = process.env.NADIYA_NOME_RECIBO;
   if (!nomeRecibo) {

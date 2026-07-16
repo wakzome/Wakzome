@@ -2109,16 +2109,13 @@
     });
 
     // ── BIND EDIT BOX BUTTON ──────────────────────────────────
+    // Abre um modal flutuante só com as referências que já têm quantidade
+    // nesta caixa — evita arrastar o scroll horizontal pela matriz inteira
+    // para encontrar as colunas certas (pedido: fluidez de trabalho).
     area.querySelectorAll('.tam-box-edit-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
         var bi = parseInt(btn.getAttribute('data-box'));
-        var box = tamSession.boxes[bi];
-        if (box) {
-          Object.keys(box.refs).forEach(function(ref){ tamRefDone.delete(ref); });
-          box.locked = false;
-        }
-        tamEditingBoxBi = bi;   // move this box to leftmost position
-        tamRenderAll(); tamScheduleSave();
+        tamShowBoxEditModal(bi);
       });
     });
 
@@ -2426,6 +2423,130 @@
         syncing = false;
       });
     })();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     MODAL DE EDIÇÃO RÁPIDA DE CAIXA — só refs com quantidade > 0
+     Aberto pelo lápis ✏️ de uma caixa completa/bloqueada. Em vez de
+     desbloquear a caixa inline e obrigar a arrastar o scroll horizontal
+     pela matriz inteira (podem ser 50+ referências), mostra só as que
+     esta caixa já tem preenchidas, num modal compacto — edita e
+     confirma de uma vez.
+  ══════════════════════════════════════════════════════════════ */
+  function tamShowBoxEditModal(bi) {
+    if (!tamSession) return;
+    var box = tamSession.boxes[bi];
+    if (!box) return;
+
+    var old = document.getElementById('tam-box-edit-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    /* Só refs com F ou PS > 0 nesta caixa — é exactamente o que foi pedido */
+    var refs = Object.keys(box.refs).filter(function(ref){
+      var c = box.refs[ref];
+      return c && ((c.f || 0) + (c.p || 0)) > 0;
+    });
+
+    var consolidated = tamConsolidatedRefs();
+    function totalFor(ref) {
+      var c = consolidated.find(function(x){ return x.ref === ref; });
+      return c ? c.totalPieces : 0;
+    }
+
+    var boxLabel = box.dnZyCode ? box.dnZyCode : ('Caixa ' + (bi + 1));
+
+    var rowsHtml = refs.map(function(ref) {
+      var cell = box.refs[ref] || { f:0, p:0 };
+      var safe = ref.replace(/[^a-z0-9]/gi,'_');
+      return '<tr>' +
+        '<td class="tam-dne-ref"><strong>' + tamEsc(ref) + '</strong></td>' +
+        '<td class="tam-dne-inv">' + totalFor(ref) + '</td>' +
+        '<td class="tam-dne-qty">' +
+          '<input type="text" inputmode="numeric" class="tam-dne-inp" ' +
+            'id="tam-bem-f-' + safe + '" data-ref="' + tamEsc(ref) + '" value="' + (cell.f || 0) + '" autocomplete="off">' +
+        '</td>' +
+        '<td class="tam-dne-qty">' +
+          '<input type="text" inputmode="numeric" class="tam-dne-inp" ' +
+            'id="tam-bem-p-' + safe + '" data-ref="' + tamEsc(ref) + '" value="' + (cell.p || 0) + '" autocomplete="off">' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    var modal = document.createElement('div');
+    modal.id = 'tam-box-edit-modal';
+    modal.className = 'tam-dn-edit-modal';   /* reutiliza o mesmo sistema visual do modal de DN */
+
+    modal.innerHTML =
+      '<div id="tam-dn-edit-backdrop"></div>' +
+      '<div id="tam-dn-edit-panel">' +
+        '<div id="tam-dne-header">' +
+          '<div id="tam-dne-title">' +
+            '<span id="tam-dne-zy">' + tamEsc(boxLabel) + '</span>' +
+            '<span id="tam-dne-sub">Edição rápida · só referências com quantidade</span>' +
+          '</div>' +
+          '<button id="tam-bem-close" class="tam-dn-close">&times;</button>' +
+        '</div>' +
+        (refs.length
+          ? '<div class="tam-dne-hint">Corrige F / PS desta caixa e confirma. Referências sem quantidade não aparecem aqui.</div>' +
+            '<div id="tam-dne-scroll">' +
+              '<table id="tam-dne-table">' +
+                '<thead><tr>' +
+                  '<th class="tam-dn-th">Referência</th>' +
+                  '<th class="tam-dn-th">Total</th>' +
+                  '<th class="tam-dn-th">F</th>' +
+                  '<th class="tam-dn-th">PS</th>' +
+                '</tr></thead>' +
+                '<tbody>' + rowsHtml + '</tbody>' +
+              '</table>' +
+            '</div>'
+          : '<div class="tam-dne-hint">Esta caixa ainda não tem nenhuma referência com quantidade.</div>') +
+        '<div id="tam-dne-footer">' +
+          '<button id="tam-bem-save" class="tam-dn-action-btn">✓ Confirmar e guardar</button>' +
+          '<button id="tam-bem-cancel" class="tam-dn-cancel-btn">Cancelar</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(function(){ modal.classList.add('tam-dn-visible'); });
+
+    function closeModal() {
+      modal.classList.remove('tam-dn-visible');
+      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 250);
+    }
+    modal.querySelector('#tam-dn-edit-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('#tam-bem-close').addEventListener('click', closeModal);
+    modal.querySelector('#tam-bem-cancel').addEventListener('click', closeModal);
+
+    var saveBtn = modal.querySelector('#tam-bem-save');
+    if (saveBtn) saveBtn.addEventListener('click', function() {
+      tamPushUndo();
+      refs.forEach(function(ref) {
+        var safe = ref.replace(/[^a-z0-9]/gi,'_');
+        var fInp = modal.querySelector('#tam-bem-f-' + safe);
+        var pInp = modal.querySelector('#tam-bem-p-' + safe);
+        var fVal = fInp ? (parseInt(fInp.value) || 0) : 0;
+        var pVal = pInp ? (parseInt(pInp.value) || 0) : 0;
+        if (fVal <= 0 && pVal <= 0) {
+          delete box.refs[ref];
+        } else {
+          box.refs[ref] = { f: fVal, p: pVal };
+        }
+      });
+
+      /* Recalcula se a caixa continua completa — sem esperar os 3s de
+         animação, porque isto é uma confirmação deliberada e não
+         digitação ao vivo. */
+      var received = 0;
+      Object.values(box.refs).forEach(function(v){ received += (v.f || 0) + (v.p || 0); });
+      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+      delete tamBoxLockPending[bi];
+      box.locked = !!(box.total && received >= box.total);
+
+      tamDetectRefCompletions();
+      tamRenderAll();
+      tamSaveSession(false);
+      closeModal();
+    });
   }
 
   /* ──────────────────────────────────────────────────────────────

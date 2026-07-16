@@ -4794,7 +4794,8 @@
             allPageItems.push({
               str: s,
               x: item.transform[4],
-              y: pageH - item.transform[5] + offset   /* top-to-bottom, page-adjusted */
+              y: pageH - item.transform[5] + offset,  /* top-to-bottom, page-adjusted */
+              w: item.width || 0   /* usado pelo âncoramento por cabeçalho (ex: coluna Stück/Pieces) */
             });
           });
         }
@@ -4901,8 +4902,11 @@
     /* ── 3. Locate all EAN items (structural anchors) ── */
     var eanItems = allPageItems.filter(function(it){ return EAN_RE.test(it.str); });
     if (!eanItems.length) {
-      /* No EANs at all — try text fallback (Lot-Nr structure) */
-      return tamParseDNFromItemsTextFallback(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, BAD_STR);
+      /* Sem EAN de 13 dígitos — o fornecedor pode ter mudado o layout da DN
+         (já aconteceu: lotes agregados por referência, sem quebra por
+         tamanho). Delega à cadeia de critérios de leitura, validados contra
+         o Gesamtstückzahl que a própria DN declara. */
+      return tamParseDNFallbackChain(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, null);
     }
 
     /* ── 4. Auto-calibrate QTY column X from items that appear near EAN Y positions ──
@@ -5044,18 +5048,104 @@
       .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
       .filter(function(r){ return r.qty > 0; });
 
-    /* ── 7. If EAN-anchored strategy found nothing, try text-structure fallback ── */
-    if (!refs.length) {
-      var fb = tamParseDNFromItemsTextFallback(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, BAD_STR);
-      if (fb && fb.refs.length) return fb;
-      console.warn('TAM DN v5: no refs found for', zyCode, fileName);
-      return null;
+    /* ── 7. Validar contra o Gesamtstückzahl declarado na própria DN.
+       Encontrar refs não chega — se a soma não bater com o total que a DN
+       diz ter, a leitura pode estar errada (ex.: mudança de layout do
+       fornecedor). Delega à cadeia de critérios: só aceita de imediato o
+       que reconciliar com o total declarado; senão tenta os outros
+       critérios de leitura antes de se dar por vencido. */
+    var eanResult = refs.length ? { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs } : null;
+    return tamParseDNFallbackChain(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, eanResult);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     CADEIA DE CRITÉRIOS DE LEITURA DE DN — auto-detecção de formato
+     O fornecedor pode mudar o layout da DN a qualquer momento (já
+     aconteceu). Em vez de confiar cegamente no primeiro critério que
+     encontrar alguma coisa, cada candidato é validado contra o
+     Gesamtstückzahl que a própria DN declara — a única "verdade" que
+     não depende de como o PDF está desenhado. Só quando NENHUM critério
+     reconcilia é que se aceita o melhor resultado disponível, e mesmo
+     assim marcado como não confirmado (parseUnconfirmed) para alertar
+     o utilizador na UI em vez de falhar silenciosamente.
+  ══════════════════════════════════════════════════════════════ */
+  function tamParseDNFallbackChain(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, primaryResult) {
+    function sumOf(res) { return res.refs.reduce(function(s,r){ return s + r.qty; }, 0); }
+    function matches(res) {
+      return !!(res && res.refs && res.refs.length && (gesamtPcs === null || sumOf(res) === gesamtPcs));
     }
 
-    var computedSum = refs.reduce(function(s,r){ return s + r.qty; }, 0);
-    if (gesamtPcs !== null && computedSum !== gesamtPcs) {
-      console.warn('TAM DN v5:', computedSum, 'computed vs', gesamtPcs, 'declared for', zyCode);
+    if (matches(primaryResult)) return primaryResult;
+
+    var qtyCol = tamParseDNFromItemsQtyColumn(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef);
+    if (matches(qtyCol)) return qtyCol;
+
+    var fb = tamParseDNFromItemsTextFallback(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef);
+    if (matches(fb)) return fb;
+
+    /* Nenhum critério reconciliou com o total declarado — usa o melhor
+       resultado não-vazio disponível (o mais estrutural primeiro) mas
+       marca como não confirmado em vez de aceitar às cegas. */
+    var best = (primaryResult && primaryResult.refs && primaryResult.refs.length) ? primaryResult
+             : (qtyCol && qtyCol.refs && qtyCol.refs.length) ? qtyCol
+             : fb;
+    if (!best || !best.refs || !best.refs.length) {
+      console.warn('TAM DN: nenhum critério de leitura encontrou referências para', zyCode, fileName);
+      return null;
     }
+    best.parseUnconfirmed = true;
+    console.warn('TAM DN: leitura não confirmada (nenhum critério bate com o Gesamtstückzahl declarado) —',
+      zyCode, fileName, '· soma:', sumOf(best), '· declarado:', gesamtPcs);
+    return best;
+  }
+
+  /* ── DN parser — formato "lote agregado" sem EAN de 13 dígitos ──────────
+     Layout observado a partir de 06/2026: cada bloco Lot-Nr traz uma única
+     linha por referência já com a quantidade total do lote (sem quebra por
+     tamanho nem EAN de 13 dígitos por linha). Sem EAN como âncora, a coluna
+     de quantidade é isolada pela posição X do próprio cabeçalho
+     "Stück/Pieces" da DN — evita o bug do fallback genérico de texto, que
+     soma qualquer inteiro solto do bloco (códigos de cor/estilo inclusive).
+  ─────────────────────────────────────────────────────────────────────── */
+  function tamParseDNFromItemsQtyColumn(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef) {
+    var hdr = null;
+    for (var i = 0; i < allPageItems.length; i++) {
+      if (/^Stück\/Pieces$/i.test(allPageItems[i].str)) { hdr = allPageItems[i]; break; }
+    }
+    if (!hdr) return null;   /* cabeçalho não encontrado — deixa para o fallback genérico */
+
+    var QTY_X_MIN = hdr.x - 6;
+    var QTY_X_MAX = hdr.x + (hdr.w || 45) + 8;
+
+    var sorted = allPageItems.slice().sort(function(a,b){ return a.y - b.y; });
+    var refAccum = {}, refOrder = [];
+    var currentRef = null;
+
+    for (var i = 0; i < sorted.length; i++) {
+      var s = sorted[i].str;
+      if (/^Lot-Nr/i.test(s)) { currentRef = null; continue; }
+      if (/^Gesamtst/i.test(s)) break;
+      if (currentRef === null && tamIsDNRef(s)) {
+        currentRef = s;
+        if (!refAccum.hasOwnProperty(currentRef)) {
+          refAccum[currentRef] = 0;
+          refOrder.push(currentRef);
+        }
+        continue;
+      }
+      if (currentRef !== null && /^\d{1,4}$/.test(s)) {
+        var x = sorted[i].x;
+        if (x < QTY_X_MIN || x > QTY_X_MAX) continue;   /* fora da coluna Stück/Pieces */
+        var v = parseInt(s);
+        if (v >= 1 && v <= 9999) refAccum[currentRef] += v;
+      }
+    }
+
+    var refs = refOrder
+      .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
+      .filter(function(r){ return r.qty > 0; });
+    if (!refs.length) return null;
+
     return { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs };
   }
 
@@ -5829,6 +5919,22 @@
       var missingDNs  = dnList.filter(function(zy){ return !tamDeliveryNotes[zy]; });
       var allLoaded   = missingDNs.length === 0 && !parsedShort;
 
+      /* ── Leitura não confirmada: nenhum critério de parsing bateu com o
+         Gesamtstückzahl que a própria DN declara (possível mudança de
+         layout do fornecedor). Avisa sempre, independentemente do resto. ── */
+      var unconfirmedDNs = loadedDNs.filter(function(zy){
+        var d = tamDeliveryNotes[zy];
+        return d && d.parseUnconfirmed;
+      });
+      var unconfirmedHtml = unconfirmedDNs.length
+        ? '<div class="tam-dnv-missing-block">' +
+            '<div class="tam-dnv-missing-hdr">⚠ Leitura automática não confirmada — ' +
+              unconfirmedDNs.map(tamEsc).join(', ') +
+              ' &mdash; a soma não bate com o Gesamtstückzahl da própria DN. Verifica com ✏ Editar.' +
+            '</div>' +
+          '</div>'
+        : '';
+
       /* ── Progress indicator ── */
       var progressHtml;
 
@@ -5956,7 +6062,7 @@
             '</div>';
         }
       }
-      blocks.push(progressHtml);
+      blocks.push(unconfirmedHtml + progressHtml);
     });
 
     if (!blocks.length) { area.innerHTML = ''; return; }
@@ -5988,6 +6094,7 @@
           if (mdRes && mdRes.refs && mdRes.refs.length) {
             dn.refs          = mdRes.refs;
             dn.userCorrected = true;
+            delete dn.parseUnconfirmed;
             if (mdRes.gesamtPcs) dn.gesamtPcs = mdRes.gesamtPcs;
             if (tamDNVerifyState[zy]) tamDNVerifyState[zy].dnConfirmed = false;
             tamRenderDNVerification();
@@ -6113,6 +6220,7 @@
       /* Update DN object — mark as user-corrected, clear escalation state */
       dn.refs = newRefs;
       dn.userCorrected = true;
+      delete dn.parseUnconfirmed;
       if (tamDNVerifyState[dn.zyCode]) tamDNVerifyState[dn.zyCode].dnConfirmed = false;
       tamRenderDNVerification();
       tamScheduleSave();
@@ -7473,7 +7581,7 @@
       '.tam-dnv-btn-motord:hover { background:#f0f0f0!important; border-color:#555!important; }',
 
       /* ── DN Verification area (proc style) ── */
-      '#tam-dn-verify-area { width:100%; max-width:520px; margin-top:16px; }',
+      '#tam-dn-verify-area { width:100%; max-width:1600px; margin-top:16px; }',
       '#tam-progress-area { display:none; }',
       '.tam-inv-stock-btn.tam-inv-stock-active { background:#111!important; border-color:#111!important; color:#fff!important; }',
       '.tam-dnv-area { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',
@@ -7487,7 +7595,7 @@
       '.tam-dnv-block-hdr { padding:10px 16px; background:#FFFBF5; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#C47A1E; border-bottom:1px solid #E8A44A; }',
       '.tam-dnv-hint { padding:8px 16px; font-size:.78rem; color:#000; opacity:.5; font-weight:700; border-bottom:1px solid #f0f0f0; background:#fafafa; }',
       '.tam-dnv-scroll { overflow-x:auto; }',
-      '.tam-dnv-table { width:100%; border-collapse:collapse; font-size:.83rem; }',
+      '.tam-dnv-table { width:auto; min-width:640px; border-collapse:collapse; font-size:.83rem; }',
       '.tam-dnv-table thead th { padding:7px 12px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.10em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; white-space:nowrap; }',
       '.tam-dnv-row td { padding:8px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }',
       '.tam-dnv-row:last-child td { border-bottom:none; }',

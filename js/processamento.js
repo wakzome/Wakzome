@@ -2361,6 +2361,34 @@
     }
   }
 
+  /* Normaliza um valor colado num campo numérico: aceita separador decimal
+     europeu (vírgula) ou americano (ponto), remove símbolos de moeda e
+     separadores de milhares. Devolve null se não for um número válido —
+     nesse caso o input numérico não é tocado, evitando o erro nativo do
+     browser "The specified value ... cannot be parsed". */
+  function procNormalizePastedNumber(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (!s) return null;
+    s = s.replace(/[^0-9,.\-]/g, '');
+    if (!s) return null;
+    var hasComma = s.indexOf(',') !== -1;
+    var hasDot   = s.indexOf('.') !== -1;
+    if (hasComma && hasDot) {
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        /* "1.234,56" -> milhares=. decimais=, */
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        /* "1,234.56" -> milhares=, decimais=. */
+        s = s.replace(/,/g, '');
+      }
+    } else if (hasComma) {
+      /* "6,9" -> so virgula, e o separador decimal */
+      s = s.replace(',', '.');
+    }
+    var n = parseFloat(s);
+    return (isNaN(n) || !isFinite(n)) ? null : String(n);
+  }
+
   function procInitTableKeyboard(fid) {
     var block = document.getElementById('proc-table-block-' + fid);
     if (!block || block._keyboardInited) return;
@@ -2379,8 +2407,24 @@
       var lines = text.split('\n').map(function(l) { return l.replace(/\r/g, '').trim(); });
       if (lines[lines.length - 1] === '') lines.pop();
 
-      /* Only handle multi-line paste */
-      if (lines.length <= 1) return;
+      /* Cola de valor unico (uma celula): o browser trata da insercao no
+         cursor, exceto em inputs numericos, onde e preciso normalizar a
+         virgula decimal antes de atribuir -- caso contrario o valor nativo
+         e rejeitado silenciosamente (ou com erro na consola). */
+      if (lines.length <= 1) {
+        if (input.type === 'number') {
+          var normalizedSingle = procNormalizePastedNumber(text);
+          if (normalizedSingle !== null) {
+            e.preventDefault();
+            input.value = normalizedSingle;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            var trSingle = input.closest('tr');
+            var rowIdSingle = trSingle ? parseInt((trSingle.id || '').split('-').pop(), 10) : NaN;
+            if (!isNaN(rowIdSingle)) procRecalcRow(fid, rowIdSingle);
+          }
+        }
+        return;
+      }
 
       e.preventDefault();
 
@@ -2415,7 +2459,12 @@
         );
         var targetInput = targetInputs[colIdx];
         if (!targetInput) return;
-        targetInput.value = val;
+        var pasteVal = val;
+        if (targetInput.type === 'number') {
+          var normalizedMulti = procNormalizePastedNumber(val);
+          pasteVal = normalizedMulti !== null ? normalizedMulti : '';
+        }
+        targetInput.value = pasteVal;
         targetInput.dispatchEvent(new Event('input', { bubbles: true }));
         /* Get row id from tr id: proc-row-{fid}-{id} */
         var rowId = parseInt((targetRow.id || '').split('-').pop(), 10);

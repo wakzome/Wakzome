@@ -274,10 +274,11 @@
 
   // ── Tarifa vigente em cada momento (histórico, nunca retroativo) ──
   // _nTarifas está ordenado ascendentemente por vigente_desde.
-  function _rateFor(iso) {
+  function _rateFor(iso, tarifasList) {
+    var list = tarifasList || _nTarifas;
     var applicable = DEFAULT_RATE;
-    for (var i = 0; i < _nTarifas.length; i++) {
-      if (_nTarifas[i].vigente_desde <= iso) applicable = parseFloat(_nTarifas[i].valor);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].vigente_desde <= iso) applicable = parseFloat(list[i].valor);
       else break;
     }
     return applicable;
@@ -1268,5 +1269,141 @@
       String(d.getSeconds()).padStart(2, '0');
   }
   setInterval(_tickClock, 1000);
+
+  // ══════════════════════════════════════════════════════════════
+  //  SALDO NO DASHBOARD (index.html → #saft-reminder)
+  //  Mostra, no painel esquerdo do dashboard "wakzome", o saldo do
+  //  mês mais recente que já tenha um recibo formal carregado
+  //  (positivo ou negativo). Independente do overlay estar aberto —
+  //  corre sozinho assim que este ficheiro é incluído na página.
+  // ══════════════════════════════════════════════════════════════
+  var DASH_SALDO_CONTAINER_ID = 'saft-reminder';
+  var DASH_SALDO_WIDGET_ID    = 'nadiya-dash-saldo';
+  var DASH_SALDO_MAX_MONTHS   = 12; // tope de meses para trás — evita chamadas infinitas à API
+  var _dashSaldoInited        = false;
+
+  function _dashGetSb() {
+    if (typeof sbAdmin !== 'undefined' && sbAdmin) return Promise.resolve(sbAdmin);
+    return new Promise(function (resolve) {
+      var tries = 0;
+      var iv = setInterval(function () {
+        if (typeof sbAdmin !== 'undefined' && sbAdmin) { clearInterval(iv); resolve(sbAdmin); return; }
+        if (++tries > 50) { clearInterval(iv); resolve(null); }
+      }, 100);
+    });
+  }
+
+  function _dashFetchRecibo(mes) {
+    return fetch('/api/nadiya-saldo?mes=' + encodeURIComponent(mes), { credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (r) {
+        if (!r.ok) return { encontrado: false };
+        return { encontrado: !!r.data.encontrado, credito: parseFloat(r.data.credito) || 0 };
+      })
+      .catch(function () { return { encontrado: false }; });
+  }
+
+  function _dashHorasEurosDoMes(records, tarifas, monthKey) {
+    var workEuros = 0, visitEuros = 0;
+    records.forEach(function (r) {
+      if (_monthKeyOf(r.entrada) !== monthKey) return;
+      if (r.tipo === 'trabalho' && r.salida) {
+        workEuros += _hoursBetween(r.entrada, r.salida) * _rateFor(r.entrada, tarifas);
+      } else if (r.tipo === 'visita') {
+        visitEuros += _rateFor(r.entrada, tarifas);
+      }
+    });
+    return workEuros + visitEuros;
+  }
+
+  // Percorre meses (do mais recente para trás) até encontrar um com recibo "encontrado".
+  function _dashFindSaldoRecente(records, tarifas, monthsBack) {
+    var cursor = new Date();
+    cursor.setDate(1); // evita saltos incorretos ao recuar meses em dias 29-31
+
+    function attempt(i) {
+      if (i >= monthsBack) return Promise.resolve(null);
+      var monthKey = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0');
+      var mes = _mesFromMonthKey(monthKey);
+      return _dashFetchRecibo(mes).then(function (recibo) {
+        if (recibo.encontrado) {
+          return {
+            monthKey: monthKey,
+            saldo: _dashHorasEurosDoMes(records, tarifas, monthKey) - recibo.credito
+          };
+        }
+        cursor.setMonth(cursor.getMonth() - 1);
+        return attempt(i + 1);
+      });
+    }
+    return attempt(0);
+  }
+
+  function _dashMonthLabel(monthKey) {
+    var parts = monthKey.split('-');
+    var idx = parseInt(parts[1], 10) - 1;
+    var names = I18N[_nLang].monthNames;
+    return (names[idx] || parts[1]) + ' ' + parts[0];
+  }
+
+  function _dashRenderSaldo(container, result) {
+    var existing = document.getElementById(DASH_SALDO_WIDGET_ID);
+    if (existing) existing.remove();
+    if (!result) return;
+
+    var wrap = document.createElement('div');
+    wrap.id = DASH_SALDO_WIDGET_ID;
+    wrap.style.cssText = 'width:100%;';
+
+    var divider = document.createElement('div');
+    divider.style.cssText = 'width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;';
+
+    var label = document.createElement('div');
+    label.style.cssText = 'font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;';
+    label.textContent = t('saldoLabel') + ' \u00b7 ' + _dashMonthLabel(result.monthKey);
+
+    var value = document.createElement('div');
+    var positivo = result.saldo >= 0;
+    value.style.cssText = 'font-size:1.3rem;font-weight:600;line-height:1;letter-spacing:-.01em;color:' + (positivo ? '#2a8a2a' : '#c05000') + ';';
+    value.textContent = (positivo ? '+' : '') + _fmtEuros(result.saldo);
+
+    wrap.appendChild(divider);
+    wrap.appendChild(label);
+    wrap.appendChild(value);
+    container.appendChild(wrap);
+  }
+
+  function _initDashSaldo() {
+    if (_dashSaldoInited) return;
+    _dashSaldoInited = true;
+
+    var container = document.getElementById(DASH_SALDO_CONTAINER_ID);
+    if (!container) return;
+
+    _dashGetSb().then(function (sb) {
+      if (!sb) return;
+      return Promise.all([
+        sb.from(TABLE).select('*'),
+        sb.from(TABLE_TARIFAS).select('*').order('vigente_desde', { ascending: true })
+      ]).then(function (results) {
+        var resRecords = results[0], resTarifas = results[1];
+        if (resRecords.error || resTarifas.error) return;
+        var records = resRecords.data || [];
+        var tarifas = resTarifas.data || [];
+        return _dashFindSaldoRecente(records, tarifas, DASH_SALDO_MAX_MONTHS)
+          .then(function (result) { _dashRenderSaldo(container, result); });
+      });
+    }).catch(function () { /* falha silenciosa — o painel simplesmente não mostra o saldo */ });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initDashSaldo);
+  } else {
+    _initDashSaldo();
+  }
 
 })();

@@ -1599,6 +1599,124 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     VÍNCULO MANUAL CAIXA → DN (quando o PDF/foto da DN não está
+     disponível, mas o código da DN é conhecido no papel físico).
+     Estampar box.dnZyCode + box.invIdx torna essa caixa autoritativa
+     em tamGetRefDistribForInvoice, tirando-a do pool "manual" que é
+     repartido por ordem de chegada das facturas.
+  ══════════════════════════════════════════════════════════════ */
+
+  /* DNs declaradas nas facturas (inv.dnList) que ainda não estão
+     vinculadas a nenhuma caixa da sessão, agrupadas por factura. */
+  function tamGetPendingDNsGrouped() {
+    if (!tamSession) return [];
+    var usedCodes = {};
+    tamSession.boxes.forEach(function(b){ if (b.dnZyCode) usedCodes[b.dnZyCode] = true; });
+    var groups = [];
+    tamInvoices.forEach(function(inv, invIdx){
+      var pending = (inv.dnList || []).filter(function(zy){ return !usedCodes[zy]; });
+      if (pending.length) groups.push({ invIdx: invIdx, invoiceNo: inv.invoiceNo, codes: pending });
+    });
+    return groups;
+  }
+
+  /* Vincula uma caixa a uma DN conhecida apenas pelo código. Não mexe
+     em refs/total — só estampa o roteamento para essa factura. */
+  function tamLinkBoxToDN(bi, zyCode, invIdx) {
+    if (!tamSession) return;
+    var box = tamSession.boxes[bi];
+    if (!box) return;
+    tamPushUndo();
+    box.dnZyCode = zyCode;
+    box.invIdx   = invIdx;
+    tamRenderAll();
+    tamScheduleSave();
+  }
+
+  /* Remove o vínculo manual (só disponível quando não há DN digital por
+     trás — ver isManualLink em tamRenderReception). A caixa volta a
+     "Caixa N" posicional; tamRepairBoxInvIdx a reencaixa no próximo render. */
+  function tamUnlinkBoxDN(bi) {
+    if (!tamSession) return;
+    var box = tamSession.boxes[bi];
+    if (!box || !box.dnZyCode) return;
+    tamPushUndo();
+    delete box.dnZyCode;
+    tamRenderAll();
+    tamScheduleSave();
+  }
+
+  /* Popover singleton — lista as DNs pendentes para vincular a uma caixa. */
+  function tamShowDNLinkPopover(bi, anchorEl) {
+    var old = document.getElementById('tam-dn-link-popover');
+    if (old) old.parentNode.removeChild(old);
+
+    var groups = tamGetPendingDNsGrouped();
+    var bodyHtml = !groups.length
+      ? '<div class="tam-dnlink-empty">Não há DNs pendentes por vincular.</div>'
+      : groups.map(function(g){
+          return '<div class="tam-dnlink-group">' +
+            '<div class="tam-dnlink-group-hdr">' + tamEsc(g.invoiceNo) + '</div>' +
+            g.codes.map(function(zy){
+              return '<button type="button" class="tam-dnlink-opt" data-zy="' + tamEsc(zy) +
+                '" data-inv="' + g.invIdx + '">' + tamEsc(zy) + '</button>';
+            }).join('') +
+          '</div>';
+        }).join('');
+
+    var pop = document.createElement('div');
+    pop.id = 'tam-dn-link-popover';
+    pop.innerHTML =
+      '<div class="tam-dnlink-title">Vincular caixa a DN pendente</div>' +
+      '<div class="tam-dnlink-list">' + bodyHtml + '</div>' +
+      '<button type="button" class="tam-dnlink-cancel" id="tam-dnlink-cancel">cancelar</button>';
+    document.body.appendChild(pop);
+
+    function closePop() {
+      if (pop.parentNode) pop.parentNode.removeChild(pop);
+      document.removeEventListener('click', onOutsideClick, true);
+    }
+    function onOutsideClick(e) {
+      if (pop.contains(e.target) || e.target === anchorEl) return;
+      closePop();
+    }
+
+    pop.querySelectorAll('.tam-dnlink-opt').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var zy     = btn.getAttribute('data-zy');
+        var invIdx = parseInt(btn.getAttribute('data-inv'));
+        closePop();
+        tamLinkBoxToDN(bi, zy, invIdx);
+      });
+    });
+    pop.querySelector('#tam-dnlink-cancel').addEventListener('click', function(e){
+      e.stopPropagation();
+      closePop();
+    });
+
+    pop.style.visibility = 'hidden';
+    pop.classList.add('tam-dnlink-visible');
+    requestAnimationFrame(function(){
+      var rect    = anchorEl.getBoundingClientRect();
+      var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+      var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+      var popW = pop.offsetWidth, popH = pop.offsetHeight;
+      var left = rect.left + scrollX;
+      var top  = rect.bottom + scrollY + 6;
+      var maxLeft = scrollX + window.innerWidth - popW - 12;
+      if (left > maxLeft) left = maxLeft;
+      if (left < scrollX + 8) left = scrollX + 8;
+      if (top + popH > scrollY + window.innerHeight - 8) top = rect.top + scrollY - popH - 6;
+      pop.style.left = left + 'px';
+      pop.style.top  = top  + 'px';
+      pop.style.visibility = '';
+    });
+
+    setTimeout(function(){ document.addEventListener('click', onOutsideClick, true); }, 0);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      RENDER: ÁREA DE RECEPCIÓN
   ══════════════════════════════════════════════════════════════ */
   function tamRenderReception() {
@@ -1666,12 +1784,31 @@
     sortedBoxes.forEach(function(bObj, boxPos){
       var bi  = bObj.bi;
       var info = boxStyleInfo[boxPos];
-      var dnCode   = bObj.box.dnZyCode || null;
+      var box  = bObj.box;
+      var dnCode       = box.dnZyCode || null;
+      var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
+      var canLink      = !dnCode && !box.locked;
       var boxLabel = dnCode
-        ? (dnCode + (bObj.box.locked ? ' \uD83D\uDD12' : ''))
-        : ('Caixa ' + (bi+1) + (bObj.box.locked ? ' \uD83D\uDD12' : ''));
+        ? (dnCode + (box.locked ? ' \uD83D\uDD12' : ''))
+        : ('Caixa ' + (bi+1) + (box.locked ? ' \uD83D\uDD12' : ''));
       var colSpan = info.isActiveBox ? 3 : 2;
-      hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + boxLabel + '</th>';
+
+      var labelHtml;
+      if (canLink) {
+        labelHtml =
+          '<button type="button" class="tam-box-dn-link-btn" data-box="' + bi + '" ' +
+            'title="Vincular esta caixa a uma DN pendente (sabe o c\u00f3digo mas n\u00e3o tem o PDF)">' +
+            tamEsc(boxLabel) + ' <span class="tam-box-dn-link-icon">\uD83D\uDD17</span>' +
+          '</button>';
+      } else if (isManualLink && !box.locked) {
+        labelHtml =
+          tamEsc(boxLabel) +
+          ' <button type="button" class="tam-box-dn-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
+      } else {
+        labelHtml = tamEsc(boxLabel);
+      }
+
+      hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + labelHtml + '</th>';
     });
 
     // Header row 2: sub-labels
@@ -1948,6 +2085,24 @@
         }
         tamEditingBoxBi = bi;   // move this box to leftmost position
         tamRenderAll(); tamScheduleSave();
+      });
+    });
+
+    // ── BIND LINK-TO-DN BUTTON ─────────────────────────────────
+    area.querySelectorAll('.tam-box-dn-link-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var bi = parseInt(btn.getAttribute('data-box'));
+        tamShowDNLinkPopover(bi, btn);
+      });
+    });
+
+    // ── BIND UNLINK-DN BUTTON ───────────────────────────────────
+    area.querySelectorAll('.tam-box-dn-unlink-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var bi = parseInt(btn.getAttribute('data-box'));
+        tamUnlinkBoxDN(bi);
       });
     });
 
@@ -7416,6 +7571,23 @@
       '  #tam-stock-actions, #tam-guia-header-btns { flex-wrap:wrap; gap:6px; }',
       '  .tam-stock-action-btn, .tam-guia-action-btn { font-size:.72rem!important; padding:5px 10px!important; }',
       '}',
+
+      /* ── Vínculo manual caixa → DN pendente ── */
+      '.tam-box-dn-link-btn { background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }',
+      '.tam-box-dn-link-btn:hover { text-decoration:underline; }',
+      '.tam-box-dn-link-icon { font-size:.75em; opacity:.6; }',
+      '.tam-box-dn-unlink-btn { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.65rem; padding:0 4px; margin-left:4px; color:#9B4D4D; vertical-align:middle; }',
+      '.tam-box-dn-unlink-btn:hover { background:#F5EAEA; border-color:#9B4D4D; }',
+      '#tam-dn-link-popover { position:absolute; z-index:9999; min-width:220px; max-width:280px; max-height:320px; overflow-y:auto; background:#fff; border:1px solid #000; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.18); font-family:\'MontserratLight\',sans-serif; padding:10px; opacity:0; transition:opacity .12s ease; }',
+      '#tam-dn-link-popover.tam-dnlink-visible { opacity:1; }',
+      '.tam-dnlink-title { font-size:.74rem; font-weight:700; color:#000; margin-bottom:8px; }',
+      '.tam-dnlink-list { display:flex; flex-direction:column; gap:8px; }',
+      '.tam-dnlink-group-hdr { font-size:.68rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }',
+      '.tam-dnlink-opt { display:block; width:100%; text-align:left; padding:5px 8px; margin-bottom:3px; font-size:.76rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; border:1px solid #e0e0e0; border-radius:7px; background:#fff; color:#000; cursor:pointer; transition:all .12s; }',
+      '.tam-dnlink-opt:hover { background:#f0f0f0; border-color:#000; }',
+      '.tam-dnlink-empty { font-size:.74rem; color:#888; padding:6px 0; }',
+      '.tam-dnlink-cancel { display:block; width:100%; margin-top:8px; padding:4px 0; font-size:.72rem; font-family:\'MontserratLight\',sans-serif; text-align:center; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; cursor:pointer; transition:all .12s; text-transform:lowercase; }',
+      '.tam-dnlink-cancel:hover { background:#f0f0f0; border-color:#555; }',
     ].join('\n');
     document.head.appendChild(s);
   }

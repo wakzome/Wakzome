@@ -149,10 +149,6 @@
       '#proc-content .proc-cell-status.err { color:#fff; background:#9B4D4D; }',
       '#proc-content .proc-cell-status.warn { color:#fff; background:#5F7B94; }',
 
-      /* Copy button — elegant pill */
-      '#proc-content .proc-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:1px solid #d0d0d0; background:transparent; cursor:pointer; color:#888; font-size:.6rem; line-height:1; border-radius:4px; flex-shrink:0; transition:background .15s,border-color .15s,color .15s; vertical-align:middle; margin-right:4px; }',
-      '#proc-content .proc-copy-btn:hover { color:#000; background:#f0f0f0; border-color:#ccc; box-shadow:0 1px 4px rgba(50,78,102,.15); }',
-      '#proc-content .proc-copy-btn.copied { color:#000 !important; background:#f0f0f0 !important; border-color:#ccc !important; }',
       /* Ref and desc cell layout */
       '#proc-content .proc-ref-wrap { display:inline-flex; align-items:center; width:100%; }',
       '#proc-content .proc-desc-wrap { display:inline-flex; align-items:center; width:100%; position:relative; }',
@@ -661,7 +657,7 @@
     'MUKIT','ALCOTT','CHUXUAN SUN','MELODYSTATION','MUNDO FAVORITO','MING TA','ARITA','ALDATEX',
     'GOOD E GOOD','BLUE ROYAL','EXOTICO & CINTILANTE','SKY LOVERS','ZHUO QIUHUI','BESTSELLER',
     'FARZANA','BIJUTERIA XU HAIDONG','NOVA MODA','XIANDENG ZHANG','WAVINGMOON','ERRUI CHEN',
-    'YINGLONG','HANG HAIGUANG'
+    'YINGLONG','HANG HAIGUANG','CHI FANGYU'
   ];
 
   function procNormalize(s) {
@@ -692,6 +688,51 @@
       }
     }
     return null;
+  }
+
+  /* ── 2b-bis. BIBLIOTECA DE FORNECEDORES (Supabase) ──
+     PROVIDERS funciona como cache em memória partilhada por todas as
+     funções de matching acima. Ao arrancar, funde-se com os fornecedores
+     gravados remotamente; sempre que se deteta um fornecedor novo (sem
+     correspondência aproximada), grava-se na tabela `proc_fornecedores`
+     para ficar disponível a todos os utilizadores/sessões futuras. */
+  var _knownFornecedoresSet  = {};
+  var _fornecedoresRemoteLoaded = false;
+  (function procBuildFornecedoresSet() {
+    for (var i = 0; i < PROVIDERS.length; i++) _knownFornecedoresSet[PROVIDERS[i]] = true;
+  })();
+
+  function procLoadFornecedoresRemote() {
+    if (_fornecedoresRemoteLoaded) return;
+    _fornecedoresRemoteLoaded = true;
+    procSbFetch('proc_fornecedores?select=nome', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        if (!rows || !rows.length) return;
+        rows.forEach(function(row) {
+          var nome = row && row.nome ? procNormalize(row.nome) : '';
+          if (nome && !_knownFornecedoresSet[nome]) {
+            PROVIDERS.push(nome);
+            _knownFornecedoresSet[nome] = true;
+          }
+        });
+      })
+      .catch(function() { /* offline — mantém-se a lista local/seed */ });
+  }
+
+  /* Grava um fornecedor novo na biblioteca remota (fire-and-forget).
+     Idempotente: `merge-duplicates` evita duplicados se duas sessões
+     gravarem o mesmo nome em simultâneo. */
+  function procSaveFornecedorRemote(nome) {
+    var n = procNormalize(nome);
+    if (!n || _knownFornecedoresSet[n]) return;
+    _knownFornecedoresSet[n] = true;
+    PROVIDERS.push(n);
+    procSbFetch('proc_fornecedores', {
+      method: 'POST',
+      headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({ nome: n })
+    }).catch(function() { /* falha silenciosa — fica disponível só nesta sessão */ });
   }
 
 
@@ -918,6 +959,11 @@
     if (!input || !sugg) return;
 
     input.addEventListener('input', function() {
+      /* Força maiúsculas no valor real (não só visual), preservando a posição do cursor */
+      var selStart = input.selectionStart, selEnd = input.selectionEnd;
+      input.value = input.value.toUpperCase();
+      try { input.setSelectionRange(selStart, selEnd); } catch(e) {}
+
       procUpdateBannerProvider(fid);
       procUpdateTableLock(fid);
       var q = input.value.trim();
@@ -933,12 +979,19 @@
     input.addEventListener('blur', function() {
       setTimeout(function() {
         sugg.classList.add('hidden');
+        var raw = input.value.trim();
+        if (!raw) return;
         /* Corrección automática si hay coincidencia suficiente */
-        var exact = procFindExact(input.value);
-        if (exact && procNormalize(input.value) !== exact) {
-          input.value = exact;
-          procUpdateBannerProvider(fid);
-          procUpdateTableLock(fid);
+        var exact = procFindExact(raw);
+        if (exact) {
+          if (procNormalize(raw) !== exact) {
+            input.value = exact;
+            procUpdateBannerProvider(fid);
+            procUpdateTableLock(fid);
+          }
+        } else {
+          /* Fornecedor novo — entra na biblioteca remota (Supabase) */
+          procSaveFornecedorRemote(raw);
         }
       }, 180);
     });
@@ -2012,18 +2065,12 @@
       tr.innerHTML =
           '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'
-        + '<button class="proc-copy-btn" title="Copiar refer\u00eancia" onclick="procCopyBtn(this)">'
-        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-        + '</button>'
         + '<input type="text" class="proc-ref-input"'
         + ' onfocus="procActivateRow(this)"'
         + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td class="td-desc">'
         + '<div class="proc-desc-wrap">'
-        + '<button class="proc-copy-btn" title="Copiar descri\u00e7\u00e3o" onclick="procCopyBtn(this)">'
-        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-        + '</button>'
         + '<input type="text" class="proc-desc-input" size="22"'
         + ' onfocus="procActivateRow(this)"'
         + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procCheckAutoExpand(' + f + ',' + r + ')">'
@@ -2053,9 +2100,6 @@
         + '</div></td>'
         + '<td class="proc-cell-computed" id="proc-pvp-'   + f + '-' + r + '" style="padding:2px 4px;text-align:center;">'
         + '<div class="proc-pvp-wrap">'
-        + '<button class="proc-copy-btn proc-pvp-copy-btn" title="Copiar PVP" style="display:none" onclick="procCopyPVP(this,\'' + f + '\',\'' + r + '\')">'
-        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-        + '</button>'
         + '<span class="proc-pvp-display">\u2014</span>'
         + '<input type="number" class="proc-pvp-edit-input" step="0.01" min="0" placeholder="0.00"'
         + ' onblur="procPVPEditBlur(this,\'' + f + '\',\'' + r + '\')"'
@@ -3449,6 +3493,9 @@
 
     buildOverlayContent(container);
 
+    /* Carrega biblioteca de fornecedores remota (non-blocking) */
+    procLoadFornecedoresRemote();
+
     /* Show start area (non-blocking) — loads remote keys then renders */
     procShowStartArea();
 
@@ -4577,10 +4624,8 @@
   window.procShowAuditPanel      = procShowAuditPanel;
   window.procShowCriacaoModal    = procShowCriacaoModal;
   window.procActivateRow             = procActivateRow;
-  window.procCopyBtn             = procCopyBtn;
   window.procLimitDigits         = procLimitDigits;
   window.procToggleFlag          = procToggleFlag;
-  window.procCopyPVP             = procCopyPVP;
   window.procPVPToggleEdit       = procPVPToggleEdit;
   window.procPVPEditInput        = procPVPEditInput;
   window.procPVPEditBlur         = procPVPEditBlur;
@@ -4612,57 +4657,6 @@
       parts[0] = parts[0].slice(0, max);
       input.value = parts.join('.');
     }
-  }
-
-  function procCopyBtn(btn) {
-    var wrap  = btn.parentElement;
-    var input = wrap ? wrap.querySelector('input') : null;
-    var text  = input ? input.value.trim() : '';
-    if (!text) return;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-      } else {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
-        document.body.appendChild(ta); ta.select();
-        document.execCommand('copy'); document.body.removeChild(ta);
-      }
-    } catch(e) {}
-    btn.classList.add('copied');
-    var origHTML = btn.innerHTML;
-    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-    setTimeout(function() {
-      btn.classList.remove('copied');
-      btn.innerHTML = origHTML;
-    }, 900);
-    /* Highlight the row for any copy button click */
-    procActivateRow(btn);
-  }
-
-  function procCopyPVP(btn, fid, id) {
-    var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
-    var display = pvpEl ? pvpEl.querySelector('.proc-pvp-display') : null;
-    var text = display ? display.textContent.trim() : '';
-    if (!text || text === '\u2014') return;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-      } else {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
-        document.body.appendChild(ta); ta.select();
-        document.execCommand('copy'); document.body.removeChild(ta);
-      }
-    } catch(e) {}
-    btn.classList.add('copied');
-    var origHTML = btn.innerHTML;
-    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-    setTimeout(function() { btn.classList.remove('copied'); btn.innerHTML = origHTML; }, 900);
-    /* Highlight the row */
-    procActivateRow(btn);
   }
 
   function procPVPToggleEdit(btn, fid, id) {

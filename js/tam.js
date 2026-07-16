@@ -131,6 +131,25 @@
     });
   }
 
+  /* ── N.º GUIA ERP: ao preencher, colapsa automaticamente a fatura ──────
+     Espelha o mecanismo do módulo Processamento: ao introduzir o número
+     da guia gerada no ERP, a fatura minimiza-se sozinha, sinalizando
+     visualmente que já está processada. Nunca expande automaticamente ao
+     apagar o valor — só o utilizador decide reabrir manualmente. ── */
+  function tamGuiaErpChange(idx) {
+    var input = document.getElementById('tam-inv-guia-erp-' + idx);
+    if (!input) return;
+    var r = tamInvoices[idx];
+    if (r) r.guiaErp = input.value;
+    var hasGuia = input.value.trim().length > 0;
+    input.classList.toggle('tam-inv-guia-erp-done', hasGuia);
+    if (hasGuia && !tamCollapseState['inv_' + idx]) {
+      tamCollapseState['inv_' + idx] = true;
+      tamApplyCollapseState();
+    }
+    tamScheduleSave();
+  }
+
 
   /* ── Supabase: tabla tam_sessions, bucket/tabla tam_refs ── */
   var TAM_SESSIONS_TABLE = 'tam_sessions';
@@ -828,6 +847,11 @@
           '<span class="tam-inv-total">' + tamFmtEU(r0.grandTotal) + ' €</span>' +
         '</div>' +
         '<div class="tam-inv-hdr-btns">' +
+          '<div class="tam-inv-guia-erp-wrap">' +
+            '<span class="tam-inv-guia-erp-label">N.º Guia ERP</span>' +
+            '<input type="text" class="tam-inv-guia-erp-input' + (r0.guiaErp ? ' tam-inv-guia-erp-done' : '') + '" ' +
+              'id="tam-inv-guia-erp-0" data-inv="0" placeholder="ex: 2025/001" autocomplete="off" value="' + tamEsc(r0.guiaErp || '') + '">' +
+          '</div>' +
           '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '" data-inv="0">' +
             (tamEditMode[0] ? 'fechar edição' : 'editar') +
           '</button>' +
@@ -842,6 +866,7 @@
         tamCollapseState['inv_0'] = !tamCollapseState['inv_0'];
         tamApplyCollapseState();
       });
+      hdr0.querySelector('.tam-inv-guia-erp-input').addEventListener('input', function(){ tamGuiaErpChange(0); });
       hdr0.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){ tamToggleEditMode(0); });
       hdr0.querySelector('.tam-inv-export-btn').addEventListener('click', function(){ tamExportInvoiceCSV(tamInvoices[0]); });
       hdr0.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){ tamShowStockModal(0); });
@@ -892,6 +917,11 @@
             '<span class="tam-inv-total">' + tamFmtEU(r.grandTotal) + ' €</span>' +
           '</div>' +
           '<div class="tam-inv-hdr-btns">' +
+            '<div class="tam-inv-guia-erp-wrap">' +
+              '<span class="tam-inv-guia-erp-label">N.º Guia ERP</span>' +
+              '<input type="text" class="tam-inv-guia-erp-input' + (r.guiaErp ? ' tam-inv-guia-erp-done' : '') + '" ' +
+                'id="tam-inv-guia-erp-' + idx + '" data-inv="' + idx + '" placeholder="ex: 2025/001" autocomplete="off" value="' + tamEsc(r.guiaErp || '') + '">' +
+            '</div>' +
             '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
               (tamEditMode[idx] ? 'fechar edição' : 'editar') +
             '</button>' +
@@ -904,6 +934,10 @@
           var i = parseInt(hdr.querySelector('.tam-inv-toggle-btn').getAttribute('data-inv'));
           tamCollapseState['inv_' + i] = !tamCollapseState['inv_' + i];
           tamApplyCollapseState();
+        });
+        hdr.querySelector('.tam-inv-guia-erp-input').addEventListener('input', function(){
+          var i = parseInt(hdr.querySelector('.tam-inv-guia-erp-input').getAttribute('data-inv'));
+          tamGuiaErpChange(i);
         });
         hdr.querySelector('.tam-inv-edit-btn').addEventListener('click', function(){
           var i = parseInt(hdr.querySelector('.tam-inv-edit-btn').getAttribute('data-inv'));
@@ -2959,7 +2993,8 @@
           dnList:        r.dnList        || [],
           grouped:       r.grouped,
           shipPerPiece:  r.shipPerPiece  || 0,
-          _externalShipping: r._externalShipping || null
+          _externalShipping: r._externalShipping || null,
+          guiaErp:       r.guiaErp       || ''
         };
       })
     };
@@ -3287,11 +3322,17 @@
           grouped:        grouped,
           shipPerPiece:   inv.shipPerPiece   || (totalPieces > 0 ? tamRound2(shipping / totalPieces) : 0),
           _externalShipping: inv._externalShipping || null,
+          guiaErp:        inv.guiaErp         || '',
           xv: { fullyAgree: true, confirmed: grouped.length, conflicts: [],
                 engines: [{label:'A',refs:grouped.length,units:totalPieces},
                           {label:'B',refs:grouped.length,units:totalPieces}],
                 autoEngine:'A', activeEngine:'A', isManual:false }
         };
+      });
+      /* Guia ERP já preenchida ao guardar — a fatura reabre sempre colapsada
+         (o estado de colapso em si não é persistido, só se re-deriva daqui). */
+      tamInvoices.forEach(function(inv, idx){
+        if (inv.guiaErp) tamCollapseState['inv_' + idx] = true;
       });
       tamEnsureStyles();
       document.getElementById('tab-tam').classList.add('tam-loaded');
@@ -7314,6 +7355,13 @@
       /* ── Remove button per invoice (proc style) ── */
       '.tam-inv-remove-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
       '.tam-inv-remove-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
+
+      /* ── N.º Guia ERP — auto-colapsa a fatura ao preencher (proc style) ── */
+      '.tam-inv-guia-erp-wrap { display:flex; align-items:center; gap:6px; }',
+      '.tam-inv-guia-erp-label { font-size:.62rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
+      '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:130px; outline:none; transition:border-color .15s,background .15s; }',
+      '.tam-inv-guia-erp-input:focus { border-color:#000; background:#fff; }',
+      '.tam-inv-guia-erp-input.tam-inv-guia-erp-done { border-color:#4A7C6F; background:#F0F7F5; color:#4A7C6F; }',
 
             /* ── Stock modal (proc-or-modal system — identical to processamento.js) ── */
       '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',

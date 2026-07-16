@@ -1371,9 +1371,14 @@
     value.style.cssText = 'font-size:1.3rem;font-weight:600;line-height:1;letter-spacing:-.01em;color:' + (positivo ? '#2a8a2a' : '#c05000') + ';';
     value.textContent = (positivo ? '+' : '') + _fmtEuros(result.saldo);
 
+    var quem = document.createElement('div');
+    quem.style.cssText = 'font-size:.62rem;color:#999;margin-top:2px;';
+    quem.textContent = 'Nadiya';
+
     wrap.appendChild(divider);
     wrap.appendChild(label);
     wrap.appendChild(value);
+    wrap.appendChild(quem);
     container.appendChild(wrap);
   }
 

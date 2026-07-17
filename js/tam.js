@@ -3360,10 +3360,13 @@
     return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10)).getTime();
   }
 
+  /* Renderiza a lista em TODOS os contentores presentes no DOM neste
+     momento — o bloco inline (visível em estado vazio) e, se estiver
+     aberto, o modal de troca de sessão (visível dentro de uma sessão
+     activa). Os dois soões o mesmo dado, nunca dessincronizam. */
   function tamRenderSessionsList(sessions) {
-    var dd = document.getElementById('tam-sessions-dropdown');
-    var titleEl = document.getElementById('tam-sessions-inline-title');
-    if (!dd) return;
+    var targets = document.querySelectorAll('.tam-sessions-list-target');
+    if (!targets.length) return;
     if (!sessions) sessions = tamLoadAllSessionsLocal();
     var keys = Object.keys(sessions).sort(function(a,b){
       var da = tamParseSessionDate(sessions[a].name || a);
@@ -3372,15 +3375,12 @@
       return (sessions[b].savedAt||0) - (sessions[a].savedAt||0);
     });
 
-    if (titleEl) titleEl.textContent = 'sessões guardadas' + (keys.length ? ' · ' + keys.length : '');
+    var titleTxt = 'sessões guardadas' + (keys.length ? ' · ' + keys.length : '');
+    document.querySelectorAll('.tam-sessions-title-target').forEach(function(t){ t.textContent = titleTxt; });
 
-    if (!keys.length) {
-      dd.innerHTML = '<div class="tam-sessions-empty">nenhuma sessão guardada</div>';
-      return;
-    }
-
-    dd.innerHTML =
-      keys.map(function(k){
+    var bodyHtml = !keys.length
+      ? '<div class="tam-sessions-empty">nenhuma sessão guardada</div>'
+      : keys.map(function(k){
         var s = sessions[k];
         var date = s.savedAt ? new Date(s.savedAt).toLocaleString('pt-PT') : '—';
         var invInfo = s.invoices ? s.invoices.length + ' fat.' : '';
@@ -3434,28 +3434,66 @@
           '</div>';
       }).join('');
 
-    dd.querySelectorAll('.tam-dd-load-btn').forEach(function(btn){
-      btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        var key = btn.getAttribute('data-key');
-        /* Show loading feedback on button */
-        btn.textContent = '…';
-        btn.disabled = true;
-        tamLoadSessionFresh(key);
-      });
-    });
+    targets.forEach(function(dd){
+      dd.innerHTML = bodyHtml;
 
-    dd.querySelectorAll('.tam-dd-del-btn').forEach(function(btn){
-      btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        var key = btn.getAttribute('data-key');
-        tamConfirmDeleteSession(key, function(){
-          tamDeleteSession(key);
-          var updatedSessions = tamLoadAllSessionsLocal();
-          tamRenderSessionsList(updatedSessions);
+      dd.querySelectorAll('.tam-dd-load-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          var key = btn.getAttribute('data-key');
+          /* Show loading feedback on button */
+          btn.textContent = '…';
+          btn.disabled = true;
+          tamLoadSessionFresh(key);
+          /* Se veio do modal de troca (dentro de uma sessão activa), fechá-lo */
+          var switchModal = document.getElementById('tam-sessions-switch-modal');
+          if (switchModal) switchModal.remove();
+        });
+      });
+
+      dd.querySelectorAll('.tam-dd-del-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          var key = btn.getAttribute('data-key');
+          tamConfirmDeleteSession(key, function(){
+            tamDeleteSession(key);
+            var updatedSessions = tamLoadAllSessionsLocal();
+            tamRenderSessionsList(updatedSessions);
+          });
         });
       });
     });
+  }
+
+  /* ── Modal de troca de sessão — só faz sentido quando já se está DENTRO
+     de uma sessão activa (o bloco inline fica escondido nesse estado para
+     dar espaço ao trabalho). Segue o mesmo padrão de overlay que os outros
+     diálogos do módulo (criar/remover a cada abertura). ── */
+  function tamOpenSessionsSwitchModal() {
+    var old = document.getElementById('tam-sessions-switch-modal');
+    if (old) old.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'tam-sessions-switch-modal';
+    overlay.innerHTML =
+      '<div id="tam-sessions-switch-box">' +
+        '<div class="tam-sessions-switch-hdr">' +
+          '<span class="tam-sessions-inline-title tam-sessions-title-target">sessões guardadas</span>' +
+          '<button type="button" id="tam-sessions-switch-close">✕</button>' +
+        '</div>' +
+        '<div class="tam-sessions-list-target" id="tam-sessions-switch-dropdown"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#tam-sessions-switch-close').addEventListener('click', function(){ overlay.remove(); });
+    function onKeyDown(e){
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKeyDown); }
+    }
+    document.addEventListener('keydown', onKeyDown);
+
+    overlay.querySelector('#tam-sessions-switch-dropdown').innerHTML = '<div class="tam-sessions-empty">a carregar sessões…</div>';
+    tamLoadAllSessionsMerged().then(function(sessions){ tamRenderSessionsList(sessions); });
   }
 
   /* ── Cargar sessão forçando fetch de Supabase primeiro ── */
@@ -7278,6 +7316,18 @@
       '#tab-tam:not(.tam-loaded) #tam-sessions-inline { display:block; }',
       '.tam-sessions-inline-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; background:#000!important; color:#fff!important; }',
       '#tam-sessions-dropdown { width:100%; max-height:420px; overflow-y:auto; }',
+      /* Botão "sessões": só dentro de uma sessão activa — no estado vazio
+         o bloco inline acima já está visível, o botão seria redundante. */
+      '#tam-sessions-btn { display:none; }',
+      '#tab-tam.tam-loaded #tam-sessions-btn { display:inline-flex; }',
+      /* Modal de troca de sessão (aberto a partir do botão acima) */
+      '#tam-sessions-switch-modal { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:900; display:flex; align-items:center; justify-content:center; padding:16px; }',
+      '#tam-sessions-switch-box { width:min(480px,100%); max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.25); font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-sessions-switch-hdr { display:flex; align-items:center; justify-content:space-between; background:#000!important; flex-shrink:0; }',
+      '.tam-sessions-switch-hdr .tam-sessions-inline-title { border-bottom:none; flex:1; }',
+      '#tam-sessions-switch-close { background:none; border:none; color:#fff!important; font-size:.85rem; cursor:pointer; padding:10px 18px; line-height:1; }',
+      '#tam-sessions-switch-close:hover { opacity:.65; }',
+      '#tam-sessions-switch-dropdown { overflow-y:auto; }',
       '.tam-dd-item { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f0f0f0; transition:background .12s; }',
       '.tam-dd-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }',
       '.tam-dd-dot-green { background:#4A7C6F; }',
@@ -8106,6 +8156,7 @@
       bar.id = 'tam-session-bar';
       bar.style.cssText = 'display:flex!important;';   // visible desde el inicio
       bar.innerHTML =
+        '<button class="tam-session-btn" id="tam-sessions-btn" title="trocar de sessão">sessões</button>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">guardar</button>' +
         '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">guía</button>' +
         '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">delivery note' +
@@ -8126,14 +8177,20 @@
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
 
+      // ── Botão "sessões": só visível dentro de uma sessão activa (ver CSS
+      // #tab-tam.tam-loaded #tam-sessions-btn) — em estado vazio o bloco
+      // inline já está à vista, não faz falta um botão para o abrir. ──
+      var sessBtn = bar.querySelector('#tam-sessions-btn');
+      if (sessBtn) sessBtn.addEventListener('click', function(){ tamOpenSessionsSwitchModal(); });
+
       // ── Lista de sessões: bloco fixo por baixo da zona de carregar
       // fatura (visível só em estado vazio — ver CSS #tab-tam:not(.tam-loaded)).
       if (!document.getElementById('tam-sessions-inline')) {
         var sessInline = document.createElement('div');
         sessInline.id = 'tam-sessions-inline';
         sessInline.innerHTML =
-          '<div class="tam-sessions-inline-title" id="tam-sessions-inline-title">sessões guardadas</div>' +
-          '<div id="tam-sessions-dropdown"></div>';
+          '<div class="tam-sessions-inline-title tam-sessions-title-target" id="tam-sessions-inline-title">sessões guardadas</div>' +
+          '<div class="tam-sessions-list-target" id="tam-sessions-dropdown"></div>';
         if (uz && uz.parentNode) uz.parentNode.insertBefore(sessInline, uz.nextSibling);
         else tab.appendChild(sessInline);
         tamRefreshSessionsInline();

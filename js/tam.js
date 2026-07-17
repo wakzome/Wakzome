@@ -1882,8 +1882,7 @@
             'value="' + (box.total||'') + '" placeholder="total" ' +
             (isLocked ? 'disabled ' : '') + 'min="1" data-box="' + bi + '">' +
           (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
-          (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '">\u270F\uFE0F</button>' : '') +
-          '<button class="tam-box-filter-btn" data-box="' + bi + '" title="Ver s\u00f3 refs desta caixa">\uD83D\uDD0D</button>' +
+          '<button class="tam-box-close-btn" data-box="' + bi + '" title="Fechar sem confirmar">\u2715</button>' +
           '<button class="tam-box-confirm-btn" data-box="' + bi + '" title="Confirmar caixa e fechar colunas">\u2713 Confirmar</button>' +
         '</div>' +
         '<div class="tam-box-sub-labels">' +
@@ -2070,15 +2069,11 @@
     })();
 
     // ── BIND PAINEL DE CAIXAS (pendentes / confirmadas) ───────
+    // Clicar em qualquer caixa da lista — pendente ou confirmada — abre
+    // sempre o modal primeiro. Só o botão "Levar a distribuição geral"
+    // dentro do modal abre as colunas na distribuição geral.
     (function(){
-      area.querySelectorAll('.tam-boxlist-item[data-action="open"]').forEach(function(btn){
-        btn.addEventListener('click', function(){
-          var bi = parseInt(btn.getAttribute('data-box'));
-          tamEditingBoxBi = (tamEditingBoxBi === bi) ? -1 : bi;
-          tamRenderAll();
-        });
-      });
-      area.querySelectorAll('.tam-boxlist-item[data-action="modal"]').forEach(function(btn){
+      area.querySelectorAll('.tam-boxlist-item').forEach(function(btn){
         btn.addEventListener('click', function(){
           tamShowBoxEditModal(parseInt(btn.getAttribute('data-box')));
         });
@@ -2087,6 +2082,13 @@
         btn.addEventListener('click', function(e){
           e.stopPropagation();
           tamConfirmBox(parseInt(btn.getAttribute('data-box')));
+        });
+      });
+      area.querySelectorAll('.tam-box-close-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          tamEditingBoxBi = -1;
+          tamRenderAll();
         });
       });
     })();
@@ -2638,17 +2640,39 @@
       received += (c.f || 0) + (c.p || 0);
     });
     var missing = box.total ? Math.max(0, box.total - received) : 0;
-    var msg = missing > 0
-      ? ('Faltam ' + missing + ' pe\u00e7a(s) para completar o total declarado (' + received + '/' + box.total + ').\n\nConfirmar mesmo assim?')
-      : ('Confirmar esta caixa' + (box.total ? (' (' + received + '/' + box.total + ')') : (' com ' + received + ' pe\u00e7as')) + '?');
-    if (!confirm(msg)) return;
+    var bodyHtml = missing > 0
+      ? ('Faltam <strong>' + missing + '</strong> pe\u00e7a(s) para completar o total declarado (' +
+          received + '/' + box.total + ').<br><small style="color:#888">Podes confirmar mesmo assim se a caixa est\u00e1 mesmo incompleta.</small>')
+      : ('Confirmar esta caixa' + (box.total ? (' com ' + received + ' de ' + box.total + ' pe\u00e7as') : (' com ' + received + ' pe\u00e7as')) + '?');
 
-    tamPushUndo();
-    box.confirmed = true;
-    if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
-    tamDetectRefCompletions();
-    tamRenderAll();
-    tamScheduleSave();
+    var old = document.getElementById('tam-session-dialog');
+    if (old) old.parentNode.removeChild(old);
+
+    var dialog = document.createElement('div');
+    dialog.id = 'tam-session-dialog';
+    dialog.innerHTML =
+      '<div id="tam-session-dialog-box">' +
+        '<div class="tam-dialog-title">confirmar caixa</div>' +
+        '<div class="tam-dialog-body">' + bodyHtml + '</div>' +
+        '<div class="tam-dialog-btns">' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add" id="tam-confirmbox-yes">\u2713 sim, confirmar</button>' +
+          '<button class="tam-dialog-btn" id="tam-confirmbox-no">cancelar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(dialog);
+
+    dialog.querySelector('#tam-confirmbox-yes').addEventListener('click', function(){
+      dialog.parentNode.removeChild(dialog);
+      tamPushUndo();
+      box.confirmed = true;
+      if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
+      tamDetectRefCompletions();
+      tamRenderAll();
+      tamScheduleSave();
+    });
+    dialog.querySelector('#tam-confirmbox-no').addEventListener('click', function(){
+      dialog.parentNode.removeChild(dialog);
+    });
   }
 
   /* ──────────────────────────────────────────────────────────────
@@ -7480,6 +7504,8 @@
       '.tam-box-edit-btn:hover { background:#f0f0f0; border-color:#000; }',
       '.tam-box-confirm-btn { background:#4A7C6F; border:1px solid #4A7C6F; color:#fff!important; border-radius:6px; cursor:pointer; font-size:.7rem; font-weight:700; padding:2px 8px; margin-left:4px; transition:background .15s; white-space:nowrap; }',
       '.tam-box-confirm-btn:hover { background:#3a6459; }',
+      '.tam-box-close-btn { background:transparent; border:1px solid #e0e0e0; color:#888!important; border-radius:6px; cursor:pointer; font-size:.75rem; padding:1px 7px; margin-left:2px; transition:all .15s; }',
+      '.tam-box-close-btn:hover { background:#fdeaea; border-color:#c00; color:#c00!important; }',
       '.tam-box-sub-labels { display:flex; justify-content:space-around; }',
       '.tam-sub-f { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',
       '.tam-sub-p { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',

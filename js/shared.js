@@ -78,6 +78,7 @@
       // Cargar los JS protegidos ahora que la cookie está lista
       await (function loadProtectedScripts() {
         const scripts = [
+          'js/session-lock.js',
           'js/agenda.js','js/rotulos.js','js/processamento.js',
           'js/admin-init.js','js/salarios.js','js/recibos.js',
           'js/admin-horarios.js','js/ferias.js','js/editor-pdf.js',

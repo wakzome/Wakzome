@@ -1778,12 +1778,9 @@
       return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
     }).filter(function(b){ return !b.isHidden; });
 
-    /* ── Painel lateral: só a caixa em tamEditingBoxBi mostra colunas.
-       As restantes aparecem apenas na lista "caixas pendentes / confirmadas"
-       — clicar abre-a (pendente) ou abre o modal (confirmada). */
-    var panelPending   = boxOrder.filter(function(b){ return !b.box.confirmed; });
-    var panelConfirmed = boxOrder.filter(function(b){ return  b.box.confirmed; });
-
+    /* ── Painel lateral: uma única lista de caixas (ordem de receção).
+       Confirmar NÃO move nem separa a caixa — só marca um ✓ no item.
+       Só a caixa em tamEditingBoxBi mostra colunas na distribuição geral. */
     var openEntry = null;
     for (var _oi=0; _oi<boxOrder.length; _oi++) { if (boxOrder[_oi].bi === tamEditingBoxBi) { openEntry = boxOrder[_oi]; break; } }
     if (!openEntry || openEntry.box.confirmed) { tamEditingBoxBi = -1; openEntry = null; }
@@ -1985,31 +1982,44 @@
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
       '</div>';
 
-    // ── Painel lateral: lista de caixas pendentes / confirmadas ──
+    // ── Painel lateral: lista única de caixas ────────────────
     function tamBoxPanelLabel(bObj) {
       var box = bObj.box, bi = bObj.bi;
       var dnCode = box.dnZyCode || null;
       return dnCode ? (dnCode + (box.locked ? ' \uD83D\uDD12' : ''))
                     : ('Caixa ' + (bi + 1) + (box.locked ? ' \uD83D\uDD12' : ''));
     }
-    function tamBoxPanelItem(bObj, action) {
+    function tamBoxPanelItem(bObj) {
       var bi     = bObj.bi;
-      var pct    = bObj.box.total ? (bObj.received + '/' + bObj.box.total) : '';
-      var active = (action === 'open' && bi === tamEditingBoxBi) ? ' tam-boxlist-item-active' : '';
-      return '<button type="button" class="tam-boxlist-item' + active + '" data-box="' + bi + '" data-action="' + action + '">' +
-        '<span class="tam-boxlist-label">' + tamEsc(tamBoxPanelLabel(bObj)) + '</span>' +
-        (pct ? '<span class="tam-boxlist-pct">' + pct + '</span>' : '') +
-      '</button>';
+      var box    = bObj.box;
+      var dnCode = box.dnZyCode || null;
+      var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
+      var canLink      = !dnCode && !box.locked;
+      var pct    = box.total ? (bObj.received + '/' + box.total) : '';
+      var active = (bi === tamEditingBoxBi) ? ' tam-boxlist-item-active' : '';
+      var confirmedCls = box.confirmed ? ' tam-boxlist-item-confirmed' : '';
+
+      var linkHtml = '';
+      if (canLink) {
+        linkHtml = '<button type="button" class="tam-boxlist-link-btn" data-box="' + bi + '" title="Vincular a uma DN pendente">\uD83D\uDD17</button>';
+      } else if (isManualLink && !box.locked) {
+        linkHtml = '<button type="button" class="tam-boxlist-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
+      }
+
+      return '<div class="tam-boxlist-item' + active + confirmedCls + '">' +
+        '<button type="button" class="tam-boxlist-item-main" data-box="' + bi + '">' +
+          (box.confirmed ? '<span class="tam-boxlist-check" title="Confirmada">\u2713</span>' : '') +
+          '<span class="tam-boxlist-label">' + tamEsc(tamBoxPanelLabel(bObj)) + '</span>' +
+          (pct ? '<span class="tam-boxlist-pct">' + pct + '</span>' : '') +
+        '</button>' +
+        linkHtml +
+      '</div>';
     }
     var boxListHtml =
       '<div class="tam-boxlist-panel">' +
         '<div class="tam-boxlist-section">' +
-          '<div class="tam-boxlist-hdr">Caixas pendentes</div>' +
-          (panelPending.length ? panelPending.map(function(b){ return tamBoxPanelItem(b, 'open'); }).join('') : '<div class="tam-boxlist-empty">\u2014</div>') +
-        '</div>' +
-        '<div class="tam-boxlist-section">' +
-          '<div class="tam-boxlist-hdr">Caixas confirmadas</div>' +
-          (panelConfirmed.length ? panelConfirmed.map(function(b){ return tamBoxPanelItem(b, 'modal'); }).join('') : '<div class="tam-boxlist-empty">\u2014</div>') +
+          '<div class="tam-boxlist-hdr">Caixas</div>' +
+          (boxOrder.length ? boxOrder.map(function(b){ return tamBoxPanelItem(b); }).join('') : '<div class="tam-boxlist-empty">\u2014</div>') +
         '</div>' +
       '</div>';
 
@@ -2073,9 +2083,21 @@
     // sempre o modal primeiro. Só o botão "Levar a distribuição geral"
     // dentro do modal abre as colunas na distribuição geral.
     (function(){
-      area.querySelectorAll('.tam-boxlist-item').forEach(function(btn){
+      area.querySelectorAll('.tam-boxlist-item-main').forEach(function(btn){
         btn.addEventListener('click', function(){
           tamShowBoxEditModal(parseInt(btn.getAttribute('data-box')));
+        });
+      });
+      area.querySelectorAll('.tam-boxlist-link-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          tamShowDNLinkPopover(parseInt(btn.getAttribute('data-box')), btn);
+        });
+      });
+      area.querySelectorAll('.tam-boxlist-unlink-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          tamUnlinkBoxDN(parseInt(btn.getAttribute('data-box')));
         });
       });
       area.querySelectorAll('.tam-box-confirm-btn').forEach(function(btn){
@@ -7373,12 +7395,18 @@
       '.tam-boxlist-panel { flex:0 0 210px; display:flex; flex-direction:column; gap:14px; border-left:1px solid #e0e0e0; padding:10px 0 10px 14px; }',
       '.tam-boxlist-hdr { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#000; opacity:.5; margin-bottom:6px; }',
       '.tam-boxlist-section { display:flex; flex-direction:column; gap:6px; }',
-      '.tam-boxlist-item { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.8rem; font-weight:700; color:#000!important; text-align:left; transition:all .15s; }',
+      '.tam-boxlist-item { display:flex; align-items:center; gap:4px; width:100%; padding:2px 4px 2px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; transition:all .15s; }',
       '.tam-boxlist-item:hover { border-color:#555; background:#fafafa; }',
       '.tam-boxlist-item-active { border-color:#000; background:rgba(0,0,0,.05); }',
+      '.tam-boxlist-item-confirmed { border-color:#4A7C6F; }',
+      '.tam-boxlist-item-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 4px; border:none; background:transparent; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.8rem; font-weight:700; color:#000!important; text-align:left; }',
       '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
       '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
+      '.tam-boxlist-check { color:#4A7C6F!important; font-weight:700; }',
       '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
+      '.tam-boxlist-link-btn, .tam-boxlist-unlink-btn { flex:0 0 auto; background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:2px 6px; transition:all .15s; }',
+      '.tam-boxlist-link-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-boxlist-unlink-btn:hover { background:#fdeaea; border-color:#c00; color:#c00!important; }',
       '@media (max-width:768px) {',
       '  .tam-rec-flex { flex-direction:column; }',
       '  .tam-boxlist-panel { flex:0 0 auto; width:100%; border-left:none; border-top:1px solid #e0e0e0; padding:14px 0 0 0; flex-direction:row; flex-wrap:wrap; }',

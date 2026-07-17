@@ -804,7 +804,6 @@
 
     tamRenderInvoices();
     tamRenderReception();
-    tamRenderAnomalies();
     tamRenderDNVerification();
     tamRenderProgress();
     tamRenderSessionBar();
@@ -3172,113 +3171,6 @@
     });
   }
 
-  function tamRenderAnomalies() {
-    var area = document.getElementById('tam-anomaly-area');
-    if (!area) return;
-
-    // Build consolidated ref totals directly from boxes (raw, unfiltered)
-    var boxTotals = {};
-    if (tamSession) {
-      tamSession.boxes.forEach(function(box){
-        Object.keys(box.refs || {}).forEach(function(ref){
-          if (!boxTotals[ref]) boxTotals[ref] = { f:0, p:0 };
-          boxTotals[ref].f += (box.refs[ref].f || 0);
-          boxTotals[ref].p += (box.refs[ref].p || 0);
-        });
-      });
-    }
-
-    // Build consolidated ref totals needed across all invoices
-    var refNeeded = {};
-    tamInvoices.forEach(function(r){
-      r.grouped.forEach(function(g){
-        refNeeded[g.ref] = (refNeeded[g.ref] || 0) + g.pieces;
-      });
-    });
-
-    // Collect anomalies: any ref that has been touched and differs from expected
-    var anomalies = [];
-    Object.keys(boxTotals).forEach(function(ref){
-      var got  = (boxTotals[ref].f || 0) + (boxTotals[ref].p || 0);
-      if (got === 0) return; // nothing entered yet
-      var expected = refNeeded[ref] || 0;
-      var diff = got - expected;
-      if (diff !== 0) {
-        // Find which invoice(s) this ref belongs to
-        var invoiceNos = tamInvoices
-          .filter(function(r){ return r.grouped.some(function(g){ return g.ref === ref; }); })
-          .map(function(r){ return r.invoiceNo; })
-          .join(', ');
-        anomalies.push({
-          ref:       ref,
-          invoiceNo: invoiceNos,
-          expected:  expected,
-          got:       got,
-          diff:      diff,
-          f:         boxTotals[ref].f || 0,
-          p:         boxTotals[ref].p || 0
-        });
-      }
-    });
-
-    if (!anomalies.length) {
-      area.innerHTML = '';
-      return;
-    }
-
-    // Sort: most severe first (largest absolute diff)
-    anomalies.sort(function(a,b){ return Math.abs(b.diff) - Math.abs(a.diff); });
-
-    var btnHtml =
-      '<div class="tam-anomaly-btn-wrap">' +
-        '<button id="tam-anomaly-btn" class="tam-anomaly-btn">⚠ ' + anomalies.length + ' anomalia(s) — ver resumo</button>' +
-      '</div>';
-
-    var reportHtml =
-      '<div id="tam-anomaly-report" style="display:none;">' +
-        '<div class="tam-anomaly-title">resumo de anomalias</div>' +
-        '<div class="tam-anomaly-scroll">' +
-        '<table class="tam-anomaly-table">' +
-        '<thead><tr>' +
-          '<th>referência</th>' +
-          '<th>fatura</th>' +
-          '<th>esperado</th>' +
-          '<th>funchal</th>' +
-          '<th>porto santo</th>' +
-          '<th>diferença</th>' +
-        '</tr></thead><tbody>' +
-        anomalies.map(function(a){
-          var diffCls = a.diff < 0 ? 'tam-anom-low' : 'tam-anom-high';
-          var diffTxt = a.diff < 0
-            ? a.diff + ' <span style="font-weight:normal;font-size:.75rem">(faltam ' + Math.abs(a.diff) + ')</span>'
-            : '+' + a.diff + ' <span style="font-weight:normal;font-size:.75rem">(a mais)</span>';
-          return '<tr>' +
-            '<td><strong>' + tamEsc(a.ref) + '</strong></td>' +
-            '<td>' + tamEsc(a.invoiceNo) + '</td>' +
-            '<td class="tam-td-num">' + a.expected + '</td>' +
-            '<td class="tam-td-num tam-cell-funchal">' + a.f + '</td>' +
-            '<td class="tam-td-num tam-cell-porto">'   + a.p + '</td>' +
-            '<td class="tam-td-num ' + diffCls + '">' + diffTxt + '</td>' +
-            '</tr>';
-        }).join('') +
-        '</tbody></table>' +
-        '</div>' +
-      '</div>';
-
-    area.innerHTML = btnHtml + reportHtml;
-
-    area.querySelector('#tam-anomaly-btn').addEventListener('click', function(){
-      var report = document.getElementById('tam-anomaly-report');
-      var btn    = document.getElementById('tam-anomaly-btn');
-      if (report.style.display === 'none') {
-        report.style.display = 'block';
-        btn.textContent = '▲ ocultar resumo';
-      } else {
-        report.style.display = 'none';
-        btn.textContent = '⚠ ' + anomalies.length + ' anomalia(s) — ver resumo';
-      }
-    });
-  }
   function tamRenderSessionBar() {
     var bar = document.getElementById('tam-session-bar');
     if (!bar) return;
@@ -7498,7 +7390,9 @@
       '  .tam-boxlist-panel { flex:0 0 auto; width:100%; border-left:none; border-top:1px solid #e0e0e0; padding:14px 0 0 0; flex-direction:row; flex-wrap:wrap; }',
       '  .tam-boxlist-section { flex:1 1 45%; min-width:140px; }',
       '}',
-      '.tam-rec-area-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; background:#fafafa; border-radius:14px 14px 0 0; }',
+      '.tam-rec-area-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; border-radius:14px 14px 0 0; background:#000!important; color:#fff!important; opacity:1!important; }',
+      '.tam-rec-area-title .tam-inv-toggle-btn { color:#fff!important; }',
+      '.tam-rec-area-title .tam-inv-toggle-btn:hover { color:#ccc!important; }',
 
       /* Funchal/Porto reception th already defined above */
 
@@ -7872,23 +7766,6 @@
       '.tam-cell-anomaly-high { color:#5F7B94; font-weight:700; text-align:center; }',
       '.tam-cell-anomaly-empty { }',
 
-      /* ── Anomaly report block (proc style) ── */
-      '#tam-anomaly-area { width:100%; max-width:960px; margin-top:16px; }',
-      '.tam-anomaly-btn-wrap { display:flex; justify-content:center; margin-bottom:10px; }',
-      '.tam-anomaly-btn { padding:9px 32px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #E8A44A; border-radius:10px; background:transparent; color:#C47A1E; transition:all .15s; letter-spacing:.02em; }',
-      '.tam-anomaly-btn:hover { background:#E8A44A; color:#fff; }',
-      '#tam-anomaly-report { border:1px solid #e0e0e0; border-radius:14px; overflow:hidden; font-family:\'MontserratLight\',sans-serif; }',
-      '.tam-anomaly-title { padding:10px 16px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; background:#fafafa; border-radius:14px 14px 0 0; }',
-      '.tam-anomaly-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }',
-      '.tam-anomaly-table { width:100%; min-width:480px; border-collapse:collapse; font-size:.84rem; white-space:nowrap; }',
-      '.tam-anomaly-table th { padding:6px 12px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.10em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; text-align:center; }',
-      '.tam-anomaly-table td { padding:5px 12px; border-bottom:1px solid #f0f0f0; font-weight:700; text-align:center; vertical-align:middle; }',
-      '.tam-anomaly-table td:first-child { text-align:left; }',
-      '.tam-anomaly-table tbody tr:last-child td { border-bottom:none; }',
-      '.tam-anom-low  { color:#9B4D4D!important; }',
-      '.tam-anom-high { color:#5F7B94!important; }',
-
-
       /* -- DN modal (proc style) -- */
       '#tam-dn-modal { position:fixed; inset:0; z-index:10001; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
       '#tam-dn-modal.tam-dn-visible { opacity:1; pointer-events:auto; }',
@@ -8218,8 +8095,6 @@
         });
         var ra = document.getElementById('tam-reception-area');
         if (ra) ra.innerHTML = '';
-        var aa = document.getElementById('tam-anomaly-area');
-        if (aa) aa.innerHTML = '';
         var dva = document.getElementById('tam-dn-verify-area');
         if (dva) dva.innerHTML = '';
         var pra = document.getElementById('tam-progress-area');
@@ -8397,22 +8272,13 @@
       else tab.appendChild(ra);
     }
 
-    // Anomaly area — injected after reception area
-    if (!document.getElementById('tam-anomaly-area')) {
-      var aa = document.createElement('div');
-      aa.id = 'tam-anomaly-area';
-      var recArea = document.getElementById('tam-reception-area');
-      if (recArea && recArea.nextSibling) recArea.parentNode.insertBefore(aa, recArea.nextSibling);
-      else if (recArea) recArea.parentNode.appendChild(aa);
-      else tab.appendChild(aa);
-    }
-    // DN verification area — injected after anomaly area
+    // DN verification area — injected after reception area
     if (!document.getElementById('tam-dn-verify-area')) {
       var dva = document.createElement('div');
       dva.id = 'tam-dn-verify-area';
-      var anomArea = document.getElementById('tam-anomaly-area');
-      if (anomArea && anomArea.nextSibling) anomArea.parentNode.insertBefore(dva, anomArea.nextSibling);
-      else if (anomArea) anomArea.parentNode.appendChild(dva);
+      var recArea2 = document.getElementById('tam-reception-area');
+      if (recArea2 && recArea2.nextSibling) recArea2.parentNode.insertBefore(dva, recArea2.nextSibling);
+      else if (recArea2) recArea2.parentNode.appendChild(dva);
       else tab.appendChild(dva);
     }
 

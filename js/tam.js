@@ -7348,12 +7348,12 @@
       '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { font-size:.72rem!important; letter-spacing:.10em!important; font-weight:700!important; }',
 
       /* ── Multi-factura: bloques (proc style) ── */
-      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:.8rem; color:#bbb; padding:0 6px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
+      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:1.15rem; color:#000; padding:0 8px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
       '.tam-inv-toggle-btn:hover { color:#000; }',
       '#tam-rec-toggle-btn { font-size:1.05rem; color:#999; }',
       /* iPad: bigger toggle button */
       '@media (pointer:coarse) and (min-width:768px) {',
-      '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#555; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',
+      '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#000; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',
       '  #tam-rec-toggle-btn { font-size:1.6rem; padding:6px 12px; color:#333; min-width:44px; min-height:44px; }',
       '}',
 
@@ -7362,6 +7362,7 @@
       '.tam-inv-collapsed .tam-inv-table-wrap thead { display:none!important; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tbody { display:none!important; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
+      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-hdr-row2,.tam-inv-collapsed .tam-inv-guia-erp-label,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn { display:none!important; }',
 
       /* ── Single invoice collapsed state ── */
       '.tam-single-inv-collapsed thead { display:none!important; }',
@@ -7392,7 +7393,7 @@
       '.tam-inv-color-0 .tam-inv-meta,.tam-inv-color-1 .tam-inv-meta,.tam-inv-color-2 .tam-inv-meta,.tam-inv-color-3 .tam-inv-meta,.tam-inv-color-4 .tam-inv-meta,.tam-inv-color-5 .tam-inv-meta { color:#000!important; text-shadow:none; opacity:.5; }',
       '.tam-inv-color-0 .tam-inv-total,.tam-inv-color-1 .tam-inv-total,.tam-inv-color-2 .tam-inv-total,.tam-inv-color-3 .tam-inv-total,.tam-inv-color-4 .tam-inv-total,.tam-inv-color-5 .tam-inv-total { color:#000!important; text-shadow:none; }',
       /* Toggle button: dark on white */
-      '.tam-inv-color-0 .tam-inv-toggle-btn,.tam-inv-color-1 .tam-inv-toggle-btn,.tam-inv-color-2 .tam-inv-toggle-btn,.tam-inv-color-3 .tam-inv-toggle-btn,.tam-inv-color-4 .tam-inv-toggle-btn,.tam-inv-color-5 .tam-inv-toggle-btn { color:#bbb!important; }',
+      '.tam-inv-color-0 .tam-inv-toggle-btn,.tam-inv-color-1 .tam-inv-toggle-btn,.tam-inv-color-2 .tam-inv-toggle-btn,.tam-inv-color-3 .tam-inv-toggle-btn,.tam-inv-color-4 .tam-inv-toggle-btn,.tam-inv-color-5 .tam-inv-toggle-btn { color:#000!important; }',
       /* Buttons inside header: proc style */
       '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):not(.tam-inv-edit-btn):not(.tam-inv-stock-btn):not(.tam-inv-guia-btn):not(.tam-inv-export-btn):not(.tam-inv-remove-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
       '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):not(.tam-inv-edit-btn):not(.tam-inv-stock-btn):not(.tam-inv-guia-btn):not(.tam-inv-export-btn):not(.tam-inv-remove-btn):hover { background:#f0f0f0!important; border-color:#555!important; }',
@@ -7405,7 +7406,7 @@
       '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; }',
       '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; }',
       '.tam-inv-table-wrap { overflow-x:auto; border-radius:0 0 12px 12px; }',
-      '.tam-inv-separator { height:auto; padding-top:80px; background:#e3e3e3; border-bottom:3px solid #000; margin:0 0 40px; width:100%; max-width:960px; box-sizing:border-box; }',
+      '.tam-inv-separator { height:auto; padding-top:80px; background:#e3e3e3; border-bottom:3px solid #000; margin:0 auto 40px; width:calc(100% - 48px); max-width:912px; box-sizing:border-box; }',
       /* Validation banner inside block */
       '.tam-inv-banner { display:flex; flex-wrap:wrap; gap:4px 20px; padding:10px 20px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border-bottom:1px solid #e0e0e0; border-left:1px solid #e0e0e0; border-right:1px solid #e0e0e0; }',
       '.tam-inv-banner.ok  { background:transparent; color:#4A7C6F; }',
@@ -7722,7 +7723,7 @@
       '.tam-inv-guia-erp-label { font-size:.62rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
       '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:130px; outline:none; transition:border-color .15s,background .15s; }',
       '.tam-inv-guia-erp-input:focus { border-color:#000; background:#fff; }',
-      '.tam-inv-guia-erp-input.tam-inv-guia-erp-done { border-color:#4A7C6F; background:#F0F7F5; color:#4A7C6F; }',
+      '.tam-inv-guia-erp-input.tam-inv-guia-erp-done { border-color:#000!important; background:#000!important; color:#fff!important; }',
 
             /* ── Stock modal (proc-or-modal system — identical to processamento.js) ── */
       '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',

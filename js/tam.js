@@ -7366,7 +7366,7 @@
       '.tam-inv-collapsed .tam-inv-table-wrap tbody { display:none!important; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tfoot { display:none!important; }',
-      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-meta-rest,.tam-inv-collapsed .tam-inv-guia-erp-label,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-meta-rest,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn { display:none!important; }',
 
       /* ── Single invoice collapsed state ── */
       '.tam-single-inv-collapsed thead { display:none!important; }',
@@ -7725,7 +7725,7 @@
       /* ── N.º Guia ERP — auto-colapsa a fatura ao preencher (proc style) ── */
       '.tam-inv-guia-erp-wrap { display:flex; align-items:center; gap:6px; }',
       '.tam-inv-guia-erp-label { font-size:.62rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
-      '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; outline:none; transition:border-color .15s,background .15s,width .15s; }',
+      '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; text-align:center; outline:none; transition:border-color .15s,background .15s,width .15s; }',
       '.tam-inv-guia-erp-input:focus { border-color:#000; background:#fff; }',
       '.tam-inv-guia-erp-input.tam-inv-guia-erp-done { border-color:#000!important; background:#000!important; color:#fff!important; }',
 

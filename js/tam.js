@@ -1820,7 +1820,9 @@
       var box  = bObj.box;
       var dnCode       = box.dnZyCode || null;
       var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
-      var canLink      = !dnCode && !box.locked;
+      // Vincular/desvincular é independente de já ter distribuição ou de
+      // estar bloqueada — não altera box.refs, só a atribuição por factura.
+      var canLink      = !dnCode;
       var boxLabel = dnCode
         ? (dnCode + (box.locked ? ' \uD83D\uDD12' : ''))
         : ('Caixa ' + (bi+1) + (box.locked ? ' \uD83D\uDD12' : ''));
@@ -1833,7 +1835,7 @@
             'title="Vincular esta caixa a uma DN pendente (sabe o c\u00f3digo mas n\u00e3o tem o PDF)">' +
             tamEsc(boxLabel) + ' <span class="tam-box-dn-link-icon">\uD83D\uDD17</span>' +
           '</button>';
-      } else if (isManualLink && !box.locked) {
+      } else if (isManualLink) {
         labelHtml =
           tamEsc(boxLabel) +
           ' <button type="button" class="tam-box-dn-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
@@ -1994,7 +1996,9 @@
       var box    = bObj.box;
       var dnCode = box.dnZyCode || null;
       var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
-      var canLink      = !dnCode && !box.locked;
+      // Vincular/desvincular é independente de já ter distribuição ou de
+      // estar bloqueada — não altera box.refs, só a atribuição por factura.
+      var canLink      = !dnCode;
       var pct    = box.total ? (bObj.received + '/' + box.total) : '';
       var active = (bi === tamEditingBoxBi) ? ' tam-boxlist-item-active' : '';
       var confirmedCls = box.confirmed ? ' tam-boxlist-item-confirmed' : '';
@@ -2002,7 +2006,7 @@
       var linkHtml = '';
       if (canLink) {
         linkHtml = '<button type="button" class="tam-boxlist-link-btn" data-box="' + bi + '" title="Vincular a uma DN pendente">\uD83D\uDD17</button>';
-      } else if (isManualLink && !box.locked) {
+      } else if (isManualLink) {
         linkHtml = '<button type="button" class="tam-boxlist-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
       }
 

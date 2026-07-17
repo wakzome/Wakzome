@@ -1991,16 +1991,26 @@
       return dnCode ? dnCode : ('Caixa ' + (bi + 1));
     }
     function tamBoxPanelItem(bObj) {
-      var bi     = bObj.bi;
-      var box    = bObj.box;
-      var dnCode = box.dnZyCode || null;
+      var bi       = bObj.bi;
+      var box      = bObj.box;
+      var received = bObj.received;
+      var dnCode   = box.dnZyCode || null;
       var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
       // Vincular/desvincular é independente de já ter distribuição ou de
       // estar bloqueada — não altera box.refs, só a atribuição por factura.
       var canLink      = !dnCode;
-      var pct    = box.total ? (bObj.received + '/' + box.total) : '';
+      var pct    = box.total ? (received + '/' + box.total) : '';
       var active = (bi === tamEditingBoxBi) ? ' tam-boxlist-item-active' : '';
-      var confirmedCls = box.confirmed ? ' tam-boxlist-item-confirmed' : '';
+
+      // Único sinal visual: caixa incompleta (começou mas não chegou ao
+      // total) ou com mais peças do que o total declarado. Nada de
+      // "confirmada / não confirmada" — essa distinção só confundia.
+      var over        = !!(box.total && received > box.total);
+      var incomplete  = !!(box.total && received > 0 && received < box.total);
+      var warnCls     = over ? ' tam-boxlist-item-over' : (incomplete ? ' tam-boxlist-item-incomplete' : '');
+      var warnHtml    = over
+        ? '<span class="tam-boxlist-warn" title="Tem mais pe\u00e7as do que o total declarado">\u26A0</span>'
+        : (incomplete ? '<span class="tam-boxlist-warn" title="Distribui\u00e7\u00e3o incompleta">\u26A0</span>' : '');
 
       var linkHtml = '';
       if (canLink) {
@@ -2009,9 +2019,9 @@
         linkHtml = '<button type="button" class="tam-boxlist-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
       }
 
-      return '<div class="tam-boxlist-item' + active + confirmedCls + '">' +
+      return '<div class="tam-boxlist-item' + active + warnCls + '">' +
         '<button type="button" class="tam-boxlist-item-main" data-box="' + bi + '">' +
-          (box.confirmed ? '<span class="tam-boxlist-check" title="Confirmada">\u2713</span>' : '') +
+          warnHtml +
           '<span class="tam-boxlist-label">' + tamEsc(tamBoxPanelLabel(bObj)) + '</span>' +
           (pct ? '<span class="tam-boxlist-pct">' + pct + '</span>' : '') +
         '</button>' +
@@ -7392,8 +7402,8 @@
       ══════════════════════════ */
       '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
       '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }',
-      '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; }',
-      '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; width:100%; }',
+      '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; width:-moz-fit-content; width:fit-content; max-width:100%; }',
+      '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; }',
       '.tam-rec-main-col { flex:0 1 auto; min-width:0; max-width:100%; }',
       '.tam-boxlist-panel { flex:0 0 150px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #e0e0e0; padding:8px 0 8px 12px; }',
       '.tam-boxlist-hdr { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#000; opacity:.5; margin-bottom:6px; }',
@@ -7401,11 +7411,12 @@
       '.tam-boxlist-item { display:flex; align-items:center; gap:2px; width:100%; padding:1px 3px 1px 8px; border:1px solid #e0e0e0; border-radius:7px; background:#fff; transition:all .15s; }',
       '.tam-boxlist-item:hover { border-color:#555; background:#fafafa; }',
       '.tam-boxlist-item-active { border-color:#000; background:rgba(0,0,0,.05); }',
-      '.tam-boxlist-item-confirmed { border-color:#4A7C6F; }',
+      '.tam-boxlist-item-incomplete { border-color:#E8A44A; }',
+      '.tam-boxlist-item-over { border-color:#9B4D4D; }',
       '.tam-boxlist-item-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:5px 3px; border:none; background:transparent; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.74rem; font-weight:700; color:#000!important; text-align:left; }',
       '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
       '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
-      '.tam-boxlist-check { color:#4A7C6F!important; font-weight:700; }',
+      '.tam-boxlist-warn { font-size:.72rem; }',
       '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
       '.tam-boxlist-link-btn, .tam-boxlist-unlink-btn { flex:0 0 auto; background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:2px 6px; transition:all .15s; }',
       '.tam-boxlist-link-btn:hover { background:#f0f0f0; border-color:#555; }',

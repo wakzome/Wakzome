@@ -1824,8 +1824,8 @@
       // estar bloqueada — não altera box.refs, só a atribuição por factura.
       var canLink      = !dnCode;
       var boxLabel = dnCode
-        ? (dnCode + (box.locked ? ' \uD83D\uDD12' : ''))
-        : ('Caixa ' + (bi+1) + (box.locked ? ' \uD83D\uDD12' : ''));
+        ? dnCode
+        : ('Caixa ' + (bi+1));
       var colSpan = info.isActiveBox ? 3 : 2;
 
       var labelHtml;
@@ -1988,8 +1988,7 @@
     function tamBoxPanelLabel(bObj) {
       var box = bObj.box, bi = bObj.bi;
       var dnCode = box.dnZyCode || null;
-      return dnCode ? (dnCode + (box.locked ? ' \uD83D\uDD12' : ''))
-                    : ('Caixa ' + (bi + 1) + (box.locked ? ' \uD83D\uDD12' : ''));
+      return dnCode ? dnCode : ('Caixa ' + (bi + 1));
     }
     function tamBoxPanelItem(bObj) {
       var bi     = bObj.bi;
@@ -7395,15 +7394,15 @@
       '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }',
       '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; }',
       '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; width:100%; }',
-      '.tam-rec-main-col { flex:1 1 auto; min-width:0; }',
-      '.tam-boxlist-panel { flex:0 0 210px; display:flex; flex-direction:column; gap:14px; border-left:1px solid #e0e0e0; padding:10px 0 10px 14px; }',
+      '.tam-rec-main-col { flex:0 1 auto; min-width:0; max-width:100%; }',
+      '.tam-boxlist-panel { flex:0 0 150px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #e0e0e0; padding:8px 0 8px 12px; }',
       '.tam-boxlist-hdr { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#000; opacity:.5; margin-bottom:6px; }',
       '.tam-boxlist-section { display:flex; flex-direction:column; gap:6px; }',
-      '.tam-boxlist-item { display:flex; align-items:center; gap:4px; width:100%; padding:2px 4px 2px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; transition:all .15s; }',
+      '.tam-boxlist-item { display:flex; align-items:center; gap:2px; width:100%; padding:1px 3px 1px 8px; border:1px solid #e0e0e0; border-radius:7px; background:#fff; transition:all .15s; }',
       '.tam-boxlist-item:hover { border-color:#555; background:#fafafa; }',
       '.tam-boxlist-item-active { border-color:#000; background:rgba(0,0,0,.05); }',
       '.tam-boxlist-item-confirmed { border-color:#4A7C6F; }',
-      '.tam-boxlist-item-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 4px; border:none; background:transparent; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.8rem; font-weight:700; color:#000!important; text-align:left; }',
+      '.tam-boxlist-item-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:5px 3px; border:none; background:transparent; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.74rem; font-weight:700; color:#000!important; text-align:left; }',
       '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
       '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
       '.tam-boxlist-check { color:#4A7C6F!important; font-weight:700; }',
@@ -7929,7 +7928,7 @@
       '.tam-dnv-btn-motord:hover { background:#f0f0f0!important; border-color:#555!important; }',
 
       /* ── DN Verification area (proc style) ── */
-      '#tam-dn-verify-area { width:100%; max-width:1600px; margin-top:16px; }',
+      '#tam-dn-verify-area { width:100%; max-width:760px; margin-top:16px; }',
       '#tam-progress-area { display:none; }',
       '.tam-inv-stock-btn.tam-inv-stock-active { background:#111!important; border-color:#111!important; color:#fff!important; }',
       '.tam-dnv-area { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',

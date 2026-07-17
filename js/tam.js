@@ -1704,9 +1704,26 @@
     pop.id = 'tam-dn-link-popover';
     pop.innerHTML =
       '<div class="tam-dnlink-title">Vincular caixa a DN pendente</div>' +
+      (groups.length ? '<input type="text" inputmode="numeric" autocomplete="off" id="tam-dnlink-filter" class="tam-dnlink-filter" placeholder="\uD83D\uDD0D filtrar por c\u00f3digo\u2026">' : '') +
       '<div class="tam-dnlink-list">' + bodyHtml + '</div>' +
       '<button type="button" class="tam-dnlink-cancel" id="tam-dnlink-cancel">cancelar</button>';
     document.body.appendChild(pop);
+
+    var dnFilterInp = pop.querySelector('#tam-dnlink-filter');
+    if (dnFilterInp) {
+      dnFilterInp.addEventListener('input', function(){
+        var q = dnFilterInp.value.trim().toLowerCase();
+        pop.querySelectorAll('.tam-dnlink-group').forEach(function(grp){
+          var anyVisible = false;
+          grp.querySelectorAll('.tam-dnlink-opt').forEach(function(optBtn){
+            var match = !q || optBtn.getAttribute('data-zy').toLowerCase().indexOf(q) >= 0;
+            optBtn.style.display = match ? '' : 'none';
+            if (match) anyVisible = true;
+          });
+          grp.style.display = anyVisible ? '' : 'none';
+        });
+      });
+    }
 
     function closePop() {
       if (pop.parentNode) pop.parentNode.removeChild(pop);
@@ -1747,6 +1764,7 @@
       pop.style.left = left + 'px';
       pop.style.top  = top  + 'px';
       pop.style.visibility = '';
+      if (dnFilterInp) dnFilterInp.focus();
     });
 
     setTimeout(function(){ document.addEventListener('click', onOutsideClick, true); }, 0);
@@ -1994,6 +2012,7 @@
       var bi       = bObj.bi;
       var box      = bObj.box;
       var received = bObj.received;
+      var openDirect = !bObj.isComplete;
       var dnCode   = box.dnZyCode || null;
       var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
       // Vincular/desvincular é independente de já ter distribuição ou de
@@ -2020,7 +2039,7 @@
       }
 
       return '<div class="tam-boxlist-item' + active + warnCls + '">' +
-        '<button type="button" class="tam-boxlist-item-main" data-box="' + bi + '">' +
+        '<button type="button" class="tam-boxlist-item-main" data-box="' + bi + '" data-direct="' + (openDirect ? '1' : '0') + '">' +
           warnHtml +
           '<span class="tam-boxlist-label">' + tamEsc(tamBoxPanelLabel(bObj)) + '</span>' +
           (pct ? '<span class="tam-boxlist-pct">' + pct + '</span>' : '') +
@@ -2091,14 +2110,30 @@
       });
     })();
 
-    // ── BIND PAINEL DE CAIXAS (pendentes / confirmadas) ───────
-    // Clicar em qualquer caixa da lista — pendente ou confirmada — abre
-    // sempre o modal primeiro. Só o botão "Levar a distribuição geral"
-    // dentro do modal abre as colunas na distribuição geral.
+    // ── BIND PAINEL DE CAIXAS ──────────────────────────────────
+    // Caixa vazia/incompleta → abre direto na distribuição geral.
+    // Caixa completa → abre o modal primeiro (revisão rápida de números).
     (function(){
       area.querySelectorAll('.tam-boxlist-item-main').forEach(function(btn){
         btn.addEventListener('click', function(){
-          tamShowBoxEditModal(parseInt(btn.getAttribute('data-box')));
+          var bi = parseInt(btn.getAttribute('data-box'));
+          if (btn.getAttribute('data-direct') === '1') {
+            // Caixa vazia ou incompleta — vai direto à distribuição geral,
+            // sem passar pelo modal (não há nada relevante para rever ali).
+            var dBox = tamSession.boxes[bi];
+            if (dBox) {
+              tamPushUndo();
+              dBox.locked    = false;
+              dBox.confirmed = false;
+              if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+              delete tamBoxLockPending[bi];
+            }
+            tamEditingBoxBi = bi;
+            tamRenderAll();
+            tamScheduleSave();
+          } else {
+            tamShowBoxEditModal(bi);
+          }
         });
       });
       area.querySelectorAll('.tam-boxlist-link-btn').forEach(function(btn){
@@ -7402,7 +7437,7 @@
       ══════════════════════════ */
       '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
       '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }',
-      '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; width:-moz-fit-content; width:fit-content; max-width:100%; }',
+      '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; width:-moz-fit-content; width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }',
       '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; }',
       '.tam-rec-main-col { flex:0 1 auto; min-width:0; max-width:100%; }',
       '.tam-boxlist-panel { flex:0 0 150px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #e0e0e0; padding:8px 0 8px 12px; }',
@@ -7414,7 +7449,7 @@
       '.tam-boxlist-item-incomplete { border-color:#E8A44A; }',
       '.tam-boxlist-item-over { border-color:#9B4D4D; }',
       '.tam-boxlist-item-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:5px 3px; border:none; background:transparent; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.74rem; font-weight:700; color:#000!important; text-align:left; }',
-      '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
+      '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1 1 auto; }',
       '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
       '.tam-boxlist-warn { font-size:.72rem; }',
       '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
@@ -8047,6 +8082,9 @@
       '#tam-dn-link-popover { position:absolute; z-index:9999; min-width:220px; max-width:280px; max-height:320px; overflow-y:auto; background:#fff; border:1px solid #000; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.18); font-family:\'MontserratLight\',sans-serif; padding:10px; opacity:0; transition:opacity .12s ease; }',
       '#tam-dn-link-popover.tam-dnlink-visible { opacity:1; }',
       '.tam-dnlink-title { font-size:.74rem; font-weight:700; color:#000; margin-bottom:8px; }',
+      '.tam-dnlink-filter { width:100%; box-sizing:border-box; padding:5px 8px; margin-bottom:8px; font-size:.76rem; font-family:\'MontserratLight\',sans-serif; border:1px solid #e0e0e0; border-radius:7px; outline:none; background:#fafafa; color:#000; transition:border-color .15s; }',
+      '.tam-dnlink-filter:focus { border-color:#000; background:#fff; }',
+      '.tam-dnlink-filter::placeholder { color:#bbb; font-style:italic; }',
       '.tam-dnlink-list { display:flex; flex-direction:column; gap:8px; }',
       '.tam-dnlink-group-hdr { font-size:.68rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }',
       '.tam-dnlink-opt { display:block; width:100%; text-align:left; padding:5px 8px; margin-bottom:3px; font-size:.76rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; border:1px solid #e0e0e0; border-radius:7px; background:#fff; color:#000; cursor:pointer; transition:all .12s; }',

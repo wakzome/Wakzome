@@ -7392,7 +7392,7 @@
       /* ── Multi-factura: bloques (proc style) ── */
       '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:1.15rem; color:#000; padding:0 8px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
       '.tam-inv-toggle-btn:hover { color:#000; }',
-      '#tam-rec-toggle-btn { font-size:1.05rem; color:#999; }',
+      '#tam-rec-toggle-btn { font-size:1.6rem; color:#999; }',
       /* iPad: bigger toggle button */
       '@media (pointer:coarse) and (min-width:768px) {',
       '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#000; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',
@@ -7519,7 +7519,7 @@
       '  .tam-boxlist-panel { flex:0 0 auto; width:100%; border-left:none; border-top:1px solid #e0e0e0; padding:14px 0 0 0; flex-direction:row; flex-wrap:wrap; }',
       '  .tam-boxlist-section { flex:1 1 45%; min-width:140px; }',
       '}',
-      '.tam-rec-area-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; border-radius:14px 14px 0 0; background:#000!important; color:#fff!important; opacity:1!important; }',
+      '.tam-rec-area-title { padding:20px 30px; font-size:.95rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; border-radius:14px 14px 0 0; background:#000!important; color:#fff!important; opacity:1!important; }',
       '.tam-rec-area-title .tam-inv-toggle-btn { color:#fff!important; }',
       '.tam-rec-area-title .tam-inv-toggle-btn:hover { color:#ccc!important; }',
 

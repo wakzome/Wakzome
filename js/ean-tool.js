@@ -71,6 +71,18 @@
     '#ean-error-wrap.ean-visible { display:block; }',
     '#ean-error-box { background:#fff0f0 !important; border:1px solid #f5c0c0; border-radius:7px; padding:10px 14px; font-size:.74rem; color:#c00 !important; font-family:\'MontserratLight\',sans-serif; }',
 
+    /* ── delivery notes encontradas (cruce EAN → referência) ── */
+    '#ean-dn-wrap { padding:8px 18px 14px; display:none; flex-shrink:0; }',
+    '#ean-dn-wrap.ean-visible { display:block; }',
+    '#ean-dn-box { background:#f0f7f4 !important; border:1px solid #bcd9cc; border-radius:7px; padding:10px 14px; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-dn-title { font-weight:700; font-size:.76rem; margin-bottom:6px; color:#111 !important; }',
+    '#ean-dn-list { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; max-height:110px; overflow-y:auto; }',
+    '.ean-dn-item { font-family:\'Courier New\',monospace; font-size:.72rem; color:#333 !important; }',
+    '#ean-dn-unresolved { font-size:.7rem; color:#9B4D4D !important; margin-bottom:8px; }',
+    '#ean-dn-apply-btn { width:100%; padding:8px; border-radius:7px; border:1px solid #111 !important; background:#111 !important; color:#fff !important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.76rem; font-weight:700; transition:background .12s; }',
+    '#ean-dn-apply-btn:hover { background:#333 !important; }',
+    '#ean-dn-apply-btn:disabled { background:#ccc !important; border-color:#ccc !important; cursor:not-allowed; }',
+
     /* ── MODAL RESULTADOS ── */
     '#ean-modal-overlay { display:none; position:fixed; inset:0; z-index:10001; background:rgba(0,0,0,.5) !important; align-items:center; justify-content:center; padding:16px; }',
     '#ean-modal-overlay.ean-open { display:flex; }',
@@ -192,6 +204,9 @@
         /* error */
         '<div id="ean-error-wrap"><div id="ean-error-box"></div></div>' +
 
+        /* delivery notes encontradas */
+        '<div id="ean-dn-wrap"><div id="ean-dn-box"></div></div>' +
+
       '</div>' +
     '</div>' +
 
@@ -245,6 +260,8 @@
   var progressLbl  = document.getElementById('ean-progress-lbl');
   var errorWrap    = document.getElementById('ean-error-wrap');
   var errorBox     = document.getElementById('ean-error-box');
+  var dnWrap       = document.getElementById('ean-dn-wrap');
+  var dnBox        = document.getElementById('ean-dn-box');
   var modalOverlay = document.getElementById('ean-modal-overlay');
   var modalClose   = document.getElementById('ean-modal-close');
   var modalBody    = document.getElementById('ean-modal-body');
@@ -257,6 +274,14 @@
   // ═══════════════════════════════════════════════════════════════
   window.tamOpenEanTool = function () {
     toolOverlay.classList.add('ean-open');
+  };
+
+  // Ponto de entrada único: abre a ferramenta e entrega-lhe directamente
+  // os ficheiros escolhidos no botão "delivery note" de tam.js (Excel
+  // e PDF passam a ser analisados sempre pelo mesmo motor).
+  window.tamEanToolIngestFiles = function (files) {
+    toolOverlay.classList.add('ean-open');
+    addFiles(Array.prototype.slice.call(files));
   };
 
   // Cerrar ventana principal
@@ -319,6 +344,8 @@
   // ═══════════════════════════════════════════════════════════════
   var state  = { files: [], results: [] };
   var merged = {};
+  var pendingDNResults    = [];   // [{ zyCode, refs:[{ref,qty}], fileName, gesamtPcs }]
+  var pendingDNUnresolved = 0;    // EANs vistos numa hoja de DN sem referência conhecida
 
   // ═══════════════════════════════════════════════════════════════
   //  SUPABASE — Biblioteca EANs conocidos
@@ -442,7 +469,10 @@
   // ═══════════════════════════════════════════════════════════════
   async function runExtraction() {
     errorWrap.classList.remove('ean-visible');
+    dnWrap.classList.remove('ean-visible');
     merged = {}; state.results = [];
+    pendingDNResults = []; pendingDNUnresolved = 0;
+    var xlsxSheetsForDN = [];
     progressWrap.classList.add('ean-visible');
     btnOpenModal.disabled = true;
 
@@ -500,8 +530,27 @@
             }
           } catch(emd) { console.warn('EAN Motor D Excel fallback failed', emd); }
         }
+        xlsxSheetsForDN.push({ sheets: sheets, fileName: xf.file.name });
       } catch(err) { console.error('XLSX error', xf.file.name, err); }
       done++;
+    }
+
+    /* ── Delivery notes: cruce EAN → referência com o catálogo já
+       reconhecido em TODAS as hojas/ficheiros deste lote (por isso
+       corre só depois de terminar o loop, não hoja a hoja). ── */
+    if (xlsxSheetsForDN.length) {
+      var eanToRef      = buildEanToRefMap();
+      var dnAccum        = {}, dnOrder = {}, dnFileName = {};
+      var unresolvedSet = new Set();
+      xlsxSheetsForDN.forEach(function(entry){
+        detectDNSheets(entry.sheets, entry.fileName, eanToRef, dnAccum, dnOrder, dnFileName, unresolvedSet);
+      });
+      pendingDNResults = Object.keys(dnAccum).sort().map(function(zy){
+        var refs = dnOrder[zy].map(function(ref){ return { ref: ref, qty: dnAccum[zy][ref] }; });
+        var gesamtPcs = refs.reduce(function(s,r){ return s + r.qty; }, 0);
+        return { zyCode: zy, refs: refs, fileName: dnFileName[zy], gesamtPcs: gesamtPcs };
+      });
+      pendingDNUnresolved = unresolvedSet.size;
     }
 
     setProg(100, 'Consolidando…');
@@ -535,14 +584,15 @@
 
     setTimeout(function(){
       progressWrap.classList.remove('ean-visible');
-      if (!state.results.length) {
+      if (!state.results.length && !pendingDNResults.length) {
         errorBox.textContent='No se encontraron referencias con EANs. Verifica el formato de los archivos.';
         errorWrap.classList.add('ean-visible');
         btnOpenModal.disabled = true;
-      } else {
+      } else if (state.results.length) {
         btnOpenModal.disabled = false;
         btnOpenModal.classList.add('ean-has-results');
       }
+      renderPendingDN();
     }, 350);
   }
 
@@ -807,6 +857,17 @@
         if (maybeSkip.size > 0) { maybeSkip.forEach(function(c){ skipCols.add(c); }); }
       }
 
+      // ── Preferir cabecera EAN explícita antes de adivinar por patrón ──
+      // Evita confundir un GLN (u otro número de 13 dígitos constante,
+      // como un sender code) con el EAN real cuando ambos calzan con
+      // /^\d{13}$/. Si algún encabezado dice literalmente "EAN"/"barcode"/
+      // etc., esa columna gana siempre.
+      var headerEanC = -1;
+      for (var hri=0; hri<Math.min(3,rows.length); hri++) {
+        var hc = findColByHeader(rows[hri], SYN.ean);
+        if (hc !== -1) { headerEanC = hc; break; }
+      }
+
       var scores={};
       for(var c=0;c<numCols;c++) scores[c]={ean:0,ref:0,price:0,text:0,reflike:0,total:0};
 
@@ -826,13 +887,13 @@
       });
 
       var n=sample.length;
-      var eanC=-1,refC=-1,prC=-1,nmC=-1;
+      var eanC=headerEanC,refC=-1,prC=-1,nmC=-1;
       var mxE=0,mxR=0,mxP=0,mxT=0;
 
       Object.keys(scores).forEach(function(c){
         var ci=parseInt(c),s=scores[c],t=Math.max(s.total,1);
         if(skipCols.has(ci)) return;
-        if(s.ean/t>.3&&s.ean>mxE){mxE=s.ean;eanC=ci;}
+        if(headerEanC===-1 && s.ean/t>.3&&s.ean>mxE){mxE=s.ean;eanC=ci;}
         if(s.ref/t>.2&&s.ref>mxR){mxR=s.ref;refC=ci;}
         if(s.price/t>.15&&s.price>mxP){mxP=s.price;prC=ci;}
       });
@@ -876,6 +937,108 @@
     sheets.forEach(function(sheet){
       motorC(sheet);
       motorD(sheet);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  DELIVERY NOTES — cruce EAN → referência entre hojas/ficheiros
+  //  Detecta hojas com coluna "Delivery Note" (código ZY) + EAN + Qty,
+  //  mesmo sem coluna de referência própria, e resolve o ref através
+  //  do catálogo (ref+EAN) já reconhecido no mesmo lote de ficheiros.
+  // ═══════════════════════════════════════════════════════════════
+  function buildEanToRefMap() {
+    var map = {};
+    Object.keys(merged).forEach(function(key){
+      var e = merged[key];
+      e.eans.forEach(function(ean){ if (!map[ean]) map[ean] = e.ref; });
+    });
+    return map;
+  }
+
+  function detectDNSheets(sheets, fileName, eanToRef, dnAccum, dnOrder, dnFileName, unresolvedSet) {
+    var SYN_DN  = ['delivery note','lieferschein','albaran','albarán','dn'];
+    var SYN_EAN = ['ean','barcode','codigo de barras','code','gtin','upc','bar code'];
+    var SYN_QTY = ['qty','quantity','cantidad','menge','stück','pieces','anzahl'];
+
+    function findCol(headerRow, syns) {
+      for (var i=0; i<headerRow.length; i++) {
+        var h = String(headerRow[i]).toLowerCase().trim();
+        for (var j=0; j<syns.length; j++) { if (h.indexOf(syns[j]) !== -1) return i; }
+      }
+      return -1;
+    }
+
+    sheets.forEach(function(sheet){
+      var rows = sheet.rows;
+      if (!rows || rows.length < 2) return;
+
+      var hRow=-1, dnC=-1, eanC=-1, qtyC=-1;
+      for (var ri=0; ri<Math.min(8,rows.length); ri++) {
+        var dc = findCol(rows[ri], SYN_DN);
+        var ec = findCol(rows[ri], SYN_EAN);
+        if (dc !== -1 && ec !== -1) { hRow=ri; dnC=dc; eanC=ec; qtyC=findCol(rows[ri], SYN_QTY); break; }
+      }
+      if (hRow === -1) return; // esta hoja não tem estrutura de delivery note
+
+      for (var ri2=hRow+1; ri2<rows.length; ri2++) {
+        var row = rows[ri2];
+        var dnRaw = String(row[dnC]||'').trim();
+        var dnMatch = dnRaw.match(/ZY-\d+/i);
+        if (!dnMatch) continue;
+        var zyCode = dnMatch[0].toUpperCase();
+
+        var ean = String(row[eanC]||'').trim().replace(/\s/g,'');
+        if (!/^\d{8,14}$/.test(ean)) continue;
+
+        var qty = qtyC !== -1 ? parseInt(row[qtyC]) : NaN;
+        if (isNaN(qty) || qty < 1) continue;
+
+        var ref = eanToRef[ean];
+        if (!ref) { unresolvedSet.add(ean); continue; }
+
+        if (!dnAccum[zyCode]) { dnAccum[zyCode] = {}; dnOrder[zyCode] = []; dnFileName[zyCode] = fileName; }
+        if (!dnAccum[zyCode].hasOwnProperty(ref)) { dnAccum[zyCode][ref] = 0; dnOrder[zyCode].push(ref); }
+        dnAccum[zyCode][ref] += qty;
+      }
+    });
+  }
+
+  function renderPendingDN() {
+    if (!pendingDNResults.length) {
+      dnWrap.classList.remove('ean-visible');
+      dnBox.innerHTML = '';
+      return;
+    }
+    var totalPcs = pendingDNResults.reduce(function(s,d){ return s + d.gesamtPcs; }, 0);
+    var listHtml = pendingDNResults.map(function(d){
+      return '<div class="ean-dn-item">' + d.zyCode + ' — ' + d.refs.length + ' ref. · ' + d.gesamtPcs + ' pcs</div>';
+    }).join('');
+    var unresolvedHtml = pendingDNUnresolved > 0
+      ? '<div id="ean-dn-unresolved">⚠ ' + pendingDNUnresolved + ' EAN(s) sem referência no catálogo — não incluídos.</div>'
+      : '';
+    dnBox.innerHTML =
+      '<div id="ean-dn-title">📦 ' + pendingDNResults.length + ' delivery note(s) encontrada(s) · ' + totalPcs + ' pcs</div>' +
+      '<div id="ean-dn-list">' + listHtml + '</div>' +
+      unresolvedHtml +
+      '<button type="button" id="ean-dn-apply-btn">Aplicar à sessão activa</button>';
+    dnWrap.classList.add('ean-visible');
+
+    var applyBtn = dnBox.querySelector('#ean-dn-apply-btn');
+    if (applyBtn) applyBtn.addEventListener('click', function(){
+      if (typeof window.tamApplyImportedDeliveryNotes !== 'function') {
+        toast('A sessão TAM não está disponível nesta página.');
+        return;
+      }
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'A aplicar…';
+      var result = window.tamApplyImportedDeliveryNotes(pendingDNResults) || {};
+      var appliedCount = typeof result.applied === 'number' ? result.applied : pendingDNResults.length;
+      var skippedCount = typeof result.skipped === 'number' ? result.skipped : 0;
+      toast(appliedCount + ' delivery note(s) aplicada(s)' + (skippedCount ? ' · ' + skippedCount + ' já existentes ignoradas' : ''));
+      pendingDNResults    = [];
+      pendingDNUnresolved = 0;
+      dnWrap.classList.remove('ean-visible');
+      dnBox.innerHTML = '';
     });
   }
 

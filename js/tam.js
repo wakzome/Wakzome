@@ -5052,6 +5052,50 @@
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     PONTE COM O EAN TOOL (ean-tool.js) — aplica delivery notes já
+     resolvidas (cruzamento EAN→referência feito lá) à sessão activa.
+     Mesma regra do import por Excel: não sobrescreve uma DN já
+     carregada por PDF (fonte mais fiável tem prioridade).
+     dnList: [{ zyCode, refs:[{ref,qty}], fileName, gesamtPcs }]
+  ══════════════════════════════════════════════════════════════ */
+  window.tamApplyImportedDeliveryNotes = function(dnList) {
+    if (!dnList || !dnList.length) return { applied: 0, skipped: 0 };
+
+    var applied = 0, skipped = 0;
+    var newZyCodes = [];
+
+    dnList.forEach(function(dn) {
+      if (!dn || !dn.zyCode || !dn.refs || !dn.refs.length) return;
+      if (tamDeliveryNotes[dn.zyCode] && tamDeliveryNotes[dn.zyCode].refs && tamDeliveryNotes[dn.zyCode].refs.length) {
+        skipped++;
+        return;
+      }
+      var gesamtPcs = dn.gesamtPcs || dn.refs.reduce(function(s, r){ return s + (r.qty||0); }, 0);
+      tamDeliveryNotes[dn.zyCode] = {
+        zyCode:      dn.zyCode,
+        refs:        dn.refs,
+        fileName:    dn.fileName || 'EAN Tool',
+        gesamtPcs:   gesamtPcs,
+        fromExcel:   true,
+        fromEanTool: true
+      };
+      newZyCodes.push(dn.zyCode);
+      applied++;
+    });
+
+    if (applied > 0) {
+      tamRebuildDNMap();
+      tamCheckOrphanDNs(newZyCodes);
+      tamUpdateDNCount();
+      tamScheduleSave();
+      tamRenderDNVerification();
+      tamRenderAll();
+    }
+
+    return { applied: applied, skipped: skipped };
+  };
+
   async function tamHandleDeliveryNoteFiles(files) {
     var count = 0;
     var newZyCodes = [];
@@ -8232,8 +8276,22 @@
         var allFiles = Array.from(e.target.files);
         var pdfs   = allFiles.filter(function(f){ return f.type === 'application/pdf'; });
         var excels = allFiles.filter(function(f){ return /\.(xlsx|xls)$/i.test(f.name); });
-        if (pdfs.length)   tamHandleDeliveryNoteFiles(pdfs);
-        if (excels.length) excels.forEach(function(f){ tamHandleDNExcelFile(f); });
+        if (pdfs.length) tamHandleDeliveryNoteFiles(pdfs);
+        if (excels.length) {
+          // Excel passa sempre pelo motor único (EAN Tool): reconhece
+          // catálogo e delivery notes, incluindo cruzamento EAN→referência
+          // entre hojas, em vez do importador simples de uma só hoja.
+          if (typeof window.tamEanToolIngestFiles === 'function') {
+            window.tamEanToolIngestFiles(excels);
+          } else {
+            var eanScript = document.createElement('script');
+            eanScript.src = 'js/ean-tool.js';
+            eanScript.onload = function() {
+              if (typeof window.tamEanToolIngestFiles === 'function') window.tamEanToolIngestFiles(excels);
+            };
+            document.head.appendChild(eanScript);
+          }
+        }
         e.target.value = '';
       });
       var dnBarC = bar.querySelector('#tam-dn-cam-input');

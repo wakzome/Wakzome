@@ -33,7 +33,7 @@
   var tamMotorDCost   = 0;
 
   var tamRedoStack          = [];         // redo stack (cleared on new action)
-  var tamEditingBoxBi       = -1;         // bi of the box being edited — renders first
+  var tamEditingBoxBi       = -1;         // bi da única caixa com colunas abertas na distribuição geral
   var TAM_UNDO_MAX          = 50;         // max undo steps
   var tamCollapseState      = {};         // { inv_N: true (collapsed), distrib: true }
 
@@ -94,14 +94,16 @@
     if (!tamSession) return;
     tamPushUndo();
     tamSession.boxes.forEach(function(box){
-      box.refs   = {};
-      box.locked = false;
+      box.refs      = {};
+      box.locked    = false;
+      box.confirmed = false;
       if (tamBoxLockTimers) {
         var bi = tamSession.boxes.indexOf(box);
         if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
         delete tamBoxLockPending[bi];
       }
     });
+    tamEditingBoxBi = -1;
     tamSession.quickDistrib = {};
     tamRefCompleting.clear();
     tamRefDone.clear();
@@ -1776,16 +1778,16 @@
       return { bi:bi, box:box, received:received, isComplete:isComplete, isHidden:isHidden };
     }).filter(function(b){ return !b.isHidden; });
 
-    var pendingBoxes   = boxOrder.filter(function(b){ return !b.isComplete; });
-    var completedBoxes = boxOrder.filter(function(b){ return  b.isComplete; });
-    /* If a box is being edited, move it to front of pending so it renders leftmost */
-    if (tamEditingBoxBi >= 0 && pendingBoxes.length > 1) {
-      var eIdx = -1;
-      for (var _i=0; _i<pendingBoxes.length; _i++) { if (pendingBoxes[_i].bi===tamEditingBoxBi){ eIdx=_i; break; } }
-      if (eIdx > 0) { var _eb = pendingBoxes.splice(eIdx,1); pendingBoxes.unshift(_eb[0]); }
-    }
-    // Show ALL pending boxes — user can fill any box freely, not forced to go in order
-    var sortedBoxes = pendingBoxes.concat(completedBoxes);
+    /* ── Painel lateral: só a caixa em tamEditingBoxBi mostra colunas.
+       As restantes aparecem apenas na lista "caixas pendentes / confirmadas"
+       — clicar abre-a (pendente) ou abre o modal (confirmada). */
+    var panelPending   = boxOrder.filter(function(b){ return !b.box.confirmed; });
+    var panelConfirmed = boxOrder.filter(function(b){ return  b.box.confirmed; });
+
+    var openEntry = null;
+    for (var _oi=0; _oi<boxOrder.length; _oi++) { if (boxOrder[_oi].bi === tamEditingBoxBi) { openEntry = boxOrder[_oi]; break; } }
+    if (!openEntry || openEntry.box.confirmed) { tamEditingBoxBi = -1; openEntry = null; }
+    var sortedBoxes = openEntry ? [openEntry] : [];
 
     // Only refs needing manual work
     var manualInvoiceIdxs = tamInvoices.map(function(r,i){ return i; })
@@ -1882,6 +1884,7 @@
           (pctLabel ? '<span class="tam-box-pct">' + pctLabel + '</span>' : '') +
           (isLocked ? '<button class="tam-box-edit-btn" data-box="' + bi + '">\u270F\uFE0F</button>' : '') +
           '<button class="tam-box-filter-btn" data-box="' + bi + '" title="Ver s\u00f3 refs desta caixa">\uD83D\uDD0D</button>' +
+          '<button class="tam-box-confirm-btn" data-box="' + bi + '" title="Confirmar caixa e fechar colunas">\u2713 Confirmar</button>' +
         '</div>' +
         '<div class="tam-box-sub-labels">' +
           '<span class="tam-sub-f">F</span>' +
@@ -1974,13 +1977,41 @@
         '</table></div>' +
       '</div>';
 
-    // Global quick buttons bar
-    var globalBar =
+    // Global quick buttons bar — só existe enquanto há uma caixa aberta
+    var globalBar = !openEntry ? '' :
       '<div class="tam-rec-quick-btns">' +
         '<span class="tam-quick-label">tudo:</span>' +
         '<button class="tam-quick-btn" id="tam-quick-funchal">100%FNC</button>' +
         '<button class="tam-quick-btn" id="tam-quick-porto">100%PXO</button>' +
         '<button class="tam-quick-btn tam-quick-btn-split" id="tam-quick-split">50 / 50</button>' +
+      '</div>';
+
+    // ── Painel lateral: lista de caixas pendentes / confirmadas ──
+    function tamBoxPanelLabel(bObj) {
+      var box = bObj.box, bi = bObj.bi;
+      var dnCode = box.dnZyCode || null;
+      return dnCode ? (dnCode + (box.locked ? ' \uD83D\uDD12' : ''))
+                    : ('Caixa ' + (bi + 1) + (box.locked ? ' \uD83D\uDD12' : ''));
+    }
+    function tamBoxPanelItem(bObj, action) {
+      var bi     = bObj.bi;
+      var pct    = bObj.box.total ? (bObj.received + '/' + bObj.box.total) : '';
+      var active = (action === 'open' && bi === tamEditingBoxBi) ? ' tam-boxlist-item-active' : '';
+      return '<button type="button" class="tam-boxlist-item' + active + '" data-box="' + bi + '" data-action="' + action + '">' +
+        '<span class="tam-boxlist-label">' + tamEsc(tamBoxPanelLabel(bObj)) + '</span>' +
+        (pct ? '<span class="tam-boxlist-pct">' + pct + '</span>' : '') +
+      '</button>';
+    }
+    var boxListHtml =
+      '<div class="tam-boxlist-panel">' +
+        '<div class="tam-boxlist-section">' +
+          '<div class="tam-boxlist-hdr">Caixas pendentes</div>' +
+          (panelPending.length ? panelPending.map(function(b){ return tamBoxPanelItem(b, 'open'); }).join('') : '<div class="tam-boxlist-empty">\u2014</div>') +
+        '</div>' +
+        '<div class="tam-boxlist-section">' +
+          '<div class="tam-boxlist-hdr">Caixas confirmadas</div>' +
+          (panelConfirmed.length ? panelConfirmed.map(function(b){ return tamBoxPanelItem(b, 'modal'); }).join('') : '<div class="tam-boxlist-empty">\u2014</div>') +
+        '</div>' +
       '</div>';
 
     var isIpad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1999,8 +2030,13 @@
           (quickCount > 0 ? ' · ' + quickCount + ' com distribuição rápida' : '') +
         '</div>' +
         '<div class="tam-rec-collapsible">' +
-          globalBar +
-          tableHtml +
+          '<div class="tam-rec-flex">' +
+            '<div class="tam-rec-main-col">' +
+              globalBar +
+              tableHtml +
+            '</div>' +
+            boxListHtml +
+          '</div>' +
         '</div>' +
       '</div>';
 
@@ -2030,6 +2066,28 @@
         // Confirm before clearing everything
         if (!confirm('Borrar toda la distribución?\n\nPuedes deshacer con el botón ↩')) return;
         tamClearAll();
+      });
+    })();
+
+    // ── BIND PAINEL DE CAIXAS (pendentes / confirmadas) ───────
+    (function(){
+      area.querySelectorAll('.tam-boxlist-item[data-action="open"]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var bi = parseInt(btn.getAttribute('data-box'));
+          tamEditingBoxBi = (tamEditingBoxBi === bi) ? -1 : bi;
+          tamRenderAll();
+        });
+      });
+      area.querySelectorAll('.tam-boxlist-item[data-action="modal"]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          tamShowBoxEditModal(parseInt(btn.getAttribute('data-box')));
+        });
+      });
+      area.querySelectorAll('.tam-box-confirm-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          tamConfirmBox(parseInt(btn.getAttribute('data-box')));
+        });
       });
     })();
 
@@ -2502,6 +2560,7 @@
           : '<div class="tam-dne-hint">Esta caixa ainda não tem nenhuma referência com quantidade.</div>') +
         '<div id="tam-dne-footer">' +
           '<button id="tam-bem-save" class="tam-dn-action-btn">✓ Confirmar e guardar</button>' +
+          '<button id="tam-bem-general" class="tam-dn-cancel-btn">↩ Levar a distribuição geral</button>' +
           '<button id="tam-bem-cancel" class="tam-dn-cancel-btn">Cancelar</button>' +
         '</div>' +
       '</div>';
@@ -2547,6 +2606,49 @@
       tamSaveSession(false);
       closeModal();
     });
+
+    var generalBtn = modal.querySelector('#tam-bem-general');
+    if (generalBtn) generalBtn.addEventListener('click', function() {
+      tamPushUndo();
+      box.locked    = false;
+      box.confirmed = false;
+      if (tamBoxLockTimers[bi]) { clearTimeout(tamBoxLockTimers[bi]); delete tamBoxLockTimers[bi]; }
+      delete tamBoxLockPending[bi];
+      tamEditingBoxBi = bi;
+      closeModal();
+      tamRenderAll();
+      tamSaveSession(false);
+    });
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     Confirmar caixa manualmente — fecha as colunas na distribuição
+     geral e move a caixa para a lista "confirmadas". Deliberado: não
+     depende de o total bater certo (permite entregas parciais), mas
+     avisa se faltam peças.
+  ──────────────────────────────────────────────────────────────── */
+  function tamConfirmBox(bi) {
+    if (!tamSession) return;
+    var box = tamSession.boxes[bi];
+    if (!box) return;
+
+    var received = 0;
+    Object.keys(box.refs || {}).forEach(function(ref){
+      var c = box.refs[ref];
+      received += (c.f || 0) + (c.p || 0);
+    });
+    var missing = box.total ? Math.max(0, box.total - received) : 0;
+    var msg = missing > 0
+      ? ('Faltam ' + missing + ' pe\u00e7a(s) para completar o total declarado (' + received + '/' + box.total + ').\n\nConfirmar mesmo assim?')
+      : ('Confirmar esta caixa' + (box.total ? (' (' + received + '/' + box.total + ')') : (' com ' + received + ' pe\u00e7as')) + '?');
+    if (!confirm(msg)) return;
+
+    tamPushUndo();
+    box.confirmed = true;
+    if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
+    tamDetectRefCompletions();
+    tamRenderAll();
+    tamScheduleSave();
   }
 
   /* ──────────────────────────────────────────────────────────────
@@ -2575,7 +2677,8 @@
         Object.values(box2.refs).forEach(function(v){ recv2 += (v.f||0) + (v.p||0); });
         if (recv2 >= box2.total) {
           box2.locked = true;
-          if (tamEditingBoxBi === bi) tamEditingBoxBi = -1;
+          // Nota: NÃO fecha a coluna aberta automaticamente — só o botão
+          // "Confirmar" explícito faz isso (decisão deliberada do utilizador).
           // Clear any completing-ref animations for refs in this box
           Object.keys(box2.refs).forEach(function(ref){
             if (tamRefCompleting.has(ref)) {
@@ -7241,6 +7344,22 @@
       '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
       '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }',
       '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; }',
+      '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; width:100%; }',
+      '.tam-rec-main-col { flex:1 1 auto; min-width:0; }',
+      '.tam-boxlist-panel { flex:0 0 210px; display:flex; flex-direction:column; gap:14px; border-left:1px solid #e0e0e0; padding:10px 0 10px 14px; }',
+      '.tam-boxlist-hdr { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#000; opacity:.5; margin-bottom:6px; }',
+      '.tam-boxlist-section { display:flex; flex-direction:column; gap:6px; }',
+      '.tam-boxlist-item { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; background:#fff; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.8rem; font-weight:700; color:#000!important; text-align:left; transition:all .15s; }',
+      '.tam-boxlist-item:hover { border-color:#555; background:#fafafa; }',
+      '.tam-boxlist-item-active { border-color:#000; background:rgba(0,0,0,.05); }',
+      '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
+      '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
+      '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
+      '@media (max-width:768px) {',
+      '  .tam-rec-flex { flex-direction:column; }',
+      '  .tam-boxlist-panel { flex:0 0 auto; width:100%; border-left:none; border-top:1px solid #e0e0e0; padding:14px 0 0 0; flex-direction:row; flex-wrap:wrap; }',
+      '  .tam-boxlist-section { flex:1 1 45%; min-width:140px; }',
+      '}',
       '.tam-rec-area-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; background:#fafafa; border-radius:14px 14px 0 0; }',
 
       /* Funchal/Porto reception th already defined above */
@@ -7359,6 +7478,8 @@
       '.tam-box-filter-btn { background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:1px 5px; transition:all .15s; margin-left:2px; }',
       '.tam-box-filter-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-box-edit-btn:hover { background:#f0f0f0; border-color:#000; }',
+      '.tam-box-confirm-btn { background:#4A7C6F; border:1px solid #4A7C6F; color:#fff!important; border-radius:6px; cursor:pointer; font-size:.7rem; font-weight:700; padding:2px 8px; margin-left:4px; transition:background .15s; white-space:nowrap; }',
+      '.tam-box-confirm-btn:hover { background:#3a6459; }',
       '.tam-box-sub-labels { display:flex; justify-content:space-around; }',
       '.tam-sub-f { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',
       '.tam-sub-p { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',

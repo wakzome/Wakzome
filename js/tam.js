@@ -145,6 +145,7 @@
     if (r) r.guiaErp = input.value;
     var hasGuia = input.value.trim().length > 0;
     input.classList.toggle('tam-inv-guia-erp-done', hasGuia);
+    input.size = hasGuia ? Math.max(input.value.length + 1, 3) : 12;
     if (hasGuia && !tamCollapseState['inv_' + idx]) {
       tamCollapseState['inv_' + idx] = true;
       tamApplyCollapseState();
@@ -840,7 +841,8 @@
           '<button class="tam-inv-remove-btn" data-inv="0" title="remover fatura da sessão">✕</button>' +
         '</div>' +
         '<div class="tam-inv-hdr-row2">' +
-          '<span class="tam-inv-meta">' + tamEsc(r0.invoiceDate) + ' · ' +
+          '<span class="tam-inv-meta tam-inv-meta-date">' + tamEsc(r0.invoiceDate) + '</span>' +
+          '<span class="tam-inv-meta tam-inv-meta-rest"> · ' +
           r0.grouped.length + ' refs · ' + r0.totalPieces + ' un · ' +
           r0.shipPkgs + ' pac.</span>' +
         '</div>' +
@@ -851,7 +853,7 @@
           '<div class="tam-inv-guia-erp-wrap">' +
             '<span class="tam-inv-guia-erp-label">N.º Guia ERP</span>' +
             '<input type="text" class="tam-inv-guia-erp-input' + (r0.guiaErp ? ' tam-inv-guia-erp-done' : '') + '" ' +
-              'id="tam-inv-guia-erp-0" data-inv="0" placeholder="ex: 2025/001" autocomplete="off" value="' + tamEsc(r0.guiaErp || '') + '">' +
+              'id="tam-inv-guia-erp-0" data-inv="0" placeholder="ex: 2025/001" autocomplete="off" size="' + (r0.guiaErp ? Math.max(String(r0.guiaErp).length + 1, 3) : 12) + '" value="' + tamEsc(r0.guiaErp || '') + '">' +
           '</div>' +
           '<button class="tam-inv-edit-btn' + (tamEditMode[0] ? ' active' : '') + '" data-inv="0">' +
             (tamEditMode[0] ? 'fechar edição' : 'editar') +
@@ -910,7 +912,8 @@
             '<button class="tam-inv-remove-btn" data-inv="' + idx + '" title="remover fatura da sessão">✕</button>' +
           '</div>' +
           '<div class="tam-inv-hdr-row2">' +
-            '<span class="tam-inv-meta">' + tamEsc(r.invoiceDate) + ' · ' +
+            '<span class="tam-inv-meta tam-inv-meta-date">' + tamEsc(r.invoiceDate) + '</span>' +
+            '<span class="tam-inv-meta tam-inv-meta-rest"> · ' +
             r.grouped.length + ' refs · ' + r.totalPieces + ' un · ' +
             r.shipPkgs + ' pac.</span>' +
           '</div>' +
@@ -921,7 +924,7 @@
             '<div class="tam-inv-guia-erp-wrap">' +
               '<span class="tam-inv-guia-erp-label">N.º Guia ERP</span>' +
               '<input type="text" class="tam-inv-guia-erp-input' + (r.guiaErp ? ' tam-inv-guia-erp-done' : '') + '" ' +
-                'id="tam-inv-guia-erp-' + idx + '" data-inv="' + idx + '" placeholder="ex: 2025/001" autocomplete="off" value="' + tamEsc(r.guiaErp || '') + '">' +
+                'id="tam-inv-guia-erp-' + idx + '" data-inv="' + idx + '" placeholder="ex: 2025/001" autocomplete="off" size="' + (r.guiaErp ? Math.max(String(r.guiaErp).length + 1, 3) : 12) + '" value="' + tamEsc(r.guiaErp || '') + '">' +
             '</div>' +
             '<button class="tam-inv-edit-btn' + (tamEditMode[idx] ? ' active' : '') + '" data-inv="' + idx + '">' +
               (tamEditMode[idx] ? 'fechar edição' : 'editar') +
@@ -7362,7 +7365,8 @@
       '.tam-inv-collapsed .tam-inv-table-wrap thead { display:none!important; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tbody { display:none!important; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
-      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-hdr-row2,.tam-inv-collapsed .tam-inv-guia-erp-label,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap tfoot { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-meta-rest,.tam-inv-collapsed .tam-inv-guia-erp-label,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn { display:none!important; }',
 
       /* ── Single invoice collapsed state ── */
       '.tam-single-inv-collapsed thead { display:none!important; }',
@@ -7406,7 +7410,7 @@
       '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; }',
       '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; }',
       '.tam-inv-table-wrap { overflow-x:auto; border-radius:0 0 12px 12px; }',
-      '.tam-inv-separator { height:auto; padding-top:80px; background:#e3e3e3; border-bottom:3px solid #000; margin:0 auto 40px; width:calc(100% - 48px); max-width:912px; box-sizing:border-box; }',
+      '.tam-inv-separator { height:auto; padding-top:80px; background:#ececec; border-bottom:3px solid #000; margin:0 auto 40px; width:calc(100% - 48px); max-width:912px; box-sizing:border-box; }',
       /* Validation banner inside block */
       '.tam-inv-banner { display:flex; flex-wrap:wrap; gap:4px 20px; padding:10px 20px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border-bottom:1px solid #e0e0e0; border-left:1px solid #e0e0e0; border-right:1px solid #e0e0e0; }',
       '.tam-inv-banner.ok  { background:transparent; color:#4A7C6F; }',
@@ -7448,7 +7452,7 @@
       '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; width:-moz-fit-content; width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }',
       '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; }',
       '.tam-rec-main-col { flex:0 1 auto; min-width:0; max-width:100%; }',
-      '.tam-boxlist-panel { flex:0 0 150px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #e0e0e0; padding:8px 0 8px 12px; }',
+      '.tam-boxlist-panel { flex:0 0 165px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #e0e0e0; padding:8px 0 8px 12px; }',
       '.tam-boxlist-hdr { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#000; opacity:.5; margin-bottom:6px; }',
       '.tam-boxlist-section { display:flex; flex-direction:column; gap:6px; }',
       '.tam-boxlist-item { display:flex; align-items:center; gap:2px; width:100%; padding:1px 6px 1px 8px; border:1px solid #e0e0e0; border-radius:7px; background:#fff; transition:all .15s; }',
@@ -7462,8 +7466,8 @@
       '.tam-boxlist-warn { font-size:.72rem; }',
       '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
       '.tam-boxlist-pending-dn { margin-bottom:4px; }',
-      '.tam-boxlist-pending-dn-btn { width:100%; text-align:left; padding:5px 7px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border:1px solid #E8A44A; border-radius:7px; background:#FFFBF5; color:#C47A1E; cursor:pointer; transition:all .15s; }',
-      '.tam-boxlist-pending-dn-btn:hover { background:#E8A44A; color:#fff; }',
+      '.tam-boxlist-pending-dn-btn { width:100%; text-align:left; padding:5px 7px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border:1px solid #333!important; border-radius:7px; background:#333!important; color:#fff!important; cursor:pointer; transition:all .15s; }',
+      '.tam-boxlist-pending-dn-btn:hover { background:#111!important; color:#fff!important; }',
       '.tam-boxlist-pending-dn-list { display:flex; flex-direction:column; gap:6px; padding:6px 2px 2px; }',
       '.tam-boxlist-pending-dn-group { font-size:.68rem; }',
       '.tam-boxlist-pending-dn-inv { font-weight:700; color:#000; }',
@@ -7721,7 +7725,7 @@
       /* ── N.º Guia ERP — auto-colapsa a fatura ao preencher (proc style) ── */
       '.tam-inv-guia-erp-wrap { display:flex; align-items:center; gap:6px; }',
       '.tam-inv-guia-erp-label { font-size:.62rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
-      '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:130px; outline:none; transition:border-color .15s,background .15s; }',
+      '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; outline:none; transition:border-color .15s,background .15s,width .15s; }',
       '.tam-inv-guia-erp-input:focus { border-color:#000; background:#fff; }',
       '.tam-inv-guia-erp-input.tam-inv-guia-erp-done { border-color:#000!important; background:#000!important; color:#fff!important; }',
 

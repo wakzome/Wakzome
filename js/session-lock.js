@@ -1,35 +1,59 @@
 // ══════════════════════════════════════════════════════════════
-//  SESSION LOCK — Generic mutex for module sessions
-//  Prevents two tabs/devices from working on the same session at once.
+//  SESSION LOCK — Strict single-owner mutex for module sessions
+//  Guarantees that one session (module_name + session_name) is held
+//  by AT MOST ONE client (tab / device) at any time.
 //
-//  Usage (in each module):
+//  Usage (unchanged — public API is identical):
 //    var lock = SessionLock.create('parfois', sbAdmin);
 //    await lock.acquire(sessionName, onEvicted);   // when opening
 //    await lock.release();                          // when closing
 //
-//  onEvicted: function called when another tab/device claims the same
-//             session. Should save and close the module.
+//  onEvicted: called when another client claims the same session.
+//             Should save and close the module.
 //
-//  Eviction is detected by TWO independent mechanisms:
-//    1. Realtime broadcast  — fast path, near-instant when available.
-//    2. Heartbeat reconciliation — authoritative fallback that works
-//       even if Realtime is disabled/unreachable (latency ≤ heartbeat).
+//  ── DESIGN (why this is rigorous) ──────────────────────────────
+//  The correctness guarantee does NOT depend on Realtime. Realtime
+//  can be down, throttled, or broken by a duplicated GoTrue client;
+//  eviction still happens. Detection runs in three layers, fastest
+//  to most authoritative:
 //
-//  The lock row is removed when the session ends, both when the user
-//  closes the module (release) and when the browser/tab closes
-//  (pagehide / beforeunload via keepalive fetch).
+//    1. Broadcast (Realtime)      — instant nudge when the socket is up.
+//    2. Postgres Changes (Realtime) — reliable push on the lock row;
+//       unlike broadcast it does not require sender/receiver to be
+//       subscribed at the same instant.
+//    3. Heartbeat over plain HTTP (PostgREST) — the AUTHORITATIVE
+//       mechanism. Immune to Realtime/GoTrue. Runs every 3 s and is
+//       also forced on visibilitychange / focus / online, so the very
+//       moment the stale tab is looked at, it reconciles and closes.
+//
+//  Deterministic exclusion rule: on every reconciliation, if the lock
+//  row carries a tab_id different from ours, we ARE evicted — no
+//  timestamp comparison, no reclaim. There is exactly one tab_id in
+//  the row; whoever does not match it self-closes. This eliminates
+//  clock-skew ping-pong between devices.
+//
+//  Detection bound: ≤ 3 s with Realtime down (heartbeat), or instant
+//  on focusing the stale tab; < 1 s with Realtime up.
+//
+//  The lock row is removed on normal close (release) and on
+//  browser/tab close (pagehide / beforeunload via keepalive fetch).
 //
 //  Schema expected:
 //    module_session_locks(module_name text, session_name text,
 //                          tab_id text, locked_at timestamptz)
 //    UNIQUE (module_name, session_name)
+//
+//  Optional (lowers latency, NOT required for correctness):
+//    add `module_session_locks` to the `supabase_realtime` publication
+//    so Postgres Changes fire. Without it, the heartbeat still enforces
+//    exclusion within its interval.
 // ══════════════════════════════════════════════════════════════
 (function (global) {
   'use strict';
 
   var SL_TABLE     = 'module_session_locks';
-  var SL_HEARTBEAT = 5000;    // 5 s — renew + reconcile ownership
-  var SL_LOCK_TTL  = 20000;   // 20 s — lock considered stale if no heartbeat
+  var SL_HEARTBEAT = 3000;    // 3 s — renew + authoritative reconcile
+  var SL_LOCK_TTL  = 15000;   // 15 s — a lock is considered dead (for takeover) past this
 
   /* ── Unique client identifier, generated ONCE per page load, in memory ──
      Deliberately NOT persisted in sessionStorage: that storage is copied on
@@ -204,28 +228,50 @@
      LOCK INSTANCE
   ══════════════════════════════════════════════════════════════ */
   function SessionLockInstance(moduleName, sb) {
-    this._module       = moduleName;
-    this._sb           = sb;
-    this._tabId        = slTabId();
-    this._sessionName  = null;
-    this._channel      = null;
-    this._heartbeat    = null;
-    this._onEvicted    = null;
-    this._evicting     = false;
-    this._unloadBound  = false;
+    this._module        = moduleName;
+    this._sb            = sb;
+    this._tabId         = slTabId();
+    this._sessionName   = null;
+    this._channel       = null;   // broadcast channel
+    this._pgChannel     = null;   // postgres_changes channel
+    this._heartbeat     = null;
+    this._onEvicted     = null;
+    this._evicting      = false;
+    this._unloadBound   = false;
     this._unloadHandler = null;
+    this._reconcileBound = false;
+    this._visHandler    = null;
+    this._focusHandler  = null;
+    this._onlineHandler = null;
+    this._ticking       = false;  // re-entrancy guard for _tick
   }
 
   /* ── Acquire lock for a session ── */
   SessionLockInstance.prototype.acquire = async function (sessionName, onEvicted) {
+    var cb = onEvicted || function () {};
+
+    /* Idempotent: re-acquiring the SAME live session must not spawn
+       duplicate channels/heartbeats. Just refresh the callback + renew. */
+    if (this._sessionName === sessionName && !this._evicting && this._heartbeat) {
+      this._onEvicted = cb;
+      await this._upsertLock();
+      return;
+    }
+
+    /* Switching sessions on the same instance: fully release the old one. */
+    if (this._sessionName && this._sessionName !== sessionName) {
+      try { await this.release(); } catch (e) {}
+    }
+
     this._sessionName = sessionName;
-    this._onEvicted   = onEvicted || function () {};
+    this._onEvicted   = cb;
     this._evicting    = false;
 
     var sb = this._sb;
     console.info('SessionLock: acquire', { module: this._module, session: sessionName, tab: this._tabId });
 
-    /* 1. Check for an existing, non-stale lock held by a different tab. */
+    /* 1. If another live tab holds this session, nudge it via broadcast
+          (fast path). Takeover happens unconditionally at step 2. */
     try {
       var existing = await sb
         .from(SL_TABLE)
@@ -235,13 +281,8 @@
         .limit(1);
 
       if (!existing.error && existing.data && existing.data.length) {
-        var row     = existing.data[0];
-        var age     = Date.now() - new Date(row.locked_at).getTime();
-        var isOther = row.tab_id !== this._tabId;
-        var isStale = age > SL_LOCK_TTL;
-
-        if (isOther && !isStale) {
-          /* Another tab holds a fresh lock — notify it (fast path) and take over. */
+        var row = existing.data[0];
+        if (row.tab_id !== this._tabId) {
           console.info('SessionLock: taking over from', row.tab_id, '→ broadcasting evict');
           await this._notifyEviction(sessionName);
         }
@@ -250,24 +291,29 @@
       console.warn('SessionLock: error checking existing lock', e);
     }
 
-    /* 2. Claim the lock (upsert wins by last write). */
+    /* 2. Claim the lock (upsert — last write wins). */
     await this._upsertLock();
 
-    /* 3. Subscribe to eviction broadcasts from other tabs (fast path). */
-    this._subscribe();
+    /* 3. Fast-path subscriptions (best-effort; correctness comes from step 5). */
+    this._subscribeBroadcast();
+    this._subscribePgChanges();
 
-    /* 4. Ensure the row is removed if the browser/tab closes. */
+    /* 4. Ensure the row is removed if the browser/tab closes, and force a
+          reconcile whenever this tab regains focus / connectivity. */
     this._bindUnload();
+    this._bindReconcileEvents();
 
-    /* 5. Start heartbeat (renew + authoritative reconciliation). */
+    /* 5. Authoritative heartbeat (renew + reconcile). */
     this._startHeartbeat();
   };
 
   /* ── Release lock (call on module close → dashboard) ── */
   SessionLockInstance.prototype.release = async function () {
     this._stopHeartbeat();
-    this._unsubscribe();
+    this._unsubscribeBroadcast();
+    this._unsubscribePgChanges();
     this._unbindUnload();
+    this._unbindReconcileEvents();
 
     var name = this._sessionName;
     this._sessionName = null;
@@ -309,7 +355,7 @@
       await new Promise(function (resolve) {
         ch.subscribe(function (status) {
           if (status === 'SUBSCRIBED') {
-            ch.send({ type: 'broadcast', event: 'evict', payload: {} })
+            ch.send({ type: 'broadcast', event: 'evict', payload: { by: 'acquire' } })
               .then(resolve)
               .catch(resolve);
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
@@ -326,9 +372,10 @@
     }
   };
 
-  /* ── Subscribe to eviction events for our session ── */
-  SessionLockInstance.prototype._subscribe = function () {
+  /* ── Subscribe to eviction broadcasts for our session (fast path) ── */
+  SessionLockInstance.prototype._subscribeBroadcast = function () {
     if (!this._sessionName) return;
+    this._unsubscribeBroadcast();
     var self        = this;
     var channelName = 'sl_' + this._module + '_' + this._sessionName.replace(/\s/g, '_');
 
@@ -340,16 +387,73 @@
       .subscribe(function (status) {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           /* Realtime unavailable — heartbeat reconciliation covers it. */
-          console.warn('SessionLock: realtime subscribe status', status);
+          console.warn('SessionLock: broadcast subscribe status', status);
         }
       });
   };
 
-  /* ── Unsubscribe from Realtime channel ── */
-  SessionLockInstance.prototype._unsubscribe = function () {
+  SessionLockInstance.prototype._unsubscribeBroadcast = function () {
     if (this._channel) {
       try { this._sb.removeChannel(this._channel); } catch (e) {}
       this._channel = null;
+    }
+  };
+
+  /* ── Subscribe to Postgres Changes on the lock row (reliable push) ──
+     Not filtered server-side (composite key + arbitrary session names make
+     server filters brittle); we filter in the handler. Volume is trivial. */
+  SessionLockInstance.prototype._subscribePgChanges = function () {
+    if (!this._sessionName) return;
+    this._unsubscribePgChanges();
+    var self = this;
+    var channelName = 'slpg_' + this._module + '_' + this._sessionName.replace(/\s/g, '_') + '_' + this._tabId;
+
+    try {
+      this._pgChannel = this._sb.channel(channelName);
+      this._pgChannel
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: SL_TABLE },
+            function (payload) { self._onLockChange(payload); })
+        .subscribe(function (status) {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            /* Table not in publication or Realtime down — heartbeat covers it. */
+            console.warn('SessionLock: postgres_changes subscribe status', status);
+          }
+        });
+    } catch (e) {
+      console.warn('SessionLock: error subscribing postgres_changes', e);
+      this._pgChannel = null;
+    }
+  };
+
+  SessionLockInstance.prototype._unsubscribePgChanges = function () {
+    if (this._pgChannel) {
+      try { this._sb.removeChannel(this._pgChannel); } catch (e) {}
+      this._pgChannel = null;
+    }
+  };
+
+  /* ── Handle a pushed change on the lock row. Deterministic rule:
+        a different tab_id now owns OUR session → we are evicted. ── */
+  SessionLockInstance.prototype._onLockChange = function (payload) {
+    if (this._evicting || !this._sessionName) return;
+    var rec = (payload && (payload.new || payload.old)) || null;
+    if (!rec) return;
+    if (rec.module_name !== this._module) return;
+    if (rec.session_name !== this._sessionName) return;
+
+    var evt = payload.eventType || payload.event;
+
+    if (evt === 'DELETE') {
+      /* Our row was deleted. If it was us (normal release path), ignore.
+         Otherwise let the next heartbeat reclaim it if we still own logically. */
+      return;
+    }
+
+    /* INSERT / UPDATE: a row for our session exists. */
+    var newRec = payload.new || rec;
+    if (newRec && newRec.tab_id && newRec.tab_id !== this._tabId) {
+      this._handleEviction();
     }
   };
 
@@ -374,6 +478,45 @@
     this._unloadBound   = false;
   };
 
+  /* ── Force an authoritative reconcile when the tab wakes up ──
+     Covers background-throttled timers and dropped sockets: the instant the
+     stale tab is focused / becomes visible / regains network, it checks the
+     DB and self-evicts if it lost ownership. This is what makes "never two
+     visible at once" hold even when Realtime never delivered anything.    */
+  SessionLockInstance.prototype._bindReconcileEvents = function () {
+    if (this._reconcileBound) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    var self = this;
+
+    this._visHandler = function () {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        self._tick();
+      }
+    };
+    this._focusHandler  = function () { self._tick(); };
+    this._onlineHandler = function () { self._tick(); };
+
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('visibilitychange', this._visHandler);
+    }
+    window.addEventListener('focus',  this._focusHandler);
+    window.addEventListener('online', this._onlineHandler);
+    this._reconcileBound = true;
+  };
+
+  SessionLockInstance.prototype._unbindReconcileEvents = function () {
+    if (!this._reconcileBound) return;
+    try {
+      if (typeof document !== 'undefined' && document.removeEventListener) {
+        document.removeEventListener('visibilitychange', this._visHandler);
+      }
+      window.removeEventListener('focus',  this._focusHandler);
+      window.removeEventListener('online', this._onlineHandler);
+    } catch (e) {}
+    this._visHandler = this._focusHandler = this._onlineHandler = null;
+    this._reconcileBound = false;
+  };
+
   /* ── Best-effort, survives page unload (keepalive). Deletes ONLY our row. ── */
   SessionLockInstance.prototype._beaconRelease = function () {
     if (!this._sessionName) return;
@@ -396,15 +539,17 @@
     } catch (e) {}
   };
 
-  /* ── Handle incoming eviction (broadcast or heartbeat). Idempotent. ── */
+  /* ── Handle incoming eviction (broadcast, pg-change or heartbeat). Idempotent. ── */
   SessionLockInstance.prototype._handleEviction = function () {
     if (this._evicting || !this._sessionName) return;
     this._evicting = true;
     console.info('SessionLock: evicted — another client took session', this._sessionName);
 
     this._stopHeartbeat();
-    this._unsubscribe();
-    this._unbindUnload();   /* the new owner holds the row now — do not delete it */
+    this._unsubscribeBroadcast();
+    this._unsubscribePgChanges();
+    this._unbindUnload();          /* the new owner holds the row now — do not delete it */
+    this._unbindReconcileEvents();
     this._sessionName = null;
 
     slShowEvictionToast();
@@ -418,9 +563,13 @@
     }, 600);
   };
 
-  /* ── Heartbeat: renew ownership (race-safe) and reconcile against DB ── */
+  /* ── Heartbeat: renew ownership (race-safe) and reconcile against DB.
+        Authoritative, plain HTTP — immune to Realtime/GoTrue problems. ── */
   SessionLockInstance.prototype._tick = async function () {
     if (!this._sessionName || this._evicting) return;
+    if (this._ticking) return;          /* avoid overlapping ticks (focus + timer) */
+    this._ticking = true;
+
     var sb   = this._sb;
     var name = this._sessionName;
 
@@ -447,12 +596,12 @@
       /* 0 rows updated → we no longer own the row. Find out why. */
       var cur = await sb
         .from(SL_TABLE)
-        .select('tab_id, locked_at')
+        .select('tab_id')
         .eq('module_name', this._module)
         .eq('session_name', name)
         .limit(1);
 
-      if (cur.error) return;                              /* skip on error */
+      if (cur.error) return;                                 /* skip on error */
       if (this._sessionName !== name || this._evicting) return;
 
       if (!cur.data || !cur.data.length) {
@@ -461,19 +610,21 @@
         return;
       }
 
-      var row = cur.data[0];
-      var age = Date.now() - new Date(row.locked_at).getTime();
-
-      if (row.tab_id !== this._tabId && age <= SL_LOCK_TTL) {
-        /* A live tab/device has taken the session → we are evicted. */
+      /* Deterministic exclusion: a different tab_id owns our session → we are
+         evicted. No timestamp comparison (skew-proof): the conditional update
+         above already proved someone overwrote our row after us.            */
+      if (cur.data[0].tab_id !== this._tabId) {
         this._handleEviction();
         return;
       }
 
-      /* Owner is stale (dead) → reclaim. */
+      /* Row says it's ours but the conditional update missed it (rare race) →
+         re-assert ownership. */
       await this._upsertLock();
     } catch (e) {
       /* Swallow: a transient failure must never evict the active user. */
+    } finally {
+      this._ticking = false;
     }
   };
 

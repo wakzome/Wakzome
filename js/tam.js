@@ -3338,61 +3338,48 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     MODAL DE SESIONES
+     LISTA DE SESSÕES — bloco fixo por baixo da zona de carregar
+     fatura (visível só em estado vazio, via CSS #tab-tam:not(.tam-loaded)).
+     Substituiu o antigo popup: já não há abrir/fechar, só (re)carregar.
   ══════════════════════════════════════════════════════════════ */
-  function tamOpenSessionsModal() {
+  function tamRefreshSessionsInline() {
     var dd = document.getElementById('tam-sessions-dropdown');
     if (!dd) return;
-    var isOpen = dd.classList.contains('open');
-    dd.classList.toggle('open', !isOpen);
-    if (!isOpen) {
-      /* Smart positioning: ensure dropdown doesn't go off-screen left */
-      dd.style.right = '0';
-      dd.style.left  = 'auto';
-      requestAnimationFrame(function(){
-        var rect = dd.getBoundingClientRect();
-        if (rect.left < 8) {
-          /* Would overflow left — anchor to left edge of wrap instead */
-          dd.style.right = 'auto';
-          dd.style.left  = '0';
-        }
-        /* On narrow screens use fixed positioning spanning full width */
-        if (window.innerWidth <= 768) {
-          dd.style.position = 'fixed';
-          dd.style.left     = '12px';
-          dd.style.right    = '12px';
-          dd.style.top      = '';
-          dd.style.width    = 'auto';
-        } else {
-          dd.style.position = '';
-          dd.style.width    = '';
-        }
-      });
-      dd.innerHTML = '<div class="tam-dd-header">a carregar sessões…</div>';
-      tamLoadAllSessionsMerged().then(function(sessions){
-        tamRenderSessionsList(sessions);
-      });
-    }
+    dd.innerHTML = '<div class="tam-sessions-empty">a carregar sessões…</div>';
+    tamLoadAllSessionsMerged().then(function(sessions){
+      tamRenderSessionsList(sessions);
+    });
   }
 
-  function tamCloseSessionsModal() {
-    var dd = document.getElementById('tam-sessions-dropdown');
-    if (dd) dd.classList.remove('open');
+  /* Data embutida no nome da sessão ("Sessão TAM DD/MM/YYYY") — âncora
+     cronológica estável que nunca muda ao guardar/carregar, ao contrário
+     de savedAt (que avança sempre que a sessão é tocada). */
+  function tamParseSessionDate(name) {
+    var m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(name || '');
+    if (!m) return 0;
+    return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10)).getTime();
   }
 
   function tamRenderSessionsList(sessions) {
     var dd = document.getElementById('tam-sessions-dropdown');
+    var titleEl = document.getElementById('tam-sessions-inline-title');
     if (!dd) return;
     if (!sessions) sessions = tamLoadAllSessionsLocal();
-    var keys = Object.keys(sessions).sort(function(a,b){ return (sessions[b].savedAt||0) - (sessions[a].savedAt||0); });
+    var keys = Object.keys(sessions).sort(function(a,b){
+      var da = tamParseSessionDate(sessions[a].name || a);
+      var db = tamParseSessionDate(sessions[b].name || b);
+      if (db !== da) return db - da;
+      return (sessions[b].savedAt||0) - (sessions[a].savedAt||0);
+    });
+
+    if (titleEl) titleEl.textContent = 'sessões guardadas' + (keys.length ? ' · ' + keys.length : '');
 
     if (!keys.length) {
-      dd.innerHTML = '<div class="tam-dd-header">sessões guardadas</div><div class="tam-sessions-empty">nenhuma sessão guardada</div>';
+      dd.innerHTML = '<div class="tam-sessions-empty">nenhuma sessão guardada</div>';
       return;
     }
 
     dd.innerHTML =
-      '<div class="tam-dd-header">sessões guardadas · ' + keys.length + '</div>' +
       keys.map(function(k){
         var s = sessions[k];
         var date = s.savedAt ? new Date(s.savedAt).toLocaleString('pt-PT') : '—';
@@ -3454,7 +3441,6 @@
         /* Show loading feedback on button */
         btn.textContent = '…';
         btn.disabled = true;
-        tamCloseSessionsModal();
         tamLoadSessionFresh(key);
       });
     });
@@ -7284,11 +7270,14 @@
       '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
       '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
 
-      /* ── Sessions dropdown (proc style) ── */
-      '.tam-sessions-dropdown-wrap { position:relative; }',
-      '#tam-sessions-dropdown { display:none; position:absolute; top:calc(100% + 6px); right:0; width:360px; max-width:calc(100vw - 24px); max-height:380px; overflow-y:auto; background:#fff; border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.14); z-index:9999; font-family:\'MontserratLight\',sans-serif; }',
-      '#tam-sessions-dropdown.open { display:block; }',
-      '.tam-dd-header { padding:10px 14px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; border-bottom:1px solid #f0f0f0; background:#fafafa; border-radius:12px 12px 0 0; }',
+      /* ── Lista de sessões — bloco fixo por baixo da zona de carregar
+         fatura (visível só em estado vazio), estilo consistente com
+         .tam-rec-area / .tam-rec-area-title (cabeçalho preto, cartão
+         branco arredondado). Já não é um popup. ── */
+      '#tam-sessions-inline { display:none; width:100%; max-width:960px; margin:16px auto 0; border:1px solid #e0e0e0; border-radius:14px; overflow:hidden; background:#fff; font-family:\'MontserratLight\',sans-serif; }',
+      '#tab-tam:not(.tam-loaded) #tam-sessions-inline { display:block; }',
+      '.tam-sessions-inline-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; background:#000!important; color:#fff!important; }',
+      '#tam-sessions-dropdown { width:100%; max-height:420px; overflow-y:auto; }',
       '.tam-dd-item { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f0f0f0; transition:background .12s; }',
       '.tam-dd-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }',
       '.tam-dd-dot-green { background:#4A7C6F; }',
@@ -8049,8 +8038,8 @@
          RESPONSIVE MOBILE — all tam module elements
       ══════════════════════════════════════════════ */
       '@media (max-width:768px) {',
-      /* Sessions dropdown — prevent off-screen right */
-      '  #tam-sessions-dropdown { position:fixed!important; top:auto!important; right:12px!important; left:12px!important; width:auto!important; max-width:none!important; border-radius:12px; }',
+      /* Sessions inline list — full width on small screens */
+      '  #tam-sessions-inline { max-width:none; margin:12px 0 0; }',
       /* Invoice block header — stack and shrink buttons */
       '  .tam-invoice-block-header { gap:4px; padding:14px 14px; }',
       '  .tam-inv-num { font-size:1.1rem!important; }',
@@ -8117,10 +8106,6 @@
       bar.id = 'tam-session-bar';
       bar.style.cssText = 'display:flex!important;';   // visible desde el inicio
       bar.innerHTML =
-        '<div class="tam-sessions-dropdown-wrap">' +
-          '<button class="tam-session-btn" id="tam-sessions-btn">sessões</button>' +
-          '<div id="tam-sessions-dropdown"></div>' +
-        '</div>' +
         '<button class="tam-session-btn" id="tam-save-btn" title="guardar sessão">guardar</button>' +
         '<button class="tam-session-btn" id="tam-guia-bar-btn" title="guía consolidada" style="display:none">guía</button>' +
         '<label class="tam-session-btn" id="tam-dn-load-bar-btn" for="tam-dn-file-input" title="delivery notes PDF / Excel" style="display:none">delivery note' +
@@ -8140,6 +8125,19 @@
 
       var saveBtn = bar.querySelector('#tam-save-btn');
       if (saveBtn) saveBtn.addEventListener('click', function(){ tamSaveSession(false); });
+
+      // ── Lista de sessões: bloco fixo por baixo da zona de carregar
+      // fatura (visível só em estado vazio — ver CSS #tab-tam:not(.tam-loaded)).
+      if (!document.getElementById('tam-sessions-inline')) {
+        var sessInline = document.createElement('div');
+        sessInline.id = 'tam-sessions-inline';
+        sessInline.innerHTML =
+          '<div class="tam-sessions-inline-title" id="tam-sessions-inline-title">sessões guardadas</div>' +
+          '<div id="tam-sessions-dropdown"></div>';
+        if (uz && uz.parentNode) uz.parentNode.insertBefore(sessInline, uz.nextSibling);
+        else tab.appendChild(sessInline);
+        tamRefreshSessionsInline();
+      }
 
       // ── Botón EAN Tool ──
       var eanToolBtn = bar.querySelector('#tam-ean-tool-btn');
@@ -8217,6 +8215,9 @@
         if (statusMsg) statusMsg.textContent = '';
         var fileName = document.getElementById('tam-file-name');
         if (fileName) fileName.textContent = '';
+        // A sessão fechada acabou de ser guardada — refrescar a lista
+        // inline (volta a ficar visível agora que saímos do estado carregado).
+        tamRefreshSessionsInline();
       }
 
       /* ── Confirmation modal for closing session ── */
@@ -8305,13 +8306,6 @@
         overlay.addEventListener('remove', function(){ document.removeEventListener('keydown', onKeyDown); });
       }
 
-      // Bind sessions button here, not in the separate listener block above
-      var sesBtn2 = bar.querySelector('#tam-sessions-btn');
-      if (sesBtn2) sesBtn2.addEventListener('click', function(e){
-        e.stopPropagation();
-        tamOpenSessionsModal();
-      });
-
       // Guia bar button → open consolidated guia
       var guiaBarBtn = bar.querySelector('#tam-guia-bar-btn');
       if (guiaBarBtn) guiaBarBtn.addEventListener('click', function(){ tamShowGuiaModal(null); });
@@ -8345,15 +8339,6 @@
         var file = e.target.files[0];
         if (file) tamHandleDNCameraPhoto(file);
         e.target.value = '';
-      });
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', function(e){
-        var dd = document.getElementById('tam-sessions-dropdown');
-        var btn = document.getElementById('tam-sessions-btn');
-        if (dd && !dd.contains(e.target) && e.target !== btn) {
-          dd.classList.remove('open');
-        }
       });
     }
 

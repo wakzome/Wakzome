@@ -71,6 +71,13 @@
     '#ean-error-wrap.ean-visible { display:block; }',
     '#ean-error-box { background:#fff0f0 !important; border:1px solid #f5c0c0; border-radius:7px; padding:10px 14px; font-size:.74rem; color:#c00 !important; font-family:\'MontserratLight\',sans-serif; }',
 
+    /* ── novos EANs encontrados (extração em curso ou ingestão em 2º plano) ── */
+    '#ean-found-wrap { padding:8px 18px 0; display:none; flex-shrink:0; }',
+    '#ean-found-wrap.ean-visible { display:block; }',
+    '#ean-found-box { background:#fdf6e8 !important; border:1px solid #e6d5a3; border-radius:7px; padding:10px 14px; font-family:\'MontserratLight\',sans-serif; }',
+    '#ean-found-title { font-weight:700; font-size:.76rem; color:#111 !important; margin-bottom:2px; }',
+    '#ean-found-hint { font-size:.7rem; color:#8a7238 !important; }',
+
     /* ── delivery notes encontradas (cruce EAN → referência) ── */
     '#ean-dn-wrap { padding:8px 18px 14px; display:none; flex-shrink:0; }',
     '#ean-dn-wrap.ean-visible { display:block; }',
@@ -204,6 +211,9 @@
         /* error */
         '<div id="ean-error-wrap"><div id="ean-error-box"></div></div>' +
 
+        /* novos EANs encontrados */
+        '<div id="ean-found-wrap"><div id="ean-found-box"></div></div>' +
+
         /* delivery notes encontradas */
         '<div id="ean-dn-wrap"><div id="ean-dn-box"></div></div>' +
 
@@ -262,6 +272,8 @@
   var errorBox     = document.getElementById('ean-error-box');
   var dnWrap       = document.getElementById('ean-dn-wrap');
   var dnBox        = document.getElementById('ean-dn-box');
+  var foundWrap    = document.getElementById('ean-found-wrap');
+  var foundBox     = document.getElementById('ean-found-box');
   var modalOverlay = document.getElementById('ean-modal-overlay');
   var modalClose   = document.getElementById('ean-modal-close');
   var modalBody    = document.getElementById('ean-modal-body');
@@ -274,6 +286,16 @@
   // ═══════════════════════════════════════════════════════════════
   window.tamOpenEanTool = function () {
     toolOverlay.classList.add('ean-open');
+    /* Se existe um rascunho restaurado do localStorage (ou dados chegados
+       em 2º plano via tamEanToolIngestCatalog) que ainda não foi reflectido
+       em state.results nesta sessão de página, consolida agora para que o
+       utilizador veja logo o catálogo acumulado ao abrir a ferramenta. */
+    if (Object.keys(merged).length && !state.results.length) {
+      consolidateResults().then(function(){
+        if (state.results.length) { btnOpenModal.disabled = false; btnOpenModal.classList.add('ean-has-results'); }
+        renderPendingEanBanner();
+      });
+    }
   };
 
   // Ponto de entrada único: abre a ferramenta e entrega-lhe directamente
@@ -282,6 +304,20 @@
   window.tamEanToolIngestFiles = function (files) {
     toolOverlay.classList.add('ean-open');
     addFiles(Array.prototype.slice.call(files));
+  };
+
+  // Ingestão silenciosa em 2º plano — usada pelo parser de DN em PDF de
+  // tam.js (tamPushEanCatalogFromPDF) para alimentar o catálogo com os
+  // EAN reais capturados durante a leitura de uma delivery note, sem abrir
+  // o overlay nem reanalisar ficheiros. entries: [{ref, eans:[...]}].
+  window.tamEanToolIngestCatalog = async function (entries) {
+    if (!entries || !entries.length) return;
+    entries.forEach(function(e){
+      if (e && e.ref && e.eans && e.eans.length) mergeRef(e.ref, '', '', e.eans, 'pdf-dn', '');
+    });
+    await consolidateResults();
+    if (state.results.length) { btnOpenModal.disabled = false; btnOpenModal.classList.add('ean-has-results'); }
+    renderPendingEanBanner();
   };
 
   // Cerrar ventana principal
@@ -346,6 +382,57 @@
   var merged = {};
   var pendingDNResults    = [];   // [{ zyCode, refs:[{ref,qty}], fileName, gesamtPcs }]
   var pendingDNUnresolved = 0;    // EANs vistos numa hoja de DN sem referência conhecida
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PERSISTÊNCIA (localStorage) — rascunho do catálogo por sessão de
+  //  browser. Guarda só o catálogo (merged); as delivery notes pendentes
+  //  não persistem (ficam sujeitas a "Aplicar à sessão activa" na hora).
+  // ═══════════════════════════════════════════════════════════════
+  var EAN_STORAGE_KEY = 'tam_ean_tool_draft_v1';
+
+  function persistEanToolState() {
+    try {
+      var serializable = {};
+      Object.keys(merged).forEach(function(key){
+        var e = merged[key];
+        serializable[key] = {
+          ref: e.ref, name: e.name, pvp: e.pvp,
+          eans: Array.from(e.eans), sources: Array.from(e.sources), dns: Array.from(e.dns)
+        };
+      });
+      if (Object.keys(serializable).length) {
+        localStorage.setItem(EAN_STORAGE_KEY, JSON.stringify({ merged: serializable, savedAt: Date.now() }));
+      } else {
+        localStorage.removeItem(EAN_STORAGE_KEY);
+      }
+    } catch(e) { console.warn('EAN Tool: fallo al guardar borrador local', e); }
+  }
+
+  function restoreEanToolState() {
+    try {
+      var raw = localStorage.getItem(EAN_STORAGE_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (!data || !data.merged) return false;
+      var any = false;
+      Object.keys(data.merged).forEach(function(key){
+        var e = data.merged[key];
+        if (!e || !e.ref) return;
+        merged[key] = {
+          ref: e.ref, name: e.name || '', pvp: e.pvp || '',
+          eans: new Set(e.eans || []), sources: new Set(e.sources || []), dns: new Set(e.dns || [])
+        };
+        any = true;
+      });
+      return any;
+    } catch(e) { console.warn('EAN Tool: fallo al restaurar borrador local', e); return false; }
+  }
+
+  function clearEanToolState() {
+    try { localStorage.removeItem(EAN_STORAGE_KEY); } catch(e) {}
+  }
+
+  restoreEanToolState();
 
   // ═══════════════════════════════════════════════════════════════
   //  SUPABASE — Biblioteca EANs conocidos
@@ -465,6 +552,43 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //  Consolidação do catálogo (merged → state.results), incluindo o
+  //  filtro de EANs já conhecidos no Supabase. Reutilizável tanto pelo
+  //  fluxo normal de extração (runExtraction) como pela ingestão em
+  //  segundo plano vinda do parser de DN em PDF (tamEanToolIngestCatalog).
+  // ═══════════════════════════════════════════════════════════════
+  async function consolidateResults() {
+    state.results = Object.values(merged)
+      .map(function(e){ return {
+        ref:     e.ref,
+        name:    e.name,
+        pvp:     e.pvp,
+        eans:    Array.from(e.eans).filter(function(x){return /^\d{8,14}$/.test(x);}),
+        sources: Array.from(e.sources),
+        dns:     Array.from(e.dns).sort()
+      }; })
+      .filter(function(r){ return r.eans.length>0; })
+      .sort(function(a,b){ return a.ref.localeCompare(b.ref); });
+
+    runAuditEngines(state.results);
+
+    try {
+      var knownEans = await fetchKnownEans();
+      if (knownEans.size > 0) {
+        var withEans = [], withoutEans = [];
+        state.results.forEach(function(r) {
+          r.eans = r.eans.filter(function(e){ return !knownEans.has(e); });
+          if (r.eans.length > 0) { withEans.push(r); }
+          else { withoutEans.push(r); }
+        });
+        state.results = withEans.concat(withoutEans);
+      }
+    } catch(e) { console.warn('Supabase fetch error (filtro omitido):', e); }
+
+    persistEanToolState();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   //  MAIN — auto-runs on file load
   // ═══════════════════════════════════════════════════════════════
   async function runExtraction() {
@@ -554,33 +678,8 @@
     }
 
     setProg(100, 'Consolidando…');
-    state.results = Object.values(merged)
-      .map(function(e){ return {
-        ref:     e.ref,
-        name:    e.name,
-        pvp:     e.pvp,
-        eans:    Array.from(e.eans).filter(function(x){return /^\d{8,14}$/.test(x);}),
-        sources: Array.from(e.sources),
-        dns:     Array.from(e.dns).sort()
-      }; })
-      .filter(function(r){ return r.eans.length>0; })
-      .sort(function(a,b){ return a.ref.localeCompare(b.ref); });
-
-    runAuditEngines(state.results);
-
-    try {
-      setProg(100, 'Consultando biblioteca EANs…');
-      var knownEans = await fetchKnownEans();
-      if (knownEans.size > 0) {
-        var withEans = [], withoutEans = [];
-        state.results.forEach(function(r) {
-          r.eans = r.eans.filter(function(e){ return !knownEans.has(e); });
-          if (r.eans.length > 0) { withEans.push(r); }
-          else { withoutEans.push(r); }
-        });
-        state.results = withEans.concat(withoutEans);
-      }
-    } catch(e) { console.warn('Supabase fetch error (filtro omitido):', e); }
+    setProg(100, 'Consultando biblioteca EANs…');
+    await consolidateResults();
 
     setTimeout(function(){
       progressWrap.classList.remove('ean-visible');
@@ -593,6 +692,7 @@
         btnOpenModal.classList.add('ean-has-results');
       }
       renderPendingDN();
+      renderPendingEanBanner();
     }, 350);
   }
 
@@ -1042,6 +1142,23 @@
     });
   }
 
+  /* ── Aviso visível de EANs novos por rever/guardar. Complementa o
+     destaque discreto do botão ◉ (ean-has-results) com um bloco explícito,
+     igualmente relevante quando os dados chegam em 2º plano (PDF de DN)
+     ou são restaurados de um rascunho local, sem passar por runExtraction. ── */
+  function renderPendingEanBanner() {
+    var totalNew = state.results.reduce(function(s,r){ return s + r.eans.length; }, 0);
+    if (!state.results.length || totalNew === 0) {
+      foundWrap.classList.remove('ean-visible');
+      foundBox.innerHTML = '';
+      return;
+    }
+    foundBox.innerHTML =
+      '<div id="ean-found-title">🏷 ' + state.results.length + ' referencia(s) · ' + totalNew + ' EAN(s) nuevo(s)</div>' +
+      '<div id="ean-found-hint">Toca en ◉ para revisar y guardar en el catálogo.</div>';
+    foundWrap.classList.add('ean-visible');
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  CAPA DE FISCALIZACIÓN — 4 MOTORES AUDITORES
   // ═══════════════════════════════════════════════════════════════
@@ -1397,6 +1514,7 @@
     btn.textContent = '⬆ SB';
     if (errors === 0) {
       toast(allEans.length + ' EANs guardados en Supabase ✓');
+      clearEanToolState();
     } else {
       toast('Guardado con ' + errors + ' error(es) — revisa consola');
     }

@@ -5096,9 +5096,29 @@
     return { applied: applied, skipped: skipped };
   };
 
+  /* ── Alimenta em segundo plano o catálogo do EAN Tool com os EAN reais
+     capturados pelo parser primário de DN em PDF (ver refEans em
+     tamParseDNFromItems). Não abre o overlay do EAN Tool — carrega o
+     script se ainda não estiver presente (idêntico ao lazy-load já usado
+     para o botão de Excel) e delega a fusão a tamEanToolIngestCatalog. */
+  function tamPushEanCatalogFromPDF(entries) {
+    if (!entries || !entries.length) return;
+    if (typeof window.tamEanToolIngestCatalog === 'function') {
+      window.tamEanToolIngestCatalog(entries);
+    } else {
+      var eanScript = document.createElement('script');
+      eanScript.src = 'js/ean-tool.js';
+      eanScript.onload = function() {
+        if (typeof window.tamEanToolIngestCatalog === 'function') window.tamEanToolIngestCatalog(entries);
+      };
+      document.head.appendChild(eanScript);
+    }
+  }
+
   async function tamHandleDeliveryNoteFiles(files) {
     var count = 0;
     var newZyCodes = [];
+    var pdfCatalogEntries = [];
     for (var fi = 0; fi < files.length; fi++) {
       var file = files[fi];
       try {
@@ -5125,7 +5145,14 @@
           });
         }
         var dn = tamParseDNFromItems(allPageItems, file.name);
-        if (dn) { tamDeliveryNotes[dn.zyCode] = dn; newZyCodes.push(dn.zyCode); count++; }
+        if (dn) {
+          tamDeliveryNotes[dn.zyCode] = dn; newZyCodes.push(dn.zyCode); count++;
+          if (dn.refEans) {
+            Object.keys(dn.refEans).forEach(function(ref) {
+              if (dn.refEans[ref] && dn.refEans[ref].length) pdfCatalogEntries.push({ ref: ref, eans: dn.refEans[ref] });
+            });
+          }
+        }
       } catch(e) { console.warn('DN parse error', file.name, e); }
     }
     tamRebuildDNMap();
@@ -5135,6 +5162,7 @@
     console.log('DN loaded:', count, Object.keys(tamDeliveryNotes));
     tamRenderDNVerification();
     tamRenderAll();
+    tamPushEanCatalogFromPDF(pdfCatalogEntries);
   }
 
 
@@ -5373,13 +5401,26 @@
       .map(function(ref){ return { ref:ref, qty:refAccum[ref] }; })
       .filter(function(r){ return r.qty > 0; });
 
+    /* ── 6b. Capturar os EAN reais por referência (leitura adicional só de
+       apoio — não interfere na deteção de ref/qty acima nem na cadeia de
+       fallback). Reaproveita eanItems/eanToRef já calculados, agrupando o
+       código de barras que já serviu de âncora posicional para cada ref,
+       para poder alimentar depois o catálogo EAN. */
+    var refEans = {};
+    eanItems.forEach(function(ean) {
+      var ref = eanToRef[ean.y];
+      if (!ref) return;
+      if (!refEans[ref]) refEans[ref] = [];
+      if (refEans[ref].indexOf(ean.str) === -1) refEans[ref].push(ean.str);
+    });
+
     /* ── 7. Validar contra o Gesamtstückzahl declarado na própria DN.
        Encontrar refs não chega — se a soma não bater com o total que a DN
        diz ter, a leitura pode estar errada (ex.: mudança de layout do
        fornecedor). Delega à cadeia de critérios: só aceita de imediato o
        que reconciliar com o total declarado; senão tenta os outros
        critérios de leitura antes de se dar por vencido. */
-    var eanResult = refs.length ? { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs } : null;
+    var eanResult = refs.length ? { zyCode:zyCode, refs:refs, fileName:fileName, gesamtPcs:gesamtPcs, refEans:refEans } : null;
     return tamParseDNFallbackChain(allPageItems, zyCode, fileName, gesamtPcs, tamIsDNRef, eanResult);
   }
 

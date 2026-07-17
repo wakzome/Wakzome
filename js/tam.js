@@ -1651,7 +1651,7 @@
     var groups = [];
     tamInvoices.forEach(function(inv, invIdx){
       var pending = (inv.dnList || []).filter(function(zy){ return !usedCodes[zy]; });
-      if (pending.length) groups.push({ invIdx: invIdx, invoiceNo: inv.invoiceNo, codes: pending });
+      if (pending.length) groups.push({ invIdx: invIdx, invoiceNo: inv.invoiceNo, invoiceDate: inv.invoiceDate, codes: pending });
     });
     return groups;
   }
@@ -1836,11 +1836,11 @@
       var bi  = bObj.bi;
       var info = boxStyleInfo[boxPos];
       var box  = bObj.box;
-      var dnCode       = box.dnZyCode || null;
-      var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
-      // Vincular/desvincular é independente de já ter distribuição ou de
-      // estar bloqueada — não altera box.refs, só a atribuição por factura.
-      var canLink      = !dnCode;
+      var dnCode = box.dnZyCode || null;
+      // Vincular/desvincular é independente de já ter distribuição, de
+      // estar bloqueada, ou de a DN ter (ou não) PDF digital por trás —
+      // não altera box.refs, só a atribuição por factura.
+      var canLink  = !dnCode;
       var boxLabel = dnCode
         ? dnCode
         : ('Caixa ' + (bi+1));
@@ -1853,12 +1853,10 @@
             'title="Vincular esta caixa a uma DN pendente (sabe o c\u00f3digo mas n\u00e3o tem o PDF)">' +
             tamEsc(boxLabel) + ' <span class="tam-box-dn-link-icon">\uD83D\uDD17</span>' +
           '</button>';
-      } else if (isManualLink) {
+      } else {
         labelHtml =
           tamEsc(boxLabel) +
           ' <button type="button" class="tam-box-dn-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
-      } else {
-        labelHtml = tamEsc(boxLabel);
       }
 
       hdr1 += '<th colspan="' + colSpan + '" class="tam-box-header ' + info.boxCls + '">' + labelHtml + '</th>';
@@ -2014,10 +2012,10 @@
       var received = bObj.received;
       var openDirect = !bObj.isComplete;
       var dnCode   = box.dnZyCode || null;
-      var isManualLink = !!(dnCode && !tamDeliveryNotes[dnCode]);
-      // Vincular/desvincular é independente de já ter distribuição ou de
-      // estar bloqueada — não altera box.refs, só a atribuição por factura.
-      var canLink      = !dnCode;
+      // Vincular/desvincular é independente de já ter distribuição, de
+      // estar bloqueada, ou de a DN ter (ou não) PDF digital por trás —
+      // não altera box.refs, só a atribuição por factura.
+      var canLink  = !dnCode;
       var pct    = box.total ? (received + '/' + box.total) : '';
       var active = (bi === tamEditingBoxBi) ? ' tam-boxlist-item-active' : '';
 
@@ -2031,12 +2029,9 @@
         ? '<span class="tam-boxlist-warn" title="Tem mais pe\u00e7as do que o total declarado">\u26A0</span>'
         : (incomplete ? '<span class="tam-boxlist-warn" title="Distribui\u00e7\u00e3o incompleta">\u26A0</span>' : '');
 
-      var linkHtml = '';
-      if (canLink) {
-        linkHtml = '<button type="button" class="tam-boxlist-link-btn" data-box="' + bi + '" title="Vincular a uma DN pendente">\uD83D\uDD17</button>';
-      } else if (isManualLink) {
-        linkHtml = '<button type="button" class="tam-boxlist-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
-      }
+      var linkHtml = canLink
+        ? '<button type="button" class="tam-boxlist-link-btn" data-box="' + bi + '" title="Vincular a uma DN pendente">\uD83D\uDD17</button>'
+        : '<button type="button" class="tam-boxlist-unlink-btn" data-box="' + bi + '" title="Desvincular DN">\u2715</button>';
 
       return '<div class="tam-boxlist-item' + active + warnCls + '">' +
         '<button type="button" class="tam-boxlist-item-main" data-box="' + bi + '" data-direct="' + (openDirect ? '1' : '0') + '">' +
@@ -2047,10 +2042,36 @@
         linkHtml +
       '</div>';
     }
+    // ── Resumo compacto: DNs declaradas nas facturas que ainda não
+    // foram vinculadas a nenhuma caixa — mesma informação que o popover
+    // de vincular já usa, só que visível de relance, sem ser invasiva
+    // (colapsada por defeito).
+    var pendingDNGroups    = tamGetPendingDNsGrouped();
+    var pendingDNCount     = pendingDNGroups.reduce(function(s,g){ return s + g.codes.length; }, 0);
+    var pendingDNCollapsed = tamCollapseState['pendingDN'] === undefined ? true : !!tamCollapseState['pendingDN'];
+    var pendingDNHtml = !pendingDNCount ? '' :
+      '<div class="tam-boxlist-pending-dn">' +
+        '<button type="button" id="tam-pendingdn-toggle" class="tam-boxlist-pending-dn-btn">' +
+          '\u26A0 ' + pendingDNCount + ' DN(s) pendente(s) ' + (pendingDNCollapsed ? '\u25B8' : '\u25BE') +
+        '</button>' +
+        (pendingDNCollapsed ? '' :
+          '<div class="tam-boxlist-pending-dn-list">' +
+            pendingDNGroups.map(function(g){
+              return '<div class="tam-boxlist-pending-dn-group">' +
+                '<div class="tam-boxlist-pending-dn-inv">' + tamEsc(g.invoiceNo) +
+                  (g.invoiceDate ? ' \u00b7 ' + tamEsc(g.invoiceDate) : '') +
+                '</div>' +
+                '<div class="tam-boxlist-pending-dn-codes">' + g.codes.map(tamEsc).join(', ') + '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>') +
+      '</div>';
+
     var boxListHtml =
       '<div class="tam-boxlist-panel">' +
         '<div class="tam-boxlist-section">' +
           '<div class="tam-boxlist-hdr">Caixas</div>' +
+          pendingDNHtml +
           (boxOrder.length ? boxOrder.map(function(b){ return tamBoxPanelItem(b); }).join('') : '<div class="tam-boxlist-empty">\u2014</div>') +
         '</div>' +
       '</div>';
@@ -2107,6 +2128,15 @@
         // Confirm before clearing everything
         if (!confirm('Borrar toda la distribución?\n\nPuedes deshacer con el botón ↩')) return;
         tamClearAll();
+      });
+    })();
+
+    // ── BIND RESUMO DE DNs PENDENTES ────────────────────────────
+    (function(){
+      var pendingDNBtn = area.querySelector('#tam-pendingdn-toggle');
+      if (pendingDNBtn) pendingDNBtn.addEventListener('click', function(){
+        tamCollapseState['pendingDN'] = !pendingDNCollapsed;
+        tamRenderAll();
       });
     })();
 
@@ -7453,6 +7483,13 @@
       '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
       '.tam-boxlist-warn { font-size:.72rem; }',
       '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
+      '.tam-boxlist-pending-dn { margin-bottom:4px; }',
+      '.tam-boxlist-pending-dn-btn { width:100%; text-align:left; padding:5px 7px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border:1px solid #E8A44A; border-radius:7px; background:#FFFBF5; color:#C47A1E; cursor:pointer; transition:all .15s; }',
+      '.tam-boxlist-pending-dn-btn:hover { background:#E8A44A; color:#fff; }',
+      '.tam-boxlist-pending-dn-list { display:flex; flex-direction:column; gap:6px; padding:6px 2px 2px; }',
+      '.tam-boxlist-pending-dn-group { font-size:.68rem; }',
+      '.tam-boxlist-pending-dn-inv { font-weight:700; color:#000; }',
+      '.tam-boxlist-pending-dn-codes { color:#888; font-family:\'Courier New\',monospace; word-break:break-word; }',
       '.tam-boxlist-link-btn, .tam-boxlist-unlink-btn { flex:0 0 auto; background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:2px 6px; transition:all .15s; }',
       '.tam-boxlist-link-btn:hover { background:#f0f0f0; border-color:#555; }',
       '.tam-boxlist-unlink-btn:hover { background:#fdeaea; border-color:#c00; color:#c00!important; }',

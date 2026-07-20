@@ -250,17 +250,19 @@
 
   /* ── Porto Santo: leitura direta de gh_people / gh_banco_horas / bh_ps_pendentes ── */
   // gh_people e gh_banco_horas só respondem a pedidos com o token real de
-  // admin (política "solo admin con token", cmd=ALL) — o mesmo cliente que o
-  // gerador-horarios.js já usa (getSupabase() -> sbAdmin). window.sbClient
-  // (anon, sem token) devolve sempre vazio aqui, sem erro.
+  // admin (política "solo admin con token", cmd=ALL) — por isso lê-se aqui
+  // por duas vistas próprias (gh_people_publico / gh_banco_horas_publico),
+  // que só expõem nome+id e pessoa_id+saldo, com leitura aberta (anon) —
+  // ver SQL correspondente. A tabela original e a sua proteção de escrita
+  // não mudam; escritas continuam sempre por bhAdminClient()/sbAdmin.
   async function bhFetchPessoasPortoSanto() {
-    var res = await window.sbAdmin.from('gh_people').select('id,name').eq('active', true).order('name', { ascending: true });
+    var res = await window.sbClient.from('gh_people_publico').select('id,name').order('name', { ascending: true });
     if (res.error) throw res.error;
     return res.data || [];
   }
 
   async function bhFetchBancoPortoSantoMap() {
-    var res = await window.sbAdmin.from('gh_banco_horas').select('pessoa_id,saldo');
+    var res = await window.sbClient.from('gh_banco_horas_publico').select('pessoa_id,saldo');
     if (res.error) throw res.error;
     var map = {};
     (res.data || []).forEach(function (b) { map[b.pessoa_id] = Number(b.saldo) || 0; });
@@ -978,7 +980,7 @@
       var isPS = bhLojaColaboradoraAtual.loja === 'porto santo';
       var saldoHoras, historico;
       if (isPS) {
-        var bancoRes = await window.sbClient.from('gh_banco_horas').select('saldo').eq('pessoa_id', bhLojaColaboradoraAtual.id).maybeSingle();
+        var bancoRes = await window.sbClient.from('gh_banco_horas_publico').select('saldo').eq('pessoa_id', bhLojaColaboradoraAtual.id).maybeSingle();
         if (bancoRes.error) throw bancoRes.error;
         saldoHoras = (bancoRes.data && Number(bancoRes.data.saldo)) || 0;
         var pendRes = await window.sbClient.from('bh_ps_pendentes').select('*')
@@ -1065,13 +1067,14 @@
     if (!el) return;
     el.innerHTML = '<div class="bh-empty">a carregar…</div>';
     var loja = window._currentStoreGlobal;
-    if (loja === 'porto santo') {
-      el.innerHTML = '<div class="bh-empty">Esta vista ainda não está disponível para Porto Santo — fala com a administração.</div>';
-      return;
-    }
     try {
-      var saldos = await bhFetchSaldos(loja);
-      saldos = saldos.filter(function (s) { return s.ativo; });
+      var saldos;
+      if (loja === 'porto santo') {
+        saldos = await bhFetchSaldosPortoSanto();
+      } else {
+        saldos = await bhFetchSaldos(loja);
+        saldos = saldos.filter(function (s) { return s.ativo; });
+      }
       saldos.sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt'); });
       el.innerHTML = saldos.length
         ? saldos.map(bhRenderSaldoRowSimples).join('')

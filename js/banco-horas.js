@@ -12,7 +12,7 @@
 //  com sufixo "PortoSanto" abaixo) — não existe cópia nem sincronização,
 //  é a mesma conta vista a partir de dois sítios. gerador-horarios.js não
 //  é tocado por nenhuma alteração feita aqui. Como gh_banco_horas não tem
-//  conceito de "pendente", os pedidos da empregada de Porto Santo ficam
+//  conceito de "pendente", os pedidos da colaboradora de Porto Santo ficam
 //  numa tabela nova (bh_ps_pendentes) até serem aceites — só aí entram em
 //  gh_banco_horas, tal como a lógica de aprovação das outras lojas.
 // ══════════════════════════════════════════════════════════════
@@ -84,7 +84,7 @@
   function bhFormatSaldo(saldo) {
     var n = Number(saldo) || 0;
     if (Math.abs(n) < 0.005) return { texto: 'saldo a zero', classe: 'bh-saldo-zero' };
-    if (n > 0) return { texto: bhFormatHoras(n) + ' h a favor da empregada', classe: 'bh-saldo-positivo' };
+    if (n > 0) return { texto: bhFormatHoras(n) + ' h a favor da colaboradora', classe: 'bh-saldo-positivo' };
     return { texto: bhFormatHoras(Math.abs(n)) + ' h em dívida à empresa', classe: 'bh-saldo-negativo' };
   }
 
@@ -98,7 +98,7 @@
     return '<span class="bh-badge ' + m[1] + '">' + m[0] + '</span>';
   }
 
-  // 'credito' = horas extra (a favor da empregada) · 'debito' = deve à empresa
+  // 'credito' = horas extra (a favor da colaboradora) · 'debito' = deve à empresa
   function bhTipoLabel(tipo) {
     return tipo === 'credito' ? 'horas extra' : 'deve à empresa';
   }
@@ -845,7 +845,7 @@
   };
 
   /* ══════════════════════════════════════════════════════════════
-     LOJA — DOM + RENDER (autosserviço da empregada)
+     LOJA — DOM + RENDER (autosserviço da colaboradora)
      ══════════════════════════════════════════════════════════════ */
   var bhLojaInjected = false;
   var bhLojaColaboradoraAtual = null; // { id, nome, loja }
@@ -1046,7 +1046,7 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     VISUALIZAÇÃO (dashboard de empregadas — botão "banco de horas")
+     VISUALIZAÇÃO (dashboard de colaboradoras — botão "banco de horas")
      Só leitura por agora: mostra os nomes da loja e o saldo de cada
      uma, sem qualquer ação de editar/aprovar. Chamado por index.html
      (openBanco()) sempre que o modal abre.

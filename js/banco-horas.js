@@ -59,8 +59,15 @@
     return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : dateStr;
   }
 
+  // Mostra sempre horas:minutos (ex.: 28,5h -> "28:30"), nunca decimal —
+  // "6,95" lia-se como se tivesse 95 minutos, o que não existe.
   function bhFormatHoras(h) {
-    return Number(h).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var totalMin = Math.round(Number(h) * 60);
+    var sinal = totalMin < 0 ? '-' : '';
+    totalMin = Math.abs(totalMin);
+    var hh = Math.floor(totalMin / 60);
+    var mm = totalMin % 60;
+    return sinal + hh + ':' + String(mm).padStart(2, '0');
   }
 
   // Espelha a lógica do trigger bh_calc_horas() no Postgres — só para pré-visualização.

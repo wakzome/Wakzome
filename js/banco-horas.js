@@ -661,9 +661,14 @@
     try {
       var todasColaboradoras = await bhFetchColaboradoras(null);
       var recibosList = await bhFetchColaboradorasRecibos();
+      // Nomes que já pertencem a Porto Santo (gh_people) também contam como
+      // "já têm loja" — só não estão em bh_colaboradoras porque essa loja é
+      // gerida à parte, no gerador de horários.
+      var pessoasPS = await bhFetchPessoasPortoSanto().catch(function () { return []; });
       var recibosNomes = recibosList.map(function (f) { return f.nome; });
       var recibosNomesLowerSet = new Set(recibosNomes.map(function (n) { return n.trim().toLowerCase(); }));
       var assignedNomesLowerSet = new Set(todasColaboradoras.map(function (c) { return c.nome.trim().toLowerCase(); }));
+      pessoasPS.forEach(function (p) { assignedNomesLowerSet.add(p.name.trim().toLowerCase()); });
 
       var pendentes = recibosNomes.filter(function (n) { return !assignedNomesLowerSet.has(n.trim().toLowerCase()); });
       var orphans = todasColaboradoras.filter(function (c) { return !recibosNomesLowerSet.has(c.nome.trim().toLowerCase()); });

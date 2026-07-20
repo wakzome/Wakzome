@@ -158,22 +158,6 @@
       '#bh-loja-picker{display:flex;flex-direction:column;gap:8px;max-width:360px;margin:20px auto 30px;text-align:center;}',
       '#bh-loja-picker label{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;opacity:.55;}',
       '#bh-loja-picker select{padding:10px 14px;font-size:.95rem;font-weight:600;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:12px;background:#fff;outline:none;cursor:pointer;}',
-      '.bh-colab-table-wrap{overflow-x:auto;}',
-      'table.bh-colab-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:12px;overflow:hidden;border:1px solid #e6e6e6;}',
-      'table.bh-colab-table th{background:#f0f0f0;padding:8px 16px;font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid #e0e0e0;text-align:center;white-space:nowrap;}',
-      'table.bh-colab-table th:first-child{text-align:left;padding-left:14px;}',
-      'table.bh-colab-table td{padding:8px 10px;font-size:.84rem;font-weight:600;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;}',
-      'table.bh-colab-table td.bh-colab-table-nome{text-align:left;padding-left:14px;white-space:nowrap;}',
-      'table.bh-colab-table tbody tr:hover td{background:#fafafa;}',
-      'table.bh-colab-table input[type="checkbox"]{width:18px;height:18px;cursor:pointer;}',
-      '#bh-colab-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;justify-content:center;align-items:center;}',
-      '#bh-colab-modal-overlay.show{display:flex;}',
-      '#bh-colab-modal-box{background:#fff;border-radius:18px;padding:26px;max-width:1080px;width:95%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}',
-      '#bh-colab-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-shrink:0;}',
-      '#bh-colab-modal-title{font-size:.88rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;}',
-      '#bh-colab-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}',
-      '#bh-colab-modal-close:hover{background:#f0f0f0;}',
-      '#bh-colab-modal-body{overflow-y:auto;flex:1;}',
       '.bh-loja-group-title{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:18px 0 8px;}',
       '.bh-loja-group-title:first-child{margin-top:0;}',
       '.bh-row-clickable{cursor:pointer;transition:background .12s;}',
@@ -186,7 +170,19 @@
       '#bh-lancar-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}',
       '#bh-lancar-modal-close:hover{background:#f0f0f0;}',
       '#bh-lancar-modal-nome{font-size:.95rem;font-weight:bold;color:#000;}',
-      '#bh-lancar-modal-loja{font-size:.72rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;}'
+      '#bh-lancar-modal-loja{font-size:.72rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;}',
+      '#bh-gerir-lojas-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:601;justify-content:center;align-items:center;}',
+      '#bh-gerir-lojas-modal-overlay.show{display:flex;}',
+      '#bh-gerir-lojas-modal-box{background:#fff;border-radius:18px;padding:26px;max-width:420px;width:90%;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}',
+      '#bh-gerir-lojas-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}',
+      '#bh-gerir-lojas-modal-title{font-size:.88rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;}',
+      '#bh-gerir-lojas-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}',
+      '#bh-gerir-lojas-modal-close:hover{background:#f0f0f0;}',
+      '#bh-gerir-lojas-modal-nome{font-size:.95rem;font-weight:bold;color:#000;}',
+      '.bh-gerir-loja-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #f0f0f0;}',
+      '.bh-gerir-loja-row:last-child{border-bottom:none;}',
+      '.bh-gerir-loja-row input[type="checkbox"]{width:18px;height:18px;cursor:pointer;flex-shrink:0;}',
+      '.bh-gerir-loja-row label{font-size:.86rem;font-weight:600;cursor:pointer;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -410,11 +406,7 @@
     bhAdminInjected = true;
     root.innerHTML =
       '<div id="bh-admin-wrap">' +
-        '<div class="bh-section">' +
-          '<div class="bh-section-title">colaboradoras</div>' +
-          '<div class="bh-row-meta" style="margin-bottom:14px;">Atribui a loja de cada colaboradora (lista vinda de "pagamentos → gerir colaboradoras"). Porto Santo é gerido automaticamente a partir do gerador de horários — não precisa de atribuição aqui.</div>' +
-          '<button class="bh-btn primary" id="bh-adm-open-colab-modal-btn">atribuir loja</button>' +
-        '</div>' +
+        '<div id="bh-adm-pendentes-wrap"></div>' +
 
         '<div class="bh-section">' +
           '<div class="bh-filter-row">' +
@@ -442,7 +434,21 @@
       });
     });
     document.getElementById('bh-adm-loja-filter').addEventListener('change', bhAdminRefreshAll);
-    document.getElementById('bh-adm-open-colab-modal-btn').addEventListener('click', bhOpenColabModal);
+
+    document.getElementById('bh-adm-pendentes-wrap').addEventListener('click', function (e) {
+      var row = e.target.closest('.bh-row-clickable');
+      if (row) { bhOpenGerirLojasModal(row.getAttribute('data-nome')); return; }
+      var delBtn = e.target.closest('.bh-btn-del-orphan');
+      if (delBtn) {
+        var id = parseInt(delBtn.getAttribute('data-id'), 10);
+        var nome = delBtn.getAttribute('data-nome');
+        if (!confirm('Eliminar "' + nome + '" do Banco de Horas? Isto apaga também o histórico de horas dela. Não é reversível.')) return;
+        delBtn.disabled = true;
+        bhAdminDeleteColaboradora(id)
+          .then(bhAdminRefreshAll)
+          .catch(function (err) { alert('Erro ao eliminar: ' + err.message); delBtn.disabled = false; });
+      }
+    });
 
     document.getElementById('bh-adm-pendentes-list').addEventListener('click', function (e) {
       var aceitarBtn = e.target.closest('.bh-btn-aceitar');
@@ -484,7 +490,8 @@
         '</div>' +
         '<div id="bh-lancar-modal-body">' +
           '<div class="bh-row-nome" id="bh-lancar-modal-nome" style="margin-bottom:2px;"></div>' +
-          '<div class="bh-row-loja" id="bh-lancar-modal-loja" style="margin-bottom:18px;"></div>' +
+          '<div class="bh-row-loja" id="bh-lancar-modal-loja" style="margin-bottom:10px;"></div>' +
+          '<div id="bh-lancar-gerir-lojas-wrap" style="margin-bottom:18px;"><button class="bh-btn" type="button" id="bh-lancar-gerir-lojas-btn">gerir lojas</button></div>' +
           '<div class="bh-field-row">' +
             '<div class="bh-field"><label>tipo</label><select id="bh-lancar-tipo">' +
               '<option value="credito">horas extra</option>' +
@@ -506,6 +513,13 @@
 
     document.getElementById('bh-lancar-modal-close').addEventListener('click', bhCloseLancarModal);
     modal.addEventListener('click', function (e) { if (e.target === modal) bhCloseLancarModal(); });
+
+    document.getElementById('bh-lancar-gerir-lojas-btn').addEventListener('click', function () {
+      if (!bhLancarAlvo) return;
+      var nome = bhLancarAlvo.nome;
+      bhCloseLancarModal();
+      bhOpenGerirLojasModal(nome);
+    });
 
     ['bh-lancar-inicio', 'bh-lancar-fim'].forEach(function (id) {
       document.getElementById(id).addEventListener('input', function () {
@@ -554,6 +568,7 @@
     bhLancarAlvo = alvo;
     document.getElementById('bh-lancar-modal-nome').textContent = alvo.nome;
     document.getElementById('bh-lancar-modal-loja').textContent = bhLojaLabel(alvo.loja);
+    document.getElementById('bh-lancar-gerir-lojas-wrap').style.display = alvo.tipo === 'ps' ? 'none' : '';
     document.getElementById('bh-lancar-tipo').value = 'credito';
     document.getElementById('bh-lancar-data').value = bhTodayISO();
     document.getElementById('bh-lancar-inicio').value = '';
@@ -570,22 +585,11 @@
     bhLancarAlvo = null;
   }
 
-  function bhRenderColabTableRow(nomeRecibo, colabByKey) {
-    var nomeLower = nomeRecibo.trim().toLowerCase();
-    var cellsHtml = BH_LOJAS_ATRIBUIVEIS.map(function (l) {
-      var key = nomeLower + '|' + l.value;
-      var existing = colabByKey[key];
-      var checked = existing ? ' checked' : '';
-      var idAttr = existing ? existing.id : '';
-      return '<td><input type="checkbox" class="bh-loja-check" data-nome="' + bhEsc(nomeRecibo) + '" data-loja="' + bhEsc(l.value) + '" data-id="' + idAttr + '"' + checked + '></td>';
-    }).join('');
-    return '<tr><td class="bh-colab-table-nome">' + bhEsc(nomeRecibo) + '</td>' + cellsHtml + '</tr>';
-  }
-
-  function bhRenderColabTable(recibosNomes, colabByKey) {
-    var headerCells = BH_LOJAS_ATRIBUIVEIS.map(function (l) { return '<th>' + bhEsc(l.label) + '</th>'; }).join('');
-    var rows = recibosNomes.map(function (nome) { return bhRenderColabTableRow(nome, colabByKey); }).join('');
-    return '<table class="bh-colab-table"><thead><tr><th>colaboradora</th>' + headerCells + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  function bhRenderPendenteAtribuicaoRow(nome) {
+    return '<div class="bh-row bh-row-clickable" data-nome="' + bhEsc(nome) + '" title="clicar para atribuir loja">' +
+      '<div class="bh-row-main"><span class="bh-row-nome">' + bhEsc(nome) + '</span></div>' +
+      '<span class="bh-row-meta">por atribuir</span>' +
+    '</div>';
   }
 
   function bhRenderOrphanRow(c) {
@@ -648,67 +652,68 @@
     '</div>';
   }
 
-  // Colaboradoras (tabela do modal + dropdown de "inserir horas diretamente")
-  // — separado do resto porque a tabela só existe depois de o modal ser aberto
-  // pela primeira vez; o dropdown vive sempre na página principal.
+  // Silencioso por default: só mostra algo quando há colaboradoras dos
+  // recibos ainda sem nenhuma loja atribuída, ou registos antigos sem
+  // correspondência nos recibos. Sem essa justificação, o wrap fica vazio.
   async function bhRefreshColabSection() {
-    var colabTableEl = document.getElementById('bh-adm-colab-table'); // pode não existir se o modal nunca foi aberto
-    if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-empty">a carregar…</div>';
-
+    var wrap = document.getElementById('bh-adm-pendentes-wrap');
+    if (!wrap) return;
     try {
       var todasColaboradoras = await bhFetchColaboradoras(null);
       var recibosList = await bhFetchColaboradorasRecibos();
       var recibosNomes = recibosList.map(function (f) { return f.nome; });
       var recibosNomesLowerSet = new Set(recibosNomes.map(function (n) { return n.trim().toLowerCase(); }));
+      var assignedNomesLowerSet = new Set(todasColaboradoras.map(function (c) { return c.nome.trim().toLowerCase(); }));
 
-      if (colabTableEl) {
-        var colabByKey = {};
-        todasColaboradoras.forEach(function (c) {
-          colabByKey[c.nome.trim().toLowerCase() + '|' + c.loja] = c;
-        });
+      var pendentes = recibosNomes.filter(function (n) { return !assignedNomesLowerSet.has(n.trim().toLowerCase()); });
+      var orphans = todasColaboradoras.filter(function (c) { return !recibosNomesLowerSet.has(c.nome.trim().toLowerCase()); });
 
-        var html = recibosNomes.length
-          ? bhRenderColabTable(recibosNomes, colabByKey)
-          : '<div class="bh-empty">Sem colaboradoras em "gerir colaboradoras" (separador pagamentos). Adiciona-as lá primeiro.</div>';
+      if (!pendentes.length && !orphans.length) { wrap.innerHTML = ''; return; }
 
-        var orphans = todasColaboradoras.filter(function (c) { return !recibosNomesLowerSet.has(c.nome.trim().toLowerCase()); });
-        if (orphans.length) {
-          html += '<div class="bh-section-title" style="margin-top:22px;">sem correspondência nos recibos</div>' +
-            '<div class="bh-row-meta" style="margin-bottom:10px;">Têm horas registadas mas já não estão em "gerir colaboradoras".</div>' +
-            orphans.map(bhRenderOrphanRow).join('');
-        }
-        colabTableEl.innerHTML = html;
+      var html = '';
+      if (pendentes.length) {
+        html += '<div class="bh-section-title">colaboradoras por atribuir</div>' +
+          '<div class="bh-row-meta" style="margin-bottom:10px;">Clica no nome para escolher a loja.</div>' +
+          pendentes.map(bhRenderPendenteAtribuicaoRow).join('');
       }
+      if (orphans.length) {
+        html += '<div class="bh-section-title" style="margin-top:' + (pendentes.length ? '22px' : '0') + ';">sem correspondência nos recibos</div>' +
+          '<div class="bh-row-meta" style="margin-bottom:10px;">Têm horas registadas mas já não estão em "gerir colaboradoras".</div>' +
+          orphans.map(bhRenderOrphanRow).join('');
+      }
+      wrap.innerHTML = '<div class="bh-section">' + html + '</div>';
     } catch (err) {
-      if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
+      wrap.innerHTML = '<div class="bh-section"><div class="bh-error">' + bhEsc(err.message) + '</div></div>';
     }
   }
 
-  var bhColabModalInjected = false;
-  function bhColabModalInjectDOM() {
-    if (bhColabModalInjected) return;
-    bhColabModalInjected = true;
+  /* ── modal "gerir lojas" — atribuir/remover lojas de UMA colaboradora ── */
+  var bhGerirLojasModalInjected = false;
+  var bhGerirLojasNome = null;
+
+  function bhGerirLojasModalInjectDOM() {
+    if (bhGerirLojasModalInjected) return;
+    bhGerirLojasModalInjected = true;
     var modal = document.createElement('div');
-    modal.id = 'bh-colab-modal-overlay';
+    modal.id = 'bh-gerir-lojas-modal-overlay';
     modal.innerHTML =
-      '<div id="bh-colab-modal-box">' +
-        '<div id="bh-colab-modal-header">' +
-          '<span id="bh-colab-modal-title">atribuir loja às colaboradoras</span>' +
-          '<button id="bh-colab-modal-close">✕</button>' +
+      '<div id="bh-gerir-lojas-modal-box">' +
+        '<div id="bh-gerir-lojas-modal-header">' +
+          '<span id="bh-gerir-lojas-modal-title">gerir lojas</span>' +
+          '<button id="bh-gerir-lojas-modal-close">✕</button>' +
         '</div>' +
-        '<div id="bh-colab-modal-body">' +
-          '<div class="bh-colab-table-wrap"><div id="bh-adm-colab-table"></div></div>' +
-        '</div>' +
+        '<div class="bh-row-nome" id="bh-gerir-lojas-modal-nome" style="margin-bottom:14px;"></div>' +
+        '<div id="bh-gerir-lojas-modal-body"></div>' +
       '</div>';
     document.body.appendChild(modal);
 
-    document.getElementById('bh-colab-modal-close').addEventListener('click', bhCloseColabModal);
-    modal.addEventListener('click', function (e) { if (e.target === modal) bhCloseColabModal(); });
+    document.getElementById('bh-gerir-lojas-modal-close').addEventListener('click', bhCloseGerirLojasModal);
+    modal.addEventListener('click', function (e) { if (e.target === modal) bhCloseGerirLojasModal(); });
 
-    document.getElementById('bh-adm-colab-table').addEventListener('change', async function (e) {
-      var cb = e.target.closest('.bh-loja-check');
-      if (!cb) return;
-      var nome = cb.getAttribute('data-nome');
+    document.getElementById('bh-gerir-lojas-modal-body').addEventListener('change', async function (e) {
+      var cb = e.target.closest('.bh-gerir-loja-check');
+      if (!cb || !bhGerirLojasNome) return;
+      var nome = bhGerirLojasNome;
       var loja = cb.getAttribute('data-loja');
       var id = cb.getAttribute('data-id');
       cb.disabled = true;
@@ -723,6 +728,7 @@
           if (!confirmar) { cb.checked = true; cb.disabled = false; return; }
           await bhAdminDeleteColaboradora(parseInt(id, 10));
         }
+        await bhRefreshGerirLojasModal();
         await bhAdminRefreshAll();
       } catch (err) {
         alert('Erro: ' + err.message);
@@ -730,28 +736,45 @@
         cb.disabled = false;
       }
     });
-
-    document.getElementById('bh-adm-colab-table').addEventListener('click', function (e) {
-      var delBtn = e.target.closest('.bh-btn-del-orphan');
-      if (!delBtn) return;
-      var id = parseInt(delBtn.getAttribute('data-id'), 10);
-      var nome = delBtn.getAttribute('data-nome');
-      if (!confirm('Eliminar "' + nome + '" do Banco de Horas? Isto apaga também o histórico de horas dela. Não é reversível.')) return;
-      delBtn.disabled = true;
-      bhAdminDeleteColaboradora(id)
-        .then(bhAdminRefreshAll)
-        .catch(function (err) { alert('Erro ao eliminar: ' + err.message); delBtn.disabled = false; });
-    });
   }
 
-  function bhOpenColabModal() {
-    bhColabModalInjectDOM();
-    document.getElementById('bh-colab-modal-overlay').classList.add('show');
-    bhRefreshColabSection();
+  async function bhRefreshGerirLojasModal() {
+    var body = document.getElementById('bh-gerir-lojas-modal-body');
+    if (!bhGerirLojasNome) return;
+    body.innerHTML = '<div class="bh-empty">a carregar…</div>';
+    try {
+      var nomeLower = bhGerirLojasNome.trim().toLowerCase();
+      var todas = await bhFetchColaboradoras(null);
+      var existentesPorLoja = {};
+      todas.forEach(function (c) {
+        if (c.nome.trim().toLowerCase() === nomeLower) existentesPorLoja[c.loja] = c;
+      });
+      body.innerHTML = BH_LOJAS_ATRIBUIVEIS.map(function (l) {
+        var existing = existentesPorLoja[l.value];
+        var checked = existing ? ' checked' : '';
+        var idAttr = existing ? existing.id : '';
+        var cbId = 'bh-gerir-loja-cb-' + l.value.replace(/[^a-z0-9]/gi, '');
+        return '<div class="bh-gerir-loja-row">' +
+          '<input type="checkbox" class="bh-gerir-loja-check" id="' + cbId + '" data-loja="' + bhEsc(l.value) + '" data-id="' + idAttr + '"' + checked + '>' +
+          '<label for="' + cbId + '">' + bhEsc(l.label) + '</label>' +
+        '</div>';
+      }).join('');
+    } catch (err) {
+      body.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
+    }
   }
-  function bhCloseColabModal() {
-    var el = document.getElementById('bh-colab-modal-overlay');
+
+  function bhOpenGerirLojasModal(nome) {
+    bhGerirLojasModalInjectDOM();
+    bhGerirLojasNome = nome;
+    document.getElementById('bh-gerir-lojas-modal-nome').textContent = nome;
+    document.getElementById('bh-gerir-lojas-modal-overlay').classList.add('show');
+    bhRefreshGerirLojasModal();
+  }
+  function bhCloseGerirLojasModal() {
+    var el = document.getElementById('bh-gerir-lojas-modal-overlay');
     if (el) el.classList.remove('show');
+    bhGerirLojasNome = null;
   }
 
   async function bhAdminRefreshAll() {

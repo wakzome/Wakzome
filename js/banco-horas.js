@@ -146,7 +146,7 @@
       '.bh-field input:focus,.bh-field select:focus{border-color:#555;}',
       '.bh-field-row{display:flex;gap:12px;flex-wrap:wrap;}',
       '.bh-preview span{display:inline-block;padding:9px 0;font-size:.9rem;font-weight:bold;color:#000;}',
-      '#bh-adm-ins-status,#bh-loja-submit-status{font-size:.82rem;font-weight:600;min-height:18px;margin-top:8px;}',
+      '#bh-lancar-status,#bh-loja-submit-status{font-size:.82rem;font-weight:600;min-height:18px;margin-top:8px;}',
       '.bh-status-ok{color:#2a8a2a;}',
       '.bh-status-error{color:#c03000;}',
       '.bh-saldo-card{padding:18px 22px;border-radius:14px;background:#f7f7f7;border:1.5px solid #e6e6e6;margin-bottom:20px;}',
@@ -175,7 +175,18 @@
       '#bh-colab-modal-close:hover{background:#f0f0f0;}',
       '#bh-colab-modal-body{overflow-y:auto;flex:1;}',
       '.bh-loja-group-title{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:18px 0 8px;}',
-      '.bh-loja-group-title:first-child{margin-top:0;}'
+      '.bh-loja-group-title:first-child{margin-top:0;}',
+      '.bh-row-clickable{cursor:pointer;transition:background .12s;}',
+      '.bh-row-clickable:hover{background:#f0f0f0;}',
+      '#bh-lancar-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;justify-content:center;align-items:center;}',
+      '#bh-lancar-modal-overlay.show{display:flex;}',
+      '#bh-lancar-modal-box{background:#fff;border-radius:18px;padding:26px;max-width:480px;width:92%;max-height:85vh;overflow-y:auto;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}',
+      '#bh-lancar-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}',
+      '#bh-lancar-modal-title{font-size:.88rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;}',
+      '#bh-lancar-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}',
+      '#bh-lancar-modal-close:hover{background:#f0f0f0;}',
+      '#bh-lancar-modal-nome{font-size:.95rem;font-weight:bold;color:#000;}',
+      '#bh-lancar-modal-loja{font-size:.72rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -269,6 +280,7 @@
     pendentes.forEach(function (p) { pendCountMap[p.pessoa_id] = (pendCountMap[p.pessoa_id] || 0) + 1; });
     return pessoas.map(function (p) {
       return {
+        pessoa_id: p.id,
         nome: p.name,
         loja: 'porto santo',
         ativo: true,
@@ -416,33 +428,19 @@
           '<div class="bh-section-title">lançamentos pendentes</div>' +
           '<div id="bh-adm-pendentes-list"></div>' +
         '</div>' +
-
-        '<div class="bh-section">' +
-          '<div class="bh-section-title">inserir horas diretamente</div>' +
-          '<div class="bh-insert-form">' +
-            '<div class="bh-field"><label>colaboradora</label><select id="bh-adm-ins-colab"><option value="">— selecionar —</option></select></div>' +
-            '<div class="bh-field-row">' +
-              '<div class="bh-field"><label>tipo</label><select id="bh-adm-ins-tipo">' +
-                '<option value="credito">horas extra</option>' +
-                '<option value="debito">deve à empresa</option>' +
-              '</select></div>' +
-              '<div class="bh-field"><label>data</label><input type="date" id="bh-adm-ins-data"></div>' +
-            '</div>' +
-            '<div class="bh-field-row">' +
-              '<div class="bh-field"><label>hora início</label><input type="time" id="bh-adm-ins-inicio"></div>' +
-              '<div class="bh-field"><label>hora fim</label><input type="time" id="bh-adm-ins-fim"></div>' +
-              '<div class="bh-field bh-preview"><label>duração</label><span id="bh-adm-ins-preview">—</span></div>' +
-            '</div>' +
-            '<div class="bh-field"><label>nota (opcional)</label><input type="text" id="bh-adm-ins-nota" placeholder="observação"></div>' +
-            '<button class="bh-btn primary" id="bh-adm-ins-btn">registar (já aceite)</button>' +
-            '<div id="bh-adm-ins-status"></div>' +
-          '</div>' +
-        '</div>' +
       '</div>';
 
-    document.getElementById('bh-adm-ins-data').value = bhTodayISO();
-
     // ── delegação de eventos (uma única vez) ──
+    document.getElementById('bh-adm-saldos-list').addEventListener('click', function (e) {
+      var row = e.target.closest('.bh-row-clickable');
+      if (!row) return;
+      bhOpenLancarModal({
+        tipo: row.getAttribute('data-tipo'),
+        id: row.getAttribute('data-tipo') === 'ps' ? row.getAttribute('data-id') : parseInt(row.getAttribute('data-id'), 10),
+        nome: row.getAttribute('data-nome'),
+        loja: row.getAttribute('data-loja')
+      });
+    });
     document.getElementById('bh-adm-loja-filter').addEventListener('change', bhAdminRefreshAll);
     document.getElementById('bh-adm-open-colab-modal-btn').addEventListener('click', bhOpenColabModal);
 
@@ -467,41 +465,82 @@
         });
     });
 
-    var previewInputs = ['bh-adm-ins-inicio', 'bh-adm-ins-fim'];
-    previewInputs.forEach(function (id) {
-      document.getElementById(id).addEventListener('input', bhAdminUpdateInsertPreview);
+  }
+
+  /* ── modal "registar horas" — aberto ao clicar num nome nos saldos ── */
+  var bhLancarModalInjected = false;
+  var bhLancarAlvo = null; // { tipo: 'normal'|'ps', id, nome, loja }
+
+  function bhLancarModalInjectDOM() {
+    if (bhLancarModalInjected) return;
+    bhLancarModalInjected = true;
+    var modal = document.createElement('div');
+    modal.id = 'bh-lancar-modal-overlay';
+    modal.innerHTML =
+      '<div id="bh-lancar-modal-box">' +
+        '<div id="bh-lancar-modal-header">' +
+          '<span id="bh-lancar-modal-title">registar horas</span>' +
+          '<button id="bh-lancar-modal-close">✕</button>' +
+        '</div>' +
+        '<div id="bh-lancar-modal-body">' +
+          '<div class="bh-row-nome" id="bh-lancar-modal-nome" style="margin-bottom:2px;"></div>' +
+          '<div class="bh-row-loja" id="bh-lancar-modal-loja" style="margin-bottom:18px;"></div>' +
+          '<div class="bh-field-row">' +
+            '<div class="bh-field"><label>tipo</label><select id="bh-lancar-tipo">' +
+              '<option value="credito">horas extra</option>' +
+              '<option value="debito">deve à empresa</option>' +
+            '</select></div>' +
+            '<div class="bh-field"><label>data</label><input type="date" id="bh-lancar-data"></div>' +
+          '</div>' +
+          '<div class="bh-field-row">' +
+            '<div class="bh-field"><label>hora início</label><input type="time" id="bh-lancar-inicio"></div>' +
+            '<div class="bh-field"><label>hora fim</label><input type="time" id="bh-lancar-fim"></div>' +
+            '<div class="bh-field bh-preview"><label>duração</label><span id="bh-lancar-preview">—</span></div>' +
+          '</div>' +
+          '<div class="bh-field"><label>nota (opcional)</label><input type="text" id="bh-lancar-nota" placeholder="observação"></div>' +
+          '<button class="bh-btn primary" id="bh-lancar-submit-btn">registar (já aceite)</button>' +
+          '<div id="bh-lancar-status"></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    document.getElementById('bh-lancar-modal-close').addEventListener('click', bhCloseLancarModal);
+    modal.addEventListener('click', function (e) { if (e.target === modal) bhCloseLancarModal(); });
+
+    ['bh-lancar-inicio', 'bh-lancar-fim'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', function () {
+        var inicio = document.getElementById('bh-lancar-inicio').value;
+        var fim = document.getElementById('bh-lancar-fim').value;
+        var h = bhComputeHoras(inicio, fim);
+        document.getElementById('bh-lancar-preview').textContent = h === null ? '—' : (bhFormatHoras(h) + ' h');
+      });
     });
 
-    document.getElementById('bh-adm-ins-btn').addEventListener('click', async function () {
+    document.getElementById('bh-lancar-submit-btn').addEventListener('click', async function () {
+      if (!bhLancarAlvo) return;
       var btn = this;
-      var statusEl = document.getElementById('bh-adm-ins-status');
-      var colabId = document.getElementById('bh-adm-ins-colab').value;
-      var tipo = document.getElementById('bh-adm-ins-tipo').value;
-      var data = document.getElementById('bh-adm-ins-data').value;
-      var inicio = document.getElementById('bh-adm-ins-inicio').value;
-      var fim = document.getElementById('bh-adm-ins-fim').value;
-      var nota = document.getElementById('bh-adm-ins-nota').value;
+      var statusEl = document.getElementById('bh-lancar-status');
+      var tipo = document.getElementById('bh-lancar-tipo').value;
+      var data = document.getElementById('bh-lancar-data').value;
+      var inicio = document.getElementById('bh-lancar-inicio').value;
+      var fim = document.getElementById('bh-lancar-fim').value;
+      var nota = document.getElementById('bh-lancar-nota').value;
 
-      if (!colabId) { statusEl.textContent = 'Seleciona uma colaboradora.'; statusEl.className = 'bh-status-error'; return; }
       if (!data) { statusEl.textContent = 'Indica a data.'; statusEl.className = 'bh-status-error'; return; }
       var horasCalc = bhComputeHoras(inicio, fim);
       if (horasCalc === null) { statusEl.textContent = 'Hora de início e hora de fim inválidas ou iguais.'; statusEl.className = 'bh-status-error'; return; }
 
       btn.disabled = true; statusEl.textContent = 'a guardar…'; statusEl.className = '';
       try {
-        if (colabId.indexOf('ps:') === 0) {
-          var pessoaId = colabId.slice(3);
+        if (bhLancarAlvo.tipo === 'ps') {
           var delta = tipo === 'credito' ? horasCalc : -horasCalc;
-          await bhAdminLancarPortoSanto(pessoaId, delta);
+          await bhAdminLancarPortoSanto(bhLancarAlvo.id, delta);
         } else {
-          await bhAdminInserirDireto({ colaboradora_id: parseInt(colabId, 10), tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
+          await bhAdminInserirDireto({ colaboradora_id: bhLancarAlvo.id, tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
         }
         statusEl.textContent = '✓ lançamento registado e já aceite.'; statusEl.className = 'bh-status-ok';
-        document.getElementById('bh-adm-ins-inicio').value = '';
-        document.getElementById('bh-adm-ins-fim').value = '';
-        document.getElementById('bh-adm-ins-nota').value = '';
-        bhAdminUpdateInsertPreview();
         await bhAdminRefreshAll();
+        setTimeout(bhCloseLancarModal, 700);
       } catch (err) {
         statusEl.textContent = 'Erro: ' + err.message; statusEl.className = 'bh-status-error';
       } finally {
@@ -510,11 +549,25 @@
     });
   }
 
-  function bhAdminUpdateInsertPreview() {
-    var inicio = document.getElementById('bh-adm-ins-inicio').value;
-    var fim = document.getElementById('bh-adm-ins-fim').value;
-    var h = bhComputeHoras(inicio, fim);
-    document.getElementById('bh-adm-ins-preview').textContent = h === null ? '—' : (bhFormatHoras(h) + ' h');
+  function bhOpenLancarModal(alvo) {
+    bhLancarModalInjectDOM();
+    bhLancarAlvo = alvo;
+    document.getElementById('bh-lancar-modal-nome').textContent = alvo.nome;
+    document.getElementById('bh-lancar-modal-loja').textContent = bhLojaLabel(alvo.loja);
+    document.getElementById('bh-lancar-tipo').value = 'credito';
+    document.getElementById('bh-lancar-data').value = bhTodayISO();
+    document.getElementById('bh-lancar-inicio').value = '';
+    document.getElementById('bh-lancar-fim').value = '';
+    document.getElementById('bh-lancar-nota').value = '';
+    document.getElementById('bh-lancar-preview').textContent = '—';
+    document.getElementById('bh-lancar-status').textContent = '';
+    document.getElementById('bh-lancar-status').className = '';
+    document.getElementById('bh-lancar-modal-overlay').classList.add('show');
+  }
+  function bhCloseLancarModal() {
+    var el = document.getElementById('bh-lancar-modal-overlay');
+    if (el) el.classList.remove('show');
+    bhLancarAlvo = null;
   }
 
   function bhRenderColabTableRow(nomeRecibo, colabByKey) {
@@ -549,7 +602,9 @@
 
   function bhRenderSaldoRow(s) {
     var saldo = bhFormatSaldo(s.saldo_horas);
-    return '<div class="bh-row">' +
+    var tipo = s.pessoa_id != null ? 'ps' : 'normal';
+    var id = s.pessoa_id != null ? s.pessoa_id : s.colaboradora_id;
+    return '<div class="bh-row bh-row-clickable" data-tipo="' + tipo + '" data-id="' + bhEsc(String(id)) + '" data-nome="' + bhEsc(s.nome) + '" data-loja="' + bhEsc(s.loja) + '" title="clicar para registar horas">' +
       '<div class="bh-row-main">' +
         '<span class="bh-row-nome">' + bhEsc(s.nome) + '</span>' +
         (s.pendentes_count > 0 ? '<span class="bh-row-meta">' + s.pendentes_count + ' pendente' + (s.pendentes_count > 1 ? 's' : '') + '</span>' : '') +
@@ -598,7 +653,6 @@
   // pela primeira vez; o dropdown vive sempre na página principal.
   async function bhRefreshColabSection() {
     var colabTableEl = document.getElementById('bh-adm-colab-table'); // pode não existir se o modal nunca foi aberto
-    var insColab = document.getElementById('bh-adm-ins-colab');
     if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-empty">a carregar…</div>';
 
     try {
@@ -624,25 +678,6 @@
             orphans.map(bhRenderOrphanRow).join('');
         }
         colabTableEl.innerHTML = html;
-      }
-
-      if (insColab) {
-        var currentSel = insColab.value;
-        var colabAtivas = todasColaboradoras.filter(function (c) { return c.ativo; });
-        var optsHtml = '<option value="">— selecionar —</option>' + colabAtivas.map(function (c) {
-          return '<option value="' + c.id + '">' + bhEsc(c.nome) + ' — ' + bhEsc(bhLojaLabel(c.loja)) + '</option>';
-        }).join('');
-        try {
-          var pessoasPS = await bhFetchPessoasPortoSanto();
-          if (pessoasPS.length) {
-            optsHtml += '<optgroup label="Porto Santo">' + pessoasPS.map(function (p) {
-              return '<option value="ps:' + bhEsc(p.id) + '">' + bhEsc(p.name) + '</option>';
-            }).join('') + '</optgroup>';
-          }
-        } catch (e) { /* Porto Santo indisponível não deve travar o resto do formulário */ }
-        insColab.innerHTML = optsHtml;
-        var stillExists = Array.prototype.some.call(insColab.options, function (o) { return o.value === currentSel; });
-        if (currentSel && stillExists) insColab.value = currentSel;
       }
     } catch (err) {
       if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';

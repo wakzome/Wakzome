@@ -186,7 +186,8 @@ body {
 #agenda-link,
 #rotulos-link,
 #etiquetas-link,
-#processamento-link {
+#processamento-link,
+#banco-horas-link {
   display: inline-block;
   padding: 4px 13px;
   font-size: 0.7rem;
@@ -207,7 +208,8 @@ body {
 #agenda-link:hover,
 #rotulos-link:hover,
 #etiquetas-link:hover,
-#processamento-link:hover {
+#processamento-link:hover,
+#banco-horas-link:hover {
   border-color: #555;
   background: #f5f5f5;
 }
@@ -388,6 +390,63 @@ body {
   text-align: center;
 }
 #ventas-link:hover { border-color: #555; background: #f5f5f5; }
+
+#banco-horas-link {
+  display: inline-block;
+  padding: 4px 13px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'MontserratLight', sans-serif;
+  text-transform: uppercase;
+  color: #000;
+  text-decoration: none;
+  letter-spacing: .1em;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+  min-width: 82px;
+  text-align: center;
+}
+#banco-horas-link:hover { border-color: #555; background: #f5f5f5; }
+
+#banco-horas-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: #fff;
+  z-index: 200;
+  flex-direction: column;
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+#banco-horas-overlay.open { display: flex; }
+#banco-horas-overlay.visible { opacity: 1; }
+#banco-horas-overlay-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e6e6e6;
+  background: #fff; flex-shrink: 0;
+}
+#banco-horas-overlay-title {
+  font-size: .82rem; font-weight: bold; text-transform: lowercase;
+  letter-spacing: .06em; color: #000;
+}
+#banco-horas-overlay-back {
+  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
+  cursor: pointer; color: #fff; background: #000; border: 1.5px solid #000;
+  padding: 7px 16px 7px 12px; border-radius: 10px;
+  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
+  text-transform: lowercase; letter-spacing: .03em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+#banco-horas-overlay-back:hover { background: #333; border-color: #333; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
+#banco-horas-overlay-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 36px 16px 60px;
+  font-family: 'MontserratLight', sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
 
 #ventas-overlay {
   display: none;
@@ -876,6 +935,7 @@ body {
 #horarios-sub-grid .adm-mod-card[data-horarios-module="horarios"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
 #horarios-sub-grid .adm-mod-card[data-horarios-module="gerador"]::before  { background: linear-gradient(145deg, #0a1a10 0%, #0f2e1a 60%, #1a4a2a 100%); }
 #horarios-sub-grid .adm-mod-card[data-horarios-module="ferias"]::before   { background: linear-gradient(145deg, #0d1f18 0%, #143322 60%, #1a4a2e 100%); }
+#horarios-sub-grid .adm-mod-card[data-horarios-module="banco-horas"]::before { background: linear-gradient(145deg, #241a05 0%, #3a2a08 60%, #5c4310 100%); }
 
 .adm-mod-card[data-module="horarios-group"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
 
@@ -2802,7 +2862,8 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #etiquetas-overlay-back,
 #ventas-overlay-back,
 #horarios-overlay-back,
-#faturas-overlay-back { color: #fff !important; }
+#faturas-overlay-back,
+#banco-horas-overlay-back { color: #fff !important; }
 
 #key-submit:hover,
 #recibos-link:hover,
@@ -3569,6 +3630,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     <a id="recibos-link" href="#" onclick="openRecibosOverlay(); return false;">RECIBOS</a>
     <a id="etiquetas-link" href="#" onclick="openEtiquetasOverlay(); return false;">ETIQUETAS</a>
     <a id="ventas-link" href="#" onclick="openVentasOverlay(); return false;">VENDAS</a>
+    <a id="banco-horas-link" href="#" onclick="openBancoHorasOverlay(); return false;">BANCO DE HORAS</a>
   </div>
   <div id="main-header-center" class="reveal-item">
     <div class="logo-text" id="main-logo" style="cursor:pointer;">wakzome</div>
@@ -4119,6 +4181,10 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     <div id="f-area"></div>
   </div>
 
+  <div id="tab-banco-horas" class="tab-panel">
+    <div id="bh-admin-root"></div>
+  </div>
+
   
   <div id="tab-editor" class="tab-panel">
     
@@ -4461,6 +4527,16 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   </div>
 </div>
 
+<div id="banco-horas-overlay">
+  <div id="banco-horas-overlay-bar">
+    <button id="banco-horas-overlay-back" onclick="closeBancoHorasOverlay()">← voltar</button>
+    <span id="banco-horas-overlay-title">banco de horas</span>
+  </div>
+  <div id="banco-horas-overlay-content">
+    <div id="bh-loja-root" style="width:100%;"></div>
+  </div>
+</div>
+
 <div id="horarios-overlay">
   <div id="horarios-overlay-bar">
     <button id="horarios-overlay-back">
@@ -4516,6 +4592,21 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
         <div>
           <div class="adm-mod-name">FÉRIAS</div>
           <div class="adm-mod-desc">controlo de férias e ausências</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-horarios-module="banco-horas" style="animation-delay:0.20s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="10" width="4" height="10" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="6" width="4" height="14" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="13" width="4" height="7" rx="1" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M4 6l3-2 3 2" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">BANCO DE HORAS</div>
+          <div class="adm-mod-desc">colaboradoras, saldos e aprovação de horas</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>
@@ -4912,6 +5003,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     horarios:      'horários',
     gerador:       'gerador de horários',
     ferias:        'férias',
+    'banco-horas': 'banco de horas',
     editor:        'editor pdf',
     tam:           'tam',
     processamento: 'faturas lisboa',
@@ -5022,6 +5114,9 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
           b.dispatchEvent(new CustomEvent('ferias:tabactivated', { bubbles: true }));
         });
       }
+    }
+    if (tab === 'banco-horas') {
+      if (typeof initBancoHorasAdmin === 'function') setTimeout(initBancoHorasAdmin, 40);
     }
   }
 
@@ -5619,6 +5714,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       { id: 'recibos-overlay',       close: function () { if (typeof closeRecibosOverlay === 'function') closeRecibosOverlay(); } },
       { id: 'etiquetas-overlay',     close: function () { if (typeof closeEtiquetasOverlay === 'function') closeEtiquetasOverlay(); } },
       { id: 'ventas-overlay',        close: function () { if (typeof closeVentasOverlay === 'function') closeVentasOverlay(); } },
+      { id: 'banco-horas-overlay',   close: function () { if (typeof closeBancoHorasOverlay === 'function') closeBancoHorasOverlay(); } },
       { id: 'horarios-overlay',      close: function () { var btn = document.getElementById('horarios-overlay-back'); if (btn) btn.click(); } },
       { id: 'faturas-overlay',       close: function () { var btn = document.getElementById('faturas-overlay-back'); if (btn) btn.click(); } },
       { id: 'vendas-overlay',        close: function () { var btn = document.getElementById('vendas-overlay-back'); if (btn) btn.click(); } }

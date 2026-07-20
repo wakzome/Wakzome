@@ -150,7 +150,17 @@
       'table.bh-colab-table td{padding:8px 10px;font-size:.84rem;font-weight:600;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;}',
       'table.bh-colab-table td.bh-colab-table-nome{text-align:left;padding-left:14px;white-space:nowrap;}',
       'table.bh-colab-table tbody tr:hover td{background:#fafafa;}',
-      'table.bh-colab-table input[type="checkbox"]{width:18px;height:18px;cursor:pointer;}'
+      'table.bh-colab-table input[type="checkbox"]{width:18px;height:18px;cursor:pointer;}',
+      '#bh-colab-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;justify-content:center;align-items:center;}',
+      '#bh-colab-modal-overlay.show{display:flex;}',
+      '#bh-colab-modal-box{background:#fff;border-radius:18px;padding:26px;max-width:720px;width:94%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}',
+      '#bh-colab-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-shrink:0;}',
+      '#bh-colab-modal-title{font-size:.88rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;}',
+      '#bh-colab-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}',
+      '#bh-colab-modal-close:hover{background:#f0f0f0;}',
+      '#bh-colab-modal-body{overflow-y:auto;flex:1;}',
+      '.bh-loja-group-title{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:18px 0 8px;}',
+      '.bh-loja-group-title:first-child{margin-top:0;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -283,8 +293,8 @@
       '<div id="bh-admin-wrap">' +
         '<div class="bh-section">' +
           '<div class="bh-section-title">colaboradoras</div>' +
-          '<div class="bh-row-meta" style="margin-bottom:14px;">Lista vinda de "pagamentos → gerir colaboradoras". Marca em que loja(s) cada uma trabalha — pode ser mais de uma.</div>' +
-          '<div class="bh-colab-table-wrap"><div id="bh-adm-colab-table"></div></div>' +
+          '<div class="bh-row-meta" style="margin-bottom:14px;">Atribui a loja de cada colaboradora (lista vinda de "pagamentos → gerir colaboradoras").</div>' +
+          '<button class="bh-btn primary" id="bh-adm-open-colab-modal-btn">atribuir loja</button>' +
         '</div>' +
 
         '<div class="bh-section">' +
@@ -327,44 +337,7 @@
 
     // ── delegação de eventos (uma única vez) ──
     document.getElementById('bh-adm-loja-filter').addEventListener('change', bhAdminRefreshAll);
-
-    document.getElementById('bh-adm-colab-table').addEventListener('change', async function (e) {
-      var cb = e.target.closest('.bh-loja-check');
-      if (!cb) return;
-      var nome = cb.getAttribute('data-nome');
-      var loja = cb.getAttribute('data-loja');
-      var id = cb.getAttribute('data-id');
-      cb.disabled = true;
-      try {
-        if (cb.checked) {
-          await bhAdminAddColaboradora(nome, loja);
-        } else if (id) {
-          var confirmar = confirm(
-            'Remover ' + nome + ' de ' + bhLojaLabel(loja) + '?\n' +
-            'Isto apaga também o histórico de horas dela nesta loja. Não é reversível.'
-          );
-          if (!confirmar) { cb.checked = true; cb.disabled = false; return; }
-          await bhAdminDeleteColaboradora(parseInt(id, 10));
-        }
-        await bhAdminRefreshAll();
-      } catch (err) {
-        alert('Erro: ' + err.message);
-        cb.checked = !cb.checked;
-        cb.disabled = false;
-      }
-    });
-
-    document.getElementById('bh-adm-colab-table').addEventListener('click', function (e) {
-      var delBtn = e.target.closest('.bh-btn-del-orphan');
-      if (!delBtn) return;
-      var id = parseInt(delBtn.getAttribute('data-id'), 10);
-      var nome = delBtn.getAttribute('data-nome');
-      if (!confirm('Eliminar "' + nome + '" do Banco de Horas? Isto apaga também o histórico de horas dela. Não é reversível.')) return;
-      delBtn.disabled = true;
-      bhAdminDeleteColaboradora(id)
-        .then(bhAdminRefreshAll)
-        .catch(function (err) { alert('Erro ao eliminar: ' + err.message); delBtn.disabled = false; });
-    });
+    document.getElementById('bh-adm-open-colab-modal-btn').addEventListener('click', bhOpenColabModal);
 
     document.getElementById('bh-adm-pendentes-list').addEventListener('click', function (e) {
       var aceitarBtn = e.target.closest('.bh-btn-aceitar');
@@ -462,11 +435,27 @@
     return '<div class="bh-row">' +
       '<div class="bh-row-main">' +
         '<span class="bh-row-nome">' + bhEsc(s.nome) + '</span>' +
-        '<span class="bh-row-loja">' + bhEsc(bhLojaLabel(s.loja)) + '</span>' +
         (s.pendentes_count > 0 ? '<span class="bh-row-meta">' + s.pendentes_count + ' pendente' + (s.pendentes_count > 1 ? 's' : '') + '</span>' : '') +
       '</div>' +
       '<span class="' + saldo.classe + '" style="font-size:.85rem;font-weight:bold;">' + saldo.texto + '</span>' +
     '</div>';
+  }
+
+  // Agrupa por loja, pela ordem de BH_LOJAS — como o utilizador pediu.
+  function bhRenderSaldosGrouped(saldos) {
+    if (!saldos.length) return '<div class="bh-empty">sem dados.</div>';
+    var porLoja = {};
+    saldos.forEach(function (s) {
+      if (!porLoja[s.loja]) porLoja[s.loja] = [];
+      porLoja[s.loja].push(s);
+    });
+    var html = '';
+    BH_LOJAS.forEach(function (l) {
+      var items = porLoja[l.value];
+      if (!items || !items.length) return;
+      html += '<div class="bh-loja-group-title">' + bhEsc(l.label) + '</div>' + items.map(bhRenderSaldoRow).join('');
+    });
+    return html || '<div class="bh-empty">sem dados.</div>';
   }
 
   function bhRenderPendenteRow(l) {
@@ -487,18 +476,13 @@
     '</div>';
   }
 
-  async function bhAdminRefreshAll() {
-    bhAdminInjectDOM();
-    var lojaFiltro = document.getElementById('bh-adm-loja-filter').value;
-
-    var colabTableEl = document.getElementById('bh-adm-colab-table');
-    var saldosList = document.getElementById('bh-adm-saldos-list');
-    var pendentesList = document.getElementById('bh-adm-pendentes-list');
+  // Colaboradoras (tabela do modal + dropdown de "inserir horas diretamente")
+  // — separado do resto porque a tabela só existe depois de o modal ser aberto
+  // pela primeira vez; o dropdown vive sempre na página principal.
+  async function bhRefreshColabSection() {
+    var colabTableEl = document.getElementById('bh-adm-colab-table'); // pode não existir se o modal nunca foi aberto
     var insColab = document.getElementById('bh-adm-ins-colab');
-
-    colabTableEl.innerHTML = '<div class="bh-empty">a carregar…</div>';
-    saldosList.innerHTML = '<div class="bh-empty">a carregar…</div>';
-    pendentesList.innerHTML = '<div class="bh-empty">a carregar…</div>';
+    if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-empty">a carregar…</div>';
 
     try {
       var todasColaboradoras = await bhFetchColaboradoras(null);
@@ -506,39 +490,123 @@
       var recibosNomes = recibosList.map(function (f) { return f.nome; });
       var recibosNomesLowerSet = new Set(recibosNomes.map(function (n) { return n.trim().toLowerCase(); }));
 
-      var colabByKey = {};
-      todasColaboradoras.forEach(function (c) {
-        colabByKey[c.nome.trim().toLowerCase() + '|' + c.loja] = c;
-      });
+      if (colabTableEl) {
+        var colabByKey = {};
+        todasColaboradoras.forEach(function (c) {
+          colabByKey[c.nome.trim().toLowerCase() + '|' + c.loja] = c;
+        });
 
-      var html = recibosNomes.length
-        ? bhRenderColabTable(recibosNomes, colabByKey)
-        : '<div class="bh-empty">Sem colaboradoras em "gerir colaboradoras" (separador pagamentos). Adiciona-as lá primeiro.</div>';
+        var html = recibosNomes.length
+          ? bhRenderColabTable(recibosNomes, colabByKey)
+          : '<div class="bh-empty">Sem colaboradoras em "gerir colaboradoras" (separador pagamentos). Adiciona-as lá primeiro.</div>';
 
-      var orphans = todasColaboradoras.filter(function (c) { return !recibosNomesLowerSet.has(c.nome.trim().toLowerCase()); });
-      if (orphans.length) {
-        html += '<div class="bh-section-title" style="margin-top:22px;">sem correspondência nos recibos</div>' +
-          '<div class="bh-row-meta" style="margin-bottom:10px;">Têm horas registadas mas já não estão em "gerir colaboradoras".</div>' +
-          orphans.map(bhRenderOrphanRow).join('');
+        var orphans = todasColaboradoras.filter(function (c) { return !recibosNomesLowerSet.has(c.nome.trim().toLowerCase()); });
+        if (orphans.length) {
+          html += '<div class="bh-section-title" style="margin-top:22px;">sem correspondência nos recibos</div>' +
+            '<div class="bh-row-meta" style="margin-bottom:10px;">Têm horas registadas mas já não estão em "gerir colaboradoras".</div>' +
+            orphans.map(bhRenderOrphanRow).join('');
+        }
+        colabTableEl.innerHTML = html;
       }
 
-      colabTableEl.innerHTML = html;
-
-      var currentSel = insColab.value;
-      var colabAtivas = todasColaboradoras.filter(function (c) { return c.ativo; });
-      insColab.innerHTML = '<option value="">— selecionar —</option>' + colabAtivas.map(function (c) {
-        return '<option value="' + c.id + '">' + bhEsc(c.nome) + ' — ' + bhEsc(bhLojaLabel(c.loja)) + '</option>';
-      }).join('');
-      if (currentSel && colabAtivas.some(function (c) { return String(c.id) === currentSel; })) insColab.value = currentSel;
+      if (insColab) {
+        var currentSel = insColab.value;
+        var colabAtivas = todasColaboradoras.filter(function (c) { return c.ativo; });
+        insColab.innerHTML = '<option value="">— selecionar —</option>' + colabAtivas.map(function (c) {
+          return '<option value="' + c.id + '">' + bhEsc(c.nome) + ' — ' + bhEsc(bhLojaLabel(c.loja)) + '</option>';
+        }).join('');
+        if (currentSel && colabAtivas.some(function (c) { return String(c.id) === currentSel; })) insColab.value = currentSel;
+      }
     } catch (err) {
-      colabTableEl.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
+      if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
     }
+  }
+
+  var bhColabModalInjected = false;
+  function bhColabModalInjectDOM() {
+    if (bhColabModalInjected) return;
+    bhColabModalInjected = true;
+    var modal = document.createElement('div');
+    modal.id = 'bh-colab-modal-overlay';
+    modal.innerHTML =
+      '<div id="bh-colab-modal-box">' +
+        '<div id="bh-colab-modal-header">' +
+          '<span id="bh-colab-modal-title">atribuir loja às colaboradoras</span>' +
+          '<button id="bh-colab-modal-close">✕</button>' +
+        '</div>' +
+        '<div id="bh-colab-modal-body">' +
+          '<div class="bh-colab-table-wrap"><div id="bh-adm-colab-table"></div></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    document.getElementById('bh-colab-modal-close').addEventListener('click', bhCloseColabModal);
+    modal.addEventListener('click', function (e) { if (e.target === modal) bhCloseColabModal(); });
+
+    document.getElementById('bh-adm-colab-table').addEventListener('change', async function (e) {
+      var cb = e.target.closest('.bh-loja-check');
+      if (!cb) return;
+      var nome = cb.getAttribute('data-nome');
+      var loja = cb.getAttribute('data-loja');
+      var id = cb.getAttribute('data-id');
+      cb.disabled = true;
+      try {
+        if (cb.checked) {
+          await bhAdminAddColaboradora(nome, loja);
+        } else if (id) {
+          var confirmar = confirm(
+            'Remover ' + nome + ' de ' + bhLojaLabel(loja) + '?\n' +
+            'Isto apaga também o histórico de horas dela nesta loja. Não é reversível.'
+          );
+          if (!confirmar) { cb.checked = true; cb.disabled = false; return; }
+          await bhAdminDeleteColaboradora(parseInt(id, 10));
+        }
+        await bhAdminRefreshAll();
+      } catch (err) {
+        alert('Erro: ' + err.message);
+        cb.checked = !cb.checked;
+        cb.disabled = false;
+      }
+    });
+
+    document.getElementById('bh-adm-colab-table').addEventListener('click', function (e) {
+      var delBtn = e.target.closest('.bh-btn-del-orphan');
+      if (!delBtn) return;
+      var id = parseInt(delBtn.getAttribute('data-id'), 10);
+      var nome = delBtn.getAttribute('data-nome');
+      if (!confirm('Eliminar "' + nome + '" do Banco de Horas? Isto apaga também o histórico de horas dela. Não é reversível.')) return;
+      delBtn.disabled = true;
+      bhAdminDeleteColaboradora(id)
+        .then(bhAdminRefreshAll)
+        .catch(function (err) { alert('Erro ao eliminar: ' + err.message); delBtn.disabled = false; });
+    });
+  }
+
+  function bhOpenColabModal() {
+    bhColabModalInjectDOM();
+    document.getElementById('bh-colab-modal-overlay').classList.add('show');
+    bhRefreshColabSection();
+  }
+  function bhCloseColabModal() {
+    var el = document.getElementById('bh-colab-modal-overlay');
+    if (el) el.classList.remove('show');
+  }
+
+  async function bhAdminRefreshAll() {
+    bhAdminInjectDOM();
+    var lojaFiltro = document.getElementById('bh-adm-loja-filter').value;
+
+    var saldosList = document.getElementById('bh-adm-saldos-list');
+    var pendentesList = document.getElementById('bh-adm-pendentes-list');
+
+    saldosList.innerHTML = '<div class="bh-empty">a carregar…</div>';
+    pendentesList.innerHTML = '<div class="bh-empty">a carregar…</div>';
+
+    await bhRefreshColabSection();
 
     try {
       var saldos = await bhFetchSaldos(lojaFiltro || null);
-      saldosList.innerHTML = saldos.length
-        ? saldos.map(bhRenderSaldoRow).join('')
-        : '<div class="bh-empty">sem dados.</div>';
+      saldosList.innerHTML = bhRenderSaldosGrouped(saldos);
     } catch (err) {
       saldosList.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
     }

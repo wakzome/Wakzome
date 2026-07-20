@@ -1055,9 +1055,9 @@
      ══════════════════════════════════════════════════════════════ */
   function bhRenderSaldoRowSimples(s) {
     var saldo = bhFormatSaldo(s.saldo_horas);
-    return '<div class="bh-row">' +
-      '<div class="bh-row-main"><span class="bh-row-nome">' + bhEsc(s.nome) + '</span></div>' +
-      '<span class="' + saldo.classe + '" style="font-size:.85rem;font-weight:bold;">' + saldo.texto + '</span>' +
+    return '<div class="bh-row" style="flex-wrap:nowrap;">' +
+      '<div class="bh-row-main" style="flex-wrap:nowrap;min-width:0;"><span class="bh-row-nome" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + bhEsc(s.nome) + '</span></div>' +
+      '<span class="' + saldo.classe + '" style="font-size:.85rem;font-weight:bold;white-space:nowrap;flex-shrink:0;margin-left:14px;">' + saldo.texto + '</span>' +
     '</div>';
   }
 

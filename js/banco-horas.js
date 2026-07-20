@@ -1045,6 +1045,42 @@
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     VISUALIZAÇÃO (dashboard de empregadas — botão "banco de horas")
+     Só leitura por agora: mostra os nomes da loja e o saldo de cada
+     uma, sem qualquer ação de editar/aprovar. Chamado por index.html
+     (openBanco()) sempre que o modal abre.
+     ══════════════════════════════════════════════════════════════ */
+  function bhRenderSaldoRowSimples(s) {
+    var saldo = bhFormatSaldo(s.saldo_horas);
+    return '<div class="bh-row">' +
+      '<div class="bh-row-main"><span class="bh-row-nome">' + bhEsc(s.nome) + '</span></div>' +
+      '<span class="' + saldo.classe + '" style="font-size:.85rem;font-weight:bold;">' + saldo.texto + '</span>' +
+    '</div>';
+  }
+
+  window.bhVisualizarSaldos = async function () {
+    bhInjectStyles();
+    var el = document.getElementById('wz-banco-modal-body');
+    if (!el) return;
+    el.innerHTML = '<div class="bh-empty">a carregar…</div>';
+    var loja = window._currentStoreGlobal;
+    if (loja === 'porto santo') {
+      el.innerHTML = '<div class="bh-empty">Esta vista ainda não está disponível para Porto Santo — fala com a administração.</div>';
+      return;
+    }
+    try {
+      var saldos = await bhFetchSaldos(loja);
+      saldos = saldos.filter(function (s) { return s.ativo; });
+      saldos.sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt'); });
+      el.innerHTML = saldos.length
+        ? saldos.map(bhRenderSaldoRowSimples).join('')
+        : '<div class="bh-empty">sem colaboradoras registadas nesta loja.</div>';
+    } catch (err) {
+      el.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
+    }
+  };
+
   window.openBancoHorasOverlay = function () {
     bhInjectStyles();
     var overlay = document.getElementById('banco-horas-overlay');

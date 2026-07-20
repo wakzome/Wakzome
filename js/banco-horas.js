@@ -195,6 +195,22 @@
     return bhAdminClientInstance;
   }
 
+  // Reaproveita a lista já gerida em "pagamentos → gerir colaboradoras"
+  // (tabela recibos_funcionarias, endpoint /api/recibos-gerir) em vez de duplicar
+  // nomes aqui. Devolve [] silenciosamente se o pedido falhar, para não travar
+  // o resto do painel — o Banco de Horas continua a funcionar com o que já
+  // tiver localmente, só sem a lista de sugestões/deteção de removidas.
+  async function bhFetchColaboradorasRecibos() {
+    try {
+      var res = await fetch('/api/recibos-gerir', { credentials: 'same-origin' });
+      if (!res.ok) return [];
+      var body = await res.json().catch(function () { return {}; });
+      return (body.funcionarias || []).filter(function (f) { return f.ativo !== false; });
+    } catch (e) {
+      return [];
+    }
+  }
+
   async function bhAdminAddColaboradora(nome, loja) {
     var res = await bhAdminClient().from('bh_colaboradoras').insert({ nome: nome.trim().toUpperCase(), loja: loja });
     if (res.error) throw res.error;
@@ -265,11 +281,12 @@
           '<div id="bh-adm-colab-list"></div>' +
           '<div class="bh-add-form">' +
             '<div class="bh-field-row">' +
-              '<div class="bh-field"><label>nome completo</label><input type="text" id="bh-adm-nome-input" placeholder="nome completo da colaboradora" autocomplete="off"></div>' +
+              '<div class="bh-field"><label>colaboradora (lista de recibos)</label><select id="bh-adm-nome-input"><option value="">— selecionar —</option></select></div>' +
               '<div class="bh-field"><label>loja</label><select id="bh-adm-loja-input">' + bhLojaOptionsHtml(false) + '</select></div>' +
             '</div>' +
             '<button class="bh-btn primary" id="bh-adm-add-btn">adicionar colaboradora</button>' +
             '<div id="bh-adm-add-status"></div>' +
+            '<div class="bh-row-meta" style="margin-top:8px;">A lista vem da gestão de colaboradoras dos recibos (separador pagamentos). Só falta indicar a loja aqui — se eliminares alguém lá, ela deixa de aparecer para escolha aqui na próxima vez que abrires este painel.</div>' +
           '</div>' +
         '</div>' +
 
@@ -413,12 +430,14 @@
     document.getElementById('bh-adm-ins-preview').textContent = h === null ? '—' : (bhFormatHoras(h) + ' h');
   }
 
-  function bhRenderColabRow(c) {
+  function bhRenderColabRow(c, removidasSet) {
+    var removida = removidasSet && removidasSet.has(c.nome.trim().toLowerCase());
     return '<div class="bh-row" data-id="' + c.id + '">' +
       '<div class="bh-row-main">' +
         '<span class="bh-row-nome">' + bhEsc(c.nome) + '</span>' +
         '<span class="bh-row-loja">' + bhEsc(bhLojaLabel(c.loja)) + '</span>' +
         (!c.ativo ? '<span class="bh-badge bh-badge-inativo">inativa</span>' : '') +
+        (removida ? '<span class="bh-badge bh-badge-rejeitado" title="Já não consta na gestão de colaboradoras dos recibos">removida dos recibos</span>' : '') +
       '</div>' +
       '<div class="bh-row-actions">' +
         '<button class="bh-btn bh-btn-toggle" data-id="' + c.id + '" data-ativo="' + (c.ativo ? '1' : '0') + '">' + (c.ativo ? 'desativar' : 'ativar') + '</button>' +
@@ -471,10 +490,24 @@
     saldosList.innerHTML = '<div class="bh-empty">a carregar…</div>';
     pendentesList.innerHTML = '<div class="bh-empty">a carregar…</div>';
 
+    var nomeSelect = document.getElementById('bh-adm-nome-input');
     try {
       var colaboradoras = await bhFetchColaboradoras(lojaFiltro || null);
+      var todasColaboradoras = lojaFiltro ? await bhFetchColaboradoras(null) : colaboradoras;
+      var recibosList = await bhFetchColaboradorasRecibos();
+      var recibosCarregados = recibosList.length > 0;
+      var recibosAtivosSet = new Set(recibosList.map(function (f) { return (f.nome || '').trim().toLowerCase(); }));
+
+      // uma colaboradora fica marcada "removida dos recibos" quando o nome dela
+      // já não está na lista ativa de recibos_funcionarias (fonte única de nomes).
+      var removidasSet = new Set(
+        colaboradoras
+          .map(function (c) { return c.nome.trim().toLowerCase(); })
+          .filter(function (nome) { return recibosCarregados && !recibosAtivosSet.has(nome); })
+      );
+
       colabList.innerHTML = colaboradoras.length
-        ? colaboradoras.map(bhRenderColabRow).join('')
+        ? colaboradoras.map(function (c) { return bhRenderColabRow(c, removidasSet); }).join('')
         : '<div class="bh-empty">nenhuma colaboradora registada' + (lojaFiltro ? ' nesta loja' : '') + '.</div>';
 
       var colabAtivas = colaboradoras.filter(function (c) { return c.ativo; });
@@ -483,6 +516,18 @@
         return '<option value="' + c.id + '">' + bhEsc(c.nome) + ' — ' + bhEsc(bhLojaLabel(c.loja)) + '</option>';
       }).join('');
       if (currentSel && colabAtivas.some(function (c) { return String(c.id) === currentSel; })) insColab.value = currentSel;
+
+      if (nomeSelect) {
+        var jaAdicionadasSet = new Set(todasColaboradoras.map(function (c) { return c.nome.trim().toLowerCase(); }));
+        var disponiveis = recibosList.filter(function (f) { return !jaAdicionadasSet.has((f.nome || '').trim().toLowerCase()); });
+        var currentNome = nomeSelect.value;
+        nomeSelect.innerHTML = disponiveis.length
+          ? '<option value="">— selecionar —</option>' + disponiveis.map(function (f) {
+              return '<option value="' + bhEsc(f.nome) + '">' + bhEsc(f.nome) + '</option>';
+            }).join('')
+          : '<option value="">nenhuma colaboradora nova disponível</option>';
+        if (currentNome && disponiveis.some(function (f) { return f.nome === currentNome; })) nomeSelect.value = currentNome;
+      }
     } catch (err) {
       colabList.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
     }

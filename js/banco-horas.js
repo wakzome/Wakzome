@@ -4,6 +4,17 @@
 //  Escritas de admin usam bhAdminClient(), um cliente Supabase próprio com
 //  um cabeçalho/segredo dedicados — ver bh_is_admin() no SQL. Já disponível
 //  quando initBancoHorasAdmin()/openBancoHorasOverlay() são chamados.
+//
+//  PORTO SANTO — caso especial: esta loja já tem o seu próprio banco de
+//  horas dentro do gerador de horários (tabelas gh_people / gh_banco_horas),
+//  em produção e a funcionar. Em vez de duplicar dados, este módulo lê e
+//  escreve DIRETAMENTE nessas mesmas tabelas para "porto santo" (funções
+//  com sufixo "PortoSanto" abaixo) — não existe cópia nem sincronização,
+//  é a mesma conta vista a partir de dois sítios. gerador-horarios.js não
+//  é tocado por nenhuma alteração feita aqui. Como gh_banco_horas não tem
+//  conceito de "pendente", os pedidos da empregada de Porto Santo ficam
+//  numa tabela nova (bh_ps_pendentes) até serem aceites — só aí entram em
+//  gh_banco_horas, tal como a lógica de aprovação das outras lojas.
 // ══════════════════════════════════════════════════════════════
 (function () {
   'use strict';
@@ -14,6 +25,10 @@
     { value: 'parfois arcadas são francisco',    label: 'Arcadas' },
     { value: 'porto santo',                      label: 'Porto Santo' }
   ];
+
+  // Porto Santo não aparece na grelha "atribuir loja": as pessoas dessa loja
+  // vêm de gh_people (gerido no próprio gerador de horários), não de recibos.
+  var BH_LOJAS_ATRIBUIVEIS = BH_LOJAS.filter(function (l) { return l.value !== 'porto santo'; });
 
   function bhLojaLabel(value) {
     for (var i = 0; i < BH_LOJAS.length; i++) if (BH_LOJAS[i].value === value) return BH_LOJAS[i].label;
@@ -219,6 +234,46 @@
     return list;
   }
 
+  /* ── Porto Santo: leitura direta de gh_people / gh_banco_horas / bh_ps_pendentes ── */
+  async function bhFetchPessoasPortoSanto() {
+    var res = await window.sbClient.from('gh_people').select('id,name').eq('active', true).order('name', { ascending: true });
+    if (res.error) throw res.error;
+    return res.data || [];
+  }
+
+  async function bhFetchBancoPortoSantoMap() {
+    var res = await window.sbClient.from('gh_banco_horas').select('pessoa_id,saldo');
+    if (res.error) throw res.error;
+    var map = {};
+    (res.data || []).forEach(function (b) { map[b.pessoa_id] = Number(b.saldo) || 0; });
+    return map;
+  }
+
+  async function bhFetchPendentesPortoSanto() {
+    var res = await window.sbClient.from('bh_ps_pendentes').select('*')
+      .eq('estado', 'pendente')
+      .order('inserido_em', { ascending: true });
+    if (res.error) throw res.error;
+    return res.data || [];
+  }
+
+  async function bhFetchSaldosPortoSanto() {
+    var pessoas = await bhFetchPessoasPortoSanto();
+    var bancoMap = await bhFetchBancoPortoSantoMap();
+    var pendentes = await bhFetchPendentesPortoSanto();
+    var pendCountMap = {};
+    pendentes.forEach(function (p) { pendCountMap[p.pessoa_id] = (pendCountMap[p.pessoa_id] || 0) + 1; });
+    return pessoas.map(function (p) {
+      return {
+        nome: p.name,
+        loja: 'porto santo',
+        ativo: true,
+        saldo_horas: bancoMap[p.id] || 0,
+        pendentes_count: pendCountMap[p.id] || 0
+      };
+    });
+  }
+
   // Escritas de admin usam um cliente Supabase próprio do Banco de Horas,
   // com um cabeçalho e segredo dedicados (não é o ADMIN_TOKEN do resto da
   // app). O Postgres confirma este cabeçalho em bh_is_admin() — ver o SQL.
@@ -261,6 +316,36 @@
     if (res.error) throw res.error;
   }
 
+  // Soma/subtrai diretamente ao saldo de gh_banco_horas — o MESMO upsert que
+  // lancarBanco() já faz dentro de gerador-horarios.js (mesma tabela, mesma
+  // lógica de arredondamento a 1 casa decimal). Não toca em saldo_semana nem
+  // ultima_semana, que são só do cálculo automático do horário semanal.
+  async function bhAdminLancarPortoSanto(pessoaId, deltaHoras) {
+    var atualRes = await window.sbClient.from('gh_banco_horas').select('saldo').eq('pessoa_id', pessoaId).maybeSingle();
+    if (atualRes.error) throw atualRes.error;
+    var atual = (atualRes.data && Number(atualRes.data.saldo)) || 0;
+    var novoSaldo = Math.round((atual + deltaHoras) * 10) / 10;
+    var res = await window.sbClient.from('gh_banco_horas').upsert(
+      { pessoa_id: pessoaId, saldo: novoSaldo, updated_at: new Date().toISOString() },
+      { onConflict: 'pessoa_id' }
+    );
+    if (res.error) throw res.error;
+    return novoSaldo;
+  }
+
+  async function bhAdminDecidirPortoSanto(id, novoEstado) {
+    var atualRow = await bhAdminClient().from('bh_ps_pendentes').select('*').eq('id', id).maybeSingle();
+    if (atualRow.error) throw atualRow.error;
+    var row = atualRow.data;
+    if (!row) throw new Error('Pedido não encontrado (pode já ter sido decidido).');
+    var upd = await bhAdminClient().from('bh_ps_pendentes').update({ estado: novoEstado }).eq('id', id);
+    if (upd.error) throw upd.error;
+    if (novoEstado === 'aceite') {
+      var delta = row.tipo === 'credito' ? Number(row.horas) : -Number(row.horas);
+      await bhAdminLancarPortoSanto(row.pessoa_id, delta);
+    }
+  }
+
   async function bhLojaSubmeter(payload) {
     var res = await window.sbClient.from('bh_lancamentos').insert({
       colaboradora_id: payload.colaboradora_id,
@@ -280,6 +365,24 @@
     if (res.error) throw res.error;
   }
 
+  async function bhLojaSubmeterPortoSanto(payload) {
+    var res = await window.sbClient.from('bh_ps_pendentes').insert({
+      pessoa_id: payload.pessoa_id,
+      nome: payload.nome,
+      tipo: payload.tipo,
+      data: payload.data,
+      hora_inicio: payload.hora_inicio,
+      hora_fim: payload.hora_fim,
+      nota: payload.nota || null
+    });
+    if (res.error) throw res.error;
+  }
+
+  async function bhLojaCancelarPendentePortoSanto(id) {
+    var res = await window.sbClient.from('bh_ps_pendentes').delete().eq('id', id).eq('estado', 'pendente');
+    if (res.error) throw res.error;
+  }
+
   /* ══════════════════════════════════════════════════════════════
      ADMIN — DOM + RENDER
      ══════════════════════════════════════════════════════════════ */
@@ -293,7 +396,7 @@
       '<div id="bh-admin-wrap">' +
         '<div class="bh-section">' +
           '<div class="bh-section-title">colaboradoras</div>' +
-          '<div class="bh-row-meta" style="margin-bottom:14px;">Atribui a loja de cada colaboradora (lista vinda de "pagamentos → gerir colaboradoras").</div>' +
+          '<div class="bh-row-meta" style="margin-bottom:14px;">Atribui a loja de cada colaboradora (lista vinda de "pagamentos → gerir colaboradoras"). Porto Santo é gerido automaticamente a partir do gerador de horários — não precisa de atribuição aqui.</div>' +
           '<button class="bh-btn primary" id="bh-adm-open-colab-modal-btn">atribuir loja</button>' +
         '</div>' +
 
@@ -344,12 +447,15 @@
       var rejeitarBtn = e.target.closest('.bh-btn-rejeitar');
       var btn = aceitarBtn || rejeitarBtn;
       if (!btn) return;
-      var id = parseInt(btn.getAttribute('data-id'), 10);
+      var rawId = btn.getAttribute('data-id');
+      var isPS = rawId.indexOf('ps:') === 0;
+      var id = isPS ? parseInt(rawId.slice(3), 10) : parseInt(rawId, 10);
       var novoEstado = aceitarBtn ? 'aceite' : 'rejeitado';
       if (rejeitarBtn && !confirm('Rejeitar este lançamento?')) return;
       var row = btn.closest('.bh-row');
       row.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
-      bhAdminDecidir(id, novoEstado)
+      var decisao = isPS ? bhAdminDecidirPortoSanto(id, novoEstado) : bhAdminDecidir(id, novoEstado);
+      decisao
         .then(bhAdminRefreshAll)
         .catch(function (err) {
           alert('Erro: ' + err.message);
@@ -374,11 +480,18 @@
 
       if (!colabId) { statusEl.textContent = 'Seleciona uma colaboradora.'; statusEl.className = 'bh-status-error'; return; }
       if (!data) { statusEl.textContent = 'Indica a data.'; statusEl.className = 'bh-status-error'; return; }
-      if (bhComputeHoras(inicio, fim) === null) { statusEl.textContent = 'Hora de início e hora de fim inválidas ou iguais.'; statusEl.className = 'bh-status-error'; return; }
+      var horasCalc = bhComputeHoras(inicio, fim);
+      if (horasCalc === null) { statusEl.textContent = 'Hora de início e hora de fim inválidas ou iguais.'; statusEl.className = 'bh-status-error'; return; }
 
       btn.disabled = true; statusEl.textContent = 'a guardar…'; statusEl.className = '';
       try {
-        await bhAdminInserirDireto({ colaboradora_id: parseInt(colabId, 10), tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
+        if (colabId.indexOf('ps:') === 0) {
+          var pessoaId = colabId.slice(3);
+          var delta = tipo === 'credito' ? horasCalc : -horasCalc;
+          await bhAdminLancarPortoSanto(pessoaId, delta);
+        } else {
+          await bhAdminInserirDireto({ colaboradora_id: parseInt(colabId, 10), tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
+        }
         statusEl.textContent = '✓ lançamento registado e já aceite.'; statusEl.className = 'bh-status-ok';
         document.getElementById('bh-adm-ins-inicio').value = '';
         document.getElementById('bh-adm-ins-fim').value = '';
@@ -402,7 +515,7 @@
 
   function bhRenderColabTableRow(nomeRecibo, colabByKey) {
     var nomeLower = nomeRecibo.trim().toLowerCase();
-    var cellsHtml = BH_LOJAS.map(function (l) {
+    var cellsHtml = BH_LOJAS_ATRIBUIVEIS.map(function (l) {
       var key = nomeLower + '|' + l.value;
       var existing = colabByKey[key];
       var checked = existing ? ' checked' : '';
@@ -413,7 +526,7 @@
   }
 
   function bhRenderColabTable(recibosNomes, colabByKey) {
-    var headerCells = BH_LOJAS.map(function (l) { return '<th>' + bhEsc(l.label) + '</th>'; }).join('');
+    var headerCells = BH_LOJAS_ATRIBUIVEIS.map(function (l) { return '<th>' + bhEsc(l.label) + '</th>'; }).join('');
     var rows = recibosNomes.map(function (nome) { return bhRenderColabTableRow(nome, colabByKey); }).join('');
     return '<table class="bh-colab-table"><thead><tr><th>colaboradora</th>' + headerCells + '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
@@ -512,10 +625,20 @@
       if (insColab) {
         var currentSel = insColab.value;
         var colabAtivas = todasColaboradoras.filter(function (c) { return c.ativo; });
-        insColab.innerHTML = '<option value="">— selecionar —</option>' + colabAtivas.map(function (c) {
+        var optsHtml = '<option value="">— selecionar —</option>' + colabAtivas.map(function (c) {
           return '<option value="' + c.id + '">' + bhEsc(c.nome) + ' — ' + bhEsc(bhLojaLabel(c.loja)) + '</option>';
         }).join('');
-        if (currentSel && colabAtivas.some(function (c) { return String(c.id) === currentSel; })) insColab.value = currentSel;
+        try {
+          var pessoasPS = await bhFetchPessoasPortoSanto();
+          if (pessoasPS.length) {
+            optsHtml += '<optgroup label="Porto Santo">' + pessoasPS.map(function (p) {
+              return '<option value="ps:' + bhEsc(p.id) + '">' + bhEsc(p.name) + '</option>';
+            }).join('') + '</optgroup>';
+          }
+        } catch (e) { /* Porto Santo indisponível não deve travar o resto do formulário */ }
+        insColab.innerHTML = optsHtml;
+        var stillExists = Array.prototype.some.call(insColab.options, function (o) { return o.value === currentSel; });
+        if (currentSel && stillExists) insColab.value = currentSel;
       }
     } catch (err) {
       if (colabTableEl) colabTableEl.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
@@ -605,14 +728,32 @@
     await bhRefreshColabSection();
 
     try {
-      var saldos = await bhFetchSaldos(lojaFiltro || null);
+      var saldos = await bhFetchSaldos(lojaFiltro && lojaFiltro !== 'porto santo' ? lojaFiltro : null);
+      saldos = saldos.filter(function (s) { return s.loja !== 'porto santo'; }); // defesa contra dados legados
+      if (!lojaFiltro || lojaFiltro === 'porto santo') {
+        var saldosPS = await bhFetchSaldosPortoSanto();
+        saldos = saldos.concat(saldosPS);
+      }
       saldosList.innerHTML = bhRenderSaldosGrouped(saldos);
     } catch (err) {
       saldosList.innerHTML = '<div class="bh-error">' + bhEsc(err.message) + '</div>';
     }
 
     try {
-      var pendentes = await bhFetchPendentes(lojaFiltro || null);
+      var pendentes = await bhFetchPendentes(lojaFiltro && lojaFiltro !== 'porto santo' ? lojaFiltro : null);
+      pendentes = pendentes.filter(function (l) { return !l.bh_colaboradoras || l.bh_colaboradoras.loja !== 'porto santo'; });
+      if (!lojaFiltro || lojaFiltro === 'porto santo') {
+        var pendentesPSraw = await bhFetchPendentesPortoSanto();
+        var pendentesPS = pendentesPSraw.map(function (row) {
+          return {
+            id: 'ps:' + row.id,
+            tipo: row.tipo, data: row.data, hora_inicio: row.hora_inicio, hora_fim: row.hora_fim,
+            horas: row.horas, nota: row.nota,
+            bh_colaboradoras: { nome: row.nome, loja: 'porto santo' }
+          };
+        });
+        pendentes = pendentes.concat(pendentesPS);
+      }
       pendentesList.innerHTML = pendentes.length
         ? pendentes.map(bhRenderPendenteRow).join('')
         : '<div class="bh-empty">nenhum lançamento pendente.</div>';
@@ -675,8 +816,10 @@
       var id = this.value;
       if (!id) { document.getElementById('bh-loja-content').style.display = 'none'; bhLojaColaboradoraAtual = null; return; }
       var opt = this.options[this.selectedIndex];
-      bhLojaColaboradoraAtual = { id: parseInt(id, 10), nome: opt.getAttribute('data-nome') };
-      try { localStorage.setItem('bh_colab_id_' + window._currentStoreGlobal, id); } catch (e) {}
+      var loja = window._currentStoreGlobal;
+      var isPS = loja === 'porto santo';
+      bhLojaColaboradoraAtual = { id: isPS ? id : parseInt(id, 10), nome: opt.getAttribute('data-nome'), loja: loja };
+      try { localStorage.setItem('bh_colab_id_' + loja, id); } catch (e) {}
       document.getElementById('bh-loja-content').style.display = '';
       bhLojaRefreshConteudo();
     });
@@ -705,7 +848,11 @@
 
       btn.disabled = true; statusEl.textContent = 'a submeter…'; statusEl.className = '';
       try {
-        await bhLojaSubmeter({ colaboradora_id: bhLojaColaboradoraAtual.id, tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
+        if (bhLojaColaboradoraAtual.loja === 'porto santo') {
+          await bhLojaSubmeterPortoSanto({ pessoa_id: bhLojaColaboradoraAtual.id, nome: bhLojaColaboradoraAtual.nome, tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
+        } else {
+          await bhLojaSubmeter({ colaboradora_id: bhLojaColaboradoraAtual.id, tipo: tipo, data: data, hora_inicio: inicio, hora_fim: fim, nota: nota });
+        }
         statusEl.textContent = '✓ submetido — fica pendente até a administração aprovar.'; statusEl.className = 'bh-status-ok';
         document.getElementById('bh-loja-inicio').value = '';
         document.getElementById('bh-loja-fim').value = '';
@@ -725,7 +872,9 @@
       if (!confirm('Cancelar este pedido pendente?')) return;
       var id = parseInt(cancelBtn.getAttribute('data-id'), 10);
       cancelBtn.disabled = true;
-      bhLojaCancelarPendente(id)
+      var isPS = bhLojaColaboradoraAtual && bhLojaColaboradoraAtual.loja === 'porto santo';
+      var acao = isPS ? bhLojaCancelarPendentePortoSanto(id) : bhLojaCancelarPendente(id);
+      acao
         .then(bhLojaRefreshConteudo)
         .catch(function (err) { alert('Erro: ' + err.message); cancelBtn.disabled = false; });
     });
@@ -751,18 +900,32 @@
     saldoCard.innerHTML = '<div class="bh-empty">a carregar…</div>';
     histEl.innerHTML = '<div class="bh-empty">a carregar…</div>';
     try {
-      var lancamentos = await bhFetchLancamentos(bhLojaColaboradoraAtual.id);
-      var saldoHoras = lancamentos.reduce(function (acc, l) {
-        if (l.estado !== 'aceite') return acc;
-        return acc + (l.tipo === 'credito' ? Number(l.horas) : -Number(l.horas));
-      }, 0);
+      var isPS = bhLojaColaboradoraAtual.loja === 'porto santo';
+      var saldoHoras, historico;
+      if (isPS) {
+        var bancoRes = await window.sbClient.from('gh_banco_horas').select('saldo').eq('pessoa_id', bhLojaColaboradoraAtual.id).maybeSingle();
+        if (bancoRes.error) throw bancoRes.error;
+        saldoHoras = (bancoRes.data && Number(bancoRes.data.saldo)) || 0;
+        var pendRes = await window.sbClient.from('bh_ps_pendentes').select('*')
+          .eq('pessoa_id', bhLojaColaboradoraAtual.id)
+          .order('data', { ascending: false })
+          .order('inserido_em', { ascending: false });
+        if (pendRes.error) throw pendRes.error;
+        historico = pendRes.data || [];
+      } else {
+        historico = await bhFetchLancamentos(bhLojaColaboradoraAtual.id);
+        saldoHoras = historico.reduce(function (acc, l) {
+          if (l.estado !== 'aceite') return acc;
+          return acc + (l.tipo === 'credito' ? Number(l.horas) : -Number(l.horas));
+        }, 0);
+      }
       var saldo = bhFormatSaldo(saldoHoras);
       saldoCard.innerHTML = '<div class="bh-saldo-card">' +
         '<div class="bh-saldo-nome">' + bhEsc(bhLojaColaboradoraAtual.nome) + '</div>' +
         '<div class="bh-saldo-valor ' + saldo.classe + '">' + saldo.texto + '</div>' +
       '</div>';
-      histEl.innerHTML = lancamentos.length
-        ? lancamentos.map(bhRenderHistoricoRow).join('')
+      histEl.innerHTML = historico.length
+        ? historico.map(bhRenderHistoricoRow).join('')
         : '<div class="bh-empty">ainda sem lançamentos.</div>';
     } catch (err) {
       saldoCard.innerHTML = '';
@@ -775,10 +938,17 @@
     var loja = window._currentStoreGlobal;
     select.innerHTML = '<option value="">a carregar…</option>';
     try {
-      var colaboradoras = await bhFetchColaboradoras(loja);
-      var ativas = colaboradoras.filter(function (c) { return c.ativo; });
+      var isPS = loja === 'porto santo';
+      var ativas;
+      if (isPS) {
+        var pessoas = await bhFetchPessoasPortoSanto();
+        ativas = pessoas.map(function (p) { return { id: p.id, nome: p.name }; });
+      } else {
+        var colaboradoras = await bhFetchColaboradoras(loja);
+        ativas = colaboradoras.filter(function (c) { return c.ativo; });
+      }
       select.innerHTML = '<option value="">— selecionar —</option>' + ativas.map(function (c) {
-        return '<option value="' + c.id + '" data-nome="' + bhEsc(c.nome) + '">' + bhEsc(c.nome) + '</option>';
+        return '<option value="' + bhEsc(String(c.id)) + '" data-nome="' + bhEsc(c.nome) + '">' + bhEsc(c.nome) + '</option>';
       }).join('');
 
       var guardado = null;

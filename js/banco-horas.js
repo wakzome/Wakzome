@@ -235,14 +235,18 @@
   }
 
   /* ── Porto Santo: leitura direta de gh_people / gh_banco_horas / bh_ps_pendentes ── */
+  // gh_people e gh_banco_horas só respondem a pedidos com o token real de
+  // admin (política "solo admin con token", cmd=ALL) — o mesmo cliente que o
+  // gerador-horarios.js já usa (getSupabase() -> sbAdmin). window.sbClient
+  // (anon, sem token) devolve sempre vazio aqui, sem erro.
   async function bhFetchPessoasPortoSanto() {
-    var res = await window.sbClient.from('gh_people').select('id,name').eq('active', true).order('name', { ascending: true });
+    var res = await window.sbAdmin.from('gh_people').select('id,name').eq('active', true).order('name', { ascending: true });
     if (res.error) throw res.error;
     return res.data || [];
   }
 
   async function bhFetchBancoPortoSantoMap() {
-    var res = await window.sbClient.from('gh_banco_horas').select('pessoa_id,saldo');
+    var res = await window.sbAdmin.from('gh_banco_horas').select('pessoa_id,saldo');
     if (res.error) throw res.error;
     var map = {};
     (res.data || []).forEach(function (b) { map[b.pessoa_id] = Number(b.saldo) || 0; });
@@ -321,11 +325,11 @@
   // lógica de arredondamento a 1 casa decimal). Não toca em saldo_semana nem
   // ultima_semana, que são só do cálculo automático do horário semanal.
   async function bhAdminLancarPortoSanto(pessoaId, deltaHoras) {
-    var atualRes = await window.sbClient.from('gh_banco_horas').select('saldo').eq('pessoa_id', pessoaId).maybeSingle();
+    var atualRes = await window.sbAdmin.from('gh_banco_horas').select('saldo').eq('pessoa_id', pessoaId).maybeSingle();
     if (atualRes.error) throw atualRes.error;
     var atual = (atualRes.data && Number(atualRes.data.saldo)) || 0;
     var novoSaldo = Math.round((atual + deltaHoras) * 10) / 10;
-    var res = await window.sbClient.from('gh_banco_horas').upsert(
+    var res = await window.sbAdmin.from('gh_banco_horas').upsert(
       { pessoa_id: pessoaId, saldo: novoSaldo, updated_at: new Date().toISOString() },
       { onConflict: 'pessoa_id' }
     );
@@ -728,8 +732,10 @@
     await bhRefreshColabSection();
 
     try {
-      var saldos = await bhFetchSaldos(lojaFiltro && lojaFiltro !== 'porto santo' ? lojaFiltro : null);
-      saldos = saldos.filter(function (s) { return s.loja !== 'porto santo'; }); // defesa contra dados legados
+      // bh_saldos pode ainda ter registos antigos de Porto Santo (de antes desta
+      // integração) — não se escondem, ficam visíveis ao lado dos novos, vindos
+      // de gh_people/gh_banco_horas. Não são fundidos automaticamente.
+      var saldos = await bhFetchSaldos(lojaFiltro || null);
       if (!lojaFiltro || lojaFiltro === 'porto santo') {
         var saldosPS = await bhFetchSaldosPortoSanto();
         saldos = saldos.concat(saldosPS);
@@ -740,8 +746,7 @@
     }
 
     try {
-      var pendentes = await bhFetchPendentes(lojaFiltro && lojaFiltro !== 'porto santo' ? lojaFiltro : null);
-      pendentes = pendentes.filter(function (l) { return !l.bh_colaboradoras || l.bh_colaboradoras.loja !== 'porto santo'; });
+      var pendentes = await bhFetchPendentes(lojaFiltro || null);
       if (!lojaFiltro || lojaFiltro === 'porto santo') {
         var pendentesPSraw = await bhFetchPendentesPortoSanto();
         var pendentesPS = pendentesPSraw.map(function (row) {

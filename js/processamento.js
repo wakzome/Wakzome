@@ -3293,6 +3293,9 @@
       +       '<span id="proc-session-label" style="font-size:.78rem;font-weight:700;color:#555;white-space:nowrap;display:none;"></span>'
       +       '<span id="proc-saveStatus" class="proc-save-status" style="display:none;"></span>'
       +     '</div>'
+      +     '<div id="proc-session-bar-center" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);">'
+      +       '<button class="proc-btn primary" id="proc-start-new-btn" style="white-space:nowrap;">&#11088; Iniciar nova sess\u00e3o</button>'
+      +     '</div>'
       +     '<div id="proc-session-bar-right">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn" style="white-space:nowrap;">&#128194; sess&#245;es &#x25be;</button>'
       +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden" style="top:calc(100% + 6px);right:0;"></div>'
@@ -3307,9 +3310,6 @@
       +       '<div style="font-size:1rem;font-weight:700;color:#000;margin-bottom:6px;">Escolhe uma sess\u00e3o ou inicia uma nova</div>'
       +       '<div style="font-size:.78rem;font-weight:600;color:#555;margin-bottom:20px;line-height:1.5;">Para evitar sobreescrever dados, selecciona sempre a sess\u00e3o correcta.</div>'
       +       '<div id="proc-start-sessions-list"></div>'
-      +       '<div style="border-top:1px solid #f0f0f0;margin-top:16px;padding-top:16px;">'
-      +         '<button class="proc-btn primary" id="proc-start-new-btn" style="width:100%;padding:11px 16px;font-size:.88rem;justify-content:flex-start;">&#11088; Iniciar nova sess\u00e3o</button>'
-      +       '</div>'
       +     '</div>'
       +   '</div>'
       /* ── Main work area — hidden until session active ── */
@@ -3455,6 +3455,8 @@
     var main  = document.getElementById('proc-main-area');
     var addBtn = document.getElementById('proc-addFaturaBtn');
     if (start) start.style.display = 'none';
+    var newBtnWrap1 = document.getElementById('proc-session-bar-center');
+    if (newBtnWrap1) newBtnWrap1.style.display = 'none';
     if (main)  main.style.display  = '';
     if (addBtn) {
       var newAddBtn = addBtn.cloneNode(true);
@@ -3480,6 +3482,8 @@
     var start = document.getElementById('proc-session-start');
     var main  = document.getElementById('proc-main-area');
     if (start) start.style.display = 'flex';
+    var newBtnWrap2 = document.getElementById('proc-session-bar-center');
+    if (newBtnWrap2) newBtnWrap2.style.display = '';
     if (main)  main.style.display  = 'none';
     var lbl = document.getElementById('proc-session-label');
     if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
@@ -3668,6 +3672,8 @@
     if (main) main.style.display = 'none';
     var start = document.getElementById('proc-session-start');
     if (start) start.style.display = 'flex';
+    var newBtnWrap3 = document.getElementById('proc-session-bar-center');
+    if (newBtnWrap3) newBtnWrap3.style.display = '';
     procHideFloatingButtons();
     var backBtn = document.getElementById('adm-back-btn');
     if (backBtn) backBtn._procBound = false;

@@ -1372,6 +1372,7 @@
       var conf     = g.confidence || 'CONFIRMED';
       var typeNome = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'—');
       var badge    = conf === 'CONFLICT' ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : conf === 'MOTOR_D' ? '<span class="tam-badge tam-badge-motord" title="Resolvido pelo Motor D">🤖</span>' : '';
+      var discBadge = g.hasDiscount ? '<span class="tam-badge tam-badge-discount" title="desconto direto detetado na fatura: ' + tamFmtEU(g.grossUnitPrice) + ' € → ' + tamFmtEU(g.grossUnitPrice - g.discountPerUnit) + ' €/un (−' + tamFmtEU(g.discountPerUnit) + ' €/un)">% desc.</span>' : '';
 
       var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
       var fVal    = distrib.f || 0;
@@ -1404,7 +1405,7 @@
       html +=
         '<tr class="' + trClass + '"' + (conf==='CONFLICT' ? ' title="' + tamEsc(g.conflictDetail||'') + '"' : '') + '>' +
         '<td class="tam-td tam-td-num">' + (i+1) + '</td>' +
-        '<td class="tam-td"><strong>' + tamEsc(g.ref) + '</strong>' + badge + '</td>' +
+        '<td class="tam-td"><strong>' + tamEsc(g.ref) + '</strong>' + badge + discBadge + '</td>' +
         '<td class="tam-td">' + tamEsc(typeNome) + '</td>' +
         '<td class="tam-td tam-td-num">' + g.pieces + '</td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(g.unitPriceWithShip) + '</td>' +
@@ -6758,6 +6759,34 @@
     return Number(n).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
   function tamEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── PRICE BLOCK (qtd + preço[s]) ─────────────────────────────────
+     Formato normal:      qtd  preço/un        total
+     Formato c/ desconto: qtd  preço bruto  desconto/un  preço líquido  total
+     (ex.: "22 5,63 1,43 4,20 92,40" → bruto 5,63 − desconto 1,43 = líquido 4,20; 22×4,20=92,40)
+     O formato de desconto só é aceite se a aritmética bater certo, para não
+     confundir números extra de faturas normais com um desconto inexistente. */
+  var PRICE_BLOCK_RE = /^(\d{1,4})\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2})(?:\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2}))?/;
+
+  function tamParsePriceBlock(after) {
+    var m = after.match(PRICE_BLOCK_RE);
+    if (!m) return null;
+    var pieces = parseInt(m[1], 10);
+    if (m[4] && m[5]) {
+      var gross    = tamParseEU(m[2]);
+      var discount = tamParseEU(m[3]);
+      var net      = tamParseEU(m[4]);
+      var total    = tamParseEU(m[5]);
+      var netOk    = Math.abs(tamRound2(gross - discount) - net) < 0.02;
+      var totalOk  = Math.abs(tamRound2(pieces * net) - total) < 0.02;
+      if (netOk && totalOk) {
+        return { pieces:pieces, unitPrice:net, total:total,
+                 hasDiscount:true, grossUnitPrice:gross, discountPerUnit:discount };
+      }
+      /* aritmética não confirma desconto — trata como formato normal (2 números) */
+    }
+    return { pieces:pieces, unitPrice:tamParseEU(m[2]), total:tamParseEU(m[3]), hasDiscount:false };
+  }
   function tamCleanName(n) {
     return String(n||'').replace(/\bModell\s*:\s*/gi,'').replace(/\b\d{8}\b/g,'').replace(/44/g,'').replace(/\s{2,}/g,' ').trim();
   }
@@ -6826,13 +6855,14 @@
   function tamBuildGrouped(rawItems) {
     var map = {};
     rawItems.forEach(function(item){
-      if (!map[item.ref]) map[item.ref] = { ref:item.ref, garmentType:item.garmentType, name:item.name, pieces:0, totalCost:0, lines:[] };
+      if (!map[item.ref]) map[item.ref] = { ref:item.ref, garmentType:item.garmentType, name:item.name, pieces:0, totalCost:0, lines:[], hasDiscount:false, grossUnitPrice:0, discountPerUnit:0 };
       var g = map[item.ref];
       g.pieces    += item.pieces;
       g.totalCost  = tamRound2(g.totalCost + item.total);
       g.lines.push(item);
       if (item.name)        g.name = item.name;
       if (item.garmentType) g.garmentType = item.garmentType;
+      if (item.hasDiscount) { g.hasDiscount = true; g.grossUnitPrice = item.grossUnitPrice; g.discountPerUnit = item.discountPerUnit; }
     });
     return Object.values(map);
   }
@@ -7110,11 +7140,12 @@
       if (hsM) {
         var hsPos = joined.indexOf(hsM[1]);
         var after = joined.slice(hsPos+8).trim();
-        var numM  = after.match(/^(\d{1,4})\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2})/);
-        if (numM) {
-          var pieces=parseInt(numM[1]), unitPrice=tamParseEU(numM[2]), total=tamParseEU(numM[3]);
+        var pb = tamParsePriceBlock(after);
+        if (pb) {
           var tn = tamExtractTypeAndName(joined.slice(0,hsPos));
-          return { idx:idx, type:'DATA', garmentType:tn.type, name:tn.name, pieces, unitPrice, total };
+          return { idx:idx, type:'DATA', garmentType:tn.type, name:tn.name,
+                   pieces:pb.pieces, unitPrice:pb.unitPrice, total:pb.total,
+                   hasDiscount:pb.hasDiscount, grossUnitPrice:pb.grossUnitPrice, discountPerUnit:pb.discountPerUnit };
         }
       }
       return { idx:idx, type:'OTHER' };
@@ -7136,6 +7167,7 @@
       }
       if (found) rawItems.push({ ref:found.ref, garmentType:row.garmentType, name:row.name,
         pieces:row.pieces, unitPrice:row.unitPrice, total:row.total,
+        hasDiscount:row.hasDiscount, grossUnitPrice:row.grossUnitPrice, discountPerUnit:row.discountPerUnit,
         valid:Math.abs(row.pieces*row.unitPrice-row.total)<0.02 });
     });
     return tamFinalise(rawItems, tagged);
@@ -7153,13 +7185,14 @@
       if (hsM && currentRef) {
         var hsPos=joined.indexOf(hsM[1]);
         var after=joined.slice(hsPos+8).replace(/\s*\*\s*$/,'').trim();
-        var numM=after.match(/^(\d{1,4})\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2})/);
-        if (numM) {
-          var pieces=parseInt(numM[1]), unitPrice=tamParseEU(numM[2]), total=tamParseEU(numM[3]);
+        var pb=tamParsePriceBlock(after);
+        if (pb) {
           var tn=tamExtractTypeAndName(joined.slice(0,hsPos));
           if (tn.name) currentName=tn.name;
           if (tn.type) currentType=tn.type;
-          tagged.push({ idx:i, type:'DATA', ref:currentRef, garmentType:currentType, name:currentName, pieces, unitPrice, total }); continue;
+          tagged.push({ idx:i, type:'DATA', ref:currentRef, garmentType:currentType, name:currentName,
+                        pieces:pb.pieces, unitPrice:pb.unitPrice, total:pb.total,
+                        hasDiscount:pb.hasDiscount, grossUnitPrice:pb.grossUnitPrice, discountPerUnit:pb.discountPerUnit }); continue;
         }
       }
       tagged.push({ idx:i, type:'OTHER' });
@@ -7169,6 +7202,7 @@
       if (row.type!=='DATA') return;
       rawItems.push({ ref:row.ref, garmentType:row.garmentType, name:row.name,
         pieces:row.pieces, unitPrice:row.unitPrice, total:row.total,
+        hasDiscount:row.hasDiscount, grossUnitPrice:row.grossUnitPrice, discountPerUnit:row.discountPerUnit,
         valid:Math.abs(row.pieces*row.unitPrice-row.total)<0.02 });
     });
     return tamFinalise(rawItems, tagged);
@@ -7382,6 +7416,7 @@
       '.tam-row-conflict td { background:#FFFBF5!important; }',
       '.tam-badge { display:inline-block; margin-left:5px; font-size:.6rem; padding:1px 5px; border-radius:4px; vertical-align:middle; font-weight:700; color:#fff; }',
       '.tam-badge-conflict { background:#E8A44A; color:#fff; }',
+      '.tam-badge-discount { background:#4A7C6F; color:#fff; cursor:help; }',
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
 
       /* Session buttons — defined here so mobile override below works */

@@ -210,14 +210,10 @@
   // nomes aqui. Devolve [] silenciosamente se o pedido falhar, para não travar
   // o resto do painel.
   async function bhFetchColaboradorasRecibos() {
-    try {
-      var res = await fetch('/api/recibos-gerir', { credentials: 'same-origin' });
-      if (!res.ok) return [];
-      var body = await res.json().catch(function () { return {}; });
-      return (body.funcionarias || []).filter(function (f) { return f.ativo !== false; });
-    } catch (e) {
-      return [];
-    }
+    var res = await fetch('/api/recibos-gerir', { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('sessão de recibos indisponível (' + res.status + ') — atualiza a página');
+    var body = await res.json().catch(function () { return {}; });
+    return (body.funcionarias || []).filter(function (f) { return f.ativo !== false; });
   }
 
   async function bhFetchSaldos(loja) {
@@ -669,11 +665,21 @@
     if (!wrap) return;
     try {
       var todasColaboradoras = await bhFetchColaboradoras(null);
-      var recibosList = await bhFetchColaboradorasRecibos();
       // Nomes que já pertencem a Porto Santo (gh_people) também contam como
       // "já têm loja" — só não estão em bh_colaboradoras porque essa loja é
       // gerida à parte, no gerador de horários.
       var pessoasPS = await bhFetchPessoasPortoSanto().catch(function () { return []; });
+
+      var recibosList;
+      try {
+        recibosList = await bhFetchColaboradorasRecibos();
+      } catch (recibosErr) {
+        // Não sabemos o estado real de "gerir colaboradoras" agora — nunca
+        // mostrar pendentes/órfãos com base nisso, seria dar falsos positivos
+        // (gente real a aparecer como se devesse ser eliminada).
+        wrap.innerHTML = '<div class="bh-section"><div class="bh-row-meta" style="color:#a06a00;">Não foi possível confirmar "gerir colaboradoras" agora (' + bhEsc(recibosErr.message) + '). Atualiza a página para veres pendentes/órfãos aqui.</div></div>';
+        return;
+      }
       var recibosNomes = recibosList.map(function (f) { return f.nome; });
       var recibosNomesLowerSet = new Set(recibosNomes.map(function (n) { return n.trim().toLowerCase(); }));
       var assignedNomesLowerSet = new Set(todasColaboradoras.map(function (c) { return c.nome.trim().toLowerCase(); }));

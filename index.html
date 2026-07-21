@@ -1849,16 +1849,16 @@ input, textarea { cursor: text !important; }
 #wz-active-panel.show { display: block; }
 #wz-active-panel.visible { opacity: 1; }
 #wz-active-bubble {
-  width: 26px; height: 26px; border-radius: 50%;
-  border: 1px solid rgba(0,0,0,0.12);
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.14);
   background: transparent;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.2s;
 }
-#wz-active-panel:hover #wz-active-bubble { border-color: rgba(0,0,0,0.35); }
+#wz-active-panel:hover #wz-active-bubble { border-color: rgba(0,0,0,0.4); }
 #wz-active-bubble::before {
   content: '';
-  width: 9px; height: 9px; border-radius: 50%;
+  width: 16px; height: 16px; border-radius: 50%;
   background: #2a8a2a;
   animation: wzActivePulse 3s ease-in-out infinite;
 }
@@ -1869,17 +1869,18 @@ input, textarea { cursor: text !important; }
 }
 #wz-active-tooltip {
   position: absolute;
-  top: 50%; right: 32px;
+  top: 50%; right: 54px;
   transform: translateY(-50%) translateX(6px);
-  min-width: 180px; max-width: 220px;
+  min-width: 220px; max-width: 280px;
   background: #fff;
   border: 1px solid #e6e6e6;
-  border-radius: 14px;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.14);
-  padding: 12px 14px;
+  border-radius: 16px;
+  box-shadow: 0 10px 34px rgba(0,0,0,0.16);
+  padding: 16px 18px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
+  max-height: 90vh;
 }
 #wz-active-panel:hover #wz-active-tooltip {
   opacity: 1;
@@ -1891,8 +1892,7 @@ input, textarea { cursor: text !important; }
   letter-spacing: .1em; color: #000; margin-bottom: 8px;
 }
 #wz-active-list {
-  display: flex; flex-direction: column; gap: 6px;
-  max-height: 46vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 7px;
 }
 .wz-active-item {
   display: flex; flex-direction: column;
@@ -1905,6 +1905,10 @@ input, textarea { cursor: text !important; }
   text-transform: uppercase; letter-spacing: .04em; margin-top: 2px;
 }
 #wz-active-empty { font-size: .72rem; font-weight: 600; color: #999; }
+.wz-active-sep {
+  text-align: center; font-size: .68rem; font-weight: 700;
+  letter-spacing: .3em; color: #ccc; margin: 2px 0;
+}
 #wz-active-updated { font-size: .56rem; color: #bbb; margin-top: 8px; text-align: right; }
 @media (max-width: 1024px) { #wz-active-panel { display: none !important; } }
 #admin-app.module-open ~ #wz-active-panel { display: none !important; }
@@ -3001,7 +3005,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .f-card .f-badge.past, .dash-card .dash-label,
 .adm-mod-arrow, #saft-label, #saft-countdown-label,
 #saft-recibos-label, #saft-recibos-mes,
-.wz-active-store {
+.wz-active-store, .wz-active-sep {
   opacity: 0.68;
 }
 .adm-mod-desc { opacity: 0.55; }
@@ -6267,6 +6271,17 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     });
   }
 
+  // Ordem fixa de exibição: primeiro as lojas de Porto Santo, depois as restantes.
+  var STORE_ORDER = ['Mezka Avenida', 'Mezka Mercado', 'Shana', 'Maxx', 'Mezka Funchal', 'Parfois Arcadas', 'Madeira Shopping'];
+
+  function wzSortByStoreOrder(list) {
+    return list.slice().sort(function (a, b) {
+      var ia = STORE_ORDER.indexOf(a.store); if (ia < 0) ia = STORE_ORDER.length;
+      var ib = STORE_ORDER.indexOf(b.store); if (ib < 0) ib = STORE_ORDER.length;
+      return ia - ib;
+    });
+  }
+
   function wzRenderActive(active) {
     var listEl = document.getElementById('wz-active-list');
     if (!listEl) return;
@@ -6274,10 +6289,18 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       listEl.innerHTML = '<div id="wz-active-empty">ninguém ativo agora</div>';
       return;
     }
-    listEl.innerHTML = active.map(function (p) {
-      return '<div class="wz-active-item"><span class="wz-active-name">' + wzEscapeHtml(p.name) +
+    var sorted = wzSortByStoreOrder(active);
+    var html = '';
+    var prevStore = null;
+    sorted.forEach(function (p) {
+      if (prevStore !== null && p.store !== prevStore) {
+        html += '<div class="wz-active-sep">***</div>';
+      }
+      html += '<div class="wz-active-item"><span class="wz-active-name">' + wzEscapeHtml(p.name) +
         '</span><span class="wz-active-store">' + wzEscapeHtml(p.store) + '</span></div>';
-    }).join('');
+      prevStore = p.store;
+    });
+    listEl.innerHTML = html;
   }
 
   async function wzLoadActive() {

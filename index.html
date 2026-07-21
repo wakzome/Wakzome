@@ -6108,7 +6108,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   var CSV_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/datosfnc.csv';
   var PORTO_BASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s';
   var BASE_DATE = new Date('2026-01-05T00:00:00');
-  var REFRESH_MS = 30 * 60 * 1000;
 
   var STANDARD_STORES = [
     { key: 'mezka funchal', label: 'Mezka Funchal' },
@@ -6336,6 +6335,28 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     }
   }
 
+  // Milissegundos até à próxima marca de relógio "em ponto" ou "e meia" (xx:00 / xx:30).
+  function wzMsUntilNextHalfHour() {
+    var now = new Date();
+    var next = new Date(now);
+    if (now.getMinutes() < 30) {
+      next.setMinutes(30, 0, 0);
+    } else {
+      next.setHours(now.getHours() + 1, 0, 0, 0);
+    }
+    return next.getTime() - now.getTime();
+  }
+
+  // Agenda-se sempre para a próxima marca de relógio, não para "+30min desde a última consulta",
+  // para que a atualização aconteça sempre às xx:00 e xx:30, independentemente da hora em que o painel arrancou.
+  function wzScheduleNextRefresh() {
+    if (wzTimer) clearTimeout(wzTimer);
+    wzTimer = setTimeout(function () {
+      wzLoadActive();
+      wzScheduleNextRefresh();
+    }, wzMsUntilNextHalfHour());
+  }
+
   function wzStartPanel() {
     if (wzStarted) return;
     wzStarted = true;
@@ -6345,7 +6366,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
       requestAnimationFrame(function () { panel.classList.add('visible'); });
     }
     wzLoadActive();
-    wzTimer = setInterval(wzLoadActive, REFRESH_MS);
+    wzScheduleNextRefresh();
   }
 
   document.addEventListener('DOMContentLoaded', function () {

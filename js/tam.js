@@ -570,6 +570,55 @@
     }
   }
 
+  /* ── Upload de nota de crédito para uma fatura específica ──
+     Associação é sempre explícita (botão dentro do cartão da fatura,
+     nunca automática/global) — mas ainda assim validamos o
+     "Re-Nr./Invoic No." contra o número da fatura antes de aplicar,
+     para não deixar anexar um documento ao destino errado. */
+  async function tamHandleCreditNoteFile(invIdx, file) {
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+    try {
+      var buf = await file.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      var allRows = [];
+      for (var p = 1; p <= pdf.numPages; p++) {
+        var page = await pdf.getPage(p);
+        allRows.push.apply(allRows, tamGroupByRows((await page.getTextContent()).items));
+      }
+      var cn = tamParseCreditNote(allRows);
+      cn.fileName = file.name;
+
+      if (!cn.lines.length) {
+        tamShowDNError('Não foi possível reconhecer artigos na nota de crédito "' + file.name + '".');
+        return;
+      }
+
+      var invoiceBareNo = String(r.invoiceNo || '').replace(/^ZY-/i, '');
+      if (cn.invoiceRefNos.indexOf(invoiceBareNo) < 0) {
+        tamShowDNError('A nota de crédito ' + (cn.creditNo || file.name) + ' refere-se à fatura Re-Nr. ' +
+          (cn.invoiceRefNos.join(', ') || '—') + ', que não corresponde a esta fatura (' + r.invoiceNo + '). Nada foi aplicado.');
+        return;
+      }
+
+      var already = (r.creditNotes || []).some(function(x){ return x.creditNo === cn.creditNo; });
+      if (already) {
+        tamShowDNError('A nota de crédito ' + (cn.creditNo || file.name) + ' já está anexada a esta fatura.');
+        return;
+      }
+
+      var warnings = tamApplyCreditNoteToInvoice(r, cn);
+      tamRenderAll();
+      tamScheduleSave();
+      if (warnings.length) {
+        tamShowDNError('Nota de crédito ' + (cn.creditNo || file.name) + ' aplicada com avisos: ' + warnings.join(' '));
+      }
+    } catch (err) {
+      console.error('tamHandleCreditNoteFile', err);
+      tamShowDNError('Erro ao processar a nota de crédito: ' + err.message);
+    }
+  }
+
   /* Prompt: add to session or start new */
   function tamAskSessionChoice(newInvoiceNos) {
     return new Promise(function(resolve){
@@ -621,7 +670,8 @@
                    totalPieces: r.totalPieces, shipPkgs: r.shipPkgs, shipping: r.shipping,
                    subtotalGoods: r.subtotalGoods, grandTotal: r.grandTotal,
                    invoiceSubtotal: r.invoiceSubtotal, grouped: r.grouped,
-                   shipPerPiece: r.shipPerPiece, _externalShipping: r._externalShipping || null };
+                   shipPerPiece: r.shipPerPiece, _externalShipping: r._externalShipping || null,
+                   creditNotes: r.creditNotes || [] };
         })
       };
       // Remove old unsuffixed entry, save as (1)
@@ -861,6 +911,8 @@
           '<button class="tam-inv-stock-btn" data-inv="0">ingreso de stock</button>' +
           '<button class="tam-inv-guia-btn" data-inv="0">guía</button>' +
           '<button class="tam-inv-export-btn" data-inv="0">exportar</button>' +
+          '<button class="tam-inv-credit-btn" data-inv="0">nota de crédito</button>' +
+          '<input type="file" accept="application/pdf" class="tam-inv-credit-input" data-inv="0" style="display:none">' +
         '</div>';
 
       block0.appendChild(hdr0);
@@ -875,11 +927,23 @@
       hdr0.querySelector('.tam-inv-stock-btn').addEventListener('click', function(){ tamShowStockModal(0); });
       hdr0.querySelector('.tam-inv-guia-btn').addEventListener('click', function(){ tamShowGuiaModal(0); });
       hdr0.querySelector('.tam-inv-remove-btn').addEventListener('click', function(){ tamConfirmRemoveInvoice(0); });
+      var creditInput0 = hdr0.querySelector('.tam-inv-credit-input');
+      hdr0.querySelector('.tam-inv-credit-btn').addEventListener('click', function(){ creditInput0.click(); });
+      creditInput0.addEventListener('change', function(){
+        if (creditInput0.files && creditInput0.files[0]) {
+          tamHandleCreditNoteFile(0, creditInput0.files[0]);
+          creditInput0.value = '';
+        }
+      });
 
       var banEl0 = document.createElement('div');
       banEl0.className = 'tam-inv-banner';
       tamRenderInvoiceBanner(r0, banEl0);
       block0.appendChild(banEl0);
+
+      var creditEl0 = document.createElement('div');
+      tamRenderCreditNotesBlock(r0, creditEl0, 0);
+      block0.appendChild(creditEl0);
 
       var tWrap0 = document.createElement('div');
       tWrap0.className = 'tam-inv-table-wrap';
@@ -932,6 +996,8 @@
             '<button class="tam-inv-stock-btn" data-inv="' + idx + '">ingreso de stock</button>' +
             '<button class="tam-inv-guia-btn" data-inv="' + idx + '">guía</button>' +
             '<button class="tam-inv-export-btn" data-inv="' + idx + '">exportar</button>' +
+            '<button class="tam-inv-credit-btn" data-inv="' + idx + '">nota de crédito</button>' +
+            '<input type="file" accept="application/pdf" class="tam-inv-credit-input" data-inv="' + idx + '" style="display:none">' +
           '</div>';
         block.appendChild(hdr);
         hdr.querySelector('.tam-inv-toggle-btn').addEventListener('click', function(){
@@ -963,12 +1029,28 @@
           var i = parseInt(hdr.querySelector('.tam-inv-remove-btn').getAttribute('data-inv'));
           tamConfirmRemoveInvoice(i);
         });
+        (function(){
+          var creditInput = hdr.querySelector('.tam-inv-credit-input');
+          hdr.querySelector('.tam-inv-credit-btn').addEventListener('click', function(){ creditInput.click(); });
+          creditInput.addEventListener('change', function(){
+            var i = parseInt(creditInput.getAttribute('data-inv'));
+            if (creditInput.files && creditInput.files[0]) {
+              tamHandleCreditNoteFile(i, creditInput.files[0]);
+              creditInput.value = '';
+            }
+          });
+        })();
 
         // ── Validation banner per invoice ──────────────────
         var banEl = document.createElement('div');
         banEl.className = 'tam-inv-banner';
         tamRenderInvoiceBanner(r, banEl);
         block.appendChild(banEl);
+
+        // ── Notas de crédito anexadas ───────────────────────
+        var creditEl = document.createElement('div');
+        tamRenderCreditNotesBlock(r, creditEl, idx);
+        block.appendChild(creditEl);
 
         // ── Table ──────────────────────────────────────────
         var tWrap = document.createElement('div');
@@ -1175,6 +1257,134 @@
     r.grandTotal    = tamRound2(r.subtotalGoods + (r.shipping || 0));
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     NOTAS DE CRÉDITO — aplicação/remoção (reversível)
+     r.grouped guarda sempre o valor billed corrente (já líquido de
+     créditos aplicados). Cada linha da nota grava se foi aplicada
+     (line.applied) para que a remoção só reverta o que foi de facto
+     debitado — protege contra dados inconsistentes (ref inexistente
+     na fatura, ou crédito maior do que o saldo restante).
+  ══════════════════════════════════════════════════════════════ */
+  function tamRecalcInvoiceAfterCredit(r) {
+    r.totalPieces   = r.grouped.reduce(function(s,g){ return s + g.pieces; }, 0);
+    r.subtotalGoods = tamRound2(r.grouped.reduce(function(s,g){ return s + g.totalCost; }, 0));
+    var shipPerPiece = r.totalPieces > 0 ? r.shipping / r.totalPieces : 0;
+    r.grouped.forEach(function(g){
+      var base = g.pieces > 0 ? g.totalCost / g.pieces : 0;
+      g.unitPriceWithShip = tamRound2(base + shipPerPiece);
+      g.grandTotal        = tamRound2(g.totalCost + shipPerPiece * g.pieces);
+    });
+    r.shipPerPiece = tamRound2(shipPerPiece);
+    r.grandTotal   = tamRound2(r.subtotalGoods + (r.shipping || 0));
+  }
+
+  function tamApplyCreditNoteToInvoice(r, cn) {
+    var warnings = [];
+    cn.lines.forEach(function(line){
+      var g = r.grouped.find(function(x){ return x.ref === line.ref; });
+      if (!g) {
+        line.applied = false;
+        warnings.push('referência ' + line.ref + ' não encontrada nesta fatura — linha ignorada.');
+        return;
+      }
+      if (line.pieces > g.pieces + 1e-6) {
+        line.applied = false;
+        warnings.push('referência ' + line.ref + ': a nota credita ' + line.pieces + ' un, mas restam apenas ' + g.pieces + ' un nesta fatura — linha ignorada.');
+        return;
+      }
+      g.pieces         = tamRound2(g.pieces - line.pieces);
+      g.totalCost       = tamRound2(g.totalCost - line.total);
+      g.creditedPieces  = tamRound2((g.creditedPieces || 0) + line.pieces);
+      g.creditedTotal   = tamRound2((g.creditedTotal  || 0) + line.total);
+      g.hasCredit        = true;
+      line.applied = true;
+    });
+    r.shipping = tamRound2(Math.max(0, (r.shipping || 0) - (cn.shipping || 0)));
+    tamRecalcInvoiceAfterCredit(r);
+    cn.warnings = warnings;
+    r.creditNotes = r.creditNotes || [];
+    r.creditNotes.push(cn);
+    return warnings;
+  }
+
+  function tamRemoveCreditNote(invIdx, creditNo) {
+    var r = tamInvoices[invIdx];
+    if (!r || !r.creditNotes) return;
+    var pos = -1;
+    for (var i = 0; i < r.creditNotes.length; i++) {
+      if (r.creditNotes[i].creditNo === creditNo) { pos = i; break; }
+    }
+    if (pos < 0) return;
+    var cn = r.creditNotes[pos];
+    cn.lines.forEach(function(line){
+      if (!line.applied) return;
+      var g = r.grouped.find(function(x){ return x.ref === line.ref; });
+      if (!g) return;
+      g.pieces          = tamRound2(g.pieces + line.pieces);
+      g.totalCost        = tamRound2(g.totalCost + line.total);
+      g.creditedPieces   = tamRound2((g.creditedPieces || 0) - line.pieces);
+      g.creditedTotal    = tamRound2((g.creditedTotal  || 0) - line.total);
+      if (g.creditedPieces <= 0.004) { g.hasCredit = false; g.creditedPieces = 0; g.creditedTotal = 0; }
+    });
+    r.shipping = tamRound2((r.shipping || 0) + (cn.shipping || 0));
+    r.creditNotes.splice(pos, 1);
+    tamRecalcInvoiceAfterCredit(r);
+    tamRenderAll();
+    tamScheduleSave();
+  }
+
+  function tamConfirmRemoveCreditNote(invIdx, creditNo) {
+    var r = tamInvoices[invIdx];
+    if (!r) return;
+    var cn = (r.creditNotes || []).find(function(x){ return x.creditNo === creditNo; });
+    var dialog = document.createElement('div');
+    dialog.id = 'tam-session-dialog';
+    dialog.innerHTML =
+      '<div id="tam-session-dialog-box">' +
+        '<div class="tam-dialog-title">remover nota de crédito</div>' +
+        '<div class="tam-dialog-body">' +
+          'Remover a nota de crédito <strong>' + tamEsc(creditNo || '') + '</strong>?<br>' +
+          '<small style="color:#888">As peças e o valor creditados voltam a ser contabilizados nesta fatura.</small>' +
+        '</div>' +
+        '<div class="tam-dialog-btns">' +
+          '<button class="tam-dialog-btn tam-dialog-btn-new">🗑 sim, remover</button>' +
+          '<button class="tam-dialog-btn tam-dialog-btn-add">cancelar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(dialog);
+    dialog.querySelector('.tam-dialog-btn-new').addEventListener('click', function(){
+      dialog.parentNode.removeChild(dialog);
+      tamRemoveCreditNote(invIdx, creditNo);
+    });
+    dialog.querySelector('.tam-dialog-btn-add').addEventListener('click', function(){
+      dialog.parentNode.removeChild(dialog);
+    });
+  }
+
+  function tamRenderCreditNotesBlock(r, el, invIdx) {
+    if (!r.creditNotes || !r.creditNotes.length) { el.innerHTML = ''; el.className = ''; return; }
+    el.className = 'tam-credit-block';
+    el.innerHTML = r.creditNotes.map(function(cn){
+      var warnHtml = (cn.warnings && cn.warnings.length)
+        ? '<span class="tam-credit-warn" title="' + tamEsc(cn.warnings.join(' ')) + '">⚠</span>' : '';
+      return (
+        '<div class="tam-credit-row">' +
+          '<span class="tam-credit-icon">↩</span>' +
+          '<span class="tam-credit-num">' + tamEsc(cn.creditNo || cn.fileName || '—') + '</span>' +
+          '<span class="tam-credit-date">' + tamEsc(cn.creditDate || '') + '</span>' +
+          '<span class="tam-credit-amt">−' + cn.totalPieces + ' un · −' + tamFmtEU(cn.grandTotal) + ' €</span>' +
+          warnHtml +
+          '<button class="tam-credit-remove-btn" data-inv="' + invIdx + '" data-credit="' + tamEsc(cn.creditNo || '') + '" title="remover nota de crédito">✕</button>' +
+        '</div>'
+      );
+    }).join('');
+    el.querySelectorAll('.tam-credit-remove-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        tamConfirmRemoveCreditNote(parseInt(btn.getAttribute('data-inv')), btn.getAttribute('data-credit'));
+      });
+    });
+  }
+
   function tamRenderInvoiceBanner(r, el) {
     var xv    = r.xv;
     var subOk = r.invoiceSubtotal != null ? Math.abs(r.invoiceSubtotal - r.subtotalGoods) < 0.05 : true;
@@ -1373,6 +1583,7 @@
       var typeNome = (g.garmentType||'') + (g.garmentType && g.name ? ' · ' : '') + (g.name||'—');
       var badge    = conf === 'CONFLICT' ? '<span class="tam-badge tam-badge-conflict">⚠</span>' : conf === 'MOTOR_D' ? '<span class="tam-badge tam-badge-motord" title="Resolvido pelo Motor D">🤖</span>' : '';
       var discBadge = g.hasDiscount ? '<span class="tam-badge tam-badge-discount" title="desconto direto detetado na fatura: ' + tamFmtEU(g.grossUnitPrice) + ' € → ' + tamFmtEU(g.grossUnitPrice - g.discountPerUnit) + ' €/un (−' + tamFmtEU(g.discountPerUnit) + ' €/un)">% desc.</span>' : '';
+      var creditBadge = g.hasCredit ? '<span class="tam-badge tam-badge-credit" title="nota de crédito aplicada: −' + g.creditedPieces + ' un / −' + tamFmtEU(g.creditedTotal) + ' €">↩ crédito</span>' : '';
 
       var distrib = tamGetRefDistribForInvoice(g.ref, invIdx);
       var fVal    = distrib.f || 0;
@@ -1405,7 +1616,7 @@
       html +=
         '<tr class="' + trClass + '"' + (conf==='CONFLICT' ? ' title="' + tamEsc(g.conflictDetail||'') + '"' : '') + '>' +
         '<td class="tam-td tam-td-num">' + (i+1) + '</td>' +
-        '<td class="tam-td"><strong>' + tamEsc(g.ref) + '</strong>' + badge + discBadge + '</td>' +
+        '<td class="tam-td"><strong>' + tamEsc(g.ref) + '</strong>' + badge + discBadge + creditBadge + '</td>' +
         '<td class="tam-td">' + tamEsc(typeNome) + '</td>' +
         '<td class="tam-td tam-td-num">' + g.pieces + '</td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(g.unitPriceWithShip) + '</td>' +
@@ -3238,7 +3449,8 @@
           grouped:       r.grouped,
           shipPerPiece:  r.shipPerPiece  || 0,
           _externalShipping: r._externalShipping || null,
-          guiaErp:       r.guiaErp       || ''
+          guiaErp:       r.guiaErp       || '',
+          creditNotes:   r.creditNotes   || []
         };
       })
     };
@@ -3591,6 +3803,7 @@
           shipPerPiece:   inv.shipPerPiece   || (totalPieces > 0 ? tamRound2(shipping / totalPieces) : 0),
           _externalShipping: inv._externalShipping || null,
           guiaErp:        inv.guiaErp         || '',
+          creditNotes:    inv.creditNotes     || [],
           xv: { fullyAgree: true, confirmed: grouped.length, conflicts: [],
                 engines: [{label:'A',refs:grouped.length,units:totalPieces},
                           {label:'B',refs:grouped.length,units:totalPieces}],
@@ -6810,6 +7023,99 @@
     return { type:typeLabel.trim(), name:modelName };
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     NOTAS DE CRÉDITO (Gutschrift) ─────────────────────────────
+     Mesma estrutura tabular das faturas, mas quantidades e totais
+     vêm com sinal "-" à direita (ex.: "22-", "198,00-"). O preço
+     unitário nunca leva o sinal. Cada linha de artigo repete
+     "Re-Nr./Invoic No.: NNNNNNNN" — o número (sem "ZY-") da fatura
+     de origem, usado para validar a que fatura a nota pertence.
+  ══════════════════════════════════════════════════════════════ */
+  var CREDIT_PRICE_RE = /^(\d{1,4})-?\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2})-?(?:\s+([\d.]*\d+,\d{2})\s+([\d.]*\d+,\d{2})-?)?/;
+
+  function tamParseCreditNote(allRows) {
+    var creditNo = null, creditDate = null;
+    var refInvoiceNos = {};
+    var currentRef = null, currentType = '', currentName = '';
+    var lines = [];
+    var shipping = 0, subtotalGoods = null, grandTotal = null;
+
+    for (var i = 0; i < allRows.length; i++) {
+      var tokens = allRows[i], joined = tokens.join(' ');
+
+      var zyM = joined.match(/\b(ZY-\d{6,})\b/);
+      if (zyM && !creditNo) creditNo = zyM[1];
+
+      if (!creditDate && joined.indexOf('Datum/Date') >= 0) {
+        var dM = joined.match(/(\d{2}\.\d{2}\.\d{4})/);
+        if (dM) creditDate = dM[1];
+      }
+
+      var reM = joined.match(/Re-Nr\.?\/?Invoic\s*No\.?:?\s*(\d{5,})/i);
+      if (reM) refInvoiceNos[reM[1]] = (refInvoiceNos[reM[1]] || 0) + 1;
+
+      if (/Versandkosten|Transportation costs/i.test(joined)) {
+        var shM = joined.match(/([\d.]*\d+,\d{2})-?\s*$/);
+        if (shM) shipping = tamParseEU(shM[1]);
+        continue;
+      }
+      if (/Zwischensumme\/Subtotal/i.test(joined)) {
+        var subM = joined.match(/([\d.]*\d+,\d{2})-?\s*$/);
+        if (subM) {
+          if (subtotalGoods == null) subtotalGoods = tamParseEU(subM[1]);
+          else grandTotal = tamParseEU(subM[1]);
+        }
+        continue;
+      }
+      if (/Gesamt\/Total/i.test(joined)) continue;
+
+      var refC = tamIsRef(tokens[0]) ? tokens[0] : (!HS_RE.test(joined) ? tamFindRefInRow(tokens) : null);
+      if (refC) { currentRef = refC; currentType = ''; currentName = ''; continue; }
+
+      var hsM = joined.match(HS_RE);
+      if (hsM && currentRef) {
+        var hsPos = joined.indexOf(hsM[1]);
+        var after = joined.slice(hsPos + 8).trim();
+        var m = after.match(CREDIT_PRICE_RE);
+        if (m) {
+          var pieces = parseInt(m[1], 10);
+          var tn = tamExtractTypeAndName(joined.slice(0, hsPos));
+          if (tn.name) currentName = tn.name;
+          if (tn.type) currentType = tn.type;
+          var line = { ref: currentRef, garmentType: currentType, name: currentName, pieces: pieces, applied: false };
+          if (m[4] && m[5]) {
+            var gross = tamParseEU(m[2]), discount = tamParseEU(m[3]), net = tamParseEU(m[4]), total = tamParseEU(m[5]);
+            var netOk   = Math.abs(tamRound2(gross - discount) - net) < 0.02;
+            var totalOk = Math.abs(tamRound2(pieces * net) - total) < 0.02;
+            if (netOk && totalOk) {
+              line.unitPrice = net; line.total = total; line.hasDiscount = true;
+              line.grossUnitPrice = gross; line.discountPerUnit = discount;
+            } else {
+              line.unitPrice = tamParseEU(m[2]); line.total = tamParseEU(m[3]); line.hasDiscount = false;
+            }
+          } else {
+            line.unitPrice = tamParseEU(m[2]); line.total = tamParseEU(m[3]); line.hasDiscount = false;
+          }
+          lines.push(line);
+        }
+      }
+    }
+
+    var totalPieces      = lines.reduce(function(s,l){ return s + l.pieces; }, 0);
+    var computedSubtotal = tamRound2(lines.reduce(function(s,l){ return s + l.total; }, 0));
+
+    return {
+      creditNo: creditNo,
+      creditDate: creditDate,
+      invoiceRefNos: Object.keys(refInvoiceNos),
+      lines: lines,
+      totalPieces: totalPieces,
+      subtotalGoods: subtotalGoods != null ? subtotalGoods : computedSubtotal,
+      shipping: shipping,
+      grandTotal: grandTotal != null ? grandTotal : tamRound2(computedSubtotal + shipping)
+    };
+  }
+
   function tamGroupByRows(items) {
     if (!items.length) return [];
     var sorted = items.slice().sort(function(a,b){ return b.transform[5]-a.transform[5]; });
@@ -7417,7 +7723,19 @@
       '.tam-badge { display:inline-block; margin-left:5px; font-size:.6rem; padding:1px 5px; border-radius:4px; vertical-align:middle; font-weight:700; color:#fff; }',
       '.tam-badge-conflict { background:#E8A44A; color:#fff; }',
       '.tam-badge-discount { background:#4A7C6F; color:#fff; cursor:help; }',
+      '.tam-badge-credit { background:#9B4D4D; color:#fff; cursor:help; }',
       '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
+
+      /* ── Notas de crédito ── */
+      '.tam-credit-block { display:flex; flex-direction:column; gap:4px; margin:6px 14px 0; }',
+      '.tam-credit-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 12px; background:#FBF3F3; border:1.5px solid #E3C9C9; border-radius:9px; font-size:.78rem; color:#7A3B3B; }',
+      '.tam-credit-icon { font-size:.9rem; }',
+      '.tam-credit-num { font-weight:800; }',
+      '.tam-credit-date { opacity:.7; }',
+      '.tam-credit-amt { margin-left:auto; font-weight:700; }',
+      '.tam-credit-warn { cursor:help; }',
+      '.tam-credit-remove-btn { padding:2px 9px; background:transparent; border:1.5px solid #D8AFAF; border-radius:6px; font-size:.72rem; color:#9B4D4D; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,color .12s; }',
+      '.tam-credit-remove-btn:hover { background:#E3C9C9; color:#5A2626; }',
 
       /* Session buttons — defined here so mobile override below works */
       '.tam-session-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
@@ -7440,7 +7758,8 @@
       '.tam-inv-collapsed .tam-inv-table-wrap tbody { display:none!important; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
       '.tam-inv-collapsed .tam-inv-table-wrap tfoot { display:none!important; }',
-      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-meta-rest,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-meta-rest,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn,.tam-inv-collapsed .tam-inv-credit-btn { display:none!important; }',
+      '.tam-invoice-block.tam-inv-collapsed .tam-credit-block { display:none!important; }',
 
       /* ── Single invoice collapsed state ── */
       '.tam-single-inv-collapsed thead { display:none!important; }',
@@ -7767,8 +8086,8 @@
       '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
 
       /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
-      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
-      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn, .tam-inv-credit-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover, .tam-inv-credit-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
 
       /* ── Edit mode button (proc style) ── */
       '.tam-inv-edit-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',

@@ -1835,6 +1835,80 @@ input, textarea { cursor: text !important; }
 /* Panel lateral oculto mientras hay un módulo abierto (libera o botão início y evita solapamiento) */
 #admin-app.module-open ~ #saft-reminder { display: none !important; }
 
+/* ══ PAINEL "PESSOAS ATIVAS AGORA" (lado direito, espelha #saft-reminder) ══ */
+#wz-active-panel {
+  position: fixed;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+  display: none;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+#wz-active-panel.show { display: block; }
+#wz-active-panel.visible { opacity: 1; }
+#wz-active-bubble {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.2s;
+}
+#wz-active-panel:hover #wz-active-bubble { border-color: rgba(0,0,0,0.35); }
+#wz-active-bubble::before {
+  content: '';
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #2a8a2a;
+  animation: wzActivePulse 3s ease-in-out infinite;
+}
+#wz-active-bubble.zero::before { background: #ccc; animation: none; }
+@keyframes wzActivePulse {
+  0%, 100% { opacity: 1;   transform: scale(1);    box-shadow: 0 0 0 0 rgba(42,138,42,0.35); }
+  50%      { opacity: .55; transform: scale(1.15); box-shadow: 0 0 0 6px rgba(42,138,42,0); }
+}
+#wz-active-tooltip {
+  position: absolute;
+  top: 50%; right: 32px;
+  transform: translateY(-50%) translateX(6px);
+  min-width: 180px; max-width: 220px;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+  padding: 12px 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+#wz-active-panel:hover #wz-active-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+}
+#wz-active-tooltip-title {
+  font-size: .62rem; font-weight: bold; text-transform: uppercase;
+  letter-spacing: .1em; color: #000; margin-bottom: 8px;
+}
+#wz-active-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 46vh; overflow-y: auto;
+}
+.wz-active-item {
+  display: flex; flex-direction: column;
+  padding: 6px 9px; border: 1px solid #efefef; border-radius: 8px;
+  background: #fafafa;
+}
+.wz-active-name { font-size: .78rem; font-weight: bold; color: #000; line-height: 1.2; }
+.wz-active-store {
+  font-size: .6rem; font-weight: 600; color: #777;
+  text-transform: uppercase; letter-spacing: .04em; margin-top: 2px;
+}
+#wz-active-empty { font-size: .72rem; font-weight: 600; color: #999; }
+#wz-active-updated { font-size: .56rem; color: #bbb; margin-top: 8px; text-align: right; }
+@media (max-width: 1024px) { #wz-active-panel { display: none !important; } }
+#admin-app.module-open ~ #wz-active-panel { display: none !important; }
+
 #tab-editor.active {
   display: flex; flex-direction: column;
   width: 100%; flex: 1; overflow: hidden;
@@ -2224,6 +2298,7 @@ input, textarea { cursor: text !important; }
 
   
   #saft-reminder { display: none !important; }
+  #wz-active-panel { display: none !important; }
 
   
   #tab-editor.active {
@@ -2265,6 +2340,7 @@ input, textarea { cursor: text !important; }
 
   
   #saft-reminder { display: none !important; }
+  #wz-active-panel { display: none !important; }
 
   
   #container-tables { overflow-x: hidden; overflow-y: auto; }
@@ -2759,9 +2835,11 @@ html.wz-egg body::after {
 .logo-text.burst { animation: logoBurst 0.6s cubic-bezier(0.22,1,0.36,1) forwards; }
 
 html.wz-minimal #main-nav,
-html.wz-minimal #saft-reminder      { opacity:0!important; transition:opacity 0.5s!important; }
+html.wz-minimal #saft-reminder,
+html.wz-minimal #wz-active-panel    { opacity:0!important; transition:opacity 0.5s!important; }
 html.wz-minimal #main-nav:hover,
-html.wz-minimal #saft-reminder:hover{ opacity:1!important; }
+html.wz-minimal #saft-reminder:hover,
+html.wz-minimal #wz-active-panel:hover{ opacity:1!important; }
 html.wz-minimal #current-time-main,
 html.wz-minimal #current-date-main  { opacity:0.08; transition:opacity 0.5s; }
 html.wz-minimal #current-time-main:hover,
@@ -2836,6 +2914,7 @@ input, button, select, textarea,
 #saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
 #saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
 .saft-fat-item,
+#wz-active-tooltip-title, .wz-active-name, #wz-active-empty, #wz-active-updated,
 #page-name-popup,
 #greeting-text, #greeting-sub,
 #h-store-selector label, #h-store-select, #h-week-select,
@@ -2921,7 +3000,8 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #adm-module-bar-title, .f-card .f-dates,
 .f-card .f-badge.past, .dash-card .dash-label,
 .adm-mod-arrow, #saft-label, #saft-countdown-label,
-#saft-recibos-label, #saft-recibos-mes {
+#saft-recibos-label, #saft-recibos-mes,
+.wz-active-store {
   opacity: 0.68;
 }
 .adm-mod-desc { opacity: 0.55; }
@@ -4390,6 +4470,15 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   <div style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
   <div style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:6px;">folgas pedidas</div>
   <button id="fd-btn" onclick="openFolgasDirigidasModal()">ver / editar<span id="fd-badge-count" style="display:none"></span></button>
+</div>
+
+<div id="wz-active-panel">
+  <div id="wz-active-bubble"></div>
+  <div id="wz-active-tooltip">
+    <div id="wz-active-tooltip-title">pessoas ativas agora</div>
+    <div id="wz-active-list"><div id="wz-active-empty">a carregar…</div></div>
+    <div id="wz-active-updated"></div>
+  </div>
 </div>
 
 <div id="page-name-popup"></div>
@@ -6004,6 +6093,243 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
   });
 
+})();
+</script>
+
+<script>
+(function () {
+  var CSV_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/datosfnc.csv';
+  var PORTO_BASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s';
+  var BASE_DATE = new Date('2026-01-05T00:00:00');
+  var REFRESH_MS = 30 * 60 * 1000;
+
+  var STANDARD_STORES = [
+    { key: 'mezka funchal', label: 'Mezka Funchal' },
+    { key: 'madeira shopping', label: 'Madeira Shopping' },
+    { key: 'parfois arcadas', label: 'Parfois Arcadas' }
+  ];
+
+  var wzStarted = false;
+  var wzTimer = null;
+
+  function wzParseCsvBlocks(csvText) {
+    var parsed = Papa.parse(csvText, { skipEmptyLines: false });
+    var rows = parsed.data.map(function (r) {
+      return r.map(function (c) { return c == null ? '' : String(c).trim(); });
+    });
+    var blocks = [];
+    var cur = [];
+    rows.forEach(function (r) {
+      if (r.every(function (c) { return c === ''; })) {
+        if (cur.length) { blocks.push(cur); cur = []; }
+      } else {
+        cur.push(r);
+      }
+    });
+    if (cur.length) blocks.push(cur);
+    return blocks;
+  }
+
+  function wzIsSameAsToday(dateStr) {
+    if (!dateStr) return false;
+    var parts = dateStr.split('/');
+    if (parts.length !== 3) return false;
+    var d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+    return d.toDateString() === new Date().toDateString();
+  }
+
+  function wzFindTodayCol(headerRow) {
+    if (!headerRow) return -1;
+    for (var col = 1; col < headerRow.length; col++) {
+      if (wzIsSameAsToday(headerRow[col])) return col;
+    }
+    return -1;
+  }
+
+  function wzIsNowInSchedule(schedule) {
+    var now = new Date();
+    var segments = schedule.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    for (var i = 0; i < segments.length; i++) {
+      var parts = segments[i].split('-');
+      if (parts.length < 2) continue;
+      var start = parts[0].trim(), end = parts[1].trim();
+      var sh = parseInt(start.split(':')[0], 10), sm = parseInt(start.split(':')[1] || '0', 10);
+      var eh = parseInt(end.split(':')[0], 10), em = parseInt(end.split(':')[1] || '0', 10);
+      if (isNaN(sh) || isNaN(eh)) continue;
+      var s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
+      var e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em);
+      if (now >= s && now <= e) return true;
+    }
+    return false;
+  }
+
+  // Lojas "normais": bloco = [rótulo+dias semana, SEMANA X+datas, ...linhas de funcionários (+linha "Nhrs" de resumo)]
+  function wzActiveFromStandardBlock(block, storeLabel) {
+    var active = [];
+    var todayCol = wzFindTodayCol(block[1]);
+    if (todayCol < 0) return active;
+    var seen = {};
+    block.slice(2).forEach(function (row) {
+      var name = (row[0] || '').trim();
+      if (!name || seen[name]) return;
+      var val = (row[todayCol] || '').trim();
+      if (val && wzIsNowInSchedule(val)) {
+        seen[name] = true;
+        active.push({ name: name, store: storeLabel });
+      }
+    });
+    return active;
+  }
+
+  // Porto Santo: várias sub-lojas (SHANA, MEZKA AVENIDA, MEZKA MERCADO, MAXX) dentro do mesmo bloco,
+  // separadas por linhas divisórias "PORTO SANTO,SEG,TER,..." e cabeçalhos "SUBLOJA,datas...".
+  // O nome do funcionário vem colado às horas semanais, ex.: "LEONIA P.40hrs".
+  function wzActiveFromPortoRows(rows) {
+    var active = [];
+    var seen = {};
+    var currentStore = null;
+    var currentCol = -1;
+    rows.forEach(function (row) {
+      var c0 = (row[0] || '').trim();
+      var c0Upper = c0.toUpperCase();
+      if (c0Upper === 'PORTO SANTO') return;
+      if (row[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(row[1])) {
+        currentStore = c0;
+        currentCol = wzFindTodayCol(row);
+        return;
+      }
+      if (!currentStore || currentCol < 0 || !c0) return;
+      var m = c0.match(/^(.*?)(\d+(?:\.\d+)?hrs)$/i);
+      var name = (m ? m[1] : c0).trim();
+      if (!name) return;
+      var val = (row[currentCol] || '').trim();
+      var key = name + '||' + currentStore;
+      if (val && wzIsNowInSchedule(val) && !seen[key]) {
+        seen[key] = true;
+        active.push({ name: name, store: wzTitleCase(currentStore) });
+      }
+    });
+    return active;
+  }
+
+  function wzTitleCase(s) {
+    return String(s).toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); });
+  }
+
+  // Determina o número da semana (formato usado nos ficheiros porto_sNN.csv) para o dia de hoje,
+  // usando a segunda-feira da semana atual como âncora (evita erros de arredondamento ao domingo).
+  function wzPortoWeekNumForToday() {
+    var today = new Date();
+    var todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var day = todayMid.getDay();
+    var diffToMonday = (day === 0 ? -6 : 1 - day);
+    var monday = new Date(todayMid);
+    monday.setDate(monday.getDate() + diffToMonday);
+    return Math.round((monday - BASE_DATE) / (7 * 86400000)) + 1;
+  }
+
+  async function wzFetchText(url) {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.text();
+  }
+
+  async function wzResolvePortoActive(standardBlocks) {
+    var weekNum = wzPortoWeekNumForToday();
+    if (weekNum >= 17) {
+      try {
+        var text = await wzFetchText(PORTO_BASE_URL + weekNum + '.csv?t=' + Date.now());
+        if (text && text.trim()) {
+          var flat = Papa.parse(text, { skipEmptyLines: false }).data
+            .map(function (r) { return r.map(function (c) { return c == null ? '' : String(c).trim(); }); })
+            .filter(function (r) { return !r.every(function (c) { return c === ''; }); });
+          if (flat.length) return wzActiveFromPortoRows(flat);
+        }
+      } catch (e) { /* cai para o CSV geral abaixo */ }
+    }
+    // Fallback: procurar bloco "porto santo" com a data de hoje dentro do CSV geral
+    var portoBlocks = standardBlocks.filter(function (b) {
+      return (b[0][0] || '').toLowerCase() === 'porto santo';
+    });
+    for (var i = 0; i < portoBlocks.length; i++) {
+      var block = portoBlocks[i];
+      var hasToday = block.some(function (row) {
+        return row.some(function (cell) { return wzIsSameAsToday(cell); });
+      });
+      if (hasToday) return wzActiveFromPortoRows(block);
+    }
+    return [];
+  }
+
+  function wzEscapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function wzRenderActive(active) {
+    var listEl = document.getElementById('wz-active-list');
+    if (!listEl) return;
+    if (!active.length) {
+      listEl.innerHTML = '<div id="wz-active-empty">ninguém ativo agora</div>';
+      return;
+    }
+    listEl.innerHTML = active.map(function (p) {
+      return '<div class="wz-active-item"><span class="wz-active-name">' + wzEscapeHtml(p.name) +
+        '</span><span class="wz-active-store">' + wzEscapeHtml(p.store) + '</span></div>';
+    }).join('');
+  }
+
+  async function wzLoadActive() {
+    var listEl = document.getElementById('wz-active-list');
+    var updatedEl = document.getElementById('wz-active-updated');
+    var bubbleEl = document.getElementById('wz-active-bubble');
+    if (!listEl) return;
+    try {
+      var csvText = await wzFetchText(CSV_URL + '?t=' + Date.now());
+      var blocks = wzParseCsvBlocks(csvText);
+
+      var results = [];
+      STANDARD_STORES.forEach(function (store) {
+        var candidates = blocks.filter(function (b) { return (b[0][0] || '').toLowerCase() === store.key; });
+        var match = null;
+        for (var i = 0; i < candidates.length; i++) {
+          if (wzFindTodayCol(candidates[i][1]) >= 0) { match = candidates[i]; break; }
+        }
+        if (match) results = results.concat(wzActiveFromStandardBlock(match, store.label));
+      });
+      results = results.concat(await wzResolvePortoActive(blocks));
+
+      wzRenderActive(results);
+      if (bubbleEl) bubbleEl.classList.toggle('zero', results.length === 0);
+      if (updatedEl) {
+        updatedEl.textContent = 'atualizado às ' + new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+      }
+    } catch (err) {
+      if (updatedEl) updatedEl.textContent = 'erro ao atualizar';
+    }
+  }
+
+  function wzStartPanel() {
+    if (wzStarted) return;
+    wzStarted = true;
+    var panel = document.getElementById('wz-active-panel');
+    if (panel) {
+      panel.classList.add('show');
+      requestAnimationFrame(function () { panel.classList.add('visible'); });
+    }
+    wzLoadActive();
+    wzTimer = setInterval(wzLoadActive, REFRESH_MS);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    if (adminApp.classList.contains('show')) { wzStartPanel(); return; }
+    new MutationObserver(function (muts, obs) {
+      if (adminApp.classList.contains('show')) { obs.disconnect(); wzStartPanel(); }
+    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+  });
 })();
 </script>
 

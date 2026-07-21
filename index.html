@@ -1871,12 +1871,13 @@ input, textarea { cursor: text !important; }
   position: absolute;
   top: 50%; right: 54px;
   transform: translateY(-50%) translateX(6px);
-  min-width: 220px; max-width: 280px;
+  width: max-content;
+  min-width: 150px; max-width: min(340px, 86vw);
   background: #fff;
   border: 1px solid #e6e6e6;
   border-radius: 16px;
   box-shadow: 0 10px 34px rgba(0,0,0,0.16);
-  padding: 16px 18px;
+  padding: 13px 16px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1892,22 +1893,24 @@ input, textarea { cursor: text !important; }
   letter-spacing: .1em; color: #000; margin-bottom: 8px;
 }
 #wz-active-list {
-  display: flex; flex-direction: column; gap: 7px;
+  display: flex; flex-direction: column; gap: 5px;
 }
 .wz-active-item {
-  display: flex; flex-direction: column;
-  padding: 6px 9px; border: 1px solid #efefef; border-radius: 8px;
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 5px 9px; border: 1px solid #efefef; border-radius: 8px;
   background: #fafafa;
+  white-space: nowrap;
 }
 .wz-active-name { font-size: .78rem; font-weight: bold; color: #000; line-height: 1.2; }
 .wz-active-store {
   font-size: .6rem; font-weight: 600; color: #777;
-  text-transform: uppercase; letter-spacing: .04em; margin-top: 2px;
+  text-transform: uppercase; letter-spacing: .04em;
 }
+.wz-active-store::before { content: '·'; margin-right: 5px; color: #ccc; font-weight: 700; }
 #wz-active-empty { font-size: .72rem; font-weight: 600; color: #999; }
 .wz-active-sep {
-  text-align: center; font-size: .68rem; font-weight: 700;
-  letter-spacing: .3em; color: #ccc; margin: 2px 0;
+  text-align: center; font-size: .62rem; font-weight: 700;
+  letter-spacing: .3em; color: #ccc; margin: 0; line-height: 1;
 }
 #wz-active-updated { font-size: .56rem; color: #bbb; margin-top: 8px; text-align: right; }
 @media (max-width: 1024px) { #wz-active-panel { display: none !important; } }

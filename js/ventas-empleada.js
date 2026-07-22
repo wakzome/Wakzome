@@ -21,7 +21,7 @@
     'Catia Temtem', 'Débora Fernandes', 'Edna Melim', 'Filipa Rodrigues',
     'Isaltina Fernandes', 'Jacinta Alves', 'Joana Baptista', 'Marilia Silva',
     'Sandra Melim', 'Sandra Nunes', 'Djanice Lopes', 'Matilde Rodrigues',
-    'Sara Almeida', 'Claudia Nunes', 'Leonia Pereira', 'Laura Vasconcelos'
+    'Sara Almeida', 'Claudia Nunes', 'Leonia Pereira', 'Lara Igreja'
   ].map(function (n) { return n.toUpperCase(); });
 
   // ── Abrir overlay ──

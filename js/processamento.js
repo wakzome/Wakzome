@@ -3837,6 +3837,9 @@
            várias faturas ou várias linhas da mesma sessão) */
         var refMap = {}; /* ref → { a4, a5, sentKeys } */
         data.faturas.forEach(function(fat, fidIdx) {
+          /* Respeitar exclusão da guia definida na sessão de origem —
+             mesma regra aplicada à sessão activa em procBuildGuiaRows() */
+          if (fat.guiaInclude === false) return;
           var fid  = fidIdx + 1; /* 1-based, igual a faturaCount */
           (fat.rows || []).forEach(function(r) {
             if (!r.ref) return;

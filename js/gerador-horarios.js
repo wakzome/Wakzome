@@ -1398,24 +1398,18 @@
 
             const diffSemana = calcBancoDiff(p.id, realHrs);
 
-            const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null, contribs_semana: {} };
-            // Histórico completo por semana (pré-requisito: coluna contribs_semana
-            // em gh_banco_horas) — permite desfazer QUALQUER semana já publicada
-            // ao republicá-la, não apenas a mais recente. Isso evita duplicar ou
-            // perder contribuições quando várias semanas são publicadas fora de
-            // ordem para a mesma pessoa.
-            const contribs = { ...(registro.contribs_semana || {}) };
-            // Migração automática de registos antigos (só com o par único
-            // ultima_semana/saldo_semana) para o novo histórico, na primeira vez.
-            if (registro.ultima_semana && !(registro.ultima_semana in contribs)) {
-              contribs[registro.ultima_semana] = registro.saldo_semana || 0;
+            const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
+            let saldoBase = registro.saldo || 0;
+
+            // Único caso a rever: republicar esta MESMA semana (edição do que já
+            // estava publicado) — desfaz o que essa mesma semana tinha contribuído
+            // da última vez, antes de aplicar o novo valor. Não olha para nenhuma
+            // outra semana.
+            if (registro.ultima_semana === weekKey) {
+              saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
             }
 
-            const saldoBruto = registro.saldo || 0;
-            const contribAnterior = contribs[weekKey] || 0;
-            const saldoBase = Math.round((saldoBruto - contribAnterior) * 10) / 10;
             const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
-            contribs[weekKey] = diffSemana;
             S._banco[p.id] = novoSaldo;
 
             bancoUpdates.push(
@@ -1425,7 +1419,6 @@
                   saldo: novoSaldo,
                   saldo_semana: diffSemana,
                   ultima_semana: weekKey,
-                  contribs_semana: contribs,
                   updated_at: new Date().toISOString()
                 },
                 { onConflict: 'pessoa_id' }

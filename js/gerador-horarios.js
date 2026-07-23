@@ -1398,15 +1398,24 @@
 
             const diffSemana = calcBancoDiff(p.id, realHrs);
 
-            const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
-            let saldoBase = registro.saldo || 0;
-
-            // Si ya calculamos esta semana antes, restar el aporte anterior
-            if (registro.ultima_semana === weekKey) {
-              saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
+            const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null, contribs_semana: {} };
+            // Histórico completo por semana (pré-requisito: coluna contribs_semana
+            // em gh_banco_horas) — permite desfazer QUALQUER semana já publicada
+            // ao republicá-la, não apenas a mais recente. Isso evita duplicar ou
+            // perder contribuições quando várias semanas são publicadas fora de
+            // ordem para a mesma pessoa.
+            const contribs = { ...(registro.contribs_semana || {}) };
+            // Migração automática de registos antigos (só com o par único
+            // ultima_semana/saldo_semana) para o novo histórico, na primeira vez.
+            if (registro.ultima_semana && !(registro.ultima_semana in contribs)) {
+              contribs[registro.ultima_semana] = registro.saldo_semana || 0;
             }
 
+            const saldoBruto = registro.saldo || 0;
+            const contribAnterior = contribs[weekKey] || 0;
+            const saldoBase = Math.round((saldoBruto - contribAnterior) * 10) / 10;
             const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
+            contribs[weekKey] = diffSemana;
             S._banco[p.id] = novoSaldo;
 
             bancoUpdates.push(
@@ -1416,6 +1425,7 @@
                   saldo: novoSaldo,
                   saldo_semana: diffSemana,
                   ultima_semana: weekKey,
+                  contribs_semana: contribs,
                   updated_at: new Date().toISOString()
                 },
                 { onConflict: 'pessoa_id' }
@@ -1994,15 +2004,14 @@
     return h;
   }
 
-  // Diferença desta semana para o banco de horas: horasReais − 40, mas os dias
-  // perdoados (Baixa Médica e Licença não recuperável) só ANULAM défice — nunca
-  // criam crédito. Cada semana conta uma única vez, isoladamente; se as horas
-  // reais já atingem ou superam 40, o perdão não tem qualquer efeito.
+  // Diferença desta semana para o banco de horas. A meta semanal (40h) reduz-se
+  // 8h por cada dia de Baixa Médica ou de Licença não recuperável — essa é a
+  // ÚNICA forma como esses dias influenciam o banco. Com a meta já ajustada, o
+  // cálculo é o normal: horas reais − meta, sem qualquer tratamento especial.
+  // O botão de Baixa Médica nunca lê nem escreve no banco — só a meta muda.
   function calcBancoDiff(pid, realHrs) {
-    const base = Math.round((realHrs - 40) * 10) / 10;
-    if (base >= 0) return base;
-    const perdao = calcPerdaoHrs(pid);
-    return Math.round(Math.min(0, base + perdao) * 10) / 10;
+    const meta = Math.max(0, 40 - calcPerdaoHrs(pid));
+    return Math.round((realHrs - meta) * 10) / 10;
   }
 
   // ── COVERAGE PANEL — people active per hour, per day, per store ──
@@ -2160,26 +2169,36 @@
         dayShifts[day][seg][part] = inp.value.trim();
       }
     });
-    // Apply work-shift edits
+    // Apply work-shift edits — só marca 'changed' se a hora final for
+    // realmente diferente da que já lá estava. Evita que um commit disparado
+    // sem qualquer alteração real (ex.: um clique fora só para fechar o modo
+    // de edição) mexa no banco.
+    let changed = false;
     Object.entries(dayShifts).forEach(([day, segs]) => {
       const cell = S.schedule[pid]?.[day];
       if (!cell || cell.type !== 'work') return;
       const parts = Object.values(segs);
       const newShift = parts.map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
+      if (newShift !== cell.shift) changed = true;
       S.schedule[pid][day] = { ...cell, shift: newShift };
     });
     // Apply apoio-shift edits
     Object.entries(apoioEdits).forEach(([day, [t1, t2]]) => {
-      if (!S._apoioShifts?.[pid]?.[day]) return;
-      S._apoioShifts[pid][day].shift = normTime(t1) + '-' + normTime(t2);
+      const apoioCell = S._apoioShifts?.[pid]?.[day];
+      if (!apoioCell) return;
+      const newApoio = normTime(t1) + '-' + normTime(t2);
+      if (newApoio !== apoioCell.shift) changed = true;
+      apoioCell.shift = newApoio;
     });
-    // Update banco — always use current DB saldo as base, add weekly diff
-    if (!S._banco) S._banco = {};
-    const realHrs = calcPersonHrs(pid);
-    const diff = calcBancoDiff(pid, realHrs);
-    const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
-    const saldoVivo = Math.round((bancoBase + diff) * 10) / 10;
-    S._banco[pid] = saldoVivo;
+    // Só recalcula o banco se alguma hora mudou mesmo — nunca num commit vazio.
+    if (changed) {
+      if (!S._banco) S._banco = {};
+      const realHrs = calcPersonHrs(pid);
+      const diff = calcBancoDiff(pid, realHrs);
+      const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
+      const saldoVivo = Math.round((bancoBase + diff) * 10) / 10;
+      S._banco[pid] = saldoVivo;
+    }
     // Re-render
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);

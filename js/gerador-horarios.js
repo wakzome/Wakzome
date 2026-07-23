@@ -1396,7 +1396,7 @@
             // Si la persona no tiene horario esta semana, no tocar su saldo
             if (!tieneHorario) return;
 
-            const diffSemana = Math.round((realHrs - Math.max(0, 40 - calcPerdaoHrs(p.id))) * 10) / 10;
+            const diffSemana = calcBancoDiff(p.id, realHrs);
 
             const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
             let saldoBase = registro.saldo || 0;
@@ -1566,7 +1566,12 @@
           const cell = S.schedule[p.id]?.[day] || { type: 'na' };
 
           if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa' || cell.type === 'baixa_medica') {
-            const lbl = cell.type === 'ferias' ? 'FERIAS' : cell.type === 'baixa_medica' ? 'BAIXA MEDICA' : cell.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+            // Licença: o texto publicado tem de distinguir recuperável / não recuperável,
+            // senão essa escolha perde-se ao reabrir a semana publicada mais tarde.
+            const lbl = cell.type === 'ferias' ? 'FERIAS'
+              : cell.type === 'baixa_medica' ? 'BAIXA MEDICA'
+              : cell.type === 'baixa' ? (cell.recuperavel === false ? 'LICENÇA NAO REC.' : 'LICENÇA')
+              : 'FOLGA';
             rowA.push(lbl);
             rowB.push((cell.type === 'baixa' || cell.type === 'baixa_medica') ? '' : lbl);
           } else if (cell.type === 'work') {
@@ -1721,6 +1726,10 @@
             if (!S._personStores[person.id].includes(storeId)) S._personStores[person.id].push(storeId);
             if (!S._storeOrder[storeId].includes(person.id)) S._storeOrder[storeId].push(person.id);
 
+            // Tipos de ausência: uma vez lida de qualquer tabela/loja, tem sempre
+            // prioridade sobre trabalho/alias lido de outra tabela para o mesmo dia —
+            // nunca é a pessoa fica com estados diferentes consoante a loja.
+            const ABSENCE_TYPES_RD = ['folga', 'ferias', 'baixa', 'baixa_medica', 'na', 'fim_contrato'];
             DAYS_ORDER.forEach((day, di) => {
               const cellA = (rowA[di+1] || '').trim();
               const cellB = (rowB[di+1] || '').trim();
@@ -1730,21 +1739,31 @@
                 S.schedule[person.id][day] = { type: 'folga', shift: null, store: null };
               } else if (upper === 'FERIAS') {
                 S.schedule[person.id][day] = { type: 'ferias', shift: null, store: null };
+              } else if (upper === 'LICENÇA') {
+                // Sem sufixo no texto publicado → recuperável (também cobre ficheiros
+                // publicados antes desta distinção existir).
+                S.schedule[person.id][day] = { type: 'baixa', shift: null, store: null, recuperavel: true };
+              } else if (upper === 'LICENÇA NAO REC.' || upper === 'LICENÇA NÃO REC.' || upper === 'LICENÇA NAO REC' || upper === 'LICENÇA NÃO REC') {
+                S.schedule[person.id][day] = { type: 'baixa', shift: null, store: null, recuperavel: false };
+              } else if (upper === 'BAIXA MEDICA' || upper === 'BAIXA MÉDICA') {
+                S.schedule[person.id][day] = { type: 'baixa_medica', shift: null, store: null };
               } else if (cellA === '' && cellB === '') {
                 // leave as empty
               } else {
+                const cur = S.schedule[person.id][day];
+                // Ausência já lida (nesta ou noutra loja) nunca é substituída por
+                // trabalho/alias vindo do bloco de outra loja.
+                if (ABSENCE_TYPES_RD.includes(cur.type)) return;
                 // Check if it's an alias (another store name)
                 const aliasId = SHORT_TO_ID[upper.toLowerCase()];
                 if (aliasId && aliasId !== storeId) {
                   // Person working in another store — only set if not already set
-                  const cur = S.schedule[person.id][day];
                   if (cur.type === 'empty') {
                     S.schedule[person.id][day] = { type: 'work', shift: null, store: aliasId };
                   }
                 } else {
                   // Actual shift — join morning + afternoon with |
                   const shift = cellB ? (cellA + '|' + cellB) : cellA;
-                  const cur = S.schedule[person.id][day];
                   // Detect apoio: single short time slot (no cellB) and person already
                   // has a full shift assigned for this day from their primary store block
                   const isShortSlot = !cellB && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(cellA);
@@ -1975,6 +1994,17 @@
     return h;
   }
 
+  // Diferença desta semana para o banco de horas: horasReais − 40, mas os dias
+  // perdoados (Baixa Médica e Licença não recuperável) só ANULAM défice — nunca
+  // criam crédito. Cada semana conta uma única vez, isoladamente; se as horas
+  // reais já atingem ou superam 40, o perdão não tem qualquer efeito.
+  function calcBancoDiff(pid, realHrs) {
+    const base = Math.round((realHrs - 40) * 10) / 10;
+    if (base >= 0) return base;
+    const perdao = calcPerdaoHrs(pid);
+    return Math.round(Math.min(0, base + perdao) * 10) / 10;
+  }
+
   // ── COVERAGE PANEL — people active per hour, per day, per store ──
   // Counts how many people are working during each whole-hour slot, for each day,
   // independently per store. A person counts for an hour H in a store if any of their
@@ -2082,7 +2112,7 @@
 
   function updateBancoBadge(pid) {
     const realHrs = calcPersonHrs(pid);
-    const diff = Math.round((realHrs - Math.max(0, 40 - calcPerdaoHrs(pid))) * 10) / 10;
+    const diff = calcBancoDiff(pid, realHrs);
     const saldoBase = S._bancoBase?.[pid] ?? S._banco?.[pid] ?? 0;
     const saldoVivo = Math.round((saldoBase + diff) * 10) / 10;
     // Store updated value
@@ -2146,7 +2176,7 @@
     // Update banco — always use current DB saldo as base, add weekly diff
     if (!S._banco) S._banco = {};
     const realHrs = calcPersonHrs(pid);
-    const diff = Math.round((realHrs - Math.max(0, 40 - calcPerdaoHrs(pid))) * 10) / 10;
+    const diff = calcBancoDiff(pid, realHrs);
     const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
     const saldoVivo = Math.round((bancoBase + diff) * 10) / 10;
     S._banco[pid] = saldoVivo;

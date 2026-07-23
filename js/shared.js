@@ -767,7 +767,7 @@
         }
         const activeCls = isActiveNow ? ' tr-active-now' : '';
         html += `<tr class="${activeCls}">`;
-        html += `<td class="name" style="width:${colWidths[0]*12}px;text-align:center;justify-content:center;">
+        html += `<td class="name hps-person-name" data-hps-person="${escapeHtml(A[0]||'')}" style="width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
                   <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                   ${escapeHtml(A[0]||'')}
                  </td>`;
@@ -795,6 +795,7 @@
     }
     html += '</table>';
     document.getElementById('table-container').innerHTML = html;
+    hpsBindNameClicks(rows);
   }
 
   function isNowInSchedule(schedule){
@@ -813,5 +814,176 @@
   }
 
   function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ══════════════════════════════════════════════════════════════
+  //  MODAL: horário consolidado de UMA pessoa (só vista Porto Santo)
+  //  Ao clicar no nome, mostra um quadro novo só com essa pessoa —
+  //  os 7 dias da semana, cada um com a loja real e o horário, tirando
+  //  a confusão de a pessoa aparecer espalhada por várias tabelas.
+  // ══════════════════════════════════════════════════════════════
+  const HPS_TIME_RE = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/;
+  function hpsIsSchedule(v) { return HPS_TIME_RE.test((v || '').trim()); }
+
+  // Repete a mesma leitura de blocos que renderPortoSanto já faz, mas devolve
+  // dados estruturados em vez de HTML: { dayHeaderRow, stores:[{name, dateRow, people:[{name,A,B}]}] }
+  function hpsCollectStores(rows) {
+    const cols = Math.max(...rows.map(r => r.length));
+    const stores = [];
+    let dayHeaderRow = null;
+    let i = 0;
+    while (i < rows.length) {
+      const row = rows[i];
+      const firstCell = (row[0] || '').trim().toLowerCase();
+      if (firstCell === 'porto santo') {
+        if (!dayHeaderRow) dayHeaderRow = row;
+        i++;
+        const dateRow = rows[i] || [];
+        const store = { name: (dateRow[0] || '').trim(), dateRow, people: [] };
+        stores.push(store);
+        i++;
+        while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
+          store.people.push({ name: (rows[i][0] || '').trim(), A: rows[i], B: rows[i + 1] });
+          i += 2;
+        }
+        continue;
+      }
+      i++;
+    }
+    return { cols, dayHeaderRow: dayHeaderRow || [], stores };
+  }
+
+  function showPersonWeekModal(personLabel, rows) {
+    const { cols, dayHeaderRow, stores } = hpsCollectStores(rows);
+    const knownStoreNames = new Set(stores.map(s => s.name.toUpperCase()).filter(Boolean));
+
+    const appearances = stores
+      .map(s => ({ store: s.name, dateRow: s.dateRow, entry: s.people.find(p => p.name === personLabel) }))
+      .filter(x => x.entry);
+    if (!appearances.length) return;
+
+    const dias = [];
+    for (let c = 1; c < cols; c++) {
+      const dayName = (dayHeaderRow[c] || '').trim();
+      const date = (appearances[0].dateRow[c] || '').trim();
+      let loja = '', display = '', isWork = false;
+      let apoioLoja = '', apoioDisplay = '';
+
+      // 1) Turno principal = a loja onde AMBOS os segmentos (manhã e tarde) têm
+      //    formato de hora — um turno normal exporta sempre os dois. Um único
+      //    segmento solto (sem o 2.º) é reforço/apoio nessa loja, não o turno
+      //    principal — guarda-se à parte em vez de competir com o principal.
+      for (const ap of appearances) {
+        const top = (ap.entry.A[c] || '').trim();
+        const bot = (ap.entry.B[c] || '').trim();
+        if (hpsIsSchedule(top) && hpsIsSchedule(bot)) {
+          loja = ap.store; display = top + ' · ' + bot; isWork = true;
+        } else if (hpsIsSchedule(top) && !bot) {
+          apoioLoja = ap.store; apoioDisplay = top;
+        }
+      }
+      // Se não houver turno principal de 2 segmentos em lado nenhum, mas houver
+      // um único segmento solto, esse passa a ser o principal (não fica um
+      // "reforço" órfão sem turno a acompanhar).
+      if (!isWork && apoioDisplay) {
+        loja = apoioLoja; display = apoioDisplay; isWork = true;
+        apoioLoja = ''; apoioDisplay = '';
+      }
+      // 2) Sem horário em lado nenhum — a primeira palavra que não seja o nome
+      //    de outra loja (FOLGA, FÉRIAS, LICENÇA, BAIXA MEDICA, etc.).
+      if (!isWork) {
+        for (const ap of appearances) {
+          const top = (ap.entry.A[c] || '').trim();
+          if (top && !knownStoreNames.has(top.toUpperCase())) { display = top; loja = ap.store; break; }
+        }
+      }
+      // 3) Nada encontrado — mostra o que houver, nunca fica em branco sem explicação.
+      if (!display) {
+        const any = appearances.find(ap => (ap.entry.A[c] || '').trim());
+        if (any) { display = (any.entry.A[c] || '').trim(); loja = any.store; }
+      }
+      dias.push({ dayName, date, loja, display, isWork, apoioLoja, apoioDisplay });
+    }
+    hpsRenderModal(personLabel, dias);
+  }
+
+  function hpsEnsureStyles() {
+    if (document.getElementById('hps-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'hps-styles';
+    style.textContent = `
+      #hps-overlay { display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,.7); backdrop-filter:blur(3px); align-items:center; justify-content:center; }
+      #hps-overlay.open { display:flex; }
+      #hps-modal { background:#1a1a1a; color:#fff; border:1px solid #383838; border-radius:14px; width:min(94vw,480px); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.7); }
+      #hps-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #2e2e2e; flex-shrink:0; }
+      #hps-modal-title { font-size:.8rem; font-weight:bold; letter-spacing:.04em; color:#fff; }
+      #hps-modal-close { background:none; border:none; cursor:pointer; font-size:1.1rem; color:#888; line-height:1; padding:2px 6px; border-radius:6px; }
+      #hps-modal-close:hover { color:#fff; background:#333; }
+      #hps-modal-body { overflow-y:auto; padding:14px 16px; flex:1; scrollbar-width:thin; scrollbar-color:#444 #1a1a1a; }
+      .hps-day-row { display:flex; align-items:center; gap:10px; background:#222; border:1px solid #2e2e2e; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+      .hps-day-lbl { width:64px; flex-shrink:0; }
+      .hps-day-name { font-size:.72rem; font-weight:bold; letter-spacing:.06em; color:#fff; display:block; }
+      .hps-day-date { font-size:.62rem; color:#888; display:block; }
+      .hps-day-info { flex:1; text-align:right; }
+      .hps-day-store { font-size:.6rem; color:#888; text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
+      .hps-day-shift { font-size:.78rem; font-weight:600; color:#fff; }
+      .hps-day-shift.off { color:#888; font-style:italic; font-weight:normal; }
+      .hps-day-apoio { font-size:.64rem; color:#e67e22; margin-top:3px; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function hpsEnsureModal() {
+    hpsEnsureStyles();
+    let overlay = document.getElementById('hps-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'hps-overlay';
+    overlay.innerHTML = `
+      <div id="hps-modal">
+        <div id="hps-modal-header">
+          <div id="hps-modal-title"></div>
+          <button id="hps-modal-close">✕</button>
+        </div>
+        <div id="hps-modal-body"></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) hpsCloseModal(); });
+    document.getElementById('hps-modal-close').addEventListener('click', hpsCloseModal);
+    return overlay;
+  }
+
+  function hpsCloseModal() {
+    const overlay = document.getElementById('hps-overlay');
+    if (overlay) overlay.classList.remove('open');
+  }
+
+  function hpsRenderModal(personLabel, dias) {
+    const overlay = hpsEnsureModal();
+    document.getElementById('hps-modal-title').textContent = personLabel;
+    document.getElementById('hps-modal-body').innerHTML = dias.map(d => {
+      const off = !d.isWork;
+      return `<div class="hps-day-row">
+        <div class="hps-day-lbl">
+          <span class="hps-day-name">${escapeHtml(d.dayName)}</span>
+          <span class="hps-day-date">${escapeHtml(d.date)}</span>
+        </div>
+        <div class="hps-day-info">
+          ${d.isWork ? `<div class="hps-day-store">${escapeHtml(d.loja)}</div>` : ''}
+          <div class="hps-day-shift${off ? ' off' : ''}">${escapeHtml(d.display || '—')}</div>
+          ${d.apoioDisplay ? `<div class="hps-day-apoio">+ reforço ${escapeHtml(d.apoioLoja)}: ${escapeHtml(d.apoioDisplay)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    overlay.classList.add('open');
+  }
+
+  function hpsBindNameClicks(rows) {
+    document.querySelectorAll('#table-container .hps-person-name').forEach(td => {
+      td.addEventListener('click', () => {
+        const personLabel = td.dataset.hpsPerson;
+        if (personLabel) showPersonWeekModal(personLabel, rows);
+      });
+    });
+  }
 
 })();

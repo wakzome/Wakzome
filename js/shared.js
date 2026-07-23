@@ -979,7 +979,7 @@
     document.getElementById('hps-modal-body').innerHTML = dias.map(d => {
       const off = !d.isWork;
       const recebeHtml = (d.recebeApoio || []).map(r =>
-        `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(hpsStripHrs(r.name))}</div>`
+        `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(hpsStripHrs(r.name))}: ${escapeHtml(r.time)}</div>`
       ).join('');
       return `<div class="hps-day-row">
         <div class="hps-day-lbl">

@@ -824,6 +824,8 @@
   // ══════════════════════════════════════════════════════════════
   const HPS_TIME_RE = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/;
   function hpsIsSchedule(v) { return HPS_TIME_RE.test((v || '').trim()); }
+  const HPS_HRS_SUFFIX_RE = /\s*\d+(?:[.,]\d+)?\s*hrs?\.?\s*$/i;
+  function hpsStripHrs(name) { return (name || '').replace(HPS_HRS_SUFFIX_RE, '').trim(); }
 
   // Repete a mesma leitura de blocos que renderPortoSanto já faz, mas devolve
   // dados estruturados em vez de HTML: { dayHeaderRow, stores:[{name, dateRow, people:[{name,A,B}]}] }
@@ -925,7 +927,7 @@
     style.textContent = `
       #hps-overlay { display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,.7); backdrop-filter:blur(3px); align-items:center; justify-content:center; }
       #hps-overlay.open { display:flex; }
-      #hps-modal { background:#1a1a1a !important; border:1px solid #383838; border-radius:14px; width:min(94vw,480px); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.7); }
+      #hps-modal { background:#1a1a1a !important; border:1px solid #383838; border-radius:14px; width:min(94vw,560px); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.7); }
       #hps-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #2e2e2e; flex-shrink:0; }
       #hps-modal-title { font-size:.82rem; font-weight:800; letter-spacing:.04em; color:#fff !important; -webkit-text-fill-color:#fff !important; }
       #hps-modal-close { background:none; border:none; cursor:pointer; font-size:1.1rem; color:#888 !important; -webkit-text-fill-color:#888 !important; line-height:1; padding:2px 6px; border-radius:6px; }
@@ -977,7 +979,7 @@
     document.getElementById('hps-modal-body').innerHTML = dias.map(d => {
       const off = !d.isWork;
       const recebeHtml = (d.recebeApoio || []).map(r =>
-        `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(r.name)}: ${escapeHtml(r.time)}</div>`
+        `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(hpsStripHrs(r.name))}</div>`
       ).join('');
       return `<div class="hps-day-row">
         <div class="hps-day-lbl">

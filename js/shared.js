@@ -817,9 +817,10 @@
 
   // ══════════════════════════════════════════════════════════════
   //  MODAL: horário consolidado de UMA pessoa (só vista Porto Santo)
-  //  Ao clicar no nome, mostra um quadro novo só com essa pessoa —
-  //  os 7 dias da semana, cada um com a loja real e o horário, tirando
-  //  a confusão de a pessoa aparecer espalhada por várias tabelas.
+  //  Ao clicar no nome, mostra um quadro novo só com essa pessoa — os 7 dias
+  //  da semana, cada um com a loja real, o horário, e (se aplicável) o
+  //  reforço que ELA dá noutra loja ou o reforço que ELA recebe na sua.
+  //  NÃO altera em nada a tabela normal — só lê os mesmos dados já publicados.
   // ══════════════════════════════════════════════════════════════
   const HPS_TIME_RE = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/;
   function hpsIsSchedule(v) { return HPS_TIME_RE.test((v || '').trim()); }
@@ -855,6 +856,8 @@
   function showPersonWeekModal(personLabel, rows) {
     const { cols, dayHeaderRow, stores } = hpsCollectStores(rows);
     const knownStoreNames = new Set(stores.map(s => s.name.toUpperCase()).filter(Boolean));
+    const storeByName = {};
+    stores.forEach(s => { storeByName[s.name] = s; });
 
     const appearances = stores
       .map(s => ({ store: s.name, dateRow: s.dateRow, entry: s.people.find(p => p.name === personLabel) }))
@@ -866,12 +869,12 @@
       const dayName = (dayHeaderRow[c] || '').trim();
       const date = (appearances[0].dateRow[c] || '').trim();
       let loja = '', display = '', isWork = false;
-      let apoioLoja = '', apoioDisplay = '';
+      let apoioLoja = '', apoioDisplay = '';       // reforço que ELA dá noutra loja
+      const recebeApoio = [];                       // reforço que ELA recebe na sua loja
 
       // 1) Turno principal = a loja onde AMBOS os segmentos (manhã e tarde) têm
       //    formato de hora — um turno normal exporta sempre os dois. Um único
-      //    segmento solto (sem o 2.º) é reforço/apoio nessa loja, não o turno
-      //    principal — guarda-se à parte em vez de competir com o principal.
+      //    segmento solto é reforço/apoio nessa loja, não o turno principal.
       for (const ap of appearances) {
         const top = (ap.entry.A[c] || '').trim();
         const bot = (ap.entry.B[c] || '').trim();
@@ -881,9 +884,6 @@
           apoioLoja = ap.store; apoioDisplay = top;
         }
       }
-      // Se não houver turno principal de 2 segmentos em lado nenhum, mas houver
-      // um único segmento solto, esse passa a ser o principal (não fica um
-      // "reforço" órfão sem turno a acompanhar).
       if (!isWork && apoioDisplay) {
         loja = apoioLoja; display = apoioDisplay; isWork = true;
         apoioLoja = ''; apoioDisplay = '';
@@ -901,7 +901,19 @@
         const any = appearances.find(ap => (ap.entry.A[c] || '').trim());
         if (any) { display = (any.entry.A[c] || '').trim(); loja = any.store; }
       }
-      dias.push({ dayName, date, loja, display, isWork, apoioLoja, apoioDisplay });
+
+      // 4) Reforço que ELA recebe: outras pessoas na SUA loja, nesse dia, com o
+      //    padrão de 1 segmento só (apoio) — não ela própria.
+      if (isWork && loja && storeByName[loja]) {
+        storeByName[loja].people.forEach(p2 => {
+          if (p2.name === personLabel) return;
+          const t = (p2.A[c] || '').trim();
+          const b = (p2.B[c] || '').trim();
+          if (hpsIsSchedule(t) && !b) recebeApoio.push({ name: p2.name, time: t });
+        });
+      }
+
+      dias.push({ dayName, date, loja, display, isWork, apoioLoja, apoioDisplay, recebeApoio });
     }
     hpsRenderModal(personLabel, dias);
   }
@@ -915,19 +927,19 @@
       #hps-overlay.open { display:flex; }
       #hps-modal { background:#1a1a1a !important; border:1px solid #383838; border-radius:14px; width:min(94vw,480px); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.7); }
       #hps-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #2e2e2e; flex-shrink:0; }
-      #hps-modal-title { font-size:.8rem; font-weight:bold; letter-spacing:.04em; color:#fff !important; -webkit-text-fill-color:#fff !important; }
+      #hps-modal-title { font-size:.82rem; font-weight:800; letter-spacing:.04em; color:#fff !important; -webkit-text-fill-color:#fff !important; }
       #hps-modal-close { background:none; border:none; cursor:pointer; font-size:1.1rem; color:#888 !important; -webkit-text-fill-color:#888 !important; line-height:1; padding:2px 6px; border-radius:6px; }
       #hps-modal-close:hover { color:#fff !important; -webkit-text-fill-color:#fff !important; background:#333; }
       #hps-modal-body { overflow-y:auto; padding:14px 16px; flex:1; scrollbar-width:thin; scrollbar-color:#444 #1a1a1a; }
       .hps-day-row { display:flex; align-items:center; gap:10px; background:#222 !important; border:1px solid #2e2e2e; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
       .hps-day-lbl { width:64px; flex-shrink:0; }
-      .hps-day-name { font-size:.72rem; font-weight:bold; letter-spacing:.06em; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
-      .hps-day-date { font-size:.62rem; color:#888 !important; -webkit-text-fill-color:#888 !important; display:block; }
+      .hps-day-name { font-size:.74rem; font-weight:800; letter-spacing:.06em; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
+      .hps-day-date { font-size:.64rem; font-weight:700; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
       .hps-day-info { flex:1; text-align:right; }
-      .hps-day-store { font-size:.6rem; color:#888 !important; -webkit-text-fill-color:#888 !important; text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
-      .hps-day-shift { font-size:.78rem; font-weight:600; color:#fff !important; -webkit-text-fill-color:#fff !important; }
-      .hps-day-shift.off { color:#888 !important; -webkit-text-fill-color:#888 !important; font-style:italic; font-weight:normal; }
-      .hps-day-apoio { font-size:.64rem; color:#e67e22 !important; -webkit-text-fill-color:#e67e22 !important; margin-top:3px; }
+      .hps-day-store { font-size:.62rem; font-weight:700; color:#fff !important; -webkit-text-fill-color:#fff !important; text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
+      .hps-day-shift { font-size:.82rem; font-weight:800; color:#fff !important; -webkit-text-fill-color:#fff !important; }
+      .hps-day-shift.off { color:#fff !important; -webkit-text-fill-color:#fff !important; font-style:italic; font-weight:700; }
+      .hps-day-apoio, .hps-day-recebe { font-size:.68rem; font-weight:800; color:#fff !important; -webkit-text-fill-color:#fff !important; margin-top:3px; }
       .hps-person-name { text-decoration:underline; text-decoration-style:dotted; text-decoration-color:#999 !important; text-underline-offset:3px; transition:background .15s; }
       .hps-person-name:hover { background:#f2f2f2 !important; }
     `;
@@ -964,6 +976,9 @@
     document.getElementById('hps-modal-title').textContent = personLabel;
     document.getElementById('hps-modal-body').innerHTML = dias.map(d => {
       const off = !d.isWork;
+      const recebeHtml = (d.recebeApoio || []).map(r =>
+        `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(r.name)}: ${escapeHtml(r.time)}</div>`
+      ).join('');
       return `<div class="hps-day-row">
         <div class="hps-day-lbl">
           <span class="hps-day-name">${escapeHtml(d.dayName)}</span>
@@ -972,7 +987,8 @@
         <div class="hps-day-info">
           ${d.isWork ? `<div class="hps-day-store">${escapeHtml(d.loja)}</div>` : ''}
           <div class="hps-day-shift${off ? ' off' : ''}">${escapeHtml(d.display || '—')}</div>
-          ${d.apoioDisplay ? `<div class="hps-day-apoio">+ reforço ${escapeHtml(d.apoioLoja)}: ${escapeHtml(d.apoioDisplay)}</div>` : ''}
+          ${d.apoioDisplay ? `<div class="hps-day-apoio">⚡ reforço em ${escapeHtml(d.apoioLoja)}: ${escapeHtml(d.apoioDisplay)}</div>` : ''}
+          ${recebeHtml}
         </div>
       </div>`;
     }).join('');

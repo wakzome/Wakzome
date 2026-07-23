@@ -776,27 +776,19 @@
           const morning = (A[c] || '').trim().toUpperCase();
           const afternoon = (B[c] || '').trim().toUpperCase();
           let content = '';
-          let cellStyle = '';
-          const specialWords = ['FOLGA', 'FERIAS', 'LICENÇA', 'LICENÇA NAO REC.', 'BAIXA MEDICA'];
+          const specialWords = ['FOLGA', 'FERIAS'];
           const isSchedule = v => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(v.trim());
-          // Reforço/apoio: um único horário (sem 2.º segmento) nesta loja — a pessoa
-          // não é normalmente daqui, vem só reforçar. Sem isto destacado, ficava
-          // igual a qualquer outra referência "está noutra loja" e passava despercebido.
-          const isApoio = isSchedule(A[c] || '') && !(B[c] || '').trim();
           const nw = (isSchedule(A[c]||'')||specialWords.includes(morning)||morning==='') &&
                      (isSchedule(B[c]||'')||specialWords.includes(afternoon)||afternoon==='')
                      ? 'white-space:nowrap;' : '';
-          if (isApoio) {
-            content = `<span style="color:#fff !important;-webkit-text-fill-color:#fff !important;font-weight:800;">⚡ REFORÇO<br>${escapeHtml((A[c]||'').trim())}</span>`;
-            cellStyle = 'background:#e67e22 !important;';
-          } else if (morning && morning === afternoon && specialWords.includes(morning)) {
+          if (morning && morning === afternoon && specialWords.includes(morning)) {
             content = escapeHtml(morning);
           } else if (morning && afternoon) {
             content = `${escapeHtml(A[c])}<br>${escapeHtml(B[c])}`;
           } else {
             content = escapeHtml(A[c] || B[c] || '');
           }
-          html += `<td class="${cls}" style="width:${colWidths[c]*12}px;text-align:center;${nw}${cellStyle}">${content}</td>`;
+          html += `<td class="${cls}" style="width:${colWidths[c]*12}px;text-align:center;${nw}">${content}</td>`;
         }
         html += '</tr>'; i += 2;
       }
@@ -929,13 +921,13 @@
       #hps-modal-body { overflow-y:auto; padding:14px 16px; flex:1; scrollbar-width:thin; scrollbar-color:#444 #1a1a1a; }
       .hps-day-row { display:flex; align-items:center; gap:10px; background:#222 !important; border:1px solid #2e2e2e; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
       .hps-day-lbl { width:64px; flex-shrink:0; }
-      .hps-day-name { font-size:.74rem; font-weight:800; letter-spacing:.06em; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
-      .hps-day-date { font-size:.64rem; font-weight:700; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
+      .hps-day-name { font-size:.72rem; font-weight:bold; letter-spacing:.06em; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
+      .hps-day-date { font-size:.62rem; color:#888 !important; -webkit-text-fill-color:#888 !important; display:block; }
       .hps-day-info { flex:1; text-align:right; }
-      .hps-day-store { font-size:.62rem; font-weight:700; color:#fff !important; -webkit-text-fill-color:#fff !important; text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
-      .hps-day-shift { font-size:.82rem; font-weight:800; color:#fff !important; -webkit-text-fill-color:#fff !important; }
-      .hps-day-shift.off { color:#fff !important; -webkit-text-fill-color:#fff !important; font-style:italic; font-weight:700; }
-      .hps-day-apoio { font-size:.68rem; font-weight:800; color:#fff !important; -webkit-text-fill-color:#fff !important; margin-top:3px; }
+      .hps-day-store { font-size:.6rem; color:#888 !important; -webkit-text-fill-color:#888 !important; text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
+      .hps-day-shift { font-size:.78rem; font-weight:600; color:#fff !important; -webkit-text-fill-color:#fff !important; }
+      .hps-day-shift.off { color:#888 !important; -webkit-text-fill-color:#888 !important; font-style:italic; font-weight:normal; }
+      .hps-day-apoio { font-size:.64rem; color:#e67e22 !important; -webkit-text-fill-color:#e67e22 !important; margin-top:3px; }
       .hps-person-name { text-decoration:underline; text-decoration-style:dotted; text-decoration-color:#999 !important; text-underline-offset:3px; transition:background .15s; }
       .hps-person-name:hover { background:#f2f2f2 !important; }
     `;
@@ -980,7 +972,7 @@
         <div class="hps-day-info">
           ${d.isWork ? `<div class="hps-day-store">${escapeHtml(d.loja)}</div>` : ''}
           <div class="hps-day-shift${off ? ' off' : ''}">${escapeHtml(d.display || '—')}</div>
-          ${d.apoioDisplay ? `<div class="hps-day-apoio">⚡ reforço ${escapeHtml(d.apoioLoja)}: ${escapeHtml(d.apoioDisplay)}</div>` : ''}
+          ${d.apoioDisplay ? `<div class="hps-day-apoio">+ reforço ${escapeHtml(d.apoioLoja)}: ${escapeHtml(d.apoioDisplay)}</div>` : ''}
         </div>
       </div>`;
     }).join('');

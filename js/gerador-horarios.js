@@ -1679,20 +1679,10 @@
       const SHORT_TO_ID = {};
       STORES.forEach(st => { SHORT_TO_ID[(PS_STORE_SHORT[st.id] || st.id).toLowerCase()] = st.id; });
 
-      // Initialize schedule for all people.
-      // Fim de contrato tem sempre prioridade — mesmo padrão já usado na
-      // geração inicial (sub_stores) e ao adicionar pessoa a uma loja
-      // (addPersonToStore). Sem isto, reabrir uma semana publicada perdia
-      // esta marcação (a célula fica em branco no CSV publicado, logo cairia
-      // no ramo "leave as empty" do reparse) e o dia voltava a ficar
-      // editável e a contar como défice no banco de horas.
+      // Initialize schedule for all people
       PEOPLE.forEach(p => {
         S.schedule[p.id] = {};
-        DAYS_ORDER.forEach(day => {
-          S.schedule[p.id][day] = isContractEnded(p, day)
-            ? { type: 'fim_contrato', shift: null, store: null }
-            : { type: 'empty', shift: null, store: null };
-        });
+        DAYS_ORDER.forEach(day => { S.schedule[p.id][day] = { type: 'empty', shift: null, store: null }; });
       });
 
       let i = 0;
@@ -2013,15 +2003,36 @@
     return h;
   }
 
-  // Diferença desta semana para o banco de horas. A meta semanal (40h) reduz-se
-  // 8h por cada dia de Baixa Médica, de Fora de Contrato ou de Licença não
-  // recuperável — essa é a ÚNICA forma como esses dias influenciam o banco. Com
-  // a meta já ajustada, o cálculo é o normal: horas reais − meta, sem qualquer
-  // tratamento especial. Estes botões nunca leem nem escrevem no banco
-  // directamente — só a meta muda.
+  // Perdão que vem especificamente de limites de contrato (Fora de Contrato ou
+  // Fim de Contrato) — isolado do resto porque este perdão tem uma regra
+  // diferente da Baixa Médica/Licença (ver calcBancoDiff): pode cancelar
+  // défice, mas NUNCA pode criar crédito.
+  function calcPerdaoContratoHrs(pid) {
+    let h = 0;
+    DAYS.forEach(d => {
+      const cl = S.schedule[pid]?.[d];
+      if (!cl) return;
+      if (cl.type === 'fora_contrato' || cl.type === 'fim_contrato') h += 8;
+    });
+    return h;
+  }
+
+  // Diferença desta semana para o banco de horas.
+  // Baixa Médica e Licença não recuperável: reduzem a meta 8h/dia, e a partir
+  // daí horas reais − meta sem qualquer tratamento especial (comportamento
+  // original, inalterado).
+  // Fora de Contrato / Fim de Contrato: a pessoa não tem contrato nesses dias,
+  // por isso NUNCA podem mover o banco a favor dela — só existem para não a
+  // penalizar. Por isso este perdão é aplicado à parte e limitado a, no
+  // máximo, cancelar um défice que já existisse sem ele; nunca sobra para
+  // criar crédito.
   function calcBancoDiff(pid, realHrs) {
-    const meta = Math.max(0, 40 - calcPerdaoHrs(pid));
-    return Math.round((realHrs - meta) * 10) / 10;
+    const perdaoTotal    = calcPerdaoHrs(pid);
+    const perdaoContrato = calcPerdaoContratoHrs(pid);
+    const metaSemContrato   = Math.max(0, 40 - (perdaoTotal - perdaoContrato));
+    const diffSemContrato   = realHrs - metaSemContrato;
+    const perdaoAplicado    = Math.min(perdaoContrato, Math.max(0, -diffSemContrato));
+    return Math.round((diffSemContrato + perdaoAplicado) * 10) / 10;
   }
 
   // ── COVERAGE PANEL — people active per hour, per day, per store ──

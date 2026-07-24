@@ -1568,15 +1568,16 @@
         DAYS_ORDER.forEach(day => {
           const cell = S.schedule[p.id]?.[day] || { type: 'na' };
 
-          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa' || cell.type === 'baixa_medica') {
+          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa' || cell.type === 'baixa_medica' || cell.type === 'fora_contrato') {
             // Licença: o texto publicado tem de distinguir recuperável / não recuperável,
             // senão essa escolha perde-se ao reabrir a semana publicada mais tarde.
             const lbl = cell.type === 'ferias' ? 'FERIAS'
               : cell.type === 'baixa_medica' ? 'BAIXA MEDICA'
+              : cell.type === 'fora_contrato' ? 'FORA DE CONTRATO'
               : cell.type === 'baixa' ? (cell.recuperavel === false ? 'LICENÇA NAO REC.' : 'LICENÇA')
               : 'FOLGA';
             rowA.push(lbl);
-            rowB.push((cell.type === 'baixa' || cell.type === 'baixa_medica') ? '' : lbl);
+            rowB.push((cell.type === 'baixa' || cell.type === 'baixa_medica' || cell.type === 'fora_contrato') ? '' : lbl);
           } else if (cell.type === 'work') {
             // Check if person does apoio in this store on this day
             const apoioHere = S._apoioShifts?.[p.id]?.[day]?.store === sid;
@@ -1678,10 +1679,20 @@
       const SHORT_TO_ID = {};
       STORES.forEach(st => { SHORT_TO_ID[(PS_STORE_SHORT[st.id] || st.id).toLowerCase()] = st.id; });
 
-      // Initialize schedule for all people
+      // Initialize schedule for all people.
+      // Fim de contrato tem sempre prioridade — mesmo padrão já usado na
+      // geração inicial (sub_stores) e ao adicionar pessoa a uma loja
+      // (addPersonToStore). Sem isto, reabrir uma semana publicada perdia
+      // esta marcação (a célula fica em branco no CSV publicado, logo cairia
+      // no ramo "leave as empty" do reparse) e o dia voltava a ficar
+      // editável e a contar como défice no banco de horas.
       PEOPLE.forEach(p => {
         S.schedule[p.id] = {};
-        DAYS_ORDER.forEach(day => { S.schedule[p.id][day] = { type: 'empty', shift: null, store: null }; });
+        DAYS_ORDER.forEach(day => {
+          S.schedule[p.id][day] = isContractEnded(p, day)
+            ? { type: 'fim_contrato', shift: null, store: null }
+            : { type: 'empty', shift: null, store: null };
+        });
       });
 
       let i = 0;
@@ -1732,7 +1743,7 @@
             // Tipos de ausência: uma vez lida de qualquer tabela/loja, tem sempre
             // prioridade sobre trabalho/alias lido de outra tabela para o mesmo dia —
             // nunca é a pessoa fica com estados diferentes consoante a loja.
-            const ABSENCE_TYPES_RD = ['folga', 'ferias', 'baixa', 'baixa_medica', 'na', 'fim_contrato'];
+            const ABSENCE_TYPES_RD = ['folga', 'ferias', 'baixa', 'baixa_medica', 'fora_contrato', 'na', 'fim_contrato'];
             DAYS_ORDER.forEach((day, di) => {
               const cellA = (rowA[di+1] || '').trim();
               const cellB = (rowB[di+1] || '').trim();
@@ -1750,6 +1761,8 @@
                 S.schedule[person.id][day] = { type: 'baixa', shift: null, store: null, recuperavel: false };
               } else if (upper === 'BAIXA MEDICA' || upper === 'BAIXA MÉDICA') {
                 S.schedule[person.id][day] = { type: 'baixa_medica', shift: null, store: null };
+              } else if (upper === 'FORA DE CONTRATO') {
+                S.schedule[person.id][day] = { type: 'fora_contrato', shift: null, store: null };
               } else if (cellA === '' && cellB === '') {
                 // leave as empty
               } else {
@@ -1982,26 +1995,30 @@
   }
 
   // Horas neutralizadas no cálculo do banco, numa semana, para uma pessoa.
-  // Cada dia de Baixa Médica (sempre) e cada dia de Licença marcada como NÃO
-  // recuperável perdoam 8h da jornada semanal, evitando que esse dia gere défice.
-  // O efeito é limitado pela própria meta em Math.max(0, 40 - perdão), pelo que
-  // nunca cria crédito artificial no banco.
+  // Cada dia de Baixa Médica (sempre), cada dia de Fora de Contrato (sempre) e
+  // cada dia de Licença marcada como NÃO recuperável perdoam 8h da jornada
+  // semanal, evitando que esse dia gere défice. O efeito é limitado pela
+  // própria meta em Math.max(0, 40 - perdão), pelo que nunca cria crédito
+  // artificial no banco.
   function calcPerdaoHrs(pid) {
     let h = 0;
     DAYS.forEach(d => {
       const cl = S.schedule[pid]?.[d];
       if (!cl) return;
       if (cl.type === 'baixa_medica') h += 8;
+      else if (cl.type === 'fora_contrato') h += 8;
+      else if (cl.type === 'fim_contrato') h += 8;
       else if (cl.type === 'baixa' && cl.recuperavel === false) h += 8;
     });
     return h;
   }
 
   // Diferença desta semana para o banco de horas. A meta semanal (40h) reduz-se
-  // 8h por cada dia de Baixa Médica ou de Licença não recuperável — essa é a
-  // ÚNICA forma como esses dias influenciam o banco. Com a meta já ajustada, o
-  // cálculo é o normal: horas reais − meta, sem qualquer tratamento especial.
-  // O botão de Baixa Médica nunca lê nem escreve no banco — só a meta muda.
+  // 8h por cada dia de Baixa Médica, de Fora de Contrato ou de Licença não
+  // recuperável — essa é a ÚNICA forma como esses dias influenciam o banco. Com
+  // a meta já ajustada, o cálculo é o normal: horas reais − meta, sem qualquer
+  // tratamento especial. Estes botões nunca leem nem escrevem no banco
+  // directamente — só a meta muda.
   function calcBancoDiff(pid, realHrs) {
     const meta = Math.max(0, 40 - calcPerdaoHrs(pid));
     return Math.round((realHrs - meta) * 10) / 10;
@@ -2306,8 +2323,8 @@
             if (c2.type === 'fim_contrato') {
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-fim-contrato"><span class="gh-sh-line gh-fim-txt">fim de contrato</span></div></td>`;
             }
-            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa_medica' ? 'BAIXA MÉDICA' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
-            const cls = c2.type === 'baixa_medica' ? 'c-baixa-med' : (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
+            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa_medica' ? 'BAIXA MÉDICA' : c2.type === 'fora_contrato' ? 'FORA DE CONTRATO' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+            const cls = c2.type === 'baixa_medica' ? 'c-baixa-med' : c2.type === 'fora_contrato' ? 'c-fora-contrato' : (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
           }
           let cls = '', content = '';
@@ -2316,6 +2333,7 @@
           else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
           else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">LICENÇA</span>`; }
           else if (c2.type === 'baixa_medica') { cls = 'c-baixa-med'; content = `<span class="gh-sh-line">BAIXA MÉDICA</span>`; }
+          else if (c2.type === 'fora_contrato') { cls = 'c-fora-contrato'; content = `<span class="gh-sh-line">FORA DE CONTRATO</span>`; }
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
           else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
           else if (c2.type === 'work') {
@@ -2624,7 +2642,7 @@
     modal.style.display = '';
     document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
     const typeEl = document.getElementById('gh-me-type');
-    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'baixa_medica' ? 'baixa_medica' : c2.type === 'baixa' ? 'baixa' : c2.type === 'empty' ? 'work' : 'folga';
+    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'baixa_medica' ? 'baixa_medica' : c2.type === 'fora_contrato' ? 'fora_contrato' : c2.type === 'baixa' ? 'baixa' : c2.type === 'empty' ? 'work' : 'folga';
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
@@ -2704,7 +2722,7 @@
     const { pid, day } = editCtx;
     const type = document.getElementById('gh-me-type').value;
     if (type !== 'work') {
-      const cellType = type === 'ferias' ? 'ferias' : type === 'baixa_medica' ? 'baixa_medica' : type === 'baixa' ? 'baixa' : 'folga';
+      const cellType = type === 'ferias' ? 'ferias' : type === 'baixa_medica' ? 'baixa_medica' : type === 'fora_contrato' ? 'fora_contrato' : type === 'baixa' ? 'baixa' : 'folga';
       const nonWorkCell = { type: cellType, shift: null, store: null };
       // Licença: guardar se é recuperável (default true → mantém o fluxo actual do banco).
       // Só 'não recuperável' (recuperavel === false) neutraliza o banco de horas.
@@ -3110,6 +3128,8 @@
         #tab-gerador .c-na .gh-sh-line     { color:#e0e0e0; }
         #tab-gerador .c-baixa-med { background:#eef2fb; }
         #tab-gerador .c-baixa-med .gh-sh-line { color:#3a4a8c; font-style:italic; }
+        #tab-gerador .c-fora-contrato { background:#f4f0fa; }
+        #tab-gerador .c-fora-contrato .gh-sh-line { color:#5b4b8a; font-style:italic; }
         #tab-gerador .c-elsewhere { background:#f5f5f5; }
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
@@ -3328,6 +3348,7 @@
               <option value="ferias">FÉRIAS</option>
               <option value="baixa">Licença</option>
               <option value="baixa_medica">Baixa Médica</option>
+              <option value="fora_contrato">Fora de Contrato</option>
             </select>
             <select id="gh-me-shift" style="display:none">
               <option value="10:00-13:00|14:00-19:00">[A]</option>
@@ -3356,6 +3377,7 @@
                 <button class="gh-pill gh-pill-tipo" data-val="ferias">Férias</button>
                 <button class="gh-pill gh-pill-tipo" data-val="baixa">Licença</button>
                 <button class="gh-pill gh-pill-tipo" data-val="baixa_medica">Baixa Médica</button>
+                <button class="gh-pill gh-pill-tipo" data-val="fora_contrato">Fora de Contrato</button>
               </div>
             </div>
 
@@ -3422,7 +3444,7 @@
             () => {
               // Cancelar: repor o pill no tipo actual da célula, sem alterar nada.
               const cur = (editCtx && S.schedule[editCtx.pid]?.[editCtx.day]?.type) || 'folga';
-              const mapped = cur === 'work' ? 'work' : cur === 'ferias' ? 'ferias' : cur === 'baixa_medica' ? 'baixa_medica' : cur === 'baixa' ? 'baixa' : 'folga';
+              const mapped = cur === 'work' ? 'work' : cur === 'ferias' ? 'ferias' : cur === 'baixa_medica' ? 'baixa_medica' : cur === 'fora_contrato' ? 'fora_contrato' : cur === 'baixa' ? 'baixa' : 'folga';
               ghSyncPillGroup('gh-me-type-btns', mapped);
             }
           );

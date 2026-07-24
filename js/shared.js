@@ -1298,7 +1298,7 @@
       document.body.appendChild(badge);
       document.getElementById('hav-ult-close').addEventListener('click', () => badge.classList.remove('show'));
     }
-    document.getElementById('hav-ult-text').innerHTML = 'Última semana publicada<br><b>' + escapeHtml(havUltimaFormatLabel(semanaISO)) + '</b>';
+    document.getElementById('hav-ult-text').innerHTML = 'Horários – última semana publicada<br><b>' + escapeHtml(havUltimaFormatLabel(semanaISO)) + '</b>';
     badge.classList.add('show');
   }
 

@@ -170,7 +170,11 @@
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: [],
-      _personStores: {}, _storeOrder: {}
+      _personStores: {}, _storeOrder: {},
+      // pid → contribuição que ESTA semana já tem dentro do saldo do banco.
+      // Preenchido ao abrir uma semana publicada para edição (derivado do
+      // próprio horário carregado) e actualizado a cada publicação.
+      _contribSemana: {}
     };
   }
   let S = blank();
@@ -1392,25 +1396,37 @@
             // Calcular horas reales de esta persona en esta semana
             const realHrs = calcPersonHrs(p.id);
             const tieneHorario = DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work');
+            const temBaseline = S._contribSemana && typeof S._contribSemana[p.id] === 'number';
 
-            // Si la persona no tiene horario esta semana, no tocar su saldo
-            if (!tieneHorario) return;
+            // Sem horário nesta semana: só há algo a fazer se a pessoa TINHA
+            // contribuição desta mesma semana (foi removida ao editar) — nesse
+            // caso essa contribuição é desfeita. Caso contrário, não tocar.
+            if (!tieneHorario && !temBaseline) return;
 
-            const diffSemana = calcBancoDiff(p.id, realHrs);
+            const diffSemana = tieneHorario ? calcBancoDiff(p.id, realHrs) : 0;
 
             const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
             let saldoBase = registro.saldo || 0;
 
-            // Único caso a rever: republicar esta MESMA semana (edição do que já
-            // estava publicado) — desfaz o que essa mesma semana tinha contribuído
-            // da última vez, antes de aplicar o novo valor. Não olha para nenhuma
-            // outra semana.
-            if (registro.ultima_semana === weekKey) {
+            // Reverter o que ESTA semana já contribuiu, antes de aplicar o novo
+            // valor — para que republicar sem alterações tenha efeito zero:
+            // 1º) baseline em memória: derivada do próprio horário carregado ao
+            //     abrir a semana publicada (cobre republicar QUALQUER semana,
+            //     mesmo depois de outras terem sido publicadas entretanto);
+            // 2º) sem baseline: comportamento antigo — só quando esta é a mesma
+            //     semana que a última registada na BD.
+            if (temBaseline) {
+              saldoBase = Math.round((saldoBase - S._contribSemana[p.id]) * 10) / 10;
+            } else if (registro.ultima_semana === weekKey) {
               saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
             }
 
             const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
             S._banco[p.id] = novoSaldo;
+            if (!S._bancoBase) S._bancoBase = {};
+            S._bancoBase[p.id] = novoSaldo;
+            if (!S._contribSemana) S._contribSemana = {};
+            S._contribSemana[p.id] = diffSemana;
 
             bancoUpdates.push(
               sb.from('gh_banco_horas').upsert(
@@ -1793,6 +1809,20 @@
       wStep = 3; // jump straight to schedule view
       S._isEditing = true; // flag: editando horario publicado
       await loadIncidencias();
+      // Memorizar quanto é que ESTA semana, tal como está publicada, já
+      // contribuiu para o banco de cada pessoa. Ao republicar, o saldo
+      // recalcula-se como: saldo − contribuição antiga + contribuição nova.
+      // Se nada mudar, o efeito líquido é exactamente zero — independentemente
+      // de que outras semanas tenham sido publicadas entretanto. Deriva-se do
+      // próprio horário acabado de carregar: não se consulta nenhuma outra
+      // semana nem nenhum histórico.
+      S._contribSemana = {};
+      PEOPLE.forEach(p => {
+        if (!S.schedule[p.id]) return;
+        const temTrabalho = DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work');
+        if (!temTrabalho) return;
+        S._contribSemana[p.id] = calcBancoDiff(p.id, calcPersonHrs(p.id));
+      });
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       showSchedule(active);
 
@@ -1866,6 +1896,7 @@
       _storeOrder: S._storeOrder,
       _folgasDirigidas: S._folgasDirigidas,
       _apoioShifts: S._apoioShifts || {},
+      _contribSemana: S._contribSemana || {},
     };
   }
 
@@ -1923,6 +1954,7 @@
     S._storeOrder = d._storeOrder || {};
     S._folgasDirigidas = d._folgasDirigidas || {};
     S._apoioShifts = d._apoioShifts || {};
+    S._contribSemana = d._contribSemana || {};
     await loadKnowledgeBase();
     await loadIncidencias();
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -2160,7 +2192,10 @@
     const realHrs = calcPersonHrs(pid);
     const diff = calcBancoDiff(pid, realHrs);
     const saldoBase = S._bancoBase?.[pid] ?? S._banco?.[pid] ?? 0;
-    const saldoVivo = Math.round((saldoBase + diff) * 10) / 10;
+    // Ao editar uma semana já publicada, o saldo da BD já inclui a contribuição
+    // desta semana — subtraí-la evita contá-la em duplicado no valor "vivo".
+    const contribAntiga = (S._contribSemana && typeof S._contribSemana[pid] === 'number') ? S._contribSemana[pid] : 0;
+    const saldoVivo = Math.round((saldoBase - contribAntiga + diff) * 10) / 10;
     // Store updated value
     if (!S._banco) S._banco = {};
     S._banco[pid] = saldoVivo;
@@ -2233,7 +2268,10 @@
       const realHrs = calcPersonHrs(pid);
       const diff = calcBancoDiff(pid, realHrs);
       const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
-      const saldoVivo = Math.round((bancoBase + diff) * 10) / 10;
+      // Mesma regra do updateBancoBadge: numa semana já publicada, o saldo da
+      // BD já contém a contribuição desta semana — não a contar duas vezes.
+      const contribAntiga = (S._contribSemana && typeof S._contribSemana[pid] === 'number') ? S._contribSemana[pid] : 0;
+      const saldoVivo = Math.round((bancoBase - contribAntiga + diff) * 10) / 10;
       S._banco[pid] = saldoVivo;
     }
     // Re-render

@@ -156,6 +156,7 @@
         currentStore = data.tienda;
         window._currentStoreGlobal = data.tienda;
         window._currentEmployeeName = (data.nombre || '').trim().toUpperCase();
+        if (data.tienda === 'porto santo' && typeof havPrefetch === 'function') havPrefetch();
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
           showGreeting(data.nombre || data.tienda, function() {
@@ -1034,6 +1035,15 @@
     } catch (e) { return { ativo: false, mensagem: '' }; }
   }
 
+  // Pré-carregamento: lançado logo após o login (em paralelo com a animação de
+  // entrada + carregamento do horário), para que quando o dashboard aparecer
+  // os dados do aviso já estejam prontos e o popup surja sem espera extra.
+  let havPrefetchPromise = null;
+  function havPrefetch() {
+    if (!havPrefetchPromise) havPrefetchPromise = havLoad().catch(() => ({ ativo: false, mensagem: '' }));
+    return havPrefetchPromise;
+  }
+
   async function havSave(ativo, mensagem) {
     const sb = await havGetSB();
     if (!sb) return false;
@@ -1180,7 +1190,7 @@
     s.textContent = [
       '#hav-view-overlay{display:none;position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;}',
       '#hav-view-overlay.open{display:flex;}',
-      '#hav-view-modal{background:#1a1a1a!important;border:1px solid #383838;border-radius:14px;width:min(94vw,480px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}',
+      '#hav-view-modal{background:#1a1a1a!important;border:1px solid #383838;border-radius:14px;width:min(94vw,760px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}',
       '#hav-view-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid #2e2e2e;flex-shrink:0;}',
       '#hav-view-title{font-size:.82rem;font-weight:800;letter-spacing:.06em;color:#fff!important;-webkit-text-fill-color:#fff!important;}',
       '#hav-view-close{background:none;border:none;cursor:pointer;font-size:1.1rem;color:#888!important;-webkit-text-fill-color:#888!important;line-height:1;padding:2px 6px;border-radius:6px;}',
@@ -1193,7 +1203,7 @@
   async function havCheckAndShow() {
     if (havShownThisSession) return;
     let cur;
-    try { cur = await havLoad(); } catch (e) { return; }
+    try { cur = await havPrefetch(); } catch (e) { return; }
     if (!cur.ativo || !cur.mensagem || !cur.mensagem.trim()) return;
     havShownThisSession = true;
     havEnsureViewStyles();

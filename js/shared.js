@@ -464,6 +464,7 @@
     }
 
     window._lastBlocks = finalBlocks;
+    if (store === 'porto santo') havCheckAndShow();
     startShiftCountdown(currentStore);
     document.getElementById('table-container').style.display='flex';
 
@@ -1004,6 +1005,215 @@
         if (personLabel) showPersonWeekModal(personLabel, rows);
       });
     });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  AVISO PORTO SANTO — mensagem flutuante editável pelo admin
+  //  · Tabela Supabase: porto_santo_aviso (linha única, id=1)
+  //  · Admin: modal com switch ativo/inativo + textarea + guardar
+  //  · Loja: ao entrar em Porto Santo, se ativo=true, mostra a mensagem
+  // ══════════════════════════════════════════════════════════════
+  const HAV_TABLE = 'porto_santo_aviso';
+
+  async function havGetSB() {
+    if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
+    }
+    return null;
+  }
+
+  async function havLoad() {
+    const sb = await havGetSB();
+    if (!sb) return { ativo: false, mensagem: '' };
+    try {
+      const { data, error } = await sb.from(HAV_TABLE).select('ativo,mensagem').eq('id', 1).limit(1);
+      if (error || !data || !data.length) return { ativo: false, mensagem: '' };
+      return { ativo: !!data[0].ativo, mensagem: data[0].mensagem || '' };
+    } catch (e) { return { ativo: false, mensagem: '' }; }
+  }
+
+  async function havSave(ativo, mensagem) {
+    const sb = await havGetSB();
+    if (!sb) return false;
+    try {
+      const { error } = await sb.from(HAV_TABLE).upsert({
+        id: 1, ativo: ativo, mensagem: mensagem, updated_at: new Date().toISOString()
+      });
+      return !error;
+    } catch (e) { return false; }
+  }
+
+  /* ── ADMIN: modal de edição ── */
+  function havEnsureAdminStyles() {
+    if (document.getElementById('hav-adm-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'hav-adm-styles';
+    s.textContent = [
+      '#hav-adm-overlay{display:none;position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);align-items:center;justify-content:center;}',
+      '#hav-adm-overlay.open{display:flex;}',
+      '#hav-adm-modal{background:#1a1a1a!important;border:1px solid #383838;border-radius:14px;width:min(94vw,480px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}',
+      '#hav-adm-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 20px 12px;border-bottom:1px solid #2e2e2e;flex-shrink:0;}',
+      '#hav-adm-title{font-size:.82rem;font-weight:800;letter-spacing:.04em;color:#fff!important;-webkit-text-fill-color:#fff!important;white-space:nowrap;}',
+      '#hav-adm-switch-row{display:flex;align-items:center;gap:8px;margin-left:auto;}',
+      '#hav-adm-switch-lbl{font-size:.68rem;font-weight:700;color:rgba(255,255,255,.7)!important;-webkit-text-fill-color:rgba(255,255,255,.7)!important;white-space:nowrap;}',
+      '.hav-switch{position:relative;width:38px;height:20px;display:inline-block;flex-shrink:0;}',
+      '.hav-switch input{opacity:0;width:0;height:0;position:absolute;}',
+      '.hav-slider{position:absolute;inset:0;background:#555;border-radius:20px;cursor:pointer;transition:background .2s;}',
+      '.hav-slider:before{content:"";position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .2s;}',
+      '#hav-adm-chk:checked+.hav-slider{background:#2a5a2a;}',
+      '#hav-adm-chk:checked+.hav-slider:before{transform:translateX(18px);}',
+      '#hav-adm-close{background:none;border:none;cursor:pointer;font-size:1.1rem;color:#888!important;-webkit-text-fill-color:#888!important;line-height:1;padding:2px 6px;border-radius:6px;flex-shrink:0;}',
+      '#hav-adm-close:hover{color:#fff!important;-webkit-text-fill-color:#fff!important;background:#333;}',
+      '#hav-adm-body{overflow-y:auto;padding:16px 20px;flex:1;}',
+      '#hav-adm-textarea{width:100%;min-height:140px;border:1px solid #383838;border-radius:8px;padding:10px 12px;font-size:.85rem;font-family:\'MontserratLight\',sans-serif;color:#fff!important;-webkit-text-fill-color:#fff!important;background:#222!important;resize:vertical;box-sizing:border-box;}',
+      '#hav-adm-textarea::placeholder{color:#777!important;-webkit-text-fill-color:#777!important;}',
+      '#hav-adm-textarea:focus{outline:none;border-color:#555;}',
+      '#hav-adm-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-top:1px solid #2e2e2e;flex-shrink:0;}',
+      '#hav-adm-save-msg{font-size:.68rem;font-weight:700;color:#5caa5c!important;-webkit-text-fill-color:#5caa5c!important;}',
+      '#hav-adm-save-btn{font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:8px 18px;border-radius:8px;border:1px solid #fff;background:#fff!important;color:#111!important;-webkit-text-fill-color:#111!important;transition:opacity .15s;}',
+      '#hav-adm-save-btn:hover{opacity:.85;}',
+      '#hav-adm-save-btn:disabled{opacity:.4;cursor:default;}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  function havEnsureAdminModal() {
+    let overlay = document.getElementById('hav-adm-overlay');
+    if (overlay) return overlay;
+    havEnsureAdminStyles();
+    overlay = document.createElement('div');
+    overlay.id = 'hav-adm-overlay';
+    overlay.innerHTML = `<div id="hav-adm-modal">
+      <div id="hav-adm-header">
+        <span id="hav-adm-title">aviso · porto santo</span>
+        <div id="hav-adm-switch-row">
+          <span id="hav-adm-switch-lbl">ativo</span>
+          <label class="hav-switch">
+            <input type="checkbox" id="hav-adm-chk">
+            <span class="hav-slider"></span>
+          </label>
+        </div>
+        <button id="hav-adm-close" title="fechar">&times;</button>
+      </div>
+      <div id="hav-adm-body">
+        <textarea id="hav-adm-textarea" placeholder="mensagem que vai aparecer às funcionárias de porto santo ao entrarem…"></textarea>
+      </div>
+      <div id="hav-adm-footer">
+        <span id="hav-adm-save-msg"></span>
+        <button id="hav-adm-save-btn">guardar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) havCloseAdminModal(); });
+    document.getElementById('hav-adm-close').addEventListener('click', havCloseAdminModal);
+    document.getElementById('hav-adm-save-btn').addEventListener('click', havHandleSave);
+    return overlay;
+  }
+
+  function havCloseAdminModal() {
+    const overlay = document.getElementById('hav-adm-overlay');
+    if (overlay) overlay.classList.remove('open');
+  }
+
+  async function havHandleSave() {
+    const btn   = document.getElementById('hav-adm-save-btn');
+    const msgEl = document.getElementById('hav-adm-save-msg');
+    const ativo = document.getElementById('hav-adm-chk').checked;
+    const mensagem = document.getElementById('hav-adm-textarea').value;
+    btn.disabled = true;
+    msgEl.textContent = 'a guardar…';
+    const ok = await havSave(ativo, mensagem);
+    btn.disabled = false;
+    msgEl.textContent = ok ? '✓ guardado' : 'erro ao guardar';
+    if (ok) setTimeout(() => { if (msgEl.textContent === '✓ guardado') msgEl.textContent = ''; }, 2500);
+  }
+
+  async function havOpenAdmin() {
+    const overlay = havEnsureAdminModal();
+    const chk = document.getElementById('hav-adm-chk');
+    const ta  = document.getElementById('hav-adm-textarea');
+    document.getElementById('hav-adm-save-msg').textContent = '';
+    chk.checked = false;
+    ta.value = '';
+    overlay.classList.add('open');
+    const cur = await havLoad();
+    chk.checked = !!cur.ativo;
+    ta.value = cur.mensagem || '';
+  }
+
+  window._hAvisoAdmin = { open: havOpenAdmin };
+
+  /* ── ADMIN: botão "aviso" só visível com Porto Santo selecionado ── */
+  (function havWireAdminButton() {
+    const sel = document.getElementById('h-store-select');
+    if (!sel) return;
+    function sync() {
+      const host = document.getElementById('h-store-selector');
+      let btn = document.getElementById('hav-adm-open-btn');
+      if (sel.value === 'porto santo') {
+        if (!btn && host) {
+          btn = document.createElement('button');
+          btn.id = 'hav-adm-open-btn';
+          btn.type = 'button';
+          btn.textContent = '📢 aviso porto santo';
+          btn.style.cssText = 'margin-left:8px;padding:7px 14px;font-size:.72rem;font-weight:700;letter-spacing:.04em;cursor:pointer;border-radius:8px;font-family:inherit;background:#111!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border:1px solid #111!important;';
+          btn.addEventListener('click', () => window._hAvisoAdmin.open());
+          host.appendChild(btn);
+        }
+      } else if (btn) {
+        btn.remove();
+      }
+    }
+    sel.addEventListener('change', sync);
+    sync();
+  })();
+
+  /* ── LOJA: janela flutuante ao entrar (só Porto Santo, só se ativo) ── */
+  let havShownThisSession = false;
+
+  function havEnsureViewStyles() {
+    if (document.getElementById('hav-view-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'hav-view-styles';
+    s.textContent = [
+      '#hav-view-overlay{display:none;position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;}',
+      '#hav-view-overlay.open{display:flex;}',
+      '#hav-view-modal{background:#1a1a1a!important;border:1px solid #383838;border-radius:14px;width:min(94vw,480px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}',
+      '#hav-view-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid #2e2e2e;flex-shrink:0;}',
+      '#hav-view-title{font-size:.82rem;font-weight:800;letter-spacing:.06em;color:#fff!important;-webkit-text-fill-color:#fff!important;}',
+      '#hav-view-close{background:none;border:none;cursor:pointer;font-size:1.1rem;color:#888!important;-webkit-text-fill-color:#888!important;line-height:1;padding:2px 6px;border-radius:6px;}',
+      '#hav-view-close:hover{color:#fff!important;-webkit-text-fill-color:#fff!important;background:#333;}',
+      '#hav-view-body{overflow-y:auto;padding:18px 20px;flex:1;font-size:.85rem;font-weight:700;line-height:1.5;color:#fff!important;-webkit-text-fill-color:#fff!important;white-space:pre-wrap;}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  async function havCheckAndShow() {
+    if (havShownThisSession) return;
+    let cur;
+    try { cur = await havLoad(); } catch (e) { return; }
+    if (!cur.ativo || !cur.mensagem || !cur.mensagem.trim()) return;
+    havShownThisSession = true;
+    havEnsureViewStyles();
+    let overlay = document.getElementById('hav-view-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'hav-view-overlay';
+      overlay.innerHTML = `<div id="hav-view-modal">
+        <div id="hav-view-header">
+          <span id="hav-view-title">aviso</span>
+          <button id="hav-view-close" title="fechar">&times;</button>
+        </div>
+        <div id="hav-view-body"></div>
+      </div>`;
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+      document.getElementById('hav-view-close').addEventListener('click', () => overlay.classList.remove('open'));
+    }
+    document.getElementById('hav-view-body').textContent = cur.mensagem;
+    overlay.classList.add('open');
   }
 
 })();

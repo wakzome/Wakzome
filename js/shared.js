@@ -157,6 +157,7 @@
         window._currentStoreGlobal = data.tienda;
         window._currentEmployeeName = (data.nombre || '').trim().toUpperCase();
         if (data.tienda === 'porto santo' && typeof havPrefetch === 'function') havPrefetch();
+        if (data.tienda === 'porto santo' && typeof havUltimaPrefetch === 'function') havUltimaPrefetch();
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
           showGreeting(data.nombre || data.tienda, function() {
@@ -466,6 +467,7 @@
 
     window._lastBlocks = finalBlocks;
     if (store === 'porto santo') havCheckAndShow();
+    if (store === 'porto santo') havUltimaCheckAndShow();
     startShiftCountdown(currentStore);
     document.getElementById('table-container').style.display='flex';
 
@@ -1224,6 +1226,79 @@
     }
     document.getElementById('hav-view-body').textContent = cur.mensagem;
     overlay.classList.add('open');
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ÚLTIMA SEMANA PUBLICADA — badge discreto (só Porto Santo)
+  //  · Tabela Supabase: porto_santo_ultima_semana (linha única, id=1,
+  //    gravada pelo gerador-horarios.js sempre que publica uma semana)
+  //  · Reaproveita havGetSB() já existente — não cria ligação nova
+  //  · Mesma mecânica do aviso: aparece uma vez por sessão, ao fechar
+  //    só volta a aparecer numa sessão nova (novo login)
+  // ══════════════════════════════════════════════════════════════
+  const HAV_ULTIMA_TABLE = 'porto_santo_ultima_semana';
+  const HAV_BASE_DATE = new Date('2026-01-05T00:00:00');
+
+  async function havUltimaSemanaLoad() {
+    const sb = await havGetSB();
+    if (!sb) return null;
+    try {
+      const { data, error } = await sb.from(HAV_ULTIMA_TABLE).select('semana_inicio').eq('id', 1).limit(1);
+      if (error || !data || !data.length || !data[0].semana_inicio) return null;
+      return data[0].semana_inicio; // 'YYYY-MM-DD'
+    } catch (e) { return null; }
+  }
+
+  let havUltimaPrefetchPromise = null;
+  function havUltimaPrefetch() {
+    if (!havUltimaPrefetchPromise) havUltimaPrefetchPromise = havUltimaSemanaLoad().catch(() => null);
+    return havUltimaPrefetchPromise;
+  }
+
+  function havUltimaFormatLabel(semanaInicioISO) {
+    const start = new Date(semanaInicioISO + 'T00:00:00');
+    const weekNum = Math.round((start - HAV_BASE_DATE) / (7 * 86400000)) + 1;
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const fmt = (d) => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+    return 'Semana ' + weekNum + ' · ' + fmt(start) + ' – ' + fmt(end);
+  }
+
+  function havUltimaEnsureStyles() {
+    if (document.getElementById('hav-ult-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'hav-ult-styles';
+    s.textContent = [
+      '#hav-ult-badge{display:none;position:fixed;bottom:18px;right:18px;z-index:9400;align-items:center;gap:10px;background:#1a1a1a!important;border:1px solid #383838;border-radius:50px;padding:10px 14px 10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.35);max-width:min(88vw,340px);}',
+      '#hav-ult-badge.show{display:flex;}',
+      '#hav-ult-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;flex-shrink:0;animation:hav-ult-pulse 1.8s ease-in-out infinite;}',
+      '@keyframes hav-ult-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(76,175,80,.5);}50%{opacity:.55;box-shadow:0 0 0 5px rgba(76,175,80,0);}}',
+      '#hav-ult-text{font-size:.72rem;font-weight:700;color:#fff!important;-webkit-text-fill-color:#fff!important;line-height:1.35;}',
+      '#hav-ult-text b{font-weight:800;}',
+      '#hav-ult-close{background:none;border:none;cursor:pointer;color:#888!important;-webkit-text-fill-color:#888!important;font-size:1rem;line-height:1;padding:2px 4px;border-radius:5px;flex-shrink:0;margin-left:2px;}',
+      '#hav-ult-close:hover{color:#fff!important;-webkit-text-fill-color:#fff!important;background:#333;}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  let havUltimaShownThisSession = false;
+  async function havUltimaCheckAndShow() {
+    if (havUltimaShownThisSession) return;
+    let semanaISO;
+    try { semanaISO = await havUltimaPrefetch(); } catch (e) { return; }
+    if (!semanaISO) return;
+    havUltimaShownThisSession = true;
+    havUltimaEnsureStyles();
+    let badge = document.getElementById('hav-ult-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'hav-ult-badge';
+      badge.innerHTML = `<span id="hav-ult-dot"></span><span id="hav-ult-text"></span><button id="hav-ult-close" title="fechar">&times;</button>`;
+      document.body.appendChild(badge);
+      document.getElementById('hav-ult-close').addEventListener('click', () => badge.classList.remove('show'));
+    }
+    document.getElementById('hav-ult-text').innerHTML = 'Última semana publicada<br><b>' + escapeHtml(havUltimaFormatLabel(semanaISO)) + '</b>';
+    badge.classList.add('show');
   }
 
 })();

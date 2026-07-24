@@ -16,39 +16,13 @@
 
   var PORTO_SUBTIENDAS = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx'];
 
-  // ── Lista de colaboradoras — carregada da mesma tabela que o gerador de
-  //    recibos (recibos_funcionarias), em vez de estar fixa no código.
-  //    Nomes completos, tal como estão guardados; a abreviação (ex.: "CARLA
-  //    A.") aplica-se só ao mostrar/gravar (ver _abbrevName).
-  var EMPLEADAS_LIST = [];
-  var _empleadasLoaded = false;
-  var _empleadasLoadPromise = null;
-
-  function _loadEmpleadasList() {
-    if (_empleadasLoadPromise) return _empleadasLoadPromise;
-    _empleadasLoadPromise = (function () {
-      if (typeof sbAdmin === 'undefined' || !sbAdmin) { _empleadasLoaded = true; return Promise.resolve(EMPLEADAS_LIST); }
-      return sbAdmin
-        .from('recibos_funcionarias')
-        .select('nome')
-        .eq('ativo', true)
-        .order('nome')
-        .then(function (res) {
-          if (res.error) throw res.error;
-          EMPLEADAS_LIST = (res.data || [])
-            .map(function (r) { return (r.nome || '').trim().toUpperCase(); })
-            .filter(Boolean);
-          _empleadasLoaded = true;
-          return EMPLEADAS_LIST;
-        })
-        .catch(function (e) {
-          console.warn('[ventas-empleada] Não foi possível carregar lista de colaboradoras:', e);
-          _empleadasLoaded = true;
-          return EMPLEADAS_LIST;
-        });
-    })();
-    return _empleadasLoadPromise;
-  }
+  var EMPLEADAS_LIST = [
+    'Alejandra Abreu', 'Cristina Teixeira', 'Patricia Silva', 'Carla Alves',
+    'Catia Temtem', 'Débora Fernandes', 'Edna Melim', 'Filipa Rodrigues',
+    'Isaltina Fernandes', 'Jacinta Alves', 'Joana Baptista', 'Marilia Silva',
+    'Sandra Melim', 'Sandra Nunes', 'Djanice Lopes', 'Matilde Rodrigues',
+    'Sara Almeida', 'Claudia Nunes', 'Leonia Pereira', 'Lara Igreja'
+  ].map(function (n) { return n.toUpperCase(); });
 
   // ── Abrir overlay ──
   window.openVentasOverlay = function (store) {
@@ -61,10 +35,6 @@
     _vSubtienda = null;
     _vFecha     = _todayStr();
     _vDirty     = false;
-
-    // Disparar já — em paralelo com o resto do carregamento do overlay —
-    // para que a lista esteja pronta quando o formulário aparecer.
-    _loadEmpleadasList();
 
     if (!_vStore) {
       var body = document.getElementById('ventas-overlay-body');
@@ -876,10 +846,7 @@
       document.head.appendChild(s);
     }
 
-    // Tags array (estado interno) — guarda o nome COMPLETO tal como vem da
-    // base de dados (não abreviado), para que a comparação/duplicação e a
-    // pesquisa no dropdown continuem exactas. A abreviação só se aplica ao
-    // desenhar o chip (_renderTags) e ao gravar (_getEmpleadaValue).
+    // Tags array (estado interno)
     var tags = [];
     if (existingValue && existingValue.trim()) {
       existingValue.split(',').forEach(function (n) {
@@ -905,7 +872,6 @@
     inp.autocomplete = 'off';
 
     var activeIdx = -1;
-    var _lastQuery = '';
 
     function _renderTags() {
       // Limpiar tags existentes (dejar dropdown e input)
@@ -915,9 +881,7 @@
       tags.forEach(function (tag, i) {
         var chip = document.createElement('span');
         chip.className = 'v-emp-tag';
-        // Mostrar a forma abreviada (ex.: "CARLA A."), guardando o nome
-        // completo em tags[] para efeitos de comparação/gravação.
-        chip.textContent = _abbrevName(tag);
+        chip.textContent = tag;
 
         var x = document.createElement('button');
         x.type = 'button';
@@ -959,21 +923,7 @@
       filtered = filtered.slice(0, 7);
       dropdown.innerHTML = '';
       activeIdx = -1;
-      if (!filtered.length) {
-        // Lista ainda a carregar (primeira vez) → mostrar estado, não "sem resultados"
-        if (!_empleadasLoaded && !EMPLEADAS_LIST.length) {
-          var loadingOpt = document.createElement('div');
-          loadingOpt.className = 'v-emp-option';
-          loadingOpt.style.cursor = 'default';
-          loadingOpt.style.opacity = '.6';
-          loadingOpt.textContent = 'a carregar…';
-          dropdown.appendChild(loadingOpt);
-          dropdown.style.display = 'block';
-        } else {
-          dropdown.style.display = 'none';
-        }
-        return;
-      }
+      if (!filtered.length) { dropdown.style.display = 'none'; return; }
       filtered.forEach(function (name) {
         var opt = document.createElement('div');
         opt.className = 'v-emp-option';
@@ -1010,15 +960,8 @@
       var cur = inp.value.replace(/[0-9.,]/g, '');
       if (cur !== inp.value) inp.value = cur;
       var q = inp.value.toUpperCase().trim();
-      _lastQuery = q;
       if (q.length < 1) { _hideDropdown(); return; }
       _showDropdown(q);
-    });
-
-    // Se a lista ainda não tinha chegado quando o campo começou a ser usado,
-    // assim que chegar volta a filtrar com a última pesquisa em curso.
-    _loadEmpleadasList().then(function () {
-      if (document.activeElement === inp && _lastQuery) _showDropdown(_lastQuery);
     });
 
     inp.addEventListener('keydown', function (e) {
@@ -1029,13 +972,8 @@
           _addTag(opts[activeIdx].textContent);
         } else if (inp.value.trim()) {
           var val = inp.value.trim().toUpperCase();
-          if (EMPLEADAS_LIST.indexOf(val) !== -1) {
-            _addTag(val);
-          } else if (!EMPLEADAS_LIST.length) {
-            // Lista indisponível (falha de rede) — não bloquear o registo.
-            _addTag(val);
-          }
-          // Se não está na lista (e a lista carregou correctamente), ignora-se.
+          if (EMPLEADAS_LIST.indexOf(val) !== -1) _addTag(val);
+          // Si no está en la lista, no se añade (se ignora silenciosamente)
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -1056,10 +994,8 @@
       // Pequeño delay para permitir click en dropdown
       setTimeout(function () {
         var val = inp.value.trim().toUpperCase();
-        if (val) {
-          if (EMPLEADAS_LIST.indexOf(val) !== -1 || !EMPLEADAS_LIST.length) _addTag(val);
-          else inp.value = '';
-        }
+        if (val && EMPLEADAS_LIST.indexOf(val) !== -1) _addTag(val);
+        else inp.value = '';
         _hideDropdown();
       }, 150);
     });
@@ -1073,16 +1009,15 @@
     container.appendChild(widget);
   }
 
-  // "CARLA SOFIA DOS SANTOS ALVES" → "CARLA A."
-  // "MARILIA"                     → "MARILIA"  (sin apellido, sin cambios)
-  // Usa apenas o PRIMEIRO nome + a inicial do ÚLTIMO apelido — ignora
-  // quaisquer nomes/apelidos do meio, mesmo com o nome completo da BD.
+  // "MARILIA SILVA"      → "MARILIA S."
+  // "MARIA JOSE PEREIRA" → "MARIA JOSE P."
+  // "MARILIA"            → "MARILIA"  (sin apellido, sin cambios)
   function _abbrevName(fullName) {
     var parts = fullName.trim().toUpperCase().split(/\s+/).filter(Boolean);
     if (parts.length <= 1) return parts[0] || '';
-    var primeiro = parts[0];
+    var nombres  = parts.slice(0, parts.length - 1).join(' ');
     var apellido = parts[parts.length - 1];
-    return primeiro + ' ' + apellido.charAt(0) + '.';
+    return nombres + ' ' + apellido.charAt(0) + '.';
   }
 
   // Leer el valor actual del widget como string mayúsculas separado por comas
@@ -1105,7 +1040,7 @@
       var extra = inp.value.trim().toUpperCase();
       if (tags.indexOf(extra) === -1) tags.push(extra);
     }
-    return tags.join(', ');
+    return tags.map(_abbrevName).join(', ');
   }
 
 })();

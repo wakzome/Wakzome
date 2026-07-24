@@ -1053,7 +1053,7 @@
     s.textContent = [
       '#hav-adm-overlay{display:none;position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);align-items:center;justify-content:center;}',
       '#hav-adm-overlay.open{display:flex;}',
-      '#hav-adm-modal{background:#1a1a1a!important;border:1px solid #383838;border-radius:14px;width:min(94vw,480px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}',
+      '#hav-adm-modal{background:#1a1a1a!important;border:1px solid #383838;border-radius:14px;width:min(94vw,760px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}',
       '#hav-adm-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 20px 12px;border-bottom:1px solid #2e2e2e;flex-shrink:0;}',
       '#hav-adm-title{font-size:.82rem;font-weight:800;letter-spacing:.04em;color:#fff!important;-webkit-text-fill-color:#fff!important;white-space:nowrap;}',
       '#hav-adm-switch-row{display:flex;align-items:center;gap:8px;margin-left:auto;}',
@@ -1067,7 +1067,7 @@
       '#hav-adm-close{background:none;border:none;cursor:pointer;font-size:1.1rem;color:#888!important;-webkit-text-fill-color:#888!important;line-height:1;padding:2px 6px;border-radius:6px;flex-shrink:0;}',
       '#hav-adm-close:hover{color:#fff!important;-webkit-text-fill-color:#fff!important;background:#333;}',
       '#hav-adm-body{overflow-y:auto;padding:16px 20px;flex:1;}',
-      '#hav-adm-textarea{width:100%;min-height:140px;border:1px solid #383838;border-radius:8px;padding:10px 12px;font-size:.85rem;font-family:\'MontserratLight\',sans-serif;color:#fff!important;-webkit-text-fill-color:#fff!important;background:#222!important;resize:vertical;box-sizing:border-box;}',
+      '#hav-adm-textarea{width:100%;height:62vh;min-height:320px;border:1px solid #383838;border-radius:8px;padding:10px 12px;font-size:.85rem;font-family:\'MontserratLight\',sans-serif;color:#fff!important;-webkit-text-fill-color:#fff!important;background:#222!important;resize:vertical;box-sizing:border-box;}',
       '#hav-adm-textarea::placeholder{color:#777!important;-webkit-text-fill-color:#777!important;}',
       '#hav-adm-textarea:focus{outline:none;border-color:#555;}',
       '#hav-adm-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-top:1px solid #2e2e2e;flex-shrink:0;}',

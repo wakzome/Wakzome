@@ -1830,13 +1830,20 @@
       if (error) throw error;
       console.log('[GH] ' + FILE + ' publicado');
       // Regista qual foi a última semana publicada, para o aviso "última semana
-      // publicada" no dashboard de Porto Santo (shared.js). Falha aqui nunca
-      // deve impedir a publicação em si — é puramente informativo.
+      // publicada" no dashboard de Porto Santo (shared.js). Só avança — nunca
+      // recua: publicar/editar uma semana MAIS ANTIGA (ex.: corrigir a semana
+      // 29 depois de já ter a 30 publicada) não deve fazer o aviso "voltar
+      // atrás". Falha aqui nunca deve impedir a publicação em si — é
+      // puramente informativo.
       try {
-        await sb.from('porto_santo_ultima_semana').upsert(
-          { id: 1, semana_inicio: weekKey, updated_at: new Date().toISOString() },
-          { onConflict: 'id' }
-        );
+        const { data: ultimaAtual } = await sb.from('porto_santo_ultima_semana').select('semana_inicio').eq('id', 1).limit(1);
+        const semanaAtualRegistada = ultimaAtual && ultimaAtual[0] ? ultimaAtual[0].semana_inicio : null;
+        if (!semanaAtualRegistada || weekKey >= semanaAtualRegistada) {
+          await sb.from('porto_santo_ultima_semana').upsert(
+            { id: 1, semana_inicio: weekKey, updated_at: new Date().toISOString() },
+            { onConflict: 'id' }
+          );
+        }
       } catch (e2) { console.warn('[GH] Não foi possível registar última semana publicada:', e2); }
     } catch(e) {
       console.error('[GH] Erro ao publicar ' + FILE + ':', e);

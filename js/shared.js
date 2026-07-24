@@ -1271,6 +1271,7 @@
     s.textContent = [
       '#hav-ult-badge{display:none;position:fixed;bottom:18px;right:18px;z-index:9400;align-items:center;gap:10px;background:#1a1a1a!important;border:1px solid #383838;border-radius:50px;padding:10px 14px 10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.35);max-width:min(88vw,340px);}',
       '#hav-ult-badge.show{display:flex;}',
+      '@media (min-width:769px){ #hav-ult-badge{ left:18px; right:auto; } }',
       '#hav-ult-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;flex-shrink:0;animation:hav-ult-pulse 1.8s ease-in-out infinite;}',
       '@keyframes hav-ult-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(76,175,80,.5);}50%{opacity:.55;box-shadow:0 0 0 5px rgba(76,175,80,0);}}',
       '#hav-ult-text{font-size:.72rem;font-weight:700;color:#fff!important;-webkit-text-fill-color:#fff!important;line-height:1.35;}',

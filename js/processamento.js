@@ -1045,6 +1045,13 @@
     return base + '_' + max;
   }
 
+  /* True se j\u00e1 existe alguma sess\u00e3o guardada para a semana corrente
+     (chave base ou com sufixo _2, _3, ...). Usado para impedir a
+     cria\u00e7\u00e3o de uma segunda sess\u00e3o na mesma semana. */
+  function weekSessionExists() {
+    return getWeekKeys().length > 0;
+  }
+
   /* Current active save key (set when a session is loaded or a new one starts) */
   var _activeSessionKey = null;
 
@@ -1497,6 +1504,16 @@
 
       var newBtn = makeBtn('', '\u2605 Iniciar nova sess\u00e3o');
       newBtn.addEventListener('click', function() {
+        if (weekSessionExists()) {
+          procFloatModal({
+            title: 'J\u00e1 existe uma sess\u00e3o esta semana',
+            body: 'J\u00e1 existe uma sess\u00e3o criada esta semana, podes continuar a utiliz\u00e1-la.',
+            buttons: [
+              { label: 'Entendido', style: 'background:#f0f0f0;border:1px solid #555;color:#000;font-weight:700;', cb: null }
+            ]
+          });
+          return;
+        }
         close();
         _activeSessionKey = getNextWeekKey();
         procMarkSynced();
@@ -3441,6 +3458,16 @@
 
   /* Start a brand-new session */
   function procStartNewSession() {
+    if (weekSessionExists()) {
+      procFloatModal({
+        title: 'J\u00e1 existe uma sess\u00e3o esta semana',
+        body: 'J\u00e1 existe uma sess\u00e3o criada esta semana, podes continuar a utiliz\u00e1-la.',
+        buttons: [
+          { label: 'Entendido', style: 'background:#f0f0f0;border:1px solid #555;color:#000;font-weight:700;', cb: null }
+        ]
+      });
+      return;
+    }
     _activeSessionKey = getNextWeekKey();
     procMarkSynced();
     procAddFatura(null);
@@ -4507,6 +4534,25 @@
         marg = ((pvpSemIVA - pc) / pvpSemIVA) * 100;
       }
       items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc });
+    }
+
+    /* Dedupe por refer\u00eancia \u2014 v\u00e1rias linhas da fatura podem repetir
+       a mesma refer\u00eancia (ex.: quantidade dividida por v\u00e1rias linhas);
+       para cria\u00e7\u00e3o de artigos basta 1 linha por refer\u00eancia. */
+    if (items.length) {
+      var seenRef = {};
+      var deduped = [];
+      items.forEach(function(it) {
+        var key = (it.ref || '').trim().toUpperCase();
+        if (!key) { deduped.push(it); return; }
+        if (!Object.prototype.hasOwnProperty.call(seenRef, key)) {
+          seenRef[key] = deduped.length;
+          deduped.push(it);
+        } else if ((it.pvp != null) && (deduped[seenRef[key]].pvp == null)) {
+          deduped[seenRef[key]] = it;
+        }
+      });
+      items = deduped;
     }
 
     /* Build table rows HTML */

@@ -170,7 +170,11 @@
       absences: [],
       sandraDay: {}, folgaDay: {}, sundayAssigned: {}, extraDayOff: {},
       schedule: {}, alerts: [], decisions: [],
-      _personStores: {}, _storeOrder: {}
+      _personStores: {}, _storeOrder: {},
+      // pid → contribuição que ESTA semana já tem dentro do saldo do banco.
+      // Preenchido ao abrir uma semana publicada para edição (derivado do
+      // próprio horário carregado) e actualizado a cada publicação.
+      _contribSemana: {}
     };
   }
   let S = blank();
@@ -1392,22 +1396,37 @@
             // Calcular horas reales de esta persona en esta semana
             const realHrs = calcPersonHrs(p.id);
             const tieneHorario = DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work');
+            const temBaseline = S._contribSemana && typeof S._contribSemana[p.id] === 'number';
 
-            // Si la persona no tiene horario esta semana, no tocar su saldo
-            if (!tieneHorario) return;
+            // Sem horário nesta semana: só há algo a fazer se a pessoa TINHA
+            // contribuição desta mesma semana (foi removida ao editar) — nesse
+            // caso essa contribuição é desfeita. Caso contrário, não tocar.
+            if (!tieneHorario && !temBaseline) return;
 
-            const diffSemana = Math.round((realHrs - 40) * 10) / 10;
+            const diffSemana = tieneHorario ? calcBancoDiff(p.id, realHrs) : 0;
 
             const registro = bancoMap[p.id] || { saldo: 0, saldo_semana: 0, ultima_semana: null };
             let saldoBase = registro.saldo || 0;
 
-            // Si ya calculamos esta semana antes, restar el aporte anterior
-            if (registro.ultima_semana === weekKey) {
+            // Reverter o que ESTA semana já contribuiu, antes de aplicar o novo
+            // valor — para que republicar sem alterações tenha efeito zero:
+            // 1º) baseline em memória: derivada do próprio horário carregado ao
+            //     abrir a semana publicada (cobre republicar QUALQUER semana,
+            //     mesmo depois de outras terem sido publicadas entretanto);
+            // 2º) sem baseline: comportamento antigo — só quando esta é a mesma
+            //     semana que a última registada na BD.
+            if (temBaseline) {
+              saldoBase = Math.round((saldoBase - S._contribSemana[p.id]) * 10) / 10;
+            } else if (registro.ultima_semana === weekKey) {
               saldoBase = Math.round((saldoBase - (registro.saldo_semana || 0)) * 10) / 10;
             }
 
             const novoSaldo = Math.round((saldoBase + diffSemana) * 10) / 10;
             S._banco[p.id] = novoSaldo;
+            if (!S._bancoBase) S._bancoBase = {};
+            S._bancoBase[p.id] = novoSaldo;
+            if (!S._contribSemana) S._contribSemana = {};
+            S._contribSemana[p.id] = diffSemana;
 
             bancoUpdates.push(
               sb.from('gh_banco_horas').upsert(
@@ -1565,10 +1584,16 @@
         DAYS_ORDER.forEach(day => {
           const cell = S.schedule[p.id]?.[day] || { type: 'na' };
 
-          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa') {
-            const lbl = cell.type === 'ferias' ? 'FERIAS' : cell.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+          if (cell.type === 'folga' || cell.type === 'ferias' || cell.type === 'baixa' || cell.type === 'baixa_medica' || cell.type === 'fora_contrato') {
+            // Licença: o texto publicado tem de distinguir recuperável / não recuperável,
+            // senão essa escolha perde-se ao reabrir a semana publicada mais tarde.
+            const lbl = cell.type === 'ferias' ? 'FERIAS'
+              : cell.type === 'baixa_medica' ? 'BAIXA MEDICA'
+              : cell.type === 'fora_contrato' ? 'FORA DE CONTRATO'
+              : cell.type === 'baixa' ? (cell.recuperavel === false ? 'LICENÇA NAO REC.' : 'LICENÇA')
+              : 'FOLGA';
             rowA.push(lbl);
-            rowB.push(cell.type === 'baixa' ? '' : lbl);
+            rowB.push((cell.type === 'baixa' || cell.type === 'baixa_medica' || cell.type === 'fora_contrato') ? '' : lbl);
           } else if (cell.type === 'work') {
             // Check if person does apoio in this store on this day
             const apoioHere = S._apoioShifts?.[p.id]?.[day]?.store === sid;
@@ -1721,6 +1746,10 @@
             if (!S._personStores[person.id].includes(storeId)) S._personStores[person.id].push(storeId);
             if (!S._storeOrder[storeId].includes(person.id)) S._storeOrder[storeId].push(person.id);
 
+            // Tipos de ausência: uma vez lida de qualquer tabela/loja, tem sempre
+            // prioridade sobre trabalho/alias lido de outra tabela para o mesmo dia —
+            // nunca é a pessoa fica com estados diferentes consoante a loja.
+            const ABSENCE_TYPES_RD = ['folga', 'ferias', 'baixa', 'baixa_medica', 'fora_contrato', 'na', 'fim_contrato'];
             DAYS_ORDER.forEach((day, di) => {
               const cellA = (rowA[di+1] || '').trim();
               const cellB = (rowB[di+1] || '').trim();
@@ -1730,21 +1759,33 @@
                 S.schedule[person.id][day] = { type: 'folga', shift: null, store: null };
               } else if (upper === 'FERIAS') {
                 S.schedule[person.id][day] = { type: 'ferias', shift: null, store: null };
+              } else if (upper === 'LICENÇA') {
+                // Sem sufixo no texto publicado → recuperável (também cobre ficheiros
+                // publicados antes desta distinção existir).
+                S.schedule[person.id][day] = { type: 'baixa', shift: null, store: null, recuperavel: true };
+              } else if (upper === 'LICENÇA NAO REC.' || upper === 'LICENÇA NÃO REC.' || upper === 'LICENÇA NAO REC' || upper === 'LICENÇA NÃO REC') {
+                S.schedule[person.id][day] = { type: 'baixa', shift: null, store: null, recuperavel: false };
+              } else if (upper === 'BAIXA MEDICA' || upper === 'BAIXA MÉDICA') {
+                S.schedule[person.id][day] = { type: 'baixa_medica', shift: null, store: null };
+              } else if (upper === 'FORA DE CONTRATO') {
+                S.schedule[person.id][day] = { type: 'fora_contrato', shift: null, store: null };
               } else if (cellA === '' && cellB === '') {
                 // leave as empty
               } else {
+                const cur = S.schedule[person.id][day];
+                // Ausência já lida (nesta ou noutra loja) nunca é substituída por
+                // trabalho/alias vindo do bloco de outra loja.
+                if (ABSENCE_TYPES_RD.includes(cur.type)) return;
                 // Check if it's an alias (another store name)
                 const aliasId = SHORT_TO_ID[upper.toLowerCase()];
                 if (aliasId && aliasId !== storeId) {
                   // Person working in another store — only set if not already set
-                  const cur = S.schedule[person.id][day];
                   if (cur.type === 'empty') {
                     S.schedule[person.id][day] = { type: 'work', shift: null, store: aliasId };
                   }
                 } else {
                   // Actual shift — join morning + afternoon with |
                   const shift = cellB ? (cellA + '|' + cellB) : cellA;
-                  const cur = S.schedule[person.id][day];
                   // Detect apoio: single short time slot (no cellB) and person already
                   // has a full shift assigned for this day from their primary store block
                   const isShortSlot = !cellB && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(cellA);
@@ -1768,6 +1809,20 @@
       wStep = 3; // jump straight to schedule view
       S._isEditing = true; // flag: editando horario publicado
       await loadIncidencias();
+      // Memorizar quanto é que ESTA semana, tal como está publicada, já
+      // contribuiu para o banco de cada pessoa. Ao republicar, o saldo
+      // recalcula-se como: saldo − contribuição antiga + contribuição nova.
+      // Se nada mudar, o efeito líquido é exactamente zero — independentemente
+      // de que outras semanas tenham sido publicadas entretanto. Deriva-se do
+      // próprio horário acabado de carregar: não se consulta nenhuma outra
+      // semana nem nenhum histórico.
+      S._contribSemana = {};
+      PEOPLE.forEach(p => {
+        if (!S.schedule[p.id]) return;
+        const temTrabalho = DAYS.some(d => S.schedule[p.id]?.[d]?.type === 'work');
+        if (!temTrabalho) return;
+        S._contribSemana[p.id] = calcBancoDiff(p.id, calcPersonHrs(p.id));
+      });
       const active = PEOPLE.filter(p => !fullyAbsent(p.id));
       showSchedule(active);
 
@@ -1804,6 +1859,22 @@
       });
       if (error) throw error;
       console.log('[GH] ' + FILE + ' publicado');
+      // Regista qual foi a última semana publicada, para o aviso "última semana
+      // publicada" no dashboard de Porto Santo (shared.js). Só avança — nunca
+      // recua: publicar/editar uma semana MAIS ANTIGA (ex.: corrigir a semana
+      // 29 depois de já ter a 30 publicada) não deve fazer o aviso "voltar
+      // atrás". Falha aqui nunca deve impedir a publicação em si — é
+      // puramente informativo.
+      try {
+        const { data: ultimaAtual } = await sb.from('porto_santo_ultima_semana').select('semana_inicio').eq('id', 1).limit(1);
+        const semanaAtualRegistada = ultimaAtual && ultimaAtual[0] ? ultimaAtual[0].semana_inicio : null;
+        if (!semanaAtualRegistada || weekKey >= semanaAtualRegistada) {
+          await sb.from('porto_santo_ultima_semana').upsert(
+            { id: 1, semana_inicio: weekKey, updated_at: new Date().toISOString() },
+            { onConflict: 'id' }
+          );
+        }
+      } catch (e2) { console.warn('[GH] Não foi possível registar última semana publicada:', e2); }
     } catch(e) {
       console.error('[GH] Erro ao publicar ' + FILE + ':', e);
       throw e;
@@ -1825,6 +1896,7 @@
       _storeOrder: S._storeOrder,
       _folgasDirigidas: S._folgasDirigidas,
       _apoioShifts: S._apoioShifts || {},
+      _contribSemana: S._contribSemana || {},
     };
   }
 
@@ -1882,6 +1954,7 @@
     S._storeOrder = d._storeOrder || {};
     S._folgasDirigidas = d._folgasDirigidas || {};
     S._apoioShifts = d._apoioShifts || {};
+    S._contribSemana = d._contribSemana || {};
     await loadKnowledgeBase();
     await loadIncidencias();
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
@@ -1957,6 +2030,57 @@
       }
     });
     return Math.round(h * 10) / 10;
+  }
+
+  // Horas neutralizadas no cálculo do banco, numa semana, para uma pessoa.
+  // Cada dia de Baixa Médica (sempre), cada dia de Fora de Contrato (sempre) e
+  // cada dia de Licença marcada como NÃO recuperável perdoam 8h da jornada
+  // semanal, evitando que esse dia gere défice. O efeito é limitado pela
+  // própria meta em Math.max(0, 40 - perdão), pelo que nunca cria crédito
+  // artificial no banco.
+  function calcPerdaoHrs(pid) {
+    let h = 0;
+    DAYS.forEach(d => {
+      const cl = S.schedule[pid]?.[d];
+      if (!cl) return;
+      if (cl.type === 'baixa_medica') h += 8;
+      else if (cl.type === 'fora_contrato') h += 8;
+      else if (cl.type === 'fim_contrato') h += 8;
+      else if (cl.type === 'baixa' && cl.recuperavel === false) h += 8;
+    });
+    return h;
+  }
+
+  // Perdão que vem especificamente de limites de contrato (Fora de Contrato ou
+  // Fim de Contrato) — isolado do resto porque este perdão tem uma regra
+  // diferente da Baixa Médica/Licença (ver calcBancoDiff): pode cancelar
+  // défice, mas NUNCA pode criar crédito.
+  function calcPerdaoContratoHrs(pid) {
+    let h = 0;
+    DAYS.forEach(d => {
+      const cl = S.schedule[pid]?.[d];
+      if (!cl) return;
+      if (cl.type === 'fora_contrato' || cl.type === 'fim_contrato') h += 8;
+    });
+    return h;
+  }
+
+  // Diferença desta semana para o banco de horas.
+  // Baixa Médica e Licença não recuperável: reduzem a meta 8h/dia, e a partir
+  // daí horas reais − meta sem qualquer tratamento especial (comportamento
+  // original, inalterado).
+  // Fora de Contrato / Fim de Contrato: a pessoa não tem contrato nesses dias,
+  // por isso NUNCA podem mover o banco a favor dela — só existem para não a
+  // penalizar. Por isso este perdão é aplicado à parte e limitado a, no
+  // máximo, cancelar um défice que já existisse sem ele; nunca sobra para
+  // criar crédito.
+  function calcBancoDiff(pid, realHrs) {
+    const perdaoTotal    = calcPerdaoHrs(pid);
+    const perdaoContrato = calcPerdaoContratoHrs(pid);
+    const metaSemContrato   = Math.max(0, 40 - (perdaoTotal - perdaoContrato));
+    const diffSemContrato   = realHrs - metaSemContrato;
+    const perdaoAplicado    = Math.min(perdaoContrato, Math.max(0, -diffSemContrato));
+    return Math.round((diffSemContrato + perdaoAplicado) * 10) / 10;
   }
 
   // ── COVERAGE PANEL — people active per hour, per day, per store ──
@@ -2066,9 +2190,12 @@
 
   function updateBancoBadge(pid) {
     const realHrs = calcPersonHrs(pid);
-    const diff = Math.round((realHrs - 40) * 10) / 10;
+    const diff = calcBancoDiff(pid, realHrs);
     const saldoBase = S._bancoBase?.[pid] ?? S._banco?.[pid] ?? 0;
-    const saldoVivo = Math.round((saldoBase + diff) * 10) / 10;
+    // Ao editar uma semana já publicada, o saldo da BD já inclui a contribuição
+    // desta semana — subtraí-la evita contá-la em duplicado no valor "vivo".
+    const contribAntiga = (S._contribSemana && typeof S._contribSemana[pid] === 'number') ? S._contribSemana[pid] : 0;
+    const saldoVivo = Math.round((saldoBase - contribAntiga + diff) * 10) / 10;
     // Store updated value
     if (!S._banco) S._banco = {};
     S._banco[pid] = saldoVivo;
@@ -2114,26 +2241,39 @@
         dayShifts[day][seg][part] = inp.value.trim();
       }
     });
-    // Apply work-shift edits
+    // Apply work-shift edits — só marca 'changed' se a hora final for
+    // realmente diferente da que já lá estava. Evita que um commit disparado
+    // sem qualquer alteração real (ex.: um clique fora só para fechar o modo
+    // de edição) mexa no banco.
+    let changed = false;
     Object.entries(dayShifts).forEach(([day, segs]) => {
       const cell = S.schedule[pid]?.[day];
       if (!cell || cell.type !== 'work') return;
       const parts = Object.values(segs);
       const newShift = parts.map(([t1,t2]) => normTime(t1)+'-'+normTime(t2)).join('|');
+      if (newShift !== cell.shift) changed = true;
       S.schedule[pid][day] = { ...cell, shift: newShift };
     });
     // Apply apoio-shift edits
     Object.entries(apoioEdits).forEach(([day, [t1, t2]]) => {
-      if (!S._apoioShifts?.[pid]?.[day]) return;
-      S._apoioShifts[pid][day].shift = normTime(t1) + '-' + normTime(t2);
+      const apoioCell = S._apoioShifts?.[pid]?.[day];
+      if (!apoioCell) return;
+      const newApoio = normTime(t1) + '-' + normTime(t2);
+      if (newApoio !== apoioCell.shift) changed = true;
+      apoioCell.shift = newApoio;
     });
-    // Update banco — always use current DB saldo as base, add weekly diff
-    if (!S._banco) S._banco = {};
-    const realHrs = calcPersonHrs(pid);
-    const diff = Math.round((realHrs - 40) * 10) / 10;
-    const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
-    const saldoVivo = Math.round((bancoBase + diff) * 10) / 10;
-    S._banco[pid] = saldoVivo;
+    // Só recalcula o banco se alguma hora mudou mesmo — nunca num commit vazio.
+    if (changed) {
+      if (!S._banco) S._banco = {};
+      const realHrs = calcPersonHrs(pid);
+      const diff = calcBancoDiff(pid, realHrs);
+      const bancoBase = S._bancoBase?.[pid] ?? S._banco[pid] ?? 0;
+      // Mesma regra do updateBancoBadge: numa semana já publicada, o saldo da
+      // BD já contém a contribuição desta semana — não a contar duas vezes.
+      const contribAntiga = (S._contribSemana && typeof S._contribSemana[pid] === 'number') ? S._contribSemana[pid] : 0;
+      const saldoVivo = Math.round((bancoBase - contribAntiga + diff) * 10) / 10;
+      S._banco[pid] = saldoVivo;
+    }
     // Re-render
     const active = PEOPLE.filter(p => !fullyAbsent(p.id));
     showSchedule(active);
@@ -2248,8 +2388,8 @@
             if (c2.type === 'fim_contrato') {
               return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner c-fim-contrato"><span class="gh-sh-line gh-fim-txt">fim de contrato</span></div></td>`;
             }
-            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
-            const cls = (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
+            const lbl = c2.type === 'ferias' ? 'FÉRIAS' : c2.type === 'baixa_medica' ? 'BAIXA MÉDICA' : c2.type === 'fora_contrato' ? 'FORA DE CONTRATO' : c2.type === 'baixa' ? 'LICENÇA' : 'FOLGA';
+            const cls = c2.type === 'baixa_medica' ? 'c-baixa-med' : c2.type === 'fora_contrato' ? 'c-fora-contrato' : (c2.type === 'ferias' || c2.type === 'baixa') ? 'c-ferias' : 'c-folga';
             return `<td class="gh-sh-td gh-no-click"><div class="gh-sh-inner ${cls}"><span class="gh-sh-line">${lbl}</span></div></td>`;
           }
           let cls = '', content = '';
@@ -2257,6 +2397,8 @@
           else if (c2.type === 'folga') { cls = 'c-folga'; content = `<span class="gh-sh-line">FOLGA</span>`; }
           else if (c2.type === 'ferias') { cls = 'c-ferias'; content = `<span class="gh-sh-line">FÉRIAS</span>`; }
           else if (c2.type === 'baixa')  { cls = 'c-ferias'; content = `<span class="gh-sh-line">LICENÇA</span>`; }
+          else if (c2.type === 'baixa_medica') { cls = 'c-baixa-med'; content = `<span class="gh-sh-line">BAIXA MÉDICA</span>`; }
+          else if (c2.type === 'fora_contrato') { cls = 'c-fora-contrato'; content = `<span class="gh-sh-line">FORA DE CONTRATO</span>`; }
           else if (c2.type === 'na')     { cls = 'c-na';     content = `<span class="gh-sh-line">N/A</span>`; }
           else if (c2.type === 'empty')  { cls = 'c-empty';  content = ''; }
           else if (c2.type === 'work') {
@@ -2514,6 +2656,37 @@
     cm.classList.add('open');
   }
 
+  function closeLicModal() {
+    const lm = document.getElementById('gh-lic-modal');
+    if (lm) lm.classList.remove('open');
+  }
+
+  // Mini-modal exclusivo da Licença: pergunta se as horas são recuperáveis.
+  // onChoose(recuperavel:boolean) ao escolher; onCancel() ao cancelar/fechar.
+  function showLicencaModal(onChoose, onCancel) {
+    let lm = document.getElementById('gh-lic-modal');
+    if (!lm) {
+      lm = document.createElement('div');
+      lm.id = 'gh-lic-modal';
+      lm.innerHTML = `<div class="gh-lm-box">
+        <div class="gh-lm-ttl">Licença</div>
+        <div class="gh-lm-msg">As horas em falta neste dia vão para o banco de horas?</div>
+        <div class="gh-lm-btns">
+          <button class="gh-lm-btn gh-lm-rec" id="gh-lm-rec">Recuperável<span class="gh-lm-sub">soma ao banco</span></button>
+          <button class="gh-lm-btn gh-lm-nrec" id="gh-lm-nrec">Não recuperável<span class="gh-lm-sub">não conta</span></button>
+        </div>
+        <button class="gh-lm-cancel" id="gh-lm-cancel">Cancelar</button>
+      </div>`;
+      document.body.appendChild(lm);
+      lm.addEventListener('click', e => { if (e.target === lm) { closeLicModal(); if (lm._onCancel) lm._onCancel(); } });
+    }
+    lm._onCancel = onCancel;
+    document.getElementById('gh-lm-rec').onclick  = () => { closeLicModal(); onChoose(true); };
+    document.getElementById('gh-lm-nrec').onclick = () => { closeLicModal(); onChoose(false); };
+    document.getElementById('gh-lm-cancel').onclick = () => { closeLicModal(); if (onCancel) onCancel(); };
+    lm.classList.add('open');
+  }
+
   // ── MODAL DE EDIÇÃO ──
   // ── PILL GROUP HELPER ──
   function ghSyncPillGroup(groupId, val) {
@@ -2534,7 +2707,7 @@
     modal.style.display = '';
     document.getElementById('gh-me-ttl').textContent = `${p?.name} · ${DAY_PT[day]}`;
     const typeEl = document.getElementById('gh-me-type');
-    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'baixa' ? 'baixa' : c2.type === 'empty' ? 'work' : 'folga';
+    typeEl.value = c2.type === 'work' ? 'work' : c2.type === 'ferias' ? 'ferias' : c2.type === 'baixa_medica' ? 'baixa_medica' : c2.type === 'fora_contrato' ? 'fora_contrato' : c2.type === 'baixa' ? 'baixa' : c2.type === 'empty' ? 'work' : 'folga';
     const shEl = document.getElementById('gh-me-shift');
     if (c2.shift) { const f = [...shEl.options].find(o => o.value === c2.shift); shEl.value = f ? c2.shift : shEl.options[0].value; }
     const stEl = document.getElementById('gh-me-store');
@@ -2614,8 +2787,12 @@
     const { pid, day } = editCtx;
     const type = document.getElementById('gh-me-type').value;
     if (type !== 'work') {
-      const cellType = type === 'ferias' ? 'ferias' : type === 'baixa' ? 'baixa' : 'folga';
-      S.schedule[pid][day] = { type: cellType, shift: null, store: null };
+      const cellType = type === 'ferias' ? 'ferias' : type === 'baixa_medica' ? 'baixa_medica' : type === 'fora_contrato' ? 'fora_contrato' : type === 'baixa' ? 'baixa' : 'folga';
+      const nonWorkCell = { type: cellType, shift: null, store: null };
+      // Licença: guardar se é recuperável (default true → mantém o fluxo actual do banco).
+      // Só 'não recuperável' (recuperavel === false) neutraliza o banco de horas.
+      if (cellType === 'baixa') nonWorkCell.recuperavel = (editCtx.licRecuperavel === false) ? false : true;
+      S.schedule[pid][day] = nonWorkCell;
       // Limpieza atómica: eliminar apoio huérfano de este día
       if (S._apoioShifts?.[pid]?.[day]) {
         delete S._apoioShifts[pid][day];
@@ -3014,6 +3191,10 @@
         #tab-gerador .c-ferias { background:#f9f9f9; }
         #tab-gerador .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
         #tab-gerador .c-na .gh-sh-line     { color:#e0e0e0; }
+        #tab-gerador .c-baixa-med { background:#eef2fb; }
+        #tab-gerador .c-baixa-med .gh-sh-line { color:#3a4a8c; font-style:italic; }
+        #tab-gerador .c-fora-contrato { background:#f4f0fa; }
+        #tab-gerador .c-fora-contrato .gh-sh-line { color:#5b4b8a; font-style:italic; }
         #tab-gerador .c-elsewhere { background:#f5f5f5; }
         #tab-gerador .c-soft { background:#fffbf0; }
         #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
@@ -3100,6 +3281,21 @@
         #gh-confirm-modal .gh-cm-cancel:hover { background:#f5f5f5; }
         #gh-confirm-modal .gh-cm-ok { padding:8px 22px; border:none; background:#c0392b; border-radius:6px; font-size:.78rem; font-weight:700; cursor:pointer; color:#fff; font-family:inherit; }
         #gh-confirm-modal .gh-cm-ok:hover { background:#a93226; }
+        /* ── LICENÇA MODAL (recuperável / não recuperável) ── */
+        #gh-lic-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9200; align-items:center; justify-content:center; }
+        #gh-lic-modal.open { display:flex; }
+        #gh-lic-modal .gh-lm-box { background:#fff; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.2); padding:24px 24px 16px; max-width:380px; width:90vw; text-align:center; }
+        #gh-lic-modal .gh-lm-ttl { font-size:.68rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#333; margin-bottom:8px; }
+        #gh-lic-modal .gh-lm-msg { font-size:.86rem; font-weight:500; color:#444; margin-bottom:18px; line-height:1.5; }
+        #gh-lic-modal .gh-lm-btns { display:flex; gap:10px; justify-content:center; margin-bottom:12px; }
+        #gh-lic-modal .gh-lm-btn { flex:1; display:flex; flex-direction:column; gap:3px; align-items:center; padding:12px 12px; border-radius:9px; font-size:.82rem; font-weight:700; cursor:pointer; font-family:inherit; border:1.5px solid; transition:all .15s; }
+        #gh-lic-modal .gh-lm-sub { font-size:.62rem; font-weight:600; opacity:.75; }
+        #gh-lic-modal .gh-lm-rec { background:#e8f5e9; border-color:#a5d6a7; color:#1b5e20; }
+        #gh-lic-modal .gh-lm-rec:hover { background:#c8e6c9; }
+        #gh-lic-modal .gh-lm-nrec { background:#e3f2fd; border-color:#90caf9; color:#0d47a1; }
+        #gh-lic-modal .gh-lm-nrec:hover { background:#bbdefb; }
+        #gh-lic-modal .gh-lm-cancel { background:none; border:none; color:#999; font-size:.76rem; font-weight:600; cursor:pointer; font-family:inherit; padding:4px 10px; }
+        #gh-lic-modal .gh-lm-cancel:hover { color:#555; text-decoration:underline; }
         /* ── FERIAS BANNER (injected separately, also scope it) ── */
         #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
         #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
@@ -3216,6 +3412,8 @@
               <option value="folga">FOLGA</option>
               <option value="ferias">FÉRIAS</option>
               <option value="baixa">Licença</option>
+              <option value="baixa_medica">Baixa Médica</option>
+              <option value="fora_contrato">Fora de Contrato</option>
             </select>
             <select id="gh-me-shift" style="display:none">
               <option value="10:00-13:00|14:00-19:00">[A]</option>
@@ -3243,6 +3441,8 @@
                 <button class="gh-pill gh-pill-tipo" data-val="folga">Folga</button>
                 <button class="gh-pill gh-pill-tipo" data-val="ferias">Férias</button>
                 <button class="gh-pill gh-pill-tipo" data-val="baixa">Licença</button>
+                <button class="gh-pill gh-pill-tipo" data-val="baixa_medica">Baixa Médica</button>
+                <button class="gh-pill gh-pill-tipo" data-val="fora_contrato">Fora de Contrato</button>
               </div>
             </div>
 
@@ -3295,10 +3495,30 @@
       document.getElementById('gh-me-type-btns').addEventListener('click', e => {
         const btn = e.target.closest('.gh-pill[data-val]');
         if (!btn) return;
-        document.getElementById('gh-me-type').value = btn.dataset.val;
-        ghSyncPillGroup('gh-me-type-btns', btn.dataset.val);
+        const val = btn.dataset.val;
+        // Licença: perguntar recuperável / não recuperável ANTES de aplicar.
+        if (val === 'baixa') {
+          showLicencaModal(
+            (recuperavel) => {
+              if (editCtx) editCtx.licRecuperavel = recuperavel;
+              document.getElementById('gh-me-type').value = 'baixa';
+              ghSyncPillGroup('gh-me-type-btns', 'baixa');
+              meTypeChange();
+              applyEdit();
+            },
+            () => {
+              // Cancelar: repor o pill no tipo actual da célula, sem alterar nada.
+              const cur = (editCtx && S.schedule[editCtx.pid]?.[editCtx.day]?.type) || 'folga';
+              const mapped = cur === 'work' ? 'work' : cur === 'ferias' ? 'ferias' : cur === 'baixa_medica' ? 'baixa_medica' : cur === 'fora_contrato' ? 'fora_contrato' : cur === 'baixa' ? 'baixa' : 'folga';
+              ghSyncPillGroup('gh-me-type-btns', mapped);
+            }
+          );
+          return;
+        }
+        document.getElementById('gh-me-type').value = val;
+        ghSyncPillGroup('gh-me-type-btns', val);
         meTypeChange();
-        if (btn.dataset.val !== 'work') applyEdit();
+        if (val !== 'work') applyEdit();
       });
       // HORARIO pill buttons — wired to BOTH the normal-shift group and the apoio group
       const onShiftPillClick = (e) => {

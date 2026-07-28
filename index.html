@@ -3868,10 +3868,50 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   ───────────────────────────────────────────────────────────── */
   var _wzWeekIndex = 0;
 
+  /* ── FUNCHAL UNIFICADO: agrupar blocos pela mesma "SEMANA N"
+     (Mezka Funchal + Parfois Arcadas). Só é usado quando
+     window._isFunchalUnificadoMode === true; não afeta as outras lojas. ── */
+  function _wzGetWeekGroups() {
+    var blocks = window._lastBlocks;
+    var groups = [];
+    var map = {};
+    if (!blocks) return groups;
+    blocks.forEach(function (b, i) {
+      var key = (b[1] && b[1][0]) ? b[1][0] : ('#' + i);
+      if (!map.hasOwnProperty(key)) {
+        map[key] = groups.length;
+        groups.push({ key: key, indices: [i] });
+      } else {
+        groups[map[key]].indices.push(i);
+      }
+    });
+    return groups;
+  }
+  function _wzFindGroupIndexForBlock(groups, blockIdx) {
+    for (var g = 0; g < groups.length; g++) {
+      if (groups[g].indices.indexOf(blockIdx) !== -1) return g;
+    }
+    return 0;
+  }
+
   function wzWeekNavUpdate() {
     var blocks = window._lastBlocks;
     if (!blocks || !blocks.length) {
       document.getElementById('wz-week-nav').style.display = 'none';
+      return;
+    }
+    if (window._isFunchalUnificadoMode) {
+      var groups = _wzGetWeekGroups();
+      var gi = _wzFindGroupIndexForBlock(groups, _wzWeekIndex);
+      var fLabel = document.getElementById('wz-week-label');
+      var fPrev  = document.getElementById('wz-week-prev');
+      var fNext  = document.getElementById('wz-week-next');
+      document.getElementById('wz-week-nav').style.display = groups.length > 1 ? 'flex' : 'none';
+      if (fLabel) fLabel.textContent = groups[gi] ? groups[gi].key.toLowerCase() : '';
+      if (fPrev)  fPrev.disabled = gi <= 0;
+      if (fNext)  fNext.disabled = gi >= groups.length - 1;
+      var fWs = document.getElementById('week-select');
+      if (fWs) fWs.value = _wzWeekIndex;
       return;
     }
     var total  = blocks.length;
@@ -3895,6 +3935,10 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     /* kill any pending fade before rendering */
     var tc = document.getElementById('table-container');
     if (tc) { tc.style.transition = 'none'; tc.style.opacity = '1'; }
+    if (window._isFunchalUnificadoMode && window._hRender && typeof window._hRender.funchal === 'function') {
+      window._hRender.funchal(blocks, _wzWeekIndex);
+      return;
+    }
     if (window._hRender && typeof window._hRender.table === 'function') {
       var firstCell = (blocks[_wzWeekIndex][0][0] || '').trim().toLowerCase();
       if (firstCell === 'porto santo') {
@@ -4012,9 +4056,21 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
     document.getElementById('wz-hor-modal-bg').addEventListener('click', closeHor);
 
     document.getElementById('wz-week-prev').addEventListener('click', function () {
+      if (window._isFunchalUnificadoMode) {
+        var groupsP = _wzGetWeekGroups();
+        var giP = _wzFindGroupIndexForBlock(groupsP, _wzWeekIndex);
+        if (giP > 0) wzWeekGo(groupsP[giP - 1].indices[0]);
+        return;
+      }
       wzWeekGo(_wzWeekIndex - 1);
     });
     document.getElementById('wz-week-next').addEventListener('click', function () {
+      if (window._isFunchalUnificadoMode) {
+        var groupsN = _wzGetWeekGroups();
+        var giN = _wzFindGroupIndexForBlock(groupsN, _wzWeekIndex);
+        if (giN < groupsN.length - 1) wzWeekGo(groupsN[giN + 1].indices[0]);
+        return;
+      }
       wzWeekGo(_wzWeekIndex + 1);
     });
 
@@ -4802,8 +4858,8 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
           </svg>
         </span>
         <div>
-          <div class="adm-mod-name">VENDAS SISTEMA</div>
-          <div class="adm-mod-desc">análise de vendas do sistema</div>
+          <div class="adm-mod-name">HISTÓRICO</div>
+          <div class="adm-mod-desc">análise de vendas históricas</div>
         </div>
         <div class="adm-mod-arrow">→</div>
       </div>

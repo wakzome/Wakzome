@@ -1116,9 +1116,12 @@
     if (overlay) return overlay;
     overlay = document.createElement('div');
     overlay.id = 'funchal-cov-overlay';
-    overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:9600;background:rgba(20,20,26,.4);align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+    // O blur tem de estar no OVERLAY (a camada de fundo) para desfocar o que
+    // está atrás; o backdrop-filter do painel, sozinho, só desfoca o próprio
+    // fundo escuro do overlay — nunca chega a "ver" a página por trás dele.
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:9600;background:rgba(15,15,22,.46);backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
     overlay.innerHTML =
-      '<div id="funchal-cov-panel" style="position:relative;max-width:920px;width:100%;max-height:82vh;overflow-y:auto;background:rgba(255,255,255,.58);backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);border:1px solid rgba(255,255,255,.75);border-radius:18px;box-shadow:0 16px 50px rgba(0,0,0,.25);padding:22px 24px;">'
+      '<div id="funchal-cov-panel" style="position:relative;max-width:920px;width:100%;max-height:82vh;overflow-y:auto;background:rgba(255,255,255,.78);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.9);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6);padding:22px 24px;">'
       +   '<button type="button" id="funchal-cov-close" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:16px;color:#777;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px;">✕</button>'
       +   '<div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:16px;text-align:center;">Cobertura por hora</div>'
       +   '<div id="funchal-cov-body"></div>'

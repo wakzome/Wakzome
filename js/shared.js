@@ -1169,8 +1169,10 @@
         + '</div>';
     });
     // Grelha fixa de 2 colunas — 2 lojas em cima, 2 em baixo (em vez de
-    // flex-wrap, que enchia 3 por linha e deixava a 4ª sozinha).
-    return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">' + sectionsHtml + '</div>';
+    // flex-wrap, que enchia 3 por linha e deixava a 4ª sozinha). Em ecrãs
+    // estreitos, a classe funchal-cov-grid passa a 1 coluna (ver media
+    // query em funchalEnsureLiveStyles) para as lojas não se sobreporem.
+    return '<div class="funchal-cov-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">' + sectionsHtml + '</div>';
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1188,6 +1190,9 @@
     style.textContent = `
       @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
       .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
+      @media (max-width: 700px) {
+        .funchal-cov-grid { grid-template-columns: 1fr !important; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1293,17 +1298,22 @@
     const cont = document.getElementById('table-container');
     if (!cont || document.getElementById('funchal-cov-toggle')) return;
     // #table-container é display:flex (row) — inserir o botão como IRMÃO da
-    // <table> punha-os lado a lado, empurrando a tabela. Em vez disso,
-    // embrulha-se o conteúdo que o renderPortoSanto já colocou (a <table>)
+    // <table> punha-os lado a lado, empurrando a tabela. Embrulha-se então
     // numa coluna própria com o botão por cima, tal como o funchal já faz —
-    // sem alterar renderPortoSanto, só reorganizar o que ele já produziu.
-    const existingHtml = cont.innerHTML;
-    cont.innerHTML = '<div id="porto-cov-col" style="display:flex;flex-direction:column;width:100%;">'
-      +   '<div style="text-align:center;margin-bottom:14px;">'
-      +     '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>'
-      +   '</div>'
-      +   existingHtml
-      + '</div>';
+    // MOVENDO os nós existentes (appendChild move, não recria) em vez de
+    // reconstruir a partir de innerHTML em string: renderPortoSanto já
+    // ligou os cliques nos nomes via hpsBindNameClicks(rows) aos nós
+    // originais; reatribuir innerHTML destruía-os e criava nós novos sem
+    // listener nenhum, perdendo o clique no nome. Mover preserva-os.
+    const col = document.createElement('div');
+    col.id = 'porto-cov-col';
+    col.style.cssText = 'display:flex;flex-direction:column;width:100%;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'text-align:center;margin-bottom:14px;';
+    bar.innerHTML = '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>';
+    col.appendChild(bar);
+    while (cont.firstChild) col.appendChild(cont.firstChild);
+    cont.appendChild(col);
     document.getElementById('funchal-cov-toggle').addEventListener('click', () => {
       const rows = portoSantoCurrentRowsIfActive();
       if (!rows) return;
@@ -1963,6 +1973,7 @@
   //  loja atual antes de fazer seja o que for, por isso não têm efeito
   //  nenhum fora do Porto Santo / funchal.
   // ══════════════════════════════════════════════════════════════
+  funchalEnsureLiveStyles();
   funchalEnsureLiveTicker();
   const _fxTableEl = document.getElementById('table-container');
   if (_fxTableEl) {

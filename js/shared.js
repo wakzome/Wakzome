@@ -836,7 +836,7 @@
     const semanaKey = (current[1] && current[1][0]) || '';
     const groupBlocks = allBlocks.filter(b => ((b[1] && b[1][0]) || '') === semanaKey);
 
-    function buildSubTable(rows, hoursMap){
+    function buildSubTable(rows, hoursMap, targetPersonCount){
       const headerRows = rows.slice(0,2);
       const dataRows   = rows.slice(2);
       const cols = Math.max(...rows.map(r=>r.length));
@@ -861,6 +861,17 @@
       });
       if(cur) persons.push(cur);
 
+      // Preencher com linhas-fantasma (invisíveis, mas ocupam espaço) até ao
+      // máximo histórico de pessoas desta loja — mantém a altura da tabela
+      // constante entre semanas, para as setas/botão de cobertura no topo do
+      // modal nunca mudarem de posição no ecrã consoante quem trabalha nessa semana.
+      while (persons.length < (targetPersonCount||0)) {
+        persons.push([
+          ['', ...Array(cols-1).fill('09:30-13:00')],
+          ['', ...Array(cols-1).fill('14:00-18:30')]
+        ]);
+      }
+
       let html='<table style="margin:0 auto;">';
       for(let r=0;r<2;r++){
         html+='<tr>';
@@ -875,22 +886,26 @@
       persons.forEach(p=>{
         const A = p[0] || Array(cols).fill('');
         const B = p[1] || Array(cols).fill('');
+        const isPlaceholder = !(A[0]||'').trim();
         const bg = '#f2f2f2';
         let circleColor='red', isActiveNow=false;
-        for(let c=1;c<cols;c++){
-          const colDate=headerRows[1][c]; if(!colDate) continue;
-          const parts=colDate.split('/'); if(parts.length!==3) continue;
-          const d=new Date(+parts[2],parts[1]-1,+parts[0]);
-          if(d.toDateString()===new Date().toDateString()){
-            const horarios=[A[c],B[c]].filter(v=>v);
-            if(horarios.some(h=>isNowInSchedule(h))){ circleColor='green'; isActiveNow=true; }
+        if (!isPlaceholder) {
+          for(let c=1;c<cols;c++){
+            const colDate=headerRows[1][c]; if(!colDate) continue;
+            const parts=colDate.split('/'); if(parts.length!==3) continue;
+            const d=new Date(+parts[2],parts[1]-1,+parts[0]);
+            if(d.toDateString()===new Date().toDateString()){
+              const horarios=[A[c],B[c]].filter(v=>v);
+              if(horarios.some(h=>isNowInSchedule(h))){ circleColor='green'; isActiveNow=true; }
+            }
           }
         }
         const activeCls = isActiveNow ? ' tr-active-now' : '';
+        const rowVis = isPlaceholder ? 'visibility:hidden;' : '';
         const nameRaw = A[0]||'';
         const hrsLabel = funchalFormatHrs((hoursMap && hoursMap[nameRaw.trim()]) || 0);
         let rowspanCols=[];
-        html+=`<tr class="${activeCls}">`;
+        html+=`<tr class="${activeCls}" style="${rowVis}">`;
         html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
                 <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                 ${escapeHtml(nameRaw)}<br>${hrsLabel}</td>`;
@@ -910,7 +925,7 @@
             rowspanCols.push(c);
           } else { html+=`<td class="${cls}" style="background:${bg};width:${colWidths[c]*12}px;text-align:center;"></td>`; }
         }
-        html+=`</tr><tr class="${activeCls}">`;
+        html+=`</tr><tr class="${activeCls}" style="${rowVis}">`;
         for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
           const cls=(c===todayCol?'today-col':'');
           html+=`<td class="${cls}" style="background:${bg};width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
@@ -922,12 +937,14 @@
     }
 
     const hoursMap = funchalCollectPersonWeekHours(groupBlocks);
+    const maxPersonCountByStore = funchalMaxPersonCountByStore(allBlocks);
     let combined = '';
     groupBlocks.forEach(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
+      const targetCount = maxPersonCountByStore[storeName] || 0;
       combined += '<div style="margin-bottom:28px;">'
                 + '<div style="font-weight:700;font-size:14px;letter-spacing:0.5px;text-transform:uppercase;margin:0 0 8px;text-align:center;color:#333;">' + escapeHtml(storeName) + '</div>'
-                + buildSubTable(block, hoursMap)
+                + buildSubTable(block, hoursMap, targetCount)
                 + '</div>';
     });
     const coverageHtml = funchalBuildCoveragePanel(groupBlocks);
@@ -973,6 +990,25 @@
   function funchalFormatHrs(totalHrs){
     const rounded = Math.round((totalHrs||0) * 10) / 10;
     return (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)) + 'hrs';
+  }
+
+  // Nº máximo de pessoas que ALGUMA VEZ apareceu em cada loja, em qualquer
+  // semana do CSV — usado para reservar sempre o mesmo nº de linhas por loja,
+  // para a caixa do modal (centrada pelo index.html) não mudar de altura
+  // consoante a semana, o que faria as setas "saltarem" de posição no ecrã.
+  function funchalMaxPersonCountByStore(allBlocks){
+    const maxByStore = {};
+    allBlocks.forEach(block=>{
+      const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
+      const dataRows = block.slice(2);
+      let count=0, curName=null;
+      dataRows.forEach(row=>{
+        const name=(row[0]||'').trim();
+        if(count===0 || name!==curName){ count++; curName=name; }
+      });
+      if(!maxByStore[storeName] || count>maxByStore[storeName]) maxByStore[storeName]=count;
+    });
+    return maxByStore;
   }
 
   // Soma as horas de TODOS os turnos de cada pessoa nas duas lojas da semana
@@ -1048,7 +1084,12 @@
         const dayCells = byDay.map(segs=>{
           let count=0;
           segs.forEach(([s,e])=>{ if(s<H+0.5 && e>H) count++; });
-          const style = count===0 ? 'color:#ccc;' : (count===1 ? 'color:#a3730a;background:rgba(255,229,153,.55);' : 'color:#1a6c1a;background:rgba(183,230,183,.55);');
+          // Escala semântica: 1 pessoa = perigo (vermelho), 2 = atenção (âmbar),
+          // 3+ = boa cobertura (verde) — tons saturados, sem pastel.
+          const style = count===0 ? 'color:#b3b3bd;'
+            : count===1 ? 'color:#b91c1c;background:rgba(185,28,28,.12);'
+            : count===2 ? 'color:#b45309;background:rgba(180,83,9,.12);'
+            : 'color:#15803d;background:rgba(21,128,61,.12);';
           return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'+(count||'')+'</td>';
         }).join('');
         const label = funchalFormatHourLabel(H);

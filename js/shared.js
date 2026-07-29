@@ -893,7 +893,7 @@
         html+=`<tr class="${activeCls}">`;
         html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
                 <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
-                ${escapeHtml(nameRaw)}<br><span style="font-size:10px;font-weight:400;opacity:.65;">${hrsLabel}</span></td>`;
+                ${escapeHtml(nameRaw)}<br>${hrsLabel}</td>`;
         for(let c=1;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
           const top=A[c]||'', bot=B[c]||'';
@@ -940,22 +940,20 @@
       +   '<div style="text-align:center;margin-bottom:14px;">'
       +     '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>'
       +   '</div>'
-      +   '<div id="funchal-view-schedule">' + combined + '</div>'
-      +   '<div id="funchal-view-coverage" style="display:none;">' + coverageHtml + '</div>'
+      +   combined
       + '</div>';
 
     hpsBindNameClicksFunchal(groupBlocks);
 
+    // Overlay de cobertura: nó único anexado ao <body> (mesmo padrão do
+    // hps-overlay), para escapar de qualquer transform/contexto do modal
+    // #wz-hor-modal. Fecha ao clicar fora (no fundo) ou no ✕ — nunca precisa
+    // de um botão para "voltar" porque a tabela de horários nunca é escondida.
+    const covOverlay = funchalCovEnsureOverlay();
+    document.getElementById('funchal-cov-body').innerHTML = coverageHtml;
     const covBtn = document.getElementById('funchal-cov-toggle');
-    const viewSchedule = document.getElementById('funchal-view-schedule');
-    const viewCoverage = document.getElementById('funchal-view-coverage');
-    if (covBtn && viewSchedule && viewCoverage) {
-      covBtn.addEventListener('click', () => {
-        const showingCoverage = viewCoverage.style.display !== 'none';
-        viewCoverage.style.display = showingCoverage ? 'none' : 'block';
-        viewSchedule.style.display = showingCoverage ? 'block' : 'none';
-        covBtn.textContent = showingCoverage ? '📊 Cobertura' : '📅 Horário';
-      });
+    if (covBtn) {
+      covBtn.addEventListener('click', () => { covOverlay.style.display = 'flex'; });
     }
   }
 
@@ -1009,6 +1007,12 @@
     return totals;
   }
 
+  function funchalFormatHourLabel(H){
+    const hh = Math.floor(H);
+    const mm = Math.round((H - hh) * 60);
+    return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+  }
+
   function funchalBuildCoveragePanel(groupBlocks){
     let sectionsHtml = '';
     groupBlocks.forEach(block=>{
@@ -1030,34 +1034,58 @@
       let minH=Infinity, maxH=-Infinity;
       byDay.forEach(segs=>segs.forEach(([s,e])=>{ if(s<minH) minH=s; if(e>maxH) maxH=e; }));
       if(!isFinite(minH) || !isFinite(maxH)){
-        sectionsHtml += '<div style="margin-bottom:18px;">'
-          + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;">' + escapeHtml(storeName) + '</div>'
-          + '<div style="font-size:11px;color:#aaa;font-style:italic;">Sem turnos atribuídos</div>'
+        sectionsHtml += '<div style="flex:1 1 260px;min-width:230px;">'
+          + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
+          + '<div style="font-size:11px;color:#888;font-style:italic;text-align:center;">Sem turnos atribuídos</div>'
           + '</div>';
         return;
       }
-      const startHour = Math.floor(minH), endHour = Math.ceil(maxH);
-      const headCells = dayHeader.map(d=>'<th style="padding:4px 2px;font-weight:700;color:#888;text-align:center;border-bottom:1px solid #e0e0e0;font-size:10px;letter-spacing:.03em;">'+escapeHtml(d)+'</th>').join('');
+      // Intervalos de 30 em 30 minutos, alinhados a :00/:30.
+      const startHour = Math.floor(minH*2)/2, endHour = Math.ceil(maxH*2)/2;
+      const headCells = dayHeader.map(d=>'<th style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'+escapeHtml(d)+'</th>').join('');
       let rowsHtml='';
-      for(let H=startHour; H<endHour; H++){
+      for(let H=startHour; H<endHour; H+=0.5){
         const dayCells = byDay.map(segs=>{
           let count=0;
-          segs.forEach(([s,e])=>{ if(s<H+1 && e>H) count++; });
-          const style = count===0 ? '' : (count===1 ? 'color:#c08a00;background:#fff7e6;' : 'color:#1a6c1a;background:#eaf7ea;');
-          return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:3px;'+style+'">'+(count||'')+'</td>';
+          segs.forEach(([s,e])=>{ if(s<H+0.5 && e>H) count++; });
+          const style = count===0 ? 'color:#ccc;' : (count===1 ? 'color:#a3730a;background:rgba(255,229,153,.55);' : 'color:#1a6c1a;background:rgba(183,230,183,.55);');
+          return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'+(count||'')+'</td>';
         }).join('');
-        const label = String(H).padStart(2,'0') + ':00';
-        rowsHtml += '<tr><td style="padding:3px 4px;color:#999;font-weight:600;text-align:left;white-space:nowrap;font-size:10px;">'+label+'</td>'+dayCells+'</tr>';
+        const label = funchalFormatHourLabel(H);
+        rowsHtml += '<tr><td style="padding:3px 4px;color:#777;font-weight:600;text-align:center;white-space:nowrap;font-size:10px;">'+label+'</td>'+dayCells+'</tr>';
       }
-      sectionsHtml += '<div style="margin-bottom:18px;">'
-        + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;">' + escapeHtml(storeName) + '</div>'
+      sectionsHtml += '<div style="flex:1 1 260px;min-width:230px;">'
+        + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
         + '<table style="width:100%;border-collapse:collapse;font-size:10px;">'
-        +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#bbb;text-align:left;border-bottom:1px solid #e0e0e0;font-size:10px;">h</th>' + headCells + '</tr></thead>'
+        +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;">h</th>' + headCells + '</tr></thead>'
         +   '<tbody>' + rowsHtml + '</tbody>'
         + '</table>'
         + '</div>';
     });
-    return '<div style="max-width:480px;margin:0 auto;border:1px solid #e2e2e2;border-radius:10px;background:#fafafa;padding:14px;box-sizing:border-box;">' + sectionsHtml + '</div>';
+    // blocos lado a lado (flex-row); em ecrãs estreitos quebram para a linha seguinte.
+    return '<div style="display:flex;flex-direction:row;flex-wrap:wrap;gap:20px;align-items:flex-start;">' + sectionsHtml + '</div>';
+  }
+
+  // Overlay de cobertura — nó único anexado a document.body (mesmo padrão do
+  // hps-overlay já usado no Porto Santo), com painel em glassmorphism. Fecha
+  // ao clicar no fundo ou no ✕; a tabela de horários por baixo nunca é
+  // escondida, por isso não é preciso nenhum botão para "voltar".
+  function funchalCovEnsureOverlay(){
+    let overlay = document.getElementById('funchal-cov-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'funchal-cov-overlay';
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:9600;background:rgba(20,20,26,.4);align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+    overlay.innerHTML =
+      '<div id="funchal-cov-panel" style="position:relative;max-width:920px;width:100%;max-height:82vh;overflow-y:auto;background:rgba(255,255,255,.58);backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);border:1px solid rgba(255,255,255,.75);border-radius:18px;box-shadow:0 16px 50px rgba(0,0,0,.25);padding:22px 24px;">'
+      +   '<button type="button" id="funchal-cov-close" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:16px;color:#777;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px;">✕</button>'
+      +   '<div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:16px;text-align:center;">Cobertura por hora</div>'
+      +   '<div id="funchal-cov-body"></div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
+    document.getElementById('funchal-cov-close').addEventListener('click', () => { overlay.style.display = 'none'; });
+    return overlay;
   }
 
   // ── Equivalentes "hps" (modal por pessoa) para a vista FUNCHAL UNIFICADO —

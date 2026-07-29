@@ -839,6 +839,7 @@
     function buildSubTable(rows, hoursMap, targetPersonCount){
       const headerRows = rows.slice(0,2);
       const dataRows   = rows.slice(2);
+      const storeSlug = ((rows[0] && rows[0][0]) || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const cols = Math.max(...rows.map(r=>r.length));
       const colWidths = Array(cols).fill(0);
       rows.forEach(r=>r.forEach((c,i)=>colWidths[i]=Math.max(colWidths[i],c.length)));
@@ -883,20 +884,20 @@
         }
         html+='</tr>';
       }
-      persons.forEach(p=>{
+      persons.forEach((p, pIdx)=>{
         const A = p[0] || Array(cols).fill('');
         const B = p[1] || Array(cols).fill('');
         const isPlaceholder = !(A[0]||'').trim();
         const bg = '#f2f2f2';
-        let circleColor='red', isActiveNow=false;
+        let circleColor='red', isActiveNow=false, todayHorarios=[];
         if (!isPlaceholder) {
           for(let c=1;c<cols;c++){
             const colDate=headerRows[1][c]; if(!colDate) continue;
             const parts=colDate.split('/'); if(parts.length!==3) continue;
             const d=new Date(+parts[2],parts[1]-1,+parts[0]);
             if(d.toDateString()===new Date().toDateString()){
-              const horarios=[A[c],B[c]].filter(v=>v);
-              if(horarios.some(h=>isNowInSchedule(h))){ circleColor='green'; isActiveNow=true; }
+              todayHorarios=[A[c],B[c]].filter(v=>v);
+              if(todayHorarios.some(h=>isNowInSchedule(h))){ circleColor='green'; isActiveNow=true; }
             }
           }
         }
@@ -904,10 +905,15 @@
         const rowVis = isPlaceholder ? 'visibility:hidden;' : '';
         const nameRaw = A[0]||'';
         const hrsLabel = funchalFormatHrs((hoursMap && hoursMap[nameRaw.trim()]) || 0);
+        // data-live-id liga a bolinha às 2 <tr> desta pessoa, para o timer de
+        // 30 em 30 min (funchalUpdateLiveDots) as encontrar e atualizar sem
+        // precisar de re-renderizar a tabela nem recarregar a página.
+        const liveId = 'fx-' + storeSlug + '-' + pIdx;
+        const liveIdAttr = isPlaceholder ? '' : ` data-live-id="${liveId}"`;
         let rowspanCols=[];
-        html+=`<tr class="${activeCls}" style="${rowVis}">`;
+        html+=`<tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
+                <span class="funchal-live-dot" data-today="${escapeHtml(todayHorarios.join('|'))}"${liveIdAttr} style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                 ${escapeHtml(nameRaw)}<br>${hrsLabel}</td>`;
         for(let c=1;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
@@ -925,7 +931,7 @@
             rowspanCols.push(c);
           } else { html+=`<td class="${cls}" style="background:${bg};width:${colWidths[c]*12}px;text-align:center;"></td>`; }
         }
-        html+=`</tr><tr class="${activeCls}" style="${rowVis}">`;
+        html+=`</tr><tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
           const cls=(c===todayCol?'today-col':'');
           html+=`<td class="${cls}" style="background:${bg};width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
@@ -972,6 +978,14 @@
     if (covBtn) {
       covBtn.addEventListener('click', () => { covOverlay.style.display = 'flex'; });
     }
+
+    // Bolinhas + ponto da cobertura: aplicar o estado atual já neste render,
+    // e arrancar (uma única vez) o timer que os mantém corretos a cada 30
+    // minutos certos do relógio, sem precisar de recarregar a página.
+    funchalEnsureLiveStyles();
+    funchalUpdateLiveDots();
+    funchalUpdateCoverageHourMarker();
+    funchalEnsureLiveTicker();
   }
 
   // ── Horas semanais + painel de cobertura para a vista FUNCHAL UNIFICADO —
@@ -1093,7 +1107,12 @@
           return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'+(count||'')+'</td>';
         }).join('');
         const label = funchalFormatHourLabel(H);
-        rowsHtml += '<tr><td style="padding:3px 4px;color:#777;font-weight:600;text-align:center;white-space:nowrap;font-size:10px;">'+label+'</td>'+dayCells+'</tr>';
+        // Ponto pulsante reservado em TODAS as linhas (visibility:hidden por
+        // omissão) — o timer de 30 em 30 min só alterna a visibilidade da
+        // linha correspondente à meia-hora atual, sem re-renderizar nada.
+        rowsHtml += '<tr><td style="padding:3px 4px;color:#777;font-weight:600;text-align:center;white-space:nowrap;font-size:10px;">'
+          + '<span class="funchal-live-hour-dot" data-hour="'+H+'" style="visibility:hidden;"></span>' + label
+          + '</td>'+dayCells+'</tr>';
       }
       sectionsHtml += '<div style="flex:1 1 260px;min-width:230px;">'
         + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
@@ -1105,6 +1124,75 @@
     });
     // blocos lado a lado (flex-row); em ecrãs estreitos quebram para a linha seguinte.
     return '<div style="display:flex;flex-direction:row;flex-wrap:wrap;gap:20px;align-items:flex-start;">' + sectionsHtml + '</div>';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ATUALIZAÇÃO AO VIVO (sem reload) — de 30 em 30 min, à hora certa do
+  //  relógio (não 30 min a contar do carregamento da página):
+  //   1) bolinha verde/vermelha de cada pessoa nas tabelas de horário;
+  //   2) ponto pulsante na linha da meia-hora atual, no painel de cobertura.
+  // ══════════════════════════════════════════════════════════════
+  let _funchalLiveTickerStarted = false;
+
+  function funchalEnsureLiveStyles(){
+    if (document.getElementById('funchal-live-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'funchal-live-styles';
+    style.textContent = `
+      @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
+      .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#3b82f6; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function funchalCurrentHalfHourDecimal(){
+    const now = new Date();
+    return now.getHours() + (now.getMinutes() < 30 ? 0 : 0.5);
+  }
+
+  // Reavalia cada bolinha a partir do horário-de-hoje guardado em data-today
+  // (texto estático, escrito no render) contra a hora ATUAL — não depende de
+  // reprocessar o CSV nem de recarregar a página.
+  function funchalUpdateLiveDots(){
+    document.querySelectorAll('#table-container .funchal-live-dot').forEach(span=>{
+      const raw = span.getAttribute('data-today') || '';
+      const segments = raw ? raw.split('|').filter(Boolean) : [];
+      const active = segments.some(h=>isNowInSchedule(h));
+      span.style.background = active ? 'green' : 'red';
+      const liveId = span.getAttribute('data-live-id');
+      if (liveId) {
+        document.querySelectorAll('#table-container tr[data-live-id="'+liveId+'"]').forEach(tr=>{
+          tr.classList.toggle('tr-active-now', active);
+        });
+      }
+    });
+  }
+
+  function funchalUpdateCoverageHourMarker(){
+    const nowH = funchalCurrentHalfHourDecimal();
+    document.querySelectorAll('#funchal-cov-body .funchal-live-hour-dot').forEach(dot=>{
+      const rowH = parseFloat(dot.getAttribute('data-hour'));
+      dot.style.visibility = (rowH === nowH) ? 'visible' : 'hidden';
+    });
+  }
+
+  // Arranca UMA SÓ VEZ por carregamento de página (flag module-level) — o
+  // callback volta a interrogar o DOM a cada tick, por isso continua correto
+  // mesmo depois de o utilizador navegar entre semanas várias vezes.
+  function funchalEnsureLiveTicker(){
+    if (_funchalLiveTickerStarted) return;
+    _funchalLiveTickerStarted = true;
+    function tick(){
+      funchalUpdateLiveDots();
+      funchalUpdateCoverageHourMarker();
+    }
+    tick();
+    const now = new Date();
+    const msToNextHalfHour = ((30 - (now.getMinutes() % 30)) * 60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+    setTimeout(() => {
+      tick();
+      setInterval(tick, 30*60*1000);
+    }, Math.max(1000, msToNextHalfHour));
   }
 
   // Overlay de cobertura — nó único anexado a document.body (mesmo padrão do

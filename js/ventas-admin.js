@@ -418,9 +418,9 @@
         'font-size:.82rem;border-radius:10px;overflow:hidden;border:1px solid #e6e6e6;'
       );
 
-      // Colgroup: Data | Num.# | MB | Visa | Voucher | Total | Obs | E*
+      // Colgroup: (visível) | Data | Num.# | MB | Visa | Voucher | Total | Obs | E*
       var cg = document.createElement('colgroup');
-      [88, 80, 80, 70, 70, 82, 36, 52].forEach(function (w) {
+      [30, 88, 80, 80, 70, 70, 82, 36, 52].forEach(function (w) {
         var col = document.createElement('col');
         col.style.width = w + 'px';
         cg.appendChild(col);
@@ -430,7 +430,7 @@
       // Cabecera
       var thead = document.createElement('thead');
       var hRow  = document.createElement('tr');
-      ['Data','Num.#','MB','Visa','Voucher','Total','Obs.','E*'].forEach(function (h, i) {
+      ['','Data','Num.#','MB','Visa','Voucher','Total','Obs.','E*'].forEach(function (h, i) {
         var th = document.createElement('th');
         th.textContent = h;
         th.setAttribute('style',
@@ -449,6 +449,44 @@
         var isToday = (r.fecha === today);
         var tr = document.createElement('tr');
         if (isToday) tr.setAttribute('style', 'background:rgba(109,207,149,0.10);');
+
+        // ── Círculo: marca o dia como visível na área da colaboradora além
+        //    da janela normal dos últimos 3 dias (coluna visible_extra em
+        //    ventas_diarias). Atualiza no Supabase e reflete-se de imediato
+        //    na área da colaboradora via Realtime (sem recarregar a página).
+        var tdToggle = document.createElement('td');
+        tdToggle.setAttribute('style', 'padding:5px 4px;text-align:center;vertical-align:middle;');
+        (function (row) {
+          var isOn = !!row.visible_extra;
+          var dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'vadm-visible-dot';
+          function _paint() {
+            dot.title = isOn
+              ? 'visível na área da colaboradora (clicar para ocultar)'
+              : 'clicar para tornar visível na área da colaboradora';
+            dot.style.cssText = 'width:14px;height:14px;border-radius:50%;cursor:pointer;padding:0;display:inline-block;' +
+              'border:1.5px solid ' + (isOn ? '#4a7c59' : '#888') + ';' +
+              'background:' + (isOn ? '#4a7c59' : 'transparent') + ';';
+          }
+          _paint();
+          dot.addEventListener('click', function () {
+            var novo = !isOn;
+            dot.disabled = true;
+            sbAdmin.from('ventas_diarias').update({ visible_extra: novo })
+              .eq('tienda', row.tienda).eq('fecha', row.fecha)
+              .then(function (res) {
+                dot.disabled = false;
+                if (res.error) { alert('Erro ao atualizar: ' + res.error.message); return; }
+                row.visible_extra = novo;
+                isOn = novo;
+                _paint();
+              })
+              .catch(function () { dot.disabled = false; alert('Erro de ligação.'); });
+          });
+          tdToggle.appendChild(dot);
+        })(r);
+        tr.appendChild(tdToggle);
 
         // Celda observaciones
         var obsText = (r.observaciones || '').trim();
@@ -498,6 +536,7 @@
         var tfoot   = document.createElement('tfoot');
         var trSub   = document.createElement('tr');
         var subCells = [
+          { v: '',                     center: false },
           { v: 'SUBTOTAL',             center: false },
           { v: _fmtEur(sub.numerario), center: true  },
           { v: _fmtEur(sub.mb),        center: true  },

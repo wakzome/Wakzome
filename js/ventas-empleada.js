@@ -10,7 +10,8 @@
   var _vAutoTimer  = null;   // interval autoguardado
   var _vDirty      = false;  // cambios sin guardar
   var _vSaving     = false;
-  var _vRecords    = [];     // últimos 3 días cargados
+  var _vRecords    = [];     // últimos 3 días cargados + dias partilhados (visible_extra)
+  var _vRealtimeChannel = null; // canal Supabase Realtime desta loja (ver _setupRealtime)
 
   var SYSTEM_START = '2026-05-01'; // Primeiro dia de declaração de vendas pelas colaboradoras
 
@@ -96,6 +97,7 @@
       if (!confirm('Tens alterações não guardadas. Sair mesmo assim?')) return;
     }
     _stopAutosave();
+    _teardownRealtime();
     var overlay = document.getElementById('ventas-overlay');
     overlay.classList.remove('visible');
     setTimeout(function () { overlay.classList.remove('open'); }, 650);
@@ -529,6 +531,10 @@
     var tLabel = _labelFor(_vSubtienda || _vStore);
     document.getElementById('ventas-overlay-title').textContent = 'ventas · ' + tLabel.toLowerCase();
 
+    // Atualização em tempo real: dias marcados como visíveis pela
+    // administração aparecem aqui sem recarregar a página.
+    _setupRealtime(_vSubtienda || _vStore);
+
     _fetchRecords().then(function (rows) {
       _vRecords = rows;
       _renderPanel(rows);
@@ -538,7 +544,9 @@
     });
   }
 
-  // ── Fetch últimos 3 días de esta tienda ──
+  // ── Fetch últimos 3 días de esta tienda + qualquer dia marcado pela
+  //    administração como visible_extra=true (partilhado manualmente,
+  //    mesmo que fora da janela normal dos últimos 3 dias) ──
   function _fetchRecords() {
     var tienda = _vSubtienda || _vStore;
     if (!tienda) {
@@ -553,7 +561,7 @@
         .from('ventas_diarias')
         .select('*')
         .eq('tienda', tienda)
-        .gte('fecha', cutoff)
+        .or('fecha.gte.' + cutoff + ',visible_extra.eq.true')
         .order('fecha', { ascending: false })
         .then(function (res) {
           if (res.error) throw res.error;
@@ -564,7 +572,75 @@
     }
   }
 
+  // ── Supabase Realtime: mantém a área da colaboradora sincronizada com o
+  //    que a administração fizer (sobretudo o toggle de visible_extra),
+  //    sem recarregar a página nem tocar no formulário aberto. ──
+  function _teardownRealtime() {
+    if (_vRealtimeChannel) {
+      try {
+        if (typeof sbAdmin !== 'undefined' && sbAdmin && typeof sbAdmin.removeChannel === 'function') {
+          sbAdmin.removeChannel(_vRealtimeChannel);
+        } else if (typeof _vRealtimeChannel.unsubscribe === 'function') {
+          _vRealtimeChannel.unsubscribe();
+        }
+      } catch (e) {}
+      _vRealtimeChannel = null;
+    }
+  }
+
+  function _setupRealtime(tienda) {
+    _teardownRealtime();
+    if (!tienda || typeof sbAdmin === 'undefined' || !sbAdmin || typeof sbAdmin.channel !== 'function') return;
+    try {
+      _vRealtimeChannel = sbAdmin
+        .channel('ventas-live-' + tienda.replace(/[^a-z0-9]/gi, '-') + '-' + Date.now())
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'ventas_diarias', filter: 'tienda=eq.' + tienda },
+          function (payload) {
+            var row = payload && (payload.new || payload.old);
+            if (row) _applyRealtimeRow(row);
+          }
+        )
+        .subscribe();
+    } catch (e) {
+      // Realtime indisponível — a app continua a funcionar, só sem
+      // atualização automática (a colaboradora vê ao reabrir o overlay).
+    }
+  }
+
+  // ── Aplica uma alteração chegada por Realtime: atualiza a linha do dia
+  //    (se estiver na janela normal, visível) e a secção de dias extra —
+  //    nunca mexe no formulário que a colaboradora possa ter aberto. ──
+  function _applyRealtimeRow(newRow) {
+    if (!newRow || !newRow.fecha) return;
+    var idx = _vRecords.findIndex(function (r) { return r.fecha === newRow.fecha; });
+    if (idx >= 0) _vRecords[idx] = newRow; else _vRecords.push(newRow);
+
+    var recentDates = _recentWindowDates();
+    if (recentDates.indexOf(newRow.fecha) !== -1 &&
+        document.querySelector('.v-hist-row[data-date="' + newRow.fecha + '"]')) {
+      _refreshHistRow(newRow.fecha, newRow);
+    }
+    _renderExtraDays(_vRecords, recentDates);
+  }
+
   // ── Renderizar panel ──
+  // ── Datas da janela normal (máx 3, limitada por SYSTEM_START) ──
+  function _recentWindowDates() {
+    var today = _todayStr();
+    var msPerDay = 86400000;
+    var daysSinceStart = Math.floor((new Date(today) - new Date(SYSTEM_START)) / msPerDay);
+    var daysToShow = Math.min(3, daysSinceStart + 1); // día 1→1, día 2→2, día 3+→3
+
+    var dates = [];
+    for (var d = 0; d < daysToShow; d++) {
+      var dateStr = _offsetDate(-d);
+      if (dateStr < SYSTEM_START) break;
+      dates.push(dateStr);
+    }
+    return dates;
+  }
+
   function _renderPanel(rows) {
     var body = document.getElementById('ventas-overlay-body');
     body.innerHTML = '';
@@ -578,21 +654,20 @@
     histTitle.textContent = 'REGISTOS RECENTES';
     histSection.appendChild(histTitle);
 
-    // Calcular cuántos días mostrar: máx 3, pero limitado por días desde SYSTEM_START
-    var today = _todayStr();
-    var msPerDay = 86400000;
-    var daysSinceStart = Math.floor((new Date(today) - new Date(SYSTEM_START)) / msPerDay);
-    var daysToShow = Math.min(3, daysSinceStart + 1); // día 1→1, día 2→2, día 3+→3
-
-    // Generar solo los días desde hoy hacia atrás, sin cruzar SYSTEM_START
-    for (var d = 0; d < daysToShow; d++) {
-      var dateStr = _offsetDate(-d);
-      if (dateStr < SYSTEM_START) break;
+    var recentDates = _recentWindowDates();
+    recentDates.forEach(function (dateStr, d) {
       var rec = rows.find(function (r) { return r.fecha === dateStr; }) || null;
       var dayEl = _buildHistRow(dateStr, rec, d === 0);
       histSection.appendChild(dayEl);
-    }
+    });
     body.appendChild(histSection);
+
+    // ── Dias partilhados pela administração fora da janela normal ──
+    var extraSection = document.createElement('div');
+    extraSection.id = 'v-hist-extra';
+    extraSection.className = 'v-hist-section';
+    body.appendChild(extraSection);
+    _renderExtraDays(rows, recentDates);
 
     // ── Formulario ──
     var formSection = document.createElement('div');
@@ -602,6 +677,32 @@
 
     // Por defecto abrir el formulario del día de hoy
     _openForm(_todayStr(), rows.find(function (r) { return r.fecha === _todayStr(); }) || null);
+  }
+
+  // ── Secção "partilhado pela administração": mostra dias marcados
+  //    manualmente como visible_extra=true que caem fora da janela normal
+  //    dos últimos 3 dias. Reconstrói-se sempre a partir de _vRecords,
+  //    incluindo quando chamada por uma atualização Realtime. ──
+  function _renderExtraDays(rows, recentDates) {
+    var extraSection = document.getElementById('v-hist-extra');
+    if (!extraSection) return;
+
+    var extraRows = rows.filter(function (r) {
+      return r && r.visible_extra && recentDates.indexOf(r.fecha) === -1;
+    }).sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; });
+
+    extraSection.innerHTML = '';
+    if (!extraRows.length) return;
+
+    var extraTitle = document.createElement('div');
+    extraTitle.className = 'v-section-label';
+    extraTitle.textContent = 'PARTILHADO PELA ADMINISTRAÇÃO';
+    extraSection.appendChild(extraTitle);
+
+    extraRows.forEach(function (rec) {
+      var dayEl = _buildHistRow(rec.fecha, rec, false);
+      extraSection.appendChild(dayEl);
+    });
   }
 
   // ── Fila de historial ──

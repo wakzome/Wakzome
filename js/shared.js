@@ -750,6 +750,31 @@
     document.getElementById('table-container').innerHTML=html;
   }
 
+  // ══════════════════════════════════════════════════════════════
+  //  ESTILO "GLASS" PARTILHADO — usado tanto por Porto Santo
+  //  (renderPortoSanto) como pelo funchal unificado (buildSubTable /
+  //  renderFunchalUnificado), para os dois terem exatamente o mesmo
+  //  visual apesar de virem de funções e formatos de dados diferentes.
+  //  É glassmorphism (blur + transparência + gradiente + highlight
+  //  especular estático via inset) — a aproximação leve e compatível
+  //  com todos os browsers/dispositivos que a web permite; não é o
+  //  material "Liquid Glass" nativo da Apple (esse usa refração real
+  //  e especularidade dinâmica via GPU shaders do próprio sistema
+  //  operativo, sem equivalente performático na web).
+  // ══════════════════════════════════════════════════════════════
+  const FX_GLASS_CARD = 'background:linear-gradient(135deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.48) 100%);'
+    + 'backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);'
+    + 'border:1px solid rgba(255,255,255,.75);border-radius:16px;'
+    + 'box-shadow:0 8px 30px rgba(0,0,0,.07), inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(0,0,0,.03);'
+    + 'padding:18px 16px 14px;';
+  const FX_TH_NORMAL = 'background:linear-gradient(180deg, rgba(42,44,50,.94) 0%, rgba(26,28,34,.94) 100%);color:#fff;';
+  const FX_TH_TODAY  = 'background:linear-gradient(180deg, rgba(70,152,235,.22) 0%, rgba(56,142,235,.14) 100%);color:#1a3a5c;';
+  const FX_CELL_BG       = 'rgba(255,255,255,.45)';
+  const FX_CELL_BG_TODAY = 'rgba(56,142,235,.10)';
+  function fxDotGlow(circleColor){
+    return circleColor === 'green' ? '0 0 6px 1px rgba(42,138,42,.55)' : '0 0 6px 1px rgba(190,50,50,.35)';
+  }
+
   function renderPortoSanto(blocks, index) {
     const rows = blocks[index];
     const cols = Math.max(...rows.map(r => r.length));
@@ -773,9 +798,9 @@
       const firstCell = (row[0] || '').trim().toLowerCase();
       if (firstCell === 'porto santo') {
         html += '<tr>';
-        html += `<th style="width:${colWidths[0]*12}px;background:#444;color:#fff;text-align:center;">${escapeHtml(row[0])}</th>`;
+        html += `<th style="width:${colWidths[0]*12}px;${FX_TH_NORMAL}text-align:center;padding:6px 4px;">${escapeHtml(row[0])}</th>`;
         for (let c = 1; c < cols; c++) {
-          html += `<th style="width:${colWidths[c]*12}px;background:#444;color:#fff;text-align:center;">${escapeHtml(row[c] || '')}</th>`;
+          html += `<th style="width:${colWidths[c]*12}px;${FX_TH_NORMAL}text-align:center;padding:6px 4px;">${escapeHtml(row[c] || '')}</th>`;
         }
         html += '</tr>'; i++; continue;
       }
@@ -783,8 +808,10 @@
       html += '<tr>';
       for (let c = 0; c < cols; c++) {
         const cls = (c === todayCol ? 'today-col' : '');
-        const bg = (c === todayCol ? '' : 'background:#444;color:#fff;');
-        html += `<th class="${cls}" style="width:${colWidths[c]*12}px;${bg}text-align:center;">${escapeHtml(row[c] || '')}</th>`;
+        // Mesmos tons do cabeçalho do funchal unificado (FX_TH_NORMAL/
+        // FX_TH_TODAY) — visual idêntico entre as duas vistas.
+        const bg = (c === todayCol ? FX_TH_TODAY : FX_TH_NORMAL);
+        html += `<th class="${cls}" style="width:${colWidths[c]*12}px;${bg}text-align:center;padding:6px 4px;">${escapeHtml(row[c] || '')}</th>`;
       }
       html += '</tr>'; i++;
       while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
@@ -795,13 +822,17 @@
           if (horarios.some(h => isNowInSchedule(h))) { circleColor = 'green'; isActiveNow = true; }
         }
         const activeCls = isActiveNow ? ' tr-active-now' : '';
+        // Mesmo fundo subtil, destaque da coluna de hoje e glow da bolinha
+        // usados no funchal unificado (FX_CELL_BG*/fxDotGlow) — visual
+        // idêntico entre as duas vistas, apesar de virem de dados diferentes.
         html += `<tr class="${activeCls}">`;
-        html += `<td class="name hps-person-name" data-hps-person="${escapeHtml(A[0]||'')}" style="width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
-                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
+        html += `<td class="name hps-person-name" data-hps-person="${escapeHtml(A[0]||'')}" style="background:${FX_CELL_BG};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};box-shadow:${fxDotGlow(circleColor)};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                   ${escapeHtml(A[0]||'')}
                  </td>`;
         for (let c = 1; c < cols; c++) {
           const cls = (c === todayCol ? 'today-col' : '');
+          const cellBg = (c === todayCol ? FX_CELL_BG_TODAY : FX_CELL_BG);
           const morning = (A[c] || '').trim().toUpperCase();
           const afternoon = (B[c] || '').trim().toUpperCase();
           let content = '';
@@ -817,13 +848,19 @@
           } else {
             content = escapeHtml(A[c] || B[c] || '');
           }
-          html += `<td class="${cls}" style="width:${colWidths[c]*12}px;text-align:center;${nw}">${content}</td>`;
+          html += `<td class="${cls}" style="background:${cellBg};width:${colWidths[c]*12}px;text-align:center;${nw}">${content}</td>`;
         }
         html += '</tr>'; i += 2;
       }
     }
     html += '</table>';
-    document.getElementById('table-container').innerHTML = html;
+    // Mesmo card "glass" usado no funchal unificado (FX_GLASS_CARD) — como
+    // aqui é uma única tabela contínua (as 4 sub-lojas intercaladas, ao
+    // contrário do funchal que usa um card por sub-loja), envolve-se a
+    // tabela inteira num só card, mantendo hpsBindNameClicks a funcionar
+    // normalmente (usa querySelectorAll, não depende do pai direto).
+    document.getElementById('table-container').innerHTML =
+      '<div class="funchal-store-card" style="' + FX_GLASS_CARD + '">' + html + '</div>';
     hpsBindNameClicks(rows);
   }
 
@@ -881,12 +918,9 @@
         html+='<tr>';
         for(let c=0;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
-          // Cabeçalho em tom escuro suave (em vez do cinza sólido #444) — a
-          // coluna de hoje ganha um azul translúcido em vez de bloco sólido,
-          // destaque mais discreto e consistente com as células de dados.
-          const thBg = (c===todayCol
-            ? 'background:rgba(56,142,235,.16);color:#1a3a5c;'
-            : 'background:rgba(32,34,40,.92);color:#fff;');
+          // Mesmas constantes partilhadas com Porto Santo (FX_TH_NORMAL/
+          // FX_TH_TODAY) — garante visual idêntico entre as duas vistas.
+          const thBg = (c===todayCol ? FX_TH_TODAY : FX_TH_NORMAL);
           const thWrap=(c===0?'':'white-space:nowrap;');
           html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;padding:6px 4px;">${escapeHtml(headerRows[r][c]||'')}</th>`;
         }
@@ -896,12 +930,10 @@
         const A = p[0] || Array(cols).fill('');
         const B = p[1] || Array(cols).fill('');
         const isPlaceholder = !(A[0]||'').trim();
-        // Fundo subtil (deixa transparecer o glass do card) + destaque
-        // translúcido próprio para a coluna de hoje, em vez do bloco cinza
-        // sólido anterior — mantém a mesma leitura visual, mais discreta.
-        const bg = 'rgba(255,255,255,.45)';
-        const bgToday = 'rgba(56,142,235,.10)';
-        const cellBg = (isToday) => isToday ? bgToday : bg;
+        // Mesmas constantes partilhadas com Porto Santo (FX_CELL_BG/
+        // FX_CELL_BG_TODAY) — garante visual idêntico entre as duas vistas.
+        const bg = FX_CELL_BG;
+        const cellBg = (isToday) => isToday ? FX_CELL_BG_TODAY : FX_CELL_BG;
         let circleColor='red', isActiveNow=false, todayHorarios=[];
         if (!isPlaceholder) {
           for(let c=1;c<cols;c++){
@@ -923,10 +955,10 @@
         // precisar de re-renderizar a tabela nem recarregar a página.
         const liveId = 'fx-' + storeSlug + '-' + pIdx;
         const liveIdAttr = isPlaceholder ? '' : ` data-live-id="${liveId}"`;
-        // Glow suave a condizer com a cor da bolinha (verde=ativa, vermelho=
-        // inativa) — funchalUpdateLiveDots aplica o mesmo par cor+glow a
-        // cada tick, para não dessincronizar depois do primeiro render.
-        const dotGlow = circleColor === 'green' ? '0 0 6px 1px rgba(42,138,42,.55)' : '0 0 6px 1px rgba(190,50,50,.35)';
+        // Mesma função partilhada com Porto Santo (fxDotGlow) — o glow
+        // fica sempre sincronizado com a cor, tanto aqui como no tick de
+        // funchalUpdateLiveDots (30 em 30 min).
+        const dotGlow = fxDotGlow(circleColor);
         let rowspanCols=[];
         html+=`<tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
@@ -977,11 +1009,11 @@
     groupBlocks.forEach(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
       const targetCount = maxPersonCountByStore[storeName] || 0;
-      // Card em "liquid glass" — mesmo vocabulário visual já usado no popup
-      // de cobertura (blur + saturação + transparência + cantos arredondados
-      // + sombra suave). Só a "casca" visual muda; estrutura/lógica da
-      // tabela (buildSubTable) ficam intactas.
-      combined += '<div class="funchal-store-card" style="margin-bottom:22px;background:rgba(255,255,255,.6);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.07);padding:18px 16px 14px;">'
+      // Mesmo card partilhado com Porto Santo (FX_GLASS_CARD) — glassmorphism
+      // com highlight especular estático (inset) e gradiente de profundidade;
+      // só a "casca" visual muda, estrutura/lógica da tabela (buildSubTable)
+      // ficam intactas.
+      combined += '<div class="funchal-store-card" style="margin-bottom:22px;' + FX_GLASS_CARD + '">'
                 + '<div style="font-weight:700;font-size:13px;letter-spacing:0.6px;text-transform:uppercase;margin:0 0 10px;text-align:center;color:#333;">' + escapeHtml(storeName) + '</div>'
                 + buildSubTable(block, hoursMap, targetCount, sharedColWidths)
                 + '</div>';
@@ -1302,13 +1334,14 @@
       @media (max-width: 700px) {
         .funchal-cov-grid { grid-template-columns: 1fr !important; }
       }
-      /* Modernização "liquid glass" da tabela de horários — escopada só ao
-         Funchal (#funchal-tables-scale), nunca afeta Porto Santo nem as
-         outras lojas: hairlines finas em vez de bordas duras, e um hover
-         mais discreto no nome (sobrepõe-se ao hover global de .hps-person-name). */
-      #funchal-tables-scale table th { border: none; }
-      #funchal-tables-scale table td { border-bottom: 1px solid rgba(0,0,0,.05); }
-      #funchal-tables-scale .hps-person-name:hover { background: rgba(0,0,0,.04) !important; }
+      /* Modernização visual da tabela de horários — escopada à classe
+         .funchal-store-card, partilhada por Porto Santo (renderPortoSanto)
+         e pelo funchal unificado (buildSubTable), nunca afeta as outras
+         lojas: hairlines finas em vez de bordas duras, hover mais discreto
+         no nome (sobrepõe-se ao hover global de .hps-person-name). */
+      .funchal-store-card table th { border: none; }
+      .funchal-store-card table td { border-bottom: 1px solid rgba(0,0,0,.05); }
+      .funchal-store-card .hps-person-name:hover { background: rgba(0,0,0,.04) !important; }
       #funchal-cov-toggle:hover { background: rgba(255,255,255,.85); }
     `;
     document.head.appendChild(style);
@@ -1322,10 +1355,11 @@
       const raw = span.getAttribute('data-today') || '';
       const segments = raw ? raw.split('|').filter(Boolean) : [];
       const active = segments.some(h=>isNowInSchedule(h));
-      span.style.background = active ? 'green' : 'red';
-      // Mesmo glow do render inicial — evita dessincronizar a sombra da cor
-      // depois do primeiro tick (30 em 30 min).
-      span.style.boxShadow = active ? '0 0 6px 1px rgba(42,138,42,.55)' : '0 0 6px 1px rgba(190,50,50,.35)';
+      const dotColor = active ? 'green' : 'red';
+      span.style.background = dotColor;
+      // Mesma função partilhada (fxDotGlow) — evita dessincronizar a sombra
+      // da cor depois do primeiro tick (30 em 30 min).
+      span.style.boxShadow = fxDotGlow(dotColor);
       const liveId = span.getAttribute('data-live-id');
       if (liveId) {
         document.querySelectorAll('#table-container tr[data-live-id="'+liveId+'"]').forEach(tr=>{
@@ -1517,7 +1551,13 @@
         active = horarios.some(h => isNowInSchedule(h));
       }
       const span = td.querySelector('span');
-      if (span) span.style.background = active ? 'green' : 'red';
+      if (span) {
+        const dotColor = active ? 'green' : 'red';
+        span.style.background = dotColor;
+        // Mesmo glow do render inicial (fxDotGlow) — evita dessincronizar a
+        // sombra da cor depois do primeiro tick (30 em 30 min).
+        span.style.boxShadow = fxDotGlow(dotColor);
+      }
       const tr = td.closest('tr');
       if (tr) tr.classList.toggle('tr-active-now', active);
     });

@@ -1336,12 +1336,15 @@
       .funchal-live-day-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:4px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
       /* Número da célula de agora: sem animação — só mais peso (negrito),
          atualizado a cada tick (30 min funchal / 1h Porto Santo). */
-      .funchal-cell-now-active { display:inline-block; font-weight:900; }
-      /* Destaque da coluna do dia atual no painel de cobertura — contorno
-         subtil em toda a coluna (cabeçalho + células), sem substituir a cor
-         semântica de contagem (vermelho/âmbar/verde) das células. */
-      .funchal-col-today-th { background:rgba(56,142,235,.14); box-shadow:inset 0 0 0 1px rgba(56,142,235,.4); }
-      .funchal-col-today-td { box-shadow:inset 0 0 0 1px rgba(56,142,235,.35); }
+      /* Peso 900 sozinho pode ficar quase impercetível consoante a fonte
+         disponível (algumas não têm um corte 900 real) — o aumento ligeiro
+         de tamanho garante que o destaque se nota sempre. */
+      .funchal-cell-now-active { display:inline-block; font-weight:900; font-size:1.15em; }
+      /* Destaque da coluna do dia atual no painel de cobertura — contorno em
+         cinza escuro em toda a coluna (cabeçalho + células), sem substituir
+         a cor semântica de contagem (vermelho/âmbar/verde) das células. */
+      .funchal-col-today-th { background:rgba(60,60,66,.12); box-shadow:inset 0 0 0 1px rgba(60,60,66,.45); }
+      .funchal-col-today-td { box-shadow:inset 0 0 0 1px rgba(60,60,66,.4); }
       @media (max-width: 700px) {
         .funchal-cov-grid { grid-template-columns: 1fr !important; }
       }

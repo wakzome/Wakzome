@@ -1063,61 +1063,22 @@
     return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
   }
 
-  // Normaliza os blocos independentes do funchal para a forma partilhada
-  // [{storeName, dayHeader, people:[{name,A,B}]}] — mesmo agrupamento
-  // consecutivo-por-nome usado em buildSubTable.
   function funchalBuildCoveragePanel(groupBlocks){
-    const normalized = groupBlocks.map(block=>{
-      const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
-      const dayHeader  = block[0].slice(1);
-      const dataRows   = block.slice(2);
-      const people = [];
-      let cur=null, curName=null;
-      dataRows.forEach(row=>{
-        const name=(row[0]||'').trim();
-        if(cur===null || name!==curName){
-          if(cur) people.push({ name: curName, A: cur[0], B: cur[1]||cur[0] });
-          cur=[row]; curName=name;
-        } else cur.push(row);
-      });
-      if(cur) people.push({ name: curName, A: cur[0], B: cur[1]||cur[0] });
-      return { storeName, dayHeader, people };
-    });
-    return funchalBuildCoveragePanelFromStores(normalized);
-  }
-
-  // Porto Santo: reaproveita hpsCollectStores (já existente, usado pela modal
-  // por pessoa) para obter as sub-lojas do bloco nested-marker, e normaliza
-  // para a mesma forma partilhada — não duplica nenhuma lógica de parsing.
-  function portoSantoBuildCoveragePanel(rows){
-    const { dayHeaderRow, stores } = hpsCollectStores(rows);
-    const normalized = stores.map(s => ({
-      storeName: s.name,
-      dayHeader: (dayHeaderRow || []).slice(1),
-      people: s.people
-    }));
-    return funchalBuildCoveragePanelFromStores(normalized);
-  }
-
-  // Núcleo genérico e partilhado do painel de cobertura — recebe uma lista
-  // já normalizada [{storeName, dayHeader, people:[{name,A,B}]}] e devolve o
-  // HTML. Usado tanto pelo funchal (blocos independentes) como pelo Porto
-  // Santo (via hpsCollectStores) — sem duplicar a lógica das cores/horas.
-  function funchalBuildCoveragePanelFromStores(normalizedStores){
     let sectionsHtml = '';
-    normalizedStores.forEach(({storeName, dayHeader, people})=>{
+    groupBlocks.forEach(block=>{
+      const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
+      const dayHeader = block[0].slice(1);
+      const dataRows  = block.slice(2);
+
       const byDay = dayHeader.map(()=>[]);
-      people.forEach(p=>{
-        [p.A, p.B].forEach(row=>{
-          if(!row) return;
-          for(let c=1;c<row.length;c++){
-            const v=(row[c]||'').trim();
-            if(!hpsIsSchedule(v)) continue;
-            const [a,b]=v.split('-');
-            const s=funchalToHrs(a), e=funchalToHrs(b);
-            if(!isNaN(s) && !isNaN(e) && e>s) byDay[c-1].push([s,e]);
-          }
-        });
+      dataRows.forEach(row=>{
+        for(let c=1;c<row.length;c++){
+          const v=(row[c]||'').trim();
+          if(!hpsIsSchedule(v)) continue;
+          const [a,b]=v.split('-');
+          const s=funchalToHrs(a), e=funchalToHrs(b);
+          if(!isNaN(s) && !isNaN(e) && e>s) byDay[c-1].push([s,e]);
+        }
       });
 
       let minH=Infinity, maxH=-Infinity;
@@ -1179,7 +1140,7 @@
     style.id = 'funchal-live-styles';
     style.textContent = `
       @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
-      .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
+      .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#3b82f6; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
     `;
     document.head.appendChild(style);
   }
@@ -1224,7 +1185,6 @@
     function tick(){
       funchalUpdateLiveDots();
       funchalUpdateCoverageHourMarker();
-      portoSantoUpdateLiveDots();
     }
     tick();
     const now = new Date();
@@ -1258,90 +1218,6 @@
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
     document.getElementById('funchal-cov-close').addEventListener('click', () => { overlay.style.display = 'none'; });
     return overlay;
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  //  PORTO SANTO — reaproveita cobertura + bolinhas ao vivo do funchal.
-  //  100% aditivo: nunca toca em renderPortoSanto/hpsCollectStores/
-  //  hpsBindNameClicks. Deteta a loja atual pela MESMA regra que
-  //  fadeRenderTable já usa (rows[0][0]==='porto santo'), injeta o botão
-  //  de cobertura por cima da tabela via DOM depois do render, e mantém
-  //  as bolinhas verdes/vermelhas atualizadas relendo o DOM — reaproveita
-  //  o mesmo temporizador de 30 em 30 min já criado para o funchal.
-  // ══════════════════════════════════════════════════════════════
-  function portoSantoCurrentRowsIfActive(){
-    const ws = document.getElementById('week-select');
-    const blocks = window._lastBlocks;
-    if (!ws || !blocks || !blocks.length) return null;
-    const idx = parseInt(ws.value, 10);
-    const rows = blocks[idx];
-    if (!rows || !rows[0]) return null;
-    const firstCell = (rows[0][0] || '').trim().toLowerCase();
-    return firstCell === 'porto santo' ? rows : null;
-  }
-
-  function portoSantoEnsureCoverageButton(){
-    const cont = document.getElementById('table-container');
-    if (!cont || document.getElementById('funchal-cov-toggle')) return;
-    const bar = document.createElement('div');
-    bar.id = 'porto-cov-bar';
-    bar.style.cssText = 'text-align:center;margin-bottom:14px;';
-    bar.innerHTML = '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>';
-    cont.insertAdjacentElement('afterbegin', bar);
-    document.getElementById('funchal-cov-toggle').addEventListener('click', () => {
-      const rows = portoSantoCurrentRowsIfActive();
-      if (!rows) return;
-      const covOverlay = funchalCovEnsureOverlay();
-      document.getElementById('funchal-cov-body').innerHTML = portoSantoBuildCoveragePanel(rows);
-      funchalUpdateCoverageHourMarker();
-      covOverlay.style.display = 'flex';
-    });
-  }
-
-  // Reavalia cada bolinha por POSIÇÃO no DOM (não por nome) — a mesma pessoa
-  // pode aparecer em mais do que uma sub-loja (reforço) com o mesmo
-  // data-hps-person; casar por nome arriscaria atualizar a loja errada.
-  // hpsCollectStores(rows) devolve as pessoas pela MESMA ordem em que
-  // renderPortoSanto as desenha (percorre o mesmo array rows pela mesma
-  // ordem), por isso o pareamento posicional é seguro.
-  function portoSantoUpdateLiveDots(){
-    const rows = portoSantoCurrentRowsIfActive();
-    if (!rows) return;
-    const { stores } = hpsCollectStores(rows);
-    const flat = [];
-    stores.forEach(s => s.people.forEach(p => flat.push({ store: s, person: p })));
-    const tds = document.querySelectorAll('#table-container .hps-person-name');
-    if (tds.length !== flat.length) return;
-    tds.forEach((td, idx) => {
-      const { store, person } = flat[idx];
-      const dateRow = store.dateRow || [];
-      let todayCol = -1;
-      for (let c = 1; c < dateRow.length; c++) {
-        const d = dateRow[c]; if (!d) continue;
-        const parts = d.split('/'); if (parts.length !== 3) continue;
-        const dd = new Date(+parts[2], +parts[1]-1, +parts[0]);
-        if (dd.toDateString() === new Date().toDateString()) { todayCol = c; break; }
-      }
-      let active = false;
-      if (todayCol > 0) {
-        const horarios = [person.A[todayCol], person.B[todayCol]].filter(v=>v);
-        active = horarios.some(h => isNowInSchedule(h));
-      }
-      const span = td.querySelector('span');
-      if (span) span.style.background = active ? 'green' : 'red';
-      const tr = td.closest('tr');
-      if (tr) tr.classList.toggle('tr-active-now', active);
-    });
-  }
-
-  // Deteta re-renders do Porto Santo (fadeRenderTable → renderPortoSanto)
-  // sem tocar em nenhum dos dois — o mesmo padrão de MutationObserver já
-  // usado no index.html para o reveal do mosaico.
-  function portoSantoOnTableMutated(){
-    const rows = portoSantoCurrentRowsIfActive();
-    if (!rows) return;
-    portoSantoEnsureCoverageButton();
-    portoSantoUpdateLiveDots();
   }
 
   // ── Equivalentes "hps" (modal por pessoa) para a vista FUNCHAL UNIFICADO —
@@ -1936,21 +1812,6 @@
     }
     document.getElementById('hav-ult-text').innerHTML = 'Horários – última semana publicada<br><b>' + escapeHtml(havUltimaFormatLabel(semanaISO)) + '</b>';
     badge.classList.add('show');
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  //  ARRANQUE incondicional (não depende de renderFunchalUnificado ter
-  //  corrido) — cobre também a loja Porto Santo, que nunca chama essa
-  //  função. #table-container já existe no HTML antes deste <script>
-  //  correr (mesmo padrão do window._hRender acima), por isso é seguro
-  //  ligar o observer já aqui. tick() e o observer verificam sempre a
-  //  loja atual antes de fazer seja o que for, por isso não têm efeito
-  //  nenhum fora do Porto Santo / funchal.
-  // ══════════════════════════════════════════════════════════════
-  funchalEnsureLiveTicker();
-  const _fxTableEl = document.getElementById('table-container');
-  if (_fxTableEl) {
-    new MutationObserver(portoSantoOnTableMutated).observe(_fxTableEl, { childList: true, subtree: true });
   }
 
 })();

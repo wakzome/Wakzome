@@ -876,14 +876,19 @@
         ]);
       }
 
-      let html='<table style="margin:0 auto;">';
+      let html='<table style="margin:0 auto;border-collapse:separate;border-spacing:0;">';
       for(let r=0;r<2;r++){
         html+='<tr>';
         for(let c=0;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
-          const thBg=(c===todayCol?'':'background:#444;color:#fff;');
+          // Cabeçalho em tom escuro suave (em vez do cinza sólido #444) — a
+          // coluna de hoje ganha um azul translúcido em vez de bloco sólido,
+          // destaque mais discreto e consistente com as células de dados.
+          const thBg = (c===todayCol
+            ? 'background:rgba(56,142,235,.16);color:#1a3a5c;'
+            : 'background:rgba(32,34,40,.92);color:#fff;');
           const thWrap=(c===0?'':'white-space:nowrap;');
-          html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;">${escapeHtml(headerRows[r][c]||'')}</th>`;
+          html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;padding:6px 4px;">${escapeHtml(headerRows[r][c]||'')}</th>`;
         }
         html+='</tr>';
       }
@@ -891,7 +896,12 @@
         const A = p[0] || Array(cols).fill('');
         const B = p[1] || Array(cols).fill('');
         const isPlaceholder = !(A[0]||'').trim();
-        const bg = '#f2f2f2';
+        // Fundo subtil (deixa transparecer o glass do card) + destaque
+        // translúcido próprio para a coluna de hoje, em vez do bloco cinza
+        // sólido anterior — mantém a mesma leitura visual, mais discreta.
+        const bg = 'rgba(255,255,255,.45)';
+        const bgToday = 'rgba(56,142,235,.10)';
+        const cellBg = (isToday) => isToday ? bgToday : bg;
         let circleColor='red', isActiveNow=false, todayHorarios=[];
         if (!isPlaceholder) {
           for(let c=1;c<cols;c++){
@@ -913,10 +923,14 @@
         // precisar de re-renderizar a tabela nem recarregar a página.
         const liveId = 'fx-' + storeSlug + '-' + pIdx;
         const liveIdAttr = isPlaceholder ? '' : ` data-live-id="${liveId}"`;
+        // Glow suave a condizer com a cor da bolinha (verde=ativa, vermelho=
+        // inativa) — funchalUpdateLiveDots aplica o mesmo par cor+glow a
+        // cada tick, para não dessincronizar depois do primeiro render.
+        const dotGlow = circleColor === 'green' ? '0 0 6px 1px rgba(42,138,42,.55)' : '0 0 6px 1px rgba(190,50,50,.35)';
         let rowspanCols=[];
         html+=`<tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
-                <span class="funchal-live-dot" data-today="${escapeHtml(todayHorarios.join('|'))}"${liveIdAttr} style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
+                <span class="funchal-live-dot" data-today="${escapeHtml(todayHorarios.join('|'))}"${liveIdAttr} style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};box-shadow:${dotGlow};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
                 ${escapeHtml(nameRaw)}<br>${hrsLabel}</td>`;
         for(let c=1;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
@@ -926,18 +940,18 @@
           const botNw = isSchedule(bot)||bot===''||bot.toUpperCase()==='FOLGA'||bot.toUpperCase()==='FERIAS';
           const nw = (topNw && botNw) ? 'white-space:nowrap;' : '';
           if(top===bot && top!==''){
-            html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bg};width:${colWidths[c]*12}px;${nw}text-align:center;">${escapeHtml(top)}</td>`;
+            html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;${nw}text-align:center;">${escapeHtml(top)}</td>`;
             rowspanCols.push(c);
           } else if(top!==''||bot!==''){
             const cont=[top,bot].filter(v=>v).map(escapeHtml).join('<br>');
-            html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${bg};width:${colWidths[c]*12}px;${nw}text-align:center;">${cont}</td>`;
+            html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;${nw}text-align:center;">${cont}</td>`;
             rowspanCols.push(c);
-          } else { html+=`<td class="${cls}" style="background:${bg};width:${colWidths[c]*12}px;text-align:center;"></td>`; }
+          } else { html+=`<td class="${cls}" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;text-align:center;"></td>`; }
         }
         html+=`</tr><tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
           const cls=(c===todayCol?'today-col':'');
-          html+=`<td class="${cls}" style="background:${bg};width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
+          html+=`<td class="${cls}" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
         }
         html+='</tr>';
       });
@@ -963,8 +977,12 @@
     groupBlocks.forEach(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
       const targetCount = maxPersonCountByStore[storeName] || 0;
-      combined += '<div style="margin-bottom:28px;">'
-                + '<div style="font-weight:700;font-size:14px;letter-spacing:0.5px;text-transform:uppercase;margin:0 0 8px;text-align:center;color:#333;">' + escapeHtml(storeName) + '</div>'
+      // Card em "liquid glass" — mesmo vocabulário visual já usado no popup
+      // de cobertura (blur + saturação + transparência + cantos arredondados
+      // + sombra suave). Só a "casca" visual muda; estrutura/lógica da
+      // tabela (buildSubTable) ficam intactas.
+      combined += '<div class="funchal-store-card" style="margin-bottom:22px;background:rgba(255,255,255,.6);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.07);padding:18px 16px 14px;">'
+                + '<div style="font-weight:700;font-size:13px;letter-spacing:0.6px;text-transform:uppercase;margin:0 0 10px;text-align:center;color:#333;">' + escapeHtml(storeName) + '</div>'
                 + buildSubTable(block, hoursMap, targetCount, sharedColWidths)
                 + '</div>';
     });
@@ -1284,6 +1302,13 @@
       @media (max-width: 700px) {
         .funchal-cov-grid { grid-template-columns: 1fr !important; }
       }
+      /* Modernização "liquid glass" da tabela de horários — escopada só ao
+         Funchal (#funchal-tables-scale), nunca afeta Porto Santo nem as
+         outras lojas: hairlines finas em vez de bordas duras, e um hover
+         mais discreto no nome (sobrepõe-se ao hover global de .hps-person-name). */
+      #funchal-tables-scale table th { border: none; }
+      #funchal-tables-scale table td { border-bottom: 1px solid rgba(0,0,0,.05); }
+      #funchal-tables-scale .hps-person-name:hover { background: rgba(0,0,0,.04) !important; }
     `;
     document.head.appendChild(style);
   }
@@ -1297,6 +1322,9 @@
       const segments = raw ? raw.split('|').filter(Boolean) : [];
       const active = segments.some(h=>isNowInSchedule(h));
       span.style.background = active ? 'green' : 'red';
+      // Mesmo glow do render inicial — evita dessincronizar a sombra da cor
+      // depois do primeiro tick (30 em 30 min).
+      span.style.boxShadow = active ? '0 0 6px 1px rgba(42,138,42,.55)' : '0 0 6px 1px rgba(190,50,50,.35)';
       const liveId = span.getAttribute('data-live-id');
       if (liveId) {
         document.querySelectorAll('#table-container tr[data-live-id="'+liveId+'"]').forEach(tr=>{

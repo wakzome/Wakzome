@@ -998,9 +998,6 @@
     // permanecem alinhadas em qualquer um dos dois modos.
     document.getElementById('table-container').innerHTML =
       '<div style="display:flex;flex-direction:column;width:100%;">'
-      +   '<div style="text-align:center;margin-bottom:14px;">'
-      +     '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>'
-      +   '</div>'
       +   '<div id="funchal-tables-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
       +     '<div id="funchal-tables-scale" style="display:inline-block;">'
       +       combined
@@ -1016,10 +1013,13 @@
     // de um botão para "voltar" porque a tabela de horários nunca é escondida.
     const covOverlay = funchalCovEnsureOverlay();
     document.getElementById('funchal-cov-body').innerHTML = coverageHtml;
-    const covBtn = document.getElementById('funchal-cov-toggle');
-    if (covBtn) {
-      covBtn.addEventListener('click', () => { covOverlay.style.display = 'flex'; });
-    }
+
+    // Botão "cobertura" na barra do modal de horários (#wz-hor-modal-bar,
+    // definida no index.html) — em vez de dentro de #table-container, para
+    // não criar scroll vertical extra; mesma posição usada por Porto Santo
+    // (ver funchalCovBarEnsureButton). O index.html não precisa de voltar a
+    // ser tocado para ajustar este botão no futuro.
+    funchalCovBarEnsureButton(() => { covOverlay.style.display = 'flex'; });
 
     // Bolinhas + ponto da cobertura: aplicar o estado atual já neste render,
     // e arrancar (uma única vez) o timer que os mantém corretos a cada 30
@@ -1309,6 +1309,7 @@
       #funchal-tables-scale table th { border: none; }
       #funchal-tables-scale table td { border-bottom: 1px solid rgba(0,0,0,.05); }
       #funchal-tables-scale .hps-person-name:hover { background: rgba(0,0,0,.04) !important; }
+      #funchal-cov-toggle:hover { background: rgba(255,255,255,.85); }
     `;
     document.head.appendChild(style);
   }
@@ -1413,6 +1414,43 @@
     return overlay;
   }
 
+  // ── Botão "cobertura" na barra do modal de horários (#wz-hor-modal-bar,
+  //    definida no index.html — não precisa de voltar a ser tocada) — em vez
+  //    de dentro de #table-container, para não empurrar a tabela para baixo
+  //    nem criar scroll vertical extra. Inserido no lado direito da barra,
+  //    junto a "semana X" e antes do ✕, para nunca invadir o título
+  //    "horários" nem as setas de navegação (que ficam centradas). Usado
+  //    tanto pelo funchal (renderFunchalUnificado) como pelo Porto Santo
+  //    (portoSantoEnsureCoverageButton) — mesma posição nos dois. ──
+  function funchalCovBarEnsureButton(onOpen){
+    const right = document.getElementById('wz-week-right');
+    if (!right) return null;
+    let btn = document.getElementById('funchal-cov-toggle');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'funchal-cov-toggle';
+      btn.textContent = 'cobertura';
+      btn.style.cssText = 'display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:lowercase;padding:6px 14px;border-radius:20px;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.55);backdrop-filter:blur(12px) saturate(160%);-webkit-backdrop-filter:blur(12px) saturate(160%);color:#333;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.05);transition:background .15s;';
+      const label = document.getElementById('wz-week-label');
+      if (label) right.insertBefore(btn, label); else right.insertBefore(btn, right.firstChild);
+    }
+    // onclick (não addEventListener) substitui sempre o handler anterior —
+    // o botão persiste entre renders (já não é recriado a cada troca de
+    // semana), por isso addEventListener empilharia um handler por render.
+    btn.onclick = onOpen;
+    btn.style.display = 'inline-flex';
+    return btn;
+  }
+
+  // Esconde o botão quando a loja atual não é nem funchal nem Porto Santo
+  // (ex.: mudou para Mezka Madeira / Parfois Arcadas standalone) — chamado
+  // pelo mesmo observer que já deteta re-renders do #table-container.
+  function funchalCovBarHideButton(){
+    const btn = document.getElementById('funchal-cov-toggle');
+    if (btn) btn.style.display = 'none';
+  }
+
   // ══════════════════════════════════════════════════════════════
   //  PORTO SANTO — reaproveita cobertura + bolinhas ao vivo do funchal.
   //  100% aditivo: nunca toca em renderPortoSanto/hpsCollectStores/
@@ -1434,26 +1472,12 @@
   }
 
   function portoSantoEnsureCoverageButton(){
-    const cont = document.getElementById('table-container');
-    if (!cont || document.getElementById('funchal-cov-toggle')) return;
-    // #table-container é display:flex (row) — inserir o botão como IRMÃO da
-    // <table> punha-os lado a lado, empurrando a tabela. Embrulha-se então
-    // numa coluna própria com o botão por cima, tal como o funchal já faz —
-    // MOVENDO os nós existentes (appendChild move, não recria) em vez de
-    // reconstruir a partir de innerHTML em string: renderPortoSanto já
-    // ligou os cliques nos nomes via hpsBindNameClicks(rows) aos nós
-    // originais; reatribuir innerHTML destruía-os e criava nós novos sem
-    // listener nenhum, perdendo o clique no nome. Mover preserva-os.
-    const col = document.createElement('div');
-    col.id = 'porto-cov-col';
-    col.style.cssText = 'display:flex;flex-direction:column;width:100%;';
-    const bar = document.createElement('div');
-    bar.style.cssText = 'text-align:center;margin-bottom:14px;';
-    bar.innerHTML = '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>';
-    col.appendChild(bar);
-    while (cont.firstChild) col.appendChild(cont.firstChild);
-    cont.appendChild(col);
-    document.getElementById('funchal-cov-toggle').addEventListener('click', () => {
+    // O botão vive na barra do modal de horários (#wz-hor-modal-bar), não
+    // dentro de #table-container — já não precisa de embrulhar nem mover a
+    // tabela do Porto Santo, por isso renderPortoSanto/hpsCollectStores/
+    // hpsBindNameClicks continuam 100% intocados, sem qualquer manipulação
+    // do DOM que produzem (ver funchalCovBarEnsureButton).
+    funchalCovBarEnsureButton(() => {
       const rows = portoSantoCurrentRowsIfActive();
       if (!rows) return;
       const covOverlay = funchalCovEnsureOverlay();
@@ -1504,7 +1528,13 @@
   // usado no index.html para o reveal do mosaico.
   function portoSantoOnTableMutated(){
     const rows = portoSantoCurrentRowsIfActive();
-    if (!rows) return;
+    if (!rows) {
+      // Não é Porto Santo — se também não for funchal unificado (que trata
+      // do seu próprio botão dentro de renderFunchalUnificado), esconde o
+      // botão de cobertura da barra do modal (loja "normal", sem cobertura).
+      if (!window._isFunchalUnificadoMode) funchalCovBarHideButton();
+      return;
+    }
     portoSantoEnsureCoverageButton();
     portoSantoUpdateLiveDots();
   }

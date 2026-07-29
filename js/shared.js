@@ -1342,7 +1342,7 @@
       // para a coluna vizinha quando o espaço fica muito apertado — caso
       // mais provável dentro do modo dividido, com colunas bem mais
       // estreitas do que no overlay tradicional.
-      const headCells = dayHeader.map(d=>'<th data-day="'+escapeHtml(d)+'" style="padding:4px 2px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.02em;overflow:hidden;">'
+      const headCells = dayHeader.map(d=>'<th data-day="'+escapeHtml(d)+'" style="padding:4px 1px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.02em;overflow:hidden;">'
         + '<span class="funchal-live-day-dot" data-day="'+escapeHtml(d)+'" style="visibility:hidden;"></span>'
         + escapeHtml(d) + '</th>').join('');
       let rowsHtml='';
@@ -1378,7 +1378,7 @@
         // dividido de Porto Santo, com 2 lojas empilhadas numa coluna
         // estreita), o texto transbordaria visualmente por cima da coluna
         // seguinte em vez de ser simplesmente cortado.
-        rowsHtml += '<tr><td style="padding:3px 2px;color:#777;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;font-size:10px;">'
+        rowsHtml += '<tr><td style="width:46px;padding:3px 2px;color:#777;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;font-size:10px;">'
           + '<span class="funchal-live-hour-dot" data-hour="'+H+'" data-hour-end="'+(H+stepHours)+'" style="visibility:hidden;"></span>' + label
           + '</td>'+dayCells+'</tr>';
       }
@@ -1386,7 +1386,7 @@
         '<div style="min-width:0;">'
         + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
         + '<table data-today-col-name="' + escapeHtml(todayColName) + '" style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px;">'
-        +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;overflow:hidden;">h</th>' + headCells + '</tr></thead>'
+        +   '<thead><tr><th style="width:46px;padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;overflow:hidden;">h</th>' + headCells + '</tr></thead>'
         +   '<tbody>' + rowsHtml + '</tbody>'
         + '</table>'
         + '</div>'
@@ -1692,35 +1692,73 @@
     if (inlineColumns) {
       const splitHtml = funchalCovBuildSplitColumnsHtml();
       if (splitHtml != null) inlineColumns.innerHTML = splitHtml;
+      // O conteúdo pode ter mudado de altura (ex.: loja com mais/menos
+      // sub-lojas) — reposiciona/redimensiona o painel fixed em função disso.
+      funchalCovPositionSplitPanel();
     }
 
     funchalUpdateCoverageHourMarker();
   }
 
-  // Mesmo corte (700px) já usado em funchalFitTablesToScreen para separar
-  // telemóvel de tablet/desktop — abaixo disso não há espaço útil para
-  // horários e cobertura lado a lado.
+  // Só há espaço ÚTIL para o painel de cobertura ao lado do modal quando
+  // sobra uma folga real à direita dele — não uma largura de janela
+  // arbitrária. rect.right já reflete a largura atual do modal
+  // (min(95vw,1080px), calculada pelo próprio browser), por isso esta
+  // verificação continua correta mesmo que o CSS do modal mude no futuro.
+  // Sem #wz-hor-modal-box no DOM (nunca deveria acontecer no fluxo real),
+  // assume-se que não há espaço. 440px corresponde ao novo mínimo real do
+  // painel (ver Math.max em funchalCovPositionSplitPanel) — abaixo disto as
+  // tabelas de cobertura ficariam ilegíveis, por isso o modo dividido nem
+  // chega a ativar-se.
+  const FUNCHAL_COV_SPLIT_MIN_GAP = 440;
   function funchalCovIsDesktopWidth(){
-    return window.innerWidth > 700;
+    const box = document.getElementById('wz-hor-modal-box');
+    if (!box) return false;
+    const rect = box.getBoundingClientRect();
+    return (window.innerWidth - rect.right) >= FUNCHAL_COV_SPLIT_MIN_GAP;
   }
 
-  // Painel de cobertura embutido no modal (modo dividido, só PC, aberto a
-  // partir do título dentro do overlay) — mesmo vocabulário visual
-  // (FX_GLASS_CARD) dos cards de horário, para parecer parte do mesmo modal
-  // em vez de um elemento estranho. A largura reserva-se com clamp: nunca
-  // menos de 340px (legibilidade mínima com 2 colunas internas) nem mais de
-  // 520px (Porto Santo empilha 2 lojas por coluna, precisa de um pouco mais
-  // de espaço do que o funchal).
-  function funchalCovEnsureInlinePanel(){
-    let outer = document.getElementById('funchal-cov-inline-panel');
-    if (outer) return outer;
-    outer = document.createElement('div');
-    outer.id = 'funchal-cov-inline-panel';
-    outer.style.cssText = 'flex:0 0 clamp(340px, 36vw, 520px);min-width:0;max-height:100%;overflow-y:auto;box-sizing:border-box;' + FX_GLASS_CARD;
-    outer.innerHTML =
-        '<div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:14px;text-align:center;">Cobertura por hora</div>'
-      + '<div id="funchal-cov-inline-columns" class="funchal-cov-host" style="display:flex;gap:16px;align-items:flex-start;"></div>';
-    return outer;
+  // Painel de cobertura do modo dividido — elemento TOTALMENTE separado do
+  // modal de horários (nunca é movido para dentro dele, nunca lhe altera o
+  // tamanho): position:fixed, com a sua própria caixa/sombra, ancorado ao
+  // lado direito do modal. Por ser fixed e independente, nunca é afetado
+  // pelo scroll vertical da tabela de horários — o utilizador pode descer
+  // até à última sub-loja (ex.: Maxx) sem a cobertura correspondente sair
+  // do sítio; tem o seu PRÓPRIO scroll interno (overflow-y:auto) quando o
+  // conteúdo é mais alto do que o espaço disponível.
+  function funchalCovEnsureSplitPanel(){
+    let panel = document.getElementById('funchal-cov-split-panel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'funchal-cov-split-panel';
+    panel.style.cssText = 'display:none;position:fixed;z-index:9500;background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.06);box-sizing:border-box;padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    panel.innerHTML =
+        '<button type="button" id="funchal-cov-split-close" style="position:absolute;top:10px;right:12px;background:none;border:none;font-size:16px;color:#777;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px;">✕</button>'
+      + '<div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:14px;text-align:center;">Cobertura por hora</div>'
+      + '<div id="funchal-cov-inline-columns" class="funchal-cov-host" style="display:flex;gap:10px;align-items:flex-start;"></div>';
+    document.body.appendChild(panel);
+    document.getElementById('funchal-cov-split-close').addEventListener('click', funchalCovExitSplit);
+    return panel;
+  }
+
+  // Recalcula a posição/tamanho do painel a partir da posição REAL do modal
+  // no ecrã (getBoundingClientRect) — chamado ao entrar no modo dividido, ao
+  // redimensionar a janela, e a cada re-render da tabela (a altura do modal
+  // pode mudar consoante quem trabalha nessa semana). Ambos position:fixed
+  // relativos ao viewport, por isso não depende de nada sobre scroll de
+  // página. Não faz nada se o painel não existir ou estiver escondido.
+  function funchalCovPositionSplitPanel(){
+    const box   = document.getElementById('wz-hor-modal-box');
+    const panel = document.getElementById('funchal-cov-split-panel');
+    if (!box || !panel || panel.style.display === 'none') return;
+    const rect = box.getBoundingClientRect();
+    const gap = 20, margin = 16;
+    const availWidth = window.innerWidth - rect.right - gap - margin;
+    const width = Math.max(420, Math.min(520, availWidth));
+    panel.style.left = (rect.right + gap) + 'px';
+    panel.style.top = rect.top + 'px';
+    panel.style.width = width + 'px';
+    panel.style.maxHeight = rect.height + 'px';
   }
 
   let _funchalCovSplitActive = false;
@@ -1743,71 +1781,49 @@
     }
   }
 
-  // Entra no modo dividido: alarga o modal (só via style inline — index.html
-  // nunca é tocado) e envolve #container-tables + o painel de cobertura num
-  // flex row, para ficarem lado a lado. A tabela de horários nunca fica
-  // atrás de nenhum overlay nem blur — está sempre no mesmo plano do resto
-  // do modal, por isso continua 100% nítida e interativa (nomes clicáveis,
-  // hover das linhas) enquanto a cobertura está visível ao lado.
+  // Entra no modo dividido: mostra e posiciona o painel de cobertura ao
+  // lado do modal — o modal em si (#wz-hor-modal-box/#container-tables)
+  // NUNCA é tocado, mantém-se exatamente como sempre esteve (mesmo tamanho,
+  // mesmo scroll próprio), por isso a tabela de horários continua 100%
+  // nítida e interativa (nomes clicáveis, hover das linhas) enquanto a
+  // cobertura está visível ao lado, e o scroll de uma nunca afeta a outra.
   function funchalCovEnterSplit(){
-    const body = document.getElementById('wz-hor-modal-body');
-    const ct   = document.getElementById('container-tables');
-    const box  = document.getElementById('wz-hor-modal-box');
-    if (!body || !ct || !box) return;
-
-    box.style.width = 'min(96vw, 1600px)';
-
-    let wrap = document.getElementById('funchal-cov-split-wrap');
-    if (!wrap) {
-      wrap = document.createElement('div');
-      wrap.id = 'funchal-cov-split-wrap';
-      wrap.style.cssText = 'display:flex;align-items:flex-start;gap:20px;width:100%;';
-      // appendChild (não insertBefore) — não exige que ct já seja filho
-      // direto de body neste momento; wrap.appendChild(ct) MOVE ct de onde
-      // estiver (dentro de body, ou até de outro sítio) para dentro do
-      // wrap. #wz-hor-modal-body só tinha o ct lá dentro de qualquer forma.
-      body.appendChild(wrap);
-      wrap.appendChild(ct);
-    }
-    ct.style.flex = '1 1 auto';
-    ct.style.minWidth = '0';
-
-    const panel = funchalCovEnsureInlinePanel();
-    if (!wrap.contains(panel)) wrap.appendChild(panel);
-
+    if (!funchalCovIsDesktopWidth()) return;
+    const panel = funchalCovEnsureSplitPanel();
+    panel.style.display = 'block';
     _funchalCovSplitActive = true;
     funchalCovUpdateToggleButtonState();
+    funchalCovPositionSplitPanel();
     funchalCovRefreshAllTargets();
-    // A coluna disponível para a tabela de horários mudou de largura — tem
-    // de recalcular o scale (mesma função para funchal e Porto Santo, ver
-    // funchalFitTablesToScreen) para nunca sobrar scroll horizontal.
-    funchalFitTablesToScreen();
+    funchalCovEnsureSplitResizeListener();
   }
 
-  // Sai do modo dividido, devolvendo #container-tables ao sítio normal
-  // dentro do modal e repondo a largura original. Defensivo: se o modal
-  // principal (closeHor, em index.html) já tiver movido #container-tables
-  // de volta para document.body entretanto, não tenta voltar a mexer nele —
-  // só limpa o wrap (e o painel de cobertura lá dentro) que ficou órfão.
+  // Sai do modo dividido: só esconde o painel — nunca há nada para repor no
+  // modal, porque funchalCovEnterSplit nunca lhe mexeu.
   function funchalCovExitSplit(){
-    const box  = document.getElementById('wz-hor-modal-box');
-    const wrap = document.getElementById('funchal-cov-split-wrap');
-    const body = document.getElementById('wz-hor-modal-body');
-    const ct   = document.getElementById('container-tables');
-
-    if (wrap) {
-      if (body && ct && wrap.contains(ct)) {
-        ct.style.flex = '';
-        ct.style.minWidth = '';
-        body.insertBefore(ct, wrap);
-      }
-      wrap.remove();
-    }
-    if (box) box.style.width = '';
-
+    const panel = document.getElementById('funchal-cov-split-panel');
+    if (panel) panel.style.display = 'none';
     _funchalCovSplitActive = false;
     funchalCovUpdateToggleButtonState();
-    funchalFitTablesToScreen();
+  }
+
+  // Reposiciona o painel ao redimensionar a janela; se deixar de haver
+  // espaço suficiente, sai do modo dividido em vez de deixar o painel
+  // espremido ou a transbordar do ecrã. Um só listener por carregamento de
+  // página (flag module-level), tal como funchalEnsureLiveTicker.
+  let _funchalCovSplitResizeListenerAdded = false;
+  function funchalCovEnsureSplitResizeListener(){
+    if (_funchalCovSplitResizeListenerAdded) return;
+    _funchalCovSplitResizeListenerAdded = true;
+    let resizeTimer = null;
+    window.addEventListener('resize', function(){
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function(){
+        if (!_funchalCovSplitActive) return;
+        if (!funchalCovIsDesktopWidth()) { funchalCovExitSplit(); return; }
+        funchalCovPositionSplitPanel();
+      }, 150);
+    });
   }
 
   // Se o modal de horários fechar (✕, clique fora, Escape — tudo tratado

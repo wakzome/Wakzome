@@ -1459,13 +1459,17 @@
         filter: brightness(1.05);
       }
       #funchal-cov-toggle:hover { background: rgba(255,255,255,.85); }
-      /* O título "Cobertura por hora" só é acionável (modo dividido) a
-         partir de 700px — abaixo disso não há espaço útil para dividir, por
-         isso nem o cursor nem o hover sugerem que é clicável. */
-      @media (min-width: 701px) {
-        #funchal-cov-split-trigger { cursor: pointer; transition: color .15s; }
-        #funchal-cov-split-trigger:hover { color: #000; }
+      /* Botão "Cobertura por hora" (gatilho do modo dividido): estado de
+         hover invertido, para reforçar que é um botão. !important porque
+         body{color:#000!important} no index.html ganharia à cor branca sobre
+         o fundo escuro do hover. */
+      #funchal-cov-split-trigger:hover {
+        background: rgba(51,51,58,.95);
+        color: #fff !important;
+        border-color: rgba(51,51,58,.95);
+        box-shadow: 0 4px 16px rgba(0,0,0,.18);
       }
+      #funchal-cov-split-trigger:active { transform: translateY(1px); }
     `;
     document.head.appendChild(style);
   }
@@ -1586,12 +1590,18 @@
     overlay.innerHTML =
       '<div id="funchal-cov-panel" style="position:relative;max-width:920px;width:100%;max-height:82vh;overflow-y:auto;background:rgba(255,255,255,.78);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.9);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6);padding:22px 24px;">'
       +   '<button type="button" id="funchal-cov-close" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:16px;color:#777;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px;">✕</button>'
-      // O próprio título é o gatilho para o modo dividido (PC): sem botão
-      // extra — clicar em "Cobertura por hora" fecha este overlay e
-      // reposiciona as duas tabelas ao lado dos horários, sem blur nenhum.
-      // Em telemóvel/tablet estreito o clique não faz nada (não há espaço
-      // útil para dividir), por isso o cursor só muda a partir de 700px.
-      +   '<div id="funchal-cov-split-trigger" style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:16px;text-align:center;">Cobertura por hora</div>'
+      // Gatilho do modo dividido (PC): um BOTÃO a sério (pílula, com borda,
+      // fundo e hover próprios), não texto simples — para se perceber logo
+      // que é clicável. Clicar fecha este overlay e abre as tabelas de
+      // cobertura uma de cada lado dos horários, sem blur nenhum.
+      // color com !important porque body{color:#000!important} no index.html
+      // ganharia à cor herdada no estado de hover (fundo escuro).
+      +   '<div style="text-align:center;margin-bottom:16px;">'
+      +     '<button type="button" id="funchal-cov-split-trigger" style="display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333!important;background:rgba(255,255,255,.72);border:1px solid rgba(0,0,0,.12);border-radius:22px;padding:9px 20px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.07);transition:background .15s, color .15s, border-color .15s, box-shadow .15s;">'
+      +       '<span style="display:inline-block;width:13px;height:9px;border-radius:2px;border:1.5px solid currentColor;border-left-width:4px;border-right-width:4px;flex:none;"></span>'
+      +       'Cobertura por hora'
+      +     '</button>'
+      +   '</div>'
       +   '<div id="funchal-cov-body" class="funchal-cov-host"></div>'
       + '</div>';
     document.body.appendChild(overlay);
@@ -1796,16 +1806,22 @@
   // tem forma de saber, só de olhar, se o modo dividido já está aberto (o
   // clique passa a alternar, ao contrário do comportamento anterior que só
   // abria).
+  // A cor do texto é aplicada com setProperty(...,'important') porque
+  // index.html define `#wz-hor-modal-bar button { color:#000 }` e
+  // `body { color:#000 !important }` — sobre o fundo cinzento-escuro do
+  // estado ativo, texto preto fica praticamente ilegível. O !important
+  // garante o branco independentemente de qualquer regra do index.html,
+  // que continua a não ser tocado.
   function funchalCovUpdateToggleButtonState(){
     const btn = document.getElementById('funchal-cov-toggle');
     if (!btn) return;
     if (_funchalCovSplitActive) {
       btn.style.background = 'rgba(51,51,58,.92)';
-      btn.style.color = '#fff';
+      btn.style.setProperty('color', '#fff', 'important');
       btn.style.borderColor = 'rgba(51,51,58,.92)';
     } else {
       btn.style.background = 'rgba(255,255,255,.55)';
-      btn.style.color = '#333';
+      btn.style.setProperty('color', '#333', 'important');
       btn.style.borderColor = 'rgba(0,0,0,.08)';
     }
   }

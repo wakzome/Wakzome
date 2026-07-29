@@ -836,13 +836,16 @@
     const semanaKey = (current[1] && current[1][0]) || '';
     const groupBlocks = allBlocks.filter(b => ((b[1] && b[1][0]) || '') === semanaKey);
 
-    function buildSubTable(rows, hoursMap, targetPersonCount){
+    function buildSubTable(rows, hoursMap, targetPersonCount, sharedColWidths){
       const headerRows = rows.slice(0,2);
       const dataRows   = rows.slice(2);
       const storeSlug = ((rows[0] && rows[0][0]) || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
-      const cols = Math.max(...rows.map(r=>r.length));
-      const colWidths = Array(cols).fill(0);
-      rows.forEach(r=>r.forEach((c,i)=>colWidths[i]=Math.max(colWidths[i],c.length)));
+      // Larguras de coluna partilhadas entre TODAS as sub-lojas do funchal
+      // (calculadas uma única vez, fora desta função) — garante que Mezka
+      // Funchal e Parfois Arcadas ficam sempre alinhadas, em vez de cada
+      // tabela calcular a sua própria largura a partir só do seu texto.
+      const colWidths = sharedColWidths;
+      const cols = colWidths.length;
       const todayCol = findTodayCol(headerRows[1])+1;
 
       // Agrupar linhas por pessoa: no FUNCHAL.csv o nome repete-se em todas as
@@ -944,13 +947,25 @@
 
     const hoursMap = funchalCollectPersonWeekHours(groupBlocks);
     const maxPersonCountByStore = funchalMaxPersonCountByStore(allBlocks);
+
+    // Larguras de coluna unificadas entre TODAS as sub-lojas desta semana —
+    // calculadas uma única vez a partir de todos os groupBlocks, para as
+    // tabelas de Mezka Funchal e Parfois Arcadas ficarem sempre alinhadas
+    // (mesma largura de coluna), em vez de cada uma variar consoante o
+    // comprimento dos seus próprios nomes/horários.
+    const sharedCols = Math.max(...groupBlocks.map(block => Math.max(...block.map(r=>r.length))));
+    const sharedColWidths = Array(sharedCols).fill(0);
+    groupBlocks.forEach(block => block.forEach(r => r.forEach((c,i) => {
+      sharedColWidths[i] = Math.max(sharedColWidths[i], c.length);
+    })));
+
     let combined = '';
     groupBlocks.forEach(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
       const targetCount = maxPersonCountByStore[storeName] || 0;
       combined += '<div style="margin-bottom:28px;">'
                 + '<div style="font-weight:700;font-size:14px;letter-spacing:0.5px;text-transform:uppercase;margin:0 0 8px;text-align:center;color:#333;">' + escapeHtml(storeName) + '</div>'
-                + buildSubTable(block, hoursMap, targetCount)
+                + buildSubTable(block, hoursMap, targetCount, sharedColWidths)
                 + '</div>';
     });
     const coverageHtml = funchalBuildCoveragePanel(groupBlocks);
@@ -958,12 +973,21 @@
     // wrapper único para neutralizar o display:flex (row) que loadData() aplica a
     // #table-container — garante que as sub-lojas empilham na vertical (uma por
     // baixo da outra), em vez de ficarem lado a lado como itens do mesmo flex row.
+    // #funchal-tables-wrap/#funchal-tables-scale: em telemóvel mantêm o
+    // tamanho natural (scroll H+V, ver funchalFitTablesToScreen); em tablet/
+    // desktop, se não couber na largura do ecrã, é encolhido (scale) como um
+    // todo — as duas tabelas partilham a mesma largura de coluna, por isso
+    // permanecem alinhadas em qualquer um dos dois modos.
     document.getElementById('table-container').innerHTML =
       '<div style="display:flex;flex-direction:column;width:100%;">'
       +   '<div style="text-align:center;margin-bottom:14px;">'
       +     '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>'
       +   '</div>'
-      +   combined
+      +   '<div id="funchal-tables-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+      +     '<div id="funchal-tables-scale" style="display:inline-block;">'
+      +       combined
+      +     '</div>'
+      +   '</div>'
       + '</div>';
 
     hpsBindNameClicksFunchal(groupBlocks);
@@ -986,6 +1010,59 @@
     funchalUpdateLiveDots();
     funchalUpdateCoverageHourMarker();
     funchalEnsureLiveTicker();
+
+    // Ajustar as duas tabelas ao ecrã (tablet/desktop) ou manter scroll
+    // natural (telemóvel) — ver funchalFitTablesToScreen.
+    funchalFitTablesToScreen();
+    funchalEnsureResizeListener();
+  }
+
+  // Telemóvel (<=700px): mantém o tamanho natural das tabelas, com scroll
+  // horizontal e vertical — encolher mais neste tamanho tornaria os horários
+  // difíceis de ler. Tablet/desktop (>700px): se a largura natural das duas
+  // tabelas juntas exceder o espaço disponível, encolhe-as (scale) como um
+  // todo até caberem exatamente, sem scroll horizontal — como partilham a
+  // mesma largura de coluna (sharedColWidths), o alinhamento mantém-se.
+  function funchalFitTablesToScreen(){
+    const wrap  = document.getElementById('funchal-tables-wrap');
+    const inner = document.getElementById('funchal-tables-scale');
+    if (!wrap || !inner) return;
+
+    // Repor antes de medir, para não acumular escalas de ajustes anteriores.
+    inner.style.transform = '';
+    inner.style.transformOrigin = '';
+    wrap.style.height = '';
+
+    if (window.innerWidth <= 700) return; // telemóvel: comportamento natural
+
+    const naturalWidth  = inner.scrollWidth;
+    const naturalHeight = inner.scrollHeight;
+    const availWidth    = wrap.clientWidth;
+    if (naturalWidth > availWidth && naturalWidth > 0) {
+      const scale = availWidth / naturalWidth;
+      inner.style.transformOrigin = 'top left';
+      inner.style.transform = 'scale(' + scale + ')';
+      // Compensa o espaço reservado no documento (transform não reflui o
+      // layout), para não sobrar scroll nem espaço vazio por baixo.
+      wrap.style.height = (naturalHeight * scale) + 'px';
+    }
+  }
+
+  // Reajusta ao rodar o ecrã ou redimensionar a janela (ex.: iPad portrait →
+  // landscape), sem precisar reabrir o modal. Um só listener por carregamento
+  // de página (flag module-level), tal como funchalEnsureLiveTicker.
+  let _funchalResizeListenerAdded = false;
+  function funchalEnsureResizeListener(){
+    if (_funchalResizeListenerAdded) return;
+    _funchalResizeListenerAdded = true;
+    let resizeTimer = null;
+    window.addEventListener('resize', function(){
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(funchalFitTablesToScreen, 150);
+    });
+    window.addEventListener('orientationchange', function(){
+      setTimeout(funchalFitTablesToScreen, 250);
+    });
   }
 
   // ── Horas semanais + painel de cobertura para a vista FUNCHAL UNIFICADO —
@@ -1136,10 +1213,15 @@
       // Intervalos de stepHours em stepHours, alinhados ao próprio passo
       // (0.5 → :00/:30 para o funchal; 1 → :00 certo para o Porto Santo).
       const startHour = Math.floor(minH/stepHours)*stepHours, endHour = Math.ceil(maxH/stepHours)*stepHours;
-      const headCells = dayHeader.map(d=>'<th style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'+escapeHtml(d)+'</th>').join('');
+      // Ponto pulsante reservado em TODOS os cabeçalhos (visibility:hidden por
+      // omissão) — o mesmo timer que trata da hora também mostra este, só na
+      // coluna do dia da semana ATUAL (ver funchalUpdateCoverageHourMarker).
+      const headCells = dayHeader.map(d=>'<th style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'
+        + '<span class="funchal-live-day-dot" data-day="'+escapeHtml(d)+'" style="visibility:hidden;"></span>'
+        + escapeHtml(d) + '</th>').join('');
       let rowsHtml='';
       for(let H=startHour; H<endHour; H+=stepHours){
-        const dayCells = byDay.map(segs=>{
+        const dayCells = byDay.map((segs, dIdx)=>{
           let count=0;
           segs.forEach(([s,e])=>{ if(s<H+stepHours && e>H) count++; });
           // Escala semântica: 1 pessoa = perigo (vermelho), 2 = atenção (âmbar),
@@ -1148,7 +1230,14 @@
             : count===1 ? 'color:#b91c1c;background:rgba(185,28,28,.12);'
             : count===2 ? 'color:#b45309;background:rgba(180,83,9,.12);'
             : 'color:#15803d;background:rgba(21,128,61,.12);';
-          return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'+(count||'')+'</td>';
+          // Span "funchal-live-cell-now" reservado em TODAS as células — o
+          // timer aplica a classe "funchal-cell-pulse" (mesma animação dos
+          // pontos) só à célula cujo dia+hora é o atual, e remove-a das
+          // restantes a cada tick (ver funchalUpdateCoverageHourMarker).
+          const dayAttr = escapeHtml(dayHeader[dIdx]||'');
+          return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'
+            + '<span class="funchal-live-cell-now" data-day="'+dayAttr+'" data-hour="'+H+'" data-hour-end="'+(H+stepHours)+'">'+(count||'')+'</span>'
+            + '</td>';
         }).join('');
         const label = funchalFormatHourLabel(H);
         // Ponto pulsante reservado em TODAS as linhas (visibility:hidden por
@@ -1190,6 +1279,8 @@
     style.textContent = `
       @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
       .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
+      .funchal-live-day-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:4px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
+      .funchal-cell-pulse { display:inline-block; animation:funchalPulse 1.6s ease-in-out infinite; }
       @media (max-width: 700px) {
         .funchal-cov-grid { grid-template-columns: 1fr !important; }
       }
@@ -1226,6 +1317,26 @@
       const rowEnd = parseFloat(dot.getAttribute('data-hour-end'));
       const isCurrent = nowDec >= rowH && nowDec < rowEnd;
       dot.style.visibility = isCurrent ? 'visible' : 'hidden';
+    });
+
+    // Ponto do dia da semana atual, no cabeçalho de cada coluna — mesmo
+    // mecanismo do ponto da hora, comparando a abreviação (SEG/TER/…) já
+    // usada no próprio CSV com o dia de hoje.
+    const diasPT = ['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
+    const todayName = diasPT[now.getDay()];
+    document.querySelectorAll('#funchal-cov-body .funchal-live-day-dot').forEach(dot=>{
+      const dayAttr = (dot.getAttribute('data-day')||'').trim().toUpperCase();
+      dot.style.visibility = (dayAttr === todayName) ? 'visible' : 'hidden';
+    });
+
+    // Número da célula (dia atual + hora atual): mesma pulsação dos pontos,
+    // aplicada/removida a cada tick sem re-renderizar a tabela.
+    document.querySelectorAll('#funchal-cov-body .funchal-live-cell-now').forEach(cell=>{
+      const dayAttr = (cell.getAttribute('data-day')||'').trim().toUpperCase();
+      const rowH = parseFloat(cell.getAttribute('data-hour'));
+      const rowEnd = parseFloat(cell.getAttribute('data-hour-end'));
+      const isNow = dayAttr === todayName && nowDec >= rowH && nowDec < rowEnd;
+      cell.classList.toggle('funchal-cell-pulse', isNow);
     });
   }
 

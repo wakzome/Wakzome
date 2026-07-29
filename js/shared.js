@@ -1199,6 +1199,11 @@
     const normalized = groupBlocks.map(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
       const dayHeader  = block[0].slice(1);
+      // Datas completas (DD/MM/YYYY) desta semana, na mesma ordem do
+      // dayHeader — necessárias para saber se a semana atualmente
+      // consultada é mesmo a que contém o dia de hoje (ver dateHeader em
+      // funchalBuildCoveragePanelFromStores).
+      const dateHeader = (block[1] || []).slice(1);
       const dataRows   = block.slice(2);
       const people = [];
       let cur=null, curName=null;
@@ -1210,7 +1215,7 @@
         } else cur.push(row);
       });
       if(cur) people.push({ name: curName, A: cur[0], B: cur[1]||cur[0] });
-      return { storeName, dayHeader, people };
+      return { storeName, dayHeader, dateHeader, people };
     });
     return funchalBuildCoveragePanelFromStores(normalized);
   }
@@ -1223,6 +1228,9 @@
     const normalized = stores.map(s => ({
       storeName: s.name,
       dayHeader: (dayHeaderRow || []).slice(1),
+      // s.dateRow já vem de hpsCollectStores (datas completas DD/MM/YYYY
+      // desta sub-loja) — mesmo propósito que em funchalBuildCoveragePanel.
+      dateHeader: (s.dateRow || []).slice(1),
       people: s.people
     }));
     // Porto Santo: intervalos hora-a-hora (9, 10, 11…), ao contrário do
@@ -1238,7 +1246,23 @@
   function funchalBuildCoveragePanelFromStores(normalizedStores, stepHours){
     stepHours = stepHours || 0.5;
     let sectionsHtml = '';
-    normalizedStores.forEach(({storeName, dayHeader, people})=>{
+    // Data de hoje, calculada uma única vez para todas as secções.
+    const todayDateStr = new Date().toDateString();
+    normalizedStores.forEach(({storeName, dayHeader, dateHeader, people})=>{
+      // Esta tabela representa a semana consultada, não necessariamente a
+      // semana atual — só deve haver destaque de "agora" se uma das suas
+      // colunas corresponder EXATAMENTE à data de hoje (mesma comparação de
+      // data completa já usada em findTodayCol/findTodayColPS para as
+      // tabelas de horário). Sem dateHeader (ou sem coincidência), fica
+      // vazio e o ticker desliga todos os indicadores desta secção.
+      let todayColName = '';
+      (dateHeader||[]).forEach((dv, di)=>{
+        if (todayColName) return;
+        const parts = (dv||'').trim().split('/');
+        if (parts.length !== 3) return;
+        const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+        if (d.toDateString() === todayDateStr) todayColName = dayHeader[di] || '';
+      });
       const byDay = dayHeader.map(()=>[]);
       people.forEach(p=>{
         [p.A, p.B].forEach(row=>{
@@ -1307,7 +1331,7 @@
       }
       sectionsHtml += '<div style="min-width:0;">'
         + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
-        + '<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px;">'
+        + '<table data-today-col-name="' + escapeHtml(todayColName) + '" style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px;">'
         +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;">h</th>' + headCells + '</tr></thead>'
         +   '<tbody>' + rowsHtml + '</tbody>'
         + '</table>'
@@ -1404,43 +1428,53 @@
   function funchalUpdateCoverageHourMarker(){
     const now = new Date();
     const nowDec = now.getHours() + now.getMinutes()/60;
-    document.querySelectorAll('#funchal-cov-body .funchal-live-hour-dot').forEach(dot=>{
-      const rowH = parseFloat(dot.getAttribute('data-hour'));
-      const rowEnd = parseFloat(dot.getAttribute('data-hour-end'));
-      const isCurrent = nowDec >= rowH && nowDec < rowEnd;
-      dot.style.visibility = isCurrent ? 'visible' : 'hidden';
-    });
 
-    // Ponto do dia da semana atual, no cabeçalho de cada coluna — mesmo
-    // mecanismo do ponto da hora, comparando a abreviação (SEG/TER/…) já
-    // usada no próprio CSV com o dia de hoje.
-    const diasPT = ['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
-    const todayName = diasPT[now.getDay()];
-    document.querySelectorAll('#funchal-cov-body .funchal-live-day-dot').forEach(dot=>{
-      const dayAttr = (dot.getAttribute('data-day')||'').trim().toUpperCase();
-      dot.style.visibility = (dayAttr === todayName) ? 'visible' : 'hidden';
-    });
+    // Cada tabela de cobertura (uma por loja) sabe, desde a sua geração
+    // (funchalBuildCoveragePanelFromStores), se a SEMANA que está a mostrar
+    // contém realmente o dia de hoje — data-today-col-name guarda o nome
+    // abreviado desse dia (ex.: "QUA"), ou fica vazio se a semana
+    // consultada for outra (ex.: "semana seguinte"). Processar tabela a
+    // tabela evita acender qualquer indicador (bolinha de dia/hora, número
+    // em negrito, contorno de coluna) quando não estamos a ver a semana
+    // atual — em vez de comparar só o nome do dia, que se repete todas as
+    // semanas.
+    document.querySelectorAll('#funchal-cov-body table[data-today-col-name]').forEach(table=>{
+      const todayColName = (table.getAttribute('data-today-col-name')||'').trim().toUpperCase();
+      const isCurrentWeek = !!todayColName;
 
-    // Número da célula (dia atual + hora atual): sem animação — só mais
-    // peso (negrito), ligado/desligado a cada tick sem re-renderizar nada.
-    document.querySelectorAll('#funchal-cov-body .funchal-live-cell-now').forEach(cell=>{
-      const dayAttr = (cell.getAttribute('data-day')||'').trim().toUpperCase();
-      const rowH = parseFloat(cell.getAttribute('data-hour'));
-      const rowEnd = parseFloat(cell.getAttribute('data-hour-end'));
-      const isNow = dayAttr === todayName && nowDec >= rowH && nowDec < rowEnd;
-      cell.classList.toggle('funchal-cell-now-active', isNow);
-    });
+      table.querySelectorAll('.funchal-live-hour-dot').forEach(dot=>{
+        const rowH = parseFloat(dot.getAttribute('data-hour'));
+        const rowEnd = parseFloat(dot.getAttribute('data-hour-end'));
+        const isCurrent = isCurrentWeek && nowDec >= rowH && nowDec < rowEnd;
+        dot.style.visibility = isCurrent ? 'visible' : 'hidden';
+      });
 
-    // Destaque da coluna inteira do dia atual (cabeçalho + cada célula de
-    // dados) — contorno subtil, nunca substitui a cor semântica de
-    // contagem das células.
-    document.querySelectorAll('#funchal-cov-body th[data-day]').forEach(th=>{
-      const dayAttr = (th.getAttribute('data-day')||'').trim().toUpperCase();
-      th.classList.toggle('funchal-col-today-th', dayAttr === todayName);
-    });
-    document.querySelectorAll('#funchal-cov-body td[data-day]').forEach(td=>{
-      const dayAttr = (td.getAttribute('data-day')||'').trim().toUpperCase();
-      td.classList.toggle('funchal-col-today-td', dayAttr === todayName);
+      table.querySelectorAll('.funchal-live-day-dot').forEach(dot=>{
+        const dayAttr = (dot.getAttribute('data-day')||'').trim().toUpperCase();
+        dot.style.visibility = (isCurrentWeek && dayAttr === todayColName) ? 'visible' : 'hidden';
+      });
+
+      // Número da célula (dia atual + hora atual): sem animação — só mais
+      // peso (negrito), ligado/desligado a cada tick sem re-renderizar nada.
+      table.querySelectorAll('.funchal-live-cell-now').forEach(cell=>{
+        const dayAttr = (cell.getAttribute('data-day')||'').trim().toUpperCase();
+        const rowH = parseFloat(cell.getAttribute('data-hour'));
+        const rowEnd = parseFloat(cell.getAttribute('data-hour-end'));
+        const isNow = isCurrentWeek && dayAttr === todayColName && nowDec >= rowH && nowDec < rowEnd;
+        cell.classList.toggle('funchal-cell-now-active', isNow);
+      });
+
+      // Destaque da coluna inteira do dia atual (cabeçalho + cada célula de
+      // dados) — contorno subtil, nunca substitui a cor semântica de
+      // contagem das células.
+      table.querySelectorAll('th[data-day]').forEach(th=>{
+        const dayAttr = (th.getAttribute('data-day')||'').trim().toUpperCase();
+        th.classList.toggle('funchal-col-today-th', isCurrentWeek && dayAttr === todayColName);
+      });
+      table.querySelectorAll('td[data-day]').forEach(td=>{
+        const dayAttr = (td.getAttribute('data-day')||'').trim().toUpperCase();
+        td.classList.toggle('funchal-col-today-td', isCurrentWeek && dayAttr === todayColName);
+      });
     });
   }
 

@@ -1777,18 +1777,6 @@ input, textarea { cursor: text !important; }
   font-size: .62rem; font-weight: bold; text-transform: uppercase;
   letter-spacing: .07em; color: #000; margin-top: -2px;
 }
-#saft-btn {
-  margin-top: 4px;
-  padding: 5px 12px;
-  font-size: .68rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: lowercase; letter-spacing: .04em;
-  color: #000; border: 1px solid #ddd; border-radius: 20px;
-  background: transparent; cursor: pointer;
-  text-decoration: none; display: inline-block;
-  transition: border-color .2s, color .2s, background .2s;
-}
-#saft-btn:hover { border-color: #555; color: #000; background: #f7f7f7; }
 #saft-divider {
   width: 100%; height: 1px; background: #e8e8e8; margin: 10px 0;
 }
@@ -2415,7 +2403,7 @@ body.no-glow #glow-layer-1,
 body.no-glow #glow-layer-2 { animation: none; }
 
 button:not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn, #key-submit, #recibos-link,
-#saft-btn, #saft-recibos-btn,
+#saft-recibos-btn,
 .ed-modal-btn, #ed-folder-pick-btn {
   transition: transform 0.18s cubic-bezier(0.22,1,0.36,1),
               box-shadow 0.18s cubic-bezier(0.22,1,0.36,1),
@@ -2424,7 +2412,7 @@ button:not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-
 }
 button:hover:not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn:hover,
 #key-submit:hover, #recibos-link:hover,
-#saft-btn:hover, #saft-recibos-btn:hover,
+#saft-recibos-btn:hover,
 .ed-modal-btn:hover, #ed-folder-pick-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 22px rgba(0,0,0,0.07);
@@ -2917,7 +2905,7 @@ input, button, select, textarea,
 #ed-folder-display, #ed-folder-pick-btn,
 .ed-modal-btn, .ed-tool-label,
 #r-conferir-btn, #r-process-btn,
-#saft-btn, #saft-recibos-btn, #saft-agenda-btn,
+#saft-recibos-btn, #saft-agenda-btn,
 #saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
 #saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
 .saft-fat-item,
@@ -2960,7 +2948,6 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 .ed-modal-btn.primary:hover,
 #r-process-btn:hover,
 #r-conferir-btn:hover,
-#saft-btn:hover,
 #saft-recibos-btn:hover,
 #saft-agenda-btn:hover,
 #ed-export-btn:hover,
@@ -4510,7 +4497,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   <div id="saft-title">solicitar criação<br>de SAFT</div>
   <div id="saft-countdown">—</div>
   <div id="saft-countdown-label">dias</div>
-  <a id="saft-btn" href="https://areareservada.pri.pt/#/auth/login" target="_blank" rel="noopener">abrir portal →</a>
   <div id="saft-divider"></div>
   <button id="saft-recibos-btn" onclick="openRecibosOverlay()">recibos</button>
   <div id="saft-recibos-label">últimos recibos<br>carregados</div>
@@ -5914,15 +5900,26 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 
     if (dateEl) dateEl.textContent = displayDate;
 
-    var stores = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx'];
+    // key = semente do _emergencyCode (tem de bater certo com o que
+    // ventas-empleada.js usa); label = texto mostrado ao admin. Para o
+    // Porto Santo os dois coincidem; para o funchal, a key é a chave exata
+    // já usada em ventas_diarias (minúsculas).
+    var stores = [
+      { key: 'Shana',         label: 'Shana' },
+      { key: 'Mezka Avenida', label: 'Mezka Avenida' },
+      { key: 'Mezka Mercado', label: 'Mezka Mercado' },
+      { key: 'Maxx',          label: 'Maxx' },
+      { key: 'mezka funchal',                  label: 'Mezka Funchal' },
+      { key: 'parfois arcadas são francisco',  label: 'Parfois Arcadas' }
+    ];
     list.innerHTML = '';
-    stores.forEach(function (s) {
-      var code = _emergencyCode(s, dateStr);
+    stores.forEach(function (entry) {
+      var code = _emergencyCode(entry.key, dateStr);
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:2px 0;border-bottom:1px solid #f0f0f0;';
       var nameEl = document.createElement('span');
       nameEl.style.cssText = 'font-size:.65rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-      nameEl.textContent = s;
+      nameEl.textContent = entry.label;
       var codeEl = document.createElement('span');
       codeEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:.08em;white-space:nowrap;';
       codeEl.textContent = code;

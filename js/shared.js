@@ -1063,41 +1063,85 @@
     return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
   }
 
+  // Normaliza os blocos independentes do funchal para a forma partilhada
+  // [{storeName, dayHeader, people:[{name,A,B}]}] — mesmo agrupamento
+  // consecutivo-por-nome usado em buildSubTable.
   function funchalBuildCoveragePanel(groupBlocks){
-    let sectionsHtml = '';
-    groupBlocks.forEach(block=>{
+    const normalized = groupBlocks.map(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
-      const dayHeader = block[0].slice(1);
-      const dataRows  = block.slice(2);
-
-      const byDay = dayHeader.map(()=>[]);
+      const dayHeader  = block[0].slice(1);
+      const dataRows   = block.slice(2);
+      const people = [];
+      let cur=null, curName=null;
       dataRows.forEach(row=>{
-        for(let c=1;c<row.length;c++){
-          const v=(row[c]||'').trim();
-          if(!hpsIsSchedule(v)) continue;
-          const [a,b]=v.split('-');
-          const s=funchalToHrs(a), e=funchalToHrs(b);
-          if(!isNaN(s) && !isNaN(e) && e>s) byDay[c-1].push([s,e]);
-        }
+        const name=(row[0]||'').trim();
+        if(cur===null || name!==curName){
+          if(cur) people.push({ name: curName, A: cur[0], B: cur[1]||cur[0] });
+          cur=[row]; curName=name;
+        } else cur.push(row);
+      });
+      if(cur) people.push({ name: curName, A: cur[0], B: cur[1]||cur[0] });
+      return { storeName, dayHeader, people };
+    });
+    return funchalBuildCoveragePanelFromStores(normalized);
+  }
+
+  // Porto Santo: reaproveita hpsCollectStores (já existente, usado pela modal
+  // por pessoa) para obter as sub-lojas do bloco nested-marker, e normaliza
+  // para a mesma forma partilhada — não duplica nenhuma lógica de parsing.
+  function portoSantoBuildCoveragePanel(rows){
+    const { dayHeaderRow, stores } = hpsCollectStores(rows);
+    const normalized = stores.map(s => ({
+      storeName: s.name,
+      dayHeader: (dayHeaderRow || []).slice(1),
+      people: s.people
+    }));
+    // Porto Santo: intervalos hora-a-hora (9, 10, 11…), ao contrário do
+    // funchal que mantém 30 em 30 min — único parâmetro que muda.
+    return funchalBuildCoveragePanelFromStores(normalized, 1);
+  }
+
+  // Núcleo genérico e partilhado do painel de cobertura — recebe uma lista
+  // já normalizada [{storeName, dayHeader, people:[{name,A,B}]}] e devolve o
+  // HTML. Usado tanto pelo funchal (blocos independentes, passo 30 min) como
+  // pelo Porto Santo (via hpsCollectStores, passo 1h) — sem duplicar a
+  // lógica das cores/horas; só o tamanho do intervalo muda por parâmetro.
+  function funchalBuildCoveragePanelFromStores(normalizedStores, stepHours){
+    stepHours = stepHours || 0.5;
+    let sectionsHtml = '';
+    normalizedStores.forEach(({storeName, dayHeader, people})=>{
+      const byDay = dayHeader.map(()=>[]);
+      people.forEach(p=>{
+        [p.A, p.B].forEach(row=>{
+          if(!row) return;
+          for(let c=1;c<row.length;c++){
+            const v=(row[c]||'').trim();
+            if(!hpsIsSchedule(v)) continue;
+            const [a,b]=v.split('-');
+            const s=funchalToHrs(a), e=funchalToHrs(b);
+            if(!isNaN(s) && !isNaN(e) && e>s) byDay[c-1].push([s,e]);
+          }
+        });
       });
 
       let minH=Infinity, maxH=-Infinity;
       byDay.forEach(segs=>segs.forEach(([s,e])=>{ if(s<minH) minH=s; if(e>maxH) maxH=e; }));
       if(!isFinite(minH) || !isFinite(maxH)){
-        sectionsHtml += '<div style="flex:1 1 260px;min-width:230px;">'
+        sectionsHtml += '<div style="min-width:0;">'
           + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
           + '<div style="font-size:11px;color:#888;font-style:italic;text-align:center;">Sem turnos atribuídos</div>'
           + '</div>';
         return;
       }
-      // Intervalos de 30 em 30 minutos, alinhados a :00/:30.
-      const startHour = Math.floor(minH*2)/2, endHour = Math.ceil(maxH*2)/2;
+      // Intervalos de stepHours em stepHours, alinhados ao próprio passo
+      // (0.5 → :00/:30 para o funchal; 1 → :00 certo para o Porto Santo).
+      const startHour = Math.floor(minH/stepHours)*stepHours, endHour = Math.ceil(maxH/stepHours)*stepHours;
       const headCells = dayHeader.map(d=>'<th style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'+escapeHtml(d)+'</th>').join('');
       let rowsHtml='';
-      for(let H=startHour; H<endHour; H+=0.5){
+      for(let H=startHour; H<endHour; H+=stepHours){
         const dayCells = byDay.map(segs=>{
           let count=0;
-          segs.forEach(([s,e])=>{ if(s<H+0.5 && e>H) count++; });
+          segs.forEach(([s,e])=>{ if(s<H+stepHours && e>H) count++; });
           // Escala semântica: 1 pessoa = perigo (vermelho), 2 = atenção (âmbar),
           // 3+ = boa cobertura (verde) — tons saturados, sem pastel.
           const style = count===0 ? 'color:#b3b3bd;'
@@ -1108,13 +1152,15 @@
         }).join('');
         const label = funchalFormatHourLabel(H);
         // Ponto pulsante reservado em TODAS as linhas (visibility:hidden por
-        // omissão) — o timer de 30 em 30 min só alterna a visibilidade da
-        // linha correspondente à meia-hora atual, sem re-renderizar nada.
+        // omissão) — o timer só alterna a visibilidade da linha cujo
+        // intervalo [data-hour, data-hour-end) contém a hora atual, sem
+        // re-renderizar nada. Funciona igual para o passo de 30 min
+        // (funchal) e de 1h (Porto Santo).
         rowsHtml += '<tr><td style="padding:3px 4px;color:#777;font-weight:600;text-align:center;white-space:nowrap;font-size:10px;">'
-          + '<span class="funchal-live-hour-dot" data-hour="'+H+'" style="visibility:hidden;"></span>' + label
+          + '<span class="funchal-live-hour-dot" data-hour="'+H+'" data-hour-end="'+(H+stepHours)+'" style="visibility:hidden;"></span>' + label
           + '</td>'+dayCells+'</tr>';
       }
-      sectionsHtml += '<div style="flex:1 1 260px;min-width:230px;">'
+      sectionsHtml += '<div style="min-width:0;">'
         + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
         + '<table style="width:100%;border-collapse:collapse;font-size:10px;">'
         +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;">h</th>' + headCells + '</tr></thead>'
@@ -1122,8 +1168,9 @@
         + '</table>'
         + '</div>';
     });
-    // blocos lado a lado (flex-row); em ecrãs estreitos quebram para a linha seguinte.
-    return '<div style="display:flex;flex-direction:row;flex-wrap:wrap;gap:20px;align-items:flex-start;">' + sectionsHtml + '</div>';
+    // Grelha fixa de 2 colunas — 2 lojas em cima, 2 em baixo (em vez de
+    // flex-wrap, que enchia 3 por linha e deixava a 4ª sozinha).
+    return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">' + sectionsHtml + '</div>';
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1140,14 +1187,9 @@
     style.id = 'funchal-live-styles';
     style.textContent = `
       @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
-      .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#3b82f6; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
+      .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
     `;
     document.head.appendChild(style);
-  }
-
-  function funchalCurrentHalfHourDecimal(){
-    const now = new Date();
-    return now.getHours() + (now.getMinutes() < 30 ? 0 : 0.5);
   }
 
   // Reavalia cada bolinha a partir do horário-de-hoje guardado em data-today
@@ -1168,11 +1210,17 @@
     });
   }
 
+  // Marca a linha cujo intervalo [data-hour, data-hour-end) contém a hora
+  // atual — funciona tanto para o passo de 30 min (funchal) como para o de
+  // 1h (Porto Santo), sem precisar de saber qual dos dois está no ecrã.
   function funchalUpdateCoverageHourMarker(){
-    const nowH = funchalCurrentHalfHourDecimal();
+    const now = new Date();
+    const nowDec = now.getHours() + now.getMinutes()/60;
     document.querySelectorAll('#funchal-cov-body .funchal-live-hour-dot').forEach(dot=>{
       const rowH = parseFloat(dot.getAttribute('data-hour'));
-      dot.style.visibility = (rowH === nowH) ? 'visible' : 'hidden';
+      const rowEnd = parseFloat(dot.getAttribute('data-hour-end'));
+      const isCurrent = nowDec >= rowH && nowDec < rowEnd;
+      dot.style.visibility = isCurrent ? 'visible' : 'hidden';
     });
   }
 
@@ -1185,6 +1233,7 @@
     function tick(){
       funchalUpdateLiveDots();
       funchalUpdateCoverageHourMarker();
+      portoSantoUpdateLiveDots();
     }
     tick();
     const now = new Date();
@@ -1218,6 +1267,97 @@
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
     document.getElementById('funchal-cov-close').addEventListener('click', () => { overlay.style.display = 'none'; });
     return overlay;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  PORTO SANTO — reaproveita cobertura + bolinhas ao vivo do funchal.
+  //  100% aditivo: nunca toca em renderPortoSanto/hpsCollectStores/
+  //  hpsBindNameClicks. Deteta a loja atual pela MESMA regra que
+  //  fadeRenderTable já usa (rows[0][0]==='porto santo'), injeta o botão
+  //  de cobertura por cima da tabela via DOM depois do render, e mantém
+  //  as bolinhas verdes/vermelhas atualizadas relendo o DOM — reaproveita
+  //  o mesmo temporizador de 30 em 30 min já criado para o funchal.
+  // ══════════════════════════════════════════════════════════════
+  function portoSantoCurrentRowsIfActive(){
+    const ws = document.getElementById('week-select');
+    const blocks = window._lastBlocks;
+    if (!ws || !blocks || !blocks.length) return null;
+    const idx = parseInt(ws.value, 10);
+    const rows = blocks[idx];
+    if (!rows || !rows[0]) return null;
+    const firstCell = (rows[0][0] || '').trim().toLowerCase();
+    return firstCell === 'porto santo' ? rows : null;
+  }
+
+  function portoSantoEnsureCoverageButton(){
+    const cont = document.getElementById('table-container');
+    if (!cont || document.getElementById('funchal-cov-toggle')) return;
+    // #table-container é display:flex (row) — inserir o botão como IRMÃO da
+    // <table> punha-os lado a lado, empurrando a tabela. Em vez disso,
+    // embrulha-se o conteúdo que o renderPortoSanto já colocou (a <table>)
+    // numa coluna própria com o botão por cima, tal como o funchal já faz —
+    // sem alterar renderPortoSanto, só reorganizar o que ele já produziu.
+    const existingHtml = cont.innerHTML;
+    cont.innerHTML = '<div id="porto-cov-col" style="display:flex;flex-direction:column;width:100%;">'
+      +   '<div style="text-align:center;margin-bottom:14px;">'
+      +     '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>'
+      +   '</div>'
+      +   existingHtml
+      + '</div>';
+    document.getElementById('funchal-cov-toggle').addEventListener('click', () => {
+      const rows = portoSantoCurrentRowsIfActive();
+      if (!rows) return;
+      const covOverlay = funchalCovEnsureOverlay();
+      document.getElementById('funchal-cov-body').innerHTML = portoSantoBuildCoveragePanel(rows);
+      funchalUpdateCoverageHourMarker();
+      covOverlay.style.display = 'flex';
+    });
+  }
+
+  // Reavalia cada bolinha por POSIÇÃO no DOM (não por nome) — a mesma pessoa
+  // pode aparecer em mais do que uma sub-loja (reforço) com o mesmo
+  // data-hps-person; casar por nome arriscaria atualizar a loja errada.
+  // hpsCollectStores(rows) devolve as pessoas pela MESMA ordem em que
+  // renderPortoSanto as desenha (percorre o mesmo array rows pela mesma
+  // ordem), por isso o pareamento posicional é seguro.
+  function portoSantoUpdateLiveDots(){
+    const rows = portoSantoCurrentRowsIfActive();
+    if (!rows) return;
+    const { stores } = hpsCollectStores(rows);
+    const flat = [];
+    stores.forEach(s => s.people.forEach(p => flat.push({ store: s, person: p })));
+    const tds = document.querySelectorAll('#table-container .hps-person-name');
+    if (tds.length !== flat.length) return;
+    tds.forEach((td, idx) => {
+      const { store, person } = flat[idx];
+      const dateRow = store.dateRow || [];
+      let todayCol = -1;
+      for (let c = 1; c < dateRow.length; c++) {
+        const d = dateRow[c]; if (!d) continue;
+        const parts = d.split('/'); if (parts.length !== 3) continue;
+        const dd = new Date(+parts[2], +parts[1]-1, +parts[0]);
+        if (dd.toDateString() === new Date().toDateString()) { todayCol = c; break; }
+      }
+      let active = false;
+      if (todayCol > 0) {
+        const horarios = [person.A[todayCol], person.B[todayCol]].filter(v=>v);
+        active = horarios.some(h => isNowInSchedule(h));
+      }
+      const span = td.querySelector('span');
+      if (span) span.style.background = active ? 'green' : 'red';
+      const tr = td.closest('tr');
+      if (tr) tr.classList.toggle('tr-active-now', active);
+    });
+  }
+
+  // Deteta re-renders do Porto Santo (fadeRenderTable → renderPortoSanto)
+  // sem tocar em nenhum dos dois — o mesmo padrão de MutationObserver já
+  // usado no index.html para o reveal do mosaico.
+  function portoSantoOnTableMutated(){
+    const rows = portoSantoCurrentRowsIfActive();
+    if (!rows) return;
+    portoSantoEnsureCoverageButton();
+    portoSantoUpdateLiveDots();
   }
 
   // ── Equivalentes "hps" (modal por pessoa) para a vista FUNCHAL UNIFICADO —
@@ -1812,6 +1952,21 @@
     }
     document.getElementById('hav-ult-text').innerHTML = 'Horários – última semana publicada<br><b>' + escapeHtml(havUltimaFormatLabel(semanaISO)) + '</b>';
     badge.classList.add('show');
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ARRANQUE incondicional (não depende de renderFunchalUnificado ter
+  //  corrido) — cobre também a loja Porto Santo, que nunca chama essa
+  //  função. #table-container já existe no HTML antes deste <script>
+  //  correr (mesmo padrão do window._hRender acima), por isso é seguro
+  //  ligar o observer já aqui. tick() e o observer verificam sempre a
+  //  loja atual antes de fazer seja o que for, por isso não têm efeito
+  //  nenhum fora do Porto Santo / funchal.
+  // ══════════════════════════════════════════════════════════════
+  funchalEnsureLiveTicker();
+  const _fxTableEl = document.getElementById('table-container');
+  if (_fxTableEl) {
+    new MutationObserver(portoSantoOnTableMutated).observe(_fxTableEl, { childList: true, subtree: true });
   }
 
 })();

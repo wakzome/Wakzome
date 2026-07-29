@@ -862,6 +862,7 @@
     document.getElementById('table-container').innerHTML =
       '<div class="funchal-store-card" style="' + FX_GLASS_CARD + '">' + html + '</div>';
     hpsBindNameClicks(rows);
+    funchalBindRowHoverEffect();
   }
 
   // ── FUNCHAL UNIFICADO: junta Mezka Funchal + Parfois Arcadas da mesma
@@ -1038,6 +1039,7 @@
       + '</div>';
 
     hpsBindNameClicksFunchal(groupBlocks);
+    funchalBindRowHoverEffect();
 
     // Overlay de cobertura: nó único anexado ao <body> (mesmo padrão do
     // hps-overlay), para escapar de qualquer transform/contexto do modal
@@ -1305,7 +1307,7 @@
       }
       sectionsHtml += '<div style="min-width:0;">'
         + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
-        + '<table style="width:100%;border-collapse:collapse;font-size:10px;">'
+        + '<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px;">'
         +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;">h</th>' + headCells + '</tr></thead>'
         +   '<tbody>' + rowsHtml + '</tbody>'
         + '</table>'
@@ -1334,12 +1336,14 @@
       @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
       .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
       .funchal-live-day-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:4px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
-      /* Número da célula de agora: sem animação — só mais peso (negrito),
-         atualizado a cada tick (30 min funchal / 1h Porto Santo). */
-      /* Peso 900 sozinho pode ficar quase impercetível consoante a fonte
-         disponível (algumas não têm um corte 900 real) — o aumento ligeiro
-         de tamanho garante que o destaque se nota sempre. */
-      .funchal-cell-now-active { display:inline-block; font-weight:900; font-size:1.15em; }
+      /* Número da célula de agora: sem animação — só mais peso (negrito) e
+         tamanho, atualizado a cada tick (30 min funchal / 1h Porto Santo).
+         Tamanho fixo (não relativo ao base de 10px) para o destaque ser
+         inequívoco à primeira vista; fundo mantém-se sempre o original da
+         célula (cor semântica vermelho/âmbar/verde). A tabela de cobertura
+         usa table-layout:fixed, por isso este aumento nunca gera scroll
+         horizontal — a largura das colunas é sempre fixa. */
+      .funchal-cell-now-active { display:inline-block; font-weight:900; font-size:14px; line-height:1; }
       /* Destaque da coluna do dia atual no painel de cobertura — contorno em
          cinza escuro em toda a coluna (cabeçalho + células), sem substituir
          a cor semântica de contagem (vermelho/âmbar/verde) das células. */
@@ -1354,8 +1358,19 @@
          lojas: hairlines finas em vez de bordas duras, hover mais discreto
          no nome (sobrepõe-se ao hover global de .hps-person-name). */
       .funchal-store-card table th { border: none; }
-      .funchal-store-card table td { border-bottom: 1px solid rgba(0,0,0,.05); }
+      .funchal-store-card table td { border-bottom: 1px solid rgba(0,0,0,.05); transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
       .funchal-store-card .hps-person-name:hover { background: rgba(0,0,0,.04) !important; }
+      /* Hover na linha da pessoa (tabelas de horário Funchal + Porto Santo):
+         classe aplicada via JS (funchalBindRowHoverEffect) à(s) <tr> certas —
+         cresce ligeiramente (simula aumento de letra) e ilumina-se com uma
+         sombra suave, sem alterar as cores semânticas de fundo da célula. */
+      .funchal-store-card tr.fx-row-hover > td {
+        transform: scale(1.035);
+        position: relative;
+        z-index: 3;
+        box-shadow: 0 6px 18px rgba(0,0,0,.14), inset 0 0 0 1px rgba(255,255,255,.7);
+        filter: brightness(1.05);
+      }
       #funchal-cov-toggle:hover { background: rgba(255,255,255,.85); }
     `;
     document.head.appendChild(style);
@@ -1903,6 +1918,34 @@
       td.addEventListener('click', () => {
         const personLabel = td.dataset.hpsPerson;
         if (personLabel) showPersonWeekModal(personLabel, rows);
+      });
+    });
+  }
+
+  // Hover nas linhas das tabelas de horário (Funchal + Porto Santo): ao
+  // passar o rato no nome, a(s) <tr> dessa pessoa ganham a classe
+  // .fx-row-hover (ver funchalEnsureLiveStyles). No Funchal cada pessoa
+  // ocupa 2 <tr> ligadas por data-live-id; em Porto Santo ocupa só 1 <tr>
+  // (sem data-live-id) — por isso o agrupamento não pode ser feito com
+  // seletores CSS de irmãos (tr:hover + tr / tr:has(+ tr:hover)), que
+  // ligariam incorretamente a última linha de uma pessoa à primeira da
+  // pessoa seguinte no Funchal. O agrupamento por data-live-id evita esse bug.
+  function funchalBindRowHoverEffect() {
+    document.querySelectorAll('#table-container .hps-person-name').forEach(nameCell => {
+      const ownRow = nameCell.closest('tr');
+      if (!ownRow) return;
+      // liveId é sempre gerado internamente como 'fx-' + slug([a-z0-9-]) + '-' + índice
+      // (ver buildSubTable), nunca contém aspas nem caracteres especiais — seguro
+      // para interpolar diretamente no seletor de atributo.
+      const liveId = ownRow.getAttribute('data-live-id');
+      const rows = liveId
+        ? document.querySelectorAll('tr[data-live-id="' + liveId + '"]')
+        : [ownRow];
+      nameCell.addEventListener('mouseenter', () => {
+        rows.forEach(tr => tr.classList.add('fx-row-hover'));
+      });
+      nameCell.addEventListener('mouseleave', () => {
+        rows.forEach(tr => tr.classList.remove('fx-row-hover'));
       });
     });
   }

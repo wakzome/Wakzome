@@ -1266,7 +1266,9 @@
       // Ponto pulsante reservado em TODOS os cabeçalhos (visibility:hidden por
       // omissão) — o mesmo timer que trata da hora também mostra este, só na
       // coluna do dia da semana ATUAL (ver funchalUpdateCoverageHourMarker).
-      const headCells = dayHeader.map(d=>'<th style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'
+      // data-day no próprio <th> (além do já existente no span do ponto)
+      // permite destacar a coluna inteira do dia atual (funchal-col-today-th).
+      const headCells = dayHeader.map(d=>'<th data-day="'+escapeHtml(d)+'" style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'
         + '<span class="funchal-live-day-dot" data-day="'+escapeHtml(d)+'" style="visibility:hidden;"></span>'
         + escapeHtml(d) + '</th>').join('');
       let rowsHtml='';
@@ -1275,17 +1277,19 @@
           let count=0;
           segs.forEach(([s,e])=>{ if(s<H+stepHours && e>H) count++; });
           // Escala semântica: 1 pessoa = perigo (vermelho), 2 = atenção (âmbar),
-          // 3+ = boa cobertura (verde) — tons saturados, sem pastel.
+          // 3+ = boa cobertura (verde) — tons saturados, sem pastel. Mantém-se
+          // sempre visível; o destaque da coluna de hoje (funchal-col-today-td)
+          // é só um contorno, nunca substitui esta cor.
           const style = count===0 ? 'color:#b3b3bd;'
             : count===1 ? 'color:#b91c1c;background:rgba(185,28,28,.12);'
             : count===2 ? 'color:#b45309;background:rgba(180,83,9,.12);'
             : 'color:#15803d;background:rgba(21,128,61,.12);';
-          // Span "funchal-live-cell-now" reservado em TODAS as células — o
-          // timer aplica a classe "funchal-cell-pulse" (mesma animação dos
-          // pontos) só à célula cujo dia+hora é o atual, e remove-a das
-          // restantes a cada tick (ver funchalUpdateCoverageHourMarker).
+          // data-day no <td> (destaque de coluna) e no <span> (negrito do
+          // número quando é a célula de agora) — o timer liga/desliga as
+          // duas classes a cada tick, sem re-renderizar nada
+          // (ver funchalUpdateCoverageHourMarker).
           const dayAttr = escapeHtml(dayHeader[dIdx]||'');
-          return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'
+          return '<td data-day="'+dayAttr+'" style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'
             + '<span class="funchal-live-cell-now" data-day="'+dayAttr+'" data-hour="'+H+'" data-hour-end="'+(H+stepHours)+'">'+(count||'')+'</span>'
             + '</td>';
         }).join('');
@@ -1330,7 +1334,14 @@
       @keyframes funchalPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
       .funchal-live-hour-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:5px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
       .funchal-live-day-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4a4a4a; margin-right:4px; vertical-align:middle; animation:funchalPulse 1.6s ease-in-out infinite; }
-      .funchal-cell-pulse { display:inline-block; animation:funchalPulse 1.6s ease-in-out infinite; }
+      /* Número da célula de agora: sem animação — só mais peso (negrito),
+         atualizado a cada tick (30 min funchal / 1h Porto Santo). */
+      .funchal-cell-now-active { display:inline-block; font-weight:900; }
+      /* Destaque da coluna do dia atual no painel de cobertura — contorno
+         subtil em toda a coluna (cabeçalho + células), sem substituir a cor
+         semântica de contagem (vermelho/âmbar/verde) das células. */
+      .funchal-col-today-th { background:rgba(56,142,235,.14); box-shadow:inset 0 0 0 1px rgba(56,142,235,.4); }
+      .funchal-col-today-td { box-shadow:inset 0 0 0 1px rgba(56,142,235,.35); }
       @media (max-width: 700px) {
         .funchal-cov-grid { grid-template-columns: 1fr !important; }
       }
@@ -1392,14 +1403,26 @@
       dot.style.visibility = (dayAttr === todayName) ? 'visible' : 'hidden';
     });
 
-    // Número da célula (dia atual + hora atual): mesma pulsação dos pontos,
-    // aplicada/removida a cada tick sem re-renderizar a tabela.
+    // Número da célula (dia atual + hora atual): sem animação — só mais
+    // peso (negrito), ligado/desligado a cada tick sem re-renderizar nada.
     document.querySelectorAll('#funchal-cov-body .funchal-live-cell-now').forEach(cell=>{
       const dayAttr = (cell.getAttribute('data-day')||'').trim().toUpperCase();
       const rowH = parseFloat(cell.getAttribute('data-hour'));
       const rowEnd = parseFloat(cell.getAttribute('data-hour-end'));
       const isNow = dayAttr === todayName && nowDec >= rowH && nowDec < rowEnd;
-      cell.classList.toggle('funchal-cell-pulse', isNow);
+      cell.classList.toggle('funchal-cell-now-active', isNow);
+    });
+
+    // Destaque da coluna inteira do dia atual (cabeçalho + cada célula de
+    // dados) — contorno subtil, nunca substitui a cor semântica de
+    // contagem das células.
+    document.querySelectorAll('#funchal-cov-body th[data-day]').forEach(th=>{
+      const dayAttr = (th.getAttribute('data-day')||'').trim().toUpperCase();
+      th.classList.toggle('funchal-col-today-th', dayAttr === todayName);
+    });
+    document.querySelectorAll('#funchal-cov-body td[data-day]').forEach(td=>{
+      const dayAttr = (td.getAttribute('data-day')||'').trim().toUpperCase();
+      td.classList.toggle('funchal-col-today-td', dayAttr === todayName);
     });
   }
 

@@ -16,38 +16,22 @@
 
   var PORTO_SUBTIENDAS = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx'];
 
-  // ── Lista de colaboradoras — carregada da mesma tabela que o gerador de
-  //    recibos (recibos_funcionarias), em vez de estar fixa no código.
-  //    Nomes completos, tal como estão guardados; a abreviação (ex.: "CARLA
-  //    A.") aplica-se só ao mostrar/gravar (ver _abbrevName).
-  var EMPLEADAS_LIST = [];
-  var _empleadasLoaded = false;
-  var _empleadasLoadPromise = null;
+  // Funchal unificado: label visível no botão + chave EXATA já usada em
+  // ventas_diarias (tienda) para Mezka Funchal / Parfois Arcadas — tem de
+  // ser esta chave, letra a letra, para continuar o histórico existente
+  // em vez de criar registos paralelos.
+  var FUNCHAL_STORES = [
+    { label: 'Mezka Funchal',   key: 'mezka funchal' },
+    { label: 'Parfois Arcadas', key: 'parfois arcadas são francisco' }
+  ];
 
-  function _loadEmpleadasList() {
-    if (_empleadasLoadPromise) return _empleadasLoadPromise;
-    _empleadasLoadPromise = (function () {
-      if (typeof sbAdmin === 'undefined' || !sbAdmin) { _empleadasLoaded = true; return Promise.resolve(EMPLEADAS_LIST); }
-      return sbAdmin
-        .from('recibos_funcionarias_publica')
-        .select('nome')
-        .order('nome')
-        .then(function (res) {
-          if (res.error) throw res.error;
-          EMPLEADAS_LIST = (res.data || [])
-            .map(function (r) { return (r.nome || '').trim().toUpperCase(); })
-            .filter(Boolean);
-          _empleadasLoaded = true;
-          return EMPLEADAS_LIST;
-        })
-        .catch(function (e) {
-          console.warn('[ventas-empleada] Não foi possível carregar lista de colaboradoras:', e);
-          _empleadasLoaded = true;
-          return EMPLEADAS_LIST;
-        });
-    })();
-    return _empleadasLoadPromise;
-  }
+  var EMPLEADAS_LIST = [
+    'Alejandra Abreu', 'Cristina Teixeira', 'Patricia Silva', 'Carla Alves',
+    'Catia Temtem', 'Débora Fernandes', 'Edna Melim', 'Filipa Rodrigues',
+    'Isaltina Fernandes', 'Jacinta Alves', 'Joana Baptista', 'Marilia Silva',
+    'Sandra Melim', 'Sandra Nunes', 'Djanice Lopes', 'Matilde Rodrigues',
+    'Sara Almeida', 'Claudia Nunes', 'Leonia Pereira', 'Lara Igreja'
+  ].map(function (n) { return n.toUpperCase(); });
 
   // ── Abrir overlay ──
   window.openVentasOverlay = function (store) {
@@ -61,10 +45,6 @@
     _vFecha     = _todayStr();
     _vDirty     = false;
 
-    // Disparar já — em paralelo com o resto do carregamento do overlay —
-    // para que a lista esteja pronta quando o formulário aparecer.
-    _loadEmpleadasList();
-
     if (!_vStore) {
       var body = document.getElementById('ventas-overlay-body');
       if (body) body.innerHTML = '<div class="v-error">⚠ Loja não identificada. Por favor, refresque a página e volte a entrar com a sua senha.</div>';
@@ -73,6 +53,8 @@
 
     if (_vStore === 'porto santo') {
       _showSubtiendasSelector();
+    } else if (_vStore === 'funchal') {
+      _showFunchalSelector();
     } else {
       _vSubtienda = _vStore;
       _loadVentasPanel();
@@ -267,8 +249,131 @@
       });
   }
 
-  // ── Renderizar los 4 botones con lógica de acceso ──
+  // ══════════════════════════════════════════════════════════════
+  //  FUNCHAL UNIFICADO — mesma lógica de controlo de acesso por horário,
+  //  mas lendo FUNCHAL.csv (um único ficheiro com todas as semanas, ao
+  //  contrário do Porto Santo que tem um ficheiro por semana).
+  // ══════════════════════════════════════════════════════════════
+
+  // ── Descargar FUNCHAL.csv (mesmo bucket/base que Porto Santo) ──
+  function _fetchFunchalScheduleCSV() {
+    var base = 'https://' + (window.SUPABASE_URL || '').replace('https://', '').replace(/\/$/, '');
+    var url  = base + '/storage/v1/object/public/horarios/FUNCHAL.csv?t=' + Date.now();
+    return fetch(url, { cache: 'no-store' }).then(function (res) {
+      if (!res.ok) throw new Error('Horário não encontrado');
+      return res.text();
+    });
+  }
+
+  // ── Separar el CSV en bloques por líneas en blanco (mismo criterio que
+  //    loadData usa em shared-funchal-v2.js) ──
+  function _splitFunchalBlocks(csvText) {
+    var lines = csvText.split(/\r?\n/).map(function (l) { return l.split(','); });
+    var blocks = [], current = [];
+    lines.forEach(function (row) {
+      var isBlank = row.every(function (c) { return (c || '').trim() === ''; });
+      if (isBlank) {
+        if (current.length) { blocks.push(current); current = []; }
+      } else {
+        current.push(row);
+      }
+    });
+    if (current.length) blocks.push(current);
+    return blocks;
+  }
+
+  // ── Nombre de la tienda en el bloque CSV → chave EXATA usada em
+  //    ventas_diarias.tienda (a mesma já usada pelas 3 lojas há meses) ──
+  function _funchalStoreKeyFromCsvName(name) {
+    var n = (name || '').trim().toUpperCase();
+    if (n.indexOf('MEZKA FUNCHAL') !== -1)   return 'mezka funchal';
+    if (n.indexOf('PARFOIS ARCADAS') !== -1) return 'parfois arcadas são francisco';
+    return null;
+  }
+
+  // ── Detectar en qué tienda(s) del funchal unificado trabaja hoy la
+  //    colaboradora, según FUNCHAL.csv. Devuelve array de keys (puede
+  //    ser vacío, o incluir las dos si tiene reforço nos dois lados hoje) ──
+  function _getAssignedFunchalStoresForToday(csvText, employeeName) {
+    if (!employeeName) return [];
+
+    var today    = new Date();
+    var todayStr = today.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    var empFirst = employeeName.split(/[\s.]/)[0].toUpperCase();
+    var skipValues = ['FOLGA', 'FERIAS', ''];
+
+    var blocks   = _splitFunchalBlocks(csvText);
+    var assigned = [];
+
+    blocks.forEach(function (block) {
+      if (block.length < 3) return; // cabecera(2) + ao menos 1 pessoa(2 filas)
+
+      var storeKey = _funchalStoreKeyFromCsvName((block[0] && block[0][0]) || '');
+      if (!storeKey || assigned.indexOf(storeKey) !== -1) return;
+
+      var dateRow = block[1] || [];
+      var todayColIdx = -1;
+      for (var c = 1; c < dateRow.length; c++) {
+        if ((dateRow[c] || '').trim() === todayStr) { todayColIdx = c; break; }
+      }
+      if (todayColIdx < 0) return; // este bloque não é da semana atual
+
+      var dataRows = block.slice(2);
+      for (var i = 0; i + 1 < dataRows.length; i += 2) {
+        var rowA = dataRows[i], rowB = dataRows[i + 1];
+        var firstToken = (rowA[0] || '').split(/[\s.]/)[0].toUpperCase();
+        if (firstToken !== empFirst) continue;
+
+        var valA = (rowA[todayColIdx] || '').trim().toUpperCase();
+        var valB = (rowB[todayColIdx] || '').trim().toUpperCase();
+
+        var isScheduled = false;
+        if (valA && skipValues.indexOf(valA) === -1 && /\d{2}:\d{2}/.test(valA)) isScheduled = true;
+        if (!isScheduled && valB && skipValues.indexOf(valB) === -1 && /\d{2}:\d{2}/.test(valB)) isScheduled = true;
+
+        if (isScheduled) { assigned.push(storeKey); }
+        break; // já encontrámos a linha desta colaboradora neste bloco
+      }
+    });
+
+    return assigned;
+  }
+
+  // ── Selector de loja (funchal unificado) — con control de acceso por
+  //    horario, mesmo modelo do Porto Santo mas com 2 botões ──
+  function _showFunchalSelector() {
+    var body = document.getElementById('ventas-overlay-body');
+    body.innerHTML = '<div class="v-loading">a verificar horário…</div>';
+
+    var empName = (window._currentEmployeeName || '').trim().toUpperCase();
+
+    _fetchFunchalScheduleCSV()
+      .then(function (csvText) {
+        var assignedStores = _getAssignedFunchalStoresForToday(csvText, empName);
+        _renderStoreSelectorWithAccess(FUNCHAL_STORES, assignedStores);
+      })
+      .catch(function () {
+        // Si falla la descarga del CSV, sin acceso directo para ninguém →
+        // cai para o código de emergência em ambos os botões (mesmo
+        // comportamento de fail-safe que o Porto Santo já tem).
+        _renderStoreSelectorWithAccess(FUNCHAL_STORES, []);
+      });
+  }
+
+  // ── Renderizar los 4 botones con lógica de acceso (Porto Santo) ──
   function _renderSubtiendasWithAccess(assignedStores, csvText) {
+    _renderStoreSelectorWithAccess(
+      PORTO_SUBTIENDAS.map(function (name) { return { label: name, key: name }; }),
+      assignedStores
+    );
+  }
+
+  // ── Núcleo genérico e partilhado do seletor de lojas com controlo de
+  //    acesso por horário — recebe [{label,key}] + a lista de keys com
+  //    acesso direto hoje. Usado pelo Porto Santo (4 sub-lojas, label===key)
+  //    e pelo funchal (2 lojas, key = chave exata já usada em ventas_diarias),
+  //    sem duplicar a lógica de UI/emergência.
+  function _renderStoreSelectorWithAccess(storeDefs, assignedStores) {
     // Inyectar CSS de emergencia una sola vez
     if (!document.getElementById('v-emergency-style')) {
       var es = document.createElement('style');
@@ -298,25 +403,25 @@
 
     var todayStr = _todayStr(); // YYYY-MM-DD para el código de emergencia
 
-    PORTO_SUBTIENDAS.forEach(function (name) {
+    storeDefs.forEach(function (def) {
       var btnWrap = document.createElement('div');
       btnWrap.className = 'v-subtienda-btn-wrap';
 
       var btn = document.createElement('button');
       btn.className = 'v-subtienda-btn';
-      btn.textContent = name;
+      btn.textContent = def.label;
 
       // Determinar si tiene acceso directo
-      var hasDirectAccess = (assignedStores.indexOf(name) !== -1);
+      var hasDirectAccess = (assignedStores.indexOf(def.key) !== -1);
 
       btn.addEventListener('click', function () {
         if (hasDirectAccess) {
-          _vSubtienda = name;
+          _vSubtienda = def.key;
           _loadVentasPanel();
           return;
         }
         // Sin acceso directo → mostrar campo de código de emergencia
-        _toggleEmergencyField(btnWrap, name, todayStr);
+        _toggleEmergencyField(btnWrap, def.key, todayStr, def.label);
       });
 
       btnWrap.appendChild(btn);
@@ -327,7 +432,7 @@
   }
 
   // ── Mostrar/ocultar campo de código de emergencia bajo un botón ──
-  function _toggleEmergencyField(btnWrap, storeName, todayStr) {
+  function _toggleEmergencyField(btnWrap, storeName, todayStr, displayLabel) {
     // Si ya hay un campo abierto para esta tienda, cerrarlo
     var existing = btnWrap.querySelector('.v-emergency-wrap');
     if (existing) { existing.remove(); return; }
@@ -340,7 +445,7 @@
 
     var msg = document.createElement('div');
     msg.className = 'v-emergency-msg';
-    msg.textContent = 'não estás programada para ' + storeName + ' hoje';
+    msg.textContent = 'não estás programada para ' + (displayLabel || storeName) + ' hoje';
     wrap.appendChild(msg);
 
     var row = document.createElement('div');
@@ -875,10 +980,7 @@
       document.head.appendChild(s);
     }
 
-    // Tags array (estado interno) — guarda o nome COMPLETO tal como vem da
-    // base de dados (não abreviado), para que a comparação/duplicação e a
-    // pesquisa no dropdown continuem exactas. A abreviação só se aplica ao
-    // desenhar o chip (_renderTags) e ao gravar (_getEmpleadaValue).
+    // Tags array (estado interno)
     var tags = [];
     if (existingValue && existingValue.trim()) {
       existingValue.split(',').forEach(function (n) {
@@ -904,7 +1006,6 @@
     inp.autocomplete = 'off';
 
     var activeIdx = -1;
-    var _lastQuery = '';
 
     function _renderTags() {
       // Limpiar tags existentes (dejar dropdown e input)
@@ -914,9 +1015,7 @@
       tags.forEach(function (tag, i) {
         var chip = document.createElement('span');
         chip.className = 'v-emp-tag';
-        // Mostrar a forma abreviada (ex.: "CARLA A."), guardando o nome
-        // completo em tags[] para efeitos de comparação/gravação.
-        chip.textContent = _abbrevName(tag);
+        chip.textContent = tag;
 
         var x = document.createElement('button');
         x.type = 'button';
@@ -958,21 +1057,7 @@
       filtered = filtered.slice(0, 7);
       dropdown.innerHTML = '';
       activeIdx = -1;
-      if (!filtered.length) {
-        // Lista ainda a carregar (primeira vez) → mostrar estado, não "sem resultados"
-        if (!_empleadasLoaded && !EMPLEADAS_LIST.length) {
-          var loadingOpt = document.createElement('div');
-          loadingOpt.className = 'v-emp-option';
-          loadingOpt.style.cursor = 'default';
-          loadingOpt.style.opacity = '.6';
-          loadingOpt.textContent = 'a carregar…';
-          dropdown.appendChild(loadingOpt);
-          dropdown.style.display = 'block';
-        } else {
-          dropdown.style.display = 'none';
-        }
-        return;
-      }
+      if (!filtered.length) { dropdown.style.display = 'none'; return; }
       filtered.forEach(function (name) {
         var opt = document.createElement('div');
         opt.className = 'v-emp-option';
@@ -1009,15 +1094,8 @@
       var cur = inp.value.replace(/[0-9.,]/g, '');
       if (cur !== inp.value) inp.value = cur;
       var q = inp.value.toUpperCase().trim();
-      _lastQuery = q;
       if (q.length < 1) { _hideDropdown(); return; }
       _showDropdown(q);
-    });
-
-    // Se a lista ainda não tinha chegado quando o campo começou a ser usado,
-    // assim que chegar volta a filtrar com a última pesquisa em curso.
-    _loadEmpleadasList().then(function () {
-      if (document.activeElement === inp && _lastQuery) _showDropdown(_lastQuery);
     });
 
     inp.addEventListener('keydown', function (e) {
@@ -1028,13 +1106,8 @@
           _addTag(opts[activeIdx].textContent);
         } else if (inp.value.trim()) {
           var val = inp.value.trim().toUpperCase();
-          if (EMPLEADAS_LIST.indexOf(val) !== -1) {
-            _addTag(val);
-          } else if (!EMPLEADAS_LIST.length) {
-            // Lista indisponível (falha de rede) — não bloquear o registo.
-            _addTag(val);
-          }
-          // Se não está na lista (e a lista carregou correctamente), ignora-se.
+          if (EMPLEADAS_LIST.indexOf(val) !== -1) _addTag(val);
+          // Si no está en la lista, no se añade (se ignora silenciosamente)
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -1055,10 +1128,8 @@
       // Pequeño delay para permitir click en dropdown
       setTimeout(function () {
         var val = inp.value.trim().toUpperCase();
-        if (val) {
-          if (EMPLEADAS_LIST.indexOf(val) !== -1 || !EMPLEADAS_LIST.length) _addTag(val);
-          else inp.value = '';
-        }
+        if (val && EMPLEADAS_LIST.indexOf(val) !== -1) _addTag(val);
+        else inp.value = '';
         _hideDropdown();
       }, 150);
     });
@@ -1072,16 +1143,15 @@
     container.appendChild(widget);
   }
 
-  // "CARLA SOFIA DOS SANTOS ALVES" → "CARLA A."
-  // "MARILIA"                     → "MARILIA"  (sin apellido, sin cambios)
-  // Usa apenas o PRIMEIRO nome + a inicial do ÚLTIMO apelido — ignora
-  // quaisquer nomes/apelidos do meio, mesmo com o nome completo da BD.
+  // "MARILIA SILVA"      → "MARILIA S."
+  // "MARIA JOSE PEREIRA" → "MARIA JOSE P."
+  // "MARILIA"            → "MARILIA"  (sin apellido, sin cambios)
   function _abbrevName(fullName) {
     var parts = fullName.trim().toUpperCase().split(/\s+/).filter(Boolean);
     if (parts.length <= 1) return parts[0] || '';
-    var primeiro = parts[0];
+    var nombres  = parts.slice(0, parts.length - 1).join(' ');
     var apellido = parts[parts.length - 1];
-    return primeiro + ' ' + apellido.charAt(0) + '.';
+    return nombres + ' ' + apellido.charAt(0) + '.';
   }
 
   // Leer el valor actual del widget como string mayúsculas separado por comas
@@ -1104,7 +1174,7 @@
       var extra = inp.value.trim().toUpperCase();
       if (tags.indexOf(extra) === -1) tags.push(extra);
     }
-    return tags.join(', ');
+    return tags.map(_abbrevName).join(', ');
   }
 
 })();

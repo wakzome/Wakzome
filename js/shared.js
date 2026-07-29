@@ -836,7 +836,7 @@
     const semanaKey = (current[1] && current[1][0]) || '';
     const groupBlocks = allBlocks.filter(b => ((b[1] && b[1][0]) || '') === semanaKey);
 
-    function buildSubTable(rows){
+    function buildSubTable(rows, hoursMap){
       const headerRows = rows.slice(0,2);
       const dataRows   = rows.slice(2);
       const cols = Math.max(...rows.map(r=>r.length));
@@ -887,11 +887,13 @@
           }
         }
         const activeCls = isActiveNow ? ' tr-active-now' : '';
+        const nameRaw = A[0]||'';
+        const hrsLabel = funchalFormatHrs((hoursMap && hoursMap[nameRaw.trim()]) || 0);
         let rowspanCols=[];
         html+=`<tr class="${activeCls}">`;
-        html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(A[0]||'')}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
+        html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
                 <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
-                ${escapeHtml(A[0]||'')}</td>`;
+                ${escapeHtml(nameRaw)}<br><span style="font-size:10px;font-weight:400;opacity:.65;">${hrsLabel}</span></td>`;
         for(let c=1;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
           const top=A[c]||'', bot=B[c]||'';
@@ -919,21 +921,143 @@
       return html;
     }
 
+    const hoursMap = funchalCollectPersonWeekHours(groupBlocks);
     let combined = '';
     groupBlocks.forEach(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
       combined += '<div style="margin-bottom:28px;">'
                 + '<div style="font-weight:700;font-size:14px;letter-spacing:0.5px;text-transform:uppercase;margin:0 0 8px;text-align:center;color:#333;">' + escapeHtml(storeName) + '</div>'
-                + buildSubTable(block)
+                + buildSubTable(block, hoursMap)
                 + '</div>';
     });
+    const coverageHtml = funchalBuildCoveragePanel(groupBlocks);
+
     // wrapper único para neutralizar o display:flex (row) que loadData() aplica a
     // #table-container — garante que as sub-lojas empilham na vertical (uma por
     // baixo da outra), em vez de ficarem lado a lado como itens do mesmo flex row.
     document.getElementById('table-container').innerHTML =
-      '<div style="display:flex;flex-direction:column;width:100%;">' + combined + '</div>';
+      '<div style="display:flex;flex-direction:column;width:100%;">'
+      +   '<div style="text-align:center;margin-bottom:14px;">'
+      +     '<button type="button" id="funchal-cov-toggle" style="font-size:12px;font-weight:700;letter-spacing:.04em;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;">📊 Cobertura</button>'
+      +   '</div>'
+      +   '<div id="funchal-view-schedule">' + combined + '</div>'
+      +   '<div id="funchal-view-coverage" style="display:none;">' + coverageHtml + '</div>'
+      + '</div>';
 
     hpsBindNameClicksFunchal(groupBlocks);
+
+    const covBtn = document.getElementById('funchal-cov-toggle');
+    const viewSchedule = document.getElementById('funchal-view-schedule');
+    const viewCoverage = document.getElementById('funchal-view-coverage');
+    if (covBtn && viewSchedule && viewCoverage) {
+      covBtn.addEventListener('click', () => {
+        const showingCoverage = viewCoverage.style.display !== 'none';
+        viewCoverage.style.display = showingCoverage ? 'none' : 'block';
+        viewSchedule.style.display = showingCoverage ? 'block' : 'none';
+        covBtn.textContent = showingCoverage ? '📊 Cobertura' : '📅 Horário';
+      });
+    }
+  }
+
+  // ── Horas semanais + painel de cobertura para a vista FUNCHAL UNIFICADO —
+  //    réplica fiel do algoritmo de "Cobertura por hora" do gerador de
+  //    horários (buildCoveragePanel): mesma janela horária dinâmica por loja,
+  //    mesma regra de sobreposição (s < H+1 && e > H) e mesmas cores por
+  //    contagem. Adaptado para ler diretamente das linhas do CSV (em vez do
+  //    estado S.schedule do gerador) — nada no gerador é tocado. ──
+  function funchalToHrs(s){
+    if(!s) return NaN;
+    const parts = s.split(':').map(Number);
+    if(isNaN(parts[0])) return NaN;
+    return parts[0] + (isNaN(parts[1]) ? 0 : parts[1]) / 60;
+  }
+
+  function funchalFormatHrs(totalHrs){
+    const rounded = Math.round((totalHrs||0) * 10) / 10;
+    return (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)) + 'hrs';
+  }
+
+  // Soma as horas de TODOS os turnos de cada pessoa nas duas lojas da semana
+  // (uma pessoa em reforço soma a loja de origem + a loja onde reforça —
+  // sem duplicar, porque cada turno só está escrito na loja onde acontece).
+  function funchalCollectPersonWeekHours(groupBlocks){
+    const totals = {};
+    groupBlocks.forEach(block=>{
+      const dataRows = block.slice(2);
+      let cur=null, curName=null;
+      const flush = () => {
+        if(!cur) return;
+        let sum = totals[curName] || 0;
+        cur.forEach(row=>{
+          for(let c=1;c<row.length;c++){
+            const v=(row[c]||'').trim();
+            if(!hpsIsSchedule(v)) continue;
+            const [a,b]=v.split('-');
+            const s=funchalToHrs(a), e=funchalToHrs(b);
+            if(!isNaN(s) && !isNaN(e) && e>s) sum += (e-s);
+          }
+        });
+        totals[curName]=sum;
+      };
+      dataRows.forEach(row=>{
+        const name=(row[0]||'').trim();
+        if(cur===null || name!==curName){ flush(); cur=[row]; curName=name; }
+        else cur.push(row);
+      });
+      flush();
+    });
+    return totals;
+  }
+
+  function funchalBuildCoveragePanel(groupBlocks){
+    let sectionsHtml = '';
+    groupBlocks.forEach(block=>{
+      const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
+      const dayHeader = block[0].slice(1);
+      const dataRows  = block.slice(2);
+
+      const byDay = dayHeader.map(()=>[]);
+      dataRows.forEach(row=>{
+        for(let c=1;c<row.length;c++){
+          const v=(row[c]||'').trim();
+          if(!hpsIsSchedule(v)) continue;
+          const [a,b]=v.split('-');
+          const s=funchalToHrs(a), e=funchalToHrs(b);
+          if(!isNaN(s) && !isNaN(e) && e>s) byDay[c-1].push([s,e]);
+        }
+      });
+
+      let minH=Infinity, maxH=-Infinity;
+      byDay.forEach(segs=>segs.forEach(([s,e])=>{ if(s<minH) minH=s; if(e>maxH) maxH=e; }));
+      if(!isFinite(minH) || !isFinite(maxH)){
+        sectionsHtml += '<div style="margin-bottom:18px;">'
+          + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;">' + escapeHtml(storeName) + '</div>'
+          + '<div style="font-size:11px;color:#aaa;font-style:italic;">Sem turnos atribuídos</div>'
+          + '</div>';
+        return;
+      }
+      const startHour = Math.floor(minH), endHour = Math.ceil(maxH);
+      const headCells = dayHeader.map(d=>'<th style="padding:4px 2px;font-weight:700;color:#888;text-align:center;border-bottom:1px solid #e0e0e0;font-size:10px;letter-spacing:.03em;">'+escapeHtml(d)+'</th>').join('');
+      let rowsHtml='';
+      for(let H=startHour; H<endHour; H++){
+        const dayCells = byDay.map(segs=>{
+          let count=0;
+          segs.forEach(([s,e])=>{ if(s<H+1 && e>H) count++; });
+          const style = count===0 ? '' : (count===1 ? 'color:#c08a00;background:#fff7e6;' : 'color:#1a6c1a;background:#eaf7ea;');
+          return '<td style="padding:3px 2px;text-align:center;font-weight:700;border-radius:3px;'+style+'">'+(count||'')+'</td>';
+        }).join('');
+        const label = String(H).padStart(2,'0') + ':00';
+        rowsHtml += '<tr><td style="padding:3px 4px;color:#999;font-weight:600;text-align:left;white-space:nowrap;font-size:10px;">'+label+'</td>'+dayCells+'</tr>';
+      }
+      sectionsHtml += '<div style="margin-bottom:18px;">'
+        + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;">' + escapeHtml(storeName) + '</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:10px;">'
+        +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#bbb;text-align:left;border-bottom:1px solid #e0e0e0;font-size:10px;">h</th>' + headCells + '</tr></thead>'
+        +   '<tbody>' + rowsHtml + '</tbody>'
+        + '</table>'
+        + '</div>';
+    });
+    return '<div style="max-width:480px;margin:0 auto;border:1px solid #e2e2e2;border-radius:10px;background:#fafafa;padding:14px;box-sizing:border-box;">' + sectionsHtml + '</div>';
   }
 
   // ── Equivalentes "hps" (modal por pessoa) para a vista FUNCHAL UNIFICADO —

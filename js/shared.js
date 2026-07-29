@@ -776,12 +776,6 @@
   }
 
   function renderPortoSanto(blocks, index) {
-    // Reforça a flag global (normalmente definida por loadData ao trocar de
-    // loja) sempre que este render corre — garante que
-    // funchalCovBuildForCurrentStore nunca lê um valor desatualizado, quer
-    // dizendo respeito ao fluxo normal da app quer a uma chamada direta a
-    // window._hRender.porto (ex.: testes, ou navegação de semana).
-    window._isFunchalUnificadoMode = false;
     const rows = blocks[index];
     const cols = Math.max(...rows.map(r => r.length));
     let html = '<table style="margin:0 auto;">';
@@ -877,18 +871,8 @@
   function renderFunchalUnificado(allBlocks, index){
     const current = allBlocks[index];
     if(!current) return;
-    // Mesmo reforço que em renderPortoSanto — esta função SABE que está a
-    // renderizar o funchal, não precisa de confiar em loadData ter corrido
-    // antes (nem sempre corre, ex.: chamada direta a window._hRender.funchal).
-    // Só depois do guard acima, para nunca marcar "modo funchal" num render
-    // que na prática não aconteceu.
-    window._isFunchalUnificadoMode = true;
     const semanaKey = (current[1] && current[1][0]) || '';
     const groupBlocks = allBlocks.filter(b => ((b[1] && b[1][0]) || '') === semanaKey);
-    // Guardado para funchalCovBuildForCurrentStore poder reconstruir o
-    // painel de cobertura a qualquer momento (ex.: ao entrar no modo
-    // dividido), sem precisar de re-passar argumentos por todo o lado.
-    window._lastFunchalGroupBlocks = groupBlocks;
 
     function buildSubTable(rows, hoursMap, targetPersonCount, sharedColWidths){
       const headerRows = rows.slice(0,2);
@@ -1035,6 +1019,7 @@
                 + buildSubTable(block, hoursMap, targetCount, sharedColWidths)
                 + '</div>';
     });
+    const coverageHtml = funchalBuildCoveragePanel(groupBlocks);
 
     // wrapper único para neutralizar o display:flex (row) que loadData() aplica a
     // #table-container — garante que as sub-lojas empilham na vertical (uma por
@@ -1056,18 +1041,19 @@
     hpsBindNameClicksFunchal(groupBlocks);
     funchalBindRowHoverEffect();
 
-    // Painel de cobertura: atualiza qualquer alvo já aberto (overlay mobile
-    // OU painel dividido em PC) com os dados desta semana — mantém tudo
-    // sincronizado ao navegar entre semanas. Não abre nada por si só; só o
-    // clique no botão (funchalCovToggle) decide abrir/fechar.
-    funchalCovRefreshAllTargets();
+    // Overlay de cobertura: nó único anexado ao <body> (mesmo padrão do
+    // hps-overlay), para escapar de qualquer transform/contexto do modal
+    // #wz-hor-modal. Fecha ao clicar fora (no fundo) ou no ✕ — nunca precisa
+    // de um botão para "voltar" porque a tabela de horários nunca é escondida.
+    const covOverlay = funchalCovEnsureOverlay();
+    document.getElementById('funchal-cov-body').innerHTML = coverageHtml;
 
     // Botão "cobertura" na barra do modal de horários (#wz-hor-modal-bar,
     // definida no index.html) — em vez de dentro de #table-container, para
     // não criar scroll vertical extra; mesma posição usada por Porto Santo
     // (ver funchalCovBarEnsureButton). O index.html não precisa de voltar a
     // ser tocado para ajustar este botão no futuro.
-    funchalCovBarEnsureButton(funchalCovToggle);
+    funchalCovBarEnsureButton(() => { covOverlay.style.display = 'flex'; });
 
     // Bolinhas + ponto da cobertura: aplicar o estado atual já neste render,
     // e arrancar (uma única vez) o timer que os mantém corretos a cada 30
@@ -1090,20 +1076,8 @@
   // todo até caberem exatamente, sem scroll horizontal — como partilham a
   // mesma largura de coluna (sharedColWidths), o alinhamento mantém-se.
   function funchalFitTablesToScreen(){
-    // Funchal tem wrap/inner dedicados (2 tabelas lado a lado). Porto Santo
-    // não tem — usa #table-container diretamente como wrap, e o seu único
-    // filho direto (.funchal-store-card, a tabela envolvida no card glass)
-    // como elemento a escalar. Mesmo mecanismo para as duas, sem duplicar
-    // lógica: necessário para o modo dividido de cobertura (a coluna
-    // disponível para a tabela de horários encolhe quando o painel de
-    // cobertura aparece ao lado) nunca gerar scroll horizontal em nenhuma
-    // das duas lojas.
-    let wrap  = document.getElementById('funchal-tables-wrap');
-    let inner = document.getElementById('funchal-tables-scale');
-    if (!wrap || !inner) {
-      wrap = document.getElementById('table-container');
-      inner = wrap && wrap.querySelector(':scope > .funchal-store-card');
-    }
+    const wrap  = document.getElementById('funchal-tables-wrap');
+    const inner = document.getElementById('funchal-tables-scale');
     if (!wrap || !inner) return;
 
     // Repor antes de medir, para não acumular escalas de ajustes anteriores.
@@ -1220,18 +1194,15 @@
 
   // Normaliza os blocos independentes do funchal para a forma partilhada
   // [{storeName, dayHeader, people:[{name,A,B}]}] — mesmo agrupamento
-  // consecutivo-por-nome usado em buildSubTable. Extraído para função
-  // própria (em vez de inline) para poder ser reutilizado tanto pelo grid
-  // padrão (funchalBuildCoveragePanel) como pela disposição do modo
-  // dividido (funchalCovBuildForCurrentStoreSections) sem duplicar nada.
-  function funchalNormalizeGroupBlocksForCoverage(groupBlocks){
-    return groupBlocks.map(block=>{
+  // consecutivo-por-nome usado em buildSubTable.
+  function funchalBuildCoveragePanel(groupBlocks){
+    const normalized = groupBlocks.map(block=>{
       const storeName = (block[0] && block[0][0]) ? block[0][0] : '';
       const dayHeader  = block[0].slice(1);
       // Datas completas (DD/MM/YYYY) desta semana, na mesma ordem do
       // dayHeader — necessárias para saber se a semana atualmente
       // consultada é mesmo a que contém o dia de hoje (ver dateHeader em
-      // funchalBuildCoverageSections).
+      // funchalBuildCoveragePanelFromStores).
       const dateHeader = (block[1] || []).slice(1);
       const dataRows   = block.slice(2);
       const people = [];
@@ -1246,47 +1217,35 @@
       if(cur) people.push({ name: curName, A: cur[0], B: cur[1]||cur[0] });
       return { storeName, dayHeader, dateHeader, people };
     });
-  }
-
-  function funchalBuildCoveragePanel(groupBlocks){
-    return funchalBuildCoveragePanelFromStores(funchalNormalizeGroupBlocksForCoverage(groupBlocks));
+    return funchalBuildCoveragePanelFromStores(normalized);
   }
 
   // Porto Santo: reaproveita hpsCollectStores (já existente, usado pela modal
   // por pessoa) para obter as sub-lojas do bloco nested-marker, e normaliza
   // para a mesma forma partilhada — não duplica nenhuma lógica de parsing.
-  // Também extraída para função própria pelo mesmo motivo que
-  // funchalNormalizeGroupBlocksForCoverage.
-  function portoSantoNormalizeRowsForCoverage(rows){
+  function portoSantoBuildCoveragePanel(rows){
     const { dayHeaderRow, stores } = hpsCollectStores(rows);
-    return stores.map(s => ({
+    const normalized = stores.map(s => ({
       storeName: s.name,
       dayHeader: (dayHeaderRow || []).slice(1),
       // s.dateRow já vem de hpsCollectStores (datas completas DD/MM/YYYY
-      // desta sub-loja) — mesmo propósito que em
-      // funchalNormalizeGroupBlocksForCoverage.
+      // desta sub-loja) — mesmo propósito que em funchalBuildCoveragePanel.
       dateHeader: (s.dateRow || []).slice(1),
       people: s.people
     }));
-  }
-
-  function portoSantoBuildCoveragePanel(rows){
     // Porto Santo: intervalos hora-a-hora (9, 10, 11…), ao contrário do
     // funchal que mantém 30 em 30 min — único parâmetro que muda.
-    return funchalBuildCoveragePanelFromStores(portoSantoNormalizeRowsForCoverage(rows), 1);
+    return funchalBuildCoveragePanelFromStores(normalized, 1);
   }
 
   // Núcleo genérico e partilhado do painel de cobertura — recebe uma lista
   // já normalizada [{storeName, dayHeader, people:[{name,A,B}]}] e devolve o
-  // HTML de cada loja SEPARADAMENTE (array [{storeName, html}]), sem as
-  // montar em nenhuma grelha — usado tanto pelo grid padrão do modal/overlay
-  // (funchalBuildCoveragePanelFromStores, ordem natural, 2 colunas) como
-  // pela disposição específica do modo dividido (funchalCovBuildSplitHtml,
-  // que reagrupa estas mesmas secções por loja). Nunca duplica a lógica das
-  // cores/horas; só o tamanho do intervalo muda por parâmetro.
-  function funchalBuildCoverageSections(normalizedStores, stepHours){
+  // HTML. Usado tanto pelo funchal (blocos independentes, passo 30 min) como
+  // pelo Porto Santo (via hpsCollectStores, passo 1h) — sem duplicar a
+  // lógica das cores/horas; só o tamanho do intervalo muda por parâmetro.
+  function funchalBuildCoveragePanelFromStores(normalizedStores, stepHours){
     stepHours = stepHours || 0.5;
-    const sections = [];
+    let sectionsHtml = '';
     // Data de hoje, calculada uma única vez para todas as secções.
     const todayDateStr = new Date().toDateString();
     normalizedStores.forEach(({storeName, dayHeader, dateHeader, people})=>{
@@ -1321,12 +1280,10 @@
       let minH=Infinity, maxH=-Infinity;
       byDay.forEach(segs=>segs.forEach(([s,e])=>{ if(s<minH) minH=s; if(e>maxH) maxH=e; }));
       if(!isFinite(minH) || !isFinite(maxH)){
-        sections.push({ storeName, html:
-          '<div style="min-width:0;">'
+        sectionsHtml += '<div style="min-width:0;">'
           + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
           + '<div style="font-size:11px;color:#888;font-style:italic;text-align:center;">Sem turnos atribuídos</div>'
-          + '</div>'
-        });
+          + '</div>';
         return;
       }
       // Intervalos de stepHours em stepHours, alinhados ao próprio passo
@@ -1337,12 +1294,7 @@
       // coluna do dia da semana ATUAL (ver funchalUpdateCoverageHourMarker).
       // data-day no próprio <th> (além do já existente no span do ponto)
       // permite destacar a coluna inteira do dia atual (funchal-col-today-th).
-      // overflow:hidden (também nas células de dados, mais abaixo) garante
-      // que table-layout:fixed nunca deixa texto transbordar visualmente
-      // para a coluna vizinha quando o espaço fica muito apertado — caso
-      // mais provável dentro do modo dividido, com colunas bem mais
-      // estreitas do que no overlay tradicional.
-      const headCells = dayHeader.map(d=>'<th data-day="'+escapeHtml(d)+'" style="padding:4px 1px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:9px;letter-spacing:.02em;overflow:hidden;">'
+      const headCells = dayHeader.map(d=>'<th data-day="'+escapeHtml(d)+'" style="padding:4px 3px;font-weight:700;color:#666;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;letter-spacing:.03em;">'
         + '<span class="funchal-live-day-dot" data-day="'+escapeHtml(d)+'" style="visibility:hidden;"></span>'
         + escapeHtml(d) + '</th>').join('');
       let rowsHtml='';
@@ -1363,7 +1315,7 @@
           // duas classes a cada tick, sem re-renderizar nada
           // (ver funchalUpdateCoverageHourMarker).
           const dayAttr = escapeHtml(dayHeader[dIdx]||'');
-          return '<td data-day="'+dayAttr+'" style="padding:3px 1px;text-align:center;font-weight:700;border-radius:4px;overflow:hidden;'+style+'">'
+          return '<td data-day="'+dayAttr+'" style="padding:3px 2px;text-align:center;font-weight:700;border-radius:4px;'+style+'">'
             + '<span class="funchal-live-cell-now" data-day="'+dayAttr+'" data-hour="'+H+'" data-hour-end="'+(H+stepHours)+'">'+(count||'')+'</span>'
             + '</td>';
         }).join('');
@@ -1373,37 +1325,22 @@
         // intervalo [data-hour, data-hour-end) contém a hora atual, sem
         // re-renderizar nada. Funciona igual para o passo de 30 min
         // (funchal) e de 1h (Porto Santo).
-        // overflow:hidden é essencial aqui — com table-layout:fixed, se a
-        // coluna ficar mais estreita do que "09:30" precisa (ex.: modo
-        // dividido de Porto Santo, com 2 lojas empilhadas numa coluna
-        // estreita), o texto transbordaria visualmente por cima da coluna
-        // seguinte em vez de ser simplesmente cortado.
-        rowsHtml += '<tr><td style="width:46px;padding:3px 2px;color:#777;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;font-size:10px;">'
+        rowsHtml += '<tr><td style="padding:3px 4px;color:#777;font-weight:600;text-align:center;white-space:nowrap;font-size:10px;">'
           + '<span class="funchal-live-hour-dot" data-hour="'+H+'" data-hour-end="'+(H+stepHours)+'" style="visibility:hidden;"></span>' + label
           + '</td>'+dayCells+'</tr>';
       }
-      sections.push({ storeName, html:
-        '<div style="min-width:0;">'
+      sectionsHtml += '<div style="min-width:0;">'
         + '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;text-align:center;">' + escapeHtml(storeName) + '</div>'
         + '<table data-today-col-name="' + escapeHtml(todayColName) + '" style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px;">'
-        +   '<thead><tr><th style="width:46px;padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;overflow:hidden;">h</th>' + headCells + '</tr></thead>'
+        +   '<thead><tr><th style="padding:4px 2px;font-weight:700;color:#999;text-align:center;border-bottom:1px solid rgba(0,0,0,.1);font-size:10px;">h</th>' + headCells + '</tr></thead>'
         +   '<tbody>' + rowsHtml + '</tbody>'
         + '</table>'
-        + '</div>'
-      });
+        + '</div>';
     });
-    return sections;
-  }
-
-  // Grid padrão do modal/overlay de cobertura — 2 colunas, 2 lojas em cima,
-  // 2 em baixo (em vez de flex-wrap, que enchia 3 por linha e deixava a 4ª
-  // sozinha), pela ordem natural dos dados. Em ecrãs estreitos, a classe
-  // funchal-cov-grid passa a 1 coluna (ver media query em
-  // funchalEnsureLiveStyles) para as lojas não se sobreporem. Usado sempre
-  // que o overlay tradicional é mostrado — nunca mudou de comportamento.
-  function funchalBuildCoveragePanelFromStores(normalizedStores, stepHours){
-    const sections = funchalBuildCoverageSections(normalizedStores, stepHours);
-    const sectionsHtml = sections.map(s => s.html).join('');
+    // Grelha fixa de 2 colunas — 2 lojas em cima, 2 em baixo (em vez de
+    // flex-wrap, que enchia 3 por linha e deixava a 4ª sozinha). Em ecrãs
+    // estreitos, a classe funchal-cov-grid passa a 1 coluna (ver media
+    // query em funchalEnsureLiveStyles) para as lojas não se sobreporem.
     return '<div class="funchal-cov-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">' + sectionsHtml + '</div>';
   }
 
@@ -1459,13 +1396,6 @@
         filter: brightness(1.05);
       }
       #funchal-cov-toggle:hover { background: rgba(255,255,255,.85); }
-      /* O título "Cobertura por hora" só é acionável (modo dividido) a
-         partir de 700px — abaixo disso não há espaço útil para dividir, por
-         isso nem o cursor nem o hover sugerem que é clicável. */
-      @media (min-width: 701px) {
-        #funchal-cov-split-trigger { cursor: pointer; transition: color .15s; }
-        #funchal-cov-split-trigger:hover { color: #000; }
-      }
     `;
     document.head.appendChild(style);
   }
@@ -1507,10 +1437,8 @@
     // tabela evita acender qualquer indicador (bolinha de dia/hora, número
     // em negrito, contorno de coluna) quando não estamos a ver a semana
     // atual — em vez de comparar só o nome do dia, que se repete todas as
-    // semanas. .funchal-cov-host cobre tanto o overlay tradicional
-    // (#funchal-cov-body) como o painel do modo dividido
-    // (#funchal-cov-inline-panel) com o mesmo seletor.
-    document.querySelectorAll('.funchal-cov-host table[data-today-col-name]').forEach(table=>{
+    // semanas.
+    document.querySelectorAll('#funchal-cov-body table[data-today-col-name]').forEach(table=>{
       const todayColName = (table.getAttribute('data-today-col-name')||'').trim().toUpperCase();
       const isCurrentWeek = !!todayColName;
 
@@ -1586,311 +1514,13 @@
     overlay.innerHTML =
       '<div id="funchal-cov-panel" style="position:relative;max-width:920px;width:100%;max-height:82vh;overflow-y:auto;background:rgba(255,255,255,.78);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.9);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6);padding:22px 24px;">'
       +   '<button type="button" id="funchal-cov-close" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:16px;color:#777;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px;">✕</button>'
-      // O próprio título é o gatilho para o modo dividido (PC): sem botão
-      // extra — clicar em "Cobertura por hora" fecha este overlay e
-      // reposiciona as duas tabelas ao lado dos horários, sem blur nenhum.
-      // Em telemóvel/tablet estreito o clique não faz nada (não há espaço
-      // útil para dividir), por isso o cursor só muda a partir de 700px.
-      +   '<div id="funchal-cov-split-trigger" style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:16px;text-align:center;">Cobertura por hora</div>'
-      +   '<div id="funchal-cov-body" class="funchal-cov-host"></div>'
+      +   '<div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:16px;text-align:center;">Cobertura por hora</div>'
+      +   '<div id="funchal-cov-body"></div>'
       + '</div>';
     document.body.appendChild(overlay);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
     document.getElementById('funchal-cov-close').addEventListener('click', () => { overlay.style.display = 'none'; });
-    document.getElementById('funchal-cov-split-trigger').addEventListener('click', () => {
-      funchalCovEnterSplit();
-    });
     return overlay;
-  }
-
-  // Devolve o HTML de cobertura da loja atualmente visível no modal
-  // (Funchal ou Porto Santo), ou null se nenhuma das duas estiver ativa —
-  // fonte única usada pelo overlay tradicional, que mostra sempre o grid
-  // padrão de 2 colunas em ordem natural.
-  function funchalCovBuildForCurrentStore(){
-    const psRows = portoSantoCurrentRowsIfActive();
-    if (psRows) return portoSantoBuildCoveragePanel(psRows);
-    if (window._isFunchalUnificadoMode && window._lastFunchalGroupBlocks) {
-      return funchalBuildCoveragePanel(window._lastFunchalGroupBlocks);
-    }
-    return null;
-  }
-
-  // Devolve as secções de cobertura da loja atual SEPARADAS (não montadas em
-  // grid) — [{storeName, html}] — para o modo dividido poder reagrupá-las
-  // por coluna (funchalCovGroupSectionsForSplit). null se nenhuma das duas
-  // lojas com cobertura estiver ativa.
-  function funchalCovBuildForCurrentStoreSections(){
-    const psRows = portoSantoCurrentRowsIfActive();
-    if (psRows) {
-      return funchalBuildCoverageSections(portoSantoNormalizeRowsForCoverage(psRows), 1);
-    }
-    if (window._isFunchalUnificadoMode && window._lastFunchalGroupBlocks) {
-      return funchalBuildCoverageSections(funchalNormalizeGroupBlocksForCoverage(window._lastFunchalGroupBlocks), 0.5);
-    }
-    return null;
-  }
-
-  // Agrupa as secções de cobertura em 2 colunas para o modo dividido.
-  // Funchal (2 lojas): 1 por coluna, ordem natural (Mezka Funchal esquerda,
-  // Arcadas direita). Porto Santo (4 lojas): ordem fixa pedida
-  // explicitamente — esquerda = Mezka Avenida (cima) + Shana (baixo);
-  // direita = Mezka Mercado (cima) + Maxx (baixo) — procurada pelo NOME
-  // exato da loja, não pela posição no array, para não depender da ordem em
-  // que as sub-lojas vêm no CSV.
-  function funchalCovGroupSectionsForSplit(sections){
-    if (sections.length <= 2) {
-      return [
-        sections[0] ? [sections[0]] : [],
-        sections[1] ? [sections[1]] : []
-      ];
-    }
-    const byName = {};
-    sections.forEach(s => { byName[(s.storeName||'').trim().toUpperCase()] = s; });
-    const left  = ['MEZKA AVENIDA', 'SHANA'].map(n => byName[n]).filter(Boolean);
-    const right = ['MEZKA MERCADO', 'MAXX'].map(n => byName[n]).filter(Boolean);
-    if (left.length + right.length === sections.length) return [left, right];
-    // Fallback defensivo: se os nomes não baterem certo (ex.: grafia
-    // diferente no CSV), nunca perder nenhuma loja silenciosamente —
-    // distribui pela ordem natural em vez da ordem pedida.
-    return [
-      sections.filter((_, i) => i % 2 === 0),
-      sections.filter((_, i) => i % 2 === 1)
-    ];
-  }
-
-  // Monta o HTML das 2 colunas do modo dividido (cada uma com 1 ou 2
-  // sub-lojas empilhadas, conforme funchalCovGroupSectionsForSplit) — ou
-  // null se não houver loja com cobertura ativa.
-  function funchalCovBuildSplitColumnsHtml(){
-    const sections = funchalCovBuildForCurrentStoreSections();
-    if (!sections) return null;
-    const columns = funchalCovGroupSectionsForSplit(sections);
-    return columns.map(col =>
-      '<div style="display:flex;flex-direction:column;gap:16px;flex:1;min-width:0;">'
-        + col.map(s => s.html).join('')
-      + '</div>'
-    ).join('');
-  }
-
-  // Atualiza tanto o overlay tradicional (sempre garantido, mesmo escondido
-  // — o conteúdo fica pronto desde o primeiro render, sem "flash" de vazio
-  // ao abrir pela primeira vez) como o painel dividido, se já tiver sido
-  // aberto pelo utilizador (esse nunca é criado antecipadamente — só existe
-  // depois de um clique no título "Cobertura por hora"). Chamada tanto ao
-  // clicar como a cada re-render da tabela (mudança de semana), para o
-  // painel dividido nunca ficar dessincronizado enquanto o utilizador navega.
-  function funchalCovRefreshAllTargets(){
-    funchalCovEnsureOverlay();
-    const overlayBody = document.getElementById('funchal-cov-body');
-    const overlayHtml = funchalCovBuildForCurrentStore();
-    if (overlayBody && overlayHtml != null) overlayBody.innerHTML = overlayHtml;
-
-    const inlineColumns = document.getElementById('funchal-cov-inline-columns');
-    if (inlineColumns) {
-      const splitHtml = funchalCovBuildSplitColumnsHtml();
-      if (splitHtml != null) inlineColumns.innerHTML = splitHtml;
-      // O conteúdo pode ter mudado de altura (ex.: loja com mais/menos
-      // sub-lojas) — reposiciona/redimensiona o painel fixed em função disso.
-      funchalCovPositionSplitPanel();
-    }
-
-    funchalUpdateCoverageHourMarker();
-  }
-
-  // Só há espaço ÚTIL para o painel de cobertura ao lado do modal quando
-  // sobra uma folga real à direita dele — não uma largura de janela
-  // arbitrária. rect.right reflete a largura ATUAL do modal — que, ao
-  // entrar em modo dividido, já foi encolhida por funchalCovShrinkModal()
-  // (ver mais abaixo) precisamente para abrir esta folga, já que o modal
-  // fica sempre centrado (width:min(95vw,1080px) em index.html) e em
-  // ecrãs normais (mesmo 1920px) não sobra espaço nenhum à volta de um
-  // modal de 1080px de largura. Sem #wz-hor-modal-box no DOM (nunca
-  // deveria acontecer no fluxo real), assume-se que não há espaço. 380px
-  // corresponde ao mínimo real do painel (ver Math.max em
-  // funchalCovPositionSplitPanel) — abaixo disto as tabelas de cobertura
-  // ficariam ilegíveis, por isso o modo dividido nem chega a ativar-se.
-  const FUNCHAL_COV_SPLIT_MIN_GAP = 380;
-  function funchalCovIsDesktopWidth(){
-    const box = document.getElementById('wz-hor-modal-box');
-    if (!box) return false;
-    const rect = box.getBoundingClientRect();
-    return (window.innerWidth - rect.right) >= FUNCHAL_COV_SPLIT_MIN_GAP;
-  }
-
-  // O modal de horários fica sempre centrado no ecrã (index.html:
-  // #wz-hor-modal usa display:flex + justify-content:center) e pode chegar
-  // a min(95vw,1080px) de largura — nesse tamanho, mesmo num ecrã Full HD
-  // (1920px) só sobram ~420px de cada lado, e em portáteis (1366-1440px)
-  // muito menos. Por isso, SÓ ao entrar em modo dividido, encolhe-se o
-  // próprio modal (max-width inline, nunca tocando em index.html) para
-  // abrir espaço real à direita — a tabela de horários lá dentro reajusta-
-  // se sozinha via funchalFitTablesToScreen (mesma lógica já usada para
-  // ecrãs estreitos), sem criar scroll horizontal. Repõe-se exatamente ao
-  // sair do modo dividido.
-  const FUNCHAL_COV_SPLIT_MODAL_WIDTH = 580;
-  function funchalCovShrinkModal(){
-    const box = document.getElementById('wz-hor-modal-box');
-    if (!box) return;
-    box.style.maxWidth = FUNCHAL_COV_SPLIT_MODAL_WIDTH + 'px';
-    funchalFitTablesToScreen();
-  }
-  function funchalCovRestoreModal(){
-    const box = document.getElementById('wz-hor-modal-box');
-    if (box) box.style.maxWidth = '';
-    funchalFitTablesToScreen();
-  }
-
-  // Painel de cobertura do modo dividido — elemento TOTALMENTE separado do
-  // modal de horários (nunca é movido para dentro dele, nunca lhe altera o
-  // tamanho): position:fixed, com a sua própria caixa/sombra, ancorado ao
-  // lado direito do modal. Por ser fixed e independente, nunca é afetado
-  // pelo scroll vertical da tabela de horários — o utilizador pode descer
-  // até à última sub-loja (ex.: Maxx) sem a cobertura correspondente sair
-  // do sítio; tem o seu PRÓPRIO scroll interno (overflow-y:auto) quando o
-  // conteúdo é mais alto do que o espaço disponível.
-  function funchalCovEnsureSplitPanel(){
-    let panel = document.getElementById('funchal-cov-split-panel');
-    if (panel) return panel;
-    panel = document.createElement('div');
-    panel.id = 'funchal-cov-split-panel';
-    panel.style.cssText = 'display:none;position:fixed;z-index:9500;background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.06);box-sizing:border-box;padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch;';
-    panel.innerHTML =
-        '<button type="button" id="funchal-cov-split-close" style="position:absolute;top:10px;right:12px;background:none;border:none;font-size:16px;color:#777;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px;">✕</button>'
-      + '<div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#333;margin-bottom:14px;text-align:center;">Cobertura por hora</div>'
-      + '<div id="funchal-cov-inline-columns" class="funchal-cov-host" style="display:flex;gap:10px;align-items:flex-start;"></div>';
-    document.body.appendChild(panel);
-    document.getElementById('funchal-cov-split-close').addEventListener('click', funchalCovExitSplit);
-    return panel;
-  }
-
-  // Recalcula a posição/tamanho do painel a partir da posição REAL do modal
-  // no ecrã (getBoundingClientRect) — chamado ao entrar no modo dividido, ao
-  // redimensionar a janela, e a cada re-render da tabela (a altura do modal
-  // pode mudar consoante quem trabalha nessa semana). Ambos position:fixed
-  // relativos ao viewport, por isso não depende de nada sobre scroll de
-  // página. Não faz nada se o painel não existir ou estiver escondido.
-  function funchalCovPositionSplitPanel(){
-    const box   = document.getElementById('wz-hor-modal-box');
-    const panel = document.getElementById('funchal-cov-split-panel');
-    if (!box || !panel || panel.style.display === 'none') return;
-    const rect = box.getBoundingClientRect();
-    const gap = 20, margin = 16;
-    const availWidth = window.innerWidth - rect.right - gap - margin;
-    const width = Math.max(380, Math.min(520, availWidth));
-    panel.style.left = (rect.right + gap) + 'px';
-    panel.style.top = rect.top + 'px';
-    panel.style.width = width + 'px';
-    panel.style.maxHeight = rect.height + 'px';
-  }
-
-  let _funchalCovSplitActive = false;
-
-  // Feedback visual de estado no próprio botão — sem isto o utilizador não
-  // tem forma de saber, só de olhar, se o modo dividido já está aberto (o
-  // clique passa a alternar, ao contrário do comportamento anterior que só
-  // abria).
-  function funchalCovUpdateToggleButtonState(){
-    const btn = document.getElementById('funchal-cov-toggle');
-    if (!btn) return;
-    if (_funchalCovSplitActive) {
-      btn.style.background = 'rgba(51,51,58,.92)';
-      btn.style.color = '#fff';
-      btn.style.borderColor = 'rgba(51,51,58,.92)';
-    } else {
-      btn.style.background = 'rgba(255,255,255,.55)';
-      btn.style.color = '#333';
-      btn.style.borderColor = 'rgba(0,0,0,.08)';
-    }
-  }
-
-  // Entra no modo dividido: encolhe o modal (abre espaço real à direita —
-  // ver funchalCovShrinkModal), confirma que agora há espaço útil e só
-  // então mostra e posiciona o painel de cobertura ao lado. #container-
-  // tables nunca é movido nem retirado do modal — continua com o seu
-  // próprio scroll, por isso a tabela de horários continua 100% nítida e
-  // interativa (nomes clicáveis, hover das linhas) enquanto a cobertura
-  // está visível ao lado, e o scroll de uma nunca afeta a outra.
-  function funchalCovEnterSplit(){
-    funchalCovShrinkModal();
-    if (!funchalCovIsDesktopWidth()) { funchalCovRestoreModal(); return; }
-    const covOverlay = document.getElementById('funchal-cov-overlay');
-    if (covOverlay) covOverlay.style.display = 'none';
-    const panel = funchalCovEnsureSplitPanel();
-    panel.style.display = 'block';
-    _funchalCovSplitActive = true;
-    funchalCovUpdateToggleButtonState();
-    funchalCovPositionSplitPanel();
-    funchalCovRefreshAllTargets();
-    funchalCovEnsureSplitResizeListener();
-  }
-
-  // Sai do modo dividido: esconde o painel e repõe o modal ao tamanho
-  // normal (funchalCovRestoreModal), incluindo o re-ajuste da escala da
-  // tabela de horários.
-  function funchalCovExitSplit(){
-    const panel = document.getElementById('funchal-cov-split-panel');
-    if (panel) panel.style.display = 'none';
-    _funchalCovSplitActive = false;
-    funchalCovUpdateToggleButtonState();
-    funchalCovRestoreModal();
-  }
-
-  // Reposiciona o painel ao redimensionar a janela; se deixar de haver
-  // espaço suficiente, sai do modo dividido em vez de deixar o painel
-  // espremido ou a transbordar do ecrã. Um só listener por carregamento de
-  // página (flag module-level), tal como funchalEnsureLiveTicker.
-  let _funchalCovSplitResizeListenerAdded = false;
-  function funchalCovEnsureSplitResizeListener(){
-    if (_funchalCovSplitResizeListenerAdded) return;
-    _funchalCovSplitResizeListenerAdded = true;
-    let resizeTimer = null;
-    window.addEventListener('resize', function(){
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function(){
-        if (!_funchalCovSplitActive) return;
-        if (!funchalCovIsDesktopWidth()) { funchalCovExitSplit(); return; }
-        funchalCovPositionSplitPanel();
-      }, 150);
-    });
-  }
-
-  // Se o modal de horários fechar (✕, clique fora, Escape — tudo tratado
-  // por closeHor() em index.html, nunca tocado) enquanto o modo dividido
-  // está ativo, o estado tem de ser reposto — senão a próxima vez que o
-  // modal abrisse ficaria com a estrutura desalinhada. Observa a classe
-  // wz-on do próprio modal em vez de depender de qualquer botão específico,
-  // por isso cobre todas as formas de fechar de uma só vez.
-  let _funchalCovModalCloseObserverAdded = false;
-  function funchalCovEnsureModalCloseObserver(){
-    if (_funchalCovModalCloseObserverAdded) return;
-    const modal = document.getElementById('wz-hor-modal');
-    if (!modal) return;
-    _funchalCovModalCloseObserverAdded = true;
-    new MutationObserver(() => {
-      if (!modal.classList.contains('wz-on') && _funchalCovSplitActive) {
-        funchalCovExitSplit();
-      }
-    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
-  }
-
-  // Callback única do botão "cobertura", partilhada por funchal e Porto
-  // Santo: abre sempre o modal/overlay tradicional, exatamente como antes
-  // de existir o modo dividido — este botão nunca decide sozinho dividir o
-  // ecrã. Só exceção: se o modo dividido já estiver ativo (aberto a partir
-  // do título "Cobertura por hora" dentro do overlay — ver
-  // funchalCovEnsureOverlay), o mesmo botão passa a servir para voltar ao
-  // layout normal, em vez de abrir o overlay por cima de uma vista já
-  // dividida (o que mostraria a cobertura duas vezes).
-  function funchalCovToggle(){
-    funchalCovEnsureModalCloseObserver();
-    if (_funchalCovSplitActive) {
-      funchalCovExitSplit();
-      return;
-    }
-    const covOverlay = funchalCovEnsureOverlay();
-    funchalCovRefreshAllTargets();
-    covOverlay.style.display = 'flex';
   }
 
   // ── Botão "cobertura" na barra do modal de horários (#wz-hor-modal-bar,
@@ -1924,13 +1554,10 @@
 
   // Esconde o botão quando a loja atual não é nem funchal nem Porto Santo
   // (ex.: mudou para Mezka Madeira / Parfois Arcadas standalone) — chamado
-  // pelo mesmo observer que já deteta re-renders do #table-container. Sai
-  // também do modo dividido, se estiver ativo: uma loja sem cobertura não
-  // pode ficar com #container-tables preso dentro do wrap lado a lado.
+  // pelo mesmo observer que já deteta re-renders do #table-container.
   function funchalCovBarHideButton(){
     const btn = document.getElementById('funchal-cov-toggle');
     if (btn) btn.style.display = 'none';
-    if (_funchalCovSplitActive) funchalCovExitSplit();
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1958,10 +1585,15 @@
     // dentro de #table-container — já não precisa de embrulhar nem mover a
     // tabela do Porto Santo, por isso renderPortoSanto/hpsCollectStores/
     // hpsBindNameClicks continuam 100% intocados, sem qualquer manipulação
-    // do DOM que produzem (ver funchalCovBarEnsureButton). Mesma callback
-    // partilhada com o funchal (funchalCovToggle) — decide overlay (mobile)
-    // ou modo dividido (PC) e sabe encontrar os dados certos por si própria.
-    funchalCovBarEnsureButton(funchalCovToggle);
+    // do DOM que produzem (ver funchalCovBarEnsureButton).
+    funchalCovBarEnsureButton(() => {
+      const rows = portoSantoCurrentRowsIfActive();
+      if (!rows) return;
+      const covOverlay = funchalCovEnsureOverlay();
+      document.getElementById('funchal-cov-body').innerHTML = portoSantoBuildCoveragePanel(rows);
+      funchalUpdateCoverageHourMarker();
+      covOverlay.style.display = 'flex';
+    });
   }
 
   // Reavalia cada bolinha por POSIÇÃO no DOM (não por nome) — a mesma pessoa
@@ -2020,14 +1652,6 @@
     }
     portoSantoEnsureCoverageButton();
     portoSantoUpdateLiveDots();
-    // Mesmo ajuste de escala do funchal (ver funchalFitTablesToScreen) —
-    // necessário sobretudo quando o modo dividido de cobertura está ativo,
-    // já que a coluna disponível para a tabela encolhe.
-    funchalFitTablesToScreen();
-    funchalEnsureResizeListener();
-    // Mantém o painel de cobertura dividido (se estiver aberto) sincronizado
-    // com a semana atualmente visível, tal como já acontece para o funchal.
-    funchalCovRefreshAllTargets();
   }
 
   // ── Equivalentes "hps" (modal por pessoa) para a vista FUNCHAL UNIFICADO —

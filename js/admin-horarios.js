@@ -2,21 +2,17 @@
 (function() {
   var hBlocks = null;
   var hCurrentStore = null;
+  var hWeekIndex = 0;
 
   document.getElementById('h-store-select').addEventListener('change', function() {
     var store = this.value;
     if (!store) return;
     hCurrentStore = store;
-    document.getElementById('h-week-select').style.display = 'none';
-    document.getElementById('h-week-select').innerHTML = '';
     document.getElementById('h-table-area').innerHTML = '<div id="h-status-msg">a carregar…</div>';
+    var nav = document.getElementById('h-week-nav');
+    if (nav) nav.style.display = 'none';
     hBlocks = null;
     loadHorarios(store);
-  });
-
-  document.getElementById('h-week-select').addEventListener('change', function() {
-    if (!hBlocks) return;
-    hRenderWeek(hBlocks.filtered, parseInt(this.value));
   });
 
   // ── UI: dropdown "loja" escondido, substituído por 2 botões (Porto Santo /
@@ -45,8 +41,11 @@
     function paintButtons() {
       Array.prototype.forEach.call(wrap.children, function(b) {
         var active = b.dataset.storeValue === sel.value;
+        // index.html tem uma regra global "button{color:#000!important}" —
+        // só setProperty(...,'important') consegue vencê-la quando o botão
+        // fica ativo (fundo escuro, precisa de letra branca legível).
         b.style.background = active ? '#111' : '#fff';
-        b.style.color = active ? '#fff' : '#111';
+        b.style.setProperty('color', active ? '#fff' : '#111', 'important');
         b.style.borderColor = active ? '#111' : '#ccc';
       });
     }
@@ -103,6 +102,111 @@
     sel.addEventListener('change', sync);
     sync();
   })();
+
+  // ── Semana: dropdown "SEMANA N" substituído por setas ← / → + rótulo
+  // centrado, calco exato de #wz-week-nav/#wz-week-prev/#wz-week-next/
+  // #wz-week-label do modal de horários das empregadas (index.html) — ids
+  // diferentes (h-week-* em vez de wz-week-*) para não colidir com esse
+  // modal, que existe sempre na mesma página. ──
+  (function hSetupWeekNav() {
+    var host = document.getElementById('h-store-selector');
+    var oldSel = document.getElementById('h-week-select');
+    if (!host || !oldSel) return;
+    oldSel.style.display = 'none';
+
+    if (!document.getElementById('h-week-nav-styles')) {
+      var s = document.createElement('style');
+      s.id = 'h-week-nav-styles';
+      s.textContent = [
+        '#h-week-nav{display:none;align-items:center;justify-content:center;gap:2px;}',
+        '#h-week-prev,#h-week-next{background:none;border:none;cursor:pointer;font-size:1.5rem;padding:4px 12px;line-height:1;color:#000;border-radius:8px;transition:background .15s;}',
+        '#h-week-prev:hover,#h-week-next:hover{background:#f0f0f0;}',
+        '#h-week-prev:disabled,#h-week-next:disabled{opacity:.2;cursor:default;pointer-events:none;}',
+        '#h-week-label{font-family:\'MontserratLight\',sans-serif;font-size:.72rem;font-weight:700;text-transform:lowercase;letter-spacing:.06em;color:#555;padding:0 6px;}'
+      ].join('');
+      document.head.appendChild(s);
+    }
+
+    var nav = document.createElement('div');
+    nav.id = 'h-week-nav';
+    nav.innerHTML =
+        '<button type="button" id="h-week-prev" title="semana anterior">&#8592;</button>'
+      + '<span id="h-week-label"></span>'
+      + '<button type="button" id="h-week-next" title="semana seguinte">&#8594;</button>';
+    host.insertBefore(nav, oldSel);
+
+    document.getElementById('h-week-prev').addEventListener('click', function () { hWeekStep(-1); });
+    document.getElementById('h-week-next').addEventListener('click', function () { hWeekStep(1); });
+  })();
+
+  // Agrupa blocos pela mesma "semana" (block[1][0]) — só usado para Funchal,
+  // onde cada loja vem num bloco bruto separado; espelha _wzGetWeekGroups()
+  // do modal de horários das empregadas (index.html).
+  function hGetWeekGroups(filtered) {
+    var groups = [];
+    var map = {};
+    filtered.forEach(function (b, i) {
+      var key = (b[1] && b[1][0]) ? b[1][0] : ('#' + i);
+      if (!Object.prototype.hasOwnProperty.call(map, key)) {
+        map[key] = groups.length;
+        groups.push({ key: key, indices: [i] });
+      } else {
+        groups[map[key]].indices.push(i);
+      }
+    });
+    return groups;
+  }
+  function hFindGroupIndexForBlock(groups, blockIdx) {
+    for (var g = 0; g < groups.length; g++) {
+      if (groups[g].indices.indexOf(blockIdx) !== -1) return g;
+    }
+    return 0;
+  }
+
+  function hWeekNavUpdate() {
+    if (!hBlocks) return;
+    var filtered = hBlocks.filtered;
+    var nav   = document.getElementById('h-week-nav');
+    var label = document.getElementById('h-week-label');
+    var prev  = document.getElementById('h-week-prev');
+    var next  = document.getElementById('h-week-next');
+    if (!nav) return;
+    if (hCurrentStore === 'funchal') {
+      var groups = hGetWeekGroups(filtered);
+      var gi = hFindGroupIndexForBlock(groups, hWeekIndex);
+      nav.style.display = groups.length > 1 ? 'flex' : 'none';
+      if (label) label.textContent = groups[gi] ? String(groups[gi].key).toLowerCase() : '';
+      if (prev)  prev.disabled = gi <= 0;
+      if (next)  next.disabled = gi >= groups.length - 1;
+    } else {
+      var total = filtered.length;
+      nav.style.display = total > 1 ? 'flex' : 'none';
+      if (label) label.textContent = 'semana ' + (hWeekIndex + 1);
+      if (prev)  prev.disabled = hWeekIndex <= 0;
+      if (next)  next.disabled = hWeekIndex >= total - 1;
+    }
+  }
+
+  function hWeekStep(dir) {
+    if (!hBlocks) return;
+    var filtered = hBlocks.filtered;
+    if (hCurrentStore === 'funchal') {
+      var groups = hGetWeekGroups(filtered);
+      var gi = hFindGroupIndexForBlock(groups, hWeekIndex);
+      var ngi = gi + dir;
+      if (ngi < 0 || ngi >= groups.length) return;
+      hWeekGoTo(groups[ngi].indices[0]);
+    } else {
+      hWeekGoTo(hWeekIndex + dir);
+    }
+  }
+
+  function hWeekGoTo(idx) {
+    var filtered = hBlocks.filtered;
+    hWeekIndex = Math.max(0, Math.min(idx, filtered.length - 1));
+    hWeekNavUpdate();
+    hRenderWeek(filtered, hWeekIndex);
+  }
 
   async function loadHorarios(store) {
     var isFunchal = (store === 'funchal');
@@ -183,46 +287,21 @@
 
     hBlocks = { filtered };
 
-    // Build week selector. Para Funchal, cada bloco é UMA loja numa ÚNICA
-    // semana (Mezka Funchal e Arcadas vêm como blocos SEPARADOS que partilham
-    // a mesma etiqueta de semana em block[1][0]) — window._hRender.funchal já
-    // agrupa por essa etiqueta sozinho a partir de UM índice qualquer do
-    // grupo, mas o seletor de semanas não pode mostrar uma entrada por bloco
-    // (mostraria a mesma semana duplicada, uma vez por loja). Por isso aqui
-    // deduplicamos por semanaKey, guardando o índice do primeiro bloco de
-    // cada semana como "representante" desse grupo. Para as restantes lojas
-    // o comportamento é idêntico ao anterior (1 opção por bloco).
-    const weekSel = document.getElementById('h-week-select');
-    weekSel.innerHTML = '';
-    let weekGroups;
+    // Semana inicial: para Funchal, procurar só entre os representantes de
+    // cada grupo (1º bloco de cada semana real), já que window._hRender.funchal
+    // agrupa a partir de QUALQUER índice da mesma semana — não importa qual
+    // dos blocos do grupo se usa como ponto de partida.
+    let startWeek;
     if (isFunchal) {
-      weekGroups = [];
-      const seen = new Set();
-      filtered.forEach((block, i) => {
-        const key = (block[1] && block[1][0]) || ('#' + i);
-        if (seen.has(key)) return;
-        seen.add(key);
-        weekGroups.push(i);
-      });
+      const weekGroups = hGetWeekGroups(filtered);
+      const representativeBlocks = weekGroups.map(g => filtered[g.indices[0]]);
+      const startGroupIdx = hFindCurrentWeek(representativeBlocks);
+      startWeek = weekGroups[startGroupIdx] ? weekGroups[startGroupIdx].indices[0] : 0;
     } else {
-      weekGroups = filtered.map((_, i) => i);
+      startWeek = hFindCurrentWeek(filtered);
     }
-    weekGroups.forEach((rawIndex, groupIdx) => {
-      const op = document.createElement('option');
-      op.value = rawIndex;
-      op.textContent = 'SEMANA ' + (groupIdx + 1);
-      weekSel.appendChild(op);
-    });
-    weekSel.style.display = weekGroups.length > 1 ? 'inline-block' : 'none';
-
-    // Auto-select current week — procura só entre os representantes de cada
-    // grupo, para o valor escolhido corresponder sempre a uma opção real do
-    // seletor (window._hRender.funchal agrupa a partir de QUALQUER índice da
-    // mesma semana, por isso não importa qual dos blocos do grupo se usa).
-    const representativeBlocks = weekGroups.map(i => filtered[i]);
-    const startGroupIdx = hFindCurrentWeek(representativeBlocks);
-    const startWeek = weekGroups[startGroupIdx];
-    weekSel.value = startWeek;
+    hWeekIndex = startWeek;
+    hWeekNavUpdate();
     hRenderWeek(filtered, startWeek);
   }
 
@@ -285,9 +364,12 @@
     const real = document.getElementById('table-container');
     if (real) real.setAttribute('id', 'table-container-bak');
 
+    // Sem estilo inline: a regra global "#table-container{display:flex;
+    // justify-content:center;...}" do index.html já centra a tabela sozinha
+    // (é a mesma que o dashboard de empregadas usa) — um "display:block"
+    // inline aqui destruía essa centragem e desalinhava tudo para um lado.
     const temp = document.createElement('div');
     temp.id = 'table-container';
-    temp.style.cssText = 'display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;';
     area.appendChild(temp);
 
     if (hCurrentStore === 'funchal') {

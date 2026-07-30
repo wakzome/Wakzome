@@ -7,6 +7,15 @@
   document.getElementById('h-store-select').addEventListener('change', function() {
     var store = this.value;
     if (!store) return;
+    // admin-horarios.js carrega para TODOS os logins (admin E empregada —
+    // ver shared.js, a lista de scripts não distingue "rol"). Só aqui, no
+    // instante em que o admin realmente escolhe uma loja (nunca acontece
+    // numa sessão de empregada, que não tem acesso a estes botões), é que
+    // é seguro apontar o sistema de cobertura para a barra do admin — feito
+    // mais cedo (ao carregar o script), ia partir o botão "cobertura" das
+    // empregadas em TODAS as sessões, mesmo sem o admin alguma vez abrir o
+    // separador de horários.
+    window._hCovBarIds = { right: 'h-week-right', label: 'h-week-label', bar: 'h-hor-bar', modalBox: 'h-hor-box' };
     hCurrentStore = store;
     document.getElementById('h-table-area').innerHTML = '<div id="h-status-msg">a carregar…</div>';
     var nav = document.getElementById('h-week-nav');
@@ -124,8 +133,15 @@
       var s = document.createElement('style');
       s.id = 'h-hor-box-styles';
       s.textContent = [
-        '#h-hor-box{width:min(95vw,1080px);margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.06);}',
-        '#h-hor-bar{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #efefef;background:#fff;border-radius:20px 20px 0 0;}',
+        // display:flex;flex-direction:column;flex:1;min-height:0 — sem isto
+        // #h-table-area (que só ganha altura via flex:1 quando o PAI é
+        // flex) deixava de encolher ao espaço disponível dentro da tab, a
+        // caixa crescia sem limite e #tab-horarios (overflow:hidden) cortava
+        // o resto sem scroll nenhum. overflow:hidden aqui é só para os
+        // cantos arredondados não vazarem — quem faz scroll de verdade é
+        // #h-table-area, por baixo, com o seu próprio overflow-y:auto.
+        '#h-hor-box{width:min(95vw,1080px);margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.06);display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}',
+        '#h-hor-bar{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #efefef;background:#fff;border-radius:20px 20px 0 0;flex:0 0 auto;}',
         '#h-hor-bar>span{flex:1;}',
         '#h-week-nav{display:none;align-items:center;gap:2px;position:absolute;left:50%;transform:translateX(-50%);}',
         '#h-week-prev,#h-week-next{background:none;border:none;cursor:pointer;font-size:1.5rem;padding:4px 12px;line-height:1;color:#000;border-radius:8px;transition:background .15s;}',
@@ -157,10 +173,10 @@
     document.getElementById('h-week-prev').addEventListener('click', function () { hWeekStep(-1); });
     document.getElementById('h-week-next').addEventListener('click', function () { hWeekStep(1); });
 
-    // Aponta o sistema de cobertura (shared.js) para esta barra em vez da
-    // do modal das empregadas — mesma lógica/aparência, só os ids mudam. O
-    // fluxo das empregadas nunca define isto, por isso fica 100% intacto.
-    window._hCovBarIds = { right: 'h-week-right', label: 'h-week-label', bar: 'h-hor-bar' };
+    // window._hCovBarIds NÃO é definido aqui (este IIFE corre ao carregar o
+    // script, para TODOS os logins, incluindo empregadas) — só é definido
+    // no listener de 'change' do #h-store-select, acima, que só dispara
+    // quando o admin clica mesmo num botão de loja.
   })();
 
   // Agrupa blocos pela mesma "semana" (block[1][0]) — só usado para Funchal,

@@ -1783,7 +1783,13 @@
   // ao bordo do ecrã (16).
   const FUNCHAL_COV_SPLIT_MIN_GAP = 376;
   function funchalCovSideGaps(){
-    const box = document.getElementById('wz-hor-modal-box');
+    // Mesma ideia do window._hCovBarIds (bar/right/label): o painel admin
+    // define window._hCovBarIds.modalBox para a SUA própria caixa
+    // (#h-hor-box), que tem exatamente a mesma largura min(95vw,1080px) do
+    // modal das empregadas — o dashboard de empregadas nunca define isto,
+    // por isso continua a usar #wz-hor-modal-box sem qualquer alteração.
+    const modalBoxId = (window._hCovBarIds && window._hCovBarIds.modalBox) || 'wz-hor-modal-box';
+    const box = document.getElementById(modalBoxId);
     if (!box) return null;
     const rect = box.getBoundingClientRect();
     return { rect, left: rect.left, right: window.innerWidth - rect.right };

@@ -1955,16 +1955,27 @@
   // modal abrisse ficaria com a estrutura desalinhada. Observa a classe
   // wz-on do próprio modal em vez de depender de qualquer botão específico,
   // por isso cobre todas as formas de fechar de uma só vez.
+  //
+  // O painel admin (admin-horarios.js) não tem "modal" nenhum — tem um
+  // separador (#tab-horarios) que ganha/perde a classe "active" ao trocar
+  // de separador ou voltar ao dashboard (botão "início"). Sem isto, sair do
+  // separador de horários com a cobertura dividida aberta deixava os
+  // painéis fixed a "contaminar" o dashboard principal, sem forma de os
+  // fechar a não ser voltando a entrar em horários. window._hCovBarIds.closeWatch
+  // permite ao admin apontar este observador para o SEU elemento/classe —
+  // a loja de empregadas nunca define isto, por isso mantém-se 100% igual.
   let _funchalCovModalCloseObserverAdded = false;
   function funchalCovEnsureModalCloseObserver(){
     if (_funchalCovModalCloseObserverAdded) return;
-    const modal = document.getElementById('wz-hor-modal');
+    const cfg = (window._hCovBarIds && window._hCovBarIds.closeWatch) || { el: 'wz-hor-modal', activeClass: 'wz-on' };
+    const modal = document.getElementById(cfg.el);
     if (!modal) return;
     _funchalCovModalCloseObserverAdded = true;
     new MutationObserver(() => {
-      if (!modal.classList.contains('wz-on') && _funchalCovSplitActive) {
-        funchalCovExitSplit();
-      }
+      if (modal.classList.contains(cfg.activeClass)) return;
+      if (_funchalCovSplitActive) funchalCovExitSplit();
+      const overlay = document.getElementById('funchal-cov-overlay');
+      if (overlay && overlay.style.display !== 'none') overlay.style.display = 'none';
     }).observe(modal, { attributes: true, attributeFilter: ['class'] });
   }
 

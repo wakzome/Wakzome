@@ -15,7 +15,11 @@
     // mais cedo (ao carregar o script), ia partir o botão "cobertura" das
     // empregadas em TODAS as sessões, mesmo sem o admin alguma vez abrir o
     // separador de horários.
-    window._hCovBarIds = { right: 'h-week-right', label: 'h-week-label', bar: 'h-hor-bar', modalBox: 'h-hor-box' };
+    // closeWatch: se o admin sair do separador "horários" (voltar ao
+    // dashboard, ou trocar de separador) com a cobertura dividida aberta,
+    // shared.js fecha-a sozinha (painéis fixed não têm "dono" nenhum, senão
+    // ficavam a contaminar o dashboard principal até se clicar "fechar").
+    window._hCovBarIds = { right: 'h-week-right', label: 'h-week-label', bar: 'h-hor-bar', modalBox: 'h-hor-box', closeWatch: { el: 'tab-horarios', activeClass: 'active' } };
     hCurrentStore = store;
     document.getElementById('h-table-area').innerHTML = '<div id="h-status-msg">a carregar…</div>';
     var nav = document.getElementById('h-week-nav');
@@ -149,7 +153,22 @@
         '#h-week-prev:disabled,#h-week-next:disabled{opacity:.2;cursor:default;pointer-events:none;}',
         '#h-week-right{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end;}',
         '#h-week-label{font-family:\'MontserratLight\',sans-serif;font-size:.72rem;font-weight:700;text-transform:lowercase;letter-spacing:.06em;color:#555;}',
-        '#h-table-area{padding:20px;box-sizing:border-box;}'
+        '#h-table-area{padding:20px;box-sizing:border-box;}',
+        // Calco exato da correção já aplicada a #wz-hor-modal-bar (barra das
+        // empregadas): em ecrã estreito, o botão "cobertura" + "semana N" no
+        // lado direito cresciam o suficiente para tapar a seta direita (que
+        // fica centrada em posição absoluta). A classe funchal-cov-on já é
+        // adicionada automaticamente por shared.js (funchalCovBarEnsureButton)
+        // sempre que o botão de cobertura existe — aqui só faltavam as regras.
+        '@media (max-width:760px){',
+        '#h-hor-bar.funchal-cov-on{gap:6px;padding-left:12px!important;padding-right:12px!important;}',
+        '#h-hor-bar.funchal-cov-on #h-week-nav{position:static!important;left:auto!important;transform:none!important;flex:none!important;order:2;}',
+        '#h-hor-bar.funchal-cov-on>span{flex:1 1 0!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;order:1;}',
+        '#h-hor-bar.funchal-cov-on #h-week-right{flex:none!important;order:3;gap:5px!important;}',
+        '#h-hor-bar.funchal-cov-on #h-week-prev,#h-hor-bar.funchal-cov-on #h-week-next{font-size:1.15rem!important;padding:4px 7px!important;}',
+        '#h-hor-bar.funchal-cov-on #funchal-cov-toggle{font-size:10px!important;padding:5px 11px!important;}',
+        '#h-hor-bar.funchal-cov-on #h-week-label{display:none;}',
+        '}'
       ].join('');
       document.head.appendChild(s);
     }

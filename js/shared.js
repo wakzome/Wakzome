@@ -1978,8 +1978,19 @@
   //    "horários" nem as setas de navegação (que ficam centradas). Usado
   //    tanto pelo funchal (renderFunchalUnificado) como pelo Porto Santo
   //    (portoSantoEnsureCoverageButton) — mesma posição nos dois. ──
+  // IDs da barra onde o botão "cobertura" vive. Por omissão, a barra do
+  // modal de horários das empregadas (definida no index.html). O painel
+  // admin (admin-horarios.js) define window._hCovBarIds com os SEUS
+  // próprios ids (h-week-right/h-week-label/h-hor-bar) antes de qualquer
+  // render — o fluxo das empregadas nunca toca nesta variável, por isso o
+  // seu comportamento fica 100% inalterado.
+  function funchalCovBarIds(){
+    return window._hCovBarIds || { right: 'wz-week-right', label: 'wz-week-label', bar: 'wz-hor-modal-bar' };
+  }
+
   function funchalCovBarEnsureButton(onOpen){
-    const right = document.getElementById('wz-week-right');
+    const ids = funchalCovBarIds();
+    const right = document.getElementById(ids.right);
     if (!right) return null;
     let btn = document.getElementById('funchal-cov-toggle');
     if (!btn) {
@@ -1988,7 +1999,7 @@
       btn.id = 'funchal-cov-toggle';
       btn.textContent = 'cobertura';
       btn.style.cssText = 'display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:lowercase;padding:6px 14px;border-radius:20px;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.55);backdrop-filter:blur(12px) saturate(160%);-webkit-backdrop-filter:blur(12px) saturate(160%);color:#333;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.05);transition:background .15s;';
-      const label = document.getElementById('wz-week-label');
+      const label = document.getElementById(ids.label);
       if (label) right.insertBefore(btn, label); else right.insertBefore(btn, right.firstChild);
     }
     // onclick (não addEventListener) substitui sempre o handler anterior —
@@ -2002,7 +2013,7 @@
     // absoluto — sem isso, o botão tapava-as em telemóvel vertical. As
     // lojas sem cobertura nunca recebem a classe e mantêm o layout original.
     funchalEnsureLiveStyles();
-    const bar = document.getElementById('wz-hor-modal-bar');
+    const bar = document.getElementById(ids.bar);
     if (bar) bar.classList.add('funchal-cov-on');
     return btn;
   }
@@ -2013,12 +2024,13 @@
   // também do modo dividido, se estiver ativo: uma loja sem cobertura não
   // pode ficar com #container-tables preso dentro do wrap lado a lado.
   function funchalCovBarHideButton(){
+    const ids = funchalCovBarIds();
     const btn = document.getElementById('funchal-cov-toggle');
     if (btn) btn.style.display = 'none';
     // Sem botão de cobertura, a barra volta ao layout original do index.html
     // (setas centradas em absoluto, "semana N" visível) — as regras de ecrã
     // estreito deixam de se aplicar porque dependem desta classe.
-    const bar = document.getElementById('wz-hor-modal-bar');
+    const bar = document.getElementById(ids.bar);
     if (bar) bar.classList.remove('funchal-cov-on');
     if (_funchalCovSplitActive) funchalCovExitSplit();
   }

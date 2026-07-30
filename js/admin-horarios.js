@@ -103,40 +103,64 @@
     sync();
   })();
 
-  // ── Semana: dropdown "SEMANA N" substituído por setas ← / → + rótulo
-  // centrado, calco exato de #wz-week-nav/#wz-week-prev/#wz-week-next/
-  // #wz-week-label do modal de horários das empregadas (index.html) — ids
-  // diferentes (h-week-* em vez de wz-week-*) para não colidir com esse
-  // modal, que existe sempre na mesma página. ──
-  (function hSetupWeekNav() {
+  // ── Caixa + barra de horários: calco exato de #wz-hor-modal-box/
+  // #wz-hor-modal-bar/#wz-week-nav/#wz-week-right/#wz-week-label/
+  // #wz-hor-modal-body do modal de horários das empregadas (index.html) —
+  // mesma largura (min(95vw,1080px)), mesmo padding, mesma barra com setas
+  // centradas e "semana N" à direita. Só os ids mudam (h-hor-*/h-week-*
+  // em vez de wz-hor-*/wz-week-*), para nunca colidir com esse modal, que
+  // existe sempre na mesma página (dashboard de empregadas). #h-table-area
+  // (elemento real do index.html) é movido para dentro desta caixa — todas
+  // as referências a getElementById('h-table-area') continuam válidas,
+  // porque o nó é o mesmo, só muda de posição na árvore. ──
+  (function hSetupHorBox() {
     var host = document.getElementById('h-store-selector');
+    var tableArea = document.getElementById('h-table-area');
     var oldSel = document.getElementById('h-week-select');
-    if (!host || !oldSel) return;
-    oldSel.style.display = 'none';
+    if (!host || !tableArea) return;
+    if (oldSel) oldSel.style.display = 'none';
 
-    if (!document.getElementById('h-week-nav-styles')) {
+    if (!document.getElementById('h-hor-box-styles')) {
       var s = document.createElement('style');
-      s.id = 'h-week-nav-styles';
+      s.id = 'h-hor-box-styles';
       s.textContent = [
-        '#h-week-nav{display:none;align-items:center;justify-content:center;gap:2px;}',
+        '#h-hor-box{width:min(95vw,1080px);margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.06);}',
+        '#h-hor-bar{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #efefef;background:#fff;border-radius:20px 20px 0 0;}',
+        '#h-hor-bar>span{flex:1;}',
+        '#h-week-nav{display:none;align-items:center;gap:2px;position:absolute;left:50%;transform:translateX(-50%);}',
         '#h-week-prev,#h-week-next{background:none;border:none;cursor:pointer;font-size:1.5rem;padding:4px 12px;line-height:1;color:#000;border-radius:8px;transition:background .15s;}',
         '#h-week-prev:hover,#h-week-next:hover{background:#f0f0f0;}',
         '#h-week-prev:disabled,#h-week-next:disabled{opacity:.2;cursor:default;pointer-events:none;}',
-        '#h-week-label{font-family:\'MontserratLight\',sans-serif;font-size:.72rem;font-weight:700;text-transform:lowercase;letter-spacing:.06em;color:#555;padding:0 6px;}'
+        '#h-week-right{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end;}',
+        '#h-week-label{font-family:\'MontserratLight\',sans-serif;font-size:.72rem;font-weight:700;text-transform:lowercase;letter-spacing:.06em;color:#555;}',
+        '#h-table-area{padding:20px;box-sizing:border-box;}'
       ].join('');
       document.head.appendChild(s);
     }
 
-    var nav = document.createElement('div');
-    nav.id = 'h-week-nav';
-    nav.innerHTML =
-        '<button type="button" id="h-week-prev" title="semana anterior">&#8592;</button>'
-      + '<span id="h-week-label"></span>'
-      + '<button type="button" id="h-week-next" title="semana seguinte">&#8594;</button>';
-    host.insertBefore(nav, oldSel);
+    var box = document.createElement('div');
+    box.id = 'h-hor-box';
+    var bar = document.createElement('div');
+    bar.id = 'h-hor-bar';
+    bar.innerHTML =
+        '<span></span>'
+      + '<div id="h-week-nav">'
+      +   '<button type="button" id="h-week-prev" title="semana anterior">&#8592;</button>'
+      +   '<button type="button" id="h-week-next" title="semana seguinte">&#8594;</button>'
+      + '</div>'
+      + '<div id="h-week-right"><span id="h-week-label"></span></div>';
+    box.appendChild(bar);
+
+    tableArea.parentNode.insertBefore(box, tableArea);
+    box.appendChild(tableArea);
 
     document.getElementById('h-week-prev').addEventListener('click', function () { hWeekStep(-1); });
     document.getElementById('h-week-next').addEventListener('click', function () { hWeekStep(1); });
+
+    // Aponta o sistema de cobertura (shared.js) para esta barra em vez da
+    // do modal das empregadas — mesma lógica/aparência, só os ids mudam. O
+    // fluxo das empregadas nunca define isto, por isso fica 100% intacto.
+    window._hCovBarIds = { right: 'h-week-right', label: 'h-week-label', bar: 'h-hor-bar' };
   })();
 
   // Agrupa blocos pela mesma "semana" (block[1][0]) — só usado para Funchal,

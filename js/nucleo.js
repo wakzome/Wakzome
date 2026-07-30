@@ -1,241 +1,29 @@
 // ══════════════════════════════════════════════════════════════
-//  NÚCLEO DA APLICAÇÃO — sessão, relógios e horários (empregada + admin)
+//  NÚCLEO DA APLICAÇÃO — horários (empregada + admin), PROTEGIDO
 // ══════════════════════════════════════════════════════════════
-//  Script carregado incondicionalmente pelo index.html, ANTES do login.
+//  Carregado só DEPOIS do login, por loadProtectedScripts() em shared.js
+//  — NÃO está em PUBLIC_JS (middleware.js), por isso um visitante sem
+//  sessão recebe 401 e nunca vê este código. Toda a lógica de negócio de
+//  horários vive aqui: renderização da vista empregada, cobertura,
+//  aviso, badge, e o painel de administração completo (secção final).
 //  Índice:
-//    1. Sessão e login unificado (relógios, orientação, attemptLogin)
-//    2. Carga e renderização de horários (vista empregada)
-//    3. Estilo "glass" partilhado (Porto Santo + Funchal)
-//    4. Atualização ao vivo da tabela (sem reload)
-//    5. Cobertura Porto Santo (reaproveita o motor do Funchal)
-//    6. Modal de horário individual (Porto Santo)
-//    7. Aviso editável (Porto Santo + Funchal)
-//    8. Badge "última semana publicada" (Porto Santo)
-//    9. Arranque incondicional (observers + estilos ao vivo)
-//   10. Painel de administração de horários (admin-horarios)
+//    1. Estado interno (modo Funchal unificado)
+//    2. Contagem decrescente de turno (vista empregada)
+//    3. window._empRender / window._hRender — API para shared.js e
+//       para a secção do painel admin (final deste ficheiro)
+//    4. Carga e renderização de horários (vista empregada)
+//    5. Estilo "glass" partilhado (Porto Santo + Funchal)
+//    6. Atualização ao vivo da tabela (sem reload)
+//    7. Cobertura Porto Santo (reaproveita o motor do Funchal)
+//    8. Modal de horário individual (Porto Santo)
+//    9. Aviso editável (Porto Santo + Funchal)
+//   10. Badge "última semana publicada" (Porto Santo)
+//   11. Arranque incondicional (observers + estilos ao vivo)
+//   12. Painel de administração de horários (admin-horarios)
 // ══════════════════════════════════════════════════════════════
 (function(){
 
-  let isLoggedIn = false;
-  let currentStore = null;
   let _isFunchalUnificadoMode = false;
-
-  // — Rotación móvil —
-  function checkOrientation() {
-    if (!isLoggedIn) {
-      document.getElementById('login-screen').style.display = 'flex';
-      document.getElementById('main-header').style.display  = 'none';
-      document.getElementById('container-tables').style.display = 'none';
-    }
-  }
-  window.addEventListener('resize', checkOrientation);
-  window.addEventListener('orientationchange', checkOrientation);
-  checkOrientation();
-
-  // — Relojes —
-  function updateTimeDateLogin() {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2,'0');
-    const m = String(now.getMinutes()).padStart(2,'0');
-    const s = String(now.getSeconds()).padStart(2,'0');
-    document.getElementById('current-time').innerHTML =
-      h + '<span class="time-colon">:</span>' + m + '<span class="time-colon">:</span>' + s;
-    document.getElementById('current-date').textContent = now.toLocaleDateString('pt-PT',{weekday:'long',year:'numeric',month:'numeric',day:'numeric'});
-  }
-  setInterval(updateTimeDateLogin, 1000);
-  updateTimeDateLogin();
-
-  function updateTimeDateMain() {
-    const now = new Date();
-    document.getElementById('current-time-main').textContent = now.toLocaleTimeString('pt-PT',{hour12:false});
-    document.getElementById('current-date-main').textContent = now.toLocaleDateString('pt-PT',{weekday:'long',year:'numeric',month:'numeric',day:'numeric'});
-  }
-  setInterval(updateTimeDateMain, 1000);
-
-  function updateAdminClock() {
-    const now = new Date();
-    document.getElementById('admin-time').textContent = now.toLocaleTimeString('pt-PT',{hour12:false});
-    document.getElementById('admin-date').textContent = now.toLocaleDateString('pt-PT',{weekday:'long',year:'numeric',month:'numeric',day:'numeric'});
-  }
-  setInterval(updateAdminClock, 1000);
-
-  // — Login unificado — consulta claves en Supabase —
-  async function attemptLogin() {
-    const userKey = document.getElementById('key-input').value.trim();
-    if (!userKey) return;
-
-    // Bloquear botón mientras consulta
-    const btn = document.getElementById('key-submit');
-    btn.disabled = true;
-
-    try {
-      const loginRes = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave: userKey })
-      });
-
-      if (!loginRes.ok) {
-        alert('Senha incorreta');
-        document.getElementById('key-input').value = '';
-        document.getElementById('key-input').focus();
-        btn.disabled = false;
-        return;
-      }
-
-      const data = await loginRes.json();
-      const sessionToken = data.token;
-
-      // Guardar token en cookie para el portero de /js/
-      document.cookie = 'wkz_session=' + sessionToken + '; path=/; SameSite=Strict';
-
-      // Cargar los JS protegidos ahora que la cookie está lista
-      await (function loadProtectedScripts() {
-        const scripts = [
-          'js/session-lock.js',
-          'js/agenda.js','js/rotulos.js','js/processamento.js',
-          'js/admin-init.js','js/salarios.js','js/recibos.js',
-          'js/ferias.js','js/editor-pdf.js',
-          'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
-          'js/ventas-empleada.js','js/ventas-admin.js',
-          'js/historico-admin.js','js/nadiya.js','js/parfois.js',
-          'js/banco-horas.js'
-        ];
-        return scripts.reduce(function(p, src) {
-          return p.then(function() {
-            return new Promise(function(resolve, reject) {
-              var s = document.createElement('script');
-              s.src = src;
-              s.onload = resolve;
-              s.onerror = reject;
-              document.body.appendChild(s);
-            });
-          });
-        }, Promise.resolve());
-      })();
-
-      // Inicializar Supabase con credenciales del login — sin llamada extra
-      await window.initSupabase(sessionToken, {
-        url: data.url,
-        key: data.key,
-        adminToken: data.adminToken
-      });
-
-      isLoggedIn = true;
-
-      if (data.rol === 'admin') {
-        // ── LOGIN ADMIN ──
-        if (window.__wkzAutoLogin) {
-          // Silent auto-login — no sweep, no greeting, instant show
-          window.__wkzAutoLogin = false;
-          document.getElementById('login-screen').style.display = 'none';
-          const adminApp = document.getElementById('admin-app');
-          adminApp.classList.add('show');
-          const adminHdr = document.getElementById('admin-header');
-          adminHdr.classList.add('show');
-          updateAdminClock();
-          rLoadConfig();
-          // Show elements immediately without animation
-          adminApp.querySelectorAll('.reveal-item').forEach(function(el) {
-            el.style.opacity = '1';
-          });
-          initSaftReminder();
-        } else {
-          sweepThen(function() {
-            document.getElementById('login-screen').style.display = 'none';
-            showGreeting(data.nombre || 'administração', function() {
-              const adminApp = document.getElementById('admin-app');
-              adminApp.classList.add('show');
-              const adminHdr = document.getElementById('admin-header');
-              adminHdr.classList.add('show');
-              updateAdminClock();
-              rLoadConfig();
-              animateReveal(adminApp.querySelectorAll('.reveal-item'), 130);
-              initSaftReminder();
-            });
-          });
-        }
-
-      } else if (data.rol === 'nadiya') {
-        // ── LOGIN NADIYA ──
-        sweepThen(function() {
-          document.getElementById('login-screen').style.display = 'none';
-          showGreeting(data.nombre || 'nadiya', function() {
-            if (typeof openNadiyaOverlay === 'function') openNadiyaOverlay();
-          });
-        });
-
-      } else {
-        // ── LOGIN TIENDA ──
-        currentStore = data.tienda;
-        window._currentStoreGlobal = data.tienda;
-        window._currentEmployeeName = (data.nombre || '').trim().toUpperCase();
-        if (data.tienda === 'porto santo' && typeof havPrefetch === 'function') havPrefetch();
-        if (data.tienda === 'porto santo' && typeof havUltimaPrefetch === 'function') havUltimaPrefetch();
-        sweepThen(function() {
-          document.getElementById('login-screen').style.display = 'none';
-          showGreeting(data.nombre || data.tienda, function() {
-            document.getElementById('main-header').classList.add('show');
-            document.getElementById('main-header').style.display = 'flex';
-            document.getElementById('container-tables').style.display = 'flex';
-            animateReveal([
-              document.querySelector('#main-header-center'),
-              document.getElementById('container-tables')
-            ], 150);
-            loadData(currentStore);
-          });
-        });
-      }
-
-    } catch(err) {
-      alert('Erro de ligação. Tenta novamente.');
-      btn.disabled = false;
-    }
-  }
-
-  document.getElementById('key-submit').addEventListener('click', attemptLogin);
-  document.getElementById('key-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') attemptLogin();
-  });
-
-  // — Logo click → reload —
-
-
-  // ── FADE RELOAD ──
-  function fadeReload() {
-    document.body.style.transition = 'opacity 0.5s ease';
-    document.body.style.opacity = '0';
-    setTimeout(function() { location.reload(); }, 520);
-  }
-  document.getElementById('main-logo').removeEventListener('click', null);
-  document.getElementById('admin-logo').removeEventListener('click', null);
-  document.getElementById('main-logo').onclick  = function(e){ e.preventDefault(); fadeReload(); };
-  document.getElementById('admin-logo').onclick = function(e){ e.preventDefault(); fadeReload(); };
-
-  // ── GREETING ──
-  function showGreeting(label, callback) {
-    const h = new Date().getHours();
-    const greet = h < 12 ? 'bom dia' : h < 19 ? 'boa tarde' : 'boa noite';
-    const sub   = label || 'wakzome';
-    const el    = document.getElementById('greeting-overlay');
-    const txt   = document.getElementById('greeting-text');
-    const subtxt= document.getElementById('greeting-sub');
-    txt.textContent  = greet;
-    subtxt.textContent = sub;
-    el.style.display = 'flex';
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        el.classList.add('show');
-        setTimeout(function() {
-          el.classList.remove('show');
-          setTimeout(function() {
-            el.style.display = 'none';
-            if (callback) callback();
-          }, 550);
-        }, 1400);
-      });
-    });
-  }
 
   // ── SHIFT COUNTDOWN (employee view) ──
   function startShiftCountdown(store) {
@@ -289,6 +77,14 @@
     setInterval(tick, 30000);
   }
 
+  // Exposto para o attemptLogin de shared.js poder chamar depois do login
+  // (mesma convenção de window._hRender, usado pelo admin-horarios.js).
+  window._empRender = {
+    loadData: function(store){ return loadData(store); },
+    havPrefetch: function(loja){ return havPrefetch(loja); },
+    havUltimaPrefetch: function(){ return havUltimaPrefetch(); }
+  };
+
   // Expose render functions for admin horarios tab
   window._hRender = {
     table: renderTable,
@@ -298,8 +94,7 @@
     // Porto Santo NÃO liga o botão/painel de cobertura dentro de
     // renderPortoSanto (ao contrário do funchal) — depende de um
     // MutationObserver ligado ao #table-container ORIGINAL (ver o final
-    // deste ficheiro). O painel admin (secção "PAINEL DE ADMINISTRAÇÃO"
-    // abaixo) faz um "swap" de id em
+    // deste ficheiro). O painel admin (admin-horarios.js) faz um "swap" de id em
     // #table-container para desviar o render para a sua própria área, o
     // que faz esse observer nunca disparar (está a observar um nó
     // diferente). Por isso expomos aqui a MESMA função que o observer
@@ -430,7 +225,7 @@
     if (store === 'porto santo') havCheckAndShow('porto santo');
     if (store === 'funchal') havCheckAndShow('funchal');
     if (store === 'porto santo') havUltimaCheckAndShow();
-    startShiftCountdown(currentStore);
+    startShiftCountdown(store);
     document.getElementById('table-container').style.display='flex';
 
     const weekSelectId = 'week-select';
@@ -1892,7 +1687,7 @@
   // wz-on do próprio modal em vez de depender de qualquer botão específico,
   // por isso cobre todas as formas de fechar de uma só vez.
   //
-  // O painel admin (secção "PAINEL DE ADMINISTRAÇÃO" abaixo) não tem "modal" nenhum — tem um
+  // O painel admin (admin-horarios.js) não tem "modal" nenhum — tem um
   // separador (#tab-horarios) que ganha/perde a classe "active" ao trocar
   // de separador ou voltar ao dashboard (botão "início"). Sem isto, sair do
   // separador de horários com a cobertura dividida aberta deixava os
@@ -1944,7 +1739,7 @@
   //    (portoSantoEnsureCoverageButton) — mesma posição nos dois. ──
   // IDs da barra onde o botão "cobertura" vive. Por omissão, a barra do
   // modal de horários das empregadas (definida no index.html). O painel
-  // admin (secção "PAINEL DE ADMINISTRAÇÃO" abaixo) define window._hCovBarIds com os SEUS
+  // admin (admin-horarios.js) define window._hCovBarIds com os SEUS
   // próprios ids (h-week-right/h-week-label/h-hor-bar) antes de qualquer
   // render — o fluxo das empregadas nunca toca nesta variável, por isso o
   // seu comportamento fica 100% inalterado.
@@ -2753,7 +2548,7 @@
     // separador de horários.
     // closeWatch: se o admin sair do separador "horários" (voltar ao
     // dashboard, ou trocar de separador) com a cobertura dividida aberta,
-    // shared.js fecha-a sozinha (painéis fixed não têm "dono" nenhum, senão
+    // nucleo.js fecha-a sozinha (painéis fixed não têm "dono" nenhum, senão
     // ficavam a contaminar o dashboard principal até se clicar "fechar").
     window._hCovBarIds = { right: 'h-week-right', label: 'h-week-label', bar: 'h-hor-bar', modalBox: 'h-hor-box', closeWatch: { el: 'tab-horarios', activeClass: 'active' } };
     hCurrentStore = store;
@@ -2824,7 +2619,7 @@
     if (dash) dash.style.display = 'none';
   })();
 
-  // ── "aviso" — trigger movido para aqui (deixa de existir em shared.js),
+  // ── "aviso" — trigger movido para aqui (deixa de existir em nucleo.js),
   // acompanha o botão de loja ativo (Porto Santo ou Funchal). ──
   (function hSetupAvisoButton() {
     var host = document.getElementById('h-store-selector');
@@ -2893,7 +2688,7 @@
         // empregadas): em ecrã estreito, o botão "cobertura" + "semana N" no
         // lado direito cresciam o suficiente para tapar a seta direita (que
         // fica centrada em posição absoluta). A classe funchal-cov-on já é
-        // adicionada automaticamente por shared.js (funchalCovBarEnsureButton)
+        // adicionada automaticamente por nucleo.js (funchalCovBarEnsureButton)
         // sempre que o botão de cobertura existe — aqui só faltavam as regras.
         '@media (max-width:760px){',
         '#h-hor-bar.funchal-cov-on{gap:6px;padding-left:12px!important;padding-right:12px!important;}',
@@ -3031,7 +2826,7 @@
     if (isFunchal) {
       // FUNCHAL.csv contém só os blocos desta loja unificada (Mezka Funchal +
       // Parfois Arcadas, várias semanas intercaladas) — usar tudo tal como
-      // vem, exatamente como o dashboard de empregadas (loadData/shared.js).
+      // vem, exatamente como o dashboard de empregadas (loadData/nucleo.js).
       filtered = allBlocks;
     } else {
       const nameMapping = {
@@ -3099,7 +2894,7 @@
     hRenderWeek(filtered, startWeek);
   }
 
-  // portoSantoCurrentRowsIfActive() (shared.js) lê o índice da semana atual
+  // portoSantoCurrentRowsIfActive() (nucleo.js) lê o índice da semana atual
   // em document.getElementById('week-select').value — um <select> que só a
   // empregada cria (dentro de loadData). O admin nunca chama loadData, por
   // isso esse elemento não existe aqui; criamos um <input type="hidden">
@@ -3182,7 +2977,7 @@
 
     if (hCurrentStore === 'funchal') {
       // Limpa qualquer resíduo de Porto Santo: portoSantoCurrentRowsIfActive()
-      // (shared.js) lê window._lastBlocks/#week-select em primeiro lugar, e
+      // (nucleo.js) lê window._lastBlocks/#week-select em primeiro lugar, e
       // se ficasse com dados antigos, o painel de cobertura do funchal
       // continuaria "ligado" a Porto Santo em vez de atualizar (bug já visto).
       window._lastBlocks = null;

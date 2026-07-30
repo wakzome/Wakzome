@@ -480,7 +480,8 @@
     }
 
     window._lastBlocks = finalBlocks;
-    if (store === 'porto santo') havCheckAndShow();
+    if (store === 'porto santo') havCheckAndShow('porto santo');
+    if (store === 'funchal') havCheckAndShow('funchal');
     if (store === 'porto santo') havUltimaCheckAndShow();
     startShiftCountdown(currentStore);
     document.getElementById('table-container').style.display='flex';
@@ -2450,12 +2451,21 @@
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  AVISO PORTO SANTO — mensagem flutuante editável pelo admin
-  //  · Tabela Supabase: porto_santo_aviso (linha única, id=1)
-  //  · Admin: modal com switch ativo/inativo + textarea + guardar
-  //  · Loja: ao entrar em Porto Santo, se ativo=true, mostra a mensagem
+  //  AVISO (PORTO SANTO + FUNCHAL) — mensagem flutuante editável
+  //  pelo admin, uma por loja.
+  //  · Tabela Supabase: porto_santo_aviso — uma linha por loja,
+  //    mapeada por HAV_IDS ('porto santo'→id:1, 'funchal'→id:2).
+  //    id:1 é a linha já existente em produção, nunca alterada de
+  //    significado; id:2 é criada automaticamente (upsert) na
+  //    primeira gravação para Funchal — sem alterações ao schema.
+  //  · Admin: modal com switch ativo/inativo + textarea + guardar,
+  //    reaproveitado para qualquer loja (título/placeholder mudam).
+  //  · Loja: ao entrar em Porto Santo ou Funchal, se ativo=true,
+  //    mostra a mensagem — uma vez por sessão, por loja.
   // ══════════════════════════════════════════════════════════════
   const HAV_TABLE = 'porto_santo_aviso';
+  const HAV_IDS = { 'porto santo': 1, 'funchal': 2 };
+  function havIdFor(loja) { return HAV_IDS[loja] || HAV_IDS['porto santo']; }
 
   async function havGetSB() {
     if (typeof sbAdmin !== 'undefined' && sbAdmin) return sbAdmin;
@@ -2466,11 +2476,11 @@
     return null;
   }
 
-  async function havLoad() {
+  async function havLoad(loja) {
     const sb = await havGetSB();
     if (!sb) return { ativo: false, mensagem: '' };
     try {
-      const { data, error } = await sb.from(HAV_TABLE).select('ativo,mensagem').eq('id', 1).limit(1);
+      const { data, error } = await sb.from(HAV_TABLE).select('ativo,mensagem').eq('id', havIdFor(loja)).limit(1);
       if (error || !data || !data.length) return { ativo: false, mensagem: '' };
       return { ativo: !!data[0].ativo, mensagem: data[0].mensagem || '' };
     } catch (e) { return { ativo: false, mensagem: '' }; }
@@ -2479,18 +2489,20 @@
   // Pré-carregamento: lançado logo após o login (em paralelo com a animação de
   // entrada + carregamento do horário), para que quando o dashboard aparecer
   // os dados do aviso já estejam prontos e o popup surja sem espera extra.
-  let havPrefetchPromise = null;
-  function havPrefetch() {
-    if (!havPrefetchPromise) havPrefetchPromise = havLoad().catch(() => ({ ativo: false, mensagem: '' }));
-    return havPrefetchPromise;
+  // Uma promise em cache por loja (Porto Santo e Funchal nunca partilham).
+  const havPrefetchPromises = {};
+  function havPrefetch(loja) {
+    const key = loja || 'porto santo';
+    if (!havPrefetchPromises[key]) havPrefetchPromises[key] = havLoad(key).catch(() => ({ ativo: false, mensagem: '' }));
+    return havPrefetchPromises[key];
   }
 
-  async function havSave(ativo, mensagem) {
+  async function havSave(loja, ativo, mensagem) {
     const sb = await havGetSB();
     if (!sb) return false;
     try {
       const { error } = await sb.from(HAV_TABLE).upsert({
-        id: 1, ativo: ativo, mensagem: mensagem, updated_at: new Date().toISOString()
+        id: havIdFor(loja), ativo: ativo, mensagem: mensagem, updated_at: new Date().toISOString()
       });
       return !error;
     } catch (e) { return false; }
@@ -2568,6 +2580,10 @@
     if (overlay) overlay.classList.remove('open');
   }
 
+  // Loja atualmente aberta no modal de admin — definida por havOpenAdmin(loja)
+  // e lida por havHandleSave, já que o botão "guardar" não recebe argumentos.
+  let havAdminCurrentLoja = 'porto santo';
+
   async function havHandleSave() {
     const btn   = document.getElementById('hav-adm-save-btn');
     const msgEl = document.getElementById('hav-adm-save-msg');
@@ -2575,54 +2591,32 @@
     const mensagem = document.getElementById('hav-adm-textarea').value;
     btn.disabled = true;
     msgEl.textContent = 'a guardar…';
-    const ok = await havSave(ativo, mensagem);
+    const ok = await havSave(havAdminCurrentLoja, ativo, mensagem);
     btn.disabled = false;
     msgEl.textContent = ok ? '✓ guardado' : 'erro ao guardar';
     if (ok) setTimeout(() => { if (msgEl.textContent === '✓ guardado') msgEl.textContent = ''; }, 2500);
   }
 
-  async function havOpenAdmin() {
+  async function havOpenAdmin(loja) {
+    havAdminCurrentLoja = loja || 'porto santo';
     const overlay = havEnsureAdminModal();
     const chk = document.getElementById('hav-adm-chk');
     const ta  = document.getElementById('hav-adm-textarea');
+    document.getElementById('hav-adm-title').textContent = 'aviso · ' + havAdminCurrentLoja;
+    ta.placeholder = 'mensagem que vai aparecer às funcionárias de ' + havAdminCurrentLoja + ' ao entrarem…';
     document.getElementById('hav-adm-save-msg').textContent = '';
     chk.checked = false;
     ta.value = '';
     overlay.classList.add('open');
-    const cur = await havLoad();
+    const cur = await havLoad(havAdminCurrentLoja);
     chk.checked = !!cur.ativo;
     ta.value = cur.mensagem || '';
   }
 
   window._hAvisoAdmin = { open: havOpenAdmin };
 
-  /* ── ADMIN: botão "aviso" só visível com Porto Santo selecionado ── */
-  (function havWireAdminButton() {
-    const sel = document.getElementById('h-store-select');
-    if (!sel) return;
-    function sync() {
-      const host = document.getElementById('h-store-selector');
-      let btn = document.getElementById('hav-adm-open-btn');
-      if (sel.value === 'porto santo') {
-        if (!btn && host) {
-          btn = document.createElement('button');
-          btn.id = 'hav-adm-open-btn';
-          btn.type = 'button';
-          btn.textContent = '📢 aviso porto santo';
-          btn.style.cssText = 'margin-left:8px;padding:7px 14px;font-size:.72rem;font-weight:700;letter-spacing:.04em;cursor:pointer;border-radius:8px;font-family:inherit;background:#111!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border:1px solid #111!important;';
-          btn.addEventListener('click', () => window._hAvisoAdmin.open());
-          host.appendChild(btn);
-        }
-      } else if (btn) {
-        btn.remove();
-      }
-    }
-    sel.addEventListener('change', sync);
-    sync();
-  })();
-
-  /* ── LOJA: janela flutuante ao entrar (só Porto Santo, só se ativo) ── */
-  let havShownThisSession = false;
+  /* ── LOJA: janela flutuante ao entrar (Porto Santo ou Funchal, só se ativo) ── */
+  const havShownThisSession = {};
 
   function havEnsureViewStyles() {
     if (document.getElementById('hav-view-styles')) return;
@@ -2641,12 +2635,13 @@
     document.head.appendChild(s);
   }
 
-  async function havCheckAndShow() {
-    if (havShownThisSession) return;
+  async function havCheckAndShow(loja) {
+    const key = loja || 'porto santo';
+    if (havShownThisSession[key]) return;
     let cur;
-    try { cur = await havPrefetch(); } catch (e) { return; }
+    try { cur = await havPrefetch(key); } catch (e) { return; }
     if (!cur.ativo || !cur.mensagem || !cur.mensagem.trim()) return;
-    havShownThisSession = true;
+    havShownThisSession[key] = true;
     havEnsureViewStyles();
     let overlay = document.getElementById('hav-view-overlay');
     if (!overlay) {

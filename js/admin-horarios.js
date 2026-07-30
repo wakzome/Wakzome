@@ -19,8 +19,96 @@
     hRenderWeek(hBlocks.filtered, parseInt(this.value));
   });
 
+  // ── UI: dropdown "loja" escondido, substituído por 2 botões (Porto Santo /
+  // Funchal) — sem tocar no index.html. O <select> mantém-se como fonte de
+  // verdade (só oculto), disparando o seu próprio 'change' já ligado acima,
+  // para reaproveitar 100% da lógica existente sem duplicação. ──
+  (function hSetupStoreButtons() {
+    var host = document.getElementById('h-store-selector');
+    var sel = document.getElementById('h-store-select');
+    if (!host || !sel) return;
+
+    if (!sel.querySelector('option[value="funchal"]')) {
+      var op = document.createElement('option');
+      op.value = 'funchal';
+      op.textContent = 'Funchal';
+      sel.appendChild(op);
+    }
+    sel.style.display = 'none';
+    var oldLabel = host.querySelector('label');
+    if (oldLabel) oldLabel.style.display = 'none';
+
+    var wrap = document.createElement('div');
+    wrap.id = 'h-store-buttons';
+    wrap.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;';
+
+    function paintButtons() {
+      Array.prototype.forEach.call(wrap.children, function(b) {
+        var active = b.dataset.storeValue === sel.value;
+        b.style.background = active ? '#111' : '#fff';
+        b.style.color = active ? '#fff' : '#111';
+        b.style.borderColor = active ? '#111' : '#ccc';
+      });
+    }
+
+    [['porto santo', 'Porto Santo'], ['funchal', 'Funchal']].forEach(function(pair) {
+      var value = pair[0], label = pair[1];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.dataset.storeValue = value;
+      btn.style.cssText = 'padding:10px 24px;font-size:.8rem;font-weight:700;letter-spacing:.03em;cursor:pointer;border-radius:10px;font-family:inherit;background:#fff;color:#111;border:1px solid #ccc;transition:background .15s,color .15s,border-color .15s;';
+      btn.addEventListener('click', function() {
+        sel.value = value;
+        sel.dispatchEvent(new Event('change'));
+      });
+      wrap.appendChild(btn);
+    });
+    host.insertBefore(wrap, sel);
+    sel.addEventListener('change', paintButtons);
+    paintButtons();
+  })();
+
+  // ── 3 caixas de estatísticas (ativas agora / folga-férias / próximo
+  // início) removidas do painel admin — #h-dashboard escondido, e deixa de
+  // se chamar window._hDashboard a partir daqui. ──
+  (function hHideDashboardBoxes() {
+    var dash = document.getElementById('h-dashboard');
+    if (dash) dash.style.display = 'none';
+  })();
+
+  // ── "aviso" — trigger movido para aqui (deixa de existir em shared.js),
+  // acompanha o botão de loja ativo (Porto Santo ou Funchal). ──
+  (function hSetupAvisoButton() {
+    var host = document.getElementById('h-store-selector');
+    var sel = document.getElementById('h-store-select');
+    if (!host || !sel) return;
+    function sync() {
+      var btn = document.getElementById('hav-adm-open-btn');
+      var loja = (sel.value === 'porto santo' || sel.value === 'funchal') ? sel.value : null;
+      if (loja) {
+        if (!btn) {
+          btn = document.createElement('button');
+          btn.id = 'hav-adm-open-btn';
+          btn.type = 'button';
+          btn.style.cssText = 'margin-left:8px;padding:7px 14px;font-size:.72rem;font-weight:700;letter-spacing:.04em;cursor:pointer;border-radius:8px;font-family:inherit;background:#111!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border:1px solid #111!important;';
+          host.appendChild(btn);
+        }
+        btn.textContent = '📢 aviso ' + loja;
+        btn.onclick = function() { if (window._hAvisoAdmin) window._hAvisoAdmin.open(loja); };
+      } else if (btn) {
+        btn.remove();
+      }
+    }
+    sel.addEventListener('change', sync);
+    sync();
+  })();
+
   async function loadHorarios(store) {
-    const csvUrl = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/datosfnc.csv';
+    var isFunchal = (store === 'funchal');
+    const csvUrl = isFunchal
+      ? 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/FUNCHAL.csv'
+      : 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/datosfnc.csv';
     let csvText = '';
     try {
       const res = await fetch(csvUrl);
@@ -41,14 +129,19 @@
     });
     if (cur.length) allBlocks.push(cur);
 
-    const nameMapping = {
-      'mezka funchal':                   'mezka funchal',
-      'parfois madeira shopping':         'madeira shopping',
-      'parfois arcadas são francisco': 'parfois arcadas',
-      'porto santo':                      'porto santo'
-    };
-    const key = nameMapping[store];
-    let filtered = allBlocks.filter(b => (b[0][0] || '').toLowerCase() === key);
+    let filtered;
+    if (isFunchal) {
+      // FUNCHAL.csv contém só os blocos desta loja unificada (Mezka Funchal +
+      // Parfois Arcadas, várias semanas intercaladas) — usar tudo tal como
+      // vem, exatamente como o dashboard de empregadas (loadData/shared.js).
+      filtered = allBlocks;
+    } else {
+      const nameMapping = {
+        'porto santo': 'porto santo'
+      };
+      const key = nameMapping[store];
+      filtered = allBlocks.filter(b => (b[0][0] || '').toLowerCase() === key);
+    }
     if (!filtered.length) {
       document.getElementById('h-table-area').innerHTML = '<div id="h-status-msg">sem dados para esta loja</div>';
       return;
@@ -90,18 +183,45 @@
 
     hBlocks = { filtered };
 
-    // Build week selector
+    // Build week selector. Para Funchal, cada bloco é UMA loja numa ÚNICA
+    // semana (Mezka Funchal e Arcadas vêm como blocos SEPARADOS que partilham
+    // a mesma etiqueta de semana em block[1][0]) — window._hRender.funchal já
+    // agrupa por essa etiqueta sozinho a partir de UM índice qualquer do
+    // grupo, mas o seletor de semanas não pode mostrar uma entrada por bloco
+    // (mostraria a mesma semana duplicada, uma vez por loja). Por isso aqui
+    // deduplicamos por semanaKey, guardando o índice do primeiro bloco de
+    // cada semana como "representante" desse grupo. Para as restantes lojas
+    // o comportamento é idêntico ao anterior (1 opção por bloco).
     const weekSel = document.getElementById('h-week-select');
     weekSel.innerHTML = '';
-    filtered.forEach((_, i) => {
+    let weekGroups;
+    if (isFunchal) {
+      weekGroups = [];
+      const seen = new Set();
+      filtered.forEach((block, i) => {
+        const key = (block[1] && block[1][0]) || ('#' + i);
+        if (seen.has(key)) return;
+        seen.add(key);
+        weekGroups.push(i);
+      });
+    } else {
+      weekGroups = filtered.map((_, i) => i);
+    }
+    weekGroups.forEach((rawIndex, groupIdx) => {
       const op = document.createElement('option');
-      op.value = i; op.textContent = 'SEMANA ' + (i + 1);
+      op.value = rawIndex;
+      op.textContent = 'SEMANA ' + (groupIdx + 1);
       weekSel.appendChild(op);
     });
-    weekSel.style.display = filtered.length > 1 ? 'inline-block' : 'none';
+    weekSel.style.display = weekGroups.length > 1 ? 'inline-block' : 'none';
 
-    // Auto-select current week
-    const startWeek = hFindCurrentWeek(filtered);
+    // Auto-select current week — procura só entre os representantes de cada
+    // grupo, para o valor escolhido corresponder sempre a uma opção real do
+    // seletor (window._hRender.funchal agrupa a partir de QUALQUER índice da
+    // mesma semana, por isso não importa qual dos blocos do grupo se usa).
+    const representativeBlocks = weekGroups.map(i => filtered[i]);
+    const startGroupIdx = hFindCurrentWeek(representativeBlocks);
+    const startWeek = weekGroups[startGroupIdx];
     weekSel.value = startWeek;
     hRenderWeek(filtered, startWeek);
   }
@@ -124,7 +244,7 @@
   // active counter interval handle
   var hActiveInterval = null;
 
-  // ── EDIT BUTTON ──
+  // ── EDIT BUTTON (só Porto Santo — mantido exatamente como estava) ──
   function hShowEditButton(filtered, index) {
     const existing = document.getElementById('h-edit-btn');
     if (existing) existing.remove();
@@ -170,18 +290,21 @@
     temp.style.cssText = 'display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;';
     area.appendChild(temp);
 
-    const firstCell = (filtered[index][0][0] || '').trim().toLowerCase();
-    if (firstCell === 'porto santo') {
-      window._hRender.porto(filtered, index);
+    if (hCurrentStore === 'funchal') {
+      window._hRender.funchal(filtered, index);
     } else {
-      window._hRender.table(filtered, index);
+      const firstCell = (filtered[index][0][0] || '').trim().toLowerCase();
+      if (firstCell === 'porto santo') {
+        window._hRender.porto(filtered, index);
+      } else {
+        window._hRender.table(filtered, index);
+      }
     }
 
     temp.removeAttribute('id');
     if (real) real.setAttribute('id', 'table-container');
 
     hUpdateActive(filtered, index);
-    if (window._hDashboard) window._hDashboard(filtered, index);
     hShowEditButton(filtered, index);
     if (hActiveInterval) clearInterval(hActiveInterval);
     hActiveInterval = setInterval(function() {

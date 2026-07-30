@@ -359,7 +359,18 @@
     table: renderTable,
     porto: renderPortoSanto,
     funchal: renderFunchalUnificado,
-    findCurrentWeek: findCurrentWeek
+    findCurrentWeek: findCurrentWeek,
+    // Porto Santo NÃO liga o botão/painel de cobertura dentro de
+    // renderPortoSanto (ao contrário do funchal) — depende de um
+    // MutationObserver ligado ao #table-container ORIGINAL (ver o final
+    // deste ficheiro). O admin (admin-horarios.js) faz um "swap" de id em
+    // #table-container para desviar o render para a sua própria área, o
+    // que faz esse observer nunca disparar (está a observar um nó
+    // diferente). Por isso expomos aqui a MESMA função que o observer
+    // chamaria, para o admin a invocar diretamente depois de renderizar
+    // Porto Santo — precisa de window._lastBlocks + #week-select.value
+    // corretos antes de chamar (ver portoSantoCurrentRowsIfActive).
+    refreshPortoSantoCoverage: function(){ portoSantoOnTableMutated(); }
   };
 
   // ══════════════════════════════════════════════════════════════

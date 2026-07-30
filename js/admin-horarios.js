@@ -345,6 +345,23 @@
     hRenderWeek(filtered, startWeek);
   }
 
+  // portoSantoCurrentRowsIfActive() (shared.js) lê o índice da semana atual
+  // em document.getElementById('week-select').value — um <select> que só a
+  // empregada cria (dentro de loadData). O admin nunca chama loadData, por
+  // isso esse elemento não existe aqui; criamos um <input type="hidden">
+  // equivalente, só para satisfazer essa leitura (não precisa de <option>s
+  // como um <select> real precisaria).
+  function hSyncWeekSelectShim(index) {
+    var ws = document.getElementById('week-select');
+    if (!ws) {
+      ws = document.createElement('input');
+      ws.type = 'hidden';
+      ws.id = 'week-select';
+      document.body.appendChild(ws);
+    }
+    ws.value = index;
+  }
+
   function hFindCurrentWeek(blocks) {
     const hoy = new Date();
     for (let i = 0; i < blocks.length; i++) {
@@ -413,12 +430,31 @@
     area.appendChild(temp);
 
     if (hCurrentStore === 'funchal') {
+      // Limpa qualquer resíduo de Porto Santo: portoSantoCurrentRowsIfActive()
+      // (shared.js) lê window._lastBlocks/#week-select em primeiro lugar, e
+      // se ficasse com dados antigos, o painel de cobertura do funchal
+      // continuaria "ligado" a Porto Santo em vez de atualizar (bug já visto).
+      window._lastBlocks = null;
       window._hRender.funchal(filtered, index);
     } else {
       const firstCell = (filtered[index][0][0] || '').trim().toLowerCase();
       if (firstCell === 'porto santo') {
+        // Porto Santo NÃO liga o botão/painel de cobertura dentro do próprio
+        // render (ao contrário do funchal) — depende de um MutationObserver
+        // ligado ao #table-container ORIGINAL, que nunca deteta as mutações
+        // daqui (o admin desvia o render para um nó substituto com o mesmo
+        // id). Por isso preenchemos manualmente o mesmo estado que esse
+        // observer esperaria (window._lastBlocks + #week-select.value) e
+        // chamamos diretamente window._hRender.refreshPortoSantoCoverage() —
+        // TEM de ser feito enquanto "temp" ainda tem id="table-container",
+        // porque essa função lê o DOM por esse id (senão via para o
+        // #table-container real e vazio).
+        window._lastBlocks = filtered;
+        hSyncWeekSelectShim(index);
         window._hRender.porto(filtered, index);
+        if (window._hRender.refreshPortoSantoCoverage) window._hRender.refreshPortoSantoCoverage();
       } else {
+        window._lastBlocks = null;
         window._hRender.table(filtered, index);
       }
     }

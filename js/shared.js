@@ -1470,6 +1470,62 @@
         box-shadow: 0 4px 16px rgba(0,0,0,.18);
       }
       #funchal-cov-split-trigger:active { transform: translateY(1px); }
+
+      /* ── Barra do modal em ecrã estreito (telemóvel vertical) ──────────
+         O index.html centra #wz-week-nav com position:absolute;left:50%,
+         portanto fora do fluxo. Ao acrescentar o botão "cobertura" dentro
+         de #wz-week-right, esse bloco passou a ser largo o suficiente para
+         alcançar o centro da barra em ecrãs estreitos e, por ter
+         backdrop-filter (que cria contexto de empilhamento e vem depois no
+         DOM), pintava-se POR CIMA das setas, tapando-as. Em horizontal há
+         espaço a sobrar, não há sobreposição, e as setas apareciam — daí o
+         sintoma de "só aparecem em horizontal".
+         Solução: nesta largura, as setas voltam ao fluxo normal da barra,
+         pelo que nada se pode sobrepor. Tudo restrito a
+         #wz-hor-modal-bar.funchal-cov-on — classe que só existe enquanto o
+         botão de cobertura está visível (Funchal/Porto Santo). As restantes
+         lojas nunca entram nestas regras e ficam exatamente como estavam. */
+      @media (max-width: 760px) {
+        #wz-hor-modal-bar.funchal-cov-on {
+          gap: 6px;
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+        #wz-hor-modal-bar.funchal-cov-on #wz-week-nav {
+          position: static !important;
+          left: auto !important;
+          transform: none !important;
+          flex: none !important;
+          order: 2;
+        }
+        /* Título "horarios" cede espaço primeiro: é o único elemento
+           dispensável se a largura ficar muito curta. */
+        #wz-hor-modal-bar.funchal-cov-on > span {
+          flex: 1 1 0 !important;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          order: 1;
+        }
+        #wz-hor-modal-bar.funchal-cov-on #wz-week-right {
+          flex: none !important;
+          order: 3;
+          gap: 5px !important;
+        }
+        #wz-hor-modal-bar.funchal-cov-on #wz-week-prev,
+        #wz-hor-modal-bar.funchal-cov-on #wz-week-next {
+          font-size: 1.15rem !important;
+          padding: 4px 7px !important;
+        }
+        #wz-hor-modal-bar.funchal-cov-on #funchal-cov-toggle {
+          font-size: 10px !important;
+          padding: 5px 11px !important;
+        }
+        /* "semana 35" é redundante em ecrã estreito (as setas já indicam a
+           navegação) e é o que rouba mais largura ao conjunto. */
+        #wz-hor-modal-bar.funchal-cov-on #wz-week-label { display: none; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1939,6 +1995,14 @@
     // semana), por isso addEventListener empilharia um handler por render.
     btn.onclick = onOpen;
     btn.style.display = 'inline-flex';
+    // Marca a barra como "tem botão de cobertura": só com esta classe é que
+    // as regras de ecrã estreito (ver funchalEnsureLiveStyles) entram em
+    // ação, deixando as setas de semana no fluxo em vez de centradas em
+    // absoluto — sem isso, o botão tapava-as em telemóvel vertical. As
+    // lojas sem cobertura nunca recebem a classe e mantêm o layout original.
+    funchalEnsureLiveStyles();
+    const bar = document.getElementById('wz-hor-modal-bar');
+    if (bar) bar.classList.add('funchal-cov-on');
     return btn;
   }
 
@@ -1950,6 +2014,11 @@
   function funchalCovBarHideButton(){
     const btn = document.getElementById('funchal-cov-toggle');
     if (btn) btn.style.display = 'none';
+    // Sem botão de cobertura, a barra volta ao layout original do index.html
+    // (setas centradas em absoluto, "semana N" visível) — as regras de ecrã
+    // estreito deixam de se aplicar porque dependem desta classe.
+    const bar = document.getElementById('wz-hor-modal-bar');
+    if (bar) bar.classList.remove('funchal-cov-on');
     if (_funchalCovSplitActive) funchalCovExitSplit();
   }
 

@@ -19,6 +19,19 @@
 (function () {
   'use strict';
 
+  // ── DOM injected by banco-horas.js ──
+  function ensureTabShell() {
+    if (document.getElementById('tab-banco-horas')) return;
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    var panel = document.createElement('div');
+    panel.id = 'tab-banco-horas';
+    panel.className = 'tab-panel';
+    panel.innerHTML = '<div id="bh-admin-root"></div>';
+    adminApp.appendChild(panel);
+  }
+  ensureTabShell();
+
   var BH_LOJAS = [
     { value: 'mezka funchal',                    label: 'Mezka Funchal' },
     { value: 'parfois madeira shopping',         label: 'Madeira Shopping' },

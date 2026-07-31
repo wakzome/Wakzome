@@ -612,14 +612,14 @@ body {
 .vadm-period-btn {
   padding: 7px 18px; font-size: .82rem; font-weight: bold;
   font-family: 'MontserratLight', sans-serif;
-  background: #3d3d3d; color: #f0f0f0;
-  border: 1.5px solid #666; border-radius: 20px;
+  background: #3d3d3d !important; color: #f0f0f0 !important;
+  border: 1.5px solid #666 !important; border-radius: 20px;
   cursor: pointer; transition: background .18s, border-color .18s, color .18s;
   white-space: nowrap;
 }
-.vadm-period-btn:hover { border-color: #aaa; background: #555; color: #fff; }
+.vadm-period-btn:hover { border-color: #aaa !important; background: #555 !important; color: #fff !important; }
 .vadm-period-btn.vadm-period-active {
-  background: #4a7c59; color: #fff !important; border-color: #4a7c59;
+  background: #4a7c59 !important; color: #fff !important; border-color: #4a7c59 !important;
 }
 @media (max-width: 600px) {
   .vadm-period-btns { flex-wrap: wrap; }
@@ -3686,21 +3686,25 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .v-emp-label{margin:0;}
 .v-emp-hint{font-size:.72rem;color:#7a9e8a;font-style:italic;font-weight:700;letter-spacing:.01em;line-height:1.3;}
 
-/* ── vista admin: abertura/fecho do módulo (substitui .style.setProperty em cascata) ── */
-#admin-app.ventas-open{
+/* ── vista admin: abertura/fecho do módulo (substitui .style.setProperty em
+   cascata). Seletor #admin-app.module-open.ventas-open (2 classes) em vez de
+   só .ventas-open: garante especificidade estritamente MAIOR do que as regras
+   pré-existentes #admin-app.module-open{...} (incluindo a media query
+   max-width:1024px que também mexe em overflow/height), eliminando qualquer
+   empate resolvido só pela ordem no ficheiro. #adm-module-bar deixou de ter
+   regra própria aqui: a regra genérica #admin-app.module-open #adm-module-bar
+   já trata disto para todos os módulos (incl. o comportamento sticky em
+   mobile, que uma regra própria aqui estava a bloquear). ── */
+#admin-app.module-open.ventas-open{
   display:flex !important; flex-direction:column !important;
   overflow:hidden !important; height:100vh !important; padding:0 !important;
 }
-#admin-app.ventas-open #adm-module-bar{
-  display:flex !important; flex-shrink:0 !important; width:100% !important;
-  position:static; top:auto; z-index:auto;
-}
-#admin-app.ventas-open #adm-ventas-panel{
+#admin-app.module-open.ventas-open #adm-ventas-panel{
   display:flex !important; flex:1 !important; flex-direction:column !important;
   overflow-y:auto !important; overflow-x:hidden !important; width:100% !important;
   height:0 !important; min-height:0 !important; -webkit-overflow-scrolling:touch !important;
 }
-#admin-app.ventas-open #adm-ventas-content{
+#admin-app.module-open.ventas-open #adm-ventas-content{
   overflow:visible !important; height:auto !important; flex:none !important;
   padding:12px 8px 80px !important; max-width:none !important; width:100% !important;
   box-sizing:border-box !important;
@@ -3772,3 +3776,18 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   pointer-events:none !important; display:none;
 }
 #vadm-tip-global.show{display:block !important;}
+
+/* ── Reforço final: a regra global button{color:#000!important} (secção
+   "BLOCO 3", muito acima neste ficheiro) tem de perder para os botões de
+   período/zona do admin de vendas. Colocado no FIM do ficheiro de propósito
+   — vence por especificidade (#id + 2 classes) E por ordem de aparição,
+   sem qualquer ambiguidade possível em nenhum motor de CSS. ── */
+#adm-ventas-panel .vadm-period-btn {
+  background: #3d3d3d !important; color: #f0f0f0 !important; border-color: #666 !important;
+}
+#adm-ventas-panel .vadm-period-btn:hover {
+  border-color: #aaa !important; background: #555 !important; color: #fff !important;
+}
+#adm-ventas-panel .vadm-period-btn.vadm-period-active {
+  background: #4a7c59 !important; color: #fff !important; border-color: #4a7c59 !important;
+}

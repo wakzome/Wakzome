@@ -2535,6 +2535,30 @@
   var hCurrentStore = null;
   var hWeekIndex = 0;
 
+  // ── DOM injected by nucleo.js (painel admin de horários) ──
+  (function ensureTabShell() {
+    if (document.getElementById('tab-horarios')) return;
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    var panel = document.createElement('div');
+    panel.id = 'tab-horarios';
+    panel.className = 'tab-panel';
+    panel.innerHTML = `    <div id="h-store-selector">
+      <label>loja</label>
+      <select id="h-store-select">
+        <option value="">— selecionar —</option>
+        <option value="mezka funchal">Mezka Funchal</option>
+        <option value="parfois madeira shopping">Parfois Madeira Shopping</option>
+        <option value="parfois arcadas são francisco">Parfois Arcadas São Francisco</option>
+        <option value="porto santo">Porto Santo</option>
+      </select>
+      <select id="h-week-select"></select>
+    </div>
+    <div id="h-dashboard"></div>
+    <div id="h-table-area"><div id="h-status-msg">selecione uma loja para ver o horário</div></div>`;
+    adminApp.appendChild(panel);
+  })();
+
   document.getElementById('h-store-select').addEventListener('change', function() {
     var store = this.value;
     if (!store) return;

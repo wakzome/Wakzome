@@ -47,19 +47,17 @@
         const style = document.createElement('style');
         style.id = 'wkz-auth-wave-style';
         style.textContent =
-          '#wkz-auth-wave{margin-top:14px;font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:lowercase;color:#666;display:flex;justify-content:center;}' +
-          '#wkz-auth-wave span{display:inline-block;opacity:0;animation:wkzAuthWave 1.4s ease-in-out infinite;}' +
-          '@keyframes wkzAuthWave{0%{opacity:0;transform:translateY(3px);}25%{opacity:1;transform:translateY(0);}55%{opacity:1;transform:translateY(0);}100%{opacity:0;transform:translateY(-3px);}}';
+          '#wkz-auth-wave{margin-top:14px;display:flex;justify-content:center;align-items:center;gap:7px;}' +
+          '#wkz-auth-wave span{width:7px;height:7px;border-radius:50%;background:#444;opacity:.25;animation:wkzAuthDot 1.8s ease-in-out infinite;}' +
+          '@keyframes wkzAuthDot{0%,60%,100%{opacity:.25;transform:scale(.8);}30%{opacity:1;transform:scale(1);}}';
         document.head.appendChild(style);
       }
       container = document.createElement('div');
       container.id = 'wkz-auth-wave';
-      const word = 'autenticando';
-      for (let i = 0; i < word.length; i++) {
-        const span = document.createElement('span');
-        span.textContent = word[i];
-        span.style.animationDelay = (i * 80) + 'ms';
-        container.appendChild(span);
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.style.animationDelay = (i * 400) + 'ms';
+        container.appendChild(dot);
       }
       const host = document.getElementById('key-input-container');
       if (!host || !host.parentNode) return;

@@ -108,7 +108,7 @@
           'js/admin-init.js','js/salarios.js','js/recibos.js',
           'js/ferias.js','js/editor-pdf.js',
           'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
-          'js/ventas-empleada.js','js/ventas-admin.js',
+          'js/ventas.js',
           'js/historico-admin.js','js/nadiya.js','js/parfois.js',
           'js/banco-horas.js'
         ];

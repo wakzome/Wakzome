@@ -4,6 +4,86 @@
 (function () {
   'use strict';
 
+  // ── DOM injected by editor-pdf.js ──
+  function ensureTabShell() {
+    if (document.getElementById('tab-editor')) return;
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    var panel = document.createElement('div');
+    panel.id = 'tab-editor';
+    panel.className = 'tab-panel';
+    panel.innerHTML = `    
+    <div id="ed-mobile-msg" style="display:none;">
+      <span>🖥️</span>
+      <p>editor de pdf não disponível em mobile</p>
+      <small>acede a partir de um computador para utilizar esta funcionalidade</small>
+    </div>
+    
+    <div id="ed-toolbar">
+      <label id="ed-upload-btn" for="ed-file-input" title="Carregar PDF">
+        <span>📂</span> carregar pdf
+        <input type="file" id="ed-file-input" accept="application/pdf" style="display:none">
+      </label>
+      <div class="ed-sep"></div>
+      <button id="ed-add-text-btn" title="Adicionar caixa de texto">✏️ texto</button>
+      <label id="ed-add-img-btn" for="ed-img-input" title="Inserir imagem">
+        🖼️ imagem
+        <input type="file" id="ed-img-input" accept="image/*" style="display:none">
+      </label>
+      <button id="ed-edit-native-btn" title="Ativar edição do texto original do PDF">🔤 editar texto original</button>
+      <div class="ed-sep"></div>
+      <button id="ed-bold-btn" title="Negrito">B</button>
+      <button id="ed-italic-btn" title="Itálico">I</button>
+      <button id="ed-underline-btn" title="Sublinhado">U</button>
+      <select id="ed-font-family" title="Família de fonte">
+        <option value="Helvetica">Arial</option>
+        <option value="Times-Roman">Times</option>
+        <option value="Courier">Courier</option>
+      </select>
+      <div class="ed-sep"></div>
+      <label class="ed-tool-label" for="ed-font-size">tamanho</label>
+      <input type="number" id="ed-font-size" value="14" min="6" max="120" step="1">
+      <input type="color" id="ed-font-color" value="#000000" title="Cor do texto">
+      <div class="ed-sep"></div>
+      <button id="ed-draw-btn" title="Caneta livre">✏ desenhar</button>
+      <input type="color" id="ed-draw-color" value="#000000" title="Cor do desenho">
+      <input type="number" id="ed-draw-size" value="2" min="1" max="20" step="1" title="Espessura">
+      <button id="ed-shape-btn" title="Inserir forma">⬡ formas</button>
+      <div class="ed-sep"></div>
+      <button id="ed-highlight-btn" title="Destacar / riscar / sublinhar (arrastar sobre texto)">🖌 destacar</button>
+      <button id="ed-sticky-btn" title="Nota adesiva (clicar na página)">📌 nota</button>
+      <div class="ed-sep"></div>
+      <button id="ed-stamp-btn" title="Carimbo">🔖 carimbo</button>
+      <button id="ed-pages-btn" title="Gerir páginas" disabled>📄 páginas</button>
+      <label id="ed-concat-btn" for="ed-concat-input" title="Juntar outro PDF">➕ juntar pdf
+        <input type="file" id="ed-concat-input" accept="application/pdf" style="display:none">
+      </label>
+      <div class="ed-sep"></div>
+      <label class="ed-tool-label" for="ed-page-select">página</label>
+      <select id="ed-page-select"></select>
+      <div class="ed-sep"></div>
+      <button id="ed-undo-btn" title="Desfazer (Ctrl+Z)">↩ desfazer</button>
+      <button id="ed-redo-btn" title="Refazer (Ctrl+Y)">↪ refazer</button>
+      <div class="ed-sep"></div>
+      <button id="ed-zoom-out-btn" title="Reduzir zoom">−</button>
+      <span id="ed-zoom-display">100%</span>
+      <button id="ed-zoom-in-btn" title="Aumentar zoom">+</button>
+      <div class="ed-sep"></div>
+      <button id="ed-export-btn" title="Exportar PDF">⬇️ exportar pdf</button>
+    </div>
+    
+    <div id="ed-canvas-wrap">
+      <div id="ed-drop-hint">
+        <span>📄</span>
+        <p>carregue um PDF para começar a editar</p>
+        <small>clique em "carregar pdf" na barra acima</small>
+      </div>
+      <div id="ed-pages-container"></div>
+    </div>`;
+    adminApp.appendChild(panel);
+  }
+  ensureTabShell();
+
   // ── 1. STATE ────────────────────────────────────────────────
   let edPdfDoc      = null;
   let edPdfBytes    = null;

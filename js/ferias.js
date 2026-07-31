@@ -19,6 +19,43 @@
   }
   ensureTabShell();
 
+  // ── Cartão do submenu "horários" injetado por ferias.js ──
+  function ensureModuleCard() {
+    if (document.querySelector('.adm-mod-card[data-horarios-module="ferias"]')) return;
+    const grid = document.getElementById('horarios-sub-grid');
+    if (!grid) return;
+    const card = document.createElement('div');
+    card.className = 'adm-mod-card';
+    card.setAttribute('data-horarios-module', 'ferias');
+    card.style.animationDelay = '0.15s';
+    card.innerHTML = `        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3C12 3 7 8 7 13a5 5 0 0 0 10 0c0-5-5-10-5-10Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 13v5M9 18h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M7 9c-2 1-4 3-4 3s2 0 3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M17 9c2 1 4 3 4 3s-2 0-3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">FÉRIAS</div>
+          <div class="adm-mod-desc">controlo de férias e ausências</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      `;
+    const gerador = grid.querySelector('.adm-mod-card[data-horarios-module="gerador"]');
+    const bancoHoras = grid.querySelector('.adm-mod-card[data-horarios-module="banco-horas"]');
+    if (bancoHoras) grid.insertBefore(card, bancoHoras);
+    else if (gerador) grid.insertBefore(card, gerador.nextSibling);
+    else grid.appendChild(card);
+    card.addEventListener('click', function () {
+      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
+      setTimeout(function () {
+        if (typeof window.openModule === 'function') window.openModule('ferias');
+      }, 200);
+    });
+  }
+  ensureModuleCard();
+
   // ── SUPABASE ──
   // Usar cliente global sbAdmin (inicializado tras login)
   function getSupabase() {

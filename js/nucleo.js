@@ -2559,6 +2559,38 @@
     adminApp.appendChild(panel);
   })();
 
+  // ── Cartão do submenu "horários" injetado por nucleo.js ──
+  (function ensureModuleCard() {
+    if (document.querySelector('.adm-mod-card[data-horarios-module="horarios"]')) return;
+    var grid = document.getElementById('horarios-sub-grid');
+    if (!grid) return;
+    var card = document.createElement('div');
+    card.className = 'adm-mod-card';
+    card.setAttribute('data-horarios-module', 'horarios');
+    card.style.animationDelay = '0.05s';
+    card.innerHTML = `        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 8v4l2.5 2.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">HORÁRIOS</div>
+          <div class="adm-mod-desc">gestão de horários por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      `;
+    var anchor = grid.querySelector('.adm-mod-card[data-horarios-module="gerador"]');
+    if (anchor) grid.insertBefore(card, anchor);
+    else grid.appendChild(card);
+    card.addEventListener('click', function () {
+      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
+      setTimeout(function () {
+        if (typeof window.openModule === 'function') window.openModule('horarios');
+      }, 200);
+    });
+  })();
+
   document.getElementById('h-store-select').addEventListener('change', function() {
     var store = this.value;
     if (!store) return;

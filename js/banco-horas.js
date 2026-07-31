@@ -32,6 +32,39 @@
   }
   ensureTabShell();
 
+  // ── Cartão do submenu "horários" injetado por banco-horas.js ──
+  function ensureModuleCard() {
+    if (document.querySelector('.adm-mod-card[data-horarios-module="banco-horas"]')) return;
+    var grid = document.getElementById('horarios-sub-grid');
+    if (!grid) return;
+    var card = document.createElement('div');
+    card.className = 'adm-mod-card';
+    card.setAttribute('data-horarios-module', 'banco-horas');
+    card.style.animationDelay = '0.20s';
+    card.innerHTML = `        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="10" width="4" height="10" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="6" width="4" height="14" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="13" width="4" height="7" rx="1" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M4 6l3-2 3 2" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">BANCO DE HORAS</div>
+          <div class="adm-mod-desc">colaboradoras, saldos e aprovação de horas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      `;
+    grid.appendChild(card);
+    card.addEventListener('click', function () {
+      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
+      setTimeout(function () {
+        if (typeof window.openModule === 'function') window.openModule('banco-horas');
+      }, 200);
+    });
+  }
+  ensureModuleCard();
+
   var BH_LOJAS = [
     { value: 'mezka funchal',                    label: 'Mezka Funchal' },
     { value: 'parfois madeira shopping',         label: 'Madeira Shopping' },

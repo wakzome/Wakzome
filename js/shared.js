@@ -1,27 +1,8 @@
-// ══════════════════════════════════════════════════════════════
-//  SESSÃO — login unificado + relógios (login/empregada/admin)
-// ══════════════════════════════════════════════════════════════
-//  PÚBLICO: único ficheiro em PUBLIC_JS (middleware.js) além de
-//  supabase-config.js/intro.js. Descarregável por QUALQUER visitante sem
-//  sessão — é o que torna o próprio login possível (o browser precisa
-//  deste código ANTES de teres cookie). Por isso deve conter só isto:
-//  autenticação, cookie de sessão, relógios, e o arranque do carregamento
-//  dos scripts protegidos. TODA a lógica de negócio (horários, cobertura,
-//  painel admin) vive em nucleo.js, carregado a seguir ao login por
-//  loadProtectedScripts() aqui em baixo, e NUNCA em PUBLIC_JS.
-//  Índice:
-//    1. Estado de sessão + rotação móvel
-//    2. Relógios (login, dashboard empregada, dashboard admin)
-//    3. attemptLogin — autenticação, cookie, carga dos scripts protegidos
-//    4. Fade reload (clique no logótipo)
-//    5. Greeting (saudação animada pós-login)
-// ══════════════════════════════════════════════════════════════
 (function(){
 
   let isLoggedIn = false;
   let currentStore = null;
 
-  // — Rotación móvil —
   function checkOrientation() {
     if (!isLoggedIn) {
       document.getElementById('login-screen').style.display = 'flex';
@@ -33,7 +14,6 @@
   window.addEventListener('orientationchange', checkOrientation);
   checkOrientation();
 
-  // — Relojes —
   function updateTimeDateLogin() {
     const now = new Date();
     const h = String(now.getHours()).padStart(2,'0');
@@ -60,14 +40,46 @@
   }
   setInterval(updateAdminClock, 1000);
 
-  // — Login unificado — consulta claves en Supabase —
+  function showAuthenticating() {
+    let container = document.getElementById('wkz-auth-wave');
+    if (!container) {
+      if (!document.getElementById('wkz-auth-wave-style')) {
+        const style = document.createElement('style');
+        style.id = 'wkz-auth-wave-style';
+        style.textContent =
+          '#wkz-auth-wave{margin-top:14px;font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:lowercase;color:#666;display:flex;justify-content:center;}' +
+          '#wkz-auth-wave span{display:inline-block;opacity:0;animation:wkzAuthWave 1.4s ease-in-out infinite;}' +
+          '@keyframes wkzAuthWave{0%{opacity:0;transform:translateY(3px);}25%{opacity:1;transform:translateY(0);}55%{opacity:1;transform:translateY(0);}100%{opacity:0;transform:translateY(-3px);}}';
+        document.head.appendChild(style);
+      }
+      container = document.createElement('div');
+      container.id = 'wkz-auth-wave';
+      const word = 'autenticando';
+      for (let i = 0; i < word.length; i++) {
+        const span = document.createElement('span');
+        span.textContent = word[i];
+        span.style.animationDelay = (i * 80) + 'ms';
+        container.appendChild(span);
+      }
+      const host = document.getElementById('key-input-container');
+      if (!host || !host.parentNode) return;
+      host.parentNode.insertBefore(container, host.nextSibling);
+    }
+    container.style.display = 'flex';
+  }
+
+  function hideAuthenticating() {
+    const container = document.getElementById('wkz-auth-wave');
+    if (container) container.style.display = 'none';
+  }
+
   async function attemptLogin() {
     const userKey = document.getElementById('key-input').value.trim();
     if (!userKey) return;
 
-    // Bloquear botón mientras consulta
     const btn = document.getElementById('key-submit');
     btn.disabled = true;
+    showAuthenticating();
 
     try {
       const loginRes = await fetch('/api/login', {
@@ -77,6 +89,7 @@
       });
 
       if (!loginRes.ok) {
+        hideAuthenticating();
         alert('Senha incorreta');
         document.getElementById('key-input').value = '';
         document.getElementById('key-input').focus();
@@ -87,10 +100,8 @@
       const data = await loginRes.json();
       const sessionToken = data.token;
 
-      // Guardar token en cookie para el portero de /js/
       document.cookie = 'wkz_session=' + sessionToken + '; path=/; SameSite=Strict';
 
-      // Cargar los JS protegidos ahora que la cookie está lista
       await (function loadProtectedScripts() {
         const scripts = [
           'js/nucleo.js',
@@ -116,7 +127,6 @@
         }, Promise.resolve());
       })();
 
-      // Inicializar Supabase con credenciales del login — sin llamada extra
       await window.initSupabase(sessionToken, {
         url: data.url,
         key: data.key,
@@ -124,11 +134,10 @@
       });
 
       isLoggedIn = true;
+      hideAuthenticating();
 
       if (data.rol === 'admin') {
-        // ── LOGIN ADMIN ──
         if (window.__wkzAutoLogin) {
-          // Silent auto-login — no sweep, no greeting, instant show
           window.__wkzAutoLogin = false;
           document.getElementById('login-screen').style.display = 'none';
           const adminApp = document.getElementById('admin-app');
@@ -137,7 +146,6 @@
           adminHdr.classList.add('show');
           updateAdminClock();
           rLoadConfig();
-          // Show elements immediately without animation
           adminApp.querySelectorAll('.reveal-item').forEach(function(el) {
             el.style.opacity = '1';
           });
@@ -159,7 +167,6 @@
         }
 
       } else if (data.rol === 'nadiya') {
-        // ── LOGIN NADIYA ──
         sweepThen(function() {
           document.getElementById('login-screen').style.display = 'none';
           showGreeting(data.nombre || 'nadiya', function() {
@@ -168,7 +175,6 @@
         });
 
       } else {
-        // ── LOGIN TIENDA ──
         currentStore = data.tienda;
         window._currentStoreGlobal = data.tienda;
         window._currentEmployeeName = (data.nombre || '').trim().toUpperCase();
@@ -190,6 +196,7 @@
       }
 
     } catch(err) {
+      hideAuthenticating();
       alert('Erro de ligação. Tenta novamente.');
       btn.disabled = false;
     }
@@ -200,10 +207,6 @@
     if (e.key === 'Enter') attemptLogin();
   });
 
-  // — Logo click → reload —
-
-
-  // ── FADE RELOAD ──
   function fadeReload() {
     document.body.style.transition = 'opacity 0.5s ease';
     document.body.style.opacity = '0';
@@ -214,7 +217,6 @@
   document.getElementById('main-logo').onclick  = function(e){ e.preventDefault(); fadeReload(); };
   document.getElementById('admin-logo').onclick = function(e){ e.preventDefault(); fadeReload(); };
 
-  // ── GREETING ──
   function showGreeting(label, callback) {
     const h = new Date().getHours();
     const greet = h < 12 ? 'bom dia' : h < 19 ? 'boa tarde' : 'boa noite';
@@ -240,4 +242,3 @@
   }
 
 })();
-

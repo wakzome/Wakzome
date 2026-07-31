@@ -1,6 +1,24 @@
 // ══ FÉRIAS TAB ══
 (function() {
 
+  // ── DOM injected by ferias.js ──
+  function ensureTabShell() {
+    if (document.getElementById('tab-ferias')) return;
+    const adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    const panel = document.createElement('div');
+    panel.id = 'tab-ferias';
+    panel.className = 'tab-panel';
+    panel.innerHTML =
+      '<div id="f-today-banner">'
+      +   '<div class="f-banner-title">🌴 de férias hoje</div>'
+      +   '<div class="f-banner-names" id="f-banner-names"></div>'
+      + '</div>'
+      + '<div id="f-area"></div>';
+    adminApp.appendChild(panel);
+  }
+  ensureTabShell();
+
   // ── SUPABASE ──
   // Usar cliente global sbAdmin (inicializado tras login)
   function getSupabase() {

@@ -3687,24 +3687,32 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .v-emp-hint{font-size:.72rem;color:#7a9e8a;font-style:italic;font-weight:700;letter-spacing:.01em;line-height:1.3;}
 
 /* ── vista admin: abertura/fecho do módulo (substitui .style.setProperty em
-   cascata). Seletor #admin-app.module-open.ventas-open (2 classes) em vez de
-   só .ventas-open: garante especificidade estritamente MAIOR do que as regras
-   pré-existentes #admin-app.module-open{...} (incluindo a media query
-   max-width:1024px que também mexe em overflow/height), eliminando qualquer
-   empate resolvido só pela ordem no ficheiro. #adm-module-bar deixou de ter
-   regra própria aqui: a regra genérica #admin-app.module-open #adm-module-bar
-   já trata disto para todos os módulos (incl. o comportamento sticky em
-   mobile, que uma regra própria aqui estava a bloquear). ── */
+   cascata). #admin-app.module-open.ventas-open (2 classes) em vez de só
+   .ventas-open: especificidade estritamente MAIOR do que #admin-app.module-open
+   sozinho (incl. a media query max-width:1024px que também mexe em
+   overflow/height) — sem depender da ordem no ficheiro.
+   #adm-ventas-panel e #adm-ventas-content: as propriedades de scroll ficam
+   INCONDICIONAIS, presas só ao próprio ID — não dependem de o elemento estar
+   aninhado dentro de #admin-app (o que não se pode confirmar sem o
+   index.html). Quando o painel está fechado (display:none, regra base),
+   estas propriedades não têm efeito visual nenhum, por isso é seguro
+   mantê-las sempre ativas; só o display:flex continua condicional à
+   abertura do módulo. #adm-module-bar não tem regra própria aqui: a regra
+   genérica #admin-app.module-open #adm-module-bar já trata disto para
+   todos os módulos (incl. o comportamento sticky em mobile). ── */
 #admin-app.module-open.ventas-open{
   display:flex !important; flex-direction:column !important;
   overflow:hidden !important; height:100vh !important; padding:0 !important;
 }
 #admin-app.module-open.ventas-open #adm-ventas-panel{
-  display:flex !important; flex:1 !important; flex-direction:column !important;
-  overflow-y:auto !important; overflow-x:hidden !important; width:100% !important;
+  display:flex !important;
+}
+#adm-ventas-panel{
+  flex:1 !important; flex-direction:column !important; width:100% !important;
+  overflow-y:auto !important; overflow-x:hidden !important;
   height:0 !important; min-height:0 !important; -webkit-overflow-scrolling:touch !important;
 }
-#admin-app.module-open.ventas-open #adm-ventas-content{
+#adm-ventas-content{
   overflow:visible !important; height:auto !important; flex:none !important;
   padding:12px 8px 80px !important; max-width:none !important; width:100% !important;
   box-sizing:border-box !important;

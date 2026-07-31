@@ -6,6 +6,33 @@
 // ══════════════════════════════════════════════════════════════
 (function () {
 
+  // ── DOM injected by tam.js ──
+  function ensureTabShell() {
+    if (document.getElementById('tab-tam')) return;
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    var panel = document.createElement('div');
+    panel.id = 'tab-tam';
+    panel.className = 'tab-panel';
+    panel.innerHTML =
+      '<div id="tam-upload-zone">' +
+        '<label id="tam-upload-label" for="tam-file-input">' +
+          '<span class="upload-icon">\ud83d\udce6</span>' +
+          'carregar fatura<br>' +
+          '<small style="font-size:.78rem;opacity:.6"></small>' +
+        '</label>' +
+        '<input type="file" id="tam-file-input" accept="application/pdf">' +
+        '<div id="tam-file-name"></div>' +
+        '<div id="tam-status-msg"></div>' +
+      '</div>' +
+      '<div id="tam-invoice-meta"></div>' +
+      '<div id="tam-validation-banner"></div>' +
+      '<div id="tam-results-wrap"></div>' +
+      '<button id="tam-export-btn">\u2b07 exportar excel</button>';
+    adminApp.appendChild(panel);
+  }
+  ensureTabShell();
+
   /* ══════════════════════════════════════════════════════════════
      ESTADO GLOBAL
   ══════════════════════════════════════════════════════════════ */

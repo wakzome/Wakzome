@@ -1,5 +1,29 @@
 (function () {
 
+  // ── DOM injected by salarios.js ──
+  function ensureUploadShell() {
+    if (document.getElementById('s-upload-zone')) return;
+    var col = document.getElementById('pag-col-salarios');
+    if (!col) return;
+    var zone = document.createElement('div');
+    zone.id = 's-upload-zone';
+    zone.innerHTML =
+      '<label id="s-upload-label" for="s-file-input">' +
+        '<span class="upload-icon">\ud83d\udcc4</span>' +
+        'carregar pdf de sal\u00e1rios<br>' +
+        '<small style="font-size:.78rem;opacity:.6">clique ou arraste o ficheiro aqui</small>' +
+      '</label>' +
+      '<input type="file" id="s-file-input" accept="application/pdf">' +
+      '<div id="s-file-name"></div>' +
+      '<div id="s-status-msg"></div>';
+    col.appendChild(zone);
+    var resultsWrap = document.createElement('div');
+    resultsWrap.className = 'results-wrap';
+    resultsWrap.id = 's-results-wrap';
+    col.appendChild(resultsWrap);
+  }
+  ensureUploadShell();
+
   // ── Utilidad interna ──
   function escHtml(str) {
     return String(str)

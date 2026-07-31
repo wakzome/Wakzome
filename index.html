@@ -17,8 +17,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <link rel="preload" href="https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/assets/Montserrat-Light.ttf.ttf" as="font" type="font/ttf" crossorigin>
 
-
-
 </head>
 <body>
 
@@ -75,7 +73,6 @@
   <div id="summary-wrap" class="table-wrap" style="display:none !important;"></div>
   <div class="table-wrap" id="table-container"><div>A carregar...</div></div>
 </div>
-
 
 <!-- ══ MOSAICO ══════════════════════════════════════════════════ -->
 <div id="wz-mosaic">
@@ -619,8 +616,6 @@
 
   <div id="tab-gerador" class="tab-panel"></div>
 
-
-
   
 
   
@@ -665,39 +660,6 @@
 
   
 
-</div>
-
-<div id="ed-export-modal">
-  <div id="ed-export-modal-box">
-    <div class="ed-modal-title">exportar pdf</div>
-    <input type="text" id="ed-export-filename" placeholder="nome do ficheiro" value="editado">
-    <div id="ed-folder-row">
-      <div id="ed-folder-display">pasta de transferências (padrão)</div>
-      <button id="ed-folder-pick-btn">📁 escolher pasta</button>
-    </div>
-    <div id="ed-export-hint">
-      Selecione uma pasta para guardar diretamente, ou clique em <span>guardar</span> para descarregar para a pasta padrão do browser.<br>
-      💡 Recomendado: guardar em <span>Wakzome Pessoal — OneDrive Pessoal</span>
-    </div>
-    <div class="ed-modal-btns">
-      <button class="ed-modal-btn" id="ed-export-cancel">cancelar</button>
-      <button class="ed-modal-btn primary" id="ed-export-confirm">⬇️ guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ EDITOR PDF: PICKERS E MODAIS ════════════════════════════ -->
-<div id="ed-shape-picker"></div>
-<div id="ed-stamp-picker"></div>
-
-<div id="ed-pages-modal">
-  <div id="ed-pages-modal-box">
-    <div id="ed-pages-modal-title">
-      gerir páginas
-      <button id="ed-pages-modal-close">✕</button>
-    </div>
-    <div id="ed-pages-modal-list"></div>
-  </div>
 </div>
 
 <div id="saft-reminder">
@@ -871,16 +833,6 @@
   </div>
   <div id="ventas-overlay-content">
     <div id="ventas-overlay-body"></div>
-  </div>
-</div>
-
-<div id="banco-horas-overlay">
-  <div id="banco-horas-overlay-bar">
-    <button id="banco-horas-overlay-back" onclick="closeBancoHorasOverlay()">← voltar</button>
-    <span id="banco-horas-overlay-title">banco de horas</span>
-  </div>
-  <div id="banco-horas-overlay-content">
-    <div id="bh-loja-root" style="width:100%;"></div>
   </div>
 </div>
 

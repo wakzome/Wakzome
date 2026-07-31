@@ -65,6 +65,22 @@
   }
   ensureModuleCard();
 
+  // ── Overlay "banco de horas" (fora de #admin-app) injetado por banco-horas.js ──
+  function ensureOverlayShell() {
+    if (document.getElementById('banco-horas-overlay')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+<div id="banco-horas-overlay">
+  <div id="banco-horas-overlay-bar">
+    <button id="banco-horas-overlay-back" onclick="closeBancoHorasOverlay()">← voltar</button>
+    <span id="banco-horas-overlay-title">banco de horas</span>
+  </div>
+  <div id="banco-horas-overlay-content">
+    <div id="bh-loja-root" style="width:100%;"></div>
+  </div>
+</div>`);
+  }
+  ensureOverlayShell();
+
   var BH_LOJAS = [
     { value: 'mezka funchal',                    label: 'Mezka Funchal' },
     { value: 'parfois madeira shopping',         label: 'Madeira Shopping' },

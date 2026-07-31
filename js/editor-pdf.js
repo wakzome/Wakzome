@@ -84,6 +84,45 @@
   }
   ensureTabShell();
 
+  // ── Modais e pickers externos (fora de #admin-app) injetados por editor-pdf.js ──
+  function ensureExternalModals() {
+    if (document.getElementById('ed-export-modal')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+<div id="ed-export-modal">
+  <div id="ed-export-modal-box">
+    <div class="ed-modal-title">exportar pdf</div>
+    <input type="text" id="ed-export-filename" placeholder="nome do ficheiro" value="editado">
+    <div id="ed-folder-row">
+      <div id="ed-folder-display">pasta de transferências (padrão)</div>
+      <button id="ed-folder-pick-btn">📁 escolher pasta</button>
+    </div>
+    <div id="ed-export-hint">
+      Selecione uma pasta para guardar diretamente, ou clique em <span>guardar</span> para descarregar para a pasta padrão do browser.<br>
+      💡 Recomendado: guardar em <span>Wakzome Pessoal — OneDrive Pessoal</span>
+    </div>
+    <div class="ed-modal-btns">
+      <button class="ed-modal-btn" id="ed-export-cancel">cancelar</button>
+      <button class="ed-modal-btn primary" id="ed-export-confirm">⬇️ guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EDITOR PDF: PICKERS E MODAIS ════════════════════════════ -->
+<div id="ed-shape-picker"></div>
+<div id="ed-stamp-picker"></div>
+
+<div id="ed-pages-modal">
+  <div id="ed-pages-modal-box">
+    <div id="ed-pages-modal-title">
+      gerir páginas
+      <button id="ed-pages-modal-close">✕</button>
+    </div>
+    <div id="ed-pages-modal-list"></div>
+  </div>
+</div>`);
+  }
+  ensureExternalModals();
+
   // ── Cartão do menu principal (dashboard admin) injetado por editor-pdf.js ──
   function ensureModuleCard() {
     if (document.querySelector('.adm-mod-card[data-module="editor"]')) return;

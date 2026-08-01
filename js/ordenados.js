@@ -719,6 +719,118 @@ function rCheckReady() {
 document.getElementById('r-process-btn').addEventListener('click', rProcessRecibos);
 
 /* ══════════════════════════════════════════════════════════════
+   OVERLAY "VER RECIBOS" — movido de index.html (fusão)
+   window.openRecibosOverlay / window.closeRecibosOverlay — usados
+   pelos links/botões do cabeçalho e do painel SAFT após login.
+   IIFE auto-contida, MESES local — zero alterações à lógica.
+   ══════════════════════════════════════════════════════════════ */
+(function () {
+  var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  window.openRecibosOverlay = function () {
+    var overlay     = document.getElementById('recibos-overlay');
+    var loading     = document.getElementById('recibos-overlay-loading');
+    var body        = document.getElementById('recibos-overlay-body');
+    var errorDiv    = document.getElementById('recibos-overlay-error');
+    var titleEl     = document.getElementById('recibos-overlay-title');
+    var pageTitleEl = document.getElementById('recibos-page-title');
+    var tbody       = document.getElementById('recibos-tbody');
+    if (!overlay) return;
+
+    
+    overlay.classList.add('open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    });
+
+    
+    loading.style.display  = 'block';
+    loading.textContent    = 'a carregar…';
+    body.style.display     = 'none';
+    errorDiv.style.display = 'none';
+    errorDiv.textContent   = '';
+    tbody.innerHTML        = '';
+
+    
+    var mes       = localStorage.getItem('gh_mes') || '';
+    var mmMatch   = mes.match(/^(\d{2})-(\d{4})$/);
+    var monthName = mmMatch ? (MESES[parseInt(mmMatch[1], 10) - 1] || mes) : mes;
+    if (titleEl)     titleEl.textContent     = monthName || 'recibos';
+    if (pageTitleEl) pageTitleEl.textContent = monthName ? 'Recibo ' + monthName : 'Recibos';
+
+    
+    sbClient.storage.from('recibos').createSignedUrl('index.json', 60)
+      .then(function (signRes) {
+        if (signRes.error) throw new Error(signRes.error.message);
+        return fetch(signRes.data.signedUrl + '&t=' + Date.now(), { cache: 'no-store' });
+      })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (indexData) {
+        var items = indexData.dados || [];
+        if (!items.length && indexData.ficheiros) {
+          items = indexData.ficheiros.map(function (f) {
+            return { filename: f, name: f.replace(/_/g, ' ').replace(/\.pdf$/i, ''), mes: indexData.mes || mes };
+          });
+        }
+
+        if (!items.length) {
+          loading.style.display  = 'none';
+          errorDiv.style.display = 'block';
+          errorDiv.textContent   = 'Nenhum recibo encontrado.';
+          return;
+        }
+
+        var mesPasta = indexData.mes || mes;
+        var paths = items.map(function (item) { return mesPasta + '/' + item.filename; });
+
+        
+        return sbClient.storage.from('recibos').createSignedUrls(paths, 300)
+          .then(function (urlRes) {
+            if (urlRes.error) throw new Error(urlRes.error.message);
+            var signed = urlRes.data; 
+
+            tbody.innerHTML = items.map(function (item, i) {
+              var entry   = signed[i] || {};
+              var fileUrl = entry.signedUrl || '';
+              var name    = item.name || item.filename;
+              var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              var safeFile = String(item.filename).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              return '<tr>'
+                + '<td class="rn">' + (i + 1) + '</td>'
+                + '<td>' + safeName + '</td>'
+                + '<td><a href="' + fileUrl + '" download="' + safeFile + '" '
+                +   'style="padding:4px 12px;font-size:.78rem;cursor:pointer;border:1px solid #ccc;'
+                +   'border-radius:7px;background:#fff;text-decoration:none;font-weight:600;display:inline-block;"'
+                +   ' onmouseover="this.style.background=\'#555\';this.style.color=\'#fff\';this.style.borderColor=\'#555\'"'
+                +   ' onmouseout="this.style.background=\'#fff\';this.style.color=\'\';this.style.borderColor=\'#ccc\'"'
+                +   '>⬇ pdf</a></td>'
+                + '</tr>';
+            }).join('');
+
+            loading.style.display = 'none';
+            body.style.display    = 'block';
+          });
+      })
+      .catch(function (err) {
+        console.error('openRecibosOverlay:', err);
+        loading.style.display  = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent   = '⚠️ Erro ao carregar recibos: ' + err.message;
+      });
+  };
+  window.closeRecibosOverlay = function () {
+    var overlay = document.getElementById('recibos-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    setTimeout(function () { overlay.classList.remove('open'); }, 460);
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════
    MOTOR DE DETEÇÃO DE MÊS — v1.1
    Determina a pasta do Supabase (mês/ano ou natal/ano) a partir do
    CONTEÚDO do PDF, em vez da data do sistema no momento do upload.

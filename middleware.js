@@ -1,8 +1,6 @@
 const PUBLIC_JS = [
   '/js/shared.js',
   '/js/intro.js',
-  '/js/nucleo.js',
-  '/js/nadiya.js',
 ];
 
 async function verifyToken(token) {

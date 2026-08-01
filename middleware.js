@@ -1,7 +1,8 @@
 const PUBLIC_JS = [
-  '/js/supabase-config.js',
-  '/js/intro.js',
   '/js/shared.js',
+  '/js/intro.js',
+  '/js/nucleo.js',
+  '/js/nadiya.js',
 ];
 
 async function verifyToken(token) {

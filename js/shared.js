@@ -109,7 +109,7 @@
           'js/ferias.js','js/editor-pdf.js',
           'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
           'js/ventas.js',
-          'js/historico-admin.js','js/nadiya.js','js/parfois.js',
+          'js/nadiya.js','js/parfois.js',
           'js/banco-horas.js'
         ];
         return scripts.reduce(function(p, src) {

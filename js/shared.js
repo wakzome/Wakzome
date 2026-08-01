@@ -104,10 +104,10 @@
         const scripts = [
           'js/nucleo.js',
           'js/session-lock.js',
-          'js/agenda.js','js/rotulos.js','js/processamento.js',
+          'js/utilitario.js','js/processamento.js',
           'js/admin-init.js','js/ordenados.js',
           'js/ferias.js','js/editor-pdf.js',
-          'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
+          'js/tam.js','js/gerador-horarios.js',
           'js/ventas.js',
           'js/nadiya.js','js/parfois.js',
           'js/banco-horas.js'

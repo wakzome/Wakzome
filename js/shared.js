@@ -105,7 +105,7 @@
           'js/nucleo.js',
           'js/session-lock.js',
           'js/agenda.js','js/rotulos.js','js/processamento.js',
-          'js/admin-init.js','js/salarios.js','js/recibos.js',
+          'js/admin-init.js','js/ordenados.js',
           'js/ferias.js','js/editor-pdf.js',
           'js/tam.js','js/saft-reminder.js','js/gerador-horarios.js',
           'js/ventas.js',

@@ -3620,7 +3620,29 @@
     dd.innerHTML = '<div class="tam-sessions-empty">a carregar sessões…</div>';
     tamLoadAllSessionsMerged().then(function(sessions){
       tamRenderSessionsList(sessions);
+      // Se o Supabase ainda não estava pronto nesta tentativa (sbAdmin
+      // undefined — acontece na 1ª carga, logo após o login), reinicia
+      // sozinho por polling até sbAdmin ficar disponível (máx. 10s).
+      if (!tamSB()) tamRetrySessionsWhenReady();
     });
+  }
+
+  function tamRetrySessionsWhenReady() {
+    if (tamRetrySessionsWhenReady._active) return;
+    tamRetrySessionsWhenReady._active = true;
+    var attempts = 0;
+    var maxAttempts = 20; // 20 × 500ms = 10s
+    var timer = setInterval(function () {
+      attempts++;
+      if (tamSB()) {
+        clearInterval(timer);
+        tamRetrySessionsWhenReady._active = false;
+        tamRefreshSessionsInline();
+      } else if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        tamRetrySessionsWhenReady._active = false;
+      }
+    }, 500);
   }
 
   /* Data embutida no nome da sessão ("Sessão TAM DD/MM/YYYY") — âncora

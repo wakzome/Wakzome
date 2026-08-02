@@ -6,65 +6,6 @@
 // ══════════════════════════════════════════════════════════════
 (function () {
 
-  // ── DOM injected by tam.js ──
-  function ensureTabShell() {
-    if (document.getElementById('tab-tam')) return;
-    var adminApp = document.getElementById('admin-app');
-    if (!adminApp) return;
-    var panel = document.createElement('div');
-    panel.id = 'tab-tam';
-    panel.className = 'tab-panel';
-    panel.innerHTML =
-      '<div id="tam-upload-zone">' +
-        '<label id="tam-upload-label" for="tam-file-input">' +
-          '<span class="upload-icon">\ud83d\udce6</span>' +
-          'carregar fatura<br>' +
-          '<small style="font-size:.78rem;opacity:.6"></small>' +
-        '</label>' +
-        '<input type="file" id="tam-file-input" accept="application/pdf">' +
-        '<div id="tam-file-name"></div>' +
-        '<div id="tam-status-msg"></div>' +
-      '</div>' +
-      '<div id="tam-invoice-meta"></div>' +
-      '<div id="tam-validation-banner"></div>' +
-      '<div id="tam-results-wrap"></div>' +
-      '<button id="tam-export-btn">\u2b07 exportar excel</button>';
-    adminApp.appendChild(panel);
-  }
-  ensureTabShell();
-
-  // ── Cartão do submenu "faturas" injetado por tam.js ──
-  function ensureModuleCard() {
-    if (document.querySelector('.adm-mod-card[data-faturas-module="tam"]')) return;
-    var grid = document.getElementById('faturas-sub-grid');
-    if (!grid) return;
-    var card = document.createElement('div');
-    card.className = 'adm-mod-card';
-    card.setAttribute('data-faturas-module', 'tam');
-    card.style.animationDelay = '0.10s';
-    card.innerHTML = `        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 8H3l1.5 10.5A2 2 0 0 0 6.48 20h11.04a2 2 0 0 0 1.98-1.5L21 8Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M3 8l1.5-4h15L21 8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M9 12h6M10 15h4" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <div>
-          <div class="adm-mod-name">TAM</div>
-          <div class="adm-mod-desc">faturas TAM Fashion</div>
-        </div>
-        <div class="adm-mod-arrow">→</div>
-      `;
-    grid.appendChild(card);
-    card.addEventListener('click', function () {
-      if (typeof window.closeFaturasOverlay === 'function') window.closeFaturasOverlay();
-      setTimeout(function () {
-        if (typeof window.openModule === 'function') window.openModule('tam');
-      }, 200);
-    });
-  }
-  ensureModuleCard();
-
   /* ══════════════════════════════════════════════════════════════
      ESTADO GLOBAL
   ══════════════════════════════════════════════════════════════ */

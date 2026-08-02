@@ -181,7 +181,7 @@
           'js/session-lock.js',
           'js/utilitario.js','js/processamento.js',
           'js/admin-init.js','js/ordenados.js',
-          'js/ferias.js','js/editor-pdf.js',
+          'js/ferias.js',
           'js/tam.js','js/gerador-horarios.js',
           'js/ventas.js',
           'js/nadiya.js','js/parfois.js',

@@ -3620,17 +3620,6 @@
     dd.innerHTML = '<div class="tam-sessions-empty">a carregar sessões…</div>';
     tamLoadAllSessionsMerged().then(function(sessions){
       tamRenderSessionsList(sessions);
-      // Se o Supabase ainda não estava pronto nesta tentativa (sbAdmin
-      // undefined — acontece na 1ª carga, antes de initSupabase terminar),
-      // volta a tentar sozinho assim que shared.js avisar que já está.
-      if (!tamSB() && !tamRefreshSessionsInline._waitingSbReady) {
-        tamRefreshSessionsInline._waitingSbReady = true;
-        window.addEventListener('wz:supabase-ready', function onSbReady() {
-          window.removeEventListener('wz:supabase-ready', onSbReady);
-          tamRefreshSessionsInline._waitingSbReady = false;
-          tamRefreshSessionsInline();
-        });
-      }
     });
   }
 

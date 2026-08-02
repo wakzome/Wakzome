@@ -139,10 +139,6 @@
       auth: Object.assign({ storageKey: 'wakzome-sb-admin' }, baseAuth),
       global: { headers: { 'x-admin-token': adminToken } }
     });
-
-    // Avisa quem estava à espera (ex.: tam.js, se sbAdmin ainda não existia
-    // na 1ª carga de sessões) de que sbClient/sbAdmin já estão prontos.
-    window.dispatchEvent(new Event('wz:supabase-ready'));
   }
   window.initSupabase = initSupabase;
 

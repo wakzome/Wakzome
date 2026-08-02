@@ -483,6 +483,7 @@
 
   async function tamHandleFiles(files) {
     document.getElementById('tam-status-msg').textContent = 'a processar…';
+    tamEnsureStyles();
 
     try {
       // Parse all PDFs first to get their invoice numbers
@@ -3873,6 +3874,7 @@
       tamInvoices.forEach(function(inv, idx){
         if (inv.guiaErp) tamCollapseState['inv_' + idx] = true;
       });
+      tamEnsureStyles();
       document.getElementById('tab-tam').classList.add('tam-loaded');
       document.getElementById('admin-app').classList.add('tam-loaded');
       document.getElementById('tam-export-btn').classList.add('show');
@@ -5404,8 +5406,12 @@
     if (typeof window.tamEanToolIngestCatalog === 'function') {
       window.tamEanToolIngestCatalog(entries);
     } else {
-      tamLoadEanToolModule();
-      if (typeof window.tamEanToolIngestCatalog === 'function') window.tamEanToolIngestCatalog(entries);
+      var eanScript = document.createElement('script');
+      eanScript.src = 'js/ean-tool.js';
+      eanScript.onload = function() {
+        if (typeof window.tamEanToolIngestCatalog === 'function') window.tamEanToolIngestCatalog(entries);
+      };
+      document.head.appendChild(eanScript);
     }
   }
 
@@ -7656,6 +7662,897 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     STYLES
+  ══════════════════════════════════════════════════════════════ */
+  function tamEnsureStyles() {
+    // Always remove any existing TAM style block so we always get the latest CSS
+    ['tam-v8-styles','tam-v9-styles','tam-xv-styles'].forEach(function(id){
+      var old = document.getElementById(id);
+      if (old) old.parentNode.removeChild(old);
+    });
+    var s = document.createElement('style');
+    s.id = 'tam-v9-styles';
+    s.textContent = [
+      /* ── Freight alert — transporte não incluído ── */
+      '.tam-freight-alert { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; padding:8px 12px; background:#fff8e1; border:1.5px solid #ffc107; border-radius:9px; font-size:.8rem; color:#6d4c00; }',
+      '.tam-freight-icon { font-size:1.1rem; }',
+      '.tam-freight-msg { flex:1; min-width:180px; }',
+      '.tam-freight-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 14px; background:linear-gradient(135deg,#e65100,#ff8f00); color:#fff; border:none; border-radius:8px; font-size:.78rem; font-weight:700; font-family:MontserratLight,sans-serif; cursor:pointer; white-space:nowrap; transition:background .14s,box-shadow .14s; box-shadow:0 2px 8px rgba(230,81,0,.35); letter-spacing:.02em; }',
+      '.tam-freight-btn:hover { background:linear-gradient(135deg,#bf360c,#e65100); box-shadow:0 4px 14px rgba(230,81,0,.45); }',
+      '.tam-freight-applied { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:7px 12px; background:#e8f5e9; border:1.5px solid #81c784; border-radius:9px; font-size:.78rem; color:#1b5e20; }',
+      '.tam-freight-remove-btn { margin-left:auto; padding:3px 9px; background:transparent; border:1.5px solid #a5d6a7; border-radius:6px; font-size:.72rem; color:#388e3c; cursor:pointer; font-family:MontserratLight,sans-serif; transition:background .12s,color .12s; }',
+      '.tam-freight-remove-btn:hover { background:#c8e6c9; color:#1b5e20; }',
+      '.tam-tr-ship-ext td { color:#e65100!important; font-style:italic; }',
+      '#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:8px 16px!important; }',
+      '#tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display:none!important; }',
+
+      /* ── Session choice dialog (proc style) ── */
+      '#tam-session-dialog { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:800; display:flex; align-items:center; justify-content:center; }',
+      '#tam-session-dialog-box { background:#fff; border-radius:16px; padding:24px 28px 22px; width:min(420px,92vw); font-family:\'MontserratLight\',sans-serif; box-shadow:0 16px 64px rgba(0,0,0,.18); }',
+      '.tam-dialog-title { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; margin-bottom:12px; }',
+      '.tam-dialog-body { font-size:.88rem; font-weight:600; color:#000; line-height:1.6; margin-bottom:22px; }',
+      '.tam-dialog-btns { display:flex; flex-direction:column; gap:8px; }',
+      '.tam-dialog-btn { padding:12px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:10px; border:1px solid #e0e0e0; background:transparent; text-align:left; transition:all 0.14s; color:#000; text-transform:lowercase; }',
+      '.tam-dialog-btn:hover { background:#f5f5f5; border-color:#ccc; }',
+      '.tam-dialog-btn-new { border-color:#555; background:#fff; color:#000; }',
+      '.tam-dialog-btn-new:hover { background:#f0f0f0; border-color:#555; }',
+      /* ── Session bar ── */
+      '#tam-session-status { font-size:.62rem; font-weight:700; color:#4A7C6F; white-space:nowrap; flex-basis:100%; text-align:center; min-height:14px; order:10; }',
+      '#tam-status-msg { font-weight:700!important; font-size:.82rem!important; color:#000; }',
+      '#tam-dn-count { color:#000!important; font-weight:700!important; font-size:.75rem; }',
+      '#tam-session-status.saved { color:#4A7C6F!important; }',
+      '#tam-save-btn { display:none; }',
+      '#tam-save-btn.visible { display:inline-flex!important; }',
+      '#tam-guia-bar-btn { display:none; }',
+      '#tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }',
+      '#tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
+
+      /* ── Lista de sessões — bloco fixo por baixo da zona de carregar
+         fatura (visível só em estado vazio), estilo consistente com
+         .tam-rec-area / .tam-rec-area-title (cabeçalho preto, cartão
+         branco arredondado). Já não é um popup. ── */
+      '#tam-sessions-inline { display:none; width:100%; max-width:960px; margin:16px auto 0; border:1px solid #e0e0e0; border-radius:14px; overflow:hidden; background:#fff; font-family:\'MontserratLight\',sans-serif; }',
+      '#tab-tam:not(.tam-loaded) #tam-sessions-inline { display:block; }',
+      '.tam-sessions-inline-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; background:#000!important; color:#fff!important; }',
+      '#tam-sessions-dropdown { width:100%; max-height:420px; overflow-y:auto; }',
+      /* Botão "sessões": só dentro de uma sessão activa — no estado vazio
+         o bloco inline acima já está visível, o botão seria redundante. */
+      '#tam-sessions-btn { display:none; }',
+      '#tab-tam.tam-loaded #tam-sessions-btn { display:inline-flex; }',
+      /* Modal de troca de sessão (aberto a partir do botão acima) */
+      '#tam-sessions-switch-modal { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:900; display:flex; align-items:center; justify-content:center; padding:16px; }',
+      '#tam-sessions-switch-box { width:min(480px,100%); max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.25); font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-sessions-switch-hdr { display:flex; align-items:center; justify-content:space-between; background:#000!important; flex-shrink:0; }',
+      '.tam-sessions-switch-hdr .tam-sessions-inline-title { border-bottom:none; flex:1; }',
+      '#tam-sessions-switch-close { background:none; border:none; color:#fff!important; font-size:.85rem; cursor:pointer; padding:10px 18px; line-height:1; }',
+      '#tam-sessions-switch-close:hover { opacity:.65; }',
+      '#tam-sessions-switch-dropdown { overflow-y:auto; }',
+      '.tam-dd-item { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f0f0f0; transition:background .12s; }',
+      '.tam-dd-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }',
+      '.tam-dd-dot-green { background:#4A7C6F; }',
+      '.tam-dd-dot-red   { background:#9B4D4D; }',
+      '.tam-dd-dot-grey  { background:#ccc; }',
+      '.tam-dd-item:last-child { border-bottom:none; }',
+      '.tam-dd-item:hover { background:#f5f5f5; }',
+      '.tam-dd-item-info { flex:1; min-width:0; }',
+      '.tam-dd-item-name { font-size:.82rem; font-weight:700; color:#000; white-space:normal; word-break:break-word; }',
+      '.tam-dd-item-meta { font-size:.67rem; color:#000; font-weight:600; margin-top:1px; opacity:.5; }',
+      '.tam-dd-load-btn { padding:3px 10px; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
+      '.tam-dd-load-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-dd-del-btn { background:none; border:1px solid #ddd; cursor:pointer; font-size:.7rem; font-weight:700; color:#000; padding:3px 8px; border-radius:6px; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; transition:all .14s; }',
+      '.tam-dd-del-btn:hover { color:#9B4D4D; border-color:#9B4D4D; background:#F5EAEA; }',
+      '.tam-sessions-empty { color:#000; opacity:.4; text-align:center; padding:28px 0; font-size:.82rem; font-weight:700; }',
+
+      /* ── Tabla de factura con columnas F/P (proc style) ── */
+      '#tam-results-wrap { width:100%; max-width:960px; overflow-x:auto; }',
+      '.tam-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-th { background:#fafafa; padding:8px 12px; text-align:center; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.10em; border:none; border-bottom:1px solid #e0e0e0; white-space:nowrap; color:#000; }',
+      /* FNC/PXO defined below with their specific background */
+      '.tam-th-funchal { background:#f0f0f0!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
+      '.tam-th-porto   { background:#e8e8e8!important; color:#000!important; letter-spacing:.10em; font-weight:700!important; border-bottom:2px solid #e0e0e0!important; }',
+      '.tam-th-actions { background:transparent!important; border-bottom:2px solid #e0e0e0!important; width:58px; }',
+      '.tam-cell-actions { padding:3px 4px!important; }',
+      '.tam-row-action-cell { display:flex; gap:3px; align-items:center; justify-content:center; }',
+      '.tam-row-action-btn { border:1px solid #ccc; background:transparent; border-radius:4px; font-size:.58rem; font-weight:700; padding:2px 5px; cursor:pointer; color:#000; transition:background .12s,border-color .12s; line-height:1; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; }',
+      '.tam-row-action-btn:hover { background:#111; border-color:#111; color:#fff!important; }',
+      '.tam-row-action-active { background:#111!important; border-color:#111!important; color:#fff!important; }',
+      '.tam-th-empty { background:transparent!important; border:none!important; padding:0!important; }',
+      '.tam-quick-header-row th, .tam-quick-split-row th { border-bottom:none!important; padding:4px 6px!important; text-align:center; vertical-align:middle; }',
+      '.tam-th-split-cell { text-align:center!important; background:#ececec!important; }',
+      '.tam-td { padding:5px 12px; border:none; border-bottom:1px solid #f0f0f0; font-size:.88rem; font-weight:800; vertical-align:middle; text-align:center; white-space:nowrap; color:#000; }',
+      '.tam-td-num { font-variant-numeric:tabular-nums; }',
+      '.tam-cell-funchal { color:#000; font-weight:800; }',
+      '.tam-cell-porto   { color:#000; font-weight:800; }',
+      '.tam-table tbody tr:hover td { background:#f5f5f5; }',
+      /* Ref completada */
+      '.tam-ref-complete td { color:#bbb!important; }',
+      '.tam-ref-complete td strong { color:#bbb!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; color:#bbb!important; }',
+      '.tam-ref-complete .tam-rec-total-col { background-color:#fafafa!important; background:#fafafa!important; }',
+      '.tam-ref-complete .tam-rec-cell-f { background-color:#fafafa!important; background:#fafafa!important; }',
+      '.tam-ref-complete .tam-rec-cell-p { background-color:#fafafa!important; background:#fafafa!important; }',
+      '.tam-ref-complete .tam-rec-input { color:#ccc!important; border-color:#eee!important; }',
+      '.tam-box-sub-complete { background:#f5f5f5!important; }',
+      '.tam-box-cell-complete.tam-rec-cell-f { background-color:#f5f5f5!important; background:#f5f5f5!important; }',
+      '.tam-box-cell-complete.tam-rec-cell-p { background-color:#f5f5f5!important; background:#f5f5f5!important; }',
+      '.tam-table tfoot td { background:#fff; font-weight:800; border-top:2px solid #e0e0e0; padding:5px 12px; text-align:center; white-space:nowrap; }',
+      '.tam-table tfoot tr.tam-tr-ship td { background:#fff; font-weight:700; font-size:.82rem; color:#000; opacity:.55; border-top:1px solid #f0f0f0; padding:3px 12px; }',
+      '.tam-table tfoot tr.tam-tr-grand td { background:#fff; font-size:.92rem; border-top:2px solid #e0e0e0; }',
+      '.tam-row-conflict td { background:#FFFBF5!important; }',
+      '.tam-badge { display:inline-block; margin-left:5px; font-size:.6rem; padding:1px 5px; border-radius:4px; vertical-align:middle; font-weight:700; color:#fff; }',
+      '.tam-badge-conflict { background:#E8A44A; color:#fff; }',
+      '.tam-badge-discount { background:#4A7C6F; color:#fff; cursor:help; }',
+      '.tam-badge-credit { background:#9B4D4D; color:#fff; cursor:help; }',
+      '.tam-conflict-ref { font-weight:800; color:#9B4D4D; }',
+
+      /* ── Notas de crédito ── */
+      '.tam-credit-block { display:flex; flex-direction:column; gap:4px; margin:6px 14px 0; }',
+      '.tam-credit-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 12px; background:#FBF3F3; border:1.5px solid #E3C9C9; border-radius:9px; font-size:.78rem; color:#7A3B3B; }',
+      '.tam-credit-icon { font-size:.9rem; }',
+      '.tam-credit-num { font-weight:800; }',
+      '.tam-credit-date { opacity:.7; }',
+      '.tam-credit-amt { margin-left:auto; font-weight:700; }',
+      '.tam-credit-warn { cursor:help; }',
+      '.tam-credit-remove-btn { padding:2px 9px; background:transparent; border:1.5px solid #D8AFAF; border-radius:6px; font-size:.72rem; color:#9B4D4D; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,color .12s; }',
+      '.tam-credit-remove-btn:hover { background:#E3C9C9; color:#5A2626; }',
+
+      /* Session buttons — defined here so mobile override below works */
+      '.tam-session-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem!important; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-session-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
+      '#tam-dn-load-bar-btn, #tam-dn-cam-bar-btn { font-size:.72rem!important; letter-spacing:.10em!important; font-weight:700!important; }',
+
+      /* ── Multi-factura: bloques (proc style) ── */
+      '.tam-inv-toggle-btn { background:none; border:none; cursor:pointer!important; font-size:1.15rem; color:#000; padding:0 8px 0 0; line-height:1; transition:color .15s; flex-shrink:0; user-select:none; }',
+      '.tam-inv-toggle-btn:hover { color:#000; }',
+      '#tam-rec-toggle-btn { font-size:1.6rem; color:#999; }',
+      /* iPad: bigger toggle button */
+      '@media (pointer:coarse) and (min-width:768px) {',
+      '  .tam-inv-toggle-btn { font-size:1.4rem; padding:4px 10px 4px 0; color:#000; min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; }',
+      '  #tam-rec-toggle-btn { font-size:1.6rem; padding:6px 12px; color:#333; min-width:44px; min-height:44px; }',
+      '}',
+
+      /* ── Invoice block collapsed state ── */
+      '.tam-inv-collapsed .tam-inv-banner { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap thead { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap tbody { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
+      '.tam-inv-collapsed .tam-inv-table-wrap tfoot { display:none!important; }',
+      '.tam-inv-collapsed .tam-inv-remove-btn,.tam-inv-collapsed .tam-inv-meta-rest,.tam-inv-collapsed .tam-inv-edit-btn,.tam-inv-collapsed .tam-inv-stock-btn,.tam-inv-collapsed .tam-inv-guia-btn,.tam-inv-collapsed .tam-inv-export-btn,.tam-inv-collapsed .tam-inv-credit-btn { display:none!important; }',
+      '.tam-invoice-block.tam-inv-collapsed .tam-credit-block { display:none!important; }',
+
+      /* ── Single invoice collapsed state ── */
+      '.tam-single-inv-collapsed thead { display:none!important; }',
+      '.tam-single-inv-collapsed tbody { display:none!important; }',
+      '.tam-single-inv-collapsed tfoot tr:first-child td { border-top:1px solid #e6e6e6; }',
+
+      /* ── Distribution area collapsed state ── */
+      '.tam-rec-area-title { display:flex; align-items:center; }',
+      '.tam-rec-collapsed .tam-rec-collapsible { display:none!important; }',
+
+/* ── Invoice blocks (proc style — clean, white) ── */
+      '.tam-invoice-block { width:100%; max-width:960px; margin-bottom:0; border:none; border-bottom:3px solid #000; padding-bottom:40px; overflow:visible; }',
+      '.tam-invoice-block:last-of-type { border-bottom:none; padding-bottom:0; }',
+      '.tam-invoice-block-header { display:flex; flex-direction:column; align-items:center; gap:4px; padding:18px 24px; background:transparent; border-radius:12px 12px 0 0; }',
+      '.tam-inv-hdr-row1 { display:flex; align-items:center; width:100%; justify-content:center; position:relative; }',
+      '.tam-inv-hdr-row1 .tam-inv-toggle-btn { position:absolute; left:0; }',
+      '.tam-inv-hdr-row1 .tam-inv-remove-btn { position:absolute; right:0; }',
+      '.tam-inv-hdr-row2 { text-align:center; }',
+      '.tam-inv-hdr-row3 { text-align:center; margin-bottom:4px; }',
+      '.tam-inv-hdr-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }',
+      '.tam-th-quick-col-btn { display:block; width:100%; background:transparent; border:none; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:7px 4px; box-shadow:inset 0 -2px 0 rgba(0,0,0,.18); transition:background .15s,box-shadow .15s,transform .1s; }',
+      '.tam-th-quick-col-btn:hover { background:rgba(0,0,0,.07); box-shadow:inset 0 -3px 0 rgba(0,0,0,.28); }',
+      '.tam-th-quick-col-btn:active { transform:translateY(1px); box-shadow:inset 0 2px 0 rgba(0,0,0,.15); }',
+      /* Single unified header look — no color variants */
+      '.tam-inv-color-0,.tam-inv-color-1,.tam-inv-color-2,.tam-inv-color-3,.tam-inv-color-4,.tam-inv-color-5 { background:transparent!important; border-bottom:none!important; }',
+      /* All text in header: black */
+      '.tam-inv-color-0 .tam-inv-num,.tam-inv-color-1 .tam-inv-num,.tam-inv-color-2 .tam-inv-num,.tam-inv-color-3 .tam-inv-num,.tam-inv-color-4 .tam-inv-num,.tam-inv-color-5 .tam-inv-num { color:#000!important; text-shadow:none; }',
+      '.tam-inv-color-0 .tam-inv-meta,.tam-inv-color-1 .tam-inv-meta,.tam-inv-color-2 .tam-inv-meta,.tam-inv-color-3 .tam-inv-meta,.tam-inv-color-4 .tam-inv-meta,.tam-inv-color-5 .tam-inv-meta { color:#000!important; text-shadow:none; opacity:.5; }',
+      '.tam-inv-color-0 .tam-inv-total,.tam-inv-color-1 .tam-inv-total,.tam-inv-color-2 .tam-inv-total,.tam-inv-color-3 .tam-inv-total,.tam-inv-color-4 .tam-inv-total,.tam-inv-color-5 .tam-inv-total { color:#000!important; text-shadow:none; }',
+      /* Toggle button: dark on white */
+      '.tam-inv-color-0 .tam-inv-toggle-btn,.tam-inv-color-1 .tam-inv-toggle-btn,.tam-inv-color-2 .tam-inv-toggle-btn,.tam-inv-color-3 .tam-inv-toggle-btn,.tam-inv-color-4 .tam-inv-toggle-btn,.tam-inv-color-5 .tam-inv-toggle-btn { color:#000!important; }',
+      /* Buttons inside header: proc style */
+      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):not(.tam-inv-edit-btn):not(.tam-inv-stock-btn):not(.tam-inv-guia-btn):not(.tam-inv-export-btn):not(.tam-inv-remove-btn) { padding:3px 11px!important; border:1px solid #ccc!important; border-radius:6px!important; background:transparent!important; color:#000!important; font-size:.72rem!important; font-weight:700!important; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s!important; text-shadow:none!important; text-transform:lowercase; }',
+      '.tam-invoice-block-header button:not(.tam-inv-toggle-btn):not(.tam-inv-edit-btn):not(.tam-inv-stock-btn):not(.tam-inv-guia-btn):not(.tam-inv-export-btn):not(.tam-inv-remove-btn):hover { background:#f0f0f0!important; border-color:#555!important; }',
+      /* Quick active badge */
+      '.tam-inv-color-0 .tam-inv-quick-active,.tam-inv-color-1 .tam-inv-quick-active,.tam-inv-color-2 .tam-inv-quick-active,.tam-inv-color-3 .tam-inv-quick-active,.tam-inv-color-4 .tam-inv-quick-active,.tam-inv-color-5 .tam-inv-quick-active { color:#000!important; font-weight:700!important; text-shadow:none!important; border:1px solid #e0e0e0!important; background:#f5f5f5!important; border-radius:6px; padding:3px 8px; }',
+      /* Quick undo: red tint like proc */
+      '.tam-invoice-block-header .tam-inv-quick-undo { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
+      '.tam-invoice-block-header .tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.12)!important; }',
+      '.tam-inv-num { font-size:1.5rem; font-weight:800; color:#000!important; letter-spacing:.02em; }',
+      '.tam-inv-meta { font-size:.78rem; font-weight:400; text-transform:uppercase; letter-spacing:.18em; color:#000; opacity:.5; }',
+      '.tam-inv-total { font-size:1.4rem; font-weight:300; color:#000; letter-spacing:-.02em; }',
+      '.tam-inv-table-wrap { overflow-x:auto; border-radius:0 0 12px 12px; }',
+      '.tam-inv-separator { height:auto; padding-top:80px; background:#ececec; border-bottom:3px solid #000; margin:0 auto 40px; width:calc(100% - 48px); max-width:912px; box-sizing:border-box; }',
+      /* Validation banner inside block */
+      '.tam-inv-banner { display:flex; flex-wrap:wrap; gap:4px 20px; padding:10px 20px; font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border-bottom:1px solid #e0e0e0; border-left:1px solid #e0e0e0; border-right:1px solid #e0e0e0; }',
+      '.tam-inv-banner.ok  { background:transparent; color:#4A7C6F; }',
+      '.tam-inv-banner.err { background:transparent; color:#9B4D4D; }',
+      '.tam-inv-banner .tam-vi { display:flex; align-items:center; gap:6px; }',
+      '.tam-inv-banner .tam-vi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
+      '.tam-inv-banner .tam-engine-sel-wrap { width:100%; margin-top:2px; }',
+      '.tam-inv-banner .tam-engine-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }',
+
+      /* ── Meta banner (proc style) ── */
+      '#tam-invoice-meta { display:none; width:100%; max-width:960px; background:transparent; border:none; padding:10px 0; margin-bottom:12px; font-size:.85rem; font-weight:700; color:#000; flex-wrap:wrap; gap:10px 20px; align-items:center; }',
+      '#tam-invoice-meta.show { display:flex; }',
+      '#tam-invoice-meta .tam-mi { display:flex; flex-direction:column; gap:1px; align-items:center; text-align:center; }',
+      '#tam-invoice-meta .tam-mi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
+
+      /* ── Validation banner (proc style) ── */
+      '#tam-validation-banner { display:none; width:100%; max-width:960px; border:none; padding:8px 0 12px; margin-bottom:0; font-size:.75rem; font-weight:700; flex-wrap:wrap; gap:6px 24px; }',
+      '#tam-validation-banner.ok  { display:flex; color:#4A7C6F; }',
+      '#tam-validation-banner.err { display:flex; color:#9B4D4D; }',
+      '#tam-validation-banner .tam-vi { display:flex; flex-direction:column; gap:0; align-items:center; text-align:center; }',
+      '#tam-validation-banner .tam-vi em { font-style:normal; font-size:.6rem; color:#000; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
+      /* Engine selector buttons (proc style) */
+      '.tam-engine-sel-wrap { grid-column:1/-1; width:100%; margin-top:4px; }',
+      '.tam-engine-btns { display:flex; gap:8px; margin-top:6px; justify-content:flex-start; flex-wrap:wrap; }',
+      '.tam-ebtn { border:1px solid #ccc; background:transparent; padding:7px 16px; border-radius:8px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.78rem; line-height:1.45; text-align:center; transition:all 0.15s; min-width:110px; color:#000; font-weight:700; text-transform:lowercase; }',
+      '.tam-ebtn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-ebtn-active { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-ebtn-label { display:block; font-weight:700; font-size:.82rem; }',
+      '.tam-ebtn-detail { display:block; font-size:.68rem; color:#000; opacity:.45; margin-top:2px; }',
+      '.tam-ebtn-active .tam-ebtn-detail { color:#fff; opacity:.6; }',
+      '.tam-chk-ok { color:#4A7C6F; }',
+      '.tam-chk-err { color:#9B4D4D; }',
+
+      /* ══════════════════════════
+         ÁREA DE RECEPCIÓN (proc style)
+      ══════════════════════════ */
+      '#tam-reception-area { width:100%; max-width:1600px; margin-top:20px; }',
+      '.tam-rec-boxes-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }',
+      '.tam-rec-area { border:1px solid #e0e0e0; border-radius:14px; overflow:visible; background:#fff; width:-moz-fit-content; width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }',
+      '.tam-rec-flex { display:flex; align-items:flex-start; gap:16px; }',
+      '.tam-rec-main-col { flex:0 1 auto; min-width:0; max-width:100%; }',
+      '.tam-boxlist-panel { flex:0 0 165px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #e0e0e0; padding:8px 0 8px 12px; }',
+      '.tam-boxlist-hdr { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#000; opacity:.5; margin-bottom:6px; }',
+      '.tam-boxlist-section { display:flex; flex-direction:column; gap:6px; }',
+      '.tam-boxlist-item { display:flex; align-items:center; gap:2px; width:100%; padding:1px 6px 1px 8px; border:1px solid #e0e0e0; border-radius:7px; background:#fff; transition:all .15s; }',
+      '.tam-boxlist-item:hover { border-color:#555; background:#fafafa; }',
+      '.tam-boxlist-item-active { border-color:#000; background:rgba(0,0,0,.05); }',
+      '.tam-boxlist-item-incomplete { border-color:#E8A44A; }',
+      '.tam-boxlist-item-over { border-color:#9B4D4D; }',
+      '.tam-boxlist-item-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:5px 3px; border:none; background:transparent; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-size:.74rem; font-weight:700; color:#000!important; text-align:left; }',
+      '.tam-boxlist-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1 1 auto; }',
+      '.tam-boxlist-pct { font-size:.68rem; opacity:.5; white-space:nowrap; }',
+      '.tam-boxlist-warn { font-size:.72rem; }',
+      '.tam-boxlist-empty { font-size:.75rem; opacity:.4; padding:4px 2px; }',
+      '.tam-boxlist-pending-dn { margin-bottom:4px; }',
+      '.tam-boxlist-pending-dn-btn { width:100%; text-align:left; padding:5px 7px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border:1px solid #333!important; border-radius:7px; background:#333!important; color:#fff!important; cursor:pointer; transition:all .15s; }',
+      '.tam-boxlist-pending-dn-btn:hover { background:#111!important; color:#fff!important; }',
+      '.tam-boxlist-pending-dn-list { display:flex; flex-direction:column; gap:6px; padding:6px 2px 2px; }',
+      '.tam-boxlist-pending-dn-group { font-size:.68rem; }',
+      '.tam-boxlist-pending-dn-inv { font-weight:700; color:#000; }',
+      '.tam-boxlist-pending-dn-codes { color:#888; font-family:\'Courier New\',monospace; word-break:break-word; }',
+      '.tam-boxlist-link-btn, .tam-boxlist-unlink-btn { flex:0 0 auto; background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:2px 6px; transition:all .15s; }',
+      '.tam-boxlist-link-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-boxlist-unlink-btn:hover { background:#fdeaea; border-color:#c00; color:#c00!important; }',
+      '@media (max-width:768px) {',
+      '  .tam-rec-flex { flex-direction:column; }',
+      '  .tam-boxlist-panel { flex:0 0 auto; width:100%; border-left:none; border-top:1px solid #e0e0e0; padding:14px 0 0 0; flex-direction:row; flex-wrap:wrap; }',
+      '  .tam-boxlist-section { flex:1 1 45%; min-width:140px; }',
+      '}',
+      '.tam-rec-area-title { padding:20px 30px; font-size:.95rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; border-radius:14px 14px 0 0; background:#000!important; color:#fff!important; opacity:1!important; }',
+      '.tam-rec-area-title .tam-inv-toggle-btn { color:#fff!important; }',
+      '.tam-rec-area-title .tam-inv-toggle-btn:hover { color:#ccc!important; }',
+
+      /* Funchal/Porto reception th already defined above */
+
+      /* ── Quick distribution buttons (proc style — white bg) ── */
+      '.tam-rec-quick-btns { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid #e0e0e0; background:#fafafa!important; flex-wrap:wrap; border-radius:0; }',
+      '.tam-quick-label { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000!important; white-space:nowrap; opacity:.5; }',
+      '.tam-quick-btn { padding:7px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc!important; border-radius:8px; background:transparent!important; color:#000!important; transition:all 0.15s; white-space:nowrap; }',
+      '.tam-quick-btn:hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-quick-btn-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
+      '.tam-quick-btn-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
+
+      /* ── Reception table (proc style) ── */
+      '.tam-rec-boxes-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.85rem; white-space:nowrap; color:#000!important; }',
+      '.tam-rec-boxes-table th, .tam-rec-boxes-table td { border:1px solid #f0f0f0; text-align:center; vertical-align:middle; color:#000!important; }',
+      '.tam-rec-input { width:48px; padding:3px 4px; font-size:.85rem; font-weight:800; font-family:\'MontserratLight\',sans-serif; border:1px solid transparent; border-radius:6px; text-align:center; outline:none; background:transparent; transition:border-color .15s; color:#000!important; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-rec-input::-webkit-outer-spin-button, .tam-rec-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }',
+      '.tam-rec-input-f { color:#000!important; }',
+      '.tam-rec-input-p { color:#000!important; }',
+      '.tam-rec-input:focus { border-color:#000; background:#fff; }',
+      '.tam-rec-input:disabled { background:#f5f5f5; color:#bbb!important; border-color:transparent; }',
+
+      /* ── Per-row quick buttons column (proc style) ── */
+      '.tam-rec-quick-col { min-width:100px; padding:2px 6px!important; background:#fafafa!important; border-left:2px solid #e0e0e0!important; }',
+      '.tam-boxes-hdr-row .tam-rec-quick-col { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; background:#fafafa!important; }',
+      '.tam-row-quick { display:flex; gap:3px; justify-content:center; }',
+      '.tam-row-quick-btn { padding:3px 8px; font-size:.68rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ddd; border-radius:6px; background:transparent; color:#000; transition:all 0.12s; white-space:nowrap; line-height:1.4; }',
+      '.tam-row-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-row-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; }',
+      '.tam-row-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
+
+      /* ── Distribuição divider banner — large title like a section heading ── */
+      '.tam-rec-divider { display:flex; align-items:center; gap:0; margin-bottom:0; width:100%; max-width:1600px; }',
+      '.tam-rec-divider::before { content:""; flex:1; height:1px; background:#e0e0e0; }',
+      '.tam-rec-divider::after  { content:""; flex:1; height:1px; background:#e0e0e0; }',
+      '.tam-rec-divider span { font-family:\'MontserratLight\',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.22em; color:#000; padding:9px 36px; white-space:nowrap; }',
+
+      /* ── Session bar — responsive for mobile ── */
+      '#tam-session-bar { display:flex!important; align-items:center; justify-content:center; gap:10px; width:100%; max-width:1400px; padding:8px 24px; flex-wrap:wrap; box-sizing:border-box; }',
+      '@media (max-width:600px) {',
+      '  #tam-session-bar { gap:8px; padding:8px 12px; }',
+      '  .tam-session-btn { font-size:.62rem!important; padding:4px 10px!important; }',
+      '}',
+
+      /* ── Box column alternating (proc style — clean) ── */
+      '.tam-box-header:nth-of-type(odd)  { background:#fafafa!important; color:#000!important; border-top:3px solid #000!important; }',
+      '.tam-box-header:nth-of-type(even) { background:#fff!important; color:#000!important; border-top:3px solid #e0e0e0!important; }',
+      '.tam-box-header.tam-box-col-complete { background:#f0f0f0!important; color:#000!important; opacity:.6; }',
+      '.tam-box-sub-th:nth-of-type(odd)  { background:#fafafa!important; border-top:2px solid #e0e0e0!important; }',
+      '.tam-box-sub-th:nth-of-type(even) { background:#fff!important; border-top:2px solid #f0f0f0!important; }',
+      '.tam-rec-cell-f.tam-col-odd  { background:#fafafa!important; }',
+      '.tam-rec-cell-p.tam-col-odd  { background:#f5f5f5!important; border-right:2px solid #e0e0e0!important; }',
+      '.tam-rec-cell-f.tam-col-even { background:#fff!important; }',
+      '.tam-rec-cell-p.tam-col-even { background:#fafafa!important; border-right:2px solid #f0f0f0!important; }',
+      '.tam-rec-cell-quick.tam-col-odd  { background:#f5f5f5!important; border-left:1px dashed #e0e0e0!important; }',
+      '.tam-rec-cell-quick.tam-col-even { background:#fafafa!important; border-left:1px dashed #f0f0f0!important; }',
+      '.tam-box-col-active { background:rgba(0,0,0,.04)!important; border-bottom:2px solid #000!important; color:#000!important; }',
+
+      /* ── Completed box columns (proc style — grey) ── */
+      '.tam-box-header.tam-box-col-grey-odd  { background:#efefef!important; color:#888!important; border-top:3px solid #ccc!important; }',
+      '.tam-box-sub-th.tam-box-col-grey-odd  { background:#f2f2f2!important; border-top:2px solid #ccc!important; }',
+      '.tam-rec-cell-f.tam-box-col-grey-odd  { background:#f2f2f2!important; }',
+      '.tam-rec-cell-p.tam-box-col-grey-odd  { background:#eeeeee!important; border-right:2px solid #ccc!important; }',
+      '.tam-rec-cell-quick.tam-col-odd.tam-box-col-grey-odd  { background:#efefef!important; border-left:1px solid #ccc!important; }',
+      '.tam-box-header.tam-box-col-grey-even { background:#e8e8e8!important; color:#777!important; border-top:3px solid #bbb!important; }',
+      '.tam-box-sub-th.tam-box-col-grey-even { background:#ebebeb!important; border-top:2px solid #bbb!important; }',
+      '.tam-rec-cell-f.tam-box-col-grey-even { background:#ebebeb!important; }',
+      '.tam-rec-cell-p.tam-box-col-grey-even { background:#e8e8e8!important; border-right:2px solid #bbb!important; }',
+      '.tam-rec-cell-quick.tam-col-even.tam-box-col-grey-even { background:#e5e5e5!important; border-left:1px solid #bbb!important; }',
+      '.tam-box-sub-th.tam-box-sub-complete { background:#f0f0f0!important; border-top:2px solid #ccc!important; }',
+      '.tam-box-col-grey-odd .tam-rec-input:disabled, .tam-box-col-grey-even .tam-rec-input:disabled { background:transparent!important; border-color:transparent!important; color:#aaa!important; }',
+
+      /* ── Inactive (non-active, non-complete) box columns ── */
+      '.tam-box-col-inactive { background:#fafafa!important; color:#bbb!important; border-top:3px solid #e0e0e0!important; }',
+      '.tam-box-compact { width:1px!important; min-width:0!important; padding:2px 3px!important; }',
+      '.tam-box-compact .tam-rec-input { width:34px!important; }',
+
+      /* ── Quick column (rápido) — light grey ── */
+      '.tam-rec-cell-quick.tam-col-odd, .tam-rec-cell-quick.tam-col-even { background:#f5f5f5!important; border-left:1px solid #e0e0e0!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn { background:transparent!important; border-color:#ccc!important; color:#000!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-btn:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-btn:hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; }',
+      '.tam-rec-cell-quick.tam-col-odd .tam-row-quick-split:hover, .tam-rec-cell-quick.tam-col-even .tam-row-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
+      '.tam-sub-q { font-size:.6rem; font-weight:700; color:#000; opacity:.4; letter-spacing:.03em; }',
+      '.tam-row-quick-btn:disabled { opacity:0.3; cursor:not-allowed; }',
+      '.tam-quick-nototals { opacity:0.5; }',
+
+      /* tam-ref-completing animation removed */
+
+
+      /* ── Top scrollbar sync bar ── */
+      '.tam-rec-scroll-sync-wrap { display:flex; flex-direction:column; width:100%; }',
+      '.tam-rec-scroll-top-bar { overflow-x:auto; overflow-y:hidden; height:12px; background:#e8e8e8; border-radius:6px 6px 0 0; border-bottom:1px solid #ccc; scrollbar-width:thin; }',
+      '.tam-rec-scroll-top-bar::-webkit-scrollbar { height:8px; }',
+      '.tam-rec-scroll-top-bar::-webkit-scrollbar-thumb { background:#aaa; border-radius:4px; }',
+      '.tam-rec-scroll-top-inner { height:1px; }',
+
+      /* dark mode overrides */
+
+      /* Cabecera caja (proc style) */
+      '.tam-boxes-hdr-row th { padding:6px 8px; background:#fafafa; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#000; opacity:.5; white-space:nowrap; }',
+      '.tam-box-header { min-width:120px; background:#fafafa!important; }',
+      '.tam-box-header.tam-box-col-complete { background:#f0f0f0!important; color:#000!important; opacity:.6; }',
+      '.tam-box-lock { font-size:.75rem; }',
+
+      /* Sub-header */
+      '.tam-boxes-sub-hdr th { padding:4px 6px; background:#fafafa; }',
+      '.tam-box-sub-th { min-width:120px; padding:4px 6px!important; }',
+      '.tam-box-sub-inner { display:flex; align-items:center; gap:4px; justify-content:center; margin-bottom:3px; }',
+      '.tam-box-total-input { width:68px; padding:3px 6px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; border:1px solid #e0e0e0; border-radius:7px; text-align:center; outline:none; background:#fff; transition:border-color .2s; -moz-appearance:textfield; }',
+      '.tam-box-total-input:focus { border-color:#000; }',
+      '.tam-box-total-input.tam-box-declared { border-color:#4A7C6F; color:#4A7C6F; }',
+      '.tam-box-total-input:disabled { background:#fafafa; color:#bbb; border-color:#e0e0e0; }',
+      '.tam-box-pct { font-size:.68rem; font-weight:700; color:#000; opacity:.4; white-space:nowrap; }',
+      '.tam-box-edit-btn { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.75rem; padding:1px 5px; transition:background .15s; }',
+      '.tam-box-filter-btn { background:transparent; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.7rem; padding:1px 5px; transition:all .15s; margin-left:2px; }',
+      '.tam-box-filter-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-box-edit-btn:hover { background:#f0f0f0; border-color:#000; }',
+      '.tam-box-confirm-btn { background:#4A7C6F; border:1px solid #4A7C6F; color:#fff!important; border-radius:6px; cursor:pointer; font-size:.7rem; font-weight:700; padding:2px 8px; margin-left:4px; transition:background .15s; white-space:nowrap; }',
+      '.tam-box-confirm-btn:hover { background:#3a6459; }',
+      '.tam-box-close-btn { background:transparent; border:1px solid #e0e0e0; color:#888!important; border-radius:6px; cursor:pointer; font-size:.75rem; padding:1px 7px; margin-left:2px; transition:all .15s; }',
+      '.tam-box-close-btn:hover { background:#fdeaea; border-color:#c00; color:#c00!important; }',
+      '.tam-box-sub-labels { display:flex; justify-content:space-around; }',
+      '.tam-sub-f { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',
+      '.tam-sub-p { font-size:.65rem; font-weight:700; color:#000; opacity:.5; letter-spacing:.03em; }',
+
+      /* Columnas fijas — sticky con background OPACO (proc style) */
+      '.tam-rec-ref-col { min-width:130px; padding:4px 10px!important; background-color:#fff!important; background:#fff!important; border-right:2px solid #e0e0e0!important; text-align:left!important; position:sticky; left:0; z-index:2; box-shadow:2px 0 5px rgba(0,0,0,.08); will-change:transform; }',
+      '.tam-rec-total-col { min-width:46px; padding:4px 8px!important; background-color:#fff!important; background:#fff!important; border-right:1px solid #e0e0e0!important; font-variant-numeric:tabular-nums; }',
+      /* Sticky header cells */
+      '.tam-boxes-hdr-row .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 5px rgba(0,0,0,.08); }',
+      '.tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky; left:0; z-index:4; background-color:#fafafa!important; background:#fafafa!important; box-shadow:2px 0 5px rgba(0,0,0,.07); padding:4px 6px!important; }',
+      /* Mobile sticky */
+      '@media (max-width:768px) {',
+      '  .tam-rec-boxes-scroll { overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }',
+      '  .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:10!important; min-width:110px!important; background-color:#fff!important; background:#fff!important; box-shadow:3px 0 10px rgba(0,0,0,.1)!important; }',
+      '  .tam-boxes-hdr-row .tam-rec-ref-col,',
+      '  .tam-boxes-sub-hdr .tam-rec-ref-col { position:sticky!important; left:0!important; z-index:12!important; background-color:#fafafa!important; background:#fafafa!important; }',
+      '  .tam-ref-over .tam-rec-ref-col { background-color:#fdf0f0!important; background:#fdf0f0!important; }',
+      '  .tam-ref-complete .tam-rec-ref-col { background-color:#fafafa!important; background:#fafafa!important; }',
+      '}',
+
+      /* ── Click-to-modify tooltip (proc style) ── */
+      '#tam-modify-tip { position:absolute; z-index:9999; display:flex; align-items:center; gap:8px; padding:8px 14px; background:#fff; border:1px solid #000; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.18); font-family:\'MontserratLight\',sans-serif; font-size:.78rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translateX(-4px); transition:opacity .15s ease, transform .15s ease; }',
+      '#tam-modify-tip.tam-tip-visible { opacity:1; pointer-events:auto; transform:translateX(0); }',
+      '.tam-tip-msg { color:#000; font-weight:700; }',
+      '.tam-tip-btn { padding:3px 14px; font-size:.74rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #555; border-radius:7px; background:#fff; color:#000; transition:background .12s; text-transform:lowercase; }',
+      '.tam-tip-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-tip-cancel { padding:3px 10px; font-size:.74rem; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:all .12s; text-transform:lowercase; }',
+      '.tam-tip-cancel:hover { background:#f0f0f0; border-color:#555; }',
+      /* pointer on clickable ref cells */
+      '.tam-ref-complete .tam-rec-ref-col, .tam-ref-over .tam-rec-ref-col { cursor:pointer; }',
+      '.tam-ref-complete .tam-rec-ref-col:hover, .tam-ref-over .tam-rec-ref-col:hover { background:#f5f5f5!important; }',
+      /* ── Unlocked column highlight ── */
+      '.tam-col-unlocked { background:#fff!important; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }',
+      '.tam-col-unlocked-hdr { background:#fafafa!important; border-top:3px solid #000!important; }',
+      /* ── Ref cells in edit state ── */
+      '.tam-cell-ref-edit { background:#f0f0f0!important; box-shadow:inset 0 1px 4px rgba(0,0,0,.14)!important; }',
+      '.tam-cell-ref-edit .tam-rec-input { background:#f0f0f0!important; font-weight:700!important; color:#000!important; }',
+      /* ── Cell edit flash animation ── */
+      '@keyframes tam-edit-flash { 0%{background:#f5f5f5!important;outline:2px solid #000!important;} 50%{background:#ececec!important;outline:2px solid #000!important;} 100%{background:inherit;outline:none;} }',
+      '.tam-cell-edit-flash { animation:tam-edit-flash 2s ease forwards!important; }',
+
+      /* ── Undo / Redo / Clear action buttons (proc style) ── */
+      '.tam-hdr-action-col { padding:2px 4px!important; text-align:center!important; vertical-align:middle!important; }',
+      '.tam-action-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:26px; font-size:.9rem; cursor:pointer; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; transition:all .12s; line-height:1; padding:0; }',
+      '.tam-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
+      '.tam-action-btn:disabled { opacity:.25; cursor:not-allowed; }',
+      '.tam-undo-btn:hover:not(:disabled) { background:#5F7B94!important; border-color:#5F7B94!important; color:#fff!important; }',
+      '.tam-redo-btn:hover:not(:disabled) { background:#5F7B94!important; border-color:#5F7B94!important; color:#fff!important; }',
+      '.tam-clear-btn:hover:not(:disabled) { background:#9B4D4D!important; border-color:#9B4D4D!important; color:#fff!important; }',
+
+      /* ── Ref filter input (proc style) ── */
+      '.tam-ref-filter-input { width:100%; box-sizing:border-box; padding:4px 8px; font-size:.78rem; font-family:\'MontserratLight\',sans-serif; border:1px solid #e0e0e0; border-radius:7px; outline:none; background:#fafafa; color:#000; transition:border-color .15s; }',
+      '.tam-ref-filter-input:focus { border-color:#000; background:#fff; }',
+      '.tam-ref-filter-input::placeholder { color:#bbb; font-style:italic; }',
+      /* Override sticky bg per row state */
+      '.tam-ref-over .tam-rec-ref-col { background-color:#fdf0f0!important; background:#fdf0f0!important; }',
+      '.tam-ref-complete .tam-rec-ref-col { background-color:#fff!important; background:#fff!important; }',
+      '.tam-rec-boxes-table tbody tr:hover .tam-rec-ref-col { background-color:#f5f5f5!important; background:#f5f5f5!important; }',
+
+      /* Celdas input F/P */
+      '.tam-rec-cell-f { background:#fafafa; padding:2px 4px!important; min-width:52px; }',
+      '.tam-rec-cell-p { background:#f5f5f5; padding:2px 4px!important; min-width:52px; border-right:2px solid #e0e0e0!important; }',
+      '.tam-rec-input-f { color:#000!important; }',
+      '.tam-rec-input-p { color:#000!important; }',
+      '.tam-rec-input:focus { border-color:#000; background:#fff; }',
+      '.tam-rec-input:disabled { background:#f5f5f5; color:#bbb; border-color:transparent; }',
+      '.tam-rec-boxes-table tbody tr:hover td { background:#f9f9f9; }',
+      '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-f { background:#f0f0f0; }',
+      '.tam-rec-boxes-table tbody tr:hover .tam-rec-cell-p { background:#ececec; }',
+      '.tam-rec-boxes-table .tam-ref-complete td { color:#bbb!important; }',
+      '.tam-rec-boxes-table .tam-ref-complete td strong { color:#bbb!important; }',
+
+      /* ── Fila en rojo: F+P >= total ref ── */
+      '.tam-ref-over td { background:#fdf0f0!important; }',
+      '.tam-ref-over .tam-rec-ref-col { background:#fdf0f0!important; }',
+      '.tam-ref-over .tam-rec-total-col { background:#fdf0f0!important; }',
+      '.tam-ref-over td strong { color:#9B4D4D!important; }',
+
+      /* ── Per-invoice quick distribution buttons (proc style) ── */
+      '.tam-inv-quick-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }',
+      '.tam-inv-quick-btn { padding:3px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.14s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-inv-quick-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-inv-quick-split { border-color:#5F7B94!important; color:#5F7B94!important; background:transparent!important; }',
+      '.tam-inv-quick-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
+      '.tam-inv-quick-active { font-size:.7rem; font-weight:700; color:#4A7C6F; border:1px solid #4A7C6F; border-radius:6px; padding:3px 8px; white-space:nowrap; letter-spacing:.02em; background:transparent; }',
+      '.tam-inv-quick-undo { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
+      '.tam-inv-quick-undo:hover { border-color:#9B4D4D!important; color:#9B4D4D!important; background:rgba(155,77,77,.08)!important; }',
+
+      /* ── Stock / Guía / Export buttons — shared style for single + multi layout ── */
+      '.tam-inv-stock-btn, .tam-inv-guia-btn, .tam-inv-export-btn, .tam-inv-credit-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-inv-stock-btn:hover, .tam-inv-guia-btn:hover, .tam-inv-export-btn:hover, .tam-inv-credit-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
+
+      /* ── Edit mode button (proc style) ── */
+      '.tam-inv-edit-btn { position:relative; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:20px; color:#000; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; letter-spacing:.10em; text-transform:uppercase; cursor:pointer; padding:5px 14px; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; flex-shrink:0; transition:background .18s ease,color .18s ease,border-color .18s ease,transform .2s ease!important; transform-origin:center; overflow:visible; }',
+      '.tam-inv-edit-btn:hover { background:#111!important; border-color:#111!important; color:#fff!important; transform:scale(1.1)!important; }',
+      '.tam-inv-edit-btn.active { background:#4A7C6F!important; border-color:#4A7C6F!important; color:#fff!important; }',
+
+      /* ── Edit mode table (proc style) ── */
+      '.tam-edit-notice { padding:7px 16px; font-size:.72rem; font-weight:700; color:#000; background:#fafafa; border-bottom:1px solid #e0e0e0; font-family:\'MontserratLight\',sans-serif; letter-spacing:.02em; opacity:.6; }',
+      '.tam-table-edit tbody tr:hover td { background:#f5f5f5!important; }',
+      '.tam-edit-input { font-family:\'MontserratLight\',sans-serif; font-size:.84rem; font-weight:700; padding:3px 6px; border:1px solid #e0e0e0; border-radius:6px; outline:none; background:#fafafa; width:100%; box-sizing:border-box; transition:border-color .15s; color:#000; }',
+      '.tam-edit-input:focus { border-color:#000; background:#fff; }',
+      '.tam-edit-wide { min-width:160px; }',
+      '.tam-edit-num { width:70px; text-align:center; }',
+      '.tam-edit-del-row { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.8rem; color:#ccc; padding:2px 7px; transition:all .15s; }',
+      '.tam-edit-del-row:hover { color:#9B4D4D; border-color:#9B4D4D; background:rgba(155,77,77,.08); }',
+      '.tam-edit-actions { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px solid #e0e0e0; flex-wrap:wrap; }',
+      '.tam-edit-add-row { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .15s; }',
+      '.tam-edit-add-row:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-edit-save { padding:6px 16px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .15s; }',
+      '.tam-edit-save:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-edit-cancel { padding:6px 14px; font-size:.78rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:all .15s; }',
+      '.tam-edit-cancel:hover { background:#f5f5f5; opacity:1; }',
+
+      /* ── Remove button per invoice (proc style) ── */
+      '.tam-inv-remove-btn { padding:3px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:lowercase; cursor:pointer; border:1px solid #ccc; border-radius:6px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }',
+      '.tam-inv-remove-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }',
+
+      /* ── N.º Guia ERP — auto-colapsa a fatura ao preencher (proc style) ── */
+      '.tam-inv-guia-erp-wrap { display:flex; align-items:center; gap:6px; }',
+      '.tam-inv-guia-erp-label { font-size:.62rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }',
+      '.tam-inv-guia-erp-input { padding:4px 9px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:\'MontserratLight\',sans-serif; font-size:.82rem; font-weight:700; color:#000; text-align:center; outline:none; transition:border-color .15s,background .15s,width .15s; }',
+      '.tam-inv-guia-erp-input:focus { border-color:#000; background:#fff; }',
+      '.tam-inv-guia-erp-input.tam-inv-guia-erp-done { border-color:#000!important; background:#000!important; color:#fff!important; }',
+
+            /* ── Stock modal (proc-or-modal system — identical to processamento.js) ── */
+      '#tam-stock-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#tam-stock-modal.tam-stock-visible { opacity:1; pointer-events:auto; }',
+      '#tam-stock-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-stock-panel { position:relative; z-index:1; width:min(660px,90vw); max-height:65vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-stock-modal.tam-stock-visible #tam-stock-panel { transform:translateY(0); }',
+      '#tam-stock-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
+      '#tam-stock-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-stock-inv-label { font-size:1rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-stock-sub-label { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:\'MontserratLight\',sans-serif; opacity:.55; }',
+      '#tam-stock-actions { display:flex; gap:8px; align-items:center; }',
+      '.tam-stock-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
+      '.tam-stock-action-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-stock-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
+      '.tam-stock-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
+      /* Copy bar — 5 cols, identical to proc-or-copy-bar */
+      '.tam-stock-copy-bar { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
+      '.tam-stock-copy-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }',
+      '.tam-stock-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-stock-copy-btn.tam-stock-copy-active { border-color:#555!important; color:#000!important; background:#f0f0f0!important; }',
+      '#tam-stock-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      /* Table — proc-or-table style */
+      '#tam-stock-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
+      '#tam-stock-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
+      '#tam-stock-table thead tr { background:#fff; border-bottom:1px solid #e0e0e0; }',
+      '.tam-stock-th { padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; white-space:nowrap; border:none; background:#fff; border-bottom:2px solid #e0e0e0; }',
+      '.tam-stock-th.tam-stock-city,.tam-stock-th.tam-stock-iva,.tam-stock-th.tam-stock-price,.tam-stock-th.tam-stock-qty { text-align:center; }',
+      '.tam-stock-td { padding:7px 12px; font-size:.84rem; font-weight:700; border:none; border-bottom:1px solid #f0f0f0; color:#000; vertical-align:middle; }',
+      '.tam-stock-td.tam-stock-city,.tam-stock-td.tam-stock-iva,.tam-stock-td.tam-stock-qty { text-align:center; }',
+      '.tam-stock-td.tam-stock-price { text-align:right; font-variant-numeric:tabular-nums; }',
+      '.tam-stock-td.tam-stock-ref { font-weight:700; color:#000; }',
+      '.tam-stock-row-even { background:#fff; }',
+      '.tam-stock-row-odd  { background:#fafafa; }',
+      '#tam-stock-table tr:nth-child(even) td { background:#fafafa; }',
+      '#tam-stock-table tbody tr:hover td { background:#f0f0f0!important; }',
+      '#tam-stock-footer { padding:10px 20px; border-top:1px solid #e0e0e0; background:#fafafa; font-size:.72rem; font-weight:700; color:#000; flex-shrink:0; font-family:\'MontserratLight\',sans-serif; }',
+
+      /* ── Guia modal (proc-or-modal system — identical to processamento.js) ── */
+      '#tam-guia-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#tam-guia-modal.tam-guia-visible { opacity:1; pointer-events:auto; }',
+      '#tam-guia-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-guia-panel { position:relative; z-index:1; width:min(640px,90vw); max-height:65vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.18); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-guia-modal.tam-guia-visible #tam-guia-panel { transform:translateY(0); }',
+      '#tam-guia-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; flex-wrap:wrap; gap:8px; }',
+      '#tam-guia-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-guia-title-main { font-size:1rem; font-weight:700; color:#000!important; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-guia-title-sub { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:#000!important; font-family:\'MontserratLight\',sans-serif; opacity:.55; }',
+      /* Right side of header: banner + buttons stacked */
+      '#tam-guia-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }',
+      '#tam-guia-header-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }',
+      /* ── Banner sessões anteriores ── */
+      '.tam-guia-other-banner { display:flex; align-items:center; gap:7px; border-radius:8px; padding:5px 10px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; max-width:340px; transition:all .3s; }',
+      '.tam-guia-other-loading { background:#f5f5f5; color:#000; opacity:.55; }',
+      '.tam-guia-other-none    { background:transparent; color:#4A7C6F; border:1px solid #c8e6c9; }',
+      '.tam-guia-other-found   { background:#FFFBF5; border:1px solid #E8A44A; color:#000; flex-wrap:wrap; max-width:none; }',
+      '.tam-guia-other-icon    { font-size:1rem; flex-shrink:0; }',
+      '.tam-guia-other-text    { display:flex; flex-direction:column; gap:1px; }',
+      '.tam-guia-other-text strong { color:#000!important; }',
+      '.tam-guia-other-sessions { font-size:.65rem; color:#000; opacity:.55; margin-top:1px; display:block; font-weight:600; }',
+      '.tam-guia-action-btn { background:#fff; border:1px solid #ccc; border-radius:8px; color:#000!important; font-size:.75rem; font-weight:700; text-transform:lowercase; padding:5px 13px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; white-space:nowrap; }',
+      '.tam-guia-action-btn:hover:not(:disabled) { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-action-btn:disabled { opacity:.4; cursor:not-allowed; }',
+      '.tam-guia-confirm { border-color:#000!important; color:#000!important; background:transparent!important; }',
+      '.tam-guia-confirm:hover:not(:disabled) { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-guia-close-btn { background:transparent; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.85rem; padding:4px 10px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all 0.14s; }',
+      '.tam-guia-close-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:#F5EAEA; }',
+      /* Address bar — 4 cols grid for Lisboa/Placa/FNC/PXO buttons */
+      '.tam-guia-addr-bar-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 16px; border-bottom:2px solid #e0e0e0; background:#fff; flex-shrink:0; position:relative; z-index:1; }',
+      '.tam-guia-addr-btn { background:#fff; border:1.5px solid #ddd; border-radius:8px; color:#000; font-size:.72rem; font-weight:700; padding:7px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all 0.14s; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; white-space:nowrap; }',
+      '.tam-guia-addr-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-addr-copied { background:#e8e8e8!important; border-color:#555!important; }',
+      /* Inline header copy buttons (small, beside Referência label in th2) */
+      '.tam-guia-copy-label { display:none; }',
+      '.tam-guia-copy-btn { background:transparent; border:1px solid #ccc; border-radius:5px; color:#888; font-size:.58rem; font-weight:700; padding:2px 6px; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:all .12s; flex-shrink:0; display:inline-flex; align-items:center; }',
+      '.tam-guia-copy-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-guia-copy-msg { font-size:.75rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; color:#4A7C6F; }',
+      '.tam-guia-hdr-copy { padding:2px 6px; font-size:.58rem; border:1px solid #ccc; border-radius:5px; background:transparent; cursor:pointer; color:#888; font-family:\'MontserratLight\',sans-serif; font-weight:700; transition:all .12s; flex-shrink:0; }',
+      '.tam-guia-hdr-copy:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-guia-hdr-copy.tam-guia-copy-active { background:#f0f0f0!important; border-color:#555!important; }',
+      '#tam-guia-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#tam-guia-table { border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; white-space:nowrap; width:100%; }',
+      '#tam-guia-table thead { position:sticky; top:0; z-index:2; background:#fff; }',
+      /* Col headers F/P — now with subtle background */
+      '.tam-guia-th { padding:8px 14px; font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#000; border-bottom:2px solid #e0e0e0; text-align:center; white-space:normal; line-height:1.3; }',
+      '.tam-guia-th-f { background:#f5f5f5; color:#000; }',
+      '.tam-guia-th-p { background:#eeeeee; color:#000; }',
+      '.tam-guia-th-sep { width:16px; background:#fff; border-bottom:2px solid #e0e0e0; }',
+      '.tam-guia-th2 { padding:7px 10px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#000; border-bottom:2px solid #e0e0e0; text-align:left; white-space:nowrap; }',
+      '.tam-guia-th2-inner { display:flex; align-items:center; gap:5px; }',
+      '.tam-guia-th2-qty { text-align:center; }',
+      '.tam-guia-td { padding:7px 12px; font-size:.84rem; font-weight:700; border-bottom:1px solid #f0f0f0; vertical-align:middle; color:#000; }',
+      '.tam-guia-ref-f { font-weight:700; color:#000; min-width:120px; }',
+      '.tam-guia-qty-f { text-align:center; font-weight:700; color:#000; font-variant-numeric:tabular-nums; }',
+      '.tam-guia-sep { width:16px; background:#fafafa; border-bottom:1px solid #f0f0f0; }',
+      '.tam-guia-ref-p { font-weight:700; color:#000; min-width:120px; }',
+      '.tam-guia-qty-p { text-align:center; font-weight:700; color:#000; font-variant-numeric:tabular-nums; }',
+      '.tam-guia-row-even td { background:#fff; }',
+      '.tam-guia-row-odd td { background:#F7F4F3; }',
+      '.tam-guia-row-sent td { background:#f5f5f5; color:#bbb; }',
+      '.tam-guia-row-sent .tam-guia-ref-f,.tam-guia-row-sent .tam-guia-ref-p { color:#bbb; }',
+      '.tam-guia-row-sent .tam-guia-qty-f,.tam-guia-row-sent .tam-guia-qty-p { color:#bbb; }',
+      '#tam-guia-table tbody tr:hover td { background:#f0f0f0!important; }',
+      '.tam-guia-sent-hdr td { padding:6px 14px; background:transparent; font-size:.65rem; font-weight:700; color:#000; text-transform:uppercase; letter-spacing:.08em; border-top:2px solid #e0e0e0; border-bottom:1px solid #e0e0e0; opacity:.5; }',
+      '.tam-guia-empty { padding:24px; color:#000; font-style:italic; text-align:center; opacity:.4; }',
+      '#tam-guia-footer { padding:10px 20px; font-size:.72rem; font-weight:700; color:#000!important; border-top:1px solid #e0e0e0; background:#fafafa; font-family:\'MontserratLight\',sans-serif; flex-shrink:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }',
+      '.tam-guia-session-dot { font-size:.55rem; vertical-align:middle; margin-right:3px; line-height:1; }',
+      '#tam-guia-session-legend { display:flex; flex-wrap:wrap; gap:10px; padding:7px 14px 4px; font-size:.68rem; color:#000; font-family:\'MontserratLight\',sans-serif; border-top:1px dashed #e0e0e0; opacity:.6; font-weight:700; }',
+      '.tam-guia-legend-item { display:flex; align-items:center; gap:4px; }',
+      /* ── Guia confirm overlay ── */
+      '#tam-guia-confirm-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.9); border-radius:16px; }',
+      '#tam-guia-confirm-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.18); padding:24px 28px; width:min(380px,90%); font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-gc-title { font-size:.9rem; font-weight:700; color:#000; margin-bottom:12px; }',
+      '.tam-gc-body { font-size:.82rem; color:#000; line-height:1.6; margin-bottom:18px; }',
+      '.tam-gc-btns { display:flex; gap:8px; }',
+      '.tam-gc-btn { padding:8px 18px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1.5px solid #ccc; background:#fff; color:#000; transition:all .12s; text-transform:lowercase; }',
+      '.tam-gc-ok { border-color:#000!important; color:#000!important; background:#f0f0f0!important; }',
+      '.tam-gc-ok:hover { background:#e8e8e8!important; border-color:#555!important; }',
+      '.tam-gc-cancel:hover { background:#f0f0f0; border-color:#000; }',
+
+      /* ── Anomaly column header and cells (proc style) ── */
+      '.tam-th-anomaly { background:transparent!important; color:#000!important; opacity:.5; font-size:.65rem!important; min-width:54px; }',
+      '.tam-cell-anomaly-ok   { color:#4A7C6F!important; font-size:.75rem; font-weight:700; text-align:center; }',
+      '.tam-cell-anomaly-low  { color:#9B4D4D; font-weight:700; text-align:center; }',
+      '.tam-cell-anomaly-high { color:#5F7B94; font-weight:700; text-align:center; }',
+      '.tam-cell-anomaly-empty { }',
+
+      /* -- DN modal (proc style) -- */
+      '#tam-dn-modal { position:fixed; inset:0; z-index:10001; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#tam-dn-modal.tam-dn-visible { opacity:1; pointer-events:auto; }',
+      '#tam-dn-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-dn-panel { position:relative; z-index:1; width:min(700px,96vw); max-width:96vw; max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.32); overflow:hidden; transform:translateY(12px); transition:transform .22s ease; }',
+      '#tam-dn-modal.tam-dn-visible #tam-dn-panel { transform:translateY(0); }',
+      '#tam-dn-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e8e8e8; background:#fafafa; flex-shrink:0; }',
+      '#tam-dn-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-dn-zy { font-size:1rem; font-weight:bold; color:#111; font-family:MontserratLight,sans-serif; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }',
+      '#tam-dn-sub { font-size:.68rem; color:#888; font-family:MontserratLight,sans-serif; text-transform:uppercase; letter-spacing:.06em; }',
+      /* Total pieces labels next to title */
+      '.tam-dn-total-ok      { font-size:.78rem; font-weight:bold; color:#2e7d32; background:#f0faf0; border:1px solid #2e7d32; border-radius:6px; padding:2px 8px; white-space:nowrap; }',
+      '.tam-dn-total-err     { font-size:.78rem; font-weight:bold; color:#c62828; background:#fff0f0; border:1px solid #c62828; border-radius:6px; padding:2px 8px; white-space:nowrap; }',
+      '.tam-dn-total-neutral { font-size:.78rem; font-weight:bold; color:#555;    background:#f5f5f5;  border:1px solid #ccc;    border-radius:6px; padding:2px 8px; white-space:nowrap; }',
+      '.tam-dn-close { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; border:1.5px solid #ddd; border-radius:8px; background:#f5f5f5; color:#555; transition:background .12s; }',
+      '.tam-dn-close:hover { background:#c62828; color:#fff; border-color:#c62828; }',
+      '#tam-dn-scroll { overflow:auto; flex:1; -webkit-overflow-scrolling:touch; }',
+      '#tam-dn-table { width:auto; min-width:100%; border-collapse:collapse; font-family:MontserratLight,sans-serif; font-size:.84rem; table-layout:auto; }',
+      '.tam-dn-th-t { width:1px; white-space:nowrap; text-align:center!important; color:#666!important; }',
+      '.tam-dn-th-f { width:1px; white-space:nowrap; text-align:center!important; color:#111!important; background:#e8e8e8; padding:0!important; }',
+      '.tam-dn-th-p { width:1px; white-space:nowrap; text-align:center!important; color:#111!important; background:#e8e8e8; padding:0!important; }',
+      '.tam-conf-badge { display:inline-block; padding:2px 8px; border-radius:5px; font-weight:700; }',
+      '.tam-conf-ok   { background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; }',
+      '.tam-conf-warn { background:#fff8e1; color:#e65100; border:1px solid #ffcc80; }',
+      '.tam-conf-err  { background:#ffebee; color:#c62828; border:1px solid #ef9a9a; }',
+      '#tam-dn-table thead { position:sticky; top:0; z-index:2; }',
+      '.tam-dn-th { padding:8px 12px; background:#f0f0f0; font-size:.68rem; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#666!important; border-bottom:2px solid #ddd; text-align:left; }',
+      '.tam-dn-th-f { color:#111!important; background:#e8e8e8; padding:0!important; }',
+      '.tam-dn-th-p { color:#111!important; background:#e8e8e8; padding:0!important; }',
+      '.tam-dn-col-btn { display:block; width:100%; height:100%; padding:8px 12px; font-size:.68rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.05em; cursor:pointer; border-radius:0; border:none; background:transparent; transition:background .13s; text-align:center; color:#111!important; }',
+      '.tam-dn-col-btn-f { color:#111!important; }',
+      '.tam-dn-col-btn-f:hover { background:rgba(0,0,0,.1)!important; }',
+      '.tam-dn-col-btn-p { color:#111!important; }',
+      '.tam-dn-col-btn-p:hover { background:rgba(0,0,0,.1)!important; }',
+      '.tam-dn-row td { padding:7px 12px; border-bottom:1px solid #f2f2f2; vertical-align:middle; }',
+      '.tam-dn-ref { font-weight:bold; color:#222; white-space:nowrap; width:1%; }',  /* shrink to longest ref */
+      '.tam-dn-total { text-align:center; color:#555; font-weight:bold; white-space:nowrap; width:1%; }',
+      '.tam-dn-cell { text-align:center; white-space:nowrap; width:1%; }',
+      /* No spinners on DN inputs */
+      '.tam-dn-inp { width:58px; min-width:44px; padding:5px 4px; font-size:.84rem; font-family:MontserratLight,sans-serif; border:1.5px solid #ddd; border-radius:7px; text-align:center; outline:none; transition:border-color .12s; -moz-appearance:textfield; appearance:textfield; color:#000!important; }',
+      '.tam-dn-inp::-webkit-inner-spin-button,.tam-dn-inp::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }',
+      '.tam-dn-inp-f:focus { border-color:#000; }',
+      '.tam-dn-inp-p:focus { border-color:#000; }',
+      '.tam-dn-btns { display:flex; gap:4px; align-items:center; white-space:nowrap; }',
+      '.tam-dn-btns-cell { width:1%; white-space:nowrap; }',
+      '.tam-dn-qbtn { padding:4px 8px; font-size:.72rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; }',  /* compact buttons */
+      '.tam-dn-f100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
+      '.tam-dn-f100:hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-dn-p100 { border-color:#ccc!important; color:#000!important; background:transparent!important; }',
+      '.tam-dn-p100:hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-dn-split:hover { background:#5F7B94!important; color:#fff!important; border-color:#5F7B94!important; }',
+      '.tam-dn-row-filled { background:#f5f5f5!important; transition:background .4s; }',
+      /* Odd-piece inline dialog */
+      '.tam-dn-odd-td { padding:0!important; border-bottom:1px solid #e0e0e0!important; }',
+      '.tam-dn-odd-dlg { padding:10px 16px; background:#fafafa; border-top:1px solid #e0e0e0; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-dn-odd-body { font-size:.82rem; font-weight:700; color:#000; }',
+      '.tam-dn-odd-btns { display:flex; gap:6px; flex-wrap:wrap; }',
+      '.tam-dn-odd-btn { padding:5px 12px; font-size:.76rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:8px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-dn-odd-f { border-color:#ccc!important; color:#000!important; }',
+      '.tam-dn-odd-f:hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-dn-odd-p { border-color:#ccc!important; color:#000!important; }',
+      '.tam-dn-odd-p:hover { background:#f0f0f0!important; border-color:#555!important; }',
+      '.tam-dn-odd-skip:hover { background:#f5f5f5!important; }',
+      '#tam-dn-footer { display:flex; align-items:center; gap:10px; padding:12px 20px; border-top:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
+      '.tam-dn-action-btn { padding:7px 22px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all .13s; text-transform:lowercase; }',
+      '.tam-dn-action-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-dn-cancel-btn { padding:7px 16px; font-size:.82rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color:#000; opacity:.5; transition:all .13s; text-transform:lowercase; }',
+      '.tam-dn-cancel-btn:hover { background:#f5f5f5; opacity:1; }',
+      '#tam-dn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:#fff; color:#000; border:1.5px solid #000; padding:10px 20px; border-radius:10px; font-size:.84rem; font-family:\'MontserratLight\',sans-serif; opacity:0; transition:opacity .3s,transform .3s; z-index:20000; pointer-events:none; font-weight:700; box-shadow:0 4px 20px rgba(0,0,0,.15); }',
+      '#tam-dn-toast.tam-dn-toast-show { opacity:1; transform:translateX(-50%) translateY(0); }',
+      '.tam-dn-loading { opacity:.7; }',
+
+      /* ── Distribution mismatch warning banner ── */
+      '#tam-dn-warn-banner { display:flex; align-items:center; gap:12px; padding:11px 20px; background:#FEF6EC; border-top:2px solid #E8A44A; border-bottom:1px solid #F0D9B5; flex-shrink:0; opacity:0; transform:translateY(6px); transition:opacity .25s ease,transform .25s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-dn-warn-banner.tam-dn-wb-visible { opacity:1; transform:translateY(0); }',
+      '.tam-dn-wb-icon { font-size:1.2rem; color:#C47A1E; flex-shrink:0; line-height:1; }',
+      '.tam-dn-wb-msg { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }',
+      '.tam-dn-wb-nums { font-size:.92rem; font-weight:700; color:#9B4D4D; letter-spacing:.01em; }',
+      '.tam-dn-wb-text { font-size:.7rem; color:#7A5530; font-weight:600; }',
+      '.tam-dn-wb-btns { display:flex; gap:8px; flex-shrink:0; }',
+      '.tam-dn-wb-fix { padding:5px 13px; border-radius:7px; border:1.5px solid #ccc; background:transparent; color:#555; font-size:.74rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,border-color .12s; text-transform:lowercase; }',
+      '.tam-dn-wb-fix:hover { background:#f0f0f0; border-color:#999; }',
+      '.tam-dn-wb-go { padding:5px 13px; border-radius:7px; border:1.5px solid #C47A1E; background:transparent; color:#C47A1E; font-size:.74rem; font-weight:700; cursor:pointer; font-family:\'MontserratLight\',sans-serif; transition:background .12s,color .12s; text-transform:lowercase; white-space:nowrap; }',
+      '.tam-dn-wb-go:hover { background:rgba(196,122,30,.12); }',
+
+      /* ── Motor D (proc style) ── */
+      '#tam-motord-spin { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(16px); background:#fff; color:#000; border:1.5px solid #000; padding:9px 20px; border-radius:12px; font-size:.82rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:20001; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,.15); }',
+
+      /* ── Motor D update badge ── */
+      '.tam-motord-update-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; font-size:.7rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border:1px solid #E8A44A; border-radius:8px; background:transparent; color:#C47A1E; transition:all .13s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-motord-update-badge:hover { background:#E8A44A; color:#fff; }',
+
+      /* ── Motor D update modal ── */
+      '#tam-motord-update-modal { position:fixed; inset:0; z-index:10100; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '#tam-motord-update-modal.tam-motord-update-visible { opacity:1; pointer-events:auto; }',
+      '#tam-motord-update-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-motord-update-panel { position:relative; z-index:1; width:min(480px,94vw); background:#fff; border-radius:16px; box-shadow:0 16px 60px rgba(0,0,0,.28); overflow:hidden; transform:translateY(10px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-motord-update-modal.tam-motord-update-visible #tam-motord-update-panel { transform:translateY(0); }',
+      '#tam-motord-update-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fafafa; border-bottom:1px solid #e0e0e0; font-size:.84rem; font-weight:700; color:#000; }',
+      '#tam-motord-update-close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:1rem; background:none; border:1px solid #ddd; border-radius:7px; cursor:pointer; color:#000; transition:all .12s; }',
+      '#tam-motord-update-close:hover { background:#9B4D4D; color:#fff; border-color:#9B4D4D; }',
+      '#tam-motord-update-body { padding:20px 22px; font-size:.85rem; font-weight:600; color:#000; line-height:1.7; }',
+      '#tam-motord-update-body p { margin:0 0 10px; }',
+      '#tam-motord-update-body ol { margin:0 0 0 18px; padding:0; }',
+      '#tam-motord-update-body li { margin-bottom:8px; }',
+      '#tam-motord-update-body code { background:#f5f5f5; border:1px solid #e0e0e0; border-radius:5px; padding:2px 7px; font-family:monospace; font-size:.82rem; color:#000; }',
+      '#tam-motord-update-body a { color:#000; font-weight:700; text-decoration:underline; }',
+      '#tam-motord-spin.tam-motord-spin-on { opacity:1; transform:translateX(-50%) translateY(0); }',
+      '.tam-badge-motord { background:#fff; color:#000; border:1px solid #000; }',
+      /* Pre-filled inputs from Motor D */
+      '.tam-dn-inp-prefilled { border-color:#E8A44A!important; background:#FFFBF5!important; }',
+      '.tam-dn-inp-unclear   { border-color:#9B4D4D!important; background:#F5EAEA!important; }',
+      '.tam-dn-row-prefilled td { background:#FFFBF5!important; }',
+      /* Confidence banners */
+      '.tam-dn-md-high { font-size:.7rem; font-weight:700; color:#4A7C6F; }',
+      '.tam-dn-md-med  { font-size:.7rem; font-weight:700; color:#E8A44A; }',
+      '.tam-dn-md-low  { font-size:.7rem; font-weight:700; color:#9B4D4D; }',
+      /* Motor D button in DN verification */
+      '.tam-dnv-btn-motord { border-color:#000!important; color:#000!important; }',
+      '.tam-dnv-btn-motord:hover { background:#f0f0f0!important; border-color:#555!important; }',
+
+      /* ── DN Verification area (proc style) ── */
+      '#tam-dn-verify-area { width:100%; max-width:760px; margin-top:16px; }',
+      '#tam-progress-area { display:none; }',
+      '.tam-inv-stock-btn.tam-inv-stock-active { background:#111!important; border-color:#111!important; color:#fff!important; }',
+      '.tam-dnv-area { display:flex; flex-direction:column; gap:8px; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-dnv-missing-block { padding:10px 14px; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa; }',
+      '.tam-dnv-missing-hdr { font-size:.78rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-dnv-missing-list { margin-top:5px; display:flex; flex-direction:column; gap:2px; padding-left:10px; }',
+      '.tam-dnv-missing-item { font-size:.72rem; color:#000; font-family:\'Courier New\',monospace; }',
+
+      /* Diff block (proc style) */
+      '.tam-dnv-block { border:1px solid #E8A44A; border-radius:14px; overflow:hidden; background:#fff; }',
+      '.tam-dnv-block-hdr { padding:10px 16px; background:#FFFBF5; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#C47A1E; border-bottom:1px solid #E8A44A; }',
+      '.tam-dnv-hint { padding:8px 16px; font-size:.78rem; color:#000; opacity:.5; font-weight:700; border-bottom:1px solid #f0f0f0; background:#fafafa; }',
+      '.tam-dnv-scroll { overflow-x:auto; }',
+      '.tam-dnv-table { width:auto; min-width:640px; border-collapse:collapse; font-size:.83rem; }',
+      '.tam-dnv-table thead th { padding:7px 12px; background:#fff; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.10em; color:#000; opacity:.5; border-bottom:1px solid #e0e0e0; white-space:nowrap; }',
+      '.tam-dnv-row td { padding:8px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }',
+      '.tam-dnv-row:last-child td { border-bottom:none; }',
+      '.tam-dnv-ref { font-weight:800; color:#000; white-space:nowrap; min-width:130px; }',
+      '.tam-dnv-num { text-align:center; font-variant-numeric:tabular-nums; font-weight:700; color:#000; white-space:nowrap; }',
+      '.tam-dnv-diff-low  { color:#9B4D4D!important; }',
+      '.tam-dnv-diff-high { color:#5F7B94!important; }',
+      '.tam-dnv-action-cell { padding:6px 12px!important; }',
+
+      /* Action buttons inside table (proc style) */
+      '.tam-dnv-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }',
+      '.tam-dnv-btn { padding:3px 10px; font-size:.73rem; font-weight:700; font-family:\'MontserratLight\',sans-serif; cursor:pointer; border-radius:6px; border:1px solid #ccc; background:transparent; color:#000; transition:all .12s; white-space:nowrap; text-transform:lowercase; }',
+      '.tam-dnv-btn:hover { background:#f0f0f0; border-color:#555; }',
+      '.tam-dnv-btn-edit { border-color:#5F7B94!important; color:#5F7B94!important; }',
+      '.tam-dnv-btn-edit:hover { background:#5F7B94!important; color:#fff!important; }',
+      '.tam-dnv-btn-confirm-dn { border-color:#4A7C6F!important; color:#4A7C6F!important; }',
+      '.tam-dnv-btn-confirm-dn:hover { background:#4A7C6F!important; color:#fff!important; }',
+      '.tam-dnv-btn-reopen { border-color:#ccc!important; color:#000!important; opacity:.5; font-size:.68rem!important; }',
+      '.tam-dnv-btn-reopen:hover { background:#f5f5f5!important; color:#000!important; border-color:#ccc!important; opacity:1; }',
+
+      /* Invoice alert row */
+      '.tam-dnv-invoice-alert { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 10px; background:#F5EAEA; border:1px solid #c47a7a; border-radius:8px; font-size:.78rem; font-weight:700; color:#9B4D4D; }',
+      '.tam-dne-row-mismatch td { background:#FFFBF5!important; }',
+
+      /* DN Edit modal (proc style) */
+      '.tam-dn-edit-modal { position:fixed; inset:0; z-index:10002; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .22s ease; pointer-events:none; }',
+      '.tam-dn-edit-modal.tam-dn-visible { opacity:1; pointer-events:auto; }',
+      '#tam-dn-edit-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }',
+      '#tam-dn-edit-panel { position:relative; z-index:1; width:min(520px,96vw); max-height:85vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 16px 64px rgba(0,0,0,.28); overflow:hidden; transform:translateY(14px); transition:transform .22s ease; font-family:\'MontserratLight\',sans-serif; }',
+      '.tam-dn-edit-modal.tam-dn-visible #tam-dn-edit-panel { transform:translateY(0); }',
+      '#tam-dne-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; border-bottom:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
+      '#tam-dne-title { display:flex; flex-direction:column; gap:2px; }',
+      '#tam-dne-zy { font-size:.95rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; }',
+      '#tam-dne-sub { display:block; font-size:.6rem; font-weight:700; color:#000; font-family:\'MontserratLight\',sans-serif; text-transform:uppercase; letter-spacing:.12em; opacity:.5; }',
+      '.tam-dne-hint { padding:8px 16px; font-size:.78rem; color:#000; opacity:.5; font-weight:700; background:#fafafa; border-bottom:1px solid #f0f0f0; flex-shrink:0; }',
+      '#tam-dne-scroll { overflow:auto; flex:1; }',
+      '#tam-dne-table { width:100%; border-collapse:collapse; font-family:\'MontserratLight\',sans-serif; font-size:.84rem; }',
+      '#tam-dne-table thead { position:sticky; top:0; z-index:2; }',
+      '.tam-dne-ref { font-weight:800; color:#000; white-space:nowrap; padding:7px 12px; border-bottom:1px solid #f0f0f0; }',
+      '.tam-dne-inv { text-align:center; color:#000; font-weight:700; opacity:.5; padding:7px 12px; border-bottom:1px solid #f0f0f0; }',
+      '.tam-dne-qty { text-align:center; padding:5px 10px; border-bottom:1px solid #f0f0f0; }',
+      '.tam-dne-inp { width:68px; padding:5px 6px; font-size:.84rem; font-family:\'MontserratLight\',sans-serif; border:1px solid #e0e0e0; border-radius:7px; text-align:center; outline:none; background:#fafafa; transition:border-color .12s; font-weight:700; color:#000; -moz-appearance:textfield; appearance:textfield; }',
+      '.tam-dne-inp::-webkit-inner-spin-button,.tam-dne-inp::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }',
+      '.tam-dne-inp:focus { border-color:#000; background:#fff; }',
+      '#tam-dne-footer { display:flex; align-items:center; gap:10px; padding:12px 20px; border-top:1px solid #e0e0e0; background:#fafafa; flex-shrink:0; }',
+
+      /* Dark mode DNV */
+
+      /* Dark mode anomaly */
+
+      /* ── Dark mode receção ── */
+
+      /* ══════════════════════════════════════════════
+         RESPONSIVE MOBILE — all tam module elements
+      ══════════════════════════════════════════════ */
+      '@media (max-width:768px) {',
+      /* Sessions inline list — full width on small screens */
+      '  #tam-sessions-inline { max-width:none; margin:12px 0 0; }',
+      /* Invoice block header — stack and shrink buttons */
+      '  .tam-invoice-block-header { gap:4px; padding:14px 14px; }',
+      '  .tam-inv-num { font-size:1.1rem!important; }',
+      '  .tam-inv-total { font-size:1rem!important; }',
+      '  .tam-inv-meta { font-size:.7rem!important; opacity:.5; }',
+      '  .tam-invoice-block-header button:not(.tam-inv-toggle-btn) { font-size:.68rem!important; padding:3px 8px!important; }',
+      '  .tam-inv-quick-wrap { flex-wrap:wrap; gap:3px; }',
+      /* Invoice meta single (above table) */
+      '  #tam-invoice-meta { flex-wrap:wrap; gap:6px; }',
+      '  #tam-invoice-meta button { font-size:.7rem!important; padding:5px 10px!important; }',
+      /* Session bar */
+      '  #tam-session-bar { gap:8px; padding:8px 12px; }',
+      '  .tam-session-btn { font-size:.62rem!important; padding:4px 10px!important; }',
+      /* Reception area */
+      '  .tam-rec-quick-btns { padding:8px 12px; gap:6px; }',
+      '  .tam-quick-btn { font-size:.72rem!important; padding:5px 10px!important; }',
+      '  #tam-reception-area { margin-top:12px; }',
+      /* Modals full width */
+      /* no bottom-sheet — panels always float centered */
+      '  .tam-stock-copy-bar { grid-template-columns:repeat(3,1fr)!important; }',
+      '  .tam-guia-copy-bar { grid-template-columns:repeat(2,1fr)!important; }',
+      '  #tam-stock-header, #tam-guia-header { flex-wrap:wrap; gap:6px; padding:12px 14px 10px; }',
+      '  #tam-stock-actions, #tam-guia-header-btns { flex-wrap:wrap; gap:6px; }',
+      '  .tam-stock-action-btn, .tam-guia-action-btn { font-size:.72rem!important; padding:5px 10px!important; }',
+      '}',
+
+      /* ── Vínculo manual caixa → DN pendente ── */
+      '.tam-box-dn-link-btn { background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }',
+      '.tam-box-dn-link-btn:hover { text-decoration:underline; }',
+      '.tam-box-dn-link-icon { font-size:.75em; opacity:.6; }',
+      '.tam-box-dn-unlink-btn { background:none; border:1px solid #e0e0e0; border-radius:6px; cursor:pointer; font-size:.65rem; padding:0 4px; margin-left:4px; color:#9B4D4D; vertical-align:middle; }',
+      '.tam-box-dn-unlink-btn:hover { background:#F5EAEA; border-color:#9B4D4D; }',
+      '#tam-dn-link-popover { position:absolute; z-index:9999; min-width:220px; max-width:280px; max-height:320px; overflow-y:auto; background:#fff; border:1px solid #000; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.18); font-family:\'MontserratLight\',sans-serif; padding:10px; opacity:0; transition:opacity .12s ease; }',
+      '#tam-dn-link-popover.tam-dnlink-visible { opacity:1; }',
+      '.tam-dnlink-title { font-size:.74rem; font-weight:700; color:#000; margin-bottom:8px; }',
+      '.tam-dnlink-filter { width:100%; box-sizing:border-box; padding:5px 8px; margin-bottom:8px; font-size:.76rem; font-family:\'MontserratLight\',sans-serif; border:1px solid #e0e0e0; border-radius:7px; outline:none; background:#fafafa; color:#000; transition:border-color .15s; }',
+      '.tam-dnlink-filter:focus { border-color:#000; background:#fff; }',
+      '.tam-dnlink-filter::placeholder { color:#bbb; font-style:italic; }',
+      '.tam-dnlink-list { display:flex; flex-direction:column; gap:8px; }',
+      '.tam-dnlink-group-hdr { font-size:.68rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }',
+      '.tam-dnlink-opt { display:block; width:100%; text-align:left; padding:5px 8px; margin-bottom:3px; font-size:.76rem; font-family:\'MontserratLight\',sans-serif; font-weight:700; border:1px solid #e0e0e0; border-radius:7px; background:#fff; color:#000; cursor:pointer; transition:all .12s; }',
+      '.tam-dnlink-opt:hover { background:#f0f0f0; border-color:#000; }',
+      '.tam-dnlink-empty { font-size:.74rem; color:#888; padding:6px 0; }',
+      '.tam-dnlink-cancel { display:block; width:100%; margin-top:8px; padding:4px 0; font-size:.72rem; font-family:\'MontserratLight\',sans-serif; text-align:center; border:1px solid #ccc; border-radius:7px; background:transparent; color:#000; cursor:pointer; transition:all .12s; text-transform:lowercase; }',
+      '.tam-dnlink-cancel:hover { background:#f0f0f0; border-color:#555; }',
+    ].join('\n');
+    document.head.appendChild(s);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      INYECTAR HTML necesario en #tab-tam si no existe
   ══════════════════════════════════════════════════════════════ */
   (function tamInjectHTML() {
@@ -7719,8 +8616,11 @@
           if (typeof window.tamOpenEanTool === 'function') {
             window.tamOpenEanTool();
           } else {
-            tamLoadEanToolModule();
-            if (typeof window.tamOpenEanTool === 'function') window.tamOpenEanTool();
+            // Cargar ean-tool.js bajo demanda la primera vez
+            var s = document.createElement('script');
+            s.src = 'js/ean-tool.js';
+            s.onload = function() { if (typeof window.tamOpenEanTool === 'function') window.tamOpenEanTool(); };
+            document.head.appendChild(s);
           }
         });
       }
@@ -7894,8 +8794,12 @@
           if (typeof window.tamEanToolIngestFiles === 'function') {
             window.tamEanToolIngestFiles(excels);
           } else {
-            tamLoadEanToolModule();
-            if (typeof window.tamEanToolIngestFiles === 'function') window.tamEanToolIngestFiles(excels);
+            var eanScript = document.createElement('script');
+            eanScript.src = 'js/ean-tool.js';
+            eanScript.onload = function() {
+              if (typeof window.tamEanToolIngestFiles === 'function') window.tamEanToolIngestFiles(excels);
+            };
+            document.head.appendChild(eanScript);
           }
         }
         e.target.value = '';
@@ -7937,6 +8841,9 @@
       else tab.appendChild(dva);
     }
 
+    // Inject styles immediately — always fresh
+    tamEnsureStyles();
+
     // ── adm-back-btn: guardar e fechar sessão antes de voltar ao dashboard ──
     (function() {
       var backBtn = document.getElementById('adm-back-btn');
@@ -7955,1529 +8862,5 @@
       }, true);
     })();
   })();
-
-  /* ══════════════════════════════════════════════════════════════
-     MÓDULO EAN TOOL — fundido de ean-tool.js
-     Antes: ficheiro à parte, carregado sob demanda via <script> nos
-     3 pontos acima (tamPushEanCatalogFromPDF, botão EAN, import Excel).
-     Agora: mesma função, chamada diretamente — carrega-se na mesma
-     altura (1ª utilização real), zero mudança de comportamento.
-  ══════════════════════════════════════════════════════════════ */
-function tamLoadEanToolModule() {
-  'use strict';
-
-  // ── Evitar doble inicialización ──
-  if (window._eanToolInitialized) return;
-  window._eanToolInitialized = true;
-
-  // ═══════════════════════════════════════════════════════════════
-  //  DEPENDENCIAS EXTERNAS — inyectar si no están presentes
-  // ═══════════════════════════════════════════════════════════════
-  function loadScript(src, id, onload) {
-    if (document.getElementById(id)) { if (onload) onload(); return; }
-    var s = document.createElement('script');
-    s.id  = id;
-    s.src = src;
-    if (onload) s.onload = onload;
-    document.head.appendChild(s);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  HTML — overlay contenedor + modal de resultados
-  // ═══════════════════════════════════════════════════════════════
-  var wrapper = document.createElement('div');
-  wrapper.innerHTML =
-    '<div id="ean-tool-overlay">' +
-      '<div id="ean-tool-wrap">' +
-
-        /* cabecera de la ventana */
-        '<div id="ean-tool-header">' +
-          '<div id="ean-tool-header-title">CÓDIGOS EAN</div>' +
-          '<button id="ean-tool-close">✕</button>' +
-        '</div>' +
-
-        /* zona de acción */
-        '<div id="ean-action-row">' +
-          '<label id="ean-drop-zone" title="Cargar archivos">' +
-            'EAN' +
-            '<input type="file" id="ean-file-input" accept=".pdf,.xlsx,.xls" multiple style="display:none">' +
-          '</label>' +
-          '<span id="ean-file-count"></span>' +
-          '<button id="ean-btn-open-modal" disabled title="Ver resultados">◉</button>' +
-        '</div>' +
-
-        /* progreso */
-        '<div id="ean-progress-wrap">' +
-          '<div id="ean-progress-track"><div id="ean-progress-fill"></div></div>' +
-          '<div id="ean-progress-lbl">Analizando…</div>' +
-        '</div>' +
-
-        /* error */
-        '<div id="ean-error-wrap"><div id="ean-error-box"></div></div>' +
-
-        /* novos EANs encontrados */
-        '<div id="ean-found-wrap"><div id="ean-found-box"></div></div>' +
-
-        /* delivery notes encontradas */
-        '<div id="ean-dn-wrap"><div id="ean-dn-box"></div></div>' +
-
-      '</div>' +
-    '</div>' +
-
-    /* modal de resultados (z-index mayor, fuera de ean-tool-wrap) */
-    '<div id="ean-modal-overlay">' +
-      '<div id="ean-modal-box">' +
-        '<div id="ean-modal-hdr">' +
-          '<div id="ean-modal-hdr-texts"><div id="ean-modal-hdr-title">CÓDIGOS EAN</div></div>' +
-          '<div id="ean-modal-hdr-actions">' +
-            '<button class="ean-btn-download-excel" id="ean-btn-download">⬇ Excel</button>' +
-            '<button class="ean-btn-save-sb" id="ean-btn-save-supabase" title="Guardar EANs en Supabase">⬆ Guardar EAN</button>' +
-            '<button id="ean-modal-close">✕</button>' +
-          '</div>' +
-        '</div>' +
-        '<div id="ean-modal-stats">' +
-          '<div class="ean-stat-item"><div class="ean-stat-val" id="ean-s-refs">0</div><div class="ean-stat-lbl">Referencias</div></div>' +
-          '<div class="ean-stat-item"><div class="ean-stat-val" id="ean-s-eans">0</div><div class="ean-stat-lbl">EANs únicos</div></div>' +
-          '<div id="ean-audit-summary">' +
-            '<div class="ean-audit-dot" id="ean-audit-dot"></div>' +
-            '<span id="ean-audit-summary-text"></span>' +
-          '</div>' +
-        '</div>' +
-        '<div id="ean-modal-search-wrap">' +
-          '<input id="ean-modal-search" type="text" placeholder="Buscar referencia, nombre o EAN…">' +
-        '</div>' +
-        '<div id="ean-modal-body">' +
-          '<div class="ean-empty-state" id="ean-empty-state">' +
-            '<div class="ean-empty-icon">🔍</div>' +
-            '<div class="ean-empty-title">Sin resultados</div>' +
-            '<div class="ean-empty-sub">Prueba con otro término</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>' +
-
-    '<div id="ean-copy-toast"></div>';
-
-  document.body.appendChild(wrapper);
-
-  // ═══════════════════════════════════════════════════════════════
-  //  REFERENCIAS DOM
-  // ═══════════════════════════════════════════════════════════════
-  var toolOverlay  = document.getElementById('ean-tool-overlay');
-  var toolClose    = document.getElementById('ean-tool-close');
-  var dropZone     = document.getElementById('ean-drop-zone');
-  var fileInput    = document.getElementById('ean-file-input');
-  var fileCount    = document.getElementById('ean-file-count');
-  var btnOpenModal = document.getElementById('ean-btn-open-modal');
-  var progressWrap = document.getElementById('ean-progress-wrap');
-  var progressFill = document.getElementById('ean-progress-fill');
-  var progressLbl  = document.getElementById('ean-progress-lbl');
-  var errorWrap    = document.getElementById('ean-error-wrap');
-  var errorBox     = document.getElementById('ean-error-box');
-  var dnWrap       = document.getElementById('ean-dn-wrap');
-  var dnBox        = document.getElementById('ean-dn-box');
-  var foundWrap    = document.getElementById('ean-found-wrap');
-  var foundBox     = document.getElementById('ean-found-box');
-  var modalOverlay = document.getElementById('ean-modal-overlay');
-  var modalClose   = document.getElementById('ean-modal-close');
-  var modalBody    = document.getElementById('ean-modal-body');
-  var modalSearch  = document.getElementById('ean-modal-search');
-  var emptyState   = document.getElementById('ean-empty-state');
-  var copyToast    = document.getElementById('ean-copy-toast');
-
-  // ═══════════════════════════════════════════════════════════════
-  //  API PÚBLICA — llamada desde tam.js
-  // ═══════════════════════════════════════════════════════════════
-  window.tamOpenEanTool = function () {
-    toolOverlay.classList.add('ean-open');
-    /* Se existe um rascunho restaurado do localStorage (ou dados chegados
-       em 2º plano via tamEanToolIngestCatalog) que ainda não foi reflectido
-       em state.results nesta sessão de página, consolida agora para que o
-       utilizador veja logo o catálogo acumulado ao abrir a ferramenta. */
-    if (Object.keys(merged).length && !state.results.length) {
-      consolidateResults().then(function(){
-        if (state.results.length) { btnOpenModal.disabled = false; btnOpenModal.classList.add('ean-has-results'); }
-        renderPendingEanBanner();
-      });
-    }
-  };
-
-  // Ponto de entrada único: abre a ferramenta e entrega-lhe directamente
-  // os ficheiros escolhidos no botão "delivery note" de tam.js (Excel
-  // e PDF passam a ser analisados sempre pelo mesmo motor).
-  window.tamEanToolIngestFiles = function (files) {
-    toolOverlay.classList.add('ean-open');
-    addFiles(Array.prototype.slice.call(files));
-  };
-
-  // Ingestão silenciosa em 2º plano — usada pelo parser de DN em PDF de
-  // tam.js (tamPushEanCatalogFromPDF) para alimentar o catálogo com os
-  // EAN reais capturados durante a leitura de uma delivery note, sem abrir
-  // o overlay nem reanalisar ficheiros. entries: [{ref, eans:[...]}].
-  window.tamEanToolIngestCatalog = async function (entries) {
-    if (!entries || !entries.length) return;
-    entries.forEach(function(e){
-      if (e && e.ref && e.eans && e.eans.length) mergeRef(e.ref, '', '', e.eans, 'pdf-dn', '');
-    });
-    await consolidateResults();
-    if (state.results.length) { btnOpenModal.disabled = false; btnOpenModal.classList.add('ean-has-results'); }
-    renderPendingEanBanner();
-  };
-
-  // Cerrar ventana principal
-  toolClose.addEventListener('click', function () {
-    toolOverlay.classList.remove('ean-open');
-  });
-  toolOverlay.addEventListener('click', function (e) {
-    if (e.target === toolOverlay) toolOverlay.classList.remove('ean-open');
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  //  CONSTANTES SEMÁNTICAS — calibradas del PDF real TAM
-  //  Pero con detección adaptativa para tolerar variaciones
-  // ═══════════════════════════════════════════════════════════════
-
-  var GARMENT_WORDS = new Set([
-    'blouse','dress','skirt','top','trouser','trousers','cardigan','pullover',
-    'pullunder','culotte','scarf','jacket','coat','shirt','leggings','vest',
-    'jumper','sweater','blazer','shorts','pants','tee','tunic','cape','poncho',
-    'bodysuit','overall','jumpsuit','romper','light','lg','sl','ss','3/4'
-  ]);
-
-  var BRANDS_SET = new Set(['hailys','zabaione','z-one']);
-
-  var NOISE_TOKENS = new Set([
-    'lot-nr./anzahl:.','lot-nr.','anzahl','herkunft/coo:','herkunft',
-    'modell/model','farbe/colour','größe/size','stück/pieces','auftr.-nr./order',
-    'versandanschrift','delivery','address','lieferschein','gesamtstückzahl',
-    'bruttogewicht','nettogewicht','gesamtpaketanzahl','verwaltung','administration',
-    'hauptsitz','headquarter','geschäftsführung','kontakt','bankverbindung',
-    'kunden','konto','karton','datum','seite','page','iban','bic','ust-id',
-    'fon','fax','email','info@tam-fashion.com','tam','fashion','gmbh',
-    'valvo-park','essener','straße','hamburg','michelfeld','stuttgart',
-    'volksbank','backnang','versandart','despatched','fedex'
-  ]);
-
-  var SIZE_TOKENS = new Set(['xs','s','m','l','xl','xxl','xxxl','xxxxl','one size']);
-
-  var REF_RE = /^(?!ZY-)(?!DE-)(?!UST-)(?!HRB)(?!B2B-)[A-Za-z]{2,6}[-_](?:[A-Za-z0-9]{1,6}[-_]){0,4}[A-Za-z0-9]*\d[A-Za-z0-9]*$/;
-
-  function isRef(s) {
-    if (!s || s.length < 4 || s.length > 32) return false;
-    if (!/\d/.test(s)) return false;
-    if (!/[A-Za-z]/.test(s)) return false;
-    if (/^\d/.test(s)) return false;
-    return REF_RE.test(s);
-  }
-
-  function isEan13(s) { return /^\d{13}$/.test(s); }
-  function isHsCode(s) { return /^\d{8}$/.test(s); }
-  function isPrice(s)  { return /^\d{1,3}[,.]\d{2}$/.test(s); }
-  function isOrderNo(s){ return /^\d-DE-\d{9,}$/.test(s); }
-  function isQty(s)    { return /^\d{1,4}$/.test(s) && parseInt(s) >= 1 && parseInt(s) <= 9999; }
-  function isSize(s)   { return SIZE_TOKENS.has(s.toLowerCase()); }
-  function isNoise(s)  { return NOISE_TOKENS.has(s.toLowerCase()); }
-  function isBrand(s)  { return BRANDS_SET.has(s.toLowerCase()); }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  ESTADO
-  // ═══════════════════════════════════════════════════════════════
-  var state  = { files: [], results: [] };
-  var merged = {};
-  var pendingDNResults    = [];   // [{ zyCode, refs:[{ref,qty}], fileName, gesamtPcs }]
-  var pendingDNUnresolved = 0;    // EANs vistos numa hoja de DN sem referência conhecida
-
-  // ═══════════════════════════════════════════════════════════════
-  //  PERSISTÊNCIA (localStorage) — rascunho do catálogo por sessão de
-  //  browser. Guarda só o catálogo (merged); as delivery notes pendentes
-  //  não persistem (ficam sujeitas a "Aplicar à sessão activa" na hora).
-  // ═══════════════════════════════════════════════════════════════
-  var EAN_STORAGE_KEY = 'tam_ean_tool_draft_v1';
-
-  function persistEanToolState() {
-    try {
-      var serializable = {};
-      Object.keys(merged).forEach(function(key){
-        var e = merged[key];
-        serializable[key] = {
-          ref: e.ref, name: e.name, pvp: e.pvp,
-          eans: Array.from(e.eans), sources: Array.from(e.sources), dns: Array.from(e.dns)
-        };
-      });
-      if (Object.keys(serializable).length) {
-        localStorage.setItem(EAN_STORAGE_KEY, JSON.stringify({ merged: serializable, savedAt: Date.now() }));
-      } else {
-        localStorage.removeItem(EAN_STORAGE_KEY);
-      }
-    } catch(e) { console.warn('EAN Tool: fallo al guardar borrador local', e); }
-  }
-
-  function restoreEanToolState() {
-    try {
-      var raw = localStorage.getItem(EAN_STORAGE_KEY);
-      if (!raw) return false;
-      var data = JSON.parse(raw);
-      if (!data || !data.merged) return false;
-      var any = false;
-      Object.keys(data.merged).forEach(function(key){
-        var e = data.merged[key];
-        if (!e || !e.ref) return;
-        merged[key] = {
-          ref: e.ref, name: e.name || '', pvp: e.pvp || '',
-          eans: new Set(e.eans || []), sources: new Set(e.sources || []), dns: new Set(e.dns || [])
-        };
-        any = true;
-      });
-      return any;
-    } catch(e) { console.warn('EAN Tool: fallo al restaurar borrador local', e); return false; }
-  }
-
-  function clearEanToolState() {
-    try { localStorage.removeItem(EAN_STORAGE_KEY); } catch(e) {}
-  }
-
-  restoreEanToolState();
-
-  // ═══════════════════════════════════════════════════════════════
-  //  SUPABASE — Biblioteca EANs conocidos
-  // ═══════════════════════════════════════════════════════════════
-  var SUPABASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
-  var SUPABASE_KEY = 'sb_publishable_Wx9SAdPR0kRX-KAsVIj02w_4Y37IyEU';
-  var MOTOR_D_URL  = 'https://wmvucabpkixdzeanfrzx.supabase.co/functions/v1/Motor-D';
-
-  async function eanMotorDCall(payload) {
-    try {
-      var res = await fetch(MOTOR_D_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'apikey': SUPABASE_KEY
-        },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) return null;
-      var data = await res.json();
-      return data.ok ? data.result : null;
-    } catch(e) {
-      console.warn('EAN Motor D failed:', e.message);
-      return null;
-    }
-  }
-
-  async function fetchKnownEans() {
-    var known    = new Set();
-    var pageSize = 1000;
-    var from     = 0;
-    var keepGoing = true;
-    while (keepGoing) {
-      var to   = from + pageSize - 1;
-      var resp = await fetch(
-        SUPABASE_URL + '/rest/v1/tam_ean_catalog?select=ean&limit=' + pageSize + '&offset=' + from,
-        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
-      );
-      if (!resp.ok) break;
-      var rows = await resp.json();
-      rows.forEach(function(r){ if (r.ean) known.add(r.ean.trim()); });
-      keepGoing = rows.length === pageSize;
-      from += pageSize;
-    }
-    return known;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  FILE HANDLING
-  // ═══════════════════════════════════════════════════════════════
-  dropZone.addEventListener('dragover',  function(e){ e.preventDefault(); dropZone.classList.add('ean-drag-over'); });
-  dropZone.addEventListener('dragleave', function(){  dropZone.classList.remove('ean-drag-over'); });
-  dropZone.addEventListener('drop', function(e){
-    e.preventDefault(); dropZone.classList.remove('ean-drag-over');
-    addFiles(Array.from(e.dataTransfer.files));
-  });
-  fileInput.addEventListener('change', function(e){
-    addFiles(Array.from(e.target.files)); e.target.value = '';
-  });
-
-  btnOpenModal.addEventListener('click', function(){
-    if (state.results && state.results.length) { openModal(); }
-  });
-
-  function addFiles(files) {
-    files.forEach(function(f){
-      var ext  = f.name.split('.').pop().toLowerCase();
-      var type = ext === 'pdf' ? 'pdf' : (ext === 'xlsx' || ext === 'xls') ? 'xlsx' : null;
-      if (!type) return;
-      if (state.files.some(function(x){ return x.file.name===f.name && x.file.size===f.size; })) return;
-      state.files.push({ file: f, type: type });
-    });
-    updateFileUI();
-    errorWrap.classList.remove('ean-visible');
-    if (state.files.length) runExtraction();
-  }
-
-  function updateFileUI() {
-    var n = state.files.length;
-    if (n > 0) {
-      fileCount.textContent = n + ' Delivery Note' + (n !== 1 ? 's' : '');
-      fileCount.classList.add('ean-visible');
-    } else {
-      fileCount.classList.remove('ean-visible');
-    }
-  }
-
-  function setProg(pct, lbl) { progressFill.style.width=pct+'%'; progressLbl.textContent=lbl; }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  LIMPIEZA DE NOMBRE
-  // ═══════════════════════════════════════════════════════════════
-  function cleanName(texto) {
-    if (!texto) return '';
-    return texto
-      .replace(/([A-Za-z])44([A-Za-z])/g, '$1$2')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MERGE HELPER
-  // ═══════════════════════════════════════════════════════════════
-  function mergeRef(ref, name, pvp, eans, src, dn) {
-    if (!ref || !ref.trim()) return;
-    var key = ref.trim().toUpperCase();
-    if (!merged[key]) merged[key] = { ref:ref.trim(), name:'', pvp:'', eans:new Set(), sources:new Set(), dns:new Set() };
-    var e = merged[key];
-    var n = cleanName((name||'').trim());
-    if (n && n.length > e.name.length) e.name = n;
-    var p = (pvp||'').toString().trim().replace(',','.').replace(/[^\d.]/g,'');
-    if (p && !e.pvp) e.pvp = p;
-    (eans||[]).forEach(function(x){ var s=String(x).replace(/\s/g,''); if(/^\d{8,14}$/.test(s)) e.eans.add(s); });
-    e.sources.add(src);
-    if (dn && /^ZY-/i.test(String(dn).trim())) e.dns.add(String(dn).trim());
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  Consolidação do catálogo (merged → state.results), incluindo o
-  //  filtro de EANs já conhecidos no Supabase. Reutilizável tanto pelo
-  //  fluxo normal de extração (runExtraction) como pela ingestão em
-  //  segundo plano vinda do parser de DN em PDF (tamEanToolIngestCatalog).
-  // ═══════════════════════════════════════════════════════════════
-  async function consolidateResults() {
-    state.results = Object.values(merged)
-      .map(function(e){ return {
-        ref:     e.ref,
-        name:    e.name,
-        pvp:     e.pvp,
-        eans:    Array.from(e.eans).filter(function(x){return /^\d{8,14}$/.test(x);}),
-        sources: Array.from(e.sources),
-        dns:     Array.from(e.dns).sort()
-      }; })
-      .filter(function(r){ return r.eans.length>0; })
-      .sort(function(a,b){ return a.ref.localeCompare(b.ref); });
-
-    runAuditEngines(state.results);
-
-    try {
-      var knownEans = await fetchKnownEans();
-      if (knownEans.size > 0) {
-        var withEans = [], withoutEans = [];
-        state.results.forEach(function(r) {
-          r.eans = r.eans.filter(function(e){ return !knownEans.has(e); });
-          if (r.eans.length > 0) { withEans.push(r); }
-          else { withoutEans.push(r); }
-        });
-        state.results = withEans.concat(withoutEans);
-      }
-    } catch(e) { console.warn('Supabase fetch error (filtro omitido):', e); }
-
-    persistEanToolState();
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MAIN — auto-runs on file load
-  // ═══════════════════════════════════════════════════════════════
-  async function runExtraction() {
-    errorWrap.classList.remove('ean-visible');
-    dnWrap.classList.remove('ean-visible');
-    merged = {}; state.results = [];
-    pendingDNResults = []; pendingDNUnresolved = 0;
-    var xlsxSheetsForDN = [];
-    progressWrap.classList.add('ean-visible');
-    btnOpenModal.disabled = true;
-
-    var pdfFiles  = state.files.filter(function(f){ return f.type==='pdf';  });
-    var xlsxFiles = state.files.filter(function(f){ return f.type==='xlsx'; });
-    var total = pdfFiles.length + xlsxFiles.length, done = 0;
-
-    for (var pi=0; pi<pdfFiles.length; pi++) {
-      var pf = pdfFiles[pi];
-      setProg(Math.round((done/total)*85+5), 'PDF '+(pi+1)+'/'+pdfFiles.length+': '+pf.file.name);
-      try {
-        var words = await extractPdfItems(pf.file);
-        var beforeCount = Object.keys(merged).length;
-        parsePDF(words, mergeRef);
-        /* Motor D fallback si el parser local no encontró nada */
-        if (Object.keys(merged).length === beforeCount) {
-          setProg(Math.round((done/total)*85+5), '🤖 Motor D: '+pf.file.name+'…');
-          try {
-            var pdfText = buildRows(words, 14)
-              .map(function(row){ return row.items.map(function(it){ return it.str; }).join(' '); })
-              .join('\n').slice(0, 12000);
-            var mdResPdf = await eanMotorDCall({ mode: 'ean', text: pdfText });
-            if (mdResPdf && mdResPdf.refs && mdResPdf.refs.length) {
-              mdResPdf.refs.forEach(function(r) {
-                if (r.ref && r.eans && r.eans.length) mergeRef(r.ref, r.name||'', r.pvp||'', r.eans, 'pdf-motord', '');
-              });
-            }
-          } catch(emd) { console.warn('EAN Motor D PDF fallback failed', emd); }
-        }
-      } catch(err) { console.error('PDF error', pf.file.name, err); }
-      done++;
-    }
-    for (var xi=0; xi<xlsxFiles.length; xi++) {
-      var xf = xlsxFiles[xi];
-      setProg(Math.round((done/total)*85+5), 'Excel '+(xi+1)+'/'+xlsxFiles.length+': '+xf.file.name);
-      try {
-        var sheets = await readXlsx(xf.file);
-        var beforeXlCount = Object.keys(merged).length;
-        parseXLSX(sheets, mergeRef);
-        /* Motor D fallback si los motores locales C+D no reconocieron el formato */
-        if (Object.keys(merged).length === beforeXlCount) {
-          setProg(Math.round((done/total)*85+5), '🤖 Motor D: '+xf.file.name+'…');
-          try {
-            var xlText = sheets.map(function(sheet) {
-              return '=== ' + sheet.name + ' ===\n' +
-                sheet.rows.slice(0, 80).map(function(row) {
-                  return row.filter(function(c){ return String(c).trim(); }).join('\t');
-                }).filter(Boolean).join('\n');
-            }).join('\n\n').slice(0, 12000);
-            var mdResXl = await eanMotorDCall({ mode: 'ean', text: xlText });
-            if (mdResXl && mdResXl.refs && mdResXl.refs.length) {
-              mdResXl.refs.forEach(function(r) {
-                if (r.ref && r.eans && r.eans.length) mergeRef(r.ref, r.name||'', r.pvp||'', r.eans, 'xlsx-motord', '');
-              });
-            }
-          } catch(emd) { console.warn('EAN Motor D Excel fallback failed', emd); }
-        }
-        xlsxSheetsForDN.push({ sheets: sheets, fileName: xf.file.name });
-      } catch(err) { console.error('XLSX error', xf.file.name, err); }
-      done++;
-    }
-
-    /* ── Delivery notes: cruce EAN → referência com o catálogo já
-       reconhecido em TODAS as hojas/ficheiros deste lote (por isso
-       corre só depois de terminar o loop, não hoja a hoja). ── */
-    if (xlsxSheetsForDN.length) {
-      var eanToRef      = buildEanToRefMap();
-      var dnAccum        = {}, dnOrder = {}, dnFileName = {};
-      var unresolvedSet = new Set();
-      xlsxSheetsForDN.forEach(function(entry){
-        detectDNSheets(entry.sheets, entry.fileName, eanToRef, dnAccum, dnOrder, dnFileName, unresolvedSet);
-      });
-      pendingDNResults = Object.keys(dnAccum).sort().map(function(zy){
-        var refs = dnOrder[zy].map(function(ref){ return { ref: ref, qty: dnAccum[zy][ref] }; });
-        var gesamtPcs = refs.reduce(function(s,r){ return s + r.qty; }, 0);
-        return { zyCode: zy, refs: refs, fileName: dnFileName[zy], gesamtPcs: gesamtPcs };
-      });
-      pendingDNUnresolved = unresolvedSet.size;
-    }
-
-    setProg(100, 'Consolidando…');
-    setProg(100, 'Consultando biblioteca EANs…');
-    await consolidateResults();
-
-    setTimeout(function(){
-      progressWrap.classList.remove('ean-visible');
-      if (!state.results.length && !pendingDNResults.length) {
-        errorBox.textContent='No se encontraron referencias con EANs. Verifica el formato de los archivos.';
-        errorWrap.classList.add('ean-visible');
-        btnOpenModal.disabled = true;
-      } else if (state.results.length) {
-        btnOpenModal.disabled = false;
-        btnOpenModal.classList.add('ean-has-results');
-      }
-      renderPendingDN();
-      renderPendingEanBanner();
-    }, 350);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  PDF UTIL
-  // ═══════════════════════════════════════════════════════════════
-  async function extractPdfItems(file) {
-    var ab  = await file.arrayBuffer();
-    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-    var allItems = [];
-    for (var p = 1; p <= pdf.numPages; p++) {
-      var page    = await pdf.getPage(p);
-      var content = await page.getTextContent();
-      content.items.forEach(function(it){
-        var s = (it.str || '').trim();
-        if (!s) return;
-        allItems.push({ str: s, x: it.transform[4], y: it.transform[5], page: p });
-      });
-    }
-    return allItems;
-  }
-
-  function buildRows(items, yTol) {
-    var sorted = items.slice().sort(function(a,b){
-      if (a.page !== b.page) return a.page - b.page;
-      return b.y - a.y;
-    });
-    var rows = [];
-    var cur  = null;
-    sorted.forEach(function(it){
-      if (!cur || cur.page !== it.page || Math.abs(it.y - cur.y) > yTol) {
-        if (cur) rows.push(cur);
-        cur = { y: it.y, page: it.page, items: [] };
-      }
-      cur.items.push(it);
-    });
-    if (cur) rows.push(cur);
-    rows.forEach(function(row){ row.items.sort(function(a,b){ return a.x - b.x; }); });
-    return rows;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  PDF PARSER — MOTOR SEMÁNTICO POR DESCARTE
-  // ═══════════════════════════════════════════════════════════════
-  function parsePDF(items, merge) {
-    var eanXs = items.filter(function(it){ return isEan13(it.str); }).map(function(it){ return it.x; });
-    function modeArr(arr, bucket) {
-      if (!arr.length) return null;
-      var c = {};
-      arr.forEach(function(x){ var b=Math.round(x/bucket)*bucket; c[b]=(c[b]||0)+1; });
-      var best=null, bn=0;
-      Object.keys(c).forEach(function(b){ if(c[b]>bn){bn=c[b];best=parseFloat(b);} });
-      return best;
-    }
-    var xEan = modeArr(eanXs, 8) || 260;
-
-    var pdfDN = '';
-    items.forEach(function(it){
-      if (!pdfDN && /^ZY-\d+$/i.test(it.str.trim())) pdfDN = it.str.trim();
-    });
-
-    var rows = buildRows(items, 14);
-
-    function rowHasEan(row)   { return row.items.some(function(it){ return isEan13(it.str); }); }
-    function rowIsLotNr(row)  { return row.items.some(function(it){ return /^Lot-Nr/i.test(it.str); }); }
-    function rowIsGesamt(row) { return row.items.some(function(it){ return /^Gesamtst/i.test(it.str); }); }
-
-    var blocks = [], curBlock = null;
-    rows.forEach(function(row){
-      if (rowIsGesamt(row)) { if (curBlock){ blocks.push(curBlock); curBlock=null; } return; }
-      if (rowIsLotNr(row))  {
-        if (curBlock) blocks.push(curBlock);
-        curBlock = { lotRow: row, lotPage: row.page, rows: [] };
-        return;
-      }
-      if (!curBlock) return;
-      curBlock.rows.push(row);
-    });
-    if (curBlock) blocks.push(curBlock);
-
-    blocks.forEach(function(block){
-      var ref = null;
-      var searchRows = [block.lotRow].concat(block.rows.slice(0, 8));
-      searchRows.forEach(function(row){
-        if (ref) return;
-        row.items.forEach(function(it){
-          if (!ref && isRef(it.str)) ref = it.str;
-        });
-      });
-      if (!ref) return;
-
-      var dataRows = block.rows.filter(rowHasEan);
-      if (!dataRows.length) return;
-
-      var eans = [];
-      var pvp  = '';
-      var nameCandidates = {};
-
-      dataRows.forEach(function(row){
-        var rowEan = '', rowPvp = '';
-        var fixedTokens = new Set();
-
-        row.items.forEach(function(it){
-          var s = it.str;
-          if (isEan13(s))    { rowEan = s; fixedTokens.add(s); return; }
-          if (isHsCode(s))   { fixedTokens.add(s); return; }
-          if (isPrice(s))    { if (!rowPvp) rowPvp = s; fixedTokens.add(s); return; }
-          if (isOrderNo(s))  { fixedTokens.add(s); return; }
-          if (isRef(s))      { fixedTokens.add(s); return; }
-          if (isNoise(s))    { fixedTokens.add(s); return; }
-          if (isBrand(s))    { fixedTokens.add(s); return; }
-          if (isSize(s) && it.x > xEan) { fixedTokens.add(s); return; }
-          if (/^\d+$/.test(s) && it.x > xEan) { fixedTokens.add(s); return; }
-        });
-
-        row.items.forEach(function(it){
-          if (fixedTokens.has(it.str)) return;
-          var s = it.str.trim();
-          if (!s) return;
-          s.split(/\s+/).forEach(function(tok){
-            tok = tok.trim();
-            if (!tok) return;
-            if (/^\d+$/.test(tok)) return;
-            if (isSize(tok)) return;
-            if (isNoise(tok)) return;
-            nameCandidates[tok] = (nameCandidates[tok] || 0) + 1;
-          });
-        });
-
-        if (rowEan && eans.indexOf(rowEan) === -1) eans.push(rowEan);
-        if (rowPvp && !pvp) pvp = rowPvp;
-      });
-
-      var orderedName = [];
-      if (dataRows.length > 0) {
-        var templateRow = dataRows[0];
-        var fixedInTemplate = new Set();
-        templateRow.items.forEach(function(it){
-          if (isEan13(it.str)||isHsCode(it.str)||isPrice(it.str)||
-              isOrderNo(it.str)||isRef(it.str)||isNoise(it.str)||isBrand(it.str)) {
-            fixedInTemplate.add(it.str);
-          }
-          if (isSize(it.str) && it.x > xEan) fixedInTemplate.add(it.str);
-          if (/^\d+$/.test(it.str) && it.x > xEan) fixedInTemplate.add(it.str);
-        });
-
-        templateRow.items.forEach(function(it){
-          if (fixedInTemplate.has(it.str)) return;
-          it.str.split(/\s+/).forEach(function(tok){
-            tok = tok.trim();
-            if (!tok || /^\d+$/.test(tok) || isSize(tok) || isNoise(tok)) return;
-            if (nameCandidates[tok] && nameCandidates[tok] >= 1) {
-              if (orderedName.indexOf(tok) === -1) orderedName.push(tok);
-            }
-          });
-        });
-      }
-
-      var name     = orderedName.join(' ').trim();
-      var pvpClean = pvp ? pvp.replace(',','.') : '';
-      if (eans.length > 0) merge(ref, name, pvpClean, eans, 'pdf', pdfDN);
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  EXCEL UTIL
-  // ═══════════════════════════════════════════════════════════════
-  function normalizeXlsxCell(v) {
-    if (typeof v === 'number') {
-      return Number.isInteger(v) ? String(v) : v.toFixed(2);
-    }
-    return (v === null || v === undefined) ? '' : String(v);
-  }
-
-  async function readXlsx(file) {
-    var ab = await file.arrayBuffer();
-    var wb = XLSX.read(ab, { type:'array', raw:true });
-    return wb.SheetNames.map(function(name){
-      var ws = wb.Sheets[name];
-      var rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
-      return { name:name, rows: rows.map(function(row){ return row.map(normalizeXlsxCell); }) };
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  EXCEL PARSER — MOTOR C (header mapping) + MOTOR D (fuzzy)
-  // ═══════════════════════════════════════════════════════════════
-  function parseXLSX(sheets, merge) {
-    var SYN = {
-      ref:  ['referencia','reference','ref','modelo','model','modell','article ref',
-              'artikelnummer','article number','item','sku','codigo'],
-      ean:  ['ean','barcode','codigo de barras','code','gtin','upc','bar code'],
-      name: ['article name','name','nombre','artikelname','product name','description',
-              'descripcion','artikel','designation','item name','producto'],
-      pvp:  ['sales price','pvp','price','precio','uvp','vk','retail','rrp',
-              'selling price','msrp','prix','prezzo'],
-      skip: ['delivery note','lieferschein','albarán','albaran','qty','quantity',
-             'cantidad','menge','stück','pieces','order','pedido','auftr']
-    };
-
-    function findColByHeader(headerRow, syns) {
-      for (var i=0; i<headerRow.length; i++) {
-        var h = String(headerRow[i]).toLowerCase().trim();
-        for (var j=0; j<syns.length; j++) {
-          if (h.indexOf(syns[j]) !== -1) return i;
-        }
-      }
-      return -1;
-    }
-
-    function getSkipCols(headerRow) {
-      var skip = new Set();
-      for (var i=0; i<headerRow.length; i++) {
-        var h = String(headerRow[i]).toLowerCase().trim();
-        for (var j=0; j<SYN.skip.length; j++) {
-          if (h.indexOf(SYN.skip[j]) !== -1) { skip.add(i); break; }
-        }
-      }
-      return skip;
-    }
-
-    function motorC(sheet) {
-      var rows = sheet.rows;
-      if (!rows || rows.length < 2) return false;
-      var hRow=-1, cols={};
-      for (var ri=0; ri<Math.min(8,rows.length); ri++) {
-        var rc=findColByHeader(rows[ri],SYN.ref);
-        var ec=findColByHeader(rows[ri],SYN.ean);
-        if (rc!==-1 && ec!==-1) {
-          hRow=ri; cols.ref=rc; cols.ean=ec;
-          cols.name=findColByHeader(rows[ri],SYN.name);
-          cols.pvp =findColByHeader(rows[ri],SYN.pvp);
-          cols.dn  =findColByHeader(rows[ri],['delivery note','lieferschein','albaran','albarán','dn']);
-          break;
-        }
-      }
-      if (hRow===-1) return false;
-      for (var ri2=hRow+1; ri2<rows.length; ri2++) {
-        var row=rows[ri2];
-        var ref =String(row[cols.ref]||'').trim();
-        var ean =String(row[cols.ean]||'').trim().replace(/\s/g,'');
-        var name=cols.name!==-1?String(row[cols.name]||'').trim():'';
-        var pvp =cols.pvp !==-1?String(row[cols.pvp] ||'').trim():'';
-        var dn  =cols.dn  !==-1?String(row[cols.dn]  ||'').trim():'';
-        if (!ref||!ean||!/^\d{8,14}$/.test(ean)) continue;
-        pvp=pvp.replace(',','.').replace(/[^\d.]/g,'');
-        merge(ref,name,pvp,[ean],'xlsx',dn);
-      }
-      return true;
-    }
-
-    function motorD(sheet) {
-      var rows=sheet.rows;
-      if (!rows||rows.length<3) return;
-
-      var sample=rows.slice(0,Math.min(40,rows.length));
-      var numCols=0; sample.forEach(function(r){if(r.length>numCols)numCols=r.length;});
-
-      var skipCols = new Set();
-      for (var ri=0; ri<Math.min(3,rows.length); ri++) {
-        var maybeSkip = getSkipCols(rows[ri]);
-        if (maybeSkip.size > 0) { maybeSkip.forEach(function(c){ skipCols.add(c); }); }
-      }
-
-      // ── Preferir cabecera EAN explícita antes de adivinar por patrón ──
-      // Evita confundir un GLN (u otro número de 13 dígitos constante,
-      // como un sender code) con el EAN real cuando ambos calzan con
-      // /^\d{13}$/. Si algún encabezado dice literalmente "EAN"/"barcode"/
-      // etc., esa columna gana siempre.
-      var headerEanC = -1;
-      for (var hri=0; hri<Math.min(3,rows.length); hri++) {
-        var hc = findColByHeader(rows[hri], SYN.ean);
-        if (hc !== -1) { headerEanC = hc; break; }
-      }
-
-      var scores={};
-      for(var c=0;c<numCols;c++) scores[c]={ean:0,ref:0,price:0,text:0,reflike:0,total:0};
-
-      sample.forEach(function(row){
-        for(var c=0;c<row.length;c++){
-          if(skipCols.has(c)) continue;
-          var v=String(row[c]||'').trim();
-          if(!v) continue;
-          scores[c].total++;
-          var vn=v.replace(/\s/g,'');
-          if(/^\d{13}$/.test(vn))           scores[c].ean++;
-          if(isRef(v))                       scores[c].ref++;
-          if(isPrice(v))                     scores[c].price++;
-          if(/^[A-Z]{2,}-\d{6,}$/.test(v))  scores[c].reflike++;
-          if(/[A-Za-z]{2,}/.test(v)&&v.length>3&&!isRef(v)) scores[c].text++;
-        }
-      });
-
-      var n=sample.length;
-      var eanC=headerEanC,refC=-1,prC=-1,nmC=-1;
-      var mxE=0,mxR=0,mxP=0,mxT=0;
-
-      Object.keys(scores).forEach(function(c){
-        var ci=parseInt(c),s=scores[c],t=Math.max(s.total,1);
-        if(skipCols.has(ci)) return;
-        if(headerEanC===-1 && s.ean/t>.3&&s.ean>mxE){mxE=s.ean;eanC=ci;}
-        if(s.ref/t>.2&&s.ref>mxR){mxR=s.ref;refC=ci;}
-        if(s.price/t>.15&&s.price>mxP){mxP=s.price;prC=ci;}
-      });
-
-      Object.keys(scores).forEach(function(c){
-        var ci=parseInt(c),s=scores[c],t=Math.max(s.total,1);
-        if(ci===eanC||ci===refC||ci===prC) return;
-        if(skipCols.has(ci)) return;
-        if(s.reflike/t>.4) return;
-        if(s.ref/t>.4) return;
-        if(s.text/t>.2&&s.text>mxT){mxT=s.text;nmC=ci;}
-      });
-
-      var dnC = -1;
-      Object.keys(scores).forEach(function(c){
-        var ci = parseInt(c), s = scores[c], t = Math.max(s.total,1);
-        if (s.reflike/t > .4 && ci !== refC) dnC = ci;
-      });
-
-      if(eanC===-1||refC===-1) return;
-
-      var startRow=0;
-      for(var ri=0;ri<Math.min(5,rows.length);ri++){
-        var hv=String(rows[ri][eanC]||'').toLowerCase();
-        if(/ean|barcode|code/.test(hv)){startRow=ri+1;break;}
-      }
-
-      for(var ri2=startRow;ri2<rows.length;ri2++){
-        var row=rows[ri2];
-        var ean=String(row[eanC]||'').trim().replace(/\s/g,'');
-        var ref=String(row[refC]||'').trim();
-        var nm =nmC!==-1?String(row[nmC]||'').trim():'';
-        var pv =prC!==-1?String(row[prC]||'').trim():'';
-        var dn =dnC!==-1?String(row[dnC]||'').trim():'';
-        if(!/^\d{8,14}$/.test(ean)||!ref) continue;
-        pv=pv.replace(',','.').replace(/[^\d.]/g,'');
-        merge(ref,nm,pv,[ean],'xlsx',dn);
-      }
-    }
-
-    sheets.forEach(function(sheet){
-      motorC(sheet);
-      motorD(sheet);
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  DELIVERY NOTES — cruce EAN → referência entre hojas/ficheiros
-  //  Detecta hojas com coluna "Delivery Note" (código ZY) + EAN + Qty,
-  //  mesmo sem coluna de referência própria, e resolve o ref através
-  //  do catálogo (ref+EAN) já reconhecido no mesmo lote de ficheiros.
-  // ═══════════════════════════════════════════════════════════════
-  function buildEanToRefMap() {
-    var map = {};
-    Object.keys(merged).forEach(function(key){
-      var e = merged[key];
-      e.eans.forEach(function(ean){ if (!map[ean]) map[ean] = e.ref; });
-    });
-    return map;
-  }
-
-  function detectDNSheets(sheets, fileName, eanToRef, dnAccum, dnOrder, dnFileName, unresolvedSet) {
-    var SYN_DN  = ['delivery note','lieferschein','albaran','albarán','dn'];
-    var SYN_EAN = ['ean','barcode','codigo de barras','code','gtin','upc','bar code'];
-    var SYN_QTY = ['qty','quantity','cantidad','menge','stück','pieces','anzahl'];
-
-    function findCol(headerRow, syns) {
-      for (var i=0; i<headerRow.length; i++) {
-        var h = String(headerRow[i]).toLowerCase().trim();
-        for (var j=0; j<syns.length; j++) { if (h.indexOf(syns[j]) !== -1) return i; }
-      }
-      return -1;
-    }
-
-    sheets.forEach(function(sheet){
-      var rows = sheet.rows;
-      if (!rows || rows.length < 2) return;
-
-      var hRow=-1, dnC=-1, eanC=-1, qtyC=-1;
-      for (var ri=0; ri<Math.min(8,rows.length); ri++) {
-        var dc = findCol(rows[ri], SYN_DN);
-        var ec = findCol(rows[ri], SYN_EAN);
-        if (dc !== -1 && ec !== -1) { hRow=ri; dnC=dc; eanC=ec; qtyC=findCol(rows[ri], SYN_QTY); break; }
-      }
-      if (hRow === -1) return; // esta hoja não tem estrutura de delivery note
-
-      for (var ri2=hRow+1; ri2<rows.length; ri2++) {
-        var row = rows[ri2];
-        var dnRaw = String(row[dnC]||'').trim();
-        var dnMatch = dnRaw.match(/ZY-\d+/i);
-        if (!dnMatch) continue;
-        var zyCode = dnMatch[0].toUpperCase();
-
-        var ean = String(row[eanC]||'').trim().replace(/\s/g,'');
-        if (!/^\d{8,14}$/.test(ean)) continue;
-
-        var qty = qtyC !== -1 ? parseInt(row[qtyC]) : NaN;
-        if (isNaN(qty) || qty < 1) continue;
-
-        var ref = eanToRef[ean];
-        if (!ref) { unresolvedSet.add(ean); continue; }
-
-        if (!dnAccum[zyCode]) { dnAccum[zyCode] = {}; dnOrder[zyCode] = []; dnFileName[zyCode] = fileName; }
-        if (!dnAccum[zyCode].hasOwnProperty(ref)) { dnAccum[zyCode][ref] = 0; dnOrder[zyCode].push(ref); }
-        dnAccum[zyCode][ref] += qty;
-      }
-    });
-  }
-
-  function renderPendingDN() {
-    if (!pendingDNResults.length) {
-      dnWrap.classList.remove('ean-visible');
-      dnBox.innerHTML = '';
-      return;
-    }
-    var totalPcs = pendingDNResults.reduce(function(s,d){ return s + d.gesamtPcs; }, 0);
-    var listHtml = pendingDNResults.map(function(d){
-      return '<div class="ean-dn-item">' + d.zyCode + ' — ' + d.refs.length + ' ref. · ' + d.gesamtPcs + ' pcs</div>';
-    }).join('');
-    var unresolvedHtml = pendingDNUnresolved > 0
-      ? '<div id="ean-dn-unresolved">⚠ ' + pendingDNUnresolved + ' EAN(s) sem referência no catálogo — não incluídos.</div>'
-      : '';
-    dnBox.innerHTML =
-      '<div id="ean-dn-title">📦 ' + pendingDNResults.length + ' delivery note(s) encontrada(s) · ' + totalPcs + ' pcs</div>' +
-      '<div id="ean-dn-list">' + listHtml + '</div>' +
-      unresolvedHtml +
-      '<button type="button" id="ean-dn-apply-btn">Aplicar à sessão activa</button>';
-    dnWrap.classList.add('ean-visible');
-
-    var applyBtn = dnBox.querySelector('#ean-dn-apply-btn');
-    if (applyBtn) applyBtn.addEventListener('click', function(){
-      if (typeof window.tamApplyImportedDeliveryNotes !== 'function') {
-        toast('A sessão TAM não está disponível nesta página.');
-        return;
-      }
-      applyBtn.disabled = true;
-      applyBtn.textContent = 'A aplicar…';
-      var result = window.tamApplyImportedDeliveryNotes(pendingDNResults) || {};
-      var appliedCount = typeof result.applied === 'number' ? result.applied : pendingDNResults.length;
-      var skippedCount = typeof result.skipped === 'number' ? result.skipped : 0;
-      toast(appliedCount + ' delivery note(s) aplicada(s)' + (skippedCount ? ' · ' + skippedCount + ' já existentes ignoradas' : ''));
-      pendingDNResults    = [];
-      pendingDNUnresolved = 0;
-      dnWrap.classList.remove('ean-visible');
-      dnBox.innerHTML = '';
-    });
-  }
-
-  /* ── Aviso visível de EANs novos por rever/guardar. Complementa o
-     destaque discreto do botão ◉ (ean-has-results) com um bloco explícito,
-     igualmente relevante quando os dados chegam em 2º plano (PDF de DN)
-     ou são restaurados de um rascunho local, sem passar por runExtraction. ── */
-  function renderPendingEanBanner() {
-    var totalNew = state.results.reduce(function(s,r){ return s + r.eans.length; }, 0);
-    if (!state.results.length || totalNew === 0) {
-      foundWrap.classList.remove('ean-visible');
-      foundBox.innerHTML = '';
-      return;
-    }
-    foundBox.innerHTML =
-      '<div id="ean-found-title">🏷 ' + state.results.length + ' referencia(s) · ' + totalNew + ' EAN(s) nuevo(s)</div>' +
-      '<div id="ean-found-hint">Toca en ◉ para revisar y guardar en el catálogo.</div>';
-    foundWrap.classList.add('ean-visible');
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  CAPA DE FISCALIZACIÓN — 4 MOTORES AUDITORES
-  // ═══════════════════════════════════════════════════════════════
-
-  function auditEanLuhn(ean) {
-    if (!/^\d{13}$/.test(ean)) return false;
-    var digits = ean.split('').map(Number);
-    var check  = digits.pop();
-    var sum = 0;
-    digits.forEach(function(d, i){ sum += (i % 2 === 0) ? d : d * 3; });
-    var computed = (10 - (sum % 10)) % 10;
-    return computed === check;
-  }
-
-  function auditConsistency(result) {
-    var flags = [];
-    var validEans   = result.eans.filter(auditEanLuhn);
-    var invalidEans = result.eans.filter(function(e){ return !auditEanLuhn(e); });
-    if (invalidEans.length > 0) {
-      flags.push({ type:'error', motor:'M1·EAN', msg:invalidEans.length+' EAN'+(invalidEans.length>1?'s':'')+' con dígito de control incorrecto', data:invalidEans });
-    }
-    if (result.eans.length > 30) {
-      flags.push({ type:'warn', motor:'M2·LOTE', msg:result.eans.length+' EANs — volumen inusual, verificar si hay mezcla de referencias' });
-    }
-    if (validEans.length === 0 && result.eans.length > 0) {
-      flags.push({ type:'error', motor:'M2·LOTE', msg:'Ningún EAN pasa la validación matemática' });
-    }
-    return flags;
-  }
-
-  function auditSemantic(result) {
-    var flags = [];
-    if (/[A-Za-z]44[A-Za-z]/.test(result.name)) {
-      flags.push({ type:'warn', motor:'M3·SEM', msg:'Nombre contiene secuencia "44" residual: "'+result.name+'"' });
-      result.name = cleanName(result.name);
-    }
-    if (result.name.length > 0 && result.name.length < 2) {
-      flags.push({ type:'warn', motor:'M3·SEM', msg:'Nombre sospechosamente corto: "'+result.name+'"' });
-    }
-    if (result.pvp) {
-      var pvpNum = parseFloat(result.pvp);
-      if (isNaN(pvpNum) || pvpNum <= 0 || pvpNum > 999.99) {
-        flags.push({ type:'error', motor:'M3·SEM', msg:'PVP fuera de rango válido: '+result.pvp+' €' });
-      }
-    }
-    var noisePatterns = /^(ZY-|DE-|HRB|UST|IBAN|BIC|GLS|DHL|FedEx)/i;
-    if (noisePatterns.test(result.name)) {
-      flags.push({ type:'error', motor:'M3·SEM', msg:'Nombre contiene ruido de cabecera: "'+result.name+'"' });
-      result.name = '';
-    }
-    return flags;
-  }
-
-  function auditIntegrity(result) {
-    var flags = [];
-    if (!result.name || result.name.trim() === '') {
-      flags.push({ type:'warn', motor:'M4·INT', msg:'Nombre de producto no detectado — registro incompleto' });
-    }
-    if (!result.pvp || result.pvp === '') {
-      flags.push({ type:'warn', motor:'M4·INT', msg:'Precio (PVP) no detectado' });
-    }
-    if (result.ref.length < 4 || result.ref.length > 30) {
-      flags.push({ type:'error', motor:'M4·INT', msg:'Referencia con longitud anómala: "'+result.ref+'"' });
-    }
-    return flags;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MOTOR OMEGA
-  // ═══════════════════════════════════════════════════════════════
-  var OMEGA_MAX_INTRA_GAP = 50;
-  var OMEGA_MIN_CLUSTER   = 2;
-  var OMEGA_TAM_PREFIX    = '40';
-  var OMEGA_MAX_CLUSTERS  = 6;
-
-  function omegaCluster(eans) {
-    if (!eans || !eans.length) return [];
-    var nums = eans.map(Number).filter(function(n){ return !isNaN(n); });
-    nums.sort(function(a,b){ return a-b; });
-    if (!nums.length) return [];
-    var clusters = [[nums[0]]];
-    for (var i = 1; i < nums.length; i++) {
-      if (nums[i] - nums[i-1] <= OMEGA_MAX_INTRA_GAP) {
-        clusters[clusters.length-1].push(nums[i]);
-      } else {
-        clusters.push([nums[i]]);
-      }
-    }
-    return clusters;
-  }
-
-  function omegaAudit(results) {
-    var omegaLog    = [];
-    var corrections = 0;
-    var detections  = 0;
-
-    var eanGlobalIndex = {};
-    results.forEach(function(r){
-      r.eans.forEach(function(ean){
-        if (!eanGlobalIndex[ean]) eanGlobalIndex[ean] = [];
-        eanGlobalIndex[ean].push(r.ref);
-      });
-    });
-
-    results.forEach(function(r){
-      if (!r._omegaFlags)      r._omegaFlags = [];
-      if (!r._omegaRemovedEans) r._omegaRemovedEans = new Set();
-
-      var clusters = omegaCluster(r.eans);
-
-      if (clusters.length > 1) {
-        var mainCluster = clusters.reduce(function(best, c){ return c.length > best.length ? c : best; }, clusters[0]);
-        clusters.forEach(function(cluster){
-          if (cluster === mainCluster) return;
-          var clusterEans = cluster.map(String);
-          var betterHome  = null;
-          var betterScore = cluster.length;
-
-          results.forEach(function(other){
-            if (other.ref === r.ref) return;
-            var otherClusters = omegaCluster(other.eans);
-            otherClusters.forEach(function(oc){
-              var overlap = cluster.filter(function(n){ return oc.indexOf(n) !== -1; });
-              if (overlap.length > 0 && oc.length > betterScore) { betterHome=other.ref; betterScore=oc.length; }
-            });
-          });
-
-          if (betterHome) {
-            clusterEans.forEach(function(ean){ r._omegaRemovedEans.add(ean); });
-            r._omegaFlags.push({ type:'error', motor:'OMEGA·P1', msg:'Cluster foráneo detectado y eliminado: '+clusterEans.length+' EANs ('+clusterEans[0]+'…'+clusterEans[clusterEans.length-1]+') pertenecen a '+betterHome, eans:clusterEans });
-            corrections++;
-            omegaLog.push('[OMEGA·P1] CORRECCIÓN: '+r.ref+' → '+clusterEans.length+' EANs reasignados a '+betterHome);
-          } else if (clusters.length > OMEGA_MAX_CLUSTERS) {
-            clusterEans.forEach(function(ean){ r._omegaRemovedEans.add(ean); });
-            r._omegaFlags.push({ type:'error', motor:'OMEGA·P1', msg:'Cluster aislado sin referencia válida: '+clusterEans.length+' EANs eliminados por exceso de fragmentación ('+clusters.length+' clusters)', eans:clusterEans });
-            corrections++;
-          }
-        });
-      }
-
-      var crossEans = r.eans.filter(function(ean){
-        var refs = eanGlobalIndex[ean];
-        return refs && refs.length > 1 && !r._omegaRemovedEans.has(ean);
-      });
-
-      if (crossEans.length > 0) {
-        crossEans.forEach(function(ean){
-          var refs = eanGlobalIndex[ean];
-          var eanNum = parseInt(ean);
-          var bestRef = null, bestScore = -1;
-          refs.forEach(function(candidateRef){
-            var candidateResult = results.filter(function(x){ return x.ref===candidateRef; })[0];
-            if (!candidateResult) return;
-            var cClusters = omegaCluster(candidateResult.eans);
-            cClusters.forEach(function(cc){
-              if (cc.indexOf(eanNum) === -1) return;
-              if (cc.length > bestScore) { bestScore=cc.length; bestRef=candidateRef; }
-            });
-          });
-
-          if (bestRef && bestRef !== r.ref) {
-            r._omegaRemovedEans.add(ean);
-            r._omegaFlags.push({ type:'error', motor:'OMEGA·P2', msg:'EAN '+ean+' reasignado a '+bestRef+' (cluster más coherente: '+bestScore+' EANs)', eans:[ean] });
-            corrections++;
-            omegaLog.push('[OMEGA·P2] CORRECCIÓN: EAN '+ean+' de '+r.ref+' → '+bestRef);
-          }
-        });
-      }
-
-      clusters.forEach(function(cluster){
-        if (cluster.length === 1) {
-          var ean = String(cluster[0]);
-          if (!r._omegaRemovedEans.has(ean)) {
-            var refs = eanGlobalIndex[ean] || [];
-            if (refs.length === 1) {
-              r._omegaFlags.push({ type:'warn', motor:'OMEGA·P3', msg:'EAN '+ean+' aparece aislado (sin cluster de tallas)', eans:[ean] });
-              detections++;
-            }
-          }
-        }
-      });
-
-      r.eans.forEach(function(ean){
-        if (!r._omegaRemovedEans.has(ean) && !ean.startsWith(OMEGA_TAM_PREFIX)) {
-          r._omegaFlags.push({ type:'error', motor:'OMEGA·P4', msg:'EAN '+ean+' tiene prefijo GS1 incorrecto (esperado 40x, encontrado '+ean.substring(0,3)+')', eans:[ean] });
-          r._omegaRemovedEans.add(ean);
-          corrections++;
-        }
-      });
-
-      if (r._omegaRemovedEans.size > 0) {
-        r.eans = r.eans.filter(function(ean){ return !r._omegaRemovedEans.has(ean); });
-      }
-    });
-
-    var before = results.length;
-    for (var i = results.length - 1; i >= 0; i--) {
-      if (results[i].eans.length === 0) {
-        omegaLog.push('[OMEGA] Referencia '+results[i].ref+' eliminada — sin EANs válidos tras corrección');
-        results.splice(i, 1);
-      }
-    }
-
-    if (omegaLog.length) {
-      console.group('%c[MOTOR OMEGA] Correcciones aplicadas', 'color:#c0392b;font-weight:bold');
-      omegaLog.forEach(function(l){ console.log(l); });
-      console.groupEnd();
-    }
-    console.info('[OMEGA] Correcciones automáticas: '+corrections+' | Detecciones: '+detections+' | Refs eliminadas: '+(before - results.length));
-
-    return { corrections: corrections, detections: detections };
-  }
-
-  function runAuditEngines(results) {
-    var omegaResult = omegaAudit(results);
-
-    var eanIndex = {};
-    results.forEach(function(r){
-      r.eans.forEach(function(ean){
-        if (!eanIndex[ean]) eanIndex[ean] = [];
-        eanIndex[ean].push(r.ref);
-      });
-    });
-
-    var totalIssues = 0, totalErrors = 0;
-
-    results.forEach(function(r){
-      r._auditFlags  = [];
-      r._invalidEans = new Set();
-
-      var consistFlags = auditConsistency(r);
-      consistFlags.forEach(function(f){ r._auditFlags.push(f); if (f.data) f.data.forEach(function(e){ r._invalidEans.add(e); }); });
-
-      var semFlags = auditSemantic(r);
-      semFlags.forEach(function(f){ r._auditFlags.push(f); });
-
-      var intFlags = auditIntegrity(r);
-      intFlags.forEach(function(f){ r._auditFlags.push(f); });
-
-      r.eans.forEach(function(ean){
-        var refs = eanIndex[ean];
-        if (refs && refs.length > 1) {
-          var alreadyFlagged = r._auditFlags.some(function(f){ return f.motor==='M4·DUP' && f.ean===ean; });
-          if (!alreadyFlagged) {
-            r._auditFlags.push({ type:'error', motor:'M4·DUP', msg:'EAN '+ean+' aparece en '+refs.length+' referencias distintas: '+refs.join(', '), ean:ean });
-            r._invalidEans.add(ean);
-          }
-        }
-      });
-
-      r._auditFlags.forEach(function(f){
-        if (f.type==='error') totalErrors++;
-        else if (f.type==='warn') totalIssues++;
-      });
-    });
-
-    var summaryEl  = document.getElementById('ean-audit-summary');
-    var dotEl      = document.getElementById('ean-audit-dot');
-    var summaryTxt = document.getElementById('ean-audit-summary-text');
-
-    if (totalErrors > 0) {
-      dotEl.className = 'ean-audit-dot ean-errors';
-      summaryTxt.textContent = totalErrors+' error'+(totalErrors>1?'s':'')+
-        (totalIssues>0?' · '+totalIssues+' aviso'+(totalIssues>1?'s':''):'')+
-        (omegaResult.corrections>0?' · Ω '+omegaResult.corrections+' corrección'+(omegaResult.corrections>1?'es':''):'');
-    } else if (totalIssues > 0 || omegaResult.corrections > 0) {
-      dotEl.className = 'ean-audit-dot ean-issues';
-      summaryTxt.textContent = (totalIssues>0?totalIssues+' aviso'+(totalIssues>1?'s':''):'')+
-        (omegaResult.corrections>0?(totalIssues>0?' · ':'')+'Ω '+omegaResult.corrections+' corrección'+(omegaResult.corrections>1?'es':''):'');
-    } else {
-      dotEl.className = 'ean-audit-dot ean-clean';
-      summaryTxt.textContent = 'Ω Auditoría OK';
-    }
-    summaryEl.style.display = 'flex';
-
-    console.info('[AUDIT] Resultados:', results.length, '| Errores:', totalErrors, '| Avisos:', totalIssues);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MODAL DE RESULTADOS
-  // ═══════════════════════════════════════════════════════════════
-  function openModal() {
-    modalSearch.value = '';
-    renderResults(state.results); updateStats(state.results);
-    modalOverlay.classList.add('ean-open');
-    setTimeout(function(){ modalSearch.focus(); }, 80);
-  }
-
-  modalClose.addEventListener('click', function(){ modalOverlay.classList.remove('ean-open'); });
-  modalOverlay.addEventListener('click', function(e){ if(e.target===modalOverlay) modalOverlay.classList.remove('ean-open'); });
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape') modalOverlay.classList.remove('ean-open'); });
-  modalSearch.addEventListener('input', function(){
-    var q=modalSearch.value.toLowerCase().trim();
-    var filtered=!q?state.results:state.results.filter(function(r){
-      return r.ref.toLowerCase().indexOf(q)!==-1||r.name.toLowerCase().indexOf(q)!==-1||r.eans.some(function(e){return e.indexOf(q)!==-1;});
-    });
-    renderResults(filtered); updateStats(filtered);
-  });
-
-  // ── Excel download ──
-  document.getElementById('ean-btn-download').addEventListener('click', function(){
-    var q = modalSearch.value.toLowerCase().trim();
-    var list = !q ? state.results : state.results.filter(function(r){
-      return r.ref.toLowerCase().indexOf(q)!==-1||r.name.toLowerCase().indexOf(q)!==-1||r.eans.some(function(e){return e.indexOf(q)!==-1;});
-    });
-    if (!list.length) return;
-
-    var rows = [['Referencia','Nombre','PVP','UN','EAN']];
-    list.forEach(function(r){
-      r.eans.forEach(function(ean){
-        rows.push([ r.ref, r.name, r.pvp ? parseFloat(r.pvp) : '', 'UN', ean ]);
-      });
-    });
-
-    var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch:20 },{ wch:22 },{ wch:8 },{ wch:5 },{ wch:16 }];
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'EANs');
-    XLSX.writeFile(wb, 'TAM_EANs_' + new Date().toISOString().slice(0,10) + '.xlsx');
-    toast('Excel descargado');
-  });
-
-  // ── Guardar EANs en Supabase ──
-  document.getElementById('ean-btn-save-supabase').addEventListener('click', async function(){
-    var btn = this;
-    var allEans = [];
-    state.results.forEach(function(r){ r.eans.forEach(function(e){ allEans.push(e); }); });
-    if (!allEans.length) { toast('No hay EANs nuevos para guardar'); return; }
-
-    btn.disabled = true;
-    btn.textContent = '⬆ Guardando…';
-
-    var batchSize = 500;
-    var errors    = 0;
-    for (var i = 0; i < allEans.length; i += batchSize) {
-      var batch = allEans.slice(i, i + batchSize).map(function(e){ return { ref:'', ean:e }; });
-      try {
-        var resp = await fetch(SUPABASE_URL + '/rest/v1/tam_ean_catalog', {
-          method: 'POST',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=ignore-duplicates'
-          },
-          body: JSON.stringify(batch)
-        });
-        if (!resp.ok) errors++;
-      } catch(e) { errors++; }
-    }
-
-    btn.disabled = false;
-    btn.textContent = '⬆ SB';
-    if (errors === 0) {
-      toast(allEans.length + ' EANs guardados en Supabase ✓');
-      clearEanToolState();
-    } else {
-      toast('Guardado con ' + errors + ' error(es) — revisa consola');
-    }
-  });
-
-  function updateStats(list){
-    document.getElementById('ean-s-refs').textContent = list.length;
-    document.getElementById('ean-s-eans').textContent = list.reduce(function(a,r){ return a+r.eans.length; }, 0);
-  }
-
-  function renderResults(list){
-    Array.from(modalBody.querySelectorAll('.ean-ref-block')).forEach(function(el){ el.remove(); });
-    if (!list.length){ emptyState.classList.add('ean-visible'); return; }
-    emptyState.classList.remove('ean-visible');
-    var frag = document.createDocumentFragment();
-    list.forEach(function(r){
-      var block = document.createElement('div'); block.className = 'ean-ref-block';
-      var topLine = document.createElement('div'); topLine.className = 'ean-ref-top-line';
-
-      var codeEl = document.createElement('div'); codeEl.className = 'ean-ref-code'; codeEl.textContent = r.ref;
-      codeEl.title = 'Clic para copiar';
-      codeEl.addEventListener('click', function(){ copySimple(r.ref, codeEl, 'Referencia copiada'); });
-
-      var nameEl = document.createElement('div'); nameEl.className = 'ean-ref-name'+(r.name?'':' ean-empty'); nameEl.textContent = r.name||'sin nombre';
-      if (r.name){ nameEl.title='Clic para copiar nombre'; nameEl.addEventListener('click', function(){ copySimple(r.name, nameEl, 'Nombre copiado'); }); }
-
-      var pvpEl = document.createElement('div'); pvpEl.className = 'ean-ref-pvp'+(r.pvp?'':' ean-empty'); pvpEl.textContent = r.pvp?r.pvp+' €':'—';
-      if (r.pvp){ pvpEl.title='Clic para copiar PVP'; pvpEl.addEventListener('click', function(){ copySimple(r.pvp, pvpEl, 'PVP copiado'); }); }
-
-      topLine.appendChild(codeEl); topLine.appendChild(nameEl); topLine.appendChild(pvpEl);
-      block.appendChild(topLine);
-
-      var allFlags = (r._omegaFlags||[]).concat(r._auditFlags||[]);
-      if (allFlags.length > 0) {
-        var auditBar = document.createElement('div'); auditBar.className = 'ean-audit-bar';
-        allFlags.forEach(function(f){
-          var tag = document.createElement('span');
-          tag.className = 'ean-audit-flag ean-' + f.type;
-          tag.textContent = (f.motor.startsWith('OMEGA') ? 'Ω ' : '⚑ ') + f.motor + ': ' + f.msg;
-          tag.title = f.msg;
-          auditBar.appendChild(tag);
-        });
-        block.appendChild(auditBar);
-      }
-
-      if (r.eans.length > 0){
-        var eanList = document.createElement('div'); eanList.className = 'ean-list';
-        r.eans.forEach(function(ean, idx){
-          var chip = document.createElement('div');
-          var isInvalid = r._invalidEans && r._invalidEans.has(ean);
-          chip.className = 'ean-chip' + (isInvalid ? ' ean-invalid' : '');
-          chip.textContent = ean;
-          chip.title = isInvalid
-            ? '⚠ EAN con dígito de control incorrecto (fallo Luhn GS1)'
-            : (idx===0?'Clic → copia TODOS los EANs en formato Excel (col A: UN  col B: EAN)':'Clic → copia todos los EANs');
-          chip.addEventListener('click', function(){ copyAllEans(r.eans, eanList); });
-          eanList.appendChild(chip);
-        });
-        block.appendChild(eanList);
-      }
-
-      if (r.dns && r.dns.length > 0) {
-        var dnFooter = document.createElement('div'); dnFooter.className = 'ean-dn-footer';
-        var dnLabel  = document.createElement('span'); dnLabel.className = 'ean-dn-label'; dnLabel.textContent = 'DN';
-        dnFooter.appendChild(dnLabel);
-        r.dns.forEach(function(dn){
-          var chip = document.createElement('span'); chip.className = 'ean-dn-chip'; chip.textContent = dn;
-          chip.title = 'Clic para copiar Delivery Note';
-          chip.addEventListener('click', function(){ copySimple(dn, chip, 'DN copiada'); });
-          dnFooter.appendChild(chip);
-        });
-        block.appendChild(dnFooter);
-      }
-
-      frag.appendChild(block);
-    });
-    modalBody.insertBefore(frag, emptyState);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  COPY
-  // ═══════════════════════════════════════════════════════════════
-  function copySimple(text, el, msg){
-    var ok = function(){
-      el.classList.add('ean-copied');
-      el.classList.add('ean-done');
-      toast(msg||'Copiado');
-      setTimeout(function(){ el.classList.remove('ean-copied'); }, 1200);
-    };
-    if (navigator.clipboard){ navigator.clipboard.writeText(text).then(ok).catch(function(){ fallback(text); ok(); }); }
-    else { fallback(text); ok(); }
-  }
-  function copyAllEans(eans, eanListEl){
-    var tsv  = eans.map(function(e){ return 'UN\t'+e; }).join('\n');
-    var html = '<table>'+eans.map(function(e){ return '<tr><td>UN</td><td>'+e+'</td></tr>'; }).join('')+'</table>';
-    var flash = function(){
-      Array.from(eanListEl.querySelectorAll('.ean-chip')).forEach(function(c){
-        c.classList.add('ean-copied');
-        c.classList.add('ean-done');
-        setTimeout(function(){ c.classList.remove('ean-copied'); }, 1400);
-      });
-      toast(eans.length+' EANs copiados · Pega en Excel: col A=UN, col B=EAN');
-    };
-    if (navigator.clipboard && window.ClipboardItem){
-      try {
-        var item = new ClipboardItem({ 'text/plain':new Blob([tsv],{type:'text/plain'}), 'text/html':new Blob([html],{type:'text/html'}) });
-        navigator.clipboard.write([item]).then(flash).catch(function(){ fallback(tsv); flash(); });
-        return;
-      } catch(e){}
-    }
-    fallback(tsv); flash();
-  }
-  function fallback(text){
-    var ta = document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0;top:0;left:0;';
-    document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta);
-  }
-  var toastTimer = null;
-  function toast(msg){
-    copyToast.textContent = msg; copyToast.classList.add('ean-show');
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ copyToast.classList.remove('ean-show'); }, 2500);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  CARGAR DEPENDENCIAS (xlsx + pdf.js) si no están presentes
-  // ═══════════════════════════════════════════════════════════════
-  function initWithDeps() {
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  }
-
-  if (typeof XLSX === 'undefined') {
-    loadScript(
-      'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-      'ean-xlsx-script',
-      function() {
-        if (typeof pdfjsLib === 'undefined') {
-          loadScript(
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-            'ean-pdfjs-script',
-            initWithDeps
-          );
-        } else {
-          initWithDeps();
-        }
-      }
-    );
-  } else if (typeof pdfjsLib === 'undefined') {
-    loadScript(
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-      'ean-pdfjs-script',
-      initWithDeps
-    );
-  } else {
-    initWithDeps();
-  }
-
-}
 
 })();

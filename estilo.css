@@ -6281,6 +6281,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 /* ══════════════════════════════════════════════════════════════
    GERADOR DE HORÁRIOS — novas classes (fusão horarios)
 ══════════════════════════════════════════════════════════════ */
+.adm-mod-card[data-horarios-module="gerador"] { animation-delay: 0.10s; }
 .gh-mt48 { margin-top:48px; }
 .gh-m0 { margin:0; }
 .gh-wiz-title.mb0 { margin-bottom:0; }

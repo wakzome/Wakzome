@@ -179,7 +179,7 @@
         const scripts = [
           'js/nucleo.js',
           'js/session-lock.js',
-          'js/utilitario.js','js/processamento.js',
+          'js/utilitario.js','js/faturas.js',
           'js/admin-init.js','js/ordenados.js',
           'js/horarios.js',
           'js/tam.js',

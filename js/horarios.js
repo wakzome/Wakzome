@@ -12,6 +12,21 @@
 //  - GERADOR expõe window.GERADOR_PEOPLE; FÉRIAS lê-a (fallback [] se ausente).
 //  Como os 3 blocos correm sequencialmente no mesmo scope global (tal como
 //  antes, em ficheiros separados), este contrato mantém-se inalterado.
+//
+//  Fundido de index.html (2ª fase de migração):
+//  - FÉRIAS: tryInitFerias() + monkey-patch de window.openModule (antigo
+//    script solto no index). Adaptado de DOMContentLoaded para verificação
+//    de document.readyState, já que este ficheiro carrega depois do login
+//    (DOMContentLoaded já disparou nessa altura — o listener original teria
+//    ficado morto sem este ajuste).
+//  - GERADOR: card do dashboard "#horarios-sub-grid" auto-injetada via
+//    ensureModuleCard() (mesmo padrão de FÉRIAS/BANCO DE HORAS), inserida
+//    sempre no início da grid para preservar a ordem gerador→férias→banco
+//    de horas. Modal completo de folgas dirigidas (window.openFolgasDirigidasModal/
+//    saveFolgasDirigidas/closeFolgasDirigidasModal), com o shell #fd-overlay
+//    auto-injetado na primeira abertura. O watch do badge (#fd-badge-count,
+//    hoje vivo em utilitario.js) também foi adaptado de DOMContentLoaded
+//    para verificação de document.readyState pelo mesmo motivo.
 // ══════════════════════════════════════════════════════════════
 
 /* ══════════════════════════════════════════════════════════════
@@ -853,7 +868,35 @@
   }, 3600000);
 
   // Arrancar solo cuando hay sesión activa (no al cargar la página)
-  // La inicialización ocurre al abrir la pestaña de férias
+  // La inicialização ocurre al abrir la pestaña de férias
+
+  // ── tryInitFerias — fundido de index.html ──
+  function tryInitFerias() {
+    if (typeof window.initFerias    === "function") { window.initFerias();    return true; }
+    if (typeof window.loadFerias    === "function") { window.loadFerias();    return true; }
+    if (typeof window.renderFerias  === "function") { window.renderFerias();  return true; }
+    if (typeof window.refreshFerias === "function") { window.refreshFerias(); return true; }
+    var btn = document.querySelector(".tab-btn[data-tab=ferias]");
+    if (btn) { var nav=document.getElementById("tab-nav"),pd=nav?nav.style.display:null; if(nav)nav.style.display=""; btn.click(); if(nav&&pd!==null)nav.style.display=pd; return true; }
+    return false;
+  }
+  document.addEventListener("ferias:open", function () { setTimeout(tryInitFerias, 40); });
+  function _ferBWireOpenModule() {
+    var _orig = window.openModule;
+    if (typeof _orig === "function") {
+      window.openModule = function (tab) { _orig(tab); if (tab === "ferias") setTimeout(tryInitFerias, 40); };
+    }
+    var panel = document.getElementById("tab-ferias");
+    if (panel && panel.classList.contains("active")) setTimeout(tryInitFerias, 80);
+  }
+  // Adaptado de DOMContentLoaded: este ficheiro carrega depois do login,
+  // quando DOMContentLoaded já disparou há muito — sem este check o
+  // listener nunca correria.
+  if (document.readyState === 'loading') {
+    document.addEventListener("DOMContentLoaded", _ferBWireOpenModule);
+  } else {
+    _ferBWireOpenModule();
+  }
 
 })();
 
@@ -4082,6 +4125,250 @@
         .finally(function () { busy = false; });
     }, 250);
   })();
+
+  // ── Card do dashboard "#horarios-sub-grid" — fundida de index.html ──
+  // (estática antes; agora auto-injetada, sempre como primeiro filho da
+  // grid para preservar a ordem gerador → férias → banco de horas, já
+  // que este bloco corre antes do de FÉRIAS ter oportunidade de se
+  // posicionar a seguir a ela)
+  function ensureModuleCard() {
+    if (document.querySelector('.adm-mod-card[data-horarios-module="gerador"]')) return;
+    var grid = document.getElementById('horarios-sub-grid');
+    if (!grid) return;
+    var card = document.createElement('div');
+    card.className = 'adm-mod-card';
+    card.setAttribute('data-horarios-module', 'gerador');
+    card.innerHTML = `        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="4" width="18" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M3 9h18" stroke="rgba(255,255,255,0.55)" stroke-width="1.1"/>
+            <path d="M8 4v5M16 4v5" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M7 14h4M7 17h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="17" cy="15.5" r="2.5" stroke="rgba(255,255,255,0.7)" stroke-width="1.1"/>
+            <path d="M17 14.5v1l.7.7" stroke="rgba(255,255,255,0.85)" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">GERADOR DE HORÁRIOS</div>
+          <div class="adm-mod-desc">geração automática de horários</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      `;
+    grid.insertBefore(card, grid.firstChild);
+    card.addEventListener('click', function () {
+      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
+      setTimeout(function () {
+        if (typeof window.openModule === 'function') window.openModule('gerador');
+      }, 200);
+    });
+  }
+  ensureModuleCard();
+
+  // ── Modal "folgas dirigidas" — fundido de index.html ──
+  var _fd = {};
+  var _fdPeople = [];
+
+  function ensureFolgasDirigidasShell() {
+    if (document.getElementById('fd-overlay')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+<div id="fd-overlay" onclick="if(event.target===this)closeFolgasDirigidasModal()">
+  <div id="fd-modal">
+    <div id="fd-modal-header">
+      <div id="fd-modal-title">folgas dirigidas · porto santo</div>
+      <button id="fd-modal-close" onclick="closeFolgasDirigidasModal()">✕</button>
+    </div>
+    <div id="fd-modal-body">
+      <div id="fd-loading">a carregar pessoas…</div>
+    </div>
+    <div id="fd-modal-footer">
+      <button class="fd-footer-btn" id="fd-cancel-btn" onclick="closeFolgasDirigidasModal()">cancelar</button>
+      <button class="fd-footer-btn" id="fd-save-btn" onclick="saveFolgasDirigidas()">guardar</button>
+    </div>
+  </div>
+</div>`);
+  }
+
+  window.openFolgasDirigidasModal = async function () {
+    ensureFolgasDirigidasShell();
+    document.getElementById('fd-overlay').classList.add('open');
+    var body = document.getElementById('fd-modal-body');
+    body.innerHTML = '<div id="fd-loading">a carregar pessoas…</div>';
+
+    try {
+      var sb = await _fdGetSb();
+      if (!sb) { body.innerHTML = '<div id="fd-loading">Supabase não disponível.</div>'; return; }
+
+      
+      var { data: people } = await sb.from('gh_people')
+        .select('id,name,store_id').eq('active', true);
+      _fdPeople = (people || []).sort((a,b) => a.name.localeCompare(b.name));
+
+      
+      var { data: fds } = await sb.from('gh_folgas_dirigidas').select('*');
+      _fd = {};
+      (fds || []).forEach(function (r) {
+        _fd[r.pessoa_id] = { id: r.id, datas: r.datas || [], notas: r.notas || '' };
+      });
+
+      _fdRenderModal(body);
+      _fdUpdateBadge();
+    } catch (e) {
+      console.error('Erro ao carregar folgas dirigidas:', e);
+      body.innerHTML = '<div id="fd-loading">Erro ao carregar dados.</div>';
+    }
+  };
+
+  function _fdRenderModal(body) {
+    body.innerHTML = '';
+    if (!_fdPeople.length) {
+      body.innerHTML = '<div id="fd-loading">Sem pessoas na base de dados.</div>';
+      return;
+    }
+    _fdPeople.forEach(function (p) {
+      var rec = _fd[p.id] || { datas: [], notas: '' };
+      var datas = (rec.datas || []).concat(['','','','']).slice(0, 4);
+      var hasDates = rec.datas && rec.datas.length > 0;
+
+      var row = document.createElement('div');
+      row.className = 'fd-pessoa-row';
+      row.dataset.pid = p.id;
+
+      var dateInputs = datas.map(function (d, i) {
+        return '<input type="date" class="fd-date-input" data-pid="' + p.id + '" data-idx="' + i + '" value="' + (d||'') + '">';
+      }).join('');
+
+      row.innerHTML =
+        '<div class="fd-pessoa-name">' +
+          _fdShortName(p.name) +
+          (hasDates ? '<span class="fd-has-dates">' + rec.datas.length + ' data' + (rec.datas.length !== 1 ? 's' : '') + '</span>' : '') +
+        '</div>' +
+        '<div class="fd-dates-grid">' + dateInputs + '</div>' +
+        '<input type="text" class="fd-nota-input" data-pid="' + p.id + '" placeholder="nota (opcional)" value="' + _fdEsc(rec.notas || '') + '">';
+
+      body.appendChild(row);
+    });
+  }
+
+  
+  window.saveFolgasDirigidas = async function () {
+    var saveBtn = document.getElementById('fd-save-btn');
+    saveBtn.textContent = 'a guardar…';
+    saveBtn.disabled = true;
+
+    try {
+      var sb = await _fdGetSb();
+      if (!sb) { alert('Supabase não disponível.'); return; }
+
+      
+      var rows = document.querySelectorAll('.fd-pessoa-row');
+      var upserts = [];
+
+      rows.forEach(function (row) {
+        var pid = row.dataset.pid;
+        var dateInputs = row.querySelectorAll('.fd-date-input');
+        var datas = [];
+        dateInputs.forEach(function (inp) { if (inp.value) datas.push(inp.value); });
+        var notas = (row.querySelector('.fd-nota-input') || {}).value || '';
+
+        
+        upserts.push({ pessoa_id: pid, datas: datas, notas: notas });
+        _fd[pid] = { datas: datas, notas: notas };
+      });
+
+      
+      var { error } = await sb.from('gh_folgas_dirigidas')
+        .upsert(upserts, { onConflict: 'pessoa_id' });
+      if (error) throw error;
+
+      _fdUpdateBadge();
+      closeFolgasDirigidasModal();
+    } catch (e) {
+      console.error('Erro ao guardar folgas dirigidas:', e);
+      alert('Erro ao guardar. Verifique a consola.');
+    } finally {
+      saveBtn.textContent = 'guardar';
+      saveBtn.disabled = false;
+    }
+  };
+
+  
+  window.closeFolgasDirigidasModal = function () {
+    document.getElementById('fd-overlay').classList.remove('open');
+  };
+
+  
+  function _fdUpdateBadge() {
+    var badge = document.getElementById('fd-badge-count');
+    if (!badge) return;
+    var today = new Date().toISOString().split('T')[0];
+    var total = 0;
+    Object.values(_fd).forEach(function (r) {
+      (r.datas || []).forEach(function (d) { if (d >= today) total++; });
+    });
+    if (total > 0) {
+      badge.textContent = total;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  
+  function _fdGetSb() {
+    if (typeof sbAdmin !== 'undefined' && sbAdmin) return Promise.resolve(sbAdmin);
+    return new Promise(function (resolve) {
+      var tries = 0;
+      var t = setInterval(function () {
+        if (typeof sbAdmin !== 'undefined' && sbAdmin) { clearInterval(t); resolve(sbAdmin); }
+        if (++tries > 50) { clearInterval(t); resolve(null); }
+      }, 100);
+    });
+  }
+
+  function _fdShortName(name) {
+    if (!name) return '';
+    var parts = name.trim().split(/\s+/);
+    return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+  }
+
+  function _fdEsc(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  async function _fdInitBadge() {
+    try {
+      var sb = await _fdGetSb();
+      if (!sb) return;
+      var today = new Date().toISOString().split('T')[0];
+      var { data: fds } = await sb.from('gh_folgas_dirigidas').select('datas');
+      var total = 0;
+      (fds || []).forEach(function (r) {
+        (r.datas || []).forEach(function (d) { if (d >= today) total++; });
+      });
+      var badge = document.getElementById('fd-badge-count');
+      if (badge && total > 0) {
+        badge.textContent = total;
+        badge.style.display = 'inline-block';
+      }
+    } catch (e) {}
+  }
+
+  function _fdWatchAdminShow() {
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    if (adminApp.classList.contains('show')) { _fdInitBadge(); return; }
+    new MutationObserver(function (muts, obs) {
+      if (adminApp.classList.contains('show')) { obs.disconnect(); _fdInitBadge(); }
+    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+  }
+  // Adaptado de DOMContentLoaded: este ficheiro carrega depois do login,
+  // quando DOMContentLoaded já disparou há muito — sem este check o
+  // listener nunca correria.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _fdWatchAdminShow);
+  } else {
+    _fdWatchAdminShow();
+  }
 
 })();
 

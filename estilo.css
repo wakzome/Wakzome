@@ -1593,7 +1593,7 @@ input, textarea { cursor: text !important; }
 }
 
 .f-card {
-  display:flex; align-items:center; gap:14px;
+  display:flex; align-items:center; gap:0;
   padding:10px 16px; border-radius:12px;
   border:1px solid #efefef; margin-bottom:6px;
   background:#fff; transition:border-color .15s;
@@ -5699,3 +5699,618 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .ed-loading-msg { padding:40px; text-align:center; color:#aaa; font-weight:bold; font-size:.85rem; }
 .ed-error-msg { padding:40px; text-align:center; color:#c03000; font-weight:bold; font-size:.85rem; }
 .ed-loading-msg-sm { padding:20px; text-align:center; color:#aaa; font-size:.82rem; }
+
+
+/* ══════════════════════════════════════════════════════════════
+   BANCO DE HORAS — estilos migrados de bhInjectStyles() (banco-horas.js)
+══════════════════════════════════════════════════════════════ */
+#tab-banco-horas.active{overflow-y:auto;}
+#bh-admin-wrap,#bh-loja-wrap{width:100%;max-width:900px;margin:0 auto;padding:0 4px 60px;box-sizing:border-box;font-family:"MontserratLight",sans-serif;}
+.bh-section{margin-bottom:34px;}
+.bh-section-title{font-size:.78rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;opacity:.55;margin-bottom:14px;}
+.bh-filter-row{margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;}
+.bh-filter-row select{padding:8px 12px;font-size:.85rem;font-weight:600;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:9px;background:#fff;outline:none;cursor:pointer;}
+.bh-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid #e6e6e6;border-radius:10px;background:#fafafa;margin-bottom:8px;flex-wrap:wrap;}
+.bh-row-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.bh-row-nome{font-size:.86rem;font-weight:bold;color:#000;}
+.bh-row-loja{font-size:.72rem;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.04em;}
+.bh-row-meta{font-size:.72rem;font-weight:600;color:#888;}
+.bh-row-actions{display:flex;gap:6px;flex-shrink:0;}
+.bh-empty{text-align:center;padding:24px;color:#aaa;font-size:.85rem;font-weight:600;}
+.bh-error{text-align:center;padding:16px;color:#c03000;font-size:.85rem;font-weight:600;}
+.bh-btn{padding:6px 14px;font-size:.76rem;font-weight:600;cursor:pointer;border:1px solid #ccc;border-radius:8px;background:#fff;font-family:"MontserratLight",sans-serif;transition:background .15s,color .15s,border-color .15s;}
+.bh-btn:hover{background:#f0f0f0;border-color:#999;}
+.bh-btn:disabled{opacity:.45;cursor:not-allowed;}
+.bh-btn.bh-btn-del:hover{background:#fff0f0;border-color:#e00;color:#c00;}
+.bh-btn.bh-btn-aceitar{border-color:#2a8a2a;color:#2a8a2a;}
+.bh-btn.bh-btn-aceitar:hover{background:#2a8a2a;color:#fff;}
+.bh-btn.bh-btn-rejeitar:hover{background:#c03000;border-color:#c03000;color:#fff;}
+.bh-btn.primary{background:#000;color:#fff !important;border-color:#000;}
+.bh-btn.primary:hover{background:#333;border-color:#333;}
+.bh-badge{display:inline-block;padding:2px 9px;font-size:.66rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border-radius:12px;}
+.bh-badge-inativo{background:#fff0f0;color:#c00;}
+.bh-badge-pendente{background:#fff8e6;color:#a06a00;}
+.bh-badge-aceite{background:#eafaea;color:#2a8a2a;}
+.bh-badge-rejeitado{background:#fdeaea;color:#c03000;}
+.bh-badge-credito{background:#eafaea;color:#2a8a2a;}
+.bh-badge-debito{background:#fff2e0;color:#b05000;}
+.bh-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;flex:1;min-width:130px;}
+.bh-field label{font-size:.68rem;font-weight:bold;text-transform:uppercase;letter-spacing:.07em;opacity:.55;}
+.bh-field input,.bh-field select{padding:9px 12px;font-size:.9rem;font-weight:600;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:10px;outline:none;background:#fff;box-sizing:border-box;transition:border-color .2s;}
+.bh-field input:focus,.bh-field select:focus{border-color:#555;}
+.bh-field-row{display:flex;gap:12px;flex-wrap:wrap;}
+.bh-preview span{display:inline-block;padding:9px 0;font-size:.9rem;font-weight:bold;color:#000;}
+#bh-lancar-status,#bh-loja-submit-status{font-size:.82rem;font-weight:600;min-height:18px;margin-top:8px;}
+.bh-status-ok{color:#2a8a2a;}
+.bh-status-error{color:#c03000;}
+.bh-saldo-card{padding:18px 22px;border-radius:14px;background:#f7f7f7;border:1.5px solid #e6e6e6;margin-bottom:20px;}
+.bh-saldo-card .bh-saldo-nome{font-size:.78rem;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;opacity:.55;margin-bottom:6px;}
+.bh-saldo-card .bh-saldo-valor{font-size:1.3rem;font-weight:bold;}
+.bh-saldo-positivo{color:#2a8a2a !important;}
+.bh-saldo-negativo{color:#c03000 !important;}
+.bh-saldo-zero{color:#666 !important;}
+#bh-loja-picker{display:flex;flex-direction:column;gap:8px;max-width:360px;margin:20px auto 30px;text-align:center;}
+#bh-loja-picker label{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;opacity:.55;}
+#bh-loja-picker select{padding:10px 14px;font-size:.95rem;font-weight:600;font-family:"MontserratLight",sans-serif;border:1.5px solid #ddd;border-radius:12px;background:#fff;outline:none;cursor:pointer;}
+.bh-loja-group-title{font-size:.72rem;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:18px 0 8px;}
+.bh-loja-group-title:first-child{margin-top:0;}
+.bh-row-clickable{cursor:pointer;transition:background .12s;}
+.bh-row-clickable:hover{background:#f0f0f0;}
+#bh-lancar-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;justify-content:center;align-items:center;}
+#bh-lancar-modal-overlay.show{display:flex;}
+#bh-lancar-modal-box{background:#fff;border-radius:18px;padding:26px;max-width:480px;width:92%;max-height:85vh;overflow-y:auto;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}
+#bh-lancar-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+#bh-lancar-modal-title{font-size:.88rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;}
+#bh-lancar-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}
+#bh-lancar-modal-close:hover{background:#f0f0f0;}
+#bh-lancar-modal-nome{font-size:.95rem;font-weight:bold;color:#000;margin-bottom:2px;}
+#bh-lancar-modal-loja{font-size:.72rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
+#bh-gerir-lojas-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:601;justify-content:center;align-items:center;}
+#bh-gerir-lojas-modal-overlay.show{display:flex;}
+#bh-gerir-lojas-modal-box{background:#fff;border-radius:18px;padding:26px;max-width:420px;width:90%;font-family:"MontserratLight",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.15);}
+#bh-gerir-lojas-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+#bh-gerir-lojas-modal-title{font-size:.88rem;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#000;}
+#bh-gerir-lojas-modal-close{background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#000;padding:4px 8px;border-radius:6px;line-height:1;}
+#bh-gerir-lojas-modal-close:hover{background:#f0f0f0;}
+#bh-gerir-lojas-modal-nome{font-size:.95rem;font-weight:bold;color:#000;margin-bottom:14px;}
+.bh-gerir-loja-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #f0f0f0;}
+.bh-gerir-loja-row:last-child{border-bottom:none;}
+.bh-gerir-loja-row input[type="checkbox"]{width:18px;height:18px;cursor:pointer;flex-shrink:0;}
+.bh-gerir-loja-row label{font-size:.86rem;font-weight:600;cursor:pointer;}
+
+/* ══════════════════════════════════════════════════════════════
+   GERADOR DE HORÁRIOS — estilos migrados de gh-styles (gerador-horarios.js)
+══════════════════════════════════════════════════════════════ */
+        /* ── LAYOUT — isolation from admin dark theme ── */
+        #tab-gerador { background:#fff !important; color:#111 !important; }
+
+        /* ── WIZARD ── */
+        @keyframes gh-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        #tab-gerador .gh-wiz-box { width:100%; max-width:520px; margin:0 auto; padding:48px 24px; animation:gh-up .3s ease; box-sizing:border-box; }
+        #tab-gerador .gh-wiz-label { font-size:.65rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:#bbb; margin-bottom:12px; }
+        #tab-gerador .gh-wiz-title { font-size:1.6rem; font-weight:400; margin-bottom:8px; line-height:1.3; color:#111; }
+        #tab-gerador .gh-wiz-sub   { font-size:.82rem; color:#888; margin-bottom:32px; line-height:1.6; }
+        #tab-gerador .gh-field { width:100%; border:1px solid #ddd; border-radius:6px; padding:11px 13px; font-size:.9rem; font-family:inherit; font-weight:400; outline:none; transition:border-color .15s; background:#fff; margin-bottom:28px; color:#111; box-sizing:border-box; }
+        #tab-gerador .gh-field:focus { border-color:#000; }
+        #tab-gerador .gh-wiz-nav { display:flex; gap:12px; align-items:center; margin-top:4px; }
+
+        /* ── BUTTONS ── */
+        #tab-gerador .gh-btn { padding:9px 20px; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border-radius:6px; font-family:inherit; transition:all .15s; }
+        #tab-gerador .gh-btn-solid { background:#111 !important; color:#fff !important; border:1px solid #111 !important; }
+        #tab-gerador .gh-btn-solid:hover { background:#333 !important; border-color:#333 !important; }
+        #tab-gerador .gh-btn-ghost { background:#fff !important; color:#111 !important; border:1px solid #999 !important; }
+        #tab-gerador .gh-btn-ghost:hover { border-color:#111 !important; }
+        #tab-gerador .gh-btn-sm { padding:6px 14px; font-size:.65rem; }
+        #tab-gerador .gh-wiz-back { background:none !important; border:none !important; font-size:.68rem; color:#bbb !important; cursor:pointer; font-family:inherit; letter-spacing:.06em; text-transform:uppercase; padding:6px 4px; }
+        #tab-gerador .gh-wiz-back:hover { color:#111 !important; }
+
+        /* ── ABSENCES ── */
+        #tab-gerador .gh-ab-list { margin-bottom:14px; }
+        #tab-gerador .gh-ab-row { display:grid; grid-template-columns:1fr 110px 90px 28px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+        #tab-gerador .gh-ab-sel { border:1px solid #ddd; border-radius:5px; padding:7px 9px; font-size:.78rem; font-family:inherit; font-weight:300; outline:none; background:#fff; width:100%; color:#111; }
+        #tab-gerador .gh-ab-x { background:none; border:none; cursor:pointer; color:#ccc; font-size:1rem; line-height:1; }
+        #tab-gerador .gh-ab-x:hover { color:#c00; }
+        #tab-gerador .gh-add-btn { display:flex; align-items:center; gap:8px; font-size:.75rem; color:#aaa; cursor:pointer; border:1px dashed #ddd; border-radius:5px; padding:9px 14px; background:none; font-family:inherit; width:100%; margin-bottom:24px; }
+        #tab-gerador .gh-add-btn:hover { border-color:#111; color:#111; }
+
+        /* ── STORE CONFIG ── */
+        #tab-gerador .gh-store-cfg { margin-bottom:28px; display:flex; flex-direction:column; gap:0; }
+        #tab-gerador .gh-sc-row { padding:14px 0 10px; border-bottom:1px solid #f0f0f0; display:flex; flex-direction:column; gap:8px; }
+        #tab-gerador .gh-sc-row:last-child { border-bottom:none; }
+        #tab-gerador .gh-sc-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        #tab-gerador .gh-sc-name { font-size:.88rem; cursor:pointer; color:#111; font-weight:600; flex:1; min-width:80px; }
+        #tab-gerador .gh-sc-top input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#000; flex-shrink:0; }
+        #tab-gerador .gh-sc-minmax { display:flex; align-items:center; gap:4px; background:#f5f5f5; border:1px solid #e8e8e8; border-radius:6px; padding:3px 8px; margin-left:auto; }
+        #tab-gerador .gh-sc-mm-field { display:flex; align-items:center; gap:3px; }
+        #tab-gerador .gh-sc-mm-label { font-size:.58rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#aaa; }
+        #tab-gerador .gh-sc-mm-inp { width:32px; font-size:.78rem; font-weight:700; text-align:center; border:1px solid #ddd; border-radius:3px; padding:2px 3px; color:#111; background:#fff; font-family:inherit; }
+        #tab-gerador .gh-sc-mm-inp:focus { outline:none; border-color:#111; }
+        #tab-gerador .gh-sc-mm-inp::placeholder { color:#ccc; font-weight:400; }
+        #tab-gerador .gh-sc-mm-sep { font-size:.7rem; color:#ccc; padding:0 1px; }
+        #tab-gerador .gh-sc-fixed-cap { font-size:.62rem; font-weight:700; color:#888; background:#f0f0f0; border:1px solid #e0e0e0; border-radius:5px; padding:3px 9px; margin-left:auto; white-space:nowrap; }
+        #tab-gerador .gh-sc-days { display:flex; gap:5px; flex-wrap:wrap; padding-left:26px; }
+        #tab-gerador .gh-sc-mode-row { display:flex; align-items:center; gap:8px; padding-left:26px; flex-wrap:wrap; }
+        #tab-gerador .gh-sc-mode-label { font-size:.58rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#aaa; white-space:nowrap; }
+        #tab-gerador .gh-sc-mode-sel { font-size:.72rem; border:1px solid #ddd; border-radius:5px; padding:4px 8px; font-family:inherit; color:#111; background:#fff; cursor:pointer; flex:1; min-width:180px; max-width:340px; }
+        #tab-gerador .gh-sc-mode-sel:focus { outline:none; border-color:#111; }
+        #tab-gerador .gh-sc-mode-hint { font-size:.62rem; color:#888; white-space:nowrap; flex-shrink:0; }
+        /* Disabled state */
+        #tab-gerador .gh-sc-row.closed .gh-sc-minmax,
+        #tab-gerador .gh-sc-row.closed .gh-sc-mode-row { opacity:.3; pointer-events:none; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-name { color:#bbb; }
+        #tab-gerador .gh-sc-row.closed .gh-sc-days { opacity:.2; pointer-events:none; }
+        /* Day toggles */
+        #tab-gerador .gh-dtog { padding:5px 9px; border:1px solid #ddd; border-radius:4px; font-size:.65rem; font-weight:600; letter-spacing:.04em; cursor:pointer; user-select:none; color:#555; background:#fff; transition:all .12s; }
+        #tab-gerador .gh-dtog:hover { border-color:#555; }
+        #tab-gerador .gh-dtog.on { background:#111; color:#fff !important; border-color:#111; }
+        #tab-gerador .gh-dtog-dom { border-style:dashed; }
+        #tab-gerador .gh-dtog-dom.on { background:#1a5c9e; border-color:#1a5c9e; border-style:solid; }
+        /* Season banner */
+        #tab-gerador .gh-season-banner { display:flex; align-items:flex-start; gap:10px; background:#f5f8ff; border:1px solid #d0ddf5; border-radius:8px; padding:10px 14px; margin-bottom:18px; }
+        #tab-gerador .gh-season-icon { font-size:1.1rem; flex-shrink:0; margin-top:1px; }
+        #tab-gerador .gh-season-name { font-size:.78rem; font-weight:700; color:#1a3a6c; margin-bottom:2px; }
+        #tab-gerador .gh-season-hint { font-size:.7rem; color:#4a6a9c; line-height:1.4; }
+
+        /* ── COMBINAÇÃO BAR ── */
+        #tab-gerador .gh-comb-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:6px 20px; background:#f9f9f7; border-bottom:1px solid #efefeb; font-size:.62rem; }
+        #tab-gerador .gh-comb-label { font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#bbb; margin-right:2px; }
+        #tab-gerador .gh-comb-codes { font-family:monospace; color:#888; font-size:.68rem; }
+        #tab-gerador .gh-comb-sep { color:#ddd; }
+        #tab-gerador .gh-comb-person { display:inline-flex; align-items:center; gap:3px; background:#f0f0eb; border-radius:4px; padding:1px 6px; color:#555; }
+        #tab-gerador .gh-comb-num { font-weight:700; color:#1a3a6c; background:#e8f0fe; border-radius:3px; padding:0 4px; font-size:.65rem; margin-left:2px; }
+
+        /* ── SCHEDULE BAR ── */
+        #tab-gerador .gh-sched-bar { position:sticky; top:0; background:#fff; border-bottom:1px solid #e8e8e8; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; box-sizing:border-box; }
+        #tab-gerador .gh-sb-week  { font-size:.68rem; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:#888; }
+        #tab-gerador .gh-sb-dates { font-size:.88rem; font-weight:500; margin-top:2px; color:#111; }
+        #tab-gerador .gh-alert-bar { padding:8px 20px; background:#fafafa; border-bottom:1px solid #ebebeb; box-sizing:border-box; }
+        #tab-gerador .gh-dec-bar   { padding:7px 20px; border-bottom:1px solid #f0f0f0; box-sizing:border-box; }
+        #tab-gerador .gh-al-inner  { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-gerador .gh-dec-inner { display:flex; flex-wrap:wrap; gap:5px; }
+        #tab-gerador .gh-al-chip { font-size:.72rem; font-weight:600; padding:5px 13px; border-radius:20px; }
+        #tab-gerador .gh-al-chip.red   { background:#fff0f0; color:#a93226; border:1px solid rgba(169,50,38,.25); }
+        #tab-gerador .gh-al-chip.amber { background:#fff8e8; color:#9a6f00; border:1px solid rgba(154,111,0,.25); }
+        #tab-gerador .gh-al-chip.info  { background:#edf3ff; color:#1a4a7a; border:1px solid rgba(26,74,122,.25); }
+        #tab-gerador .gh-dec-chip { font-size:.68rem; font-weight:500; color:#555; padding:4px 10px; background:#efefef; border-radius:4px; }
+
+        /* ── COVERAGE BLOCKER ── */
+        #tab-gerador .gh-cov-list { margin:24px 0; display:flex; flex-direction:column; gap:8px; }
+        #tab-gerador .gh-cov-row { display:grid; grid-template-columns:60px 1fr auto; gap:12px; align-items:center; padding:10px 14px; background:#fff5f5; border:1px solid rgba(169,50,38,.2); border-radius:7px; }
+        #tab-gerador .gh-cov-day { font-size:.72rem; font-weight:700; letter-spacing:.1em; color:#a93226; }
+        #tab-gerador .gh-cov-store { font-size:.82rem; font-weight:500; color:#111; }
+        #tab-gerador .gh-cov-count { font-size:.72rem; font-weight:600; color:#a93226; white-space:nowrap; }
+
+        /* ── TABLE LAYOUT ── */
+        #tab-gerador .gh-sched-body { padding:20px 20px 0; width:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; overflow:visible; }
+
+        /* ── COVERAGE PANEL ── */
+        #tab-gerador .gh-sched-wrap { display:flex; flex-direction:row; align-items:flex-start; gap:0; width:100%; box-sizing:border-box; }
+        #tab-gerador .gh-sched-wrap > .gh-sched-body { flex:1 1 auto; min-width:0; }
+        #tab-gerador .gh-cov-panel { flex:0 0 auto; width:340px; max-width:42vw; margin:20px 20px 0 0; border:1px solid #e2e2e2; border-radius:10px; background:#fafafa; box-sizing:border-box; align-self:flex-start; position:sticky; top:64px; max-height:calc(100vh - 84px); overflow-y:auto; display:none; }
+        #tab-gerador .gh-cov-header { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #e8e8e8; position:sticky; top:0; background:#fafafa; }
+        #tab-gerador .gh-cov-title { font-size:.7rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#555; }
+        #tab-gerador .gh-cov-close { background:none !important; border:none !important; font-size:.9rem; color:#999 !important; cursor:pointer; padding:2px 6px; line-height:1; }
+        #tab-gerador .gh-cov-close:hover { color:#111 !important; }
+        #tab-gerador .gh-cov-body { padding:12px 14px; }
+        #tab-gerador .gh-cov-store { margin-bottom:18px; }
+        #tab-gerador .gh-cov-store:last-child { margin-bottom:0; }
+        #tab-gerador .gh-cov-store-name { font-size:.7rem; font-weight:700; color:#333; margin-bottom:6px; letter-spacing:.04em; }
+        #tab-gerador .gh-cov-empty { font-size:.7rem; color:#aaa; font-style:italic; padding:6px 0; }
+        #tab-gerador .gh-cov-table { width:100%; border-collapse:collapse; font-size:.62rem; }
+        #tab-gerador .gh-cov-th { padding:4px 2px; font-weight:700; color:#888; text-align:center; border-bottom:1px solid #e0e0e0; font-size:.58rem; letter-spacing:.03em; }
+        #tab-gerador .gh-cov-th-hour { text-align:left; color:#bbb; }
+        #tab-gerador .gh-cov-hour { padding:3px 4px; color:#999; font-weight:600; text-align:left; white-space:nowrap; font-size:.6rem; }
+        #tab-gerador .gh-cov-td { padding:3px 2px; text-align:center; font-weight:700; border-radius:3px; }
+        #tab-gerador .gh-cov-zero { color:#ddd; }
+        #tab-gerador .gh-cov-one  { color:#c08a00; background:#fff7e6; }
+        #tab-gerador .gh-cov-many { color:#1a6c1a; background:#eaf7ea; }
+
+        /* 1. CONTENEDOR: bloque desplazable */
+        #tab-gerador .gh-store-block {
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          width: 100% !important;
+          display: block !important;
+          margin-bottom: 48px;
+          padding-bottom: 15px !important;
+          box-sizing: border-box;
+        }
+
+        /* 2. TABLA: obligada a NO encogerse */
+        #tab-gerador .gh-sched-tbl {
+          width: auto !important;
+          min-width: unset !important;
+          border-collapse: collapse !important;
+          table-layout: auto !important;
+          margin: 0 auto !important;
+        }
+
+        /* 3. CELDAS: sin saltos de linea, fondo solido */
+        #tab-gerador .gh-sched-tbl th,
+        #tab-gerador .gh-sched-tbl td {
+          white-space: nowrap !important;
+          background-color: #ffffff !important;
+        }
+
+        #tab-gerador .gh-tbl-store-hdr { background:#efefef; }
+        #tab-gerador .gh-tbl-store-hdr td { background-color:#efefef !important; padding:9px 8px; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid #ddd; text-align:center; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-tbl-store-hdr td:first-child { text-align:center; white-space:nowrap; }
+        #tab-gerador .gh-sched-tbl td:first-child { white-space:nowrap; }
+        #tab-gerador .gh-store-name-btn { background:none; border:none; cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#111; font-family:inherit; padding:4px 8px; border-radius:5px; transition:background .15s; line-height:1.4; }
+        #tab-gerador .gh-store-name-btn:hover { background:#e0e0e0; }
+        #tab-gerador .gh-store-actions { display:flex; gap:4px; justify-content:center; margin-top:4px; }
+        #tab-gerador .gh-store-act-btn { width:26px; height:26px; border-radius:50%; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:1rem; font-weight:700; display:flex; align-items:center; justify-content:center; transition:all .15s; line-height:1; }
+        #tab-gerador .gh-store-add:hover { background:#e8f5e9; border-color:#4caf50; color:#2e7d32; }
+        #tab-gerador .gh-tbl-date { font-weight:500; font-size:.72rem; color:#555; }
+        #tab-gerador .gh-sched-tbl td { border:1px solid #e8e8e8; padding:0; vertical-align:middle; }
+        #tab-gerador .gh-sched-tbl td:first-child { padding:0; white-space:nowrap; box-sizing:border-box; }
+        #tab-gerador .gh-sh-td { white-space:nowrap; text-align:center; cursor:pointer; }
+        #tab-gerador .gh-sh-td:hover { background:#f4f4f4 !important; }
+        #tab-gerador .gh-no-click { cursor:default; }
+        #tab-gerador .gh-no-click:hover { background:transparent !important; }
+
+        /* ── PERSON CELL ── */
+        #tab-gerador .gh-p-cell { padding:8px 12px; white-space:nowrap; text-align:center; overflow:hidden; }
+        #tab-gerador .gh-p-name { font-size:.85rem; font-weight:600; display:flex; align-items:center; justify-content:center; gap:5px; color:#111; }
+        #tab-gerador .gh-p-dot  { color:#e74c3c; font-size:.7rem; flex-shrink:0; }
+        #tab-gerador .gh-p-remove-btn { background:none; border:none; cursor:pointer; font-size:.85rem; font-weight:600; color:#111; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0; text-align:center; }
+        #tab-gerador .gh-p-remove-btn:hover .gh-p-remove-x { opacity:1; }
+        #tab-gerador .gh-p-remove-x { font-size:.65rem; color:#ccc; margin-left:auto; opacity:0; transition:opacity .15s; padding-left:4px; }
+        #tab-gerador .gh-p-hrs-tag { font-weight:500; color:#999; font-size:.72rem; flex-shrink:0; }
+        #tab-gerador .gh-p-hrs  { font-size:.68rem; padding-left:0; margin-top:3px; font-weight:600; text-align:center; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:5px; flex-wrap:nowrap; }
+        #tab-gerador .gh-p-hrs.ok  { color:#2d6a4f; }
+        #tab-gerador .gh-p-hrs.bad { color:#c0392b; }
+        #tab-gerador .gh-banco-badge { font-size:.62rem; font-weight:700; padding:2px 6px; border-radius:4px; border:none; font-family:inherit; line-height:1.4; display:inline-block; }
+        #tab-gerador .gh-banco-zero { background:#f5f5f5; color:#aaa; }
+        #tab-gerador .gh-banco-pos { background:#e8f5e9; color:#2e7d32; }
+        #tab-gerador .gh-banco-neg { background:#ffebee; color:#c62828; }
+        #tab-gerador .gh-banco-badge:hover { opacity:.8; }
+        #tab-gerador .gh-sh-time-inp { width:44px; font-size:.72rem; font-weight:700; text-align:center; border:1px solid #bbb; border-radius:3px; padding:2px; color:#111; background:#fff; font-family:inherit; outline:none; }
+        #tab-gerador .gh-sh-time-inp:focus { border-color:#111; }
+        #tab-gerador tr.gh-editing td.gh-sh-td { background:#fffde7 !important; }
+
+        /* ── SHIFT CELLS ── */
+        #tab-gerador .gh-sh-inner { padding:7px 4px; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        #tab-gerador .gh-sh-line { display:block; font-size:.82rem; font-weight:600; line-height:1.65; color:#111; white-space:nowrap; }
+        #tab-gerador .gh-sh-loc  { display:block; font-size:.78rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#111; line-height:1.4; }
+        #tab-gerador .c-empty  { background:#fff; min-height:48px; }
+        #tab-gerador .gh-sh-td.c-empty-td { cursor:default; }
+        #tab-gerador .c-folga  { background:#f9f9f9; }
+        #tab-gerador .c-folga .gh-sh-line  { color:#ccc; font-style:italic; }
+        #tab-gerador .c-ferias { background:#f9f9f9; }
+        #tab-gerador .c-ferias .gh-sh-line { color:#ccc; font-style:italic; }
+        #tab-gerador .c-na .gh-sh-line     { color:#e0e0e0; }
+        #tab-gerador .c-baixa-med { background:#eef2fb; }
+        #tab-gerador .c-baixa-med .gh-sh-line { color:#3a4a8c; font-style:italic; }
+        #tab-gerador .c-fora-contrato { background:#f4f0fa; }
+        #tab-gerador .c-fora-contrato .gh-sh-line { color:#5b4b8a; font-style:italic; }
+        #tab-gerador .c-elsewhere { background:#f5f5f5; }
+        #tab-gerador .c-soft { background:#fffbf0; }
+        #tab-gerador .c-soft .gh-sh-line { color:#b8860b; }
+        /* Shift-specific cell colors — A B C D E F */
+        #tab-gerador .c-shift-a { background:#fdf6e3; }
+        #tab-gerador .c-shift-a .gh-sh-line { color:#8a6000; }
+        #tab-gerador .c-shift-b { background:#e8f5e9; }
+        #tab-gerador .c-shift-b .gh-sh-line { color:#1b5e20; }
+        #tab-gerador .c-shift-c { background:#e3f2fd; }
+        #tab-gerador .c-shift-c .gh-sh-line { color:#0d47a1; }
+        #tab-gerador .c-shift-d { background:#fce4ec; }
+        #tab-gerador .c-shift-d .gh-sh-line { color:#880e4f; }
+        #tab-gerador .c-shift-e { background:#f3e5f5; }
+        #tab-gerador .c-shift-e .gh-sh-line { color:#4a148c; }
+        #tab-gerador .c-shift-f { background:#e8eaf6; }
+        #tab-gerador .c-shift-f .gh-sh-line { color:#1a237e; }
+        #tab-gerador .c-fim-contrato { background:#fff5f5; cursor:default; }
+        #tab-gerador .gh-fim-txt { color:#e57373; font-size:.58rem; font-style:italic; font-weight:600; letter-spacing:.01em; text-transform:lowercase; line-height:1.3; }
+
+        /* ── Hide legacy selects — always hidden, pills are used instead ── */
+        #gh-modal #gh-me-type,
+        #gh-modal #gh-me-shift,
+        #gh-modal #gh-me-store { display:none !important; }
+
+        /* ── MODAL — position:fixed floats over whole page; always start hidden ── */
+        #gh-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(4px); z-index:9000; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+        #gh-modal.open { display:flex; opacity:1; pointer-events:all; }
+        #gh-modal .gh-modal { background:#fff; border:1px solid #e0e0e0; border-radius:16px; width:560px; max-width:96vw; overflow:hidden; transform:translateY(10px); transition:transform .22s cubic-bezier(.25,.8,.25,1); box-shadow:0 20px 60px rgba(0,0,0,.18); color:#111; }
+        #gh-modal.open .gh-modal { transform:translateY(0); }
+        #gh-modal .gh-modal-hdr { padding:16px 20px 14px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        #gh-modal .gh-modal-ttl { font-size:.75rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#333; }
+        #gh-modal .gh-modal-x   { background:none; border:none; cursor:pointer; color:#aaa; font-size:1.1rem; line-height:1; padding:2px 4px; border-radius:4px; transition:color .15s; }
+        #gh-modal .gh-modal-x:hover { color:#555; }
+        #gh-modal .gh-modal-bdy { padding:18px 18px 20px; }
+        #gh-modal .gh-form-grp  { margin-bottom:14px; }
+        #gh-modal .gh-form-grp-last { margin-bottom:2px; }
+        #gh-modal .gh-form-lbl  { display:block; font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#ccc; margin-bottom:8px; }
+        #gh-modal .gh-conf-note { padding:9px 12px; border-radius:7px; font-size:.74rem; margin-top:10px; line-height:1.5; }
+        #gh-modal .gh-conf-note.hard { background:#fff5f5; border:1px solid rgba(192,57,43,.2); color:#c0392b; }
+        #gh-modal .gh-conf-note.soft { background:#fffbf0; border:1px solid rgba(184,134,11,.2); color:#b8860b; }
+        /* ── pill base ── */
+        #gh-modal .gh-btn-group { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+        #gh-modal .gh-pill { background:#f7f7f7; border:1.5px solid #e5e5e5; border-radius:50px; padding:9px 20px; font-size:.82rem; font-weight:600; cursor:pointer; color:#444; transition:all .15s; white-space:nowrap; font-family:inherit; line-height:1.2; }
+        #gh-modal .gh-pill:hover { background:#f0f0f0; border-color:#ccc; color:#111; transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
+        #gh-modal .gh-pill.active:hover { background:#111; border-color:#111; color:#fff !important; transform:translateY(-1px); }
+        /* TIPO active — black, white text */
+        #gh-modal .gh-pill-tipo.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+        /* SHIFT active — black, white text */
+        #gh-modal .gh-pill-shift.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        /* STORE active — black, white text */
+        #gh-modal .gh-pill-store.active { background:#111; border-color:#111; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        /* ── Shift pills base ── */
+        #gh-modal .gh-btn-group-shifts { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+        #gh-modal .gh-apoio-section-label { font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#e67e22; margin:12px 0 8px; padding:6px 10px; background:#fff3e0; border-radius:6px; border-left:3px solid #e67e22; }
+        #gh-modal .gh-btn-group-apoio { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+        #gh-modal .gh-apoio-lbl { font-size:.68rem; color:#e67e22; font-weight:700; }
+        #gh-modal .gh-pill-shift { border-radius:10px; padding:12px 8px; font-size:.82rem; font-weight:600; text-align:center; line-height:1.55; white-space:normal; color:#333; }
+        #gh-modal .gh-pill-shift:hover { color:#111; }
+        /* Subtle color tones per shift — matches table cell colors */
+        #gh-modal .gh-pill-shift[data-val="10:00-13:00|14:00-19:00"] { background:#fdf6e3; border-color:#f0d080; }
+        #gh-modal .gh-pill-shift[data-val="10:00-14:00|15:00-19:00"] { background:#e8f5e9; border-color:#a5d6a7; }
+        #gh-modal .gh-pill-shift[data-val="10:00-15:00|16:00-19:00"] { background:#e3f2fd; border-color:#90caf9; }
+        #gh-modal .gh-pill-shift[data-val="09:00-12:00|13:00-18:00"] { background:#fce4ec; border-color:#f48fb1; }
+        #gh-modal .gh-pill-shift[data-val="11:00-15:00|16:00-20:00"] { background:#f3e5f5; border-color:#ce93d8; }
+        #gh-modal .gh-pill-shift[data-val="09:00-13:00|19:00-23:00"] { background:#e8eaf6; border-color:#9fa8da; }
+        #gh-modal .gh-pill-shift.gh-pill-apoio { background:#fff3e0; border-color:#e67e22; }
+        #gh-modal .gh-pill-shift.gh-pill-apoio.active { background:#e67e22 !important; border-color:#e67e22 !important; color:#fff !important; }
+        /* Active state must override per-shift backgrounds */
+        #gh-modal .gh-pill-shift.active,
+        #gh-modal .gh-pill-shift[data-val].active { background:#111 !important; border-color:#111 !important; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+        #gh-modal .gh-pill-shift.active:hover,
+        #gh-modal .gh-pill-shift[data-val].active:hover { background:#111 !important; border-color:#111 !important; color:#fff !important; }
+        /* store pills — wrap row */
+        #gh-modal .gh-btn-group-stores { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+        #gh-modal .gh-pill-store { border-radius:50px; padding:9px 20px; font-size:.82rem; }
+
+        /* ── CONFIRM MODAL ── */
+        #gh-confirm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9100; align-items:center; justify-content:center; }
+        #gh-confirm-modal.open { display:flex; }
+        #gh-confirm-modal .gh-cm-box { background:#fff; border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.18); padding:28px 28px 20px; max-width:340px; width:90vw; text-align:center; }
+        #gh-confirm-modal .gh-cm-msg { font-size:.88rem; font-weight:500; color:#222; margin-bottom:22px; line-height:1.5; }
+        #gh-confirm-modal .gh-cm-btns { display:flex; gap:10px; justify-content:center; }
+        #gh-confirm-modal .gh-cm-cancel { padding:8px 22px; border:1px solid #ddd; background:#fff; border-radius:6px; font-size:.78rem; font-weight:600; cursor:pointer; color:#666; font-family:inherit; }
+        #gh-confirm-modal .gh-cm-cancel:hover { background:#f5f5f5; }
+        #gh-confirm-modal .gh-cm-ok { padding:8px 22px; border:none; background:#c0392b; border-radius:6px; font-size:.78rem; font-weight:700; cursor:pointer; color:#fff; font-family:inherit; }
+        #gh-confirm-modal .gh-cm-ok:hover { background:#a93226; }
+        /* ── LICENÇA MODAL (recuperável / não recuperável) ── */
+        #gh-lic-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(3px); z-index:9200; align-items:center; justify-content:center; }
+        #gh-lic-modal.open { display:flex; }
+        #gh-lic-modal .gh-lm-box { background:#fff; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.2); padding:24px 24px 16px; max-width:380px; width:90vw; text-align:center; }
+        #gh-lic-modal .gh-lm-ttl { font-size:.68rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#333; margin-bottom:8px; }
+        #gh-lic-modal .gh-lm-msg { font-size:.86rem; font-weight:500; color:#444; margin-bottom:18px; line-height:1.5; }
+        #gh-lic-modal .gh-lm-btns { display:flex; gap:10px; justify-content:center; margin-bottom:12px; }
+        #gh-lic-modal .gh-lm-btn { flex:1; display:flex; flex-direction:column; gap:3px; align-items:center; padding:12px 12px; border-radius:9px; font-size:.82rem; font-weight:700; cursor:pointer; font-family:inherit; border:1.5px solid; transition:all .15s; }
+        #gh-lic-modal .gh-lm-sub { font-size:.62rem; font-weight:600; opacity:.75; }
+        #gh-lic-modal .gh-lm-rec { background:#e8f5e9; border-color:#a5d6a7; color:#1b5e20; }
+        #gh-lic-modal .gh-lm-rec:hover { background:#c8e6c9; }
+        #gh-lic-modal .gh-lm-nrec { background:#e3f2fd; border-color:#90caf9; color:#0d47a1; }
+        #gh-lic-modal .gh-lm-nrec:hover { background:#bbdefb; }
+        #gh-lic-modal .gh-lm-cancel { background:none; border:none; color:#999; font-size:.76rem; font-weight:600; cursor:pointer; font-family:inherit; padding:4px 10px; }
+        #gh-lic-modal .gh-lm-cancel:hover { color:#555; text-decoration:underline; }
+        /* ── FERIAS BANNER (injected separately, also scope it) ── */
+        #tab-gerador .gh-ferias-banner { display:flex; align-items:center; gap:9px; background:#f0f9f0; border:1px solid #b7ddb7; border-radius:7px; padding:9px 13px; font-size:.8rem; color:#1a5c1a; margin-bottom:12px; font-weight:500; line-height:1.4; }
+        #tab-gerador .gh-ferias-banner-icon { font-size:1rem; flex-shrink:0; }
+        #tab-gerador .gh-ab-row-ferias { display:flex; align-items:center; gap:8px; padding:6px 10px; background:#f6fdf6; border:1px solid #c8e6c8; border-radius:7px; margin-bottom:6px; font-size:.82rem; color:#1a5c1a; font-weight:600; }
+        #tab-gerador .gh-ab-row-ferias .gh-ferias-tag { background:#e0f5e0; color:#1a5c1a; border-radius:4px; font-size:.68rem; padding:2px 8px; font-weight:700; letter-spacing:.04em; flex-shrink:0; }
+        #tab-gerador .gh-ab-row-ferias .gh-ferias-from { font-size:.74rem; color:#4a8a4a; font-weight:500; margin-left:auto; }
+
+        /* ── STAFF MANAGEMENT PANEL ── */
+        /* ── STEP 2 LAYOUT ── */
+        #tab-gerador .gh-step2-wrap { width:100%; max-width:780px; margin:0 auto; padding:12px 8px 40px; box-sizing:border-box; }
+        #tab-gerador .gh-step2-header { margin-bottom:14px; }
+        #tab-gerador .gh-step2-header-top { margin-bottom:10px; }
+        #tab-gerador .gh-step2-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+        #tab-gerador .gh-step2-badge { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-radius:20px; padding:4px 14px; font-size:.75rem; font-weight:700; letter-spacing:.04em; white-space:nowrap; flex-shrink:0; }
+        #tab-gerador .gh-step2-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        #tab-gerador .gh-wiz-box--wide { max-width:680px; }
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+        #tab-gerador .gh-staff-row { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e8e8e8; border-radius:7px; background:#fafafa; }
+        #tab-gerador .gh-staff-row.gh-staff-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-staff-info { display:flex; flex-direction:column; gap:2px; }
+        #tab-gerador .gh-staff-name-row { display:flex; align-items:center; gap:8px; }
+        #tab-gerador .gh-staff-name { font-size:.85rem; font-weight:700; color:#111; }
+        #tab-gerador .gh-staff-meta { font-size:.72rem; color:#777; }
+        #tab-gerador .gh-staff-weight { font-size:.70rem; color:#555; font-weight:600; }
+        #tab-gerador .gh-staff-knows { font-size:.68rem; color:#999; }
+        #tab-gerador .gh-staff-actions { flex-shrink:0; margin-left:10px; }
+        #tab-gerador .gh-btn-xs { font-size:.62rem; padding:2px 6px; }
+
+        /* ── PERSON FORM ── */
+        #tab-gerador .gh-person-form { border:1px solid #e0e0e0; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; display:none; }
+        #tab-gerador .gh-pf-title { font-size:.78rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#555; margin-bottom:12px; }
+        #tab-gerador .gh-pf-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        #tab-gerador .gh-pf-field { display:flex; flex-direction:column; gap:4px; }
+        #tab-gerador .gh-pf-field label { font-size:.65rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999; }
+        #tab-gerador .gh-pf-stores { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+        #tab-gerador .gh-pf-check { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#333; cursor:pointer; }
+        #tab-gerador .gh-pf-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
+        /* ── STAFF ROW colapsável ── */
+        #tab-gerador .gh-staff-list { display:flex; flex-direction:column; gap:5px; margin-top:12px; }
+        #tab-gerador .gh-sr { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-sizing:border-box; width:100%; }
+        #tab-gerador .gh-sr-ferias { background:#f0fdf0; border-color:#b7ddb7; }
+        #tab-gerador .gh-sr-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:8px; }
+        #tab-gerador .gh-sr-header-left { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
+        #tab-gerador .gh-toggle-btn { background:none; border:none; cursor:pointer; font-size:.65rem; color:#bbb; padding:0; width:14px; flex-shrink:0; }
+        #tab-gerador .gh-toggle-btn:hover { color:#555; }
+        #tab-gerador .gh-sr-nameblock { display:flex; flex-direction:column; gap:1px; min-width:0; }
+        #tab-gerador .gh-sr-name { font-size:.82rem; font-weight:700; color:#111; white-space:nowrap; display:flex; align-items:baseline; gap:3px; }
+        #tab-gerador .gh-sr-meta { font-size:.62rem; color:#999; white-space:nowrap; }
+        #tab-gerador .gh-auto-badge { font-size:.58rem; font-weight:700; padding:1px 5px; border-radius:3px; letter-spacing:.03em; }
+        #tab-gerador .gh-auto-efectiva   { background:#e8f5e9; color:#2e7d32; }
+        #tab-gerador .gh-auto-autonoma   { background:#e3f2fd; color:#1565c0; }
+        #tab-gerador .gh-auto-autonoma_h { background:#fff3e0; color:#e65100; }
+        #tab-gerador .gh-auto-nao_autonoma { background:#fce4ec; color:#c62828; }
+        #tab-gerador .gh-sr-btns { display:flex; flex-direction:row; gap:4px; flex-shrink:0; }
+        #tab-gerador .gh-icon-btn { width:24px; height:24px; border:1px solid #e0e0e0; border-radius:5px; background:#fafafa; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#555; font-size:.78rem; font-weight:600; line-height:1; transition:background .15s; flex-shrink:0; }
+        #tab-gerador .gh-icon-btn:hover { background:#efefef; border-color:#bbb; }
+        #tab-gerador .gh-sr-body { border-top:1px solid #f0f0f0; display:none; }
+        #tab-gerador .gh-sr-cols { display:flex; flex-direction:row; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        #tab-gerador .gh-sr-col { padding:10px 12px; border-right:1px solid #f0f0f0; display:flex; flex-direction:column; gap:3px; min-width:160px; flex-shrink:0; }
+        #tab-gerador .gh-sr-col:last-child { border-right:none; }
+        #tab-gerador .gh-sr-col-title { font-size:.62rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#888; display:flex; align-items:center; gap:4px; white-space:nowrap; margin-bottom:3px; }
+        #tab-gerador .gh-saldo-sup { font-size:.58rem; font-weight:700; padding:1px 4px; border-radius:3px; vertical-align:super; margin-left:2px; }
+        #tab-gerador .gh-saldo-sup-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
+        #tab-gerador .gh-saldo-sup-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
+        #tab-gerador .gh-day-btns { display:flex; flex-direction:row; gap:2px; flex-wrap:nowrap; }
+        #tab-gerador .gh-day-btn { border:1px solid #ddd; background:#fff; color:#555; border-radius:3px; width:22px; height:22px; font-size:.62rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+        #tab-gerador .gh-day-btn-on { background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-color:#111 !important; }
+        #tab-gerador .gh-date-row { display:flex; flex-direction:row; gap:3px; }
+        #tab-gerador .gh-date-txt { width:68px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-sel-mini { width:auto !important; max-width:80px; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-num-mini { width:40px !important; font-size:.65rem !important; padding:2px 3px !important; }
+        #tab-gerador .gh-inc-saldo { font-size:.74rem; font-weight:700; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:3px; }
+        #tab-gerador .gh-inc-saldo-neg { background:#fff0f0; color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; }
+        #tab-gerador .gh-inc-saldo-pos { background:#f0fff0; color:#1a6c1a !important; -webkit-text-fill-color:#1a6c1a !important; }
+        #tab-gerador .gh-banco-add-row { display:flex; flex-direction:row; gap:3px; align-items:center; }
+        #tab-gerador .gh-inc-tag { font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
+
+        #tab-gerador.active { display:flex !important; flex-direction:column !important; flex:1 !important; overflow:hidden !important; width:100% !important; padding:0 !important; }
+        #tab-gerador #gh-container { flex:1; display:flex; flex-direction:column; overflow-x:auto; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; width:100%; }
+
+/* ══════════════════════════════════════════════════════════════
+   FÉRIAS — estilos migrados de ferias.js (fusão horarios)
+══════════════════════════════════════════════════════════════ */
+.adm-mod-card[data-horarios-module="ferias"] { animation-delay: 0.15s; }
+
+.f-loading-toast { position:fixed;bottom:28px;right:20px;background:#111;color:#fff;padding:8px 16px;border-radius:10px;font-size:.78rem;font-weight:600;z-index:99999;opacity:.85; }
+
+.f-toast { position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:10px;font-size:.84rem;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.4);pointer-events:none;opacity:0;transition:opacity .2s; }
+.f-toast.show { opacity:1; }
+
+#f-modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px; }
+
+.f-btn { background:#fff;color:#111;border:1px solid #ccc;border-radius:8px;padding:7px 18px;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.02em; }
+.f-btn.block { margin-top:16px;width:100%; }
+.f-btn-active { background:#111;color:#fff;border:1px solid #111;border-radius:8px;padding:7px 18px;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.02em; }
+
+.f-modal-label { display:block;font-size:.72rem;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px; }
+
+.f-modal-input { width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:8px;padding:9px 12px;font-size:.88rem;box-sizing:border-box;outline:none; }
+.f-modal-input.mb { margin-bottom:14px; }
+.f-modal-input.upper { text-transform:uppercase; }
+.f-pessoa-nome-input { width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:8px;padding:10px 12px;font-size:.9rem;box-sizing:border-box;outline:none;text-transform:uppercase;margin-bottom:20px; }
+
+.f-modal-box { background:#fff;border-radius:14px;padding:28px 24px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.15);font-family:inherit; }
+.f-modal-box.w420 { max-width:420px; }
+.f-modal-box.w380 { max-width:380px; }
+.f-modal-box.w400 { max-width:400px;max-height:80vh;overflow-y:auto; }
+
+.f-modal-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:20px; }
+.f-modal-head.tight { margin-bottom:18px; }
+
+.f-modal-title { font-size:1rem;font-weight:700;color:#111; }
+.f-modal-title.sm { font-size:.95rem; }
+
+.f-modal-close { background:none;border:none;color:#888;font-size:1.3rem;cursor:pointer; }
+
+.f-modal-subwrap { display:none;margin-bottom:14px; }
+
+.f-modal-grid2 { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px; }
+.f-modal-grid2b { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+
+.f-modal-error { display:none;color:#c00;font-size:.78rem;margin-bottom:10px;font-weight:600; }
+
+.f-modal-btnrow { display:flex;gap:10px; }
+.f-modal-btn-del { flex:0 0 auto;background:#fff;color:#c00;border:1px solid #ccc;border-radius:9px;padding:11px 16px;font-size:.85rem;font-weight:700;cursor:pointer; }
+.f-modal-btn-save { flex:1;background:#fff;color:#111;border:1px solid #ccc;border-radius:9px;padding:11px;font-size:.9rem;font-weight:700;cursor:pointer; }
+
+.f-year-block { margin-bottom:16px; }
+.f-year-title { font-size:.75rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px; }
+
+.f-entry-row { display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #eee; }
+.f-entry-date { font-size:.82rem;color:#111; }
+.f-entry-meta { display:flex;align-items:center;gap:10px; }
+.f-entry-sub { font-size:.75rem;color:#666; }
+.f-entry-edit-btn { background:none;border:none;color:#888;cursor:pointer;font-size:.8rem;padding:2px 6px; }
+
+.f-view-empty { color:#888;font-size:.85rem;text-align:center;padding:20px 0; }
+
+.f-year-header-title { font-size:1.05rem;font-weight:800;color:#fff;letter-spacing:.03em; }
+.f-year-nav { display:flex;gap:8px;align-items:center; }
+#f-year-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 2px; }
+#f-actions { display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;align-items:center; }
+
+.f-filter-select { background:#fff;color:#111;border:1px solid #ccc;border-radius:8px;padding:7px 12px;font-size:.82rem;font-weight:600;cursor:pointer;outline:none; }
+
+.f-alert-box { background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;font-size:.78rem;color:#111;font-weight:600; }
+.f-alert-sub { font-weight:400;color:#444; }
+.f-highlight-box { background:#fff;border:1px solid #ccc;border-radius:10px;padding:10px 14px;font-size:.82rem;color:#111;font-weight:600; }
+
+.f-card-loja-tag { font-size:.65rem;font-weight:600;color:#bbb;margin-left:6px;text-transform:lowercase;letter-spacing:.04em; }
+.f-card-dias-tag { font-size:.68rem;color:#777;margin-left:4px; }
+.f-card-edit-btn { margin-left:auto;background:none;border:none;color:#555;cursor:pointer;font-size:.78rem;padding:0 4px;flex-shrink:0; }
+.f-card-name-btn { background:none;border:none;color:inherit;cursor:pointer;font-size:inherit;font-weight:inherit;font-family:inherit;padding:0;text-align:left; }
+
+.f-card .f-dot.active-now { background:#2a8a2a; }
+.f-card .f-dot.soon       { background:#e09000; }
+.f-card .f-dot.past       { background:#555; }
+
+.f-section-title.mb8 { margin-bottom:8px; }
+.f-resumo-grid { display:flex;flex-wrap:wrap;gap:8px; }
+.f-resumo-btn { background:#fff;border:1px solid #ccc;border-radius:8px;padding:6px 12px;cursor:pointer;text-align:left; }
+.f-resumo-name { display:block;font-size:.75rem;font-weight:700;color:#111; }
+.f-resumo-dias { font-size:.68rem;color:#555; }
+
+.f-empty-state { text-align:center;color:#aaa;font-size:.85rem;font-weight:600;padding:40px 0; }
+
+/* ══════════════════════════════════════════════════════════════
+   BANCO DE HORAS — novas classes (fusão horarios)
+══════════════════════════════════════════════════════════════ */
+.adm-mod-card[data-horarios-module="banco-horas"] { animation-delay: 0.20s; }
+#bh-loja-root { width:100%; }
+#bh-loja-content { display:none; }
+.bh-saldo-inline { font-size:.85rem;font-weight:bold; }
+.bh-saldo-inline-row { font-size:.85rem;font-weight:bold;white-space:nowrap;flex-shrink:0;margin-left:14px; }
+.bh-row-meta.warn { color:#a06a00; }
+.bh-row-meta.mb { margin-bottom:10px; }
+.bh-section-title.mt { margin-top:22px; }
+.bh-row.nowrap { flex-wrap:nowrap; }
+.bh-row-main.nowrap { flex-wrap:nowrap;min-width:0; }
+.bh-row-nome.ellipsis { white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+
+/* ══════════════════════════════════════════════════════════════
+   GERADOR DE HORÁRIOS — novas classes (fusão horarios)
+══════════════════════════════════════════════════════════════ */
+.gh-mt48 { margin-top:48px; }
+.gh-m0 { margin:0; }
+.gh-wiz-title.mb0 { margin-bottom:0; }
+.gh-ferias-banner.tight { margin-top:6px; margin-bottom:6px; }
+.gh-pf-field.full { grid-column:1/-1; }
+.gh-pf-field.mt { margin-top:10px; }
+.gh-folga-tag { display:inline-flex; align-items:center; gap:5px; margin-top:3px; padding:3px 9px 3px 7px; background:#fff3cd; border:1.5px solid #e6a817; border-radius:5px; font-size:.7rem; font-weight:800; color:#7a4800; letter-spacing:.02em; white-space:nowrap; }
+.gh-contract-end-tag { font-size:.58rem; color:#e57373; font-weight:700; }
+.gh-mt2 { margin-top:2px; }
+.gh-icon-btn.warn { color:#b8860b; }
+.gh-icon-btn.danger { color:#c0392b; }
+.gh-sr-col-title.mt { margin-top:8px; }
+.gh-btn-guardar-inline { margin-left:auto; font-size:.6rem; padding:1px 6px; width:auto; color:#1a5c1a; border-color:#b7ddb7; background:#f0fdf0; }
+.gh-date-row.mt { margin-top:3px; }
+.gh-muted-note { font-size:.72rem; color:#bbb; }
+.gh-loading-msg { padding:40px; text-align:center; color:#aaa; font-size:.85rem; }
+.gh-error-msg { padding:40px; text-align:center; color:#c0392b; font-size:.85rem; }
+.gh-borradores-title { font-size:.58rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#ccc; margin-bottom:16px; text-align:center; }
+.gh-borrador-week-label { font-size:.85rem; font-weight:600; color:#111; }
+.gh-borrador-saved-date { font-size:.63rem; color:#bbb; margin-top:2px; }
+.gh-borrador-actions { display:flex; gap:8px; flex-shrink:0; }
+.gh-btn-delete-danger { color:#c0392b !important; -webkit-text-fill-color:#c0392b !important; border-color:#e0b0b0 !important; }
+.gh-flex-row-8 { display:flex; gap:8px; align-items:center; }
+.gh-sh-line.apoio { color:#e67e22; font-weight:700; }
+.gh-day-col { width:108px; min-width:108px; max-width:108px; box-sizing:border-box; }
+.gh-empty-row { padding:18px 12px; text-align:center; color:#bbb; font-size:.8rem; font-style:italic; }
+.gh-inline-center { display:flex; align-items:center; gap:1px; justify-content:center; }
+.gh-dash-muted { font-size:.65rem; color:#999; }
+.gh-assist-note { font-size:.7rem; color:#888; margin-bottom:10px; }
+.gh-assist-list { display:flex; flex-direction:column; gap:5px; max-height:220px; overflow-y:auto; }
+.gh-badge-tag { font-size:.68rem; font-weight:700; color:#7a4800; background:#fff3cd; border:1px solid #e6a817; border-radius:4px; padding:1px 6px; white-space:nowrap; }
+.gh-icon-only { font-size:.82rem; }
+.gh-add-person-pick { text-align:left; padding:8px 12px; border:1px solid #e0e0e0; border-radius:6px; background:#fff; cursor:pointer; font-size:.82rem; font-family:inherit; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.gh-add-person-pick.has-badge { background:#fffbf0; }
+.gh-assist-empty { color:#bbb; font-size:.75rem; padding:8px; }
+.gh-apoio-title { font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#e67e22; margin-bottom:8px; }
+.gh-btn-retry { margin-left:8px; color:#b8860b; border-color:#b8860b; }
+.gh-toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.95); background:#111; color:#fff !important; -webkit-text-fill-color:#fff !important; padding:20px 36px; border-radius:14px; font-size:.95rem; font-weight:600; font-family:inherit; letter-spacing:.02em; opacity:0; transition:all .25s ease; z-index:99999; pointer-events:none; white-space:nowrap; box-shadow:0 16px 48px rgba(0,0,0,.35); }
+.gh-toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+.gh-borrador-row { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border:1px solid #efefef; border-radius:8px; margin-bottom:8px; background:#fafafa; gap:12px; }
+.gh-inline-ok { margin-top:6px; background:#111 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border-radius:5px; padding:3px 10px; font-size:.7rem; font-weight:700; cursor:pointer; font-family:inherit; display:block; width:100%; text-align:center; box-sizing:border-box; }
+.gh-btn-guardar-inc.pending { background:#fff8e8; border-color:#f0d080; color:#9a6f00; }
+.gh-btn-guardar-inc.saving { opacity:.6; }
+.gh-btn-guardar-inc.saved { background:#f0fdf0; border-color:#b7ddb7; color:#1a5c1a; opacity:1; }

@@ -181,11 +181,10 @@
           'js/session-lock.js',
           'js/utilitario.js','js/processamento.js',
           'js/admin-init.js','js/ordenados.js',
-          'js/ferias.js',
-          'js/tam.js','js/gerador-horarios.js',
+          'js/horarios.js',
+          'js/tam.js',
           'js/ventas.js',
-          'js/nadiya.js','js/parfois.js',
-          'js/banco-horas.js'
+          'js/nadiya.js','js/parfois.js'
         ];
         return scripts.reduce(function(p, src) {
           return p.then(function() {

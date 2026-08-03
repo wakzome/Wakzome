@@ -2770,8 +2770,8 @@
       /* ── Session bar — always visible, never blocking ── */
       +   '<div id="proc-session-bar">'
       +     '<div id="proc-session-bar-left">'
-      +       '<span id="proc-session-label"></span>'
-      +       '<span id="proc-saveStatus" class="proc-save-status"></span>'
+      +       '<span id="proc-session-label" style="display:none;"></span>'
+      +       '<span id="proc-saveStatus" class="proc-save-status" style="display:none;"></span>'
       +     '</div>'
       +     '<div id="proc-session-bar-center">'
       +       '<button class="proc-btn primary" id="proc-start-new-btn">&#11088; Iniciar nova sess\u00e3o</button>'
@@ -2779,8 +2779,8 @@
       +     '<div id="proc-session-bar-right">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#128194; sess&#245;es &#x25be;</button>'
       +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
-      +       '<button class="proc-btn primary" id="proc-saveBtn">&#128190;</button>'
-      +       '<button class="proc-btn" id="proc-guiaBtn">&#128203;</button>'
+      +       '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
+      +       '<button class="proc-btn" id="proc-guiaBtn" style="display:none;">&#128203;</button>'
       +     '</div>'
       +   '</div>'
       /* ── Session start panel — visible only before a session is active ── */
@@ -2793,7 +2793,7 @@
       +     '</div>'
       +   '</div>'
       /* ── Main work area — hidden until session active ── */
-      +   '<div id="proc-main-area">'
+      +   '<div id="proc-main-area" style="display:none;">'
       +     '<div class="proc-top-bar">'
       +       '<h1 class="proc-app-title">Processamento de Faturas</h1>'
       +     '</div>'

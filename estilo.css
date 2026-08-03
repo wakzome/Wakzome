@@ -1811,6 +1811,17 @@ input, textarea { cursor: text !important; }
 .saft-fat-item .saft-fat-dias {
   font-size: .6rem; opacity: .75; display: block; margin-top: 1px;
 }
+.saft-fat-total {
+  font-size: .82rem; font-weight: bold;
+  letter-spacing: -.01em; line-height: 1.2;
+}
+.saft-fat-total-label {
+  font-size: .6rem; font-weight: bold; text-transform: uppercase;
+  letter-spacing: .07em; opacity: .5; margin-top: 1px;
+}
+.saft-fat-empty {
+  font-size: .65rem; font-weight: bold; opacity: .45;
+}
 #saft-faturas-count.danger { color: #c62828; }
 #saft-faturas-count.warn   { color: #c05000; }
 #saft-agenda-btn:hover { border-color: #555; color: #000; background: #f7f7f7; }

@@ -2065,6 +2065,18 @@
   // Modo comparación exacta (mismo número de día, sin ajuste DOW)
   var _equalDates = true;
 
+  // Parfois Madeira Shopping fechou definitivamente a 01/08/2026. A partir de 1 de
+  // agosto (em qualquer ano) os seus registos deixam de contar para comparações
+  // ("vs 20XX") e para a Projecção Mês — de outro modo uma loja fechada distorce
+  // a média ao comparar contra anos em que ainda facturava. Os dados em si não são
+  // alterados nem escondidos: continuam correctos e visíveis na árvore de detalhe
+  // por loja e em qualquer pesquisa manual por datas.
+  var MADEIRA_LOJA = 'PARFOIS MADEIRA SHOPPING';
+  var MADEIRA_CORTE_MD = '08-01';
+  function _isMadeiraPosCorte(r) {
+    return r.loja === MADEIRA_LOJA && r.data.substring(5) >= MADEIRA_CORTE_MD;
+  }
+
   function _buildComparisonsExact(from, to, rows) {
     var fromD=_strToDate(from), toD=_strToDate(to);
     var nDays=Math.round((toD-fromD)/86400000)+1;
@@ -2327,6 +2339,11 @@
     var isToday=lastDay===_todayStr();
 
     var rows=_filterByZone(_allRows);
+    // Base para comparações "vs 20XX" e Projecção Mês: exclui Madeira Shopping a
+    // partir de 1 de agosto (ver _isMadeiraPosCorte). A árvore de detalhe por loja
+    // mais abaixo continua a usar `rows` sem filtrar — os dados reais de Madeira
+    // Shopping permanecem visíveis normalmente aí.
+    var rowsComp=rows.filter(function(r){return !_isMadeiraPosCorte(r);});
     var isTotal=(_activePeriodBtn==='hadm-btn-total');
     var f;
     if(isTotal){
@@ -2485,7 +2502,7 @@
 
         // ── Caso simple: Maxx NO está en la zona → proyección normal directa
         if(!_maxxNaZonaVendas){
-          var projSimple=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
+          var projSimple=_calcProjection(rowsComp,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projSimple);
           return;
         }
@@ -2497,7 +2514,7 @@
 
         // Maxx sin ventas aún en el período → proyección normal de las demás
         if(!_mr){
-          var projSinMaxx=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
+          var projSinMaxx=_calcProjection(rowsComp,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projSinMaxx);
           return;
         }
@@ -2507,7 +2524,7 @@
 
         if(!_maxxAbreEnPeriodo){
           // Maxx operó desde el inicio del período igual que las demás → cálculo normal
-          var projNormal=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
+          var projNormal=_calcProjection(rowsComp,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projNormal);
           return;
         }
@@ -2517,7 +2534,7 @@
         // Maxx: media diaria sobre días de CALENDARIO desde su apertura hasta hoy,
         // extendida a los días de calendario restantes. Coherente: misma unidad
         // (días calendario) en numerador y denominador → T2 ≥ Mes siempre.
-        var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
+        var rowsSinMaxx=rowsComp.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
         // Acumulado real de Maxx desde su 1er día con venta hasta hoy
@@ -2573,12 +2590,16 @@
     hdr.appendChild(hMainRow);
 
     if(!isTotal&&comps.length){
+      // Base "comparável" do período actual (exclui Madeira Shopping pós-corte),
+      // consistente com cTotal de cada ano abaixo — ver _isMadeiraPosCorte.
+      var periodTotalComp=periodRows.filter(function(r){return !_isMadeiraPosCorte(r);})
+        .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
       var cRow=_el('div','hadm-c-row');
       comps.forEach(function(comp,idx){
-        var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
+        var cRows=rowsComp.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
         var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var diff=cTotal>0?(periodTotal-cTotal)/cTotal*100:null;
-        var diffEur=periodTotal-cTotal;
+        var diff=cTotal>0?(periodTotalComp-cTotal)/cTotal*100:null;
+        var diffEur=periodTotalComp-cTotal;
         var cBox=_el('div','hadm-c-box');
         // Separador superior en cada fila nueva (cada 3 items excepto la primera fila)
         if(idx>=3){
@@ -2592,8 +2613,7 @@
         cYear.classList.add('hadm-h-lbl-c');
         var yearLabel='vs '+comp.label;
         if(cTotal>0){
-          var eur=_fmtEur(Math.abs(diffEur));
-          yearLabel+=' ('+_fmtNumber(Math.abs(diffEur))+')';
+          yearLabel+=' ('+(diffEur>=0?'+':'-')+_fmtNumber(Math.abs(diffEur))+')';
         }
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);

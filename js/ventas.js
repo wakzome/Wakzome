@@ -68,8 +68,26 @@
     return _empleadasLoadPromise;
   }
 
+  // ── Auto-injeção do shell do overlay (idempotente) ──
+  function _ensureVentasOverlayShell() {
+    if (document.getElementById('ventas-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'ventas-overlay';
+    overlay.innerHTML = `
+  <div id="ventas-overlay-bar">
+    <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
+    <span id="ventas-overlay-title">vendas</span>
+  </div>
+  <div id="ventas-overlay-content">
+    <div id="ventas-overlay-body"></div>
+  </div>
+`;
+    document.body.appendChild(overlay);
+  }
+
   // ── Abrir overlay ──
   window.openVentasOverlay = function (store) {
+    _ensureVentasOverlayShell();
     _vStore = store || (window._currentStoreGlobal || null);
     var overlay = document.getElementById('ventas-overlay');
     overlay.classList.add('open');
@@ -1353,8 +1371,57 @@
     });
   }
 
+  // ── Auto-injeção do shell do painel (idempotente) ──
+  function _ensureVentasAdminShell() {
+    if (document.getElementById('adm-ventas-panel')) return;
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    var panel = document.createElement('div');
+    panel.id = 'adm-ventas-panel';
+    panel.innerHTML = `
+    <div class="vadm-filter-bar">
+      <div class="vadm-period-btns">
+        <button class="vadm-period-btn" id="vadm-btn-hoy">Hoje</button>
+        <button class="vadm-period-btn" id="vadm-btn-semana">Esta semana</button>
+        <button class="vadm-period-btn" id="vadm-btn-mes">Este mês</button>
+        <button class="vadm-period-btn" id="vadm-btn-porto">Porto Santo</button>
+        <button class="vadm-period-btn" id="vadm-btn-funchal">Funchal</button>
+        <button class="vadm-period-btn" id="vadm-btn-domingos">Domingos PS</button>
+      </div>
+      <div class="vadm-filter-dates">
+        <div class="vadm-filter-group">
+          <label>De</label>
+          <input type="date" id="vadm-from">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Até</label>
+          <input type="date" id="vadm-to">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Loja</label>
+          <select id="vadm-tienda">
+            <option value="">todas as lojas</option>
+            <option value="mezka funchal">Mezka Funchal</option>
+            <option value="parfois madeira shopping">Madeira Shopping</option>
+            <option value="parfois arcadas são francisco">Parfois Arcadas</option>
+            <option value="Shana">Shana</option>
+            <option value="Mezka Avenida">Mezka Avenida</option>
+            <option value="Mezka Mercado">Mezka Mercado</option>
+            <option value="Maxx">Maxx</option>
+          </select>
+        </div>
+        <button class="vadm-buscar-btn" id="vadm-buscar-btn">pesquisar</button>
+      </div>
+    </div>
+    <div id="adm-ventas-content"></div>
+  `;
+    adminApp.appendChild(panel);
+  }
+
   // ── Abrir módulo ──
   window.openVentasAdmin = function () {
+    _ensureVentasAdminShell();
+    _attachAdminListeners();
     var adminApp  = document.getElementById('admin-app');
     var dashboard = document.getElementById('adm-dashboard');
     var moduleBar = document.getElementById('adm-module-bar');
@@ -1362,7 +1429,7 @@
     var panel     = document.getElementById('adm-ventas-panel');
     var content   = document.getElementById('adm-ventas-content');
 
-    if (barTitle)  barTitle.textContent = 'ventas declaradas';
+    if (barTitle)  barTitle.textContent = 'vendas declaradas';
     if (adminApp)  adminApp.classList.add('module-open', 'ventas-open');
 
     if (panel) {
@@ -1789,8 +1856,13 @@
     _vAdmLoadData();
   }
 
-  // ── Init ── (script corre después del DOM, ejecutar directamente)
-  setTimeout(function () {
+  // ── Liga os listeners uma única vez (chamado a partir de openVentasAdmin, após a
+  //    auto-injeção do shell — antes o HTML era estático e isto corria em setTimeout(…,0)
+  //    logo após o load do script; agora corre sob demanda, sincronamente) ──
+  var _adminListenersAttached = false;
+  function _attachAdminListeners() {
+    if (_adminListenersAttached) return;
+    _adminListenersAttached = true;
     var fromEl = document.getElementById('vadm-from');
     var toEl   = document.getElementById('vadm-to');
     if (fromEl) fromEl.value = _todayStr();
@@ -1870,7 +1942,7 @@
       if (tiendaEl) { delete tiendaEl.dataset.zoneFilter; delete tiendaEl.dataset.sundayFilter; }
       _applyBtnStyles(null, null);
     });
-  }, 0);
+  }
 
   window._vAdmLoadData = _vAdmLoadData;
 
@@ -1992,18 +2064,6 @@
 
   // Modo comparación exacta (mismo número de día, sin ajuste DOW)
   var _equalDates = true;
-
-  // Parfois Madeira Shopping fechou definitivamente a 01/08/2026. A partir de 1 de
-  // agosto (em qualquer ano) os seus registos deixam de contar para comparações
-  // ("vs 20XX") e para a Projecção Mês — de outro modo uma loja fechada distorce
-  // a média ao comparar contra anos em que ainda facturava. Os dados em si não são
-  // alterados nem escondidos: continuam correctos e visíveis na árvore de detalhe
-  // por loja e em qualquer pesquisa manual por datas.
-  var MADEIRA_LOJA = 'PARFOIS MADEIRA SHOPPING';
-  var MADEIRA_CORTE_MD = '08-01';
-  function _isMadeiraPosCorte(r) {
-    return r.loja === MADEIRA_LOJA && r.data.substring(5) >= MADEIRA_CORTE_MD;
-  }
 
   function _buildComparisonsExact(from, to, rows) {
     var fromD=_strToDate(from), toD=_strToDate(to);
@@ -2267,11 +2327,6 @@
     var isToday=lastDay===_todayStr();
 
     var rows=_filterByZone(_allRows);
-    // Base para comparações "vs 20XX" e Projecção Mês: exclui Madeira Shopping a
-    // partir de 1 de agosto (ver _isMadeiraPosCorte). A árvore de detalhe por loja
-    // mais abaixo continua a usar `rows` sem filtrar — os dados reais de Madeira
-    // Shopping permanecem visíveis normalmente aí.
-    var rowsComp=rows.filter(function(r){return !_isMadeiraPosCorte(r);});
     var isTotal=(_activePeriodBtn==='hadm-btn-total');
     var f;
     if(isTotal){
@@ -2430,7 +2485,7 @@
 
         // ── Caso simple: Maxx NO está en la zona → proyección normal directa
         if(!_maxxNaZonaVendas){
-          var projSimple=_calcProjection(rowsComp,f.from,_projTo,effectiveTodayProj,null);
+          var projSimple=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projSimple);
           return;
         }
@@ -2442,7 +2497,7 @@
 
         // Maxx sin ventas aún en el período → proyección normal de las demás
         if(!_mr){
-          var projSinMaxx=_calcProjection(rowsComp,f.from,_projTo,effectiveTodayProj,null);
+          var projSinMaxx=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projSinMaxx);
           return;
         }
@@ -2452,7 +2507,7 @@
 
         if(!_maxxAbreEnPeriodo){
           // Maxx operó desde el inicio del período igual que las demás → cálculo normal
-          var projNormal=_calcProjection(rowsComp,f.from,_projTo,effectiveTodayProj,null);
+          var projNormal=_calcProjection(rows,f.from,_projTo,effectiveTodayProj,null);
           _buildProjBlock(projNormal);
           return;
         }
@@ -2462,7 +2517,7 @@
         // Maxx: media diaria sobre días de CALENDARIO desde su apertura hasta hoy,
         // extendida a los días de calendario restantes. Coherente: misma unidad
         // (días calendario) en numerador y denominador → T2 ≥ Mes siempre.
-        var rowsSinMaxx=rowsComp.filter(function(r){return r.loja!=='MAXX';});
+        var rowsSinMaxx=rows.filter(function(r){return r.loja!=='MAXX';});
         var projBase=_calcProjection(rowsSinMaxx,f.from,_projTo,effectiveTodayProj,null);
 
         // Acumulado real de Maxx desde su 1er día con venta hasta hoy
@@ -2518,16 +2573,12 @@
     hdr.appendChild(hMainRow);
 
     if(!isTotal&&comps.length){
-      // Base "comparável" do período actual (exclui Madeira Shopping pós-corte),
-      // consistente com cTotal de cada ano abaixo — ver _isMadeiraPosCorte.
-      var periodTotalComp=periodRows.filter(function(r){return !_isMadeiraPosCorte(r);})
-        .reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
       var cRow=_el('div','hadm-c-row');
       comps.forEach(function(comp,idx){
-        var cRows=rowsComp.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
+        var cRows=rows.filter(function(r){return r.data>=comp.from&&r.data<=comp.to;});
         var cTotal=cRows.reduce(function(s,r){return s+(parseFloat(r.montante)||0);},0);
-        var diff=cTotal>0?(periodTotalComp-cTotal)/cTotal*100:null;
-        var diffEur=periodTotalComp-cTotal;
+        var diff=cTotal>0?(periodTotal-cTotal)/cTotal*100:null;
+        var diffEur=periodTotal-cTotal;
         var cBox=_el('div','hadm-c-box');
         // Separador superior en cada fila nueva (cada 3 items excepto la primera fila)
         if(idx>=3){
@@ -2541,10 +2592,16 @@
         cYear.classList.add('hadm-h-lbl-c');
         var yearLabel='vs '+comp.label;
         if(cTotal>0){
-          yearLabel+=' ('+(diffEur>=0?'+':'-')+_fmtNumber(Math.abs(diffEur))+')';
+          var eur=_fmtEur(Math.abs(diffEur));
+          yearLabel+=' ('+_fmtNumber(Math.abs(diffEur))+')';
         }
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);
+        var cDates=_el('div','hadm-c-dates');
+        cDates.className='hadm-comp-dates';
+        cDates.classList.add('hadm-c-dates-c');
+        cDates.textContent=_fmtDate(comp.from)+'→'+_fmtDate(comp.to);
+        cBox.appendChild(cDates);
         var cLine=_el('div','hadm-c-line');
         var cVal=_el('span','hadm-c-val');
         cVal.classList.add('hadm-h-val-c');

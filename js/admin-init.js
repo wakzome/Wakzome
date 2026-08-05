@@ -220,15 +220,16 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       var dashboard = document.getElementById('adm-dashboard');
       var moduleBar = document.getElementById('adm-module-bar');
       var barTitle  = document.getElementById('adm-module-bar-title');
-      var panel     = document.getElementById('adm-ventas-panel');
-      
+
       document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
       if (dashboard) dashboard.style.display = 'none';
       if (moduleBar) moduleBar.style.display  = 'flex';
       if (barTitle)  barTitle.textContent     = 'vendas declaradas';
-      if (adminApp)  { adminApp.classList.add('module-open'); adminApp.scrollTop = 0; }
-      if (panel)     panel.style.display      = 'block';
-      if (typeof _vAdmLoadData === 'function') _vAdmLoadData();
+      if (adminApp)  adminApp.scrollTop = 0;
+      // #adm-ventas-panel agora é auto-injetado por ventas.js — delega-se
+      // sempre a openVentasAdmin() (idêntico ao padrão já usado para 'historico'
+      // com openHistoricoAdmin() logo abaixo), em vez de assumir HTML estático.
+      if (typeof openVentasAdmin === 'function') openVentasAdmin();
       return;
     }
 
@@ -326,8 +327,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (moduleBar) moduleBar.style.display = '';
 
     
-    var vPanel = document.getElementById('adm-ventas-panel');
-    if (vPanel) vPanel.style.display = 'none';
+    if (typeof closeVentasAdmin === 'function') closeVentasAdmin();
+    else {
+      var vPanel = document.getElementById('adm-ventas-panel');
+      if (vPanel) vPanel.style.display = 'none';
+    }
 
     
     if (typeof closeHistoricoAdmin === 'function') closeHistoricoAdmin();

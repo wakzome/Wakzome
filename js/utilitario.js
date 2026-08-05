@@ -40,6 +40,77 @@ function ensureSaftReminderShell() {
 }
 ensureSaftReminderShell();
 
+// ══════════════════════════════════════════════════════════════
+//  CÓDIGOS DE EMERGÊNCIA — hash determinístico por loja+data, gera o
+//  código diário para cada loja e preenche o widget cujo shell vazio
+//  (#emg-codes-list / #emg-date) é criado acima por ensureSaftReminderShell().
+//  Antes vivia em index.html; movido para aqui porque é este ficheiro que
+//  cria o contentor. Nota: como este script só carrega DEPOIS do login
+//  (loadProtectedScripts), DOMContentLoaded já disparou há muito — por
+//  isso a deteção de visibilidade abaixo verifica o estado atual de
+//  imediato, em vez de depender desse evento.
+// ══════════════════════════════════════════════════════════════
+function _emergencyCode(tienda, dateStr) {
+  var SECRET = 'wkz.ps@8f2e1b9d4c7a';
+  var raw = SECRET + '|' + tienda.toLowerCase() + '|' + dateStr;
+  var h = 5381;
+  for (var i = 0; i < raw.length; i++) {
+    h = ((h << 5) + h) + raw.charCodeAt(i);
+    h = h & 0x7fffffff;
+  }
+  var code = 10000 + (h % 90000);
+  return String(Math.abs(code));
+}
+
+function _renderEmgCodes() {
+  var list = document.getElementById('emg-codes-list');
+  var dateEl = document.getElementById('emg-date');
+  if (!list) return;
+
+  var today = new Date();
+  var dd = String(today.getDate()).padStart(2,'0');
+  var mm = String(today.getMonth()+1).padStart(2,'0');
+  var yyyy = today.getFullYear();
+  var dateStr = yyyy + '-' + mm + '-' + dd;
+  var displayDate = dd + '/' + mm + '/' + yyyy;
+
+  if (dateEl) dateEl.textContent = displayDate;
+
+  var stores = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx', 'Mezka Funchal', 'Parfois Arcadas'];
+  list.innerHTML = '';
+  stores.forEach(function (s) {
+    var code = _emergencyCode(s, dateStr);
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:2px 0;border-bottom:1px solid #f0f0f0;';
+    var nameEl = document.createElement('span');
+    nameEl.style.cssText = 'font-size:.65rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    nameEl.textContent = s;
+    var codeEl = document.createElement('span');
+    codeEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:.08em;white-space:nowrap;';
+    codeEl.textContent = code;
+    row.appendChild(nameEl);
+    row.appendChild(codeEl);
+    list.appendChild(row);
+  });
+
+  var now = new Date();
+  var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5);
+  var msUntilMidnight = midnight - now;
+  setTimeout(function () { _renderEmgCodes(); }, msUntilMidnight);
+}
+
+(function () {
+  var adminApp = document.getElementById('admin-app');
+  if (!adminApp) return;
+  if (adminApp.classList.contains('show')) { _renderEmgCodes(); return; }
+  new MutationObserver(function (muts, obs) {
+    if (adminApp.classList.contains('show')) {
+      _renderEmgCodes();
+      obs.disconnect();
+    }
+  }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
+})();
+
 /* ══════════════════════════════════════════════════════
    AGENDA — módulo completo
    Injecta CSS + HTML no overlay #ag-root e gere estado

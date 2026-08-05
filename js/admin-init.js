@@ -190,6 +190,72 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 //  goToDashboard, overlays de faturas/horários/vendas
 // ══════════════════════════════════════════════════════════════
 (function () {
+  // ── Auto-injeção do shell do cajón "vendas" (idempotente). Tem de
+  //    correr AQUI, síncrono, logo ao carregar o ficheiro — antes de
+  //    _adminInitWireCards() (mais abaixo) fazer o seu varrimento único
+  //    de [data-vendas-module] e #vendas-overlay-back. Ao contrário do
+  //    shell de ventas.js (injetado tardiamente, só quando o admin abre
+  //    o módulo), aqui a injeção teria de ser eager: se o HTML aparecesse
+  //    depois desse varrimento, os cliques nas 2 cartas do cajón e no
+  //    botão "voltar" ficariam mortos (o varrimento não corre outra vez). ──
+  function ensureVendasOverlayShell() {
+    if (document.getElementById('vendas-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'vendas-overlay';
+    overlay.innerHTML = `
+  <div id="vendas-overlay-bar">
+    <button id="vendas-overlay-back">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="vendas-overlay-title">vendas</span>
+  </div>
+  <div id="vendas-overlay-content">
+    <div id="vendas-sub-header">
+      <div class="vsub-brand">VENDAS</div>
+      <div class="vsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="vendas-sub-grid">
+      
+      <div class="adm-mod-card" data-vendas-module="ventas" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">VENDAS DECLARADAS</div>
+          <div class="adm-mod-desc">vendas declaradas por loja</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      
+      <div class="adm-mod-card" data-vendas-module="historico" style="animation-delay:0.10s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+              stroke="rgba(255,255,255,0.85)" stroke-width="1.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">VENDAS SISTEMA</div>
+          <div class="adm-mod-desc">análise de vendas do sistema</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+    </div>
+  </div>
+`;
+    document.body.appendChild(overlay);
+  }
+  ensureVendasOverlayShell();
+
   var MODULE_LABELS = {
     pagamentos:    'pagamentos',
     agenda:        'agenda',

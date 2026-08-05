@@ -615,50 +615,6 @@
 
   <div id="tab-gerador" class="tab-panel"></div>
 
-  
-
-  
-  <div id="adm-ventas-panel">
-    <div class="vadm-filter-bar">
-      <div class="vadm-period-btns">
-        <button class="vadm-period-btn" id="vadm-btn-hoy">Hoje</button>
-        <button class="vadm-period-btn" id="vadm-btn-semana">Esta semana</button>
-        <button class="vadm-period-btn" id="vadm-btn-mes">Este mês</button>
-        <button class="vadm-period-btn" id="vadm-btn-porto">Porto Santo</button>
-        <button class="vadm-period-btn" id="vadm-btn-funchal">Funchal</button>
-        <button class="vadm-period-btn" id="vadm-btn-domingos">Domingos PS</button>
-      </div>
-      <div class="vadm-filter-dates">
-        <div class="vadm-filter-group">
-          <label>De</label>
-          <input type="date" id="vadm-from">
-        </div>
-        <div class="vadm-filter-group">
-          <label>Até</label>
-          <input type="date" id="vadm-to">
-        </div>
-        <div class="vadm-filter-group">
-          <label>Loja</label>
-          <select id="vadm-tienda">
-            <option value="">todas as lojas</option>
-            <option value="mezka funchal">Mezka Funchal</option>
-            <option value="parfois madeira shopping">Madeira Shopping</option>
-            <option value="parfois arcadas são francisco">Parfois Arcadas</option>
-            <option value="Shana">Shana</option>
-            <option value="Mezka Avenida">Mezka Avenida</option>
-            <option value="Mezka Mercado">Mezka Mercado</option>
-            <option value="Maxx">Maxx</option>
-          </select>
-        </div>
-        <button class="vadm-buscar-btn" id="vadm-buscar-btn">pesquisar</button>
-      </div>
-    </div>
-    <div id="adm-ventas-content"></div>
-  </div>
-  
-
-  
-
 </div>
 
 <div id="wz-active-panel">
@@ -718,16 +674,6 @@
       </div>
     </div>
     <div id="recibos-overlay-error" style="display:none;"></div>
-  </div>
-</div>
-
-<div id="ventas-overlay">
-  <div id="ventas-overlay-bar">
-    <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
-    <span id="ventas-overlay-title">vendas</span>
-  </div>
-  <div id="ventas-overlay-content">
-    <div id="ventas-overlay-body"></div>
   </div>
 </div>
 
@@ -1023,77 +969,6 @@
 
 })();
 </script>
-<script>
-
-(function () {
-  function _emergencyCode(tienda, dateStr) {
-    var SECRET = 'wkz.ps@8f2e1b9d4c7a';
-    var raw = SECRET + '|' + tienda.toLowerCase() + '|' + dateStr;
-    var h = 5381;
-    for (var i = 0; i < raw.length; i++) {
-      h = ((h << 5) + h) + raw.charCodeAt(i);
-      h = h & 0x7fffffff;
-    }
-    var code = 10000 + (h % 90000);
-    return String(Math.abs(code));
-  }
-
-  function _renderEmgCodes() {
-    var list = document.getElementById('emg-codes-list');
-    var dateEl = document.getElementById('emg-date');
-    if (!list) return;
-
-    var today = new Date();
-    var dd = String(today.getDate()).padStart(2,'0');
-    var mm = String(today.getMonth()+1).padStart(2,'0');
-    var yyyy = today.getFullYear();
-    var dateStr = yyyy + '-' + mm + '-' + dd;
-    var displayDate = dd + '/' + mm + '/' + yyyy;
-
-    if (dateEl) dateEl.textContent = displayDate;
-
-    var stores = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx', 'Mezka Funchal', 'Parfois Arcadas'];
-    list.innerHTML = '';
-    stores.forEach(function (s) {
-      var code = _emergencyCode(s, dateStr);
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:2px 0;border-bottom:1px solid #f0f0f0;';
-      var nameEl = document.createElement('span');
-      nameEl.style.cssText = 'font-size:.65rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-      nameEl.textContent = s;
-      var codeEl = document.createElement('span');
-      codeEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:.08em;white-space:nowrap;';
-      codeEl.textContent = code;
-      row.appendChild(nameEl);
-      row.appendChild(codeEl);
-      list.appendChild(row);
-    });
-
-    
-    var now = new Date();
-    var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5);
-    var msUntilMidnight = midnight - now;
-    setTimeout(function () { _renderEmgCodes(); }, msUntilMidnight);
-  }
-
-  
-  var adminApp = document.getElementById('admin-app');
-  if (adminApp) {
-    new MutationObserver(function (muts, obs) {
-      if (adminApp.classList.contains('show')) {
-        _renderEmgCodes();
-        obs.disconnect();
-      }
-    }).observe(adminApp, { attributes: true, attributeFilter: ['class'] });
-  }
-  
-  document.addEventListener('DOMContentLoaded', function () {
-    var app = document.getElementById('admin-app');
-    if (app && app.classList.contains('show')) _renderEmgCodes();
-  });
-})();
-</script>
-
 <script>
 (function () {
   var CSV_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/datosfnc.csv';

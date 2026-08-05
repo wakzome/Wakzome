@@ -4438,7 +4438,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .hadm-p-maxx{font-size:.58rem;margin-top:3px;}
 .hadm-c-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:12px;padding-top:12px;border-top:2px solid #444444;}
 .hadm-c-box{padding:10px 14px;}
-.hadm-c-year{font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px;}
+.hadm-c-year{font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px;}
 .hadm-c-dates{font-size:.56rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px;}
 .hadm-c-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
 .hadm-c-val{font-size:.88rem;font-weight:800;}

@@ -68,8 +68,25 @@
     return _empleadasLoadPromise;
   }
 
+  // ── Auto-injeção do shell do overlay (idempotente) ──
+  function _ensureVentasOverlayShell() {
+    if (document.getElementById('ventas-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'ventas-overlay';
+    overlay.innerHTML = `
+  <div id="ventas-overlay-bar">
+    <button id="ventas-overlay-back" onclick="closeVentasOverlay()">← voltar</button>
+    <span id="ventas-overlay-title">vendas</span>
+  </div>
+  <div id="ventas-overlay-content">
+    <div id="ventas-overlay-body"></div>
+  `;
+    document.body.appendChild(overlay);
+  }
+
   // ── Abrir overlay ──
   window.openVentasOverlay = function (store) {
+    _ensureVentasOverlayShell();
     _vStore = store || (window._currentStoreGlobal || null);
     var overlay = document.getElementById('ventas-overlay');
     overlay.classList.add('open');
@@ -1353,8 +1370,57 @@
     });
   }
 
+  // ── Auto-injeção do shell do painel (idempotente) ──
+  function _ensureVentasAdminShell() {
+    if (document.getElementById('adm-ventas-panel')) return;
+    var adminApp = document.getElementById('admin-app');
+    if (!adminApp) return;
+    var panel = document.createElement('div');
+    panel.id = 'adm-ventas-panel';
+    panel.innerHTML = `
+    <div class="vadm-filter-bar">
+      <div class="vadm-period-btns">
+        <button class="vadm-period-btn" id="vadm-btn-hoy">Hoje</button>
+        <button class="vadm-period-btn" id="vadm-btn-semana">Esta semana</button>
+        <button class="vadm-period-btn" id="vadm-btn-mes">Este mês</button>
+        <button class="vadm-period-btn" id="vadm-btn-porto">Porto Santo</button>
+        <button class="vadm-period-btn" id="vadm-btn-funchal">Funchal</button>
+        <button class="vadm-period-btn" id="vadm-btn-domingos">Domingos PS</button>
+      </div>
+      <div class="vadm-filter-dates">
+        <div class="vadm-filter-group">
+          <label>De</label>
+          <input type="date" id="vadm-from">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Até</label>
+          <input type="date" id="vadm-to">
+        </div>
+        <div class="vadm-filter-group">
+          <label>Loja</label>
+          <select id="vadm-tienda">
+            <option value="">todas as lojas</option>
+            <option value="mezka funchal">Mezka Funchal</option>
+            <option value="parfois madeira shopping">Madeira Shopping</option>
+            <option value="parfois arcadas são francisco">Parfois Arcadas</option>
+            <option value="Shana">Shana</option>
+            <option value="Mezka Avenida">Mezka Avenida</option>
+            <option value="Mezka Mercado">Mezka Mercado</option>
+            <option value="Maxx">Maxx</option>
+          </select>
+        </div>
+        <button class="vadm-buscar-btn" id="vadm-buscar-btn">pesquisar</button>
+      </div>
+    </div>
+    <div id="adm-ventas-content"></div>
+  `;
+    adminApp.appendChild(panel);
+  }
+
   // ── Abrir módulo ──
   window.openVentasAdmin = function () {
+    _ensureVentasAdminShell();
+    _attachAdminListeners();
     var adminApp  = document.getElementById('admin-app');
     var dashboard = document.getElementById('adm-dashboard');
     var moduleBar = document.getElementById('adm-module-bar');
@@ -1789,8 +1855,13 @@
     _vAdmLoadData();
   }
 
-  // ── Init ── (script corre después del DOM, ejecutar directamente)
-  setTimeout(function () {
+  // ── Liga os listeners uma única vez (chamado a partir de openVentasAdmin, após a
+  //    auto-injeção do shell — antes o HTML era estático e isto corria em setTimeout(…,0)
+  //    logo após o load do script; agora corre sob demanda, sincronamente) ──
+  var _adminListenersAttached = false;
+  function _attachAdminListeners() {
+    if (_adminListenersAttached) return;
+    _adminListenersAttached = true;
     var fromEl = document.getElementById('vadm-from');
     var toEl   = document.getElementById('vadm-to');
     if (fromEl) fromEl.value = _todayStr();
@@ -1870,7 +1941,7 @@
       if (tiendaEl) { delete tiendaEl.dataset.zoneFilter; delete tiendaEl.dataset.sundayFilter; }
       _applyBtnStyles(null, null);
     });
-  }, 0);
+  }
 
   window._vAdmLoadData = _vAdmLoadData;
 

@@ -2957,6 +2957,36 @@
     adminApp.appendChild(panel);
   })();
 
+  // ── Auto-injeção: shell externo #horarios-overlay (bar/título/sub-header
+  //    + #horarios-sub-grid vazio). Migrado de index.html. Tem de correr
+  //    AQUI, síncrono, ANTES de ensureModuleCard() (a seguir) — este
+  //    ficheiro é o PRIMEIRO da sequência de loadProtectedScripts() (ver
+  //    shared.js), mas #horarios-sub-grid tem de existir já quando
+  //    ensureModuleCard() (abaixo) e, mais tarde, admin-init.js
+  //    (_adminInitWireCards, 5º da sequência) fizerem os seus varrimentos
+  //    únicos de [data-horarios-module] e #horarios-overlay-back. ──
+  (function ensureOverlayShell() {
+    if (document.getElementById('horarios-overlay')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+<div id="horarios-overlay">
+  <div id="horarios-overlay-bar">
+    <button id="horarios-overlay-back">
+      ← início
+    </button>
+    <span id="horarios-overlay-title">horários</span>
+  </div>
+  <div id="horarios-overlay-content">
+    <div id="horarios-sub-header">
+      <div class="hsub-brand">HORÁRIOS</div>
+      <div class="hsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="horarios-sub-grid">
+    </div>
+  </div>
+</div>
+    `);
+  })();
+
   // ── Cartão do submenu "horários" injetado por nucleo.js ──
   (function ensureModuleCard() {
     if (document.querySelector('.adm-mod-card[data-horarios-module="horarios"]')) return;

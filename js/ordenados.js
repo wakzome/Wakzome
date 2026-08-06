@@ -728,7 +728,46 @@ document.getElementById('r-process-btn').addEventListener('click', rProcessRecib
   var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
+  /* ── Auto-injeção: shell completo #recibos-overlay (incluindo tabela e
+     nota legal, idêntico ao bloco estático original). Migrado de
+     index.html. Lazy — nada faz varrimento único dos seus filhos antes de
+     openRecibosOverlay() correr. ── */
+  function ensureRecibosOverlayShell() {
+    if (document.getElementById('recibos-overlay')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+<div id="recibos-overlay">
+  <div id="recibos-overlay-bar">
+    <button id="recibos-overlay-back" onclick="closeRecibosOverlay()">← voltar</button>
+    <div id="recibos-overlay-title"></div>
+  </div>
+  <div id="recibos-overlay-content">
+    <div id="recibos-overlay-loading">a carregar…</div>
+    <div id="recibos-overlay-body" style="display:none;">
+      <div class="logo" style="font-size:3rem;font-weight:100;text-transform:lowercase;margin-bottom:4px;">wakzome</div>
+      <div id="recibos-page-title" style="font-size:1.6rem;font-weight:bold;margin-bottom:32px;color:#000;"></div>
+      <table id="recibos-table" style="width:100%;max-width:700px;border-collapse:separate;border-spacing:0;border-radius:15px;overflow:hidden;">
+        <thead><tr>
+          <th class="rn" style="background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;">#</th>
+          <th style="background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;">colaborador</th>
+          <th style="background:#e0e0e0;padding:10px 14px;text-align:left;font-size:.85rem;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;border:1px solid #e6e6e6;">descarregar</th>
+        </tr></thead>
+        <tbody id="recibos-tbody"></tbody>
+      </table>
+      <div class="recibos-nota">
+        <p><strong>Após a impressão do recibo:</strong></p>
+        <p>· Caso esteja de acordo, poderá colocá-lo juntamente com os restantes recibos num único envelope, como tem sido feito até agora;</p>
+        <p>· Em alternativa, poderá guardá-lo em envelope fechado e juntá-lo à restante documentação que habitualmente é enviada para Lisboa.</p>
+        <p>Solicitamos igualmente o devido cuidado em assegurar que cada trabalhadora assine o seu recibo original e que este seja enviado, uma vez que, de acordo com a política interna, a assinatura constitui um procedimento obrigatório e regular.</p>
+      </div>
+    </div>
+    <div id="recibos-overlay-error" style="display:none;"></div>
+  </div>
+</div>
+    `);
+  }
+
   window.openRecibosOverlay = function () {
+    ensureRecibosOverlayShell();
     var overlay     = document.getElementById('recibos-overlay');
     var loading     = document.getElementById('recibos-overlay-loading');
     var body        = document.getElementById('recibos-overlay-body');

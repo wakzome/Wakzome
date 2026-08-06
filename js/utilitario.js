@@ -242,8 +242,28 @@ function agInjectHtml() {
   agBindLogic();
 }
 
+/* ── Auto-injeção: shell #agenda-overlay. Migrado de index.html. Lazy —
+   nada faz varrimento único dos seus filhos antes de openAgendaOverlay()
+   correr (o botão que a abre é um data-tab interceptado por admin-init.js,
+   não depende do conteúdo interno do overlay já existir). ── */
+function ensureAgendaOverlayShell() {
+  if (document.getElementById('agenda-overlay')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<div id="agenda-overlay">
+  <div id="agenda-overlay-bar">
+    <button id="agenda-overlay-back" onclick="closeAgendaOverlay()">← voltar</button>
+    <div id="agenda-overlay-title">agenda faturas</div>
+  </div>
+  <div id="agenda-overlay-content">
+    <div id="ag-root" style="width:100%;"></div>
+  </div>
+</div>
+  `);
+}
+
 window.openAgendaOverlay = function () {
   agInjectStyle();
+  ensureAgendaOverlayShell();
   var ov = document.getElementById('agenda-overlay');
   if (!ov) return;
   ov.classList.add('open');
@@ -1144,7 +1164,25 @@ function rtInjectHtml() {
   rtBindLogic();
 }
 
+/* ── Auto-injeção: shell #rotulos-overlay. Migrado de index.html. Lazy,
+   mesmo motivo do agenda-overlay acima. ── */
+function ensureRotulosOverlayShell() {
+  if (document.getElementById('rotulos-overlay')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<div id="rotulos-overlay">
+  <div id="rotulos-overlay-bar">
+    <button id="rotulos-overlay-back" onclick="closeRotulosOverlay()">← voltar</button>
+    <div id="rotulos-overlay-title">rótulos</div>
+  </div>
+  <div id="rotulos-overlay-content">
+    <div id="rt-root" style="width:100%;"></div>
+  </div>
+</div>
+  `);
+}
+
 window.openRotulosOverlay = function () {
+  ensureRotulosOverlayShell();
   var ov = document.getElementById('rotulos-overlay');
   if (!ov) return;
   ov.classList.add('open');

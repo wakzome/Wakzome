@@ -4181,11 +4181,45 @@
     <div id="processamento-overlay-title">processamento de faturas</div>
   </div>
   <div id="processamento-overlay-content">
-    <div id="proc-root"></div>
+    <div id="proc-root" style="width:100%; min-height:100%;"></div>
   </div>
 </div>
     `);
   }
+
+  /* ── Auto-injeção: shell externo #faturas-overlay (bar/título/sub-header
+     + #faturas-sub-grid vazio). Migrado de index.html. Tem de correr AQUI,
+     síncrono, ANTES de ensureModuleCard() (a seguir) — este ficheiro carrega
+     ANTES de admin-init.js (ver loadProtectedScripts() em shared.js), cujo
+     _adminInitWireCards() faz um varrimento único de #faturas-overlay-back
+     e [data-faturas-module]. Se o shell aparecesse depois, tanto esse
+     varrimento como o próprio grid.appendChild() abaixo (ensureModuleCard)
+     não teriam onde inserir a card. ── */
+  function ensureFaturasOverlayShell() {
+    if (document.getElementById('faturas-overlay')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+<div id="faturas-overlay">
+  <div id="faturas-overlay-bar">
+    <button id="faturas-overlay-back">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      início
+    </button>
+    <span id="faturas-overlay-title">faturas</span>
+  </div>
+  <div id="faturas-overlay-content">
+    <div id="faturas-sub-header">
+      <div class="fsub-brand">FATURAS</div>
+      <div class="fsub-tagline">SELECIONE UM MÓDULO</div>
+    </div>
+    <div id="faturas-sub-grid">
+    </div>
+  </div>
+</div>
+    `);
+  }
+  ensureFaturasOverlayShell();
 
   function ensureModuleCard() {
     if (document.querySelector('.adm-mod-card[data-faturas-module="processamento"]')) return;

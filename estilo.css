@@ -2277,26 +2277,6 @@ input, textarea { cursor: text !important; }
 #saft-title {
   font-size: .78rem; font-weight: bold; color: #000; line-height: 1.3;
 }
-#saft-countdown {
-  font-size: 1.5rem; font-weight: 100; color: #000; line-height: 1;
-  letter-spacing: -.01em;
-}
-#saft-countdown-label {
-  font-size: .62rem; font-weight: bold; text-transform: uppercase;
-  letter-spacing: .07em; color: #000; margin-top: -2px;
-}
-#saft-btn {
-  margin-top: 4px;
-  padding: 5px 12px;
-  font-size: .68rem; font-weight: bold;
-  font-family: 'MontserratLight', sans-serif;
-  text-transform: lowercase; letter-spacing: .04em;
-  color: #000; border: 1px solid #ddd; border-radius: 20px;
-  background: transparent; cursor: pointer;
-  text-decoration: none; display: inline-block;
-  transition: border-color .2s, color .2s, background .2s;
-}
-#saft-btn:hover { border-color: #555; color: #000; background: #f7f7f7; }
 #saft-divider {
   width: 100%; height: 1px; background: #e8e8e8; margin: 10px 0;
 }
@@ -2321,10 +2301,6 @@ input, textarea { cursor: text !important; }
   letter-spacing: .02em; margin-top: 2px; text-align: left;
   font-family: 'MontserratLight', sans-serif;
 }
-#saft-reminder.urgent #saft-countdown { color: #c05000; }
-#saft-reminder.urgent #saft-title { color: #c05000; }
-#saft-reminder.urgent #saft-countdown-label { color: #e08050; }
-
 .saft-fat-item {
   font-size: .65rem; font-weight: bold; line-height: 1.3;
   padding: 4px 7px; border-radius: 7px;
@@ -2425,6 +2401,7 @@ input, textarea { cursor: text !important; }
   font-size: .6rem; font-weight: 600; color: #777;
   text-transform: uppercase; letter-spacing: .04em;
 }
+.wz-active-store::before { content: '·'; margin-right: 5px; color: #ccc; font-weight: 700; }
 .wz-active-countdown {
   font-size: .62rem; font-weight: 700; color: #2e7d32;
   font-variant-numeric: tabular-nums;
@@ -2434,7 +2411,6 @@ input, textarea { cursor: text !important; }
   font-size: .56rem; font-weight: 600; color: #999;
   text-transform: lowercase; white-space: nowrap;
 }
-.wz-active-store::before { content: '·'; margin-right: 5px; color: #ccc; font-weight: 700; }
 #wz-active-empty { font-size: .72rem; font-weight: 600; color: #999; }
 .wz-active-sep {
   text-align: center; font-size: .62rem; font-weight: 700;
@@ -2943,7 +2919,7 @@ body.no-glow #glow-layer-1,
 body.no-glow #glow-layer-2 { animation: none; }
 
 button:not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn, #key-submit, #recibos-link,
-#saft-btn, #saft-recibos-btn,
+#saft-recibos-btn,
 .ed-modal-btn, #ed-folder-pick-btn {
   transition: transform 0.18s cubic-bezier(0.22,1,0.36,1),
               box-shadow 0.18s cubic-bezier(0.22,1,0.36,1),
@@ -2952,7 +2928,7 @@ button:not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-
 }
 button:hover:not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button), .tab-btn:hover,
 #key-submit:hover, #recibos-link:hover,
-#saft-btn:hover, #saft-recibos-btn:hover,
+#saft-recibos-btn:hover,
 .ed-modal-btn:hover, #ed-folder-pick-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 22px rgba(0,0,0,0.07);
@@ -3432,7 +3408,7 @@ input, button, select, textarea,
 #f-today-banner .f-banner-title, #f-today-banner .f-banner-names,
 .dash-card .dash-val, .dash-card .dash-label,
 #h-status-msg, #s-status-msg, #r-status-msg,
-#r-progress-detail, #saft-title, #saft-countdown,
+#r-progress-detail, #saft-title,
 .r-inline-hint, .upload-box, #s-upload-label,
 .results-wrap, .tam-table th, .tam-table td,
 #login-screen .logo-text, #login-screen #current-time,
@@ -3445,8 +3421,8 @@ input, button, select, textarea,
 #ed-folder-display, #ed-folder-pick-btn,
 .ed-modal-btn, .ed-tool-label,
 #r-conferir-btn, #r-process-btn,
-#saft-btn, #saft-recibos-btn, #saft-agenda-btn,
-#saft-label, #saft-countdown-label, #saft-recibos-label, #saft-recibos-mes,
+#saft-recibos-btn, #saft-agenda-btn,
+#saft-label, #saft-recibos-label, #saft-recibos-mes,
 #saft-faturas-label, #saft-faturas-count, #saft-faturas-count-label,
 .saft-fat-item,
 #wz-active-tooltip-title, .wz-active-name, #wz-active-empty, #wz-active-updated,
@@ -3488,7 +3464,6 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 .ed-modal-btn.primary:hover,
 #r-process-btn:hover,
 #r-conferir-btn:hover,
-#saft-btn:hover,
 #saft-recibos-btn:hover,
 #saft-agenda-btn:hover,
 #ed-export-btn:hover,
@@ -3514,9 +3489,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #r-conferir-note { color: #e09000 !important; }
 .tam-chk-ok  { color: #2a6a2a !important; }
 .tam-chk-err { color: #c00 !important; }
-#saft-reminder.urgent #saft-countdown,
-#saft-reminder.urgent #saft-title { color: #c05000 !important; }
-#saft-reminder.urgent #saft-countdown-label { color: #e08050 !important; }
 .saft-fat-item.vencida { color: #c62828 !important; }
 .saft-fat-item.urgente { color: #c05000 !important; }
 #f-today-banner .f-banner-title { color: #2a8a2a !important; }
@@ -3534,7 +3506,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .adm-mod-desc, #adm-dash-greeting .adm-tagline,
 #adm-module-bar-title, .f-card .f-dates,
 .f-card .f-badge.past, .dash-card .dash-label,
-.adm-mod-arrow, #saft-label, #saft-countdown-label,
+.adm-mod-arrow, #saft-label,
 #saft-recibos-label, #saft-recibos-mes,
 .wz-active-store, .wz-active-sep {
   opacity: 0.68;

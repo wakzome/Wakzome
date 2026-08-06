@@ -172,7 +172,6 @@
     } else {
       const nameMapping = {
         "mezka funchal": "mezka funchal",
-        "parfois madeira shopping": "madeira shopping",
         "parfois arcadas são francisco": "parfois arcadas",
         "porto santo": "porto santo"
       };
@@ -2946,7 +2945,6 @@
       <select id="h-store-select">
         <option value="">— selecionar —</option>
         <option value="mezka funchal">Mezka Funchal</option>
-        <option value="parfois madeira shopping">Parfois Madeira Shopping</option>
         <option value="parfois arcadas são francisco">Parfois Arcadas São Francisco</option>
         <option value="porto santo">Porto Santo</option>
       </select>
@@ -3529,7 +3527,6 @@
 
   var STANDARD_STORES = [
     { key: 'mezka funchal', label: 'Mezka Funchal' },
-    { key: 'madeira shopping', label: 'Madeira Shopping' },
     { key: 'parfois arcadas', label: 'Parfois Arcadas' }
   ];
 
@@ -3570,9 +3567,16 @@
     return -1;
   }
 
-  function wzIsNowInSchedule(schedule) {
+  // Analisa o horário do dia (ex.: "09:00-13:00,14:00-18:00") e, se agora
+  // cair dentro de algum tramo, devolve o fim desse tramo (currentEnd) e o
+  // fim do ÚLTIMO tramo do dia (finalEnd — a hora de saída real). Todas as
+  // pessoas têm sempre os seus tramos diários (normalmente 2, com intervalo
+  // a meio), mas o código aceita qualquer número de tramos. Devolve null se
+  // agora não cai em nenhum tramo (fora de horário ou em intervalo).
+  function wzScheduleInfo(schedule) {
     var now = new Date();
     var segments = schedule.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    var parsed = [];
     for (var i = 0; i < segments.length; i++) {
       var parts = segments[i].split('-');
       if (parts.length < 2) continue;
@@ -3580,11 +3584,23 @@
       var sh = parseInt(start.split(':')[0], 10), sm = parseInt(start.split(':')[1] || '0', 10);
       var eh = parseInt(end.split(':')[0], 10), em = parseInt(end.split(':')[1] || '0', 10);
       if (isNaN(sh) || isNaN(eh)) continue;
-      var s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
-      var e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em);
-      if (now >= s && now <= e) return true;
+      parsed.push({
+        start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm),
+        end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em)
+      });
     }
-    return false;
+    if (!parsed.length) return null;
+    var activeIdx = -1;
+    for (var j = 0; j < parsed.length; j++) {
+      if (now >= parsed[j].start && now <= parsed[j].end) { activeIdx = j; break; }
+    }
+    if (activeIdx < 0) return null;
+    var lastIdx = parsed.length - 1;
+    return {
+      currentEnd: parsed[activeIdx].end,
+      finalEnd: parsed[lastIdx].end,
+      isLastSegment: activeIdx === lastIdx
+    };
   }
 
   // Lojas "normais": bloco = [rótulo+dias semana, SEMANA X+datas, ...linhas de funcionários (+linha "Nhrs" de resumo)]
@@ -3597,9 +3613,11 @@
       var name = (row[0] || '').trim();
       if (!name || seen[name]) return;
       var val = (row[todayCol] || '').trim();
-      if (val && wzIsNowInSchedule(val)) {
+      if (!val) return;
+      var info = wzScheduleInfo(val);
+      if (info) {
         seen[name] = true;
-        active.push({ name: name, store: storeLabel });
+        active.push({ name: name, store: storeLabel, currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment });
       }
     });
     return active;
@@ -3628,9 +3646,11 @@
       if (!name) return;
       var val = (row[currentCol] || '').trim();
       var key = name + '||' + currentStore;
-      if (val && wzIsNowInSchedule(val) && !seen[key]) {
+      if (!val || seen[key]) return;
+      var info = wzScheduleInfo(val);
+      if (info) {
         seen[key] = true;
-        active.push({ name: name, store: wzTitleCase(currentStore) });
+        active.push({ name: name, store: wzTitleCase(currentStore), currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment });
       }
     });
     return active;
@@ -3692,7 +3712,7 @@
   }
 
   // Ordem fixa de exibição: primeiro as lojas de Porto Santo, depois as restantes.
-  var STORE_ORDER = ['Mezka Avenida', 'Mezka Mercado', 'Shana', 'Maxx', 'Mezka Funchal', 'Parfois Arcadas', 'Madeira Shopping'];
+  var STORE_ORDER = ['Mezka Avenida', 'Mezka Mercado', 'Shana', 'Maxx', 'Mezka Funchal', 'Parfois Arcadas'];
 
   function wzSortByStoreOrder(list) {
     return list.slice().sort(function (a, b) {
@@ -3700,6 +3720,25 @@
       var ib = STORE_ORDER.indexOf(b.store); if (ib < 0) ib = STORE_ORDER.length;
       return ia - ib;
     });
+  }
+
+  // Formata "HH:MM" (relogio) para a hora de saida final, e "H:MM:SS"/"MM:SS"
+  // (cronometro) para o tempo em falta ate ao fim do tramo atual.
+  function wzFormatClockTime(date) {
+    var hh = String(date.getHours()).padStart(2, '0');
+    var mm = String(date.getMinutes()).padStart(2, '0');
+    return hh + ':' + mm;
+  }
+
+  function wzFormatCountdown(ms) {
+    if (ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var mm = String(m).padStart(2, '0');
+    var ss = String(s).padStart(2, '0');
+    return h > 0 ? (h + ':' + mm + ':' + ss) : (mm + ':' + ss);
   }
 
   function wzRenderActive(active) {
@@ -3716,11 +3755,42 @@
       if (prevStore !== null && p.store !== prevStore) {
         html += '<div class="wz-active-sep">***</div>';
       }
-      html += '<div class="wz-active-item"><span class="wz-active-name">' + wzEscapeHtml(p.name) +
-        '</span><span class="wz-active-store">' + wzEscapeHtml(p.store) + '</span></div>';
+      // Cronómetro conta sempre até ao fim do tramo ATUAL (o intervalo, se
+      // houver um tramo a seguir; a saída real, se for o último tramo). Só
+      // mostra a hora de saída fixa quando ainda falta um tramo depois deste.
+      var exitHtml = p.isLastSegment ? '' :
+        '<span class="wz-active-exit">sai ' + wzFormatClockTime(p.finalEnd) + '</span>';
+      html += '<div class="wz-active-item" data-current-end="' + p.currentEnd.getTime() + '">' +
+        '<span class="wz-active-name">' + wzEscapeHtml(p.name) +
+        '</span><span class="wz-active-store">' + wzEscapeHtml(p.store) + '</span>' +
+        '<span class="wz-active-countdown"></span>' +
+        exitHtml +
+        '</div>';
       prevStore = p.store;
     });
     listEl.innerHTML = html;
+    wzTickCountdowns();
+  }
+
+  // Corre a cada segundo enquanto o painel existe: atualiza cada cronómetro
+  // visível e remove do DOM quem acabou de chegar a 0 (fim do tramo atual —
+  // ou entrou em intervalo, ou saiu de vez). Nunca mostra tempo negativo;
+  // a pessoa desaparece da lista em vez disso, sem esperar pelo próximo
+  // refresh de dados (que só corre a cada meia hora).
+  function wzTickCountdowns() {
+    var listEl = document.getElementById('wz-active-list');
+    if (!listEl) return;
+    var now = Date.now();
+    listEl.querySelectorAll('.wz-active-item[data-current-end]').forEach(function (el) {
+      var currentEnd = +el.dataset.currentEnd;
+      var diff = currentEnd - now;
+      if (diff <= 0) { el.remove(); return; }
+      var cd = el.querySelector('.wz-active-countdown');
+      if (cd) cd.textContent = wzFormatCountdown(diff);
+    });
+    if (!listEl.querySelector('.wz-active-item')) {
+      listEl.innerHTML = '<div id="wz-active-empty">ninguém ativo agora</div>';
+    }
   }
 
   async function wzLoadActive() {
@@ -3775,6 +3845,8 @@
     }, wzMsUntilNextHalfHour());
   }
 
+  var wzCountdownTimer = null;
+
   function wzStartPanel() {
     if (wzStarted) return;
     wzStarted = true;
@@ -3786,6 +3858,7 @@
     }
     wzLoadActive();
     wzScheduleNextRefresh();
+    if (!wzCountdownTimer) wzCountdownTimer = setInterval(wzTickCountdowns, 1000);
   }
 
   var adminApp = document.getElementById('admin-app');

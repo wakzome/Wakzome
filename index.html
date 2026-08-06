@@ -231,9 +231,11 @@
     </div>
   </div>
   
-  <div id="tab-agenda" class="tab-panel"></div>
-  <div id="tab-rotulos" class="tab-panel"></div>
-
+  <!-- tab-agenda / tab-rotulos removidos: interceptOverlayTabs() (admin-init.js)
+       bloqueia SEMPRE esses cliques com stopImmediatePropagation() antes de
+       chegar ao handler normal de tabs, e openModule() também os redireciona
+       para openAgendaOverlay()/openRotulosOverlay() em vez de ativar o panel.
+       Estes 2 divs nunca recebiam conteúdo nem eram mostrados. -->
   <div id="tab-gerador" class="tab-panel"></div>
 
 </div>

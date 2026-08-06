@@ -105,15 +105,17 @@ window.addEventListener("load", function() {
 //  Antes vivia num <script> inline no fim do <body>, onde já corria
 //  depois de todo o HTML estático existir. Aqui carrega cedo (ainda
 //  antes do login), por isso todo o arranque (_fxInit) espera pelo
-//  mesmo guard de readyState que já protegia initCinematicIntro —
-//  sem isso, elementos definidos mais abaixo no HTML (ex.:
-//  #recibos-overlay) ainda não existiriam quando o código corresse.
+//  mesmo guard de readyState que já protegia initCinematicIntro.
 //
-//  Nota (não alterado, apenas identificado): o efeito glitch/chromatic
-//  dentro de initCinematicIntro observa elementos '.char', que nenhum
-//  script atual (incluindo este ficheiro) chega a criar — parece
-//  código vestigial de uma versão anterior da intro, com efeito por
-//  carácter. Mantido tal como estava; a decidir se ainda faz sentido.
+//  #recibos-overlay, #r-modal-overlay e #ed-export-modal são hoje
+//  todos injetados por JS (ordenados.js / editor-pdf.js), alguns só
+//  na primeira abertura — por isso podem ainda não existir quando
+//  _fxInit corre. O watcher da vinheta (abaixo) espera pela sua
+//  criação em vez de assumir que já existem no DOM.
+//
+//  Removido: o efeito glitch/chromatic que existia em initCinematicIntro
+//  observava elementos '.char' que nenhum script chegava a criar —
+//  código vestigial de uma versão anterior da intro, nunca disparava.
 // ══════════════════════════════════════════════════════════════
 (function(){
   'use strict';
@@ -126,41 +128,10 @@ window.addEventListener("load", function() {
     const dynText = $('dynamic-text');
     if(!screen || !dynText) return;
 
-    let chromaApplied = false;
-    const obs = new MutationObserver(() => {
-      const chars = dynText.querySelectorAll('.char');
-      if(chars.length && !chromaApplied){
-        chromaApplied = true;
-        dynText.dataset.text = dynText.textContent;
-        setTimeout(() => {
-          chars.forEach(ch => {
-            if(Math.random() > 0.5){
-              ch.classList.add('char-glitch');
-              ch.style.animationDelay = (Math.random()*4)+'s';
-            }
-          });
-          setTimeout(() => dynText.classList.add('chromatic'), 600);
-        }, 800);
-        obs.disconnect();
-      }
-    });
-    obs.observe(dynText, { childList:true, subtree:true, attributes:true, attributeFilter:['style'] });
-
-    
     const exitObs = new MutationObserver(() => {
       const op = parseFloat(window.getComputedStyle(screen).opacity);
       if(op < 0.95 && !screen.dataset.shattered && typeof gsap !== 'undefined'){
         screen.dataset.shattered = '1';
-        dynText.querySelectorAll('.char').forEach((ch, i) => {
-          const dir = i%2===0 ? -1 : 1;
-          gsap.to(ch, {
-            x: dir*(20+Math.random()*90), y: -(10+Math.random()*80),
-            rotation: dir*(10+Math.random()*40),
-            scale: 0.2+Math.random()*0.4,
-            opacity:0, filter:'blur(8px)',
-            duration:0.6, ease:'power2.in', delay:i*0.035
-          });
-        });
         gsap.to($('intro-line'), { scaleX:0, opacity:0, duration:0.3, ease:'power2.in' });
       }
     });
@@ -179,13 +150,24 @@ window.addEventListener("load", function() {
     initCinematicIntro();
 
     const vignette = $('wz-vignette');
-    ['recibos-overlay','r-modal-overlay','ed-export-modal'].forEach(id => {
-      const el = $(id); if(!el) return;
-      new MutationObserver(() => {
-        const open = el.classList.contains('open')||el.classList.contains('show')||el.classList.contains('visible');
-        if(vignette) vignette.classList.toggle('active', open);
-      }).observe(el, { attributes:true, attributeFilter:['class','style'] });
-    });
+    function watchOverlayForVignette(id){
+      function attach(el){
+        new MutationObserver(() => {
+          const open = el.classList.contains('open')||el.classList.contains('show')||el.classList.contains('visible');
+          if(vignette) vignette.classList.toggle('active', open);
+        }).observe(el, { attributes:true, attributeFilter:['class','style'] });
+      }
+      const existing = $(id);
+      if(existing){ attach(existing); return; }
+      /* Elemento ainda não existe (injeção lazy por outro módulo) —
+         espera que apareça no body antes de observar as suas classes. */
+      const waiter = new MutationObserver(() => {
+        const el = $(id);
+        if(el){ waiter.disconnect(); attach(el); }
+      });
+      waiter.observe(document.body, { childList:true, subtree:true });
+    }
+    ['recibos-overlay','r-modal-overlay','ed-export-modal'].forEach(watchOverlayForVignette);
 
   
     const wipeEl = $('wz-wipe');

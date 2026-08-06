@@ -2354,16 +2354,12 @@ input, textarea { cursor: text !important; }
 }
 #emg-mobile-bubble {
   display: none;
-  position: fixed;
-  bottom: 20px; left: 50%;
-  transform: translateX(-50%);
-  z-index: 52;
+  margin: 8px 0 0;
 }
 @media (max-width: 1024px) { #emg-mobile-bubble { display: flex; } }
-#admin-app.module-open ~ #emg-mobile-bubble { display: none !important; }
 #emg-tooltip {
   position: fixed;
-  bottom: 76px; left: 50%;
+  bottom: 20px; left: 50%;
   transform: translateX(-50%) translateY(6px);
   width: max-content;
   min-width: 150px; max-width: min(280px, 86vw);

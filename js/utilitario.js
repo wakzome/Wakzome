@@ -10,10 +10,7 @@ function ensureSaftReminderShell() {
   document.body.insertAdjacentHTML('beforeend', `
 <div id="saft-reminder">
   <div id="saft-label">recordatorio</div>
-  <div id="saft-title">solicitar criação<br>de SAFT</div>
-  <div id="saft-countdown">—</div>
-  <div id="saft-countdown-label">dias</div>
-  <a id="saft-btn" href="https://areareservada.pri.pt/#/auth/login" target="_blank" rel="noopener">abrir portal →</a>
+  <div id="saft-title">gerir envio<br>de SAFT</div>
   <div id="saft-divider"></div>
   <button id="saft-recibos-btn" onclick="openRecibosOverlay()">recibos</button>
   <div id="saft-recibos-label">últimos recibos<br>carregados</div>
@@ -1803,50 +1800,22 @@ function initSaftReminder() {
   const reminder = document.getElementById('saft-reminder');
   if (!reminder) return;
 
+  function isSaftReminderVisible(date) {
+    const day = date.getDate();
+    if (day <= 3) return true;
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return day === lastDay;
+  }
+
   function updateSaft() {
-    const now = new Date();
-    const day = now.getDate();
-    const month = now.getMonth();
-    const year = now.getFullYear();
-
-    // Next end-of-month: find the last day of current month, or next month if already past it
-    function nextEndOfMonthFrom(d) {
-      let y = d.getFullYear(), m = d.getMonth();
-      // Last day of current month: day 0 of next month
-      const endThisMonth = new Date(y, m + 1, 0);
-      endThisMonth.setHours(0, 0, 0, 0);
-      if (endThisMonth >= d) return endThisMonth;
-      // Otherwise, last day of next month
-      return new Date(y, m + 2, 0);
-    }
-
-    const today = new Date(year, month, day);
-    const next31 = nextEndOfMonthFrom(today);
-    if (!next31) return;
-
-    const msPerDay = 86400000;
-    const diffDays = Math.round((next31 - today) / msPerDay);
-
-    const countEl = document.getElementById('saft-countdown');
-    const labelEl = document.getElementById('saft-countdown-label');
+    const visible = isSaftReminderVisible(new Date());
+    const display = visible ? '' : 'none';
+    const labelEl = document.getElementById('saft-label');
     const titleEl = document.getElementById('saft-title');
-
-    if (diffDays === 0) {
-      countEl.textContent = 'hoje';
-      labelEl.textContent = 'fim do mês';
-      titleEl.innerHTML = 'solicitar criação<br>de SAFT';
-      reminder.classList.add('urgent');
-    } else if (diffDays <= 5) {
-      countEl.textContent = diffDays;
-      labelEl.textContent = diffDays === 1 ? 'dia para o fim do mês' : 'dias para o fim do mês';
-      titleEl.innerHTML = 'solicitar criação<br>de SAFT';
-      reminder.classList.add('urgent');
-    } else {
-      countEl.textContent = diffDays;
-      labelEl.textContent = 'dias para o fim do mês';
-      titleEl.innerHTML = 'solicitar criação<br>de SAFT';
-      reminder.classList.remove('urgent');
-    }
+    const dividerEl = document.getElementById('saft-divider');
+    if (labelEl) labelEl.style.display = display;
+    if (titleEl) titleEl.style.display = display;
+    if (dividerEl) dividerEl.style.display = display;
   }
 
   updateSaft();

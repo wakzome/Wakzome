@@ -37,14 +37,24 @@ ensureSaftReminderShell();
 
 // ══════════════════════════════════════════════════════════════
 //  CÓDIGOS DE EMERGÊNCIA — bolha de acesso: shell do tooltip partilhado
-//  (desktop dentro da sidebar via #emg-bubble; mobile fixo no fundo do
-//  ecrã via #emg-mobile-bubble), injetado fora de #saft-reminder para
-//  continuar acessível quando este fica oculto em mobile.
+//  (desktop dentro da sidebar via #emg-bubble; mobile inserida no fluxo
+//  normal logo depois de #adm-module-grid via #emg-mobile-bubble — NÃO
+//  position:fixed, porque #adm-dashboard tem o seu próprio overflow-y:
+//  auto e um botão fixo ao ecrã ficaria a sobrepor os cartões enquanto
+//  o utilizador faz scroll). Tooltip injetado fora de #saft-reminder
+//  para continuar acessível quando este fica oculto em mobile.
 // ══════════════════════════════════════════════════════════════
 function ensureEmgPanelShell() {
+  if (!document.getElementById('emg-mobile-bubble')) {
+    var bubbleHtml = '<div id="emg-mobile-bubble" role="button" tabindex="0" aria-label="código de acesso"></div>';
+    var grid = document.getElementById('adm-module-grid');
+    var dashboard = document.getElementById('adm-dashboard');
+    if (grid) grid.insertAdjacentHTML('afterend', bubbleHtml);
+    else if (dashboard) dashboard.insertAdjacentHTML('beforeend', bubbleHtml);
+    else document.body.insertAdjacentHTML('beforeend', bubbleHtml);
+  }
   if (document.getElementById('emg-tooltip')) return;
   document.body.insertAdjacentHTML('beforeend', `
-<div id="emg-mobile-bubble" role="button" tabindex="0" aria-label="código de acesso"></div>
 <div id="emg-tooltip">
   <div id="emg-tooltip-title">código de acesso</div>
   <div id="emg-date">hoje</div>

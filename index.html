@@ -231,12 +231,19 @@
     </div>
   </div>
   
+  <!-- tab-agenda / tab-rotulos removidos: interceptOverlayTabs() (admin-init.js)
+       bloqueia SEMPRE esses cliques com stopImmediatePropagation() antes de
+       chegar ao handler normal de tabs, e openModule() também os redireciona
+       para openAgendaOverlay()/openRotulosOverlay() em vez de ativar o panel.
+       Estes 2 divs nunca recebiam conteúdo nem eram mostrados. -->
   <div id="tab-gerador" class="tab-panel"></div>
 
 </div>
 
 <div id="page-name-popup"></div>
 
+<!-- agenda/rotulos/processamento/recibos/horarios/faturas overlays: auto-injetados por utilitario.js, faturas.js, ordenados.js e nucleo.js -->
+<!-- #r-modal-overlay injected by recibos.js -->
 
 <script src="js/shared.js"></script>
 <script id="lazy-scripts"></script>

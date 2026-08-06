@@ -25,9 +25,7 @@ function ensureSaftReminderShell() {
   
   <div id="saft-divider3" style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
   <div id="emg-label" style="font-size:.6rem;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:4px;">código de acesso</div>
-  <div id="emg-date" style="font-size:.6rem;color:#999;margin-bottom:6px;">hoje</div>
-  <div id="emg-codes-list" style="display:flex;flex-direction:column;gap:3px;width:100%;"></div>
-  <div id="emg-valid" style="font-size:.58rem;color:#bbb;margin-top:6px;text-align:right;">válido até às 00:00</div>
+  <div id="emg-bubble" role="button" tabindex="0" aria-label="código de acesso"></div>
 
   
   <div style="width:100%;height:1px;background:#e8e8e8;margin:12px 0 8px;"></div>
@@ -38,9 +36,59 @@ function ensureSaftReminderShell() {
 ensureSaftReminderShell();
 
 // ══════════════════════════════════════════════════════════════
+//  CÓDIGOS DE EMERGÊNCIA — bolha de acesso: shell do tooltip partilhado
+//  (desktop dentro da sidebar via #emg-bubble; mobile fixo no fundo do
+//  ecrã via #emg-mobile-bubble), injetado fora de #saft-reminder para
+//  continuar acessível quando este fica oculto em mobile.
+// ══════════════════════════════════════════════════════════════
+function ensureEmgPanelShell() {
+  if (document.getElementById('emg-tooltip')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<div id="emg-mobile-bubble" role="button" tabindex="0" aria-label="código de acesso"></div>
+<div id="emg-tooltip">
+  <div id="emg-tooltip-title">código de acesso</div>
+  <div id="emg-date">hoje</div>
+  <div id="emg-codes-list"></div>
+  <div id="emg-valid">válido até às 00:00</div>
+</div>`);
+}
+ensureEmgPanelShell();
+
+function toggleEmgTooltip() {
+  var tooltip = document.getElementById('emg-tooltip');
+  if (tooltip) tooltip.classList.toggle('open');
+}
+function closeEmgTooltip() {
+  var tooltip = document.getElementById('emg-tooltip');
+  if (tooltip) tooltip.classList.remove('open');
+}
+(function bindEmgBubbles() {
+  var triggers = [document.getElementById('emg-bubble'), document.getElementById('emg-mobile-bubble')];
+  triggers.forEach(function (btn) {
+    if (!btn) return;
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      toggleEmgTooltip();
+    });
+    btn.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleEmgTooltip(); }
+    });
+  });
+  document.addEventListener('click', function (ev) {
+    var tooltip = document.getElementById('emg-tooltip');
+    if (!tooltip || !tooltip.classList.contains('open')) return;
+    if (tooltip.contains(ev.target)) return;
+    closeEmgTooltip();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') closeEmgTooltip();
+  });
+})();
+
+// ══════════════════════════════════════════════════════════════
 //  CÓDIGOS DE EMERGÊNCIA — hash determinístico por loja+data, gera o
 //  código diário para cada loja e preenche o widget cujo shell vazio
-//  (#emg-codes-list / #emg-date) é criado acima por ensureSaftReminderShell().
+//  (#emg-codes-list / #emg-date) é criado acima por ensureEmgPanelShell().
 //  Antes vivia em index.html; movido para aqui porque é este ficheiro que
 //  cria o contentor. Nota: como este script só carrega DEPOIS do login
 //  (loadProtectedScripts), DOMContentLoaded já disparou há muito — por

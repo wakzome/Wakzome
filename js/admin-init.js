@@ -256,6 +256,29 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   }
   ensureVendasOverlayShell();
 
+  // ── Reubica os sub-grids dos antigos overlays fullscreen (vendas/horários/
+  //    faturas) para dentro do novo corpo de acordeão de cada card no
+  //    dashboard. nucleo.js (horários) e faturas.js (faturas) carregam ANTES
+  //    deste ficheiro (ver os seus próprios comentários de ordem), e o shell
+  //    de vendas acabou de ser criado 2 linhas acima — os 3 grids já existem
+  //    a esta altura. Move-se o elemento em si (não uma cópia): os ficheiros
+  //    que continuam a inserir cards neles (ferias.js/banco-horas em
+  //    horarios.js, tam.js, etc.) fazem-no por getElementById, que continua
+  //    a encontrá-los onde quer que estejam — nada mais precisa de mudar. ──
+  function relocateAccordionGrids() {
+    var map = {
+      'vendas-sub-grid':   'acc-body-vendas',
+      'horarios-sub-grid': 'acc-body-horarios',
+      'faturas-sub-grid':  'acc-body-faturas'
+    };
+    Object.keys(map).forEach(function (gridId) {
+      var gridEl = document.getElementById(gridId);
+      var bodyEl = document.getElementById(map[gridId]);
+      if (gridEl && bodyEl) bodyEl.appendChild(gridEl);
+    });
+  }
+  relocateAccordionGrids();
+
   var MODULE_LABELS = {
     pagamentos:    'pagamentos',
     agenda:        'agenda',
@@ -272,13 +295,16 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
   function openModule(tab) {
     
-    if (tab === 'faturas') { openFaturasOverlay(); return; }
+    if (tab === 'faturas') { toggleAccordion('faturas'); return; }
 
     
-    if (tab === 'horarios-group') { openHorariosOverlay(); return; }
+    if (tab === 'horarios-group') { toggleAccordion('horarios'); return; }
 
     
-    if (tab === 'vendas-group') { openVendasOverlay(); return; }
+    if (tab === 'vendas-group') { toggleAccordion('vendas'); return; }
+
+    
+    if (tab === 'utilitarios-group') { toggleAccordion('utilitarios'); return; }
 
     
     if (tab === 'ventas') {
@@ -411,11 +437,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (dashboard) dashboard.style.display = '';
 
     
-    document.querySelectorAll('.adm-mod-card').forEach(function (c, i) {
+    collapseAccordion();
+    document.querySelectorAll('#adm-module-grid > .adm-mod-card, #adm-module-grid > .adm-group > .adm-mod-trigger').forEach(function (c) {
       c.style.animation = 'none';
       c.offsetWidth; 
       c.style.animation = '';
-      c.style.animationDelay = (0.05 + i * 0.05) + 's';
     });
   }
 
@@ -493,9 +519,51 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     setTimeout(function () { ov.classList.remove('open'); }, 460);
   }
 
+  // ── Acordeão do dashboard (Utilitários/Vendas/Horários/Faturas): substitui
+  //    o antigo padrão de overlay fullscreen. Clássico — abrir um grupo
+  //    fecha qualquer outro que estivesse aberto. O corpo (.adm-mod-body)
+  //    já contém o sub-grid correto graças a relocateAccordionGrids(). ──
+  var ACCORDION_BODIES = {
+    utilitarios: 'acc-body-utilitarios',
+    vendas:      'acc-body-vendas',
+    horarios:    'acc-body-horarios',
+    faturas:     'acc-body-faturas'
+  };
+
+  function collapseAccordion() {
+    document.querySelectorAll('.adm-group.expanded').forEach(function (g) {
+      g.classList.remove('expanded');
+      var trigger = g.querySelector('.adm-mod-trigger');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function toggleAccordion(name) {
+    var bodyId = ACCORDION_BODIES[name];
+    var body = bodyId ? document.getElementById(bodyId) : null;
+    var group = body ? body.closest('.adm-group') : null;
+    if (!group) return;
+
+    var wasOpen = group.classList.contains('expanded');
+    collapseAccordion();
+    if (wasOpen) return;
+
+    group.classList.add('expanded');
+    var trigger = group.querySelector('.adm-mod-trigger');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+
+    
+    body.querySelectorAll('.adm-mod-card').forEach(function (c) {
+      c.style.animation = 'none';
+      c.offsetWidth; 
+      c.style.animation = '';
+    });
+  }
+
   // ── Expostas para os módulos JS que auto-injetam o seu próprio cartão no
   // menu (editor-pdf.js, nucleo.js, ferias.js, banco-horas.js, tam.js) ──
   window.openModule = openModule;
+  window.toggleAccordion = toggleAccordion;
   window.closeHorariosOverlay = closeHorariosOverlay;
   window.closeFaturasOverlay = closeFaturasOverlay;
 
@@ -514,8 +582,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         var mod = card.dataset.faturasModule;
         if (!mod) return;
         closeFaturasOverlay();
-        
-        setTimeout(function () { openModule(mod); }, 200);
+        openModule(mod);
       });
     });
 
@@ -525,7 +592,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         var mod = card.dataset.horariosModule;
         if (!mod) return;
         closeHorariosOverlay();
-        setTimeout(function () { openModule(mod); }, 200);
+        openModule(mod);
       });
     });
 
@@ -535,7 +602,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         var mod = card.dataset.vendasModule;
         if (!mod) return;
         closeVendasOverlay();
-        setTimeout(function () { openModule(mod); }, 200);
+        openModule(mod);
       });
     });
 

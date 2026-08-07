@@ -566,9 +566,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 (function () {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-  var TILT_DEG    = 7;
-  var HOVER_LIFT   = 8;
-  var HOVER_SCALE  = 1.02;
+  var TILT_DEG    = 3;
+  var HOVER_LIFT   = 6;
+  var HOVER_SCALE  = 1.016;
 
   function makeSpring(stiffness, damping, mass, initial) {
     var value = initial, target = initial, velocity = 0;
@@ -615,16 +615,16 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     s.setProperty('--lift', (-hv * HOVER_LIFT).toFixed(2) + 'px');
     s.setProperty('--scale', (1 + hv * (HOVER_SCALE - 1)).toFixed(4));
     s.setProperty('--shine-x', (-85 + px * 110).toFixed(2) + '%');
-    s.setProperty('--shine-opacity', (hv * 0.4).toFixed(3));
-    s.setProperty('--spec-opacity', (hv * 0.8).toFixed(3));
+    s.setProperty('--shine-opacity', (hv * 0.12).toFixed(3));
+    s.setProperty('--spec-opacity', (hv * 0.22).toFixed(3));
     s.setProperty('--shadow-x', (10 - px * 20).toFixed(2) + 'px');
     s.setProperty('--shadow-y', (10 - py * 20).toFixed(2) + 'px');
     s.setProperty('--shadow-blur', (18 + hv * 16).toFixed(2) + 'px');
     s.setProperty('--shadow-spread', (-4 - hv * 5).toFixed(2) + 'px');
-    s.setProperty('--shadow-alpha', (hv * 0.14).toFixed(3));
+    s.setProperty('--shadow-alpha', (hv * 0.16).toFixed(3));
     s.setProperty('--edge-x', (2 - px * 4).toFixed(2) + 'px');
     s.setProperty('--edge-y', (2 - py * 4).toFixed(2) + 'px');
-    s.setProperty('--edge-alpha', (hv * 0.5).toFixed(3));
+    s.setProperty('--edge-alpha', (hv * 0.18).toFixed(3));
   }
 
   function step(card, e, now) {

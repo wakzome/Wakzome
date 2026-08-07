@@ -103,6 +103,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
     btn.classList.add('active');
     const panel = document.getElementById('tab-' + btn.dataset.tab);
+    if (!panel) return;
     panel.classList.add('active');
     // force reflow then re-enable animation
     void panel.offsetWidth;
@@ -158,6 +159,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   const drawer   = document.getElementById('admin-menu-drawer');
   const overlay  = document.getElementById('admin-menu-overlay');
   const tabNav   = document.getElementById('tab-nav');
+  // ── guarda defensiva: se algum destes 4 elementos não existir no HTML
+  //    atual (ex.: navegação antiga por tabs+drawer já não usada depois do
+  //    redesign para acordeão), sair aqui em vez de deixar o primeiro
+  //    addEventListener abaixo rebentar com TypeError — isso pararia a
+  //    execução do resto do FICHEIRO INTEIRO (é um único <script>), levando
+  //    consigo o router e o efeito de hover dos cartões. ──
+  if (!btn || !drawer || !overlay || !tabNav) return;
 
   function openMenu() {
     btn.classList.add('open');

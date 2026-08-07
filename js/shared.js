@@ -208,6 +208,14 @@
       isLoggedIn = true;
       hideAuthenticating();
 
+      // Reset defensivo: o admin-app nunca deve arrancar visível, nem com
+      // módulo/painel aberto, de uma sessão anterior na mesma aba — antes
+      // de decidir, pelo papel (rol) atual, o que deve mesmo ficar visível.
+      // Sem isto, um login de funcionária podia herdar admin-app.show de
+      // uma sessão de admin anterior e mostrar os módulos de administração.
+      var adminAppReset = document.getElementById('admin-app');
+      if (adminAppReset) adminAppReset.classList.remove('show', 'module-open', 'vendas-open', 'historico-open');
+
       if (data.rol === 'admin') {
         if (window.__wkzAutoLogin) {
           window.__wkzAutoLogin = false;

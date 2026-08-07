@@ -1783,15 +1783,6 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 
 /* ── recibos styles injected by recibos.js ── */
 
-body::before {
-  content: '';
-  position: fixed; inset: 0; z-index: 9998;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-}
-
 * { cursor: crosshair !important; }
 #proc-content *, #proc-criacao-modal *, #proc-guia-modal *, .proc-or-modal * { cursor: unset !important; }
 input, textarea { cursor: text !important; }
@@ -2791,9 +2782,15 @@ input, textarea { cursor: text !important; }
 html, body { background: #fafafa !important; }
 #login-screen { background: transparent !important; }
 
+/* Textura de papel/grão — camada única, global, por cima de TUDO o conteúdo
+   normal (dashboard, módulos, overlays legacy de faturas/agenda/etc, todos
+   ≤201) mas por baixo de qualquer UI interativa real (modais, toasts,
+   dropdowns, popovers — o mais baixo desses é 300). pointer-events:none
+   garante que nunca bloqueia cliques, a opacidade baixa (0.045) garante que
+   nunca compete visualmente com essa UI mesmo estando por cima dela. ── */
 body::before {
   content: '';
-  position: fixed; inset: 0; z-index: 0;
+  position: fixed; inset: 0; z-index: 250;
   pointer-events: none;
   opacity: 0.045;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");

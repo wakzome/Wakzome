@@ -545,3 +545,139 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (backBtn) backBtn.click();
   });
 })();
+
+// ══════════════════════════════════════════════════════════════
+//  Efeito "glass tilt" nos cartões do dashboard (.adm-mod-card):
+//  tilt 3D, brilho especular e sombra dinâmica seguem o ponteiro,
+//  com física de mola própria (não transições CSS lineares) para
+//  replicar fielmente o comportamento de useSpring do Framer
+//  Motion no componente original. As custom properties que este
+//  módulo escreve (--px/--py/--rx/--ry/--lift/--scale/--shine-*/
+//  --spec-opacity/--shadow-*/--edge-*) são lidas em estilo.css.
+//  Delegação de eventos em document (um só listener, não um por
+//  cartão): funciona para qualquer .adm-mod-card, incluindo as
+//  injetadas mais tarde por nucleo.js/horarios.js/faturas.js/
+//  utilitario.js, sem precisar re-vincular nada.
+//  Desligado por completo em touch e com prefers-reduced-motion —
+//  nesse caso as custom properties nunca saem dos valores de
+//  repouso definidos em estilo.css e os cartões ficam idênticos
+//  aos anteriores a este efeito. ──
+// ══════════════════════════════════════════════════════════════
+(function () {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  var TILT_DEG    = 7;
+  var HOVER_LIFT   = 8;
+  var HOVER_SCALE  = 1.02;
+
+  function makeSpring(stiffness, damping, mass, initial) {
+    var value = initial, target = initial, velocity = 0;
+    return {
+      set: function (v) { target = v; },
+      tick: function (dt) {
+        var accel = (-stiffness * (value - target) - damping * velocity) / mass;
+        velocity += accel * dt;
+        value += velocity * dt;
+        return value;
+      },
+      get: function () { return value; },
+      settled: function () {
+        return Math.abs(target - value) < 0.0008 && Math.abs(velocity) < 0.0008;
+      }
+    };
+  }
+
+  var tracked = new Map();
+
+  function entryFor(card) {
+    var e = tracked.get(card);
+    if (e) return e;
+    e = {
+      px: makeSpring(250, 28, 0.8, 0.5),
+      py: makeSpring(250, 28, 0.8, 0.5),
+      hover: makeSpring(350, 32, 0.9, 0),
+      running: false,
+      lastT: null
+    };
+    tracked.set(card, e);
+    return e;
+  }
+
+  function render(card, e) {
+    var px = e.px.get(), py = e.py.get(), hv = Math.max(0, e.hover.get());
+    var rx = TILT_DEG * (1 - 2 * py);
+    var ry = TILT_DEG * (2 * px - 1);
+    var s  = card.style;
+    s.setProperty('--px', px.toFixed(4));
+    s.setProperty('--py', py.toFixed(4));
+    s.setProperty('--rx', rx.toFixed(3) + 'deg');
+    s.setProperty('--ry', ry.toFixed(3) + 'deg');
+    s.setProperty('--lift', (-hv * HOVER_LIFT).toFixed(2) + 'px');
+    s.setProperty('--scale', (1 + hv * (HOVER_SCALE - 1)).toFixed(4));
+    s.setProperty('--shine-x', (-85 + px * 110).toFixed(2) + '%');
+    s.setProperty('--shine-opacity', (hv * 0.4).toFixed(3));
+    s.setProperty('--spec-opacity', (hv * 0.8).toFixed(3));
+    s.setProperty('--shadow-x', (10 - px * 20).toFixed(2) + 'px');
+    s.setProperty('--shadow-y', (10 - py * 20).toFixed(2) + 'px');
+    s.setProperty('--shadow-blur', (18 + hv * 16).toFixed(2) + 'px');
+    s.setProperty('--shadow-spread', (-4 - hv * 5).toFixed(2) + 'px');
+    s.setProperty('--shadow-alpha', (hv * 0.14).toFixed(3));
+    s.setProperty('--edge-x', (2 - px * 4).toFixed(2) + 'px');
+    s.setProperty('--edge-y', (2 - py * 4).toFixed(2) + 'px');
+    s.setProperty('--edge-alpha', (hv * 0.5).toFixed(3));
+  }
+
+  function step(card, e, now) {
+    if (!card.isConnected) { tracked.delete(card); e.running = false; return; }
+    var dt = e.lastT == null ? (1 / 60) : Math.min(0.05, Math.max(0, (now - e.lastT) / 1000));
+    e.lastT = now;
+    e.px.tick(dt); e.py.tick(dt); e.hover.tick(dt);
+    render(card, e);
+    if (e.px.settled() && e.py.settled() && e.hover.settled() && e.hover.get() <= 0.001) {
+      e.running = false;
+      e.lastT = null;
+      return;
+    }
+    requestAnimationFrame(function (t) { step(card, e, t); });
+  }
+
+  function ensureRunning(card, e) {
+    if (e.running) return;
+    e.running = true;
+    e.lastT = null;
+    requestAnimationFrame(function (t) { step(card, e, t); });
+  }
+
+  document.addEventListener('pointermove', function (ev) {
+    if (ev.pointerType === 'touch') return;
+    var card = ev.target.closest && ev.target.closest('.adm-mod-card');
+    if (!card) return;
+    var rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    var e = entryFor(card);
+    e.px.set(Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width)));
+    e.py.set(Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height)));
+    ensureRunning(card, e);
+  });
+
+  document.addEventListener('pointerenter', function (ev) {
+    if (ev.pointerType === 'touch') return;
+    var card = ev.target.closest && ev.target.closest('.adm-mod-card');
+    if (!card) return;
+    var e = entryFor(card);
+    e.hover.set(1);
+    ensureRunning(card, e);
+  }, true);
+
+  document.addEventListener('pointerleave', function (ev) {
+    if (ev.pointerType === 'touch') return;
+    var card = ev.target.closest && ev.target.closest('.adm-mod-card');
+    if (!card) return;
+    var e = tracked.get(card);
+    if (!e) return;
+    e.hover.set(0);
+    e.px.set(0.5);
+    e.py.set(0.5);
+    ensureRunning(card, e);
+  }, true);
+})();

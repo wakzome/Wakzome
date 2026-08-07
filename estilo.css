@@ -1657,7 +1657,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 26px 24px;
+  padding: 15px 24px;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.09);
   background: linear-gradient(180deg, #1c1c1c 0%, #101010 100%);
@@ -1689,7 +1689,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   border-color: rgba(255,255,255,0.22);
 }
 
-.adm-mod-icon, .adm-mod-arrow { display: none !important; }
+.adm-mod-icon, .adm-mod-arrow, .adm-mod-desc { display: none !important; }
 
 #adm-module-grid .adm-mod-name {
   color: #fff !important;
@@ -1717,8 +1717,18 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.5s cubic-bezier(0.22,1,0.36,1);
 }
-.adm-mod-body > * { overflow: hidden; min-height: 0; }
+.adm-mod-body > * {
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  visibility: hidden;
+  transition: visibility 0s linear 0.5s;
+}
 .adm-group.expanded > .adm-mod-body { grid-template-rows: 1fr; }
+.adm-group.expanded > .adm-mod-body > * {
+  visibility: visible;
+  transition: visibility 0s linear 0s;
+}
 
 /* sub-grids (utilitários estático + vendas/horários/faturas reubicados por
    admin-init.js) — lista vertical compacta, cards mais pequenas e neutras */
@@ -1738,7 +1748,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 #adm-module-grid #vendas-sub-grid .adm-mod-card,
 #adm-module-grid #horarios-sub-grid .adm-mod-card,
 #adm-module-grid #faturas-sub-grid .adm-mod-card {
-  padding: 15px 20px;
+  padding: 11px 20px;
   border-radius: 13px;
   background: linear-gradient(180deg, #242424 0%, #181818 100%);
   box-shadow: none;

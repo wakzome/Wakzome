@@ -103,48 +103,91 @@
       <div class="adm-tagline">SELECIONE UM MÓDULO</div>
     </div>
     <div id="adm-module-grid">
-      <div class="adm-group" data-group="utilitarios">
-        <div class="adm-mod-card adm-mod-trigger" data-module="utilitarios-group">
-          <div class="adm-mod-name">UTILITÁRIOS</div>
-          <div class="adm-mod-desc">agenda · rótulos · editor de pdf</div>
+      <div class="adm-mod-card" data-module="pagamentos" style="animation-delay:0.05s">
+        <span class="adm-mod-icon">
+          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 7v1m0 8v1M9.5 9.5C9.5 8.67 10.67 8 12 8s2.5.67 2.5 1.5S13.33 11 12 11s-2.5.67-2.5 1.5S10.67 14 12 14s2.5.67 2.5 1.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">PAGAMENTOS</div>
+          <div class="adm-mod-desc">salários · recibos</div>
         </div>
-        <div class="adm-mod-body" id="acc-body-utilitarios">
-          <div class="adm-mod-subgrid" id="utilitarios-sub-grid">
-            <div class="adm-mod-card" data-module="agenda">
-              <div class="adm-mod-name">AGENDA</div>
-              <div class="adm-mod-desc">gestão de pagamento de faturas</div>
-            </div>
-            <div class="adm-mod-card" data-module="rotulos">
-              <div class="adm-mod-name">RÓTULOS</div>
-              <div class="adm-mod-desc">impressão de rótulos</div>
-            </div>
-          </div>
-        </div>
+        <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-group" data-group="vendas">
-        <div class="adm-mod-card adm-mod-trigger" data-module="vendas-group">
+      <div class="adm-mod-card" data-module="agenda" style="animation-delay:0.15s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="5" width="16" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 3v4M16 3v4M4 10h16" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="9" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+            <circle cx="12" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+            <circle cx="15" cy="15" r="1" fill="rgba(255,255,255,0.75)"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">AGENDA</div>
+          <div class="adm-mod-desc">gestão de pagamento de faturas</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="vendas-group" style="animation-delay:0.18s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="13" width="4" height="8" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="10" y="9" width="4" height="12" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <rect x="17" y="5" width="4" height="16" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
+            <path d="M3 6l5-3 5 4 5-4" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
           <div class="adm-mod-name">VENDAS</div>
           <div class="adm-mod-desc">vendas declaradas · histórico</div>
         </div>
-        <div class="adm-mod-body" id="acc-body-vendas"></div>
+        <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-group" data-group="horarios">
-        <div class="adm-mod-card adm-mod-trigger" data-module="horarios-group">
+      <div class="adm-mod-card" data-module="rotulos" style="animation-delay:0.20s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 7a2 2 0 0 1 2-2h8.586a2 2 0 0 1 1.414.586l3.414 3.414A2 2 0 0 1 20 10.414V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <circle cx="8.5" cy="11.5" r="1.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.2"/>
+            <path d="M8 15h8" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">RÓTULOS</div>
+          <div class="adm-mod-desc">impressão de rótulos</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
+      </div>
+      <div class="adm-mod-card" data-module="horarios-group" style="animation-delay:0.25s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M12 8v4l2.5 2.5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
           <div class="adm-mod-name">HORÁRIOS</div>
           <div class="adm-mod-desc">horários · gerador · férias</div>
         </div>
-        <div class="adm-mod-body" id="acc-body-horarios"></div>
+        <div class="adm-mod-arrow">→</div>
       </div>
-      <div class="adm-mod-card" data-module="pagamentos">
-        <div class="adm-mod-name">PAGAMENTOS</div>
-        <div class="adm-mod-desc">salários · recibos</div>
-      </div>
-      <div class="adm-group" data-group="faturas">
-        <div class="adm-mod-card adm-mod-trigger" data-module="faturas">
+      
+      <div class="adm-mod-card" data-module="faturas" style="animation-delay:0.35s">
+        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
+            <path d="M8 7h8M8 10h8M8 13h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M14 17l1.5 1.5L18 15" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
           <div class="adm-mod-name">FATURAS</div>
           <div class="adm-mod-desc">tam · faturas lisboa</div>
         </div>
-        <div class="adm-mod-body" id="acc-body-faturas"></div>
+        <div class="adm-mod-arrow">→</div>
       </div>
     </div>
   </div>

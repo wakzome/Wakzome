@@ -552,9 +552,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 //  (propositadamente removido: inclinar o cartão fazia um lado subir
 //  mais do que o outro, parecendo uma tábua solta). Física de mola
 //  própria (não transições CSS lineares) para um movimento suave e
-//  elegante. As custom properties que este módulo escreve (--lift/
-//  --scale/--spec-opacity/--shadow-*/--edge-alpha) são lidas em
-//  estilo.css. Delegação de eventos em document (um só listener, não
+//  elegante. Só o MOVIMENTO vive aqui: as custom properties que este
+//  módulo escreve (--lift/--scale/--shadow-*) são lidas em estilo.css.
+//  A luz do hover é 100% CSS (.adm-mod-card:hover::before/::after) de
+//  propósito — assim aparece mesmo que este ficheiro não corra. Delegação de eventos em document (um só listener, não
 //  um por cartão): funciona para qualquer .adm-mod-card, incluindo as
 //  injetadas mais tarde por nucleo.js/horarios.js/faturas.js/
 //  utilitario.js, sem precisar re-vincular nada.
@@ -605,13 +606,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     var s  = card.style;
     s.setProperty('--lift', (-hv * HOVER_LIFT).toFixed(2) + 'px');
     s.setProperty('--scale', (1 + hv * (HOVER_SCALE - 1)).toFixed(4));
-    s.setProperty('--spec-opacity', (hv * 0.09).toFixed(3));
-    s.setProperty('--shine-opacity', (hv * 0.048).toFixed(3));
     s.setProperty('--shadow-y', (4 + hv * 6).toFixed(2) + 'px');
     s.setProperty('--shadow-blur', (18 + hv * 16).toFixed(2) + 'px');
     s.setProperty('--shadow-spread', (-4 - hv * 5).toFixed(2) + 'px');
     s.setProperty('--shadow-alpha', (hv * 0.16).toFixed(3));
-    s.setProperty('--edge-alpha', (hv * 0.07).toFixed(3));
   }
 
   function step(card, e, now) {

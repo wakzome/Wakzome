@@ -1977,8 +1977,12 @@
 
   // Detecta el último día donde TODAS las tiendas tienen registro cargado
   // Si hoy tiene las 7 tiendas → devuelve hoy. Si no → busca hacia atrás.
+  // Parfois Madeira Shopping fechou definitivamente (ver MADEIRA_LOJA/_isMadeiraPosCorte
+  // abaixo) e nunca mais terá registos novos — se continuasse a ser exigida aqui, esta
+  // função ficaria presa para sempre no último dia em que essa loja carregou, mesmo com
+  // todas as outras lojas já atualizadas. Por isso é sempre excluída desta verificação.
   function _lastCompleteDay(lojas) {
-    var lojaSet=lojas||LOJAS;
+    var lojaSet=(lojas||LOJAS).filter(function(l){return l!==MADEIRA_LOJA;});
     var today=_todayStr();
     // Comprobar hoy primero
     var candidates=[today, _yesterdayStr()];

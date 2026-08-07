@@ -1306,210 +1306,8 @@ body {
 .proc-row-highlight { background:#000!important; }
 .proc-cell-highlight { color:#fff!important; opacity:1!important; }
 
-#faturas-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 210;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
-}
-#faturas-overlay.open { display: flex; }
-#faturas-overlay.visible { opacity: 1; }
-#faturas-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#faturas-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#faturas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
-#faturas-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#faturas-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#faturas-sub-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  width: 100%;
-  max-width: 760px;
-}
-#faturas-sub-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-#faturas-sub-header .fsub-brand {
-  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
-  font-weight: 100;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: #000;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-#faturas-sub-header .fsub-tagline {
-  font-size: .72rem;
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #000;
-  opacity: .45;
-}
-@media (max-width: 600px) {
-  #faturas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-}
-
-#horarios-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 210;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
-}
-#horarios-overlay.open { display: flex; }
-#horarios-overlay.visible { opacity: 1; }
-#horarios-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#horarios-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#horarios-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
-#horarios-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#horarios-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#horarios-sub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  width: 100%;
-  max-width: 720px;
-}
-#horarios-sub-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-#horarios-sub-header .hsub-brand {
-  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
-  font-weight: 100;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: #000;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-#horarios-sub-header .hsub-tagline {
-  font-size: .72rem;
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #000;
-  opacity: .45;
-}
-@media (max-width: 600px) {
-  #horarios-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-}
-
-/* cards de horários: cor por módulo removida — redesign "tudo negro" */
-
-#vendas-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 210;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
-}
-#vendas-overlay.open { display: flex; }
-#vendas-overlay.visible { opacity: 1; }
-#vendas-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#vendas-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#vendas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
-#vendas-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#vendas-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#vendas-sub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  width: 100%;
-  max-width: 500px;
-}
-#vendas-sub-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-#vendas-sub-header .vsub-brand {
-  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
-  font-weight: 100;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: #000;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-#vendas-sub-header .vsub-tagline {
-  font-size: .72rem;
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #000;
-  opacity: .45;
-}
-@media (max-width: 600px) {
-  #vendas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-}
-
-/* cards de vendas: cor por módulo removida — redesign "tudo negro" */
+#vendas-sub-grid .adm-mod-card:nth-child(1) { animation-delay: .05s; }
+#vendas-sub-grid .adm-mod-card:nth-child(2) { animation-delay: .10s; }
 
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
 
@@ -1711,23 +1509,33 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 }
 
 /* ── corpo do acordeão: altura animada via grid-template-rows (0fr→1fr),
-   evita adivinhar um max-height fixo e permite conteúdo de altura variável ── */
+   evita adivinhar um max-height fixo e permite conteúdo de altura variável.
+   O conteúdo funde a opacidade/posição em vez de um visibility:hidden binário
+   (esse não pode ser suavizado, só atrasado — resultava num corte seco). No
+   fecho a opacidade cai mais rápido do que a altura encolhe, por isso já está
+   invisível antes da grelha chegar a 0 — sem resquício visível no final. ── */
 .adm-mod-body {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.5s cubic-bezier(0.22,1,0.36,1);
+  transition: grid-template-rows 0.4s cubic-bezier(0.4,0,0.2,1);
 }
 .adm-mod-body > * {
   overflow: hidden;
   min-height: 0;
   min-width: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.4s;
   visibility: hidden;
-  transition: visibility 0s linear 0.5s;
 }
 .adm-group.expanded > .adm-mod-body { grid-template-rows: 1fr; }
 .adm-group.expanded > .adm-mod-body > * {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
   visibility: visible;
-  transition: visibility 0s linear 0s;
+  transition: opacity 0.28s ease 0.12s, transform 0.28s ease 0.12s, visibility 0s linear 0s;
 }
 
 /* sub-grids (utilitários estático + vendas/horários/faturas reubicados por
@@ -1741,7 +1549,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   gap: 8px;
   width: 100%;
   max-width: none;
-  padding: 10px 10px 2px;
+  padding: 10px 22px 6px;
   box-sizing: border-box;
 }
 #adm-module-grid .adm-mod-subgrid .adm-mod-card,
@@ -3499,8 +3307,6 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #recibos-overlay-back,
 #etiquetas-overlay-back,
 #ventas-overlay-back,
-#horarios-overlay-back,
-#faturas-overlay-back,
 #banco-horas-overlay-back { color: #fff !important; }
 
 #key-submit:hover,
@@ -3517,11 +3323,9 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #ed-export-btn:hover,
 #tam-export-btn:hover,
 #ed-folder-pick-btn:hover,
-button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(#etiquetas-overlay-back):not(#ventas-overlay-back):not(#horarios-overlay-back):not(#faturas-overlay-back):not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button) { color: inherit; }
+button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(#etiquetas-overlay-back):not(#ventas-overlay-back):not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button) { color: inherit; }
 #key-submit:hover { color: #fff !important; }
-#ventas-overlay-back:hover,
-#horarios-overlay-back:hover,
-#faturas-overlay-back:hover { color: #fff !important; }
+#ventas-overlay-back:hover { color: #fff !important; }
 .modal-btn.primary:hover,
 .ed-modal-btn.primary:hover { color: #fff !important; }
 

@@ -103,7 +103,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
     btn.classList.add('active');
     const panel = document.getElementById('tab-' + btn.dataset.tab);
-    if (!panel) return;
     panel.classList.add('active');
     // force reflow then re-enable animation
     void panel.offsetWidth;
@@ -159,13 +158,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   const drawer   = document.getElementById('admin-menu-drawer');
   const overlay  = document.getElementById('admin-menu-overlay');
   const tabNav   = document.getElementById('tab-nav');
-  // ── guarda defensiva: se algum destes 4 elementos não existir no HTML
-  //    atual (ex.: navegação antiga por tabs+drawer já não usada depois do
-  //    redesign para acordeão), sair aqui em vez de deixar o primeiro
-  //    addEventListener abaixo rebentar com TypeError — isso pararia a
-  //    execução do resto do FICHEIRO INTEIRO (é um único <script>), levando
-  //    consigo o router e o efeito de hover dos cartões. ──
-  if (!btn || !drawer || !overlay || !tabNav) return;
 
   function openMenu() {
     btn.classList.add('open');
@@ -659,14 +651,4 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     e.hover.set(0);
     ensureRunning(card, e);
   }, true);
-})();
-
-// ═══════════ MARCADOR DE PRUEBA TEMPORAL — BORRAR DESPUÉS ═══════════
-(function () {
-  var b = document.createElement('div');
-  b.textContent = 'ADMIN-INIT.JS NUEVO — CARGADO OK';
-  b.style.cssText = 'position:fixed;top:52px;left:0;right:0;z-index:2147483647;background:#00e000;color:#000;font:900 20px/1.4 sans-serif;text-align:center;padding:14px;';
-  function add() { document.body.appendChild(b); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add);
-  else add();
 })();

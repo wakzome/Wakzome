@@ -463,6 +463,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   // menu (editor-pdf.js, nucleo.js, ferias.js, banco-horas.js, tam.js) ──
   window.openModule = openModule;
   window.toggleAccordion = toggleAccordion;
+  window.collapseAccordion = collapseAccordion;
 
   function _adminInitWireCards() {
 

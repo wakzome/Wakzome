@@ -3178,6 +3178,10 @@
     if (_activeSessionKey) procDoCloseSession();
     overlay.classList.remove('visible');
     setTimeout(function() { overlay.classList.remove('open'); }, 600);
+    // Este overlay é anterior ao acordeão do dashboard e cobre-o por completo;
+    // ao voltar, o grupo "Faturas" tem de ser colapsado tal como acontece no
+    // fluxo normal via goToDashboard() — senão fica expandido por baixo.
+    if (typeof window.collapseAccordion === 'function') window.collapseAccordion();
   }
 
   /* ── 19. GUIA DE TRANSPORTE ── */

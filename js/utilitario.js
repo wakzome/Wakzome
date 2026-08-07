@@ -336,6 +336,10 @@ window.closeAgendaOverlay = function () {
   var yn = document.getElementById('ag-year-nav');
   if (yn) yn.classList.remove('ag-visible');
   setTimeout(function () { ov.classList.remove('open'); }, 600);
+  // Este overlay é anterior ao acordeão do dashboard e cobre-o por completo;
+  // ao voltar, o grupo "Utilitários" tem de ser colapsado tal como acontece
+  // no fluxo normal via goToDashboard() — senão fica expandido por baixo.
+  if (typeof window.collapseAccordion === 'function') window.collapseAccordion();
 };
 
 function agBindLogic() {
@@ -1250,6 +1254,10 @@ window.closeRotulosOverlay = function () {
   if (!ov) return;
   ov.classList.remove('visible');
   setTimeout(function () { ov.classList.remove('open'); }, 600);
+  // Este overlay é anterior ao acordeão do dashboard e cobre-o por completo;
+  // ao voltar, o grupo "Utilitários" tem de ser colapsado tal como acontece
+  // no fluxo normal via goToDashboard() — senão fica expandido por baixo.
+  if (typeof window.collapseAccordion === 'function') window.collapseAccordion();
 };
 
 function rtBindLogic() {

@@ -1484,6 +1484,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   --lift: 0px;
   --scale: 1;
   --spec-opacity: 0;
+  --shine-opacity: 0;
   --shadow-y: 4px;
   --shadow-blur: 18px;
   --shadow-spread: -4px;
@@ -1506,6 +1507,24 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   inset: -20%;
   background: radial-gradient(circle at 50% 35%, rgba(255,255,255,0.55) 0%, transparent 62%);
   opacity: var(--spec-opacity);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* reflexo ambiente — varredura diagonal fixa (nunca segue o ponteiro:
+   não pode voltar a parecer assimétrica); só a opacidade varia com o hover */
+.adm-mod-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg,
+    transparent 15%,
+    rgba(255,255,255,0.025) 30%,
+    rgba(255,255,255,0.10) 45%,
+    rgba(255,255,255,0.025) 60%,
+    transparent 85%);
+  opacity: var(--shine-opacity);
   mix-blend-mode: screen;
   pointer-events: none;
   z-index: 1;

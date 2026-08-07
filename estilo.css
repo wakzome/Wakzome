@@ -1306,218 +1306,8 @@ body {
 .proc-row-highlight { background:#000!important; }
 .proc-cell-highlight { color:#fff!important; opacity:1!important; }
 
-#faturas-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 210;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
-}
-#faturas-overlay.open { display: flex; }
-#faturas-overlay.visible { opacity: 1; }
-#faturas-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#faturas-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#faturas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
-#faturas-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#faturas-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#faturas-sub-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  width: 100%;
-  max-width: 760px;
-}
-#faturas-sub-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-#faturas-sub-header .fsub-brand {
-  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
-  font-weight: 100;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: #000;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-#faturas-sub-header .fsub-tagline {
-  font-size: .72rem;
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #000;
-  opacity: .45;
-}
-@media (max-width: 600px) {
-  #faturas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-}
-
-#horarios-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 210;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
-}
-#horarios-overlay.open { display: flex; }
-#horarios-overlay.visible { opacity: 1; }
-#horarios-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#horarios-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#horarios-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
-#horarios-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#horarios-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#horarios-sub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  width: 100%;
-  max-width: 720px;
-}
-#horarios-sub-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-#horarios-sub-header .hsub-brand {
-  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
-  font-weight: 100;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: #000;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-#horarios-sub-header .hsub-tagline {
-  font-size: .72rem;
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #000;
-  opacity: .45;
-}
-@media (max-width: 600px) {
-  #horarios-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-}
-
-#horarios-sub-grid .adm-mod-card[data-horarios-module="horarios"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
-#horarios-sub-grid .adm-mod-card[data-horarios-module="gerador"]::before  { background: linear-gradient(145deg, #0a1a10 0%, #0f2e1a 60%, #1a4a2a 100%); }
-#horarios-sub-grid .adm-mod-card[data-horarios-module="ferias"]::before   { background: linear-gradient(145deg, #0d1f18 0%, #143322 60%, #1a4a2e 100%); }
-#horarios-sub-grid .adm-mod-card[data-horarios-module="banco-horas"]::before { background: linear-gradient(145deg, #241a05 0%, #3a2a08 60%, #5c4310 100%); }
-
-.adm-mod-card[data-module="horarios-group"]::before { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
-
-#vendas-overlay {
-  display: none; position: fixed; inset: 0;
-  background: #fff; z-index: 210;
-  flex-direction: column; opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22,1,0.36,1);
-}
-#vendas-overlay.open { display: flex; }
-#vendas-overlay.visible { opacity: 1; }
-#vendas-overlay-bar {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px; border-bottom: 1px solid #e6e6e6;
-  background: #fff; flex-shrink: 0;
-}
-#vendas-overlay-back {
-  font-size: .9rem; font-weight: bold; font-family: 'MontserratLight', sans-serif;
-  cursor: pointer; color: #fff !important; background: #000; border: 1.5px solid #000;
-  padding: 7px 16px 7px 12px; border-radius: 10px;
-  transition: background .2s, color .2s, transform .15s, box-shadow .15s;
-  text-transform: lowercase; letter-spacing: .03em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#vendas-overlay-back:hover { background: #333; border-color: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
-#vendas-overlay-title {
-  font-size: .82rem; font-weight: bold; text-transform: lowercase;
-  letter-spacing: .06em; color: #000;
-}
-#vendas-overlay-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  padding: 40px 16px 60px;
-  font-family: 'MontserratLight', sans-serif;
-  -webkit-overflow-scrolling: touch;
-}
-#vendas-sub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  width: 100%;
-  max-width: 500px;
-}
-#vendas-sub-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-#vendas-sub-header .vsub-brand {
-  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
-  font-weight: 100;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: #000;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-#vendas-sub-header .vsub-tagline {
-  font-size: .72rem;
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #000;
-  opacity: .45;
-}
-@media (max-width: 600px) {
-  #vendas-sub-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-}
-
-#vendas-sub-grid .adm-mod-card[data-vendas-module="ventas"]::before   { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
-#vendas-sub-grid .adm-mod-card[data-vendas-module="historico"]::before { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
-
-.adm-mod-card[data-module="vendas-group"]::before { background: linear-gradient(145deg, #0a1a2e 0%, #0f2a40 60%, #1a3a5c 100%); }
+#vendas-sub-grid .adm-mod-card:nth-child(1) { animation-delay: .05s; }
+#vendas-sub-grid .adm-mod-card:nth-child(2) { animation-delay: .10s; }
 
 #summary-wrap { display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
 
@@ -1650,146 +1440,152 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 }
 
 #adm-module-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   width: 100%;
-  max-width: 860px;
+  max-width: 520px;
 }
+
+.adm-group { display: flex; flex-direction: column; }
 
 .adm-mod-card {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 0;
-  border-radius: 22px;
-  border: none;
-  background: #fff;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 15px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: linear-gradient(180deg, #1c1c1c 0%, #101010 100%);
   cursor: pointer;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
-  transition: transform 0.22s cubic-bezier(0.22,1,0.36,1),
-              box-shadow 0.22s cubic-bezier(0.22,1,0.36,1);
-  min-height: 200px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.25s cubic-bezier(0.22,1,0.36,1),
+              border-color 0.25s ease;
+  min-height: 0;
   text-decoration: none;
-  color: #000;
+  color: #fff;
   position: relative;
   overflow: hidden;
   user-select: none;
 }
 
-.adm-mod-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 55%;
-  border-radius: 22px 22px 0 0;
-  background: linear-gradient(135deg, #d0f0e8 0%, #b8e8f8 100%);
-  z-index: 0;
-}
-
-.adm-mod-card::after {
-  content: '✦';
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  font-size: .55rem;
-  color: rgba(255,255,255,0.25);
-  z-index: 1;
-  pointer-events: none;
-}
-
-.adm-mod-card[data-module="pagamentos"]::before { background: linear-gradient(145deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); }
-.adm-mod-card[data-module="agenda"]::before    { background: linear-gradient(145deg, #1a1a2e 0%, #2d1b4e 60%, #3b1f6b 100%); }
-.adm-mod-card[data-module="rotulos"]::before   { background: linear-gradient(145deg, #1c1410 0%, #2e1f0e 60%, #4a2f10 100%); }
-.adm-mod-card[data-module="horarios"]::before  { background: linear-gradient(145deg, #0a1628 0%, #0f2240 60%, #1a3a5c 100%); }
-.adm-mod-card[data-module="gerador"]::before   { background: linear-gradient(145deg, #0a1a10 0%, #0f2e1a 60%, #1a4a2a 100%); }
-.adm-mod-card[data-module="ferias"]::before    { background: linear-gradient(145deg, #0d1f18 0%, #143322 60%, #1a4a2e 100%); }
-.adm-mod-card[data-module="editor"]::before    { background: linear-gradient(145deg, #1a1010 0%, #2e1414 60%, #3d1515 100%); }
-.adm-mod-card[data-module="tam"]::before       { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
-.adm-mod-card[data-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
-.adm-mod-card[data-module="faturas"]::before   { background: linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 60%, #383838 100%); }
-.adm-mod-card[data-module="ventas"]::before    { background: linear-gradient(145deg, #0a1f0a 0%, #143214 60%, #1a4a1a 100%); }
-
-#faturas-sub-grid .adm-mod-card[data-faturas-module="tam"]::before          { background: linear-gradient(145deg, #141420 0%, #1e1a30 60%, #2a1e4a 100%); }
-#faturas-sub-grid .adm-mod-card[data-faturas-module="processamento"]::before { background: linear-gradient(145deg, #101820 0%, #162030 60%, #1e2e40 100%); }
-
 .adm-mod-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.11), 0 2px 8px rgba(0,0,0,0.05);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.24), 0 2px 8px rgba(0,0,0,0.12);
+  border-color: rgba(255,255,255,0.20);
 }
 .adm-mod-card:active {
-  transform: translateY(-1px) scale(0.98);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+  transform: translateY(-1px) scale(0.99);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.16);
 }
 
-.adm-mod-icon {
-  font-size: 2.6rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 55%;
-  z-index: 1;
-  pointer-events: none;
-  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.10));
+.adm-mod-trigger[aria-expanded="true"] {
+  border-radius: 18px 18px 0 0;
+  border-color: rgba(255,255,255,0.22);
 }
 
-.adm-mod-card > div:not(.adm-mod-arrow) {
-  position: relative;
-  z-index: 2;
-  padding: 14px 18px 36px;
-  width: 100%;
-  box-sizing: border-box;
-  background: #fff;
-  border-radius: 0 0 22px 22px;
-  margin-top: auto;
-}
+.adm-mod-icon, .adm-mod-arrow, .adm-mod-desc { display: none !important; }
 
-.adm-mod-name {
-  font-size: .88rem;
+#adm-module-grid .adm-mod-name {
+  color: #fff !important;
+  font-size: .92rem !important;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .08em;
-  color: #1a1a2e;
-  line-height: 1.2;
+  letter-spacing: .10em;
+  line-height: 1.3;
 }
-.adm-mod-desc {
-  font-size: .70rem;
+#adm-module-grid .adm-mod-desc {
+  color: rgba(255,255,255,0.5) !important;
+  opacity: 1;
+  font-size: .68rem !important;
   font-weight: 500;
   text-transform: lowercase;
   letter-spacing: .02em;
-  color: #555;
-  margin-top: 4px;
-  line-height: 1.5;
+  margin-top: 6px;
+  line-height: 1.4;
 }
-.adm-mod-arrow {
-  position: absolute;
-  bottom: 14px;
-  right: 16px;
-  width: 26px;
-  height: 26px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 50%;
+
+/* ── corpo do acordeão: altura animada via grid-template-rows (0fr→1fr),
+   evita adivinhar um max-height fixo e permite conteúdo de altura variável.
+   O conteúdo funde a opacidade/posição em vez de um visibility:hidden binário
+   (esse não pode ser suavizado, só atrasado — resultava num corte seco). No
+   fecho a opacidade cai mais rápido do que a altura encolhe, por isso já está
+   invisível antes da grelha chegar a 0 — sem resquício visível no final. ── */
+.adm-mod-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+.adm-mod-body > * {
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.4s;
+  visibility: hidden;
+}
+.adm-group.expanded > .adm-mod-body { grid-template-rows: 1fr; }
+.adm-group.expanded > .adm-mod-body > * {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity 0.28s ease 0.12s, transform 0.28s ease 0.12s, visibility 0s linear 0s;
+}
+
+/* sub-grids (utilitários estático + vendas/horários/faturas reubicados por
+   admin-init.js) — lista vertical compacta, cards mais pequenas e neutras */
+#adm-module-grid .adm-mod-subgrid,
+#adm-module-grid #vendas-sub-grid,
+#adm-module-grid #horarios-sub-grid,
+#adm-module-grid #faturas-sub-grid {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: .75rem;
-  color: #888;
-  z-index: 3;
-  transition: border-color .2s, color .2s, background .2s, transform .2s;
-  background: #fff;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: none;
+  padding: 10px 22px 6px;
+  box-sizing: border-box;
 }
-.adm-mod-card:hover .adm-mod-arrow {
-  border-color: #666;
-  background: #111;
-  color: #fff;
-  transform: translateX(2px);
+#adm-module-grid .adm-mod-subgrid .adm-mod-card,
+#adm-module-grid #vendas-sub-grid .adm-mod-card,
+#adm-module-grid #horarios-sub-grid .adm-mod-card,
+#adm-module-grid #faturas-sub-grid .adm-mod-card {
+  padding: 11px 20px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #242424 0%, #181818 100%);
+  box-shadow: none;
 }
+#adm-module-grid .adm-mod-subgrid .adm-mod-name,
+#adm-module-grid #vendas-sub-grid .adm-mod-name,
+#adm-module-grid #horarios-sub-grid .adm-mod-name,
+#adm-module-grid #faturas-sub-grid .adm-mod-name {
+  font-size: .78rem !important;
+  letter-spacing: .06em;
+}
+#adm-module-grid .adm-mod-subgrid .adm-mod-desc,
+#adm-module-grid #vendas-sub-grid .adm-mod-desc,
+#adm-module-grid #horarios-sub-grid .adm-mod-desc,
+#adm-module-grid #faturas-sub-grid .adm-mod-desc {
+  font-size: .64rem !important;
+}
+
+/* entrada escalonada dos 5 cards principais — puramente CSS, sem inline styles */
+#adm-module-grid > .adm-mod-card:nth-child(1),
+#adm-module-grid > .adm-group:nth-child(1) > .adm-mod-trigger { animation-delay: 0.05s; }
+#adm-module-grid > .adm-mod-card:nth-child(2),
+#adm-module-grid > .adm-group:nth-child(2) > .adm-mod-trigger { animation-delay: 0.13s; }
+#adm-module-grid > .adm-mod-card:nth-child(3),
+#adm-module-grid > .adm-group:nth-child(3) > .adm-mod-trigger { animation-delay: 0.21s; }
+#adm-module-grid > .adm-mod-card:nth-child(4),
+#adm-module-grid > .adm-group:nth-child(4) > .adm-mod-trigger { animation-delay: 0.29s; }
+#adm-module-grid > .adm-mod-card:nth-child(5),
+#adm-module-grid > .adm-group:nth-child(5) > .adm-mod-trigger { animation-delay: 0.37s; }
 
 #adm-module-bar {
   display: flex;
@@ -1911,15 +1707,10 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 }
 
 @media (max-width: 600px) {
-  #adm-module-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  .adm-mod-card { min-height: 160px; padding: 0; }
-  .adm-mod-icon { font-size: 1.3rem; margin-bottom: 12px; }
-}
-@media (min-width: 601px) and (max-width: 860px) {
-  #adm-module-grid { grid-template-columns: repeat(3, 1fr); }
+  #adm-module-grid { gap: 12px; }
+  .adm-mod-card { padding: 22px 18px; }
+  #adm-module-grid .adm-mod-name { font-size: .86rem !important; }
+  #adm-module-grid .adm-mod-desc { font-size: .64rem !important; }
 }
 /* Inicio: reservar la franja del panel lateral en la banda donde el mosaico centrado lo pisaría.
    Simétrico para mantener el mosaico centrado y sin saltos al redimensionar. */
@@ -3516,8 +3307,6 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #recibos-overlay-back,
 #etiquetas-overlay-back,
 #ventas-overlay-back,
-#horarios-overlay-back,
-#faturas-overlay-back,
 #banco-horas-overlay-back { color: #fff !important; }
 
 #key-submit:hover,
@@ -3534,11 +3323,9 @@ small, label, p, span, div, h1, h2, h3, h4, h5, h6 {
 #ed-export-btn:hover,
 #tam-export-btn:hover,
 #ed-folder-pick-btn:hover,
-button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(#etiquetas-overlay-back):not(#ventas-overlay-back):not(#horarios-overlay-back):not(#faturas-overlay-back):not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button) { color: inherit; }
+button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-back):not(#processamento-overlay-back):not(#recibos-overlay-back):not(#etiquetas-overlay-back):not(#ventas-overlay-back):not(:disabled):not(#proc-content button):not(#proc-criacao-modal button):not(#proc-guia-modal button):not(.proc-or-modal button) { color: inherit; }
 #key-submit:hover { color: #fff !important; }
-#ventas-overlay-back:hover,
-#horarios-overlay-back:hover,
-#faturas-overlay-back:hover { color: #fff !important; }
+#ventas-overlay-back:hover { color: #fff !important; }
 .modal-btn.primary:hover,
 .ed-modal-btn.primary:hover { color: #fff !important; }
 
@@ -4436,7 +4223,6 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .hadm-buscar-btn{padding:9px 22px;font-size:.88rem;font-weight:bold;font-family:"MontserratLight",sans-serif;background:#000;color:#fff !important;border:none;border-radius:9px;cursor:pointer;align-self:flex-end;}
 .hadm-buscar-btn:hover{background:#333;}
 #hadm-content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;width:100%;box-sizing:border-box;}
-.adm-mod-card[data-module="historico"]::before{background:linear-gradient(145deg,#0a1a2e 0%,#0f2a40 60%,#1a3a5c 100%);}
 @media (max-width: 768px){.hadm-row-dates{flex-wrap:wrap !important;gap:8px !important;}.hadm-date-group{flex:1;min-width:120px;}.hadm-date-group input[type="date"]{width:100%;box-sizing:border-box;font-size:.82rem;padding:7px 8px;}.hadm-row-dates .hadm-filter-group:not(.hadm-date-group){flex:1;min-width:140px;}.hadm-row-dates .hadm-buscar-btn{align-self:flex-end;}.hadm-comp-dates{display:none !important;}}
 @media (min-width: 769px){.hadm-filter-container{max-width:860px !important;width:calc(100% - 48px) !important;padding:14px 20px !important;gap:10px !important;}.hadm-row:first-child{flex-wrap:nowrap !important;gap:6px !important;}.hadm-row:nth-child(2){flex-wrap:nowrap !important;gap:6px !important;}.hadm-row:nth-child(3){flex-wrap:nowrap !important;gap:6px !important;}.hadm-rows-combined{display:flex !important;flex-wrap:wrap !important;gap:6px !important;justify-content:center !important;width:100% !important;}#adm-historico-panel .hadm-filter-container button{padding:6px 13px !important;font-size:.78rem !important;}.hadm-row-dates{flex-wrap:nowrap !important;flex:1 !important;}.hadm-date-group{min-width:0 !important;}}
 #hadm-traza-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}

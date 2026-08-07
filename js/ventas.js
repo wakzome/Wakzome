@@ -2589,6 +2589,12 @@
 
     hdr.appendChild(hMainRow);
 
+    // Fecha principal do período: um pouco maior que o resto (mede o tamanho
+    // já aplicado pela classe partilhada hadm-h-lbl-c e escala-o, em vez de
+    // fixar um valor absoluto que poderia desalinhar com o CSS existente).
+    var _hLblBaseSize=parseFloat(window.getComputedStyle(hLbl).fontSize);
+    if(_hLblBaseSize) hLbl.style.fontSize=(_hLblBaseSize*1.12)+'px';
+
     if(!isTotal&&comps.length){
       // Base "comparável" do período actual (exclui Madeira Shopping pós-corte),
       // consistente com cTotal de cada ano abaixo — ver _isMadeiraPosCorte.
@@ -2617,11 +2623,6 @@
         }
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);
-        var cDates=_el('div','hadm-c-dates');
-        cDates.className='hadm-comp-dates';
-        cDates.classList.add('hadm-c-dates-c');
-        cDates.textContent=_fmtDate(comp.from)+'→'+_fmtDate(comp.to);
-        cBox.appendChild(cDates);
         var cLine=_el('div','hadm-c-line');
         var cVal=_el('span','hadm-c-val');
         cVal.classList.add('hadm-h-val-c');
@@ -2915,7 +2916,7 @@
     hdr.appendChild(hVal);
     var hSub=_el('div','hadm-h-sub');
     hSub.classList.add('hadm-h-sub-c');
-    hSub.textContent=currentCount+' domingos reais';
+    hSub.textContent=currentCount+' domingos';
     hdr.appendChild(hSub);
 
     // Comparações com anos anteriores — total vs total, 3 por fila
@@ -2941,7 +2942,7 @@
         cYear.classList.add('hadm-h-lbl-c');
         var yearLabel='vs '+yr+' ('+yrCount+' dom.)';
         if(yrTotal>0){
-          yearLabel+=' · '+_fmtNumber(Math.abs(diffEur));
+          yearLabel+=' ('+(diffEur>=0?'+':'-')+_fmtNumber(Math.abs(diffEur))+')';
         }
         cYear.textContent=yearLabel;
         cBox.appendChild(cYear);
@@ -3127,9 +3128,11 @@
       var yrNom=_el('span','hadm-loja-nom');
       yrNom.classList.add('hadm-loja-nom-c');
       yrNom.textContent=(yrOpen?'▼ ':'▶ ')+yr+(yr===currentYear?' ★':'');
+      var yrDomDates={};yrRows.forEach(function(r){yrDomDates[r.data]=true;});
+      var yrDomCount=Object.keys(yrDomDates).length;
       var yrSum=_el('span','hadm-loja-nom');
       yrSum.classList.add('hadm-loja-nom-c');
-      yrSum.textContent=_fmtEur(yrTotal)+' ('+yrRows.length+' dom.)';
+      yrSum.textContent=_fmtEur(yrTotal)+' ('+yrDomCount+' dom.)';
       yrHdr.appendChild(yrNom); yrHdr.appendChild(yrSum);
       yrRow.appendChild(yrHdr);
       c.appendChild(yrRow);
@@ -5765,6 +5768,11 @@
   // Tiendas Primavera (facturação - devoluções) vs ICG (total directo)
   var LOJAS_PRIMAVERA = ['MEZKA FUNCHAL','MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
 
+  // Ordem dos cartões apenas na aba Carregar Dados (não afeta LOJAS global,
+  // usado noutras vistas — árvore "detalhe por loja", narrativa de projeção,
+  // etc. — que mantêm a sua própria ordem).
+  var LOJAS_CARGA = ['MEZKA FUNCHAL','MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX','PARFOIS ARCADAS SAO FRANCISCO'];
+
   // Estado de la carga diaria: { loja: { fat, dev, status } }
   var _cargaEstado = {};
 
@@ -5811,7 +5819,7 @@
         .then(function(res){
           var rows=res.data||[];
           // Precargar estado con valores existentes
-          LOJAS.forEach(function(loja){
+          LOJAS_CARGA.forEach(function(loja){
             var r=rows.find(function(x){return x.loja===loja;});
             var esPrimavera=LOJAS_PRIMAVERA.indexOf(loja)>=0;
             if(r){
@@ -5846,7 +5854,7 @@
     c.appendChild(grid);
 
     // Inicializar estado vacío
-    LOJAS.forEach(function(loja){
+    LOJAS_CARGA.forEach(function(loja){
       var esPrimavera=LOJAS_PRIMAVERA.indexOf(loja)>=0;
       _cargaEstado[loja]=esPrimavera?{fat:0,dev:0,status:'pending'}:{total:0,status:'pending'};
     });
@@ -5863,7 +5871,7 @@
 
   function _renderLojaCards(grid){
     grid.innerHTML='';
-    LOJAS.forEach(function(loja){
+    LOJAS_CARGA.forEach(function(loja){
       var label=LOJA_LABELS[loja]||loja;
       var esPrimavera=LOJAS_PRIMAVERA.indexOf(loja)>=0;
       var estado=_cargaEstado[loja]||{};

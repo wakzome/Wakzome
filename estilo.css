@@ -1460,26 +1460,81 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   border: 1px solid rgba(255,255,255,0.09);
   background: linear-gradient(180deg, #1c1c1c 0%, #101010 100%);
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1),
-              box-shadow 0.25s cubic-bezier(0.22,1,0.36,1),
-              border-color 0.25s ease;
   min-height: 0;
   text-decoration: none;
   color: #fff;
   position: relative;
   overflow: hidden;
   user-select: none;
+  transition: border-color 0.25s ease;
+
+  /* ── efeito "glass tilt": tilt 3D + brilho especular + sombra dinâmica
+     que seguem o ponteiro, com física de mola própria (ver admin-init.js).
+     Valores de repouso abaixo — o JS só os altera durante pointermove/hover;
+     em repouso, touch, ou com prefers-reduced-motion, ficam exatamente
+     nestes valores e o cartão fica visualmente idêntico ao original. ── */
+  --px: 0.5;
+  --py: 0.5;
+  --rx: 0deg;
+  --ry: 0deg;
+  --lift: 0px;
+  --scale: 1;
+  --shine-x: -85%;
+  --shine-opacity: 0;
+  --spec-opacity: 0;
+  --shadow-x: 0px;
+  --shadow-y: 0px;
+  --shadow-blur: 18px;
+  --shadow-spread: -4px;
+  --shadow-alpha: 0;
+  --edge-x: 0px;
+  --edge-y: 0px;
+  --edge-alpha: 0;
+
+  transform: perspective(1200px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift)) scale(var(--scale));
+  transform-style: preserve-3d;
+  box-shadow:
+    0 4px 20px rgba(0,0,0,0.18),
+    0 1px 3px rgba(0,0,0,0.10),
+    var(--shadow-x) var(--shadow-y) var(--shadow-blur) var(--shadow-spread) rgba(0,0,0,var(--shadow-alpha)),
+    inset var(--edge-x) var(--edge-y) 5px 0px rgba(255,255,255,var(--edge-alpha));
+}
+
+/* brilho especular — segue o ponteiro, só visível durante o hover */
+.adm-mod-card::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at calc(var(--px) * 100%) calc(var(--py) * 100%), rgba(255,255,255,0.55) 0%, transparent 62%);
+  opacity: var(--spec-opacity);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* reflexo ambiente — varredura diagonal que acompanha o ponteiro */
+.adm-mod-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -50%;
+  right: -50%;
+  background: linear-gradient(110deg,
+    transparent 15%,
+    rgba(255,255,255,0.025) 30%,
+    rgba(255,255,255,0.10) 45%,
+    rgba(255,255,255,0.025) 60%,
+    transparent 85%);
+  transform: translateX(var(--shine-x));
+  opacity: var(--shine-opacity);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .adm-mod-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 32px rgba(0,0,0,0.24), 0 2px 8px rgba(0,0,0,0.12);
   border-color: rgba(255,255,255,0.20);
-}
-.adm-mod-card:active {
-  transform: translateY(-1px) scale(0.99);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.16);
 }
 
 .adm-mod-trigger[aria-expanded="true"] {
@@ -1496,6 +1551,8 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   text-transform: uppercase;
   letter-spacing: .10em;
   line-height: 1.3;
+  position: relative;
+  z-index: 2;
 }
 #adm-module-grid .adm-mod-desc {
   color: rgba(255,255,255,0.5) !important;
@@ -1647,8 +1704,8 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 }
 
 @keyframes admCardIn {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: perspective(1200px) translateY(18px) rotateX(var(--rx)) rotateY(var(--ry)) scale(var(--scale)); }
+  to   { opacity: 1; transform: perspective(1200px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift)) scale(var(--scale)); }
 }
 .adm-mod-card {
   opacity: 0;

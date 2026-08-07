@@ -652,3 +652,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     ensureRunning(card, e);
   }, true);
 })();
+
+// ═══════════ MARCADOR DE PRUEBA TEMPORAL — BORRAR DESPUÉS ═══════════
+(function () {
+  var b = document.createElement('div');
+  b.textContent = 'ADMIN-INIT.JS NUEVO — CARGADO OK';
+  b.style.cssText = 'position:fixed;top:52px;left:0;right:0;z-index:2147483647;background:#00e000;color:#000;font:900 20px/1.4 sans-serif;text-align:center;padding:14px;';
+  function add() { document.body.appendChild(b); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add);
+  else add();
+})();

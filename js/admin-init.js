@@ -606,6 +606,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     s.setProperty('--lift', (-hv * HOVER_LIFT).toFixed(2) + 'px');
     s.setProperty('--scale', (1 + hv * (HOVER_SCALE - 1)).toFixed(4));
     s.setProperty('--spec-opacity', (hv * 0.09).toFixed(3));
+    s.setProperty('--shine-opacity', (hv * 0.048).toFixed(3));
     s.setProperty('--shadow-y', (4 + hv * 6).toFixed(2) + 'px');
     s.setProperty('--shadow-blur', (18 + hv * 16).toFixed(2) + 'px');
     s.setProperty('--shadow-spread', (-4 - hv * 5).toFixed(2) + 'px');

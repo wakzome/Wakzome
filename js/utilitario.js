@@ -2038,21 +2038,28 @@ function initSaftReminder() {
   ensureExternalModals();
 
   // ── Cartão do menu principal (dashboard admin) injetado por editor-pdf.js ──
-  // Migrado para dentro do grupo "Utilitários" (#utilitarios-sub-grid, shell
-  // estático em index.html junto com Agenda/Rótulos) — deixa de ir para
-  // #adm-module-grid e deixa de se ancorar a "faturas" (relação que já não existe).
   function ensureModuleCard() {
     if (document.querySelector('.adm-mod-card[data-module="editor"]')) return;
-    var grid = document.getElementById('utilitarios-sub-grid');
+    var grid = document.getElementById('adm-module-grid');
     if (!grid) return;
     var card = document.createElement('div');
     card.className = 'adm-mod-card';
     card.setAttribute('data-module', 'editor');
-    card.innerHTML = `
-        <div class="adm-mod-name">EDITOR DE PDF</div>
-        <div class="adm-mod-desc">edição e anotação de documentos</div>
+    card.innerHTML = `        <span class="adm-mod-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14.5 4.5l5 5L7 22H2v-5L14.5 4.5Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M12 7l5 5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="adm-mod-name">EDITOR DE PDF</div>
+          <div class="adm-mod-desc">edição e anotação de documentos</div>
+        </div>
+        <div class="adm-mod-arrow">→</div>
       `;
-    grid.appendChild(card);
+    var anchor = grid.querySelector('.adm-mod-card[data-module="faturas"]');
+    if (anchor) grid.insertBefore(card, anchor);
+    else grid.appendChild(card);
     card.addEventListener('click', function () {
       if (typeof window.openModule === 'function') window.openModule('editor');
     });

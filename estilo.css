@@ -1509,23 +1509,33 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 }
 
 /* ── corpo do acordeão: altura animada via grid-template-rows (0fr→1fr),
-   evita adivinhar um max-height fixo e permite conteúdo de altura variável ── */
+   evita adivinhar um max-height fixo e permite conteúdo de altura variável.
+   O conteúdo funde a opacidade/posição em vez de um visibility:hidden binário
+   (esse não pode ser suavizado, só atrasado — resultava num corte seco). No
+   fecho a opacidade cai mais rápido do que a altura encolhe, por isso já está
+   invisível antes da grelha chegar a 0 — sem resquício visível no final. ── */
 .adm-mod-body {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.5s cubic-bezier(0.22,1,0.36,1);
+  transition: grid-template-rows 0.4s cubic-bezier(0.4,0,0.2,1);
 }
 .adm-mod-body > * {
   overflow: hidden;
   min-height: 0;
   min-width: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.4s;
   visibility: hidden;
-  transition: visibility 0s linear 0.5s;
 }
 .adm-group.expanded > .adm-mod-body { grid-template-rows: 1fr; }
 .adm-group.expanded > .adm-mod-body > * {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
   visibility: visible;
-  transition: visibility 0s linear 0s;
+  transition: opacity 0.28s ease 0.12s, transform 0.28s ease 0.12s, visibility 0s linear 0s;
 }
 
 /* sub-grids (utilitários estático + vendas/horários/faturas reubicados por
@@ -1539,7 +1549,7 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   gap: 8px;
   width: 100%;
   max-width: none;
-  padding: 10px 10px 2px;
+  padding: 10px 22px 6px;
   box-sizing: border-box;
 }
 #adm-module-grid .adm-mod-subgrid .adm-mod-card,

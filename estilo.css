@@ -786,7 +786,7 @@ body {
    (bloco CSS-in-JS original + estilos dispersos convertidos)
    ============================================================ */
 #proc-content *, #proc-content *::before, #proc-content *::after { box-sizing: border-box; }
-#proc-content { width:100%; min-height:100%; background:#fff; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:'MontserratLight', sans-serif; font-size:14px; font-weight:600; color:#000; }
+#proc-content { width:100%; min-height:100%; background:transparent; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:'MontserratLight', sans-serif; font-size:14px; font-weight:600; color:#000; }
 #proc-root { width:100%; min-height:100%; }
 #proc-content .page-wrap { width:100%; max-width:1400px; margin:0 auto; }
 #proc-content .proc-top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
@@ -1475,66 +1475,37 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
   user-select: none;
   transition: border-color 0.25s ease;
 
-  /* ── efeito "glass tilt": tilt 3D + brilho especular + sombra dinâmica
-     que seguem o ponteiro, com física de mola própria (ver admin-init.js).
-     Valores de repouso abaixo — o JS só os altera durante pointermove/hover;
-     em repouso, touch, ou com prefers-reduced-motion, ficam exatamente
-     nestes valores e o cartão fica visualmente idêntico ao original. ── */
-  --px: 0.5;
-  --py: 0.5;
-  --rx: 0deg;
-  --ry: 0deg;
+  /* ── hover uniforme: eleva + amplia ligeiramente, SEM qualquer rotação
+     (nunca inclina — não deve parecer uma tábua solta). Física de mola
+     em admin-init.js; valores de repouso abaixo, só alterados durante
+     pointerenter/leave. Em repouso, touch, ou com prefers-reduced-motion,
+     ficam exatamente nestes valores e o cartão fica visualmente idêntico
+     ao original. ── */
   --lift: 0px;
   --scale: 1;
-  --shine-x: -85%;
-  --shine-opacity: 0;
   --spec-opacity: 0;
-  --shadow-x: 0px;
-  --shadow-y: 0px;
+  --shadow-y: 4px;
   --shadow-blur: 18px;
   --shadow-spread: -4px;
   --shadow-alpha: 0;
-  --edge-x: 0px;
-  --edge-y: 0px;
   --edge-alpha: 0;
 
-  transform: perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift)) scale(var(--scale));
-  transform-style: preserve-3d;
+  transform: translateY(var(--lift)) scale(var(--scale));
   box-shadow:
     0 4px 20px rgba(0,0,0,0.18),
     0 1px 3px rgba(0,0,0,0.10),
-    var(--shadow-x) var(--shadow-y) var(--shadow-blur) var(--shadow-spread) rgba(0,0,0,var(--shadow-alpha)),
-    inset var(--edge-x) var(--edge-y) 5px 0px rgba(255,255,255,var(--edge-alpha));
+    0 var(--shadow-y) var(--shadow-blur) var(--shadow-spread) rgba(0,0,0,var(--shadow-alpha)),
+    inset 0 1px 5px 0px rgba(255,255,255,var(--edge-alpha));
 }
 
-/* brilho especular — segue o ponteiro, só visível durante o hover */
+/* brilho subtil e simétrico — só visível durante o hover; posição fixa
+   (não segue o ponteiro) para nunca parecer assimétrico */
 .adm-mod-card::before {
   content: "";
   position: absolute;
   inset: -20%;
-  background: radial-gradient(circle at calc(var(--px) * 100%) calc(var(--py) * 100%), rgba(255,255,255,0.55) 0%, transparent 62%);
+  background: radial-gradient(circle at 50% 35%, rgba(255,255,255,0.55) 0%, transparent 62%);
   opacity: var(--spec-opacity);
-  mix-blend-mode: screen;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* reflexo ambiente — varredura diagonal que acompanha o ponteiro */
-.adm-mod-card::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -50%;
-  right: -50%;
-  background: linear-gradient(110deg,
-    transparent 15%,
-    rgba(255,255,255,0.025) 30%,
-    rgba(255,255,255,0.10) 45%,
-    rgba(255,255,255,0.025) 60%,
-    transparent 85%);
-  transform: translateX(var(--shine-x));
-  opacity: var(--shine-opacity);
   mix-blend-mode: screen;
   pointer-events: none;
   z-index: 1;
@@ -1715,8 +1686,8 @@ th.today-col:hover { background: #333 !important; color: #fff !important; }
 }
 
 @keyframes admCardIn {
-  from { opacity: 0; transform: perspective(1600px) translateY(18px) rotateX(var(--rx)) rotateY(var(--ry)) scale(var(--scale)); }
-  to   { opacity: 1; transform: perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift)) scale(var(--scale)); }
+  from { opacity: 0; transform: translateY(18px) scale(var(--scale)); }
+  to   { opacity: 1; transform: translateY(var(--lift)) scale(var(--scale)); }
 }
 .adm-mod-card {
   opacity: 0;
@@ -4584,7 +4555,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .hadm-card-c--mk-save-btn-3{border-color:#e05a5a !important;}
 .hadm-status-dot-c--flash-need-date{background:#fff3cd !important;color:#856404 !important;}
 .hadm-inp-data-c{border-color:#cccccc !important;}
-.hadm-c-c{background:#ffffff !important;padding:16px 24px 80px !important;width:100% !important;max-width:900px !important;margin-left:auto !important;margin-right:auto !important;box-sizing:border-box !important;}
+.hadm-c-c{background:transparent !important;padding:16px 24px 80px !important;width:100% !important;max-width:900px !important;margin-left:auto !important;margin-right:auto !important;box-sizing:border-box !important;}
 .hadm-eq-btn-active{background:#4a7c59 !important;color:#ffffff !important;border-color:#4a7c59 !important;}
 .hadm-eq-btn-inactive{background:transparent !important;color:#666666 !important;border-color:#444444 !important;}
 .hadm-eq-btn.hadm-eq-btn-hover{border-color:#888888 !important;color:#aaaaaa !important;}

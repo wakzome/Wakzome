@@ -213,6 +213,7 @@
           window.__wkzAutoLogin = false;
           document.getElementById('login-screen').style.display = 'none';
           const adminApp = document.getElementById('admin-app');
+          adminApp.classList.remove('module-open', 'vendas-open', 'historico-open');
           adminApp.classList.add('show');
           const adminHdr = document.getElementById('admin-header');
           adminHdr.classList.add('show');
@@ -227,6 +228,7 @@
             document.getElementById('login-screen').style.display = 'none';
             showGreeting(data.nombre || 'administração', function() {
               const adminApp = document.getElementById('admin-app');
+              adminApp.classList.remove('module-open', 'vendas-open', 'historico-open');
               adminApp.classList.add('show');
               const adminHdr = document.getElementById('admin-header');
               adminHdr.classList.add('show');

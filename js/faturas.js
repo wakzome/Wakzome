@@ -4187,37 +4187,17 @@
     `);
   }
 
-  /* ── Auto-injeção: shell externo #faturas-overlay (bar/título/sub-header
-     + #faturas-sub-grid vazio). Migrado de index.html. Tem de correr AQUI,
-     síncrono, ANTES de ensureModuleCard() (a seguir) — este ficheiro carrega
-     ANTES de admin-init.js (ver loadProtectedScripts() em shared.js), cujo
-     _adminInitWireCards() faz um varrimento único de #faturas-overlay-back
-     e [data-faturas-module]. Se o shell aparecesse depois, tanto esse
-     varrimento como o próprio grid.appendChild() abaixo (ensureModuleCard)
-     não teriam onde inserir a card. ── */
+  /* ── Auto-injeção: #faturas-sub-grid vazio. Tem de correr AQUI, síncrono,
+     ANTES de ensureModuleCard() (a seguir) — este ficheiro carrega ANTES de
+     admin-init.js (ver loadProtectedScripts() em shared.js), cujo
+     _adminInitWireCards() e relocateAccordionGrids() fazem os seus
+     varrimentos únicos de [data-faturas-module]. Se o grid aparecesse
+     depois, nem esses varrimentos nem o grid.appendChild() abaixo
+     (ensureModuleCard) teriam onde inserir a card. Sem overlay fullscreen:
+     o grupo "Faturas" expande-se no próprio lugar no dashboard. ── */
   function ensureFaturasOverlayShell() {
-    if (document.getElementById('faturas-overlay')) return;
-    document.body.insertAdjacentHTML('beforeend', `
-<div id="faturas-overlay">
-  <div id="faturas-overlay-bar">
-    <button id="faturas-overlay-back">
-      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      início
-    </button>
-    <span id="faturas-overlay-title">faturas</span>
-  </div>
-  <div id="faturas-overlay-content">
-    <div id="faturas-sub-header">
-      <div class="fsub-brand">FATURAS</div>
-      <div class="fsub-tagline">SELECIONE UM MÓDULO</div>
-    </div>
-    <div id="faturas-sub-grid">
-    </div>
-  </div>
-</div>
-    `);
+    if (document.getElementById('faturas-sub-grid')) return;
+    document.body.insertAdjacentHTML('beforeend', '<div id="faturas-sub-grid"></div>');
   }
   ensureFaturasOverlayShell();
 
@@ -4229,25 +4209,14 @@
     card.className = 'adm-mod-card';
     card.setAttribute('data-faturas-module', 'processamento');
     card.innerHTML = `
-        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="3" width="16" height="18" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M8 8h8M8 11h8M8 14h5" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-            <path d="M15 17l1.5 1.5L19 16" stroke="rgba(255,255,255,0.75)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
         <div>
           <div class="adm-mod-name">FATURAS LISBOA</div>
           <div class="adm-mod-desc">processamento de faturas</div>
         </div>
-        <div class="adm-mod-arrow">→</div>
       `;
     grid.appendChild(card);
     card.addEventListener('click', function () {
-      if (typeof window.closeFaturasOverlay === 'function') window.closeFaturasOverlay();
-      setTimeout(function () {
-        if (typeof window.openModule === 'function') window.openModule('processamento');
-      }, 200);
+      if (typeof window.openModule === 'function') window.openModule('processamento');
     });
   }
   ensureModuleCard();

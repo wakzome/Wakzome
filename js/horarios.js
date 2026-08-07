@@ -62,19 +62,11 @@
     const card = document.createElement('div');
     card.className = 'adm-mod-card';
     card.setAttribute('data-horarios-module', 'ferias');
-    card.innerHTML = `        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 3C12 3 7 8 7 13a5 5 0 0 0 10 0c0-5-5-10-5-10Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M12 13v5M9 18h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-            <path d="M7 9c-2 1-4 3-4 3s2 0 3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
-            <path d="M17 9c2 1 4 3 4 3s-2 0-3 1" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round"/>
-          </svg>
-        </span>
+    card.innerHTML = `
         <div>
           <div class="adm-mod-name">FÉRIAS</div>
           <div class="adm-mod-desc">controlo de férias e ausências</div>
         </div>
-        <div class="adm-mod-arrow">→</div>
       `;
     const gerador = grid.querySelector('.adm-mod-card[data-horarios-module="gerador"]');
     const bancoHoras = grid.querySelector('.adm-mod-card[data-horarios-module="banco-horas"]');
@@ -82,10 +74,7 @@
     else if (gerador) grid.insertBefore(card, gerador.nextSibling);
     else grid.appendChild(card);
     card.addEventListener('click', function () {
-      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
-      setTimeout(function () {
-        if (typeof window.openModule === 'function') window.openModule('ferias');
-      }, 200);
+      if (typeof window.openModule === 'function') window.openModule('ferias');
     });
   }
   ensureModuleCard();
@@ -4138,28 +4127,15 @@
     var card = document.createElement('div');
     card.className = 'adm-mod-card';
     card.setAttribute('data-horarios-module', 'gerador');
-    card.innerHTML = `        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3" y="4" width="18" height="16" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M3 9h18" stroke="rgba(255,255,255,0.55)" stroke-width="1.1"/>
-            <path d="M8 4v5M16 4v5" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-linecap="round"/>
-            <path d="M7 14h4M7 17h6" stroke="rgba(255,255,255,0.85)" stroke-width="1.3" stroke-linecap="round"/>
-            <circle cx="17" cy="15.5" r="2.5" stroke="rgba(255,255,255,0.7)" stroke-width="1.1"/>
-            <path d="M17 14.5v1l.7.7" stroke="rgba(255,255,255,0.85)" stroke-width="1" stroke-linecap="round"/>
-          </svg>
-        </span>
+    card.innerHTML = `
         <div>
           <div class="adm-mod-name">GERADOR DE HORÁRIOS</div>
           <div class="adm-mod-desc">geração automática de horários</div>
         </div>
-        <div class="adm-mod-arrow">→</div>
       `;
     grid.insertBefore(card, grid.firstChild);
     card.addEventListener('click', function () {
-      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
-      setTimeout(function () {
-        if (typeof window.openModule === 'function') window.openModule('gerador');
-      }, 200);
+      if (typeof window.openModule === 'function') window.openModule('gerador');
     });
   }
   ensureModuleCard();
@@ -4418,26 +4394,15 @@
     var card = document.createElement('div');
     card.className = 'adm-mod-card';
     card.setAttribute('data-horarios-module', 'banco-horas');
-    card.innerHTML = `        <span class="adm-mod-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3" y="10" width="4" height="10" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
-            <rect x="10" y="6" width="4" height="14" rx="1" stroke="rgba(255,255,255,0.85)" stroke-width="1.3"/>
-            <rect x="17" y="13" width="4" height="7" rx="1" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>
-            <path d="M4 6l3-2 3 2" stroke="rgba(255,255,255,0.6)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
+    card.innerHTML = `
         <div>
           <div class="adm-mod-name">BANCO DE HORAS</div>
           <div class="adm-mod-desc">colaboradoras, saldos e aprovação de horas</div>
         </div>
-        <div class="adm-mod-arrow">→</div>
       `;
     grid.appendChild(card);
     card.addEventListener('click', function () {
-      if (typeof window.closeHorariosOverlay === 'function') window.closeHorariosOverlay();
-      setTimeout(function () {
-        if (typeof window.openModule === 'function') window.openModule('banco-horas');
-      }, 200);
+      if (typeof window.openModule === 'function') window.openModule('banco-horas');
     });
   }
   ensureModuleCard();

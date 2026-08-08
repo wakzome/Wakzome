@@ -3541,12 +3541,12 @@
     return -1;
   }
 
-  // Analisa o horário do dia (ex.: "09:00-13:00,14:00-18:00") e, se agora
-  // cair dentro de algum tramo, devolve o fim desse tramo (currentEnd) e o
-  // fim do ÚLTIMO tramo do dia (finalEnd — a hora de saída real). Todas as
-  // pessoas têm sempre os seus tramos diários (normalmente 2, com intervalo
-  // a meio), mas o código aceita qualquer número de tramos. Devolve null se
-  // agora não cai em nenhum tramo (fora de horário ou em intervalo).
+  // Analisa o horário do dia (ex.: "09:00-13:00,14:00-18:00") e devolve
+  // info sobre o estado atual da pessoa: dentro de um tramo (onBreak:false,
+  // currentEnd = fim desse tramo), em intervalo ENTRE dois tramos do mesmo
+  // dia (onBreak:true, currentEnd = início do próximo tramo), ou null se
+  // estiver mesmo fora do dia ativo (antes do 1º tramo ou depois do último).
+  // finalEnd é sempre o fim do ÚLTIMO tramo do dia (hora de saída real).
   function wzScheduleInfo(schedule) {
     var now = new Date();
     var segments = schedule.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -3564,17 +3564,28 @@
       });
     }
     if (!parsed.length) return null;
-    var activeIdx = -1;
-    for (var j = 0; j < parsed.length; j++) {
-      if (now >= parsed[j].start && now <= parsed[j].end) { activeIdx = j; break; }
-    }
-    if (activeIdx < 0) return null;
     var lastIdx = parsed.length - 1;
-    return {
-      currentEnd: parsed[activeIdx].end,
-      finalEnd: parsed[lastIdx].end,
-      isLastSegment: activeIdx === lastIdx
-    };
+    for (var j = 0; j < parsed.length; j++) {
+      if (now >= parsed[j].start && now <= parsed[j].end) {
+        return {
+          onBreak: false,
+          currentEnd: parsed[j].end,
+          finalEnd: parsed[lastIdx].end,
+          isLastSegment: j === lastIdx
+        };
+      }
+    }
+    for (var k = 0; k < lastIdx; k++) {
+      if (now > parsed[k].end && now < parsed[k + 1].start) {
+        return {
+          onBreak: true,
+          currentEnd: parsed[k + 1].start,
+          finalEnd: parsed[lastIdx].end,
+          isLastSegment: false
+        };
+      }
+    }
+    return null;
   }
 
   // Lojas "normais": bloco = [rótulo+dias semana, SEMANA X+datas, ...linhas de funcionários (+linha "Nhrs" de resumo)]
@@ -3591,7 +3602,7 @@
       var info = wzScheduleInfo(val);
       if (info) {
         seen[name] = true;
-        active.push({ name: name, store: storeLabel, currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment });
+        active.push({ name: name, store: storeLabel, currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment, onBreak: !!info.onBreak });
       }
     });
     return active;
@@ -3624,7 +3635,7 @@
       var info = wzScheduleInfo(val);
       if (info) {
         seen[key] = true;
-        active.push({ name: name, store: wzTitleCase(currentStore), currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment });
+        active.push({ name: name, store: wzTitleCase(currentStore), currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment, onBreak: !!info.onBreak });
       }
     });
     return active;
@@ -3734,9 +3745,10 @@
       // mostra a hora de saída fixa quando ainda falta um tramo depois deste.
       var exitHtml = p.isLastSegment ? '' :
         '<span class="wz-active-exit">sai ' + wzFormatClockTime(p.finalEnd) + '</span>';
-      html += '<div class="wz-active-item" data-current-end="' + p.currentEnd.getTime() + '">' +
+      var breakHtml = p.onBreak ? '<span class="wz-active-break">intervalo</span>' : '';
+      html += '<div class="wz-active-item' + (p.onBreak ? ' wz-on-break' : '') + '" data-current-end="' + p.currentEnd.getTime() + '">' +
         '<span class="wz-active-name">' + wzEscapeHtml(p.name) +
-        '</span><span class="wz-active-store">' + wzEscapeHtml(p.store) + '</span>' +
+        '</span>' + breakHtml + '<span class="wz-active-store">' + wzEscapeHtml(p.store) + '</span>' +
         '<span class="wz-active-countdown"></span>' +
         exitHtml +
         '</div>';

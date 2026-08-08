@@ -198,6 +198,215 @@
     }).catch(function() { /* falha silenciosa — fica disponível só nesta sessão */ });
   }
 
+  /* ── 2b-ter. NOVA NOMENCLATURA (AAPPPCT-NNNNN) ──
+     Bloco isolado: nada aqui e chamado a menos que procShowCriacaoModal
+     o invoque explicitamente. Nao altera nenhum fluxo existente. */
+
+  var _sessaoUsaReferenciaAutomatica = true;
+  window.procSetSessaoUsaReferenciaAutomatica = function(v) {
+    _sessaoUsaReferenciaAutomatica = (v !== false);
+  };
+
+  var _categoriasCache = null;
+  var _categoriasLoading = null;
+
+  function procNormalizarTermo(s) {
+    return (s || '').toString().toUpperCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  function procLoadCategoriasRemote() {
+    if (_categoriasCache) return Promise.resolve(_categoriasCache);
+    if (_categoriasLoading) return _categoriasLoading;
+    _categoriasLoading = procSbFetch(
+      'proc_categorias?select=codigo,categoria_pt,sinonimos_pt,sinonimos_es,sinonimos_en,sinonimos_it,sinonimos_fr,sinonimos_de,erros_comuns_pt,erros_comuns_es&ativo=eq.true',
+      { method: 'GET' }
+    )
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        _categoriasCache = (rows || []).map(function(row) {
+          var todos = []
+            .concat(row.sinonimos_pt || [], row.sinonimos_es || [], row.sinonimos_en || [],
+                    row.sinonimos_it || [], row.sinonimos_fr || [], row.sinonimos_de || [],
+                    row.erros_comuns_pt || [], row.erros_comuns_es || []);
+          var termos = todos.map(procNormalizarTermo).filter(Boolean);
+          termos.sort(function(a, b) { return b.split(' ').length - a.split(' ').length; });
+          return { codigo: row.codigo, categoria_pt: row.categoria_pt, termos: termos };
+        });
+        return _categoriasCache;
+      })
+      .catch(function() { _categoriasCache = []; return _categoriasCache; });
+    return _categoriasLoading;
+  }
+
+  function procResolverCategoria(descricao, categorias) {
+    var desc = procNormalizarTermo(descricao);
+    if (!desc) return 'XX';
+    var palavras = desc.split(' ');
+    for (var i = 0; i < categorias.length; i++) {
+      var termos = categorias[i].termos;
+      for (var j = 0; j < termos.length; j++) {
+        if (termos[j].indexOf(' ') === -1) continue;
+        if ((' ' + desc + ' ').indexOf(' ' + termos[j] + ' ') !== -1) return categorias[i].codigo;
+      }
+    }
+    for (var p = 0; p < palavras.length; p++) {
+      var w = palavras[p];
+      var wSing = (w.length > 3 && w.slice(-1) === 'S' && w.slice(-2) !== 'SS') ? w.slice(0, -1) : w;
+      for (var k = 0; k < categorias.length; k++) {
+        var terms2 = categorias[k].termos;
+        for (var m = 0; m < terms2.length; m++) {
+          if (terms2[m] === w || terms2[m] === wSing) return categorias[k].codigo;
+        }
+      }
+    }
+    return 'XX';
+  }
+
+  var _fornecedorInfoCache = {};
+  function procLoadFornecedorInfo(nomeFornecedor) {
+    var n = procNormalize(nomeFornecedor);
+    if (!n) return Promise.resolve(null);
+    if (_fornecedorInfoCache[n]) return Promise.resolve(_fornecedorInfoCache[n]);
+    return procSbFetch(
+      'proc_fornecedores?nome=eq.' + encodeURIComponent(n) + '&select=nome,codigo,gera_referencia_automatica',
+      { method: 'GET' }
+    )
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var info = (rows && rows[0]) ? rows[0] : { nome: n, codigo: null, gera_referencia_automatica: true };
+        _fornecedorInfoCache[n] = info;
+        return info;
+      })
+      .catch(function() {
+        return { nome: n, codigo: null, gera_referencia_automatica: true };
+      });
+  }
+
+  function procGuardarPreferenciaFornecedor(nomeFornecedor, ativo) {
+    var n = procNormalize(nomeFornecedor);
+    if (!n) return;
+    if (_fornecedorInfoCache[n]) _fornecedorInfoCache[n].gera_referencia_automatica = ativo;
+    procSbFetch('proc_fornecedores?nome=eq.' + encodeURIComponent(n), {
+      method: 'PATCH',
+      headers: Object.assign(procSbHeaders(), { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ gera_referencia_automatica: ativo })
+    }).catch(function() { /* falha silenciosa */ });
+  }
+
+  function procNormalizarRefOriginal(ref) {
+    return (ref || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function procObtenerOuCriarReferencia(nomeFornecedor, codigoFornecedor, refOriginal, categoria, guiaAtual) {
+    var proveedor = procNormalize(nomeFornecedor);
+    var refNorm   = procNormalizarRefOriginal(refOriginal);
+    var ano       = new Date().getFullYear() % 100;
+    if (!proveedor || !refNorm || !codigoFornecedor) return Promise.resolve(null);
+
+    var filtro = 'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedor)
+      + '&referencia_original=eq.' + encodeURIComponent(refNorm)
+      + '&categoria=eq.' + encodeURIComponent(categoria)
+      + '&ano=eq.' + ano
+      + '&select=referencia_interna,secuencial';
+
+    return procSbFetch(filtro, { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        if (rows && rows.length) return rows[0].referencia_interna;
+
+        return procSbFetch(
+          'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedor) + '&select=secuencial&order=secuencial.desc&limit=1',
+          { method: 'GET' }
+        )
+          .then(function(r2) { return r2.ok ? r2.json() : []; })
+          .then(function(rowsSeq) {
+            var proximo = (rowsSeq && rowsSeq.length) ? (rowsSeq[0].secuencial + 1) : 1;
+            var numStr  = ('00000' + proximo).slice(-5);
+            var refInterna = ano + codigoFornecedor + categoria + '-' + numStr;
+            return procSbFetch('proc_referencias', {
+              method: 'POST',
+              headers: Object.assign(procSbHeaders(), { 'Prefer': 'return=minimal' }),
+              body: JSON.stringify({
+                proveedor: proveedor,
+                referencia_original: refNorm,
+                categoria: categoria,
+                ano: ano,
+                secuencial: proximo,
+                referencia_interna: refInterna,
+                guia_erp: guiaAtual || null
+              })
+            }).then(function() { return refInterna; })
+              .catch(function() { return refInterna; });
+          });
+      })
+      .catch(function() { return null; });
+  }
+
+  function procValidarAdmin(token) {
+    if (!token) return Promise.resolve(false);
+    return procSbFetch('rpc/proc_es_admin', {
+      method: 'POST',
+      body: JSON.stringify({ p_token: token })
+    })
+      .then(function(r) { return r.ok ? r.json() : false; })
+      .catch(function() { return false; });
+  }
+
+  /* Vincula retroactivamente a guia ERP as referencias ja criadas para
+     esta factura (proveedor + referencias/categorias das linhas actuais).
+     Chamada quando o utilizador preenche o campo "Guia ERP". Falha
+     silenciosa: nunca deve bloquear o fluxo normal da factura. */
+  function procVincularGuiaReferencias(fid, guia) {
+    guia = (guia || '').toString().trim();
+    if (!guia) return;
+    var pEl = document.getElementById('proc-proveedor-' + fid);
+    var fornecedor = pEl ? pEl.value.trim() : '';
+    if (!fornecedor) return;
+    var proveedorNorm = procNormalize(fornecedor);
+    if (!proveedorNorm) return;
+
+    Promise.all([procLoadFornecedorInfo(fornecedor), procLoadCategoriasRemote()])
+      .then(function(res) {
+        var info = res[0], categorias = res[1];
+        if (!info || !info.codigo) return null;
+
+        var rows = typeof procCollectRows === 'function' ? procCollectRows(fid) : [];
+        var ano = new Date().getFullYear() % 100;
+        var chaves = {};
+        rows.forEach(function(r) {
+          if (!r || !r.ref) return;
+          var refNorm = procNormalizarRefOriginal(r.ref);
+          if (!refNorm) return;
+          var categoria = procResolverCategoria(r.desc, categorias);
+          chaves[refNorm + '|' + categoria] = true;
+        });
+        var listaChaves = Object.keys(chaves);
+        if (!listaChaves.length) return null;
+
+        return procSbFetch(
+          'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm)
+            + '&ano=eq.' + ano
+            + '&select=referencia_interna,referencia_original,categoria',
+          { method: 'GET' }
+        )
+          .then(function(r2) { return r2.ok ? r2.json() : []; })
+          .then(function(todasDoAno) {
+            var referenciasParaLigar = (todasDoAno || [])
+              .filter(function(row) { return chaves.hasOwnProperty(row.referencia_original + '|' + row.categoria); })
+              .map(function(row) { return row.referencia_interna; });
+            if (!referenciasParaLigar.length) return null;
+            return procSbFetch('rpc/proc_asignar_guia_referencias', {
+              method: 'POST',
+              body: JSON.stringify({ p_proveedor: proveedorNorm, p_referencias: referenciasParaLigar, p_guia: guia })
+            });
+          });
+      })
+      .catch(function() { /* falha silenciosa — nunca bloqueia o fluxo da factura */ });
+  }
+
 
   /* ── 2c. MOTOR DE SUGESTÕES DE DESCRIÇÕES ── */
   /* Estrutura compacta: TIPOS base + MODIFICADORES → combinações dinâmicas
@@ -731,6 +940,16 @@
     else faturas.forEach(function(fd) { procAddFatura(fd); });
     /* Snapshot inicial para que o primeiro Ctrl+Z restaure este estado */
     setTimeout(procUndoSnapshot, 100);
+    /* Elegibilidade da nova nomenclatura: sessoes antigas ficam marcadas
+       usa_referencia_automatica=false na BD e nunca activam o gerador.
+       Assincrono e nao-bloqueante — nao interfere no carregamento normal. */
+    procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key) + '&select=usa_referencia_automatica', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var elegivel = !(rows && rows.length && rows[0].usa_referencia_automatica === false);
+        window.procSetSessaoUsaReferenciaAutomatica(elegivel);
+      })
+      .catch(function() { window.procSetSessaoUsaReferenciaAutomatica(true); });
     if (callback) callback();
   }
 
@@ -805,10 +1024,15 @@
         { label: '\u274c Eliminar definitivamente',
           style: 'background:#F5EAEA;border:1px solid #e8c5c5;color:#9B4D4D;font-weight:700;',
           cb: function() {
-            procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key), { method: 'DELETE' }).catch(function(){});
-            try { localStorage.removeItem(key); } catch(e) {}
-            if (_activeSessionKey === key) { _activeSessionKey = null; procLockRelease(); }
-            procRenderSessionMenu();
+            var senha = window.prompt('Esta ac\u00e7\u00e3o requer a senha de administrador:');
+            if (senha === null) return; /* cancelado */
+            procValidarAdmin(senha).then(function(ok) {
+              if (!ok) { window.alert('Senha incorrecta.'); return; }
+              procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(key), { method: 'DELETE' }).catch(function(){});
+              try { localStorage.removeItem(key); } catch(e) {}
+              if (_activeSessionKey === key) { _activeSessionKey = null; procLockRelease(); }
+              procRenderSessionMenu();
+            });
           }
         },
         { label: 'Cancelar', style: 'background:#fff;border:1px solid #9DB6C9;color:#000;', cb: null }
@@ -1293,11 +1517,22 @@
 
   function procRemoveFatura(fid) {
     if (activeFaturas.length <= 1) return;
-    procUndoSnapshot(); /* snapshot antes de remover */
-    var el = document.getElementById('proc-fatura-' + fid);
-    if (el) el.remove();
-    activeFaturas = activeFaturas.filter(function(id) { return id !== fid; });
-    procUpdateBannerNumbers();
+    var guiaInput = document.getElementById('proc-guia-erp-' + fid);
+    var temGuia = guiaInput && guiaInput.value.trim().length > 0;
+    if (temGuia) {
+      window.alert('Esta factura j\u00e1 tem n\u00famero de guia (j\u00e1 foi ingressada no sistema) e n\u00e3o pode ser eliminada.');
+      return;
+    }
+    var senha = window.prompt('Esta ac\u00e7\u00e3o requer a senha de administrador:');
+    if (senha === null) return; /* cancelado */
+    procValidarAdmin(senha).then(function(ok) {
+      if (!ok) { window.alert('Senha incorrecta.'); return; }
+      procUndoSnapshot(); /* snapshot antes de remover */
+      var el = document.getElementById('proc-fatura-' + fid);
+      if (el) el.remove();
+      activeFaturas = activeFaturas.filter(function(id) { return id !== fid; });
+      procUpdateBannerNumbers();
+    });
   }
 
   function procUpdateBannerNumbers() {
@@ -1327,6 +1562,8 @@
     if (hasGuia) {
       input.classList.add('proc-guia-done');
       if (banner) banner.classList.add('proc-banner-done');
+      /* Vincula retroactivamente a guia as referencias ja criadas (nao bloqueante) */
+      procVincularGuiaReferencias(fid, input.value.trim());
       /* Auto-collapse when guia is set and not yet collapsed */
       if (wrap && !wrap.classList.contains('proc-collapsed')) {
         procToggleCollapse(fid);
@@ -3973,6 +4210,8 @@
 
     var pEl = document.getElementById('proc-proveedor-' + fid);
     var fornecedor = pEl ? (pEl.value.trim() || 'Fornecedor') : 'Fornecedor';
+    var guiaEl = document.getElementById('proc-guia-erp-' + fid);
+    var guiaAtual = guiaEl ? guiaEl.value.trim() : '';
 
     /* Collect rows with any data */
     var rc = rowCounts[fid] || 0;
@@ -4012,7 +4251,7 @@
       var margCellEl = document.getElementById('proc-marg-' + fid + '-' + i);
       var margTxt = margCellEl ? margCellEl.textContent.trim() : '';
       var marg = (margTxt && margTxt !== '\u2014') ? margTxt : null;
-      items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc });
+      items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc, refNova: null });
     }
 
     /* Dedupe por refer\u00eancia \u2014 v\u00e1rias linhas da fatura podem repetir
@@ -4034,48 +4273,113 @@
       items = deduped;
     }
 
-    /* Build table rows HTML */
-    var rowsHTML = items.map(function(it, idx) {
-      return '<tr data-idx="' + idx + '" data-ref="' + (it.ref||'') + '" data-nome="' + (it.nome||'') + '" data-pvp="' + (it.pvp != null ? it.pvp.toFixed(2) : '') + '">'
-        + '<td class="td-ref">' + (it.ref || '\u2014') + '</td>'
-        + '<td class="td-nome">' + (it.nome || '\u2014') + '</td>'
-        + '<td class="td-pvp">' + (it.pvp != null ? it.pvp.toFixed(2) : '\u2014') + '</td>'
-        + '<td class="td-marg">' + (it.marg != null ? it.marg : '\u2014') + '</td>'
-        + '<td class="td-custo">' + (it.custo > 0 ? it.custo.toFixed(2) : '\u2014') + '</td>'
-        + '</tr>';
-    }).join('');
+    /* ── Nova nomenclatura: elegibilidade da sessao + preferencia do fornecedor.
+       Sessoes antigas (marcadas usa_referencia_automatica = false) nunca
+       chegam a pedir isto — mantem-se 100% o comportamento actual. */
+    var elegivelSessao = _sessaoUsaReferenciaAutomatica;
 
-    if (!rowsHTML) rowsHTML = '<tr><td colspan="5" class="proc-table-empty-msg">Sem artigos com dados</td></tr>';
+    function refExibida(it, ativo) {
+      return (ativo && it.refNova) ? it.refNova : (it.ref || '\u2014');
+    }
 
-    var modal = document.createElement('div');
-    modal.id = 'proc-criacao-modal';
-    modal.innerHTML =
-        '<div id="proc-criacao-backdrop"></div>'
-      + '<div id="proc-criacao-panel">'
-      +   '<div id="proc-criacao-header">'
-      +     '<div id="proc-criacao-title">'
-      +       '<span id="proc-criacao-title-main">' + fornecedor + '</span>'
-      +       '<span id="proc-criacao-title-sub">Cria\u00e7\u00e3o de Artigos</span>'
-      +     '</div>'
-      +     '<button id="proc-criacao-close">\u00d7</button>'
-      +   '</div>'
-      +   '<div id="proc-criacao-scroll">'
-      +     '<table id="proc-criacao-table">'
-      +       '<thead><tr>'
-      +         '<th>Refer\u00eancia</th>'
-      +         '<th>Nome</th>'
-      +         '<th class="right">PVP</th>'
-      +         '<th class="right">%</th>'
-      +         '<th class="right">PC</th>'
-      +       '</tr></thead>'
-      +       '<tbody>' + rowsHTML + '</tbody>'
-      +     '</table>'
-      +   '</div>'
-      +   '<div id="proc-criacao-copy-hint">Clique numa linha para selecionar &mdash; clique numa c\u00e9lula para copiar</div>'
-      + '</div>';
+    function gerarRowsHTML(ativo) {
+      var html = items.map(function(it, idx) {
+        var refMostrar = refExibida(it, ativo);
+        return '<tr data-idx="' + idx + '" data-ref="' + refMostrar + '" data-nome="' + (it.nome||'') + '" data-pvp="' + (it.pvp != null ? it.pvp.toFixed(2) : '') + '">'
+          + '<td class="td-ref">' + refMostrar + '</td>'
+          + '<td class="td-nome">' + (it.nome || '\u2014') + '</td>'
+          + '<td class="td-pvp">' + (it.pvp != null ? it.pvp.toFixed(2) : '\u2014') + '</td>'
+          + '<td class="td-marg">' + (it.marg != null ? it.marg : '\u2014') + '</td>'
+          + '<td class="td-custo">' + (it.custo > 0 ? it.custo.toFixed(2) : '\u2014') + '</td>'
+          + '</tr>';
+      }).join('');
+      return html || '<tr><td colspan="5" class="proc-table-empty-msg">Sem artigos com dados</td></tr>';
+    }
 
-    document.body.appendChild(modal);
+    function montarModal(fornecedorInfo, categorias) {
+      var podeGerar  = !!(elegivelSessao && fornecedorInfo && fornecedorInfo.codigo);
+      var ativoAtual = podeGerar && fornecedorInfo.gera_referencia_automatica !== false;
 
+      var toggleHTML = podeGerar
+        ? ('<label class="proc-criacao-toggle-wrap" title="Gerar nova nomenclatura de refer\u00eancia para este fornecedor">'
+          + '<input type="checkbox" id="proc-criacao-toggle-' + fid + '"' + (ativoAtual ? ' checked' : '') + '>'
+          + '<span>nova nomenclatura</span>'
+          + '</label>')
+        : '';
+
+      var modal = document.createElement('div');
+      modal.id = 'proc-criacao-modal';
+      modal.innerHTML =
+          '<div id="proc-criacao-backdrop"></div>'
+        + '<div id="proc-criacao-panel">'
+        +   '<div id="proc-criacao-header">'
+        +     '<div id="proc-criacao-title">'
+        +       '<span id="proc-criacao-title-main">' + fornecedor + '</span>'
+        +       toggleHTML
+        +       '<span id="proc-criacao-title-sub">Cria\u00e7\u00e3o de Artigos</span>'
+        +     '</div>'
+        +     '<button id="proc-criacao-close">\u00d7</button>'
+        +   '</div>'
+        +   '<div id="proc-criacao-scroll">'
+        +     '<table id="proc-criacao-table">'
+        +       '<thead><tr>'
+        +         '<th>Refer\u00eancia</th>'
+        +         '<th>Nome</th>'
+        +         '<th class="right">PVP</th>'
+        +         '<th class="right">%</th>'
+        +         '<th class="right">PC</th>'
+        +       '</tr></thead>'
+        +       '<tbody>' + gerarRowsHTML(ativoAtual) + '</tbody>'
+        +     '</table>'
+        +   '</div>'
+        +   '<div id="proc-criacao-copy-hint">Clique numa linha para selecionar &mdash; clique numa c\u00e9lula para copiar</div>'
+        + '</div>';
+
+      document.body.appendChild(modal);
+
+      function atualizarTabela() {
+        var tbody = modal.querySelector('tbody');
+        if (tbody) tbody.innerHTML = gerarRowsHTML(ativoAtual);
+      }
+
+      function gerarReferenciasEAtualizar() {
+        var pendentes = items.filter(function(it) { return it.ref && !it.refNova; });
+        if (!pendentes.length) { atualizarTabela(); return; }
+        Promise.all(pendentes.map(function(it) {
+          var categoria = procResolverCategoria(it.nome, categorias);
+          return procObtenerOuCriarReferencia(fornecedor, fornecedorInfo.codigo, it.ref, categoria, guiaAtual)
+            .then(function(refInterna) { if (refInterna) it.refNova = refInterna; })
+            .catch(function() {});
+        })).then(atualizarTabela);
+      }
+
+      var toggleEl = document.getElementById('proc-criacao-toggle-' + fid);
+      if (toggleEl) {
+        toggleEl.addEventListener('change', function() {
+          ativoAtual = toggleEl.checked;
+          procGuardarPreferenciaFornecedor(fornecedor, ativoAtual);
+          if (ativoAtual) { gerarReferenciasEAtualizar(); } else { atualizarTabela(); }
+        });
+      }
+
+      if (podeGerar && ativoAtual) gerarReferenciasEAtualizar();
+
+      procShowCriacaoModalContinuar(modal, fid);
+    }
+
+    if (elegivelSessao) {
+      Promise.all([procLoadFornecedorInfo(fornecedor), procLoadCategoriasRemote()])
+        .then(function(res) { montarModal(res[0], res[1]); })
+        .catch(function() { montarModal(null, []); });
+    } else {
+      montarModal(null, []);
+    }
+  }
+
+  /* Resto da configura\u00e7\u00e3o do modal (fechar, hover, clique-para-copiar,
+     anima\u00e7\u00e3o) — extra\u00eddo tal e qual do c\u00f3digo original, agora chamado
+     depois de o modal (com ou sem a nova nomenclatura) j\u00e1 estar no DOM. */
+  function procShowCriacaoModalContinuar(modal, fid) {
     /* Close on backdrop click */
     modal.querySelector('#proc-criacao-backdrop').addEventListener('click', function() {
       modal.classList.remove('proc-criacao-visible');

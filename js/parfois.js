@@ -2438,11 +2438,11 @@
     pfCloseSessionPicker();
     var ov = document.getElementById('pf-overlay');
     if (!ov) return;
+    var admBack = document.getElementById('adm-back-btn');
+    if (admBack) { admBack.click(); }
     ov.classList.remove('visible');
     setTimeout(function(){
       ov.classList.remove('open');
-      var admBack = document.getElementById('adm-back-btn');
-      if (admBack) { admBack.click(); }
     }, 450);
   }
 

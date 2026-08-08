@@ -1219,7 +1219,7 @@
       +   '</div>'
       +   '<div class="proc-transp-row">'
       +     '<div class="proc-transp-wrap">'
-      +       '<span class="proc-transp-label">Transp. / Desc.</span>'
+      +       '<span class="proc-transp-label">Transp./Desc.</span>'
       +       '<input type="number" class="proc-transp-input" id="proc-transp-' + fid + '" placeholder="opcional" step="0.01"'
       +       ' oninput="procTranspChange(' + fid + ')" />'
       +       '<button class="proc-transp-apply-btn" id="proc-transp-btn-' + fid + '" onclick="procTranspApply(' + fid + ')">distribuir</button>'

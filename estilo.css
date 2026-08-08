@@ -2432,8 +2432,40 @@ input, textarea { cursor: text !important; }
   letter-spacing: .3em; color: #ccc; margin: 0; line-height: 1;
 }
 #wz-active-updated { font-size: .56rem; color: #bbb; margin-top: 8px; text-align: right; }
-@media (max-width: 1024px) { #wz-active-panel { display: none !important; } }
+@media (max-width: 1024px) {
+  /* Deixa de estar escondido em mobile: passa a viver junto ao botão
+     "código de acesso" (#emg-mobile-bubble), reparentado ali pelo JS
+     (wzPlaceMobilePanel em nucleo.js). Sem position:fixed aqui — pela
+     mesma razão do #emg-mobile-bubble: #adm-dashboard tem overflow-y
+     próprio e um botão fixo ficaria sobreposto aos cartões ao fazer scroll. */
+  #wz-emg-row {
+    display: flex; align-items: center; gap: 10px;
+    margin: 8px 0 0;
+  }
+  #wz-emg-row #emg-mobile-bubble { margin: 0; }
+  #wz-active-panel.wz-inline-mobile {
+    position: static;
+    top: auto; right: auto; left: auto; transform: none;
+    display: inline-flex; margin: 0;
+    z-index: auto;
+  }
+  #wz-active-panel.wz-inline-mobile #wz-active-tooltip {
+    position: fixed;
+    top: auto; right: auto; bottom: 20px; left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    max-width: min(280px, 86vw);
+  }
+  #wz-active-panel.wz-inline-mobile.tt-open #wz-active-tooltip {
+    opacity: 1; pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+}
 #admin-app.module-open ~ #wz-active-panel { display: none !important; }
+/* Clique (mobile, sem :hover) — funciona em qualquer largura, não só inline */
+#wz-active-panel.tt-open #wz-active-tooltip {
+  opacity: 1; pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+}
 
 #tab-editor.active {
   display: flex; flex-direction: column;

@@ -2410,6 +2410,13 @@ input, textarea { cursor: text !important; }
   text-transform: uppercase; letter-spacing: .04em;
 }
 .wz-active-store::before { content: '·'; margin-right: 5px; color: #ccc; font-weight: 700; }
+.wz-active-break {
+  font-size: .58rem; font-weight: 700; color: #a86a00;
+  background: #fff3cd; border: 1px solid #f0d585;
+  border-radius: 6px; padding: 1px 6px;
+  text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+}
+.wz-active-item.wz-on-break { background: #fffaf0; border-color: #f0e0bd; }
 .wz-active-countdown {
   font-size: .62rem; font-weight: 700; color: #2e7d32;
   font-variant-numeric: tabular-nums;

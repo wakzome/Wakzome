@@ -2186,17 +2186,21 @@
     var diff = computedTotal - ftVal;
     if (Math.abs(diff) < 0.01) {
       diffChip.className = 'proc-diff-chip zero'; diffChip.textContent = '\u2713 fatura certa';
-      if (vEl) vEl.classList.remove('proc-warn-field');
+      if (vEl) vEl.classList.remove('proc-warn-field', 'proc-valor-error-neg', 'proc-valor-error-pos');
       procUpdateAuditButton(fid, 0);
     } else {
       var sign = diff > 0 ? '+' : '';
       diffChip.className = 'proc-diff-chip ' + (diff > 0 ? 'pos' : 'neg');
       diffChip.textContent = 'erro ' + sign + diff.toFixed(2) + ' \u20ac';
-      /* Borda laranja subtil se diferença for relevante e houver linhas */
+      /* Cor do campo espelha o indicador de diferença (maroon/azul), não o aviso laranja genérico */
       if (computedTotal > 0 && Math.abs(diff) > 0.01) {
-        if (vEl) vEl.classList.add('proc-warn-field');
+        if (vEl) {
+          vEl.classList.remove('proc-warn-field');
+          vEl.classList.toggle('proc-valor-error-neg', diff < 0);
+          vEl.classList.toggle('proc-valor-error-pos', diff > 0);
+        }
       } else {
-        if (vEl) vEl.classList.remove('proc-warn-field');
+        if (vEl) vEl.classList.remove('proc-warn-field', 'proc-valor-error-neg', 'proc-valor-error-pos');
       }
       procUpdateAuditButton(fid, diff);
     }

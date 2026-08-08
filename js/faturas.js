@@ -3472,8 +3472,12 @@
     return { f:f, p:p };
   }
 
-  /* Build rows from all active faturas that have a4 or a5 > 0 */
-  function procBuildGuiaRows() {
+  /* Build rows from all active faturas that have a4 or a5 > 0.
+     Quando um fornecedor tem a nova nomenclatura activa, a referencia
+     usada aqui (e portanto a chave de tracking de "enviado") passa a
+     ser a referencia_interna — a partir do momento em que se confirma
+     um envio, essa e a identidade perpetua do artigo, nunca a original. */
+  function procBuildGuiaRowsSync(mapasPorForn, categorias) {
     var rows = [];
     activeFaturas.forEach(function(fid) {
       /* Skip if this fatura is excluded from guia */
@@ -3482,14 +3486,23 @@
       var fatRows = procCollectRows(fid);
       var pEl = document.getElementById('proc-proveedor-' + fid);
       var forn = pEl ? (pEl.value || 'Fatura ' + fid) : 'Fatura ' + fid;
+      var fornNorm = procNormalize(forn);
+      var mapa = mapasPorForn ? mapasPorForn[fornNorm] : null;
       fatRows.forEach(function(r) {
         if (!r.ref) return;
         if ((r.a4 || 0) === 0 && (r.a5 || 0) === 0) return;
-        var sent  = procSentQty(r.ref, fid);
+        var refFinal = r.ref;
+        if (mapa) {
+          var refNorm   = procNormalizarRefOriginal(r.ref);
+          var categoria = procResolverCategoria(r.desc, categorias || []);
+          var nova      = mapa[refNorm + '|' + categoria];
+          if (nova) refFinal = nova;
+        }
+        var sent  = procSentQty(refFinal, fid);
         var pendF = Math.max(0, (r.a4||0) - sent.f);
         var pendP = Math.max(0, (r.a5||0) - sent.p);
         rows.push({
-          ref:    r.ref,
+          ref:    refFinal,
           forn:   forn,
           fid:    fid,
           totalF: r.a4 || 0,
@@ -3503,6 +3516,53 @@
       });
     });
     return rows;
+  }
+
+  /* Resolve, para cada fornecedor distinto entre as faturas activas, se tem
+     nomenclatura activa e o respectivo mapa (referencia_original|categoria
+     -> referencia_interna) antes de montar as linhas da guia. */
+  function procBuildGuiaRowsAsync() {
+    var faturasInfo = activeFaturas.map(function(fid) {
+      var cb = document.getElementById('proc-guia-include-' + fid);
+      if (cb && !cb.checked) return null;
+      var pEl = document.getElementById('proc-proveedor-' + fid);
+      var forn = pEl ? (pEl.value || 'Fatura ' + fid) : 'Fatura ' + fid;
+      return { fid: fid, forn: forn, fornNorm: procNormalize(forn) };
+    }).filter(Boolean);
+
+    var distintos = {};
+    faturasInfo.forEach(function(fi) { if (fi.fornNorm) distintos[fi.fornNorm] = true; });
+    var listaFornNorm = Object.keys(distintos);
+
+    if (!listaFornNorm.length) return Promise.resolve(procBuildGuiaRowsSync({}, []));
+
+    var ano0 = new Date().getFullYear() % 100;
+
+    return Promise.all(listaFornNorm.map(function(fn) {
+      return procLoadFornecedorInfo(fn).then(function(info) {
+        if (!info || !info.codigo || info.gera_referencia_automatica === false) {
+          return { fornNorm: fn, mapa: null };
+        }
+        return procSbFetch(
+          'proc_referencias?proveedor=eq.' + encodeURIComponent(fn) + '&ano=eq.' + ano0 + '&select=referencia_interna,referencia_original,categoria',
+          { method: 'GET' }
+        )
+          .then(function(r) { return r.ok ? r.json() : []; })
+          .then(function(rowsRef) {
+            var mapa = {};
+            (rowsRef || []).forEach(function(row) {
+              mapa[row.referencia_original + '|' + row.categoria] = row.referencia_interna;
+            });
+            return { fornNorm: fn, mapa: mapa };
+          });
+      }).catch(function() { return { fornNorm: fn, mapa: null }; });
+    })).then(function(resultados) {
+      var mapasPorForn = {};
+      resultados.forEach(function(res) { mapasPorForn[res.fornNorm] = res.mapa; });
+      return procLoadCategoriasRemote().then(function(categorias) {
+        return procBuildGuiaRowsSync(mapasPorForn, categorias);
+      });
+    });
   }
 
   /* Constrói linhas de historial para refs externas (TAM ou sessões proc anteriores)
@@ -3791,425 +3851,428 @@
   }
 
   function procShowGuiaModal() {
-    var allRows  = procBuildGuiaRows();
-    var pendRows = allRows.filter(function(r){ return !r.done; });
-    var sentRows = allRows.filter(function(r){ return  r.done; });
-    /* Incluir refs externas (TAM / sessões proc) confirmadas nesta sessão */
-    var extSentRows = procBuildGuiaSentExternal();
-    sentRows = sentRows.concat(extSentRows);
+    function montarGuiaModal(allRows) {
+      var pendRows = allRows.filter(function(r){ return !r.done; });
+      var sentRows = allRows.filter(function(r){ return  r.done; });
+      /* Incluir refs externas (TAM / sessões proc) confirmadas nesta sessão */
+      var extSentRows = procBuildGuiaSentExternal();
+      sentRows = sentRows.concat(extSentRows);
 
-    if (!allRows.length) {
-      procFloatModal({
-        title: 'Sem distribuição',
-        body:  'Nenhuma fatura tem pe\u00e7as distribu\u00eddas por armazém. Preenche as colunas FNC e PXO primeiro.',
-        buttons: [{ label: 'OK', cb: null }]
-      });
-      return;
-    }
-
-    var oldModal = document.getElementById('proc-guia-modal');
-    if (oldModal) oldModal.parentNode.removeChild(oldModal);
-
-    var nFaturas = activeFaturas.length;
-    var title    = 'Guia Consolidada \u00b7 ' + nFaturas + ' fatura' + (nFaturas !== 1 ? 's' : '');
-    var fPend    = pendRows.reduce(function(s,r){ return s+r.pendF; }, 0);
-    var pPend    = pendRows.reduce(function(s,r){ return s+r.pendP; }, 0);
-    var fSent    = sentRows.reduce(function(s,r){ return s+r.totalF; }, 0);
-    var pSent    = sentRows.reduce(function(s,r){ return s+r.totalP; }, 0);
-
-    var COL_G = ['Ref. FNC', 'Qtd. F', 'Ref. PXO', 'Qtd. PS'];
-
-    function buildTableRows(rowList) {
-      if (!rowList.length) return '<tr><td colspan="7" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
-      var fRows = rowList.filter(function(r){ return (r.done ? r.totalF : r.pendF) > 0; });
-      var pRows = rowList.filter(function(r){ return (r.done ? r.totalP : r.pendP) > 0; });
-      var maxLen = Math.max(fRows.length, pRows.length);
-      var html = '';
-      for (var i = 0; i < maxLen; i++) {
-        var fRow = fRows[i] || null;
-        var pRow = pRows[i] || null;
-        var refRow = fRow || pRow;
-        var cls = refRow.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
-        var trBg = refRow.done ? 'background:#f5f5f5;' : (i%2===0 ? 'background:#fff;' : 'background:#F7F4F3;');
-        /* Indicator dots live in their own column — refs are untouched */
-        var fDot = (fRow && fRow._dotColor)
-          ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + fRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
-          : '';
-        var pDot = (pRow && pRow._dotColor)
-          ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + pRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
-          : '';
-        var fRef = fRow ? fRow.ref : '';
-        var fQty = fRow ? (fRow.done ? fRow.totalF : fRow.pendF) : '';
-        var pRef = pRow ? pRow.ref : '';
-        var pQty = pRow ? (pRow.done ? pRow.totalP : pRow.pendP) : '';
-        html += '<tr class="proc-guia-tr' + cls + '" style="' + trBg + '">'
-          + '<td class="proc-guia-td proc-guia-dot-col" style="' + trBg + '">' + fDot + '</td>'
-          + '<td class="proc-guia-td proc-guia-ref-f" style="' + trBg + '" data-gcol="0">' + fRef + '</td>'
-          + '<td class="proc-guia-td proc-guia-qty-f" style="' + trBg + '" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
-          + '<td class="proc-guia-td proc-guia-sep-td" style="' + trBg + '"></td>'
-          + '<td class="proc-guia-td proc-guia-dot-col" style="' + trBg + '">' + pDot + '</td>'
-          + '<td class="proc-guia-td proc-guia-ref-p" style="' + trBg + '" data-gcol="2">' + pRef + '</td>'
-          + '<td class="proc-guia-td proc-guia-qty-p" style="' + trBg + '" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
-          + '</tr>';
-      }
-      return html;
-    }
-
-    function buildLegendHtml(otherRows) {
-      var colorMap = {};
-      otherRows.forEach(function(r){ if (!colorMap[r.sessionKey]) colorMap[r.sessionKey] = r._dotColor; });
-      var keys = Object.keys(colorMap);
-      if (!keys.length) return '';
-      return '<div id="proc-guia-session-legend">'
-        + keys.map(function(k){
-            var row = otherRows.find(function(r){ return r.sessionKey === k; });
-            var name = row ? row.sessionName : k;
-            return '<span class="proc-guia-legend-item"><span style="color:' + colorMap[k] + ';user-select:none;">\u25cf</span> ' + name + '</span>';
-          }).join('')
-        + '</div>';
-    }
-
-    var copyBar = '<div class="proc-guia-copy-bar">'
-      + '<button class="proc-guia-addr-btn" data-addr="CAL\u00c7ADA DA QUINTINHA 17 B">Lisboa</button>'
-      + '<button class="proc-guia-addr-btn" data-addr="29-FV-30">Matr\u00edcula</button>'
-      + '<button class="proc-guia-addr-btn" data-addr="RUA DE S\u00c3O FRANCISCO N\u00ba 20">FNC</button>'
-      + '<button class="proc-guia-addr-btn" data-addr="EDIFICIO Ilha Dourada Loja-1">PXO</button>'
-      + '</div>';
-
-    /* FIX: mostrar enviadas apenas quando nao ha pendentes */
-    var sentSection = (sentRows.length && pendRows.length === 0)
-      ? '<tr class="proc-guia-sent-hdr"><td colspan="7">\u2713 J\u00e1 enviado ('
-        + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>'
-        + buildTableRows(sentRows)
-      : '';
-
-    /* Banner — fase 1: a verificar */
-    var bannerHtml = '<div id="proc-guia-other-banner" class="proc-guia-other-banner proc-guia-other-loading">'
-      + '<span id="proc-guia-other-status">\u21bb a verificar sessões anteriores\u2026</span>'
-      + '</div>';
-
-    var modal = document.createElement('div');
-    modal.id  = 'proc-guia-modal';
-    modal.innerHTML =
-      '<div id="proc-guia-backdrop"></div>'
-      + '<div id="proc-guia-panel">'
-      +   '<div id="proc-guia-header">'
-      +     '<div id="proc-guia-title">'
-      +       '<span id="proc-guia-title-main">' + title + '</span>'
-      +       '<span id="proc-guia-title-sub">Guia de transporte \u00b7 Processamento de Faturas</span>'
-      +     '</div>'
-      +     '<div id="proc-guia-header-right">'
-      +       bannerHtml
-      +       '<div id="proc-guia-header-btns">'
-      +         '<button id="proc-guia-confirm-btn" class="proc-guia-action-btn proc-guia-confirm"'
-      +           (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>'
-      +         '<button id="proc-guia-export-btn" class="proc-guia-action-btn">\u2b07 Exportar CSV</button>'
-      +         '<button id="proc-guia-close-btn" class="proc-guia-close-btn">\u00d7</button>'
-      +       '</div>'
-      +     '</div>'
-      +   '</div>'
-      +   copyBar
-      +   '<div id="proc-guia-scroll">'
-      +     '<table id="proc-guia-table">'
-      +       '<thead><tr>'
-      +         '<th class="proc-guia-th proc-guia-dot-th"></th>'
-      +         '<th class="proc-guia-th proc-guia-th-f" colspan="2"><div class="proc-guia-th-flex"><span>\ud83d\udd35 FNC (A4)</span><span id="proc-guia-fnc-count" class="proc-guia-count-label">' + fPend + ' un. pendentes</span></div></th>'
-      +         '<th class="proc-guia-th proc-guia-th-sep"></th>'
-      +         '<th class="proc-guia-th proc-guia-dot-th"></th>'
-      +         '<th class="proc-guia-th proc-guia-th-p" colspan="2"><div class="proc-guia-th-flex"><span>\ud83d\udd34 PXO (A5)</span><span id="proc-guia-pxo-count" class="proc-guia-count-label">' + pPend + ' un. pendentes</span></div></th>'
-      +       '</tr><tr>'
-      +         '<th class="proc-guia-dot-th"></th>'
-      +         '<th class="proc-guia-th2"><button class="proc-guia-copy-btn" data-gcol="0">Refer\u00eancia</button></th>'
-      +         '<th class="proc-guia-th2 proc-th2-center"><button class="proc-guia-copy-btn" data-gcol="1">Qtd.</button></th>'
-      +         '<th class="proc-guia-th-sep"></th>'
-      +         '<th class="proc-guia-dot-th"></th>'
-      +         '<th class="proc-guia-th2"><button class="proc-guia-copy-btn" data-gcol="2">Refer\u00eancia</button></th>'
-      +         '<th class="proc-guia-th2 proc-th2-center"><button class="proc-guia-copy-btn" data-gcol="3">Qtd.</button></th>'
-      +       '</tr></thead>'
-      +       '<tbody id="proc-guia-tbody">' + buildTableRows(pendRows) + sentSection + '</tbody>'
-      +     '</table>'
-      +     '<div id="proc-guia-legend-wrap"></div>'
-      +   '</div>'
-      +   '<div id="proc-guia-footer">'
-      +     '<span id="proc-guia-footer-text">'
-      +       pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO'
-      +       (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
-      +     '</span>'
-      +     '<span class="proc-guia-copy-msg" id="proc-guia-copy-msg"></span>'
-      +   '</div>'
-      + '</div>';
-
-    document.body.appendChild(modal);
-    requestAnimationFrame(function(){ modal.classList.add('proc-guia-visible'); });
-
-    /* ── Fase 2: fetch remoto — proc + TAM ── */
-    /* NÃO adiciona automaticamente — apenas avisa e espera confirmação do utilizador */
-    var _pendingOtherRows = [];   /* ficam guardadas até o user clicar em Adicionar */
-
-    /* _addedOtherRows acumula todas as rows de sessões que o user escolheu adicionar */
-    var _addedOtherRows = [];
-
-    function applyOtherRows() {
-      /* _pendingOtherRows contém as rows da sessão que acabou de ser clicada */
-      var sessionRows = _pendingOtherRows.slice();
-      _pendingOtherRows = [];
-      if (!sessionRows.length) return;
-
-      /* Acumular para legenda */
-      _addedOtherRows = _addedOtherRows.concat(sessionRows);
-
-      var newPendRows = pendRows.concat(sessionRows);
-      var newFPend = newPendRows.reduce(function(s,r){ return s+r.pendF; },0);
-      var newPPend = newPendRows.reduce(function(s,r){ return s+r.pendP; },0);
-
-      var tbody = modal.querySelector('#proc-guia-tbody');
-      if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + sentSection;
-
-      var fncCount = modal.querySelector('#proc-guia-fnc-count');
-      var pxoCount = modal.querySelector('#proc-guia-pxo-count');
-      if (fncCount) fncCount.textContent = newFPend + ' un. pendentes';
-      if (pxoCount) pxoCount.textContent = newPPend + ' un. pendentes';
-
-      var legendWrap = modal.querySelector('#proc-guia-legend-wrap');
-      if (legendWrap) legendWrap.innerHTML = buildLegendHtml(_addedOtherRows);
-
-      var footerText = modal.querySelector('#proc-guia-footer-text');
-      if (footerText) {
-        footerText.textContent = newPendRows.length + ' refs pendentes · ' + newFPend + ' un. FNC · ' + newPPend + ' un. PXO'
-          + (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '');
-      }
-
-      var confirmBtn = modal.querySelector('#proc-guia-confirm-btn');
-      if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
-
-      pendRows = newPendRows;
-      fPend = newFPend; pPend = newPPend;
-    }
-
-    Promise.all([
-      procGetPendingFromProcSessions(),
-      procGetPendingFromTamSessions()
-    ]).then(function(results) {
-      var allOther = results[0].concat(results[1]);
-      var banner   = modal.querySelector('#proc-guia-other-banner');
-      if (!banner || !modal.parentNode) return;
-
-      banner.classList.remove('proc-guia-other-loading');
-
-      if (!allOther.length) {
-        banner.classList.add('proc-guia-other-none');
-        banner.querySelector('#proc-guia-other-status').textContent = '\u2713 sem pendentes noutras sess\u00f5es';
-        setTimeout(function(){ banner.style.display = 'none'; }, 2000);
+      if (!allRows.length) {
+        procFloatModal({
+          title: 'Sem distribuição',
+          body:  'Nenhuma fatura tem pe\u00e7as distribu\u00eddas por armazém. Preenche as colunas FNC e PXO primeiro.',
+          buttons: [{ label: 'OK', cb: null }]
+        });
         return;
       }
 
-      /* Atribuir cores por sess\u00e3o */
-      var colorMap = {}, colorIdx = 0;
-      allOther.forEach(function(row) {
-        if (!colorMap[row.sessionKey]) colorMap[row.sessionKey] = procSessionColor(colorIdx++);
-        row._dotColor = colorMap[row.sessionKey];
-      });
+      var oldModal = document.getElementById('proc-guia-modal');
+      if (oldModal) oldModal.parentNode.removeChild(oldModal);
 
-      /* Agrupar por sess\u00e3o — uma linha de banner por cada sess\u00e3o */
-      var sessionGroups = {};
-      var sessionOrder  = [];
-      allOther.forEach(function(row) {
-        if (!sessionGroups[row.sessionKey]) {
-          sessionGroups[row.sessionKey] = { rows: [], name: row.sessionName, color: row._dotColor, key: row.sessionKey };
-          sessionOrder.push(row.sessionKey);
+      var nFaturas = activeFaturas.length;
+      var title    = 'Guia Consolidada \u00b7 ' + nFaturas + ' fatura' + (nFaturas !== 1 ? 's' : '');
+      var fPend    = pendRows.reduce(function(s,r){ return s+r.pendF; }, 0);
+      var pPend    = pendRows.reduce(function(s,r){ return s+r.pendP; }, 0);
+      var fSent    = sentRows.reduce(function(s,r){ return s+r.totalF; }, 0);
+      var pSent    = sentRows.reduce(function(s,r){ return s+r.totalP; }, 0);
+
+      var COL_G = ['Ref. FNC', 'Qtd. F', 'Ref. PXO', 'Qtd. PS'];
+
+      function buildTableRows(rowList) {
+        if (!rowList.length) return '<tr><td colspan="7" class="proc-guia-empty">Sem refer\u00eancias pendentes</td></tr>';
+        var fRows = rowList.filter(function(r){ return (r.done ? r.totalF : r.pendF) > 0; });
+        var pRows = rowList.filter(function(r){ return (r.done ? r.totalP : r.pendP) > 0; });
+        var maxLen = Math.max(fRows.length, pRows.length);
+        var html = '';
+        for (var i = 0; i < maxLen; i++) {
+          var fRow = fRows[i] || null;
+          var pRow = pRows[i] || null;
+          var refRow = fRow || pRow;
+          var cls = refRow.done ? ' proc-guia-row-sent' : (i%2===0 ? ' proc-guia-row-even' : ' proc-guia-row-odd');
+          var trBg = refRow.done ? 'background:#f5f5f5;' : (i%2===0 ? 'background:#fff;' : 'background:#F7F4F3;');
+          /* Indicator dots live in their own column — refs are untouched */
+          var fDot = (fRow && fRow._dotColor)
+            ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + fRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
+            : '';
+          var pDot = (pRow && pRow._dotColor)
+            ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + pRow._dotColor + ';flex-shrink:0;" aria-hidden="true"></span>'
+            : '';
+          var fRef = fRow ? fRow.ref : '';
+          var fQty = fRow ? (fRow.done ? fRow.totalF : fRow.pendF) : '';
+          var pRef = pRow ? pRow.ref : '';
+          var pQty = pRow ? (pRow.done ? pRow.totalP : pRow.pendP) : '';
+          html += '<tr class="proc-guia-tr' + cls + '" style="' + trBg + '">'
+            + '<td class="proc-guia-td proc-guia-dot-col" style="' + trBg + '">' + fDot + '</td>'
+            + '<td class="proc-guia-td proc-guia-ref-f" style="' + trBg + '" data-gcol="0">' + fRef + '</td>'
+            + '<td class="proc-guia-td proc-guia-qty-f" style="' + trBg + '" data-gcol="1">' + (fQty !== '' ? fQty : '') + '</td>'
+            + '<td class="proc-guia-td proc-guia-sep-td" style="' + trBg + '"></td>'
+            + '<td class="proc-guia-td proc-guia-dot-col" style="' + trBg + '">' + pDot + '</td>'
+            + '<td class="proc-guia-td proc-guia-ref-p" style="' + trBg + '" data-gcol="2">' + pRef + '</td>'
+            + '<td class="proc-guia-td proc-guia-qty-p" style="' + trBg + '" data-gcol="3">' + (pQty !== '' ? pQty : '') + '</td>'
+            + '</tr>';
         }
-        sessionGroups[row.sessionKey].rows.push(row);
+        return html;
+      }
+
+      function buildLegendHtml(otherRows) {
+        var colorMap = {};
+        otherRows.forEach(function(r){ if (!colorMap[r.sessionKey]) colorMap[r.sessionKey] = r._dotColor; });
+        var keys = Object.keys(colorMap);
+        if (!keys.length) return '';
+        return '<div id="proc-guia-session-legend">'
+          + keys.map(function(k){
+              var row = otherRows.find(function(r){ return r.sessionKey === k; });
+              var name = row ? row.sessionName : k;
+              return '<span class="proc-guia-legend-item"><span style="color:' + colorMap[k] + ';user-select:none;">\u25cf</span> ' + name + '</span>';
+            }).join('')
+          + '</div>';
+      }
+
+      var copyBar = '<div class="proc-guia-copy-bar">'
+        + '<button class="proc-guia-addr-btn" data-addr="CAL\u00c7ADA DA QUINTINHA 17 B">Lisboa</button>'
+        + '<button class="proc-guia-addr-btn" data-addr="29-FV-30">Matr\u00edcula</button>'
+        + '<button class="proc-guia-addr-btn" data-addr="RUA DE S\u00c3O FRANCISCO N\u00ba 20">FNC</button>'
+        + '<button class="proc-guia-addr-btn" data-addr="EDIFICIO Ilha Dourada Loja-1">PXO</button>'
+        + '</div>';
+
+      /* FIX: mostrar enviadas apenas quando nao ha pendentes */
+      var sentSection = (sentRows.length && pendRows.length === 0)
+        ? '<tr class="proc-guia-sent-hdr"><td colspan="7">\u2713 J\u00e1 enviado ('
+          + sentRows.length + ' refs \u00b7 ' + fSent + ' F \u00b7 ' + pSent + ' PS)</td></tr>'
+          + buildTableRows(sentRows)
+        : '';
+
+      /* Banner — fase 1: a verificar */
+      var bannerHtml = '<div id="proc-guia-other-banner" class="proc-guia-other-banner proc-guia-other-loading">'
+        + '<span id="proc-guia-other-status">\u21bb a verificar sessões anteriores\u2026</span>'
+        + '</div>';
+
+      var modal = document.createElement('div');
+      modal.id  = 'proc-guia-modal';
+      modal.innerHTML =
+        '<div id="proc-guia-backdrop"></div>'
+        + '<div id="proc-guia-panel">'
+        +   '<div id="proc-guia-header">'
+        +     '<div id="proc-guia-title">'
+        +       '<span id="proc-guia-title-main">' + title + '</span>'
+        +       '<span id="proc-guia-title-sub">Guia de transporte \u00b7 Processamento de Faturas</span>'
+        +     '</div>'
+        +     '<div id="proc-guia-header-right">'
+        +       bannerHtml
+        +       '<div id="proc-guia-header-btns">'
+        +         '<button id="proc-guia-confirm-btn" class="proc-guia-action-btn proc-guia-confirm"'
+        +           (pendRows.length===0?' disabled':'') + '>\u2713 Confirmar envio</button>'
+        +         '<button id="proc-guia-export-btn" class="proc-guia-action-btn">\u2b07 Exportar CSV</button>'
+        +         '<button id="proc-guia-close-btn" class="proc-guia-close-btn">\u00d7</button>'
+        +       '</div>'
+        +     '</div>'
+        +   '</div>'
+        +   copyBar
+        +   '<div id="proc-guia-scroll">'
+        +     '<table id="proc-guia-table">'
+        +       '<thead><tr>'
+        +         '<th class="proc-guia-th proc-guia-dot-th"></th>'
+        +         '<th class="proc-guia-th proc-guia-th-f" colspan="2"><div class="proc-guia-th-flex"><span>\ud83d\udd35 FNC (A4)</span><span id="proc-guia-fnc-count" class="proc-guia-count-label">' + fPend + ' un. pendentes</span></div></th>'
+        +         '<th class="proc-guia-th proc-guia-th-sep"></th>'
+        +         '<th class="proc-guia-th proc-guia-dot-th"></th>'
+        +         '<th class="proc-guia-th proc-guia-th-p" colspan="2"><div class="proc-guia-th-flex"><span>\ud83d\udd34 PXO (A5)</span><span id="proc-guia-pxo-count" class="proc-guia-count-label">' + pPend + ' un. pendentes</span></div></th>'
+        +       '</tr><tr>'
+        +         '<th class="proc-guia-dot-th"></th>'
+        +         '<th class="proc-guia-th2"><button class="proc-guia-copy-btn" data-gcol="0">Refer\u00eancia</button></th>'
+        +         '<th class="proc-guia-th2 proc-th2-center"><button class="proc-guia-copy-btn" data-gcol="1">Qtd.</button></th>'
+        +         '<th class="proc-guia-th-sep"></th>'
+        +         '<th class="proc-guia-dot-th"></th>'
+        +         '<th class="proc-guia-th2"><button class="proc-guia-copy-btn" data-gcol="2">Refer\u00eancia</button></th>'
+        +         '<th class="proc-guia-th2 proc-th2-center"><button class="proc-guia-copy-btn" data-gcol="3">Qtd.</button></th>'
+        +       '</tr></thead>'
+        +       '<tbody id="proc-guia-tbody">' + buildTableRows(pendRows) + sentSection + '</tbody>'
+        +     '</table>'
+        +     '<div id="proc-guia-legend-wrap"></div>'
+        +   '</div>'
+        +   '<div id="proc-guia-footer">'
+        +     '<span id="proc-guia-footer-text">'
+        +       pendRows.length + ' refs pendentes \u00b7 ' + fPend + ' un. FNC \u00b7 ' + pPend + ' un. PXO'
+        +       (sentRows.length ? ' \u00b7 ' + sentRows.length + ' j\u00e1 enviadas' : '')
+        +     '</span>'
+        +     '<span class="proc-guia-copy-msg" id="proc-guia-copy-msg"></span>'
+        +   '</div>'
+        + '</div>';
+
+      document.body.appendChild(modal);
+      requestAnimationFrame(function(){ modal.classList.add('proc-guia-visible'); });
+
+      /* ── Fase 2: fetch remoto — proc + TAM ── */
+      /* NÃO adiciona automaticamente — apenas avisa e espera confirmação do utilizador */
+      var _pendingOtherRows = [];   /* ficam guardadas até o user clicar em Adicionar */
+
+      /* _addedOtherRows acumula todas as rows de sessões que o user escolheu adicionar */
+      var _addedOtherRows = [];
+
+      function applyOtherRows() {
+        /* _pendingOtherRows contém as rows da sessão que acabou de ser clicada */
+        var sessionRows = _pendingOtherRows.slice();
+        _pendingOtherRows = [];
+        if (!sessionRows.length) return;
+
+        /* Acumular para legenda */
+        _addedOtherRows = _addedOtherRows.concat(sessionRows);
+
+        var newPendRows = pendRows.concat(sessionRows);
+        var newFPend = newPendRows.reduce(function(s,r){ return s+r.pendF; },0);
+        var newPPend = newPendRows.reduce(function(s,r){ return s+r.pendP; },0);
+
+        var tbody = modal.querySelector('#proc-guia-tbody');
+        if (tbody) tbody.innerHTML = buildTableRows(newPendRows) + sentSection;
+
+        var fncCount = modal.querySelector('#proc-guia-fnc-count');
+        var pxoCount = modal.querySelector('#proc-guia-pxo-count');
+        if (fncCount) fncCount.textContent = newFPend + ' un. pendentes';
+        if (pxoCount) pxoCount.textContent = newPPend + ' un. pendentes';
+
+        var legendWrap = modal.querySelector('#proc-guia-legend-wrap');
+        if (legendWrap) legendWrap.innerHTML = buildLegendHtml(_addedOtherRows);
+
+        var footerText = modal.querySelector('#proc-guia-footer-text');
+        if (footerText) {
+          footerText.textContent = newPendRows.length + ' refs pendentes · ' + newFPend + ' un. FNC · ' + newPPend + ' un. PXO'
+            + (sentRows.length ? ' · ' + sentRows.length + ' já enviadas' : '');
+        }
+
+        var confirmBtn = modal.querySelector('#proc-guia-confirm-btn');
+        if (confirmBtn) confirmBtn.disabled = (newPendRows.length === 0);
+
+        pendRows = newPendRows;
+        fPend = newFPend; pPend = newPPend;
+      }
+
+      Promise.all([
+        procGetPendingFromProcSessions(),
+        procGetPendingFromTamSessions()
+      ]).then(function(results) {
+        var allOther = results[0].concat(results[1]);
+        var banner   = modal.querySelector('#proc-guia-other-banner');
+        if (!banner || !modal.parentNode) return;
+
+        banner.classList.remove('proc-guia-other-loading');
+
+        if (!allOther.length) {
+          banner.classList.add('proc-guia-other-none');
+          banner.querySelector('#proc-guia-other-status').textContent = '\u2713 sem pendentes noutras sess\u00f5es';
+          setTimeout(function(){ banner.style.display = 'none'; }, 2000);
+          return;
+        }
+
+        /* Atribuir cores por sess\u00e3o */
+        var colorMap = {}, colorIdx = 0;
+        allOther.forEach(function(row) {
+          if (!colorMap[row.sessionKey]) colorMap[row.sessionKey] = procSessionColor(colorIdx++);
+          row._dotColor = colorMap[row.sessionKey];
+        });
+
+        /* Agrupar por sess\u00e3o — uma linha de banner por cada sess\u00e3o */
+        var sessionGroups = {};
+        var sessionOrder  = [];
+        allOther.forEach(function(row) {
+          if (!sessionGroups[row.sessionKey]) {
+            sessionGroups[row.sessionKey] = { rows: [], name: row.sessionName, color: row._dotColor, key: row.sessionKey };
+            sessionOrder.push(row.sessionKey);
+          }
+          sessionGroups[row.sessionKey].rows.push(row);
+        });
+
+        banner.classList.add('proc-guia-other-found');
+        banner.style.flexDirection = 'column';
+        banner.style.alignItems    = 'stretch';
+        banner.style.gap           = '6px';
+
+        /* Renderizar uma linha por sess\u00e3o */
+        banner.innerHTML = '<div class="proc-guia-banner-label">Sessões anteriores com pendentes</div>'
+          + sessionOrder.map(function(sKey) {
+              var grp  = sessionGroups[sKey];
+              var totF = grp.rows.reduce(function(s,r){ return s+r.pendF; },0);
+              var totP = grp.rows.reduce(function(s,r){ return s+r.pendP; },0);
+              return '<div class="proc-guia-sess-row" data-skey="' + sKey + '">'
+                + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + grp.color + ';flex-shrink:0;"></span>'
+                + '<span class="proc-guia-sess-name" title="' + grp.name + '">' + grp.name + '</span>'
+                + '<span class="proc-guia-sess-count">' + grp.rows.length + ' ref' + (grp.rows.length!==1?'s':'') + ' \u00b7 ' + totF + ' FNC \u00b7 ' + totP + ' PXO</span>'
+                + '<button class="proc-guia-sess-add-btn" data-skey="' + sKey + '">+ Adicionar</button>'
+                + '<button class="proc-guia-sess-ign-btn" data-skey="' + sKey + '">\u00d7</button>'
+                + '</div>';
+            }).join('');
+
+        /* Bind por linha */
+        banner.querySelectorAll('.proc-guia-sess-add-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sKey = btn.getAttribute('data-skey');
+            var grp  = sessionGroups[sKey];
+            if (!grp) return;
+
+            /* Flash sutil no bot\u00e3o — escurece borda brevemente, volta ao normal */
+            btn.style.borderColor = '#555';
+            btn.style.background  = '#f0f0f0';
+            setTimeout(function(){ btn.style.borderColor = ''; btn.style.background = ''; }, 300);
+
+            /* Aplicar apenas as rows desta sess\u00e3o */
+            _pendingOtherRows = grp.rows;
+            applyOtherRows();
+
+            /* Remover a linha desta sess\u00e3o do banner */
+            delete sessionGroups[sKey];
+            var rowEl = banner.querySelector('.proc-guia-sess-row[data-skey="' + sKey + '"]');
+            if (rowEl) rowEl.remove();
+
+            /* Se n\u00e3o restam sess\u00f5es, fechar banner */
+            if (!Object.keys(sessionGroups).length) {
+              banner.style.display = 'none';
+            }
+          });
+        });
+
+        banner.querySelectorAll('.proc-guia-sess-ign-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sKey = btn.getAttribute('data-skey');
+            delete sessionGroups[sKey];
+            var rowEl = banner.querySelector('.proc-guia-sess-row[data-skey="' + sKey + '"]');
+            if (rowEl) rowEl.remove();
+            if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+          });
+        });
+
+      }).catch(function() {
+        var banner = modal.querySelector('#proc-guia-other-banner');
+        if (banner) banner.style.display = 'none';
       });
 
-      banner.classList.add('proc-guia-other-found');
-      banner.style.flexDirection = 'column';
-      banner.style.alignItems    = 'stretch';
-      banner.style.gap           = '6px';
+      function closeModal() {
+        modal.classList.remove('proc-guia-visible');
+        setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
+      }
 
-      /* Renderizar uma linha por sess\u00e3o */
-      banner.innerHTML = '<div class="proc-guia-banner-label">Sessões anteriores com pendentes</div>'
-        + sessionOrder.map(function(sKey) {
-            var grp  = sessionGroups[sKey];
-            var totF = grp.rows.reduce(function(s,r){ return s+r.pendF; },0);
-            var totP = grp.rows.reduce(function(s,r){ return s+r.pendP; },0);
-            return '<div class="proc-guia-sess-row" data-skey="' + sKey + '">'
-              + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + grp.color + ';flex-shrink:0;"></span>'
-              + '<span class="proc-guia-sess-name" title="' + grp.name + '">' + grp.name + '</span>'
-              + '<span class="proc-guia-sess-count">' + grp.rows.length + ' ref' + (grp.rows.length!==1?'s':'') + ' \u00b7 ' + totF + ' FNC \u00b7 ' + totP + ' PXO</span>'
-              + '<button class="proc-guia-sess-add-btn" data-skey="' + sKey + '">+ Adicionar</button>'
-              + '<button class="proc-guia-sess-ign-btn" data-skey="' + sKey + '">\u00d7</button>'
-              + '</div>';
-          }).join('');
-
-      /* Bind por linha */
-      banner.querySelectorAll('.proc-guia-sess-add-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          var sKey = btn.getAttribute('data-skey');
-          var grp  = sessionGroups[sKey];
-          if (!grp) return;
-
-          /* Flash sutil no bot\u00e3o — escurece borda brevemente, volta ao normal */
-          btn.style.borderColor = '#555';
-          btn.style.background  = '#f0f0f0';
-          setTimeout(function(){ btn.style.borderColor = ''; btn.style.background = ''; }, 300);
-
-          /* Aplicar apenas as rows desta sess\u00e3o */
-          _pendingOtherRows = grp.rows;
-          applyOtherRows();
-
-          /* Remover a linha desta sess\u00e3o do banner */
-          delete sessionGroups[sKey];
-          var rowEl = banner.querySelector('.proc-guia-sess-row[data-skey="' + sKey + '"]');
-          if (rowEl) rowEl.remove();
-
-          /* Se n\u00e3o restam sess\u00f5es, fechar banner */
-          if (!Object.keys(sessionGroups).length) {
-            banner.style.display = 'none';
+      /* Address button copy */
+      modal.querySelectorAll('.proc-guia-addr-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var text = btn.getAttribute('data-addr');
+          if (!text) return;
+          function flash(){ btn.classList.add('proc-guia-addr-copied'); setTimeout(function(){ btn.classList.remove('proc-guia-addr-copied'); }, 1400); }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flash).catch(flash);
+          } else {
+            try { var ta=document.createElement('textarea'); ta.value=text; ta.className='proc-clipboard-hack'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch(e){}
+            flash();
           }
         });
       });
 
-      banner.querySelectorAll('.proc-guia-sess-ign-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          var sKey = btn.getAttribute('data-skey');
-          delete sessionGroups[sKey];
-          var rowEl = banner.querySelector('.proc-guia-sess-row[data-skey="' + sKey + '"]');
-          if (rowEl) rowEl.remove();
-          if (!Object.keys(sessionGroups).length) banner.style.display = 'none';
+      /* Copy column */
+      var copyMsg = modal.querySelector('#proc-guia-copy-msg');
+      var copyTimer = null;
+      modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var ci   = parseInt(btn.getAttribute('data-gcol'));
+          var vals = Array.from(modal.querySelectorAll('td[data-gcol="'+ci+'"]'))
+                         .map(function(td){ return td.textContent.trim(); })
+                         .filter(function(v){ return v && v !== '\u2014'; });
+          if (!vals.length) return;
+          modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(b){ b.classList.remove('proc-guia-copy-active'); });
+          btn.classList.add('proc-guia-copy-active');
+          var text = vals.join('\n');
+          function showMsg(ok) {
+            if (!copyMsg) return;
+            copyMsg.textContent = ok ? '\u2713 ' + COL_G[ci] + ' copiado!' : '\u26a0 copie manualmente';
+            copyMsg.style.color = ok ? '#4A7C6F' : '#b05000';
+            clearTimeout(copyTimer);
+            copyTimer = setTimeout(function(){
+              copyMsg.textContent = '';
+              modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(b){ b.classList.remove('proc-guia-copy-active'); });
+            }, 2200);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
+          } else {
+            try {
+              var ta = document.createElement('textarea');
+              ta.value = text; ta.className = 'proc-clipboard-hack';
+              document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+              document.body.removeChild(ta); showMsg(true);
+            } catch(e){ showMsg(false); }
+          }
         });
       });
 
-    }).catch(function() {
-      var banner = modal.querySelector('#proc-guia-other-banner');
-      if (banner) banner.style.display = 'none';
-    });
+      /* Confirmar envio */
+      modal.querySelector('#proc-guia-confirm-btn').addEventListener('click', function(){
+        if (!pendRows.length) return;
+        var confirmDiv = document.createElement('div');
+        confirmDiv.id = 'proc-guia-confirm-overlay';
+        confirmDiv.innerHTML =
+          '<div id="proc-guia-confirm-box">'
+          + '<div class="proc-gc-title">\u26a0 Confirmar envio</div>'
+          + '<div class="proc-gc-body">'
+          + 'Vais marcar <strong>' + pendRows.length + ' refer\u00eancias</strong> como enviadas hoje ('
+          + new Date().toLocaleDateString('pt-PT') + ').<br>'
+          + '<strong>' + fPend + '</strong> un. FNC \u00b7 <strong>' + pPend + '</strong> un. PXO<br><br>'
+          + 'Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.'
+          + '</div>'
+          + '<div class="proc-gc-btns">'
+          + '<button class="proc-gc-btn proc-gc-ok">\u2713 Confirmar</button>'
+          + '<button class="proc-gc-btn proc-gc-cancel">Cancelar</button>'
+          + '</div>'
+          + '</div>';
+        modal.querySelector('#proc-guia-panel').appendChild(confirmDiv);
+        confirmDiv.querySelector('.proc-gc-cancel').addEventListener('click', function(){
+          confirmDiv.parentNode.removeChild(confirmDiv);
+        });
+        confirmDiv.querySelector('.proc-gc-ok').addEventListener('click', function(){
+          var ownRows   = pendRows.filter(function(r){ return !r._fromOtherSession; });
+          var otherRows = pendRows.filter(function(r){ return  r._fromOtherSession; });
+          procConfirmGuiaEnvio(ownRows);
+          /* Guardar refs externas confirmadas em _procSentRefs para historial */
+          var today = new Date().toISOString().slice(0,10);
+          otherRows.forEach(function(row) {
+            var extKey = row.ref + '___EXT___' + (row.sessionName || row.sessionKey || 'ext');
+            if (!_procSentRefs[extKey]) _procSentRefs[extKey] = [];
+            _procSentRefs[extKey].push({ data: today, f: row.pendF, p: row.pendP });
+          });
+          confirmDiv.parentNode.removeChild(confirmDiv);
+          closeModal();
+          /* Aguardar que o Supabase das outras sessões seja actualizado antes
+             de reabrir a guia — evita que as refs reapareçam como pendentes */
+          procConfirmOtherSessionsEnvio(otherRows).then(function() {
+            setTimeout(function(){ procShowGuiaModal(); }, 150);
+          }).catch(function() {
+            setTimeout(function(){ procShowGuiaModal(); }, 150);
+          });
+        });
+      });
 
-    function closeModal() {
-      modal.classList.remove('proc-guia-visible');
-      setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 260);
+      /* Export CSV */
+      modal.querySelector('#proc-guia-export-btn').addEventListener('click', function(){
+        var fRows = pendRows.filter(function(r){ return r.pendF>0; });
+        var pRows = pendRows.filter(function(r){ return r.pendP>0; });
+        var lines = ['\uFEFF' + 'Referencia;Qtd FNC;Referencia;Qtd PXO'];
+        for (var li = 0; li < Math.max(fRows.length, pRows.length); li++) {
+          var fc = fRows[li] ? fRows[li].ref + ';' + fRows[li].pendF : ';';
+          var pc = pRows[li] ? pRows[li].ref + ';' + pRows[li].pendP : ';';
+          lines.push(fc + ';' + pc);
+        }
+        var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement('a');
+        a.href   = url;
+        a.download = 'Guia_' + new Date().toISOString().slice(0,10) + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      });
+
+      modal.querySelector('#proc-guia-backdrop').addEventListener('click', closeModal);
+      modal.querySelector('#proc-guia-close-btn').addEventListener('click', closeModal);
+      document.addEventListener('keydown', function escG(e){
+        if (e.key==='Escape'){ closeModal(); document.removeEventListener('keydown', escG); }
+      });
     }
 
-    /* Address button copy */
-    modal.querySelectorAll('.proc-guia-addr-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var text = btn.getAttribute('data-addr');
-        if (!text) return;
-        function flash(){ btn.classList.add('proc-guia-addr-copied'); setTimeout(function(){ btn.classList.remove('proc-guia-addr-copied'); }, 1400); }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(flash).catch(flash);
-        } else {
-          try { var ta=document.createElement('textarea'); ta.value=text; ta.className='proc-clipboard-hack'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch(e){}
-          flash();
-        }
-      });
-    });
-
-    /* Copy column */
-    var copyMsg = modal.querySelector('#proc-guia-copy-msg');
-    var copyTimer = null;
-    modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var ci   = parseInt(btn.getAttribute('data-gcol'));
-        var vals = Array.from(modal.querySelectorAll('td[data-gcol="'+ci+'"]'))
-                       .map(function(td){ return td.textContent.trim(); })
-                       .filter(function(v){ return v && v !== '\u2014'; });
-        if (!vals.length) return;
-        modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(b){ b.classList.remove('proc-guia-copy-active'); });
-        btn.classList.add('proc-guia-copy-active');
-        var text = vals.join('\n');
-        function showMsg(ok) {
-          if (!copyMsg) return;
-          copyMsg.textContent = ok ? '\u2713 ' + COL_G[ci] + ' copiado!' : '\u26a0 copie manualmente';
-          copyMsg.style.color = ok ? '#4A7C6F' : '#b05000';
-          clearTimeout(copyTimer);
-          copyTimer = setTimeout(function(){
-            copyMsg.textContent = '';
-            modal.querySelectorAll('.proc-guia-copy-btn').forEach(function(b){ b.classList.remove('proc-guia-copy-active'); });
-          }, 2200);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function(){ showMsg(true); }).catch(function(){ showMsg(false); });
-        } else {
-          try {
-            var ta = document.createElement('textarea');
-            ta.value = text; ta.className = 'proc-clipboard-hack';
-            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-            document.body.removeChild(ta); showMsg(true);
-          } catch(e){ showMsg(false); }
-        }
-      });
-    });
-
-    /* Confirmar envio */
-    modal.querySelector('#proc-guia-confirm-btn').addEventListener('click', function(){
-      if (!pendRows.length) return;
-      var confirmDiv = document.createElement('div');
-      confirmDiv.id = 'proc-guia-confirm-overlay';
-      confirmDiv.innerHTML =
-        '<div id="proc-guia-confirm-box">'
-        + '<div class="proc-gc-title">\u26a0 Confirmar envio</div>'
-        + '<div class="proc-gc-body">'
-        + 'Vais marcar <strong>' + pendRows.length + ' refer\u00eancias</strong> como enviadas hoje ('
-        + new Date().toLocaleDateString('pt-PT') + ').<br>'
-        + '<strong>' + fPend + '</strong> un. FNC \u00b7 <strong>' + pPend + '</strong> un. PXO<br><br>'
-        + 'Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.'
-        + '</div>'
-        + '<div class="proc-gc-btns">'
-        + '<button class="proc-gc-btn proc-gc-ok">\u2713 Confirmar</button>'
-        + '<button class="proc-gc-btn proc-gc-cancel">Cancelar</button>'
-        + '</div>'
-        + '</div>';
-      modal.querySelector('#proc-guia-panel').appendChild(confirmDiv);
-      confirmDiv.querySelector('.proc-gc-cancel').addEventListener('click', function(){
-        confirmDiv.parentNode.removeChild(confirmDiv);
-      });
-      confirmDiv.querySelector('.proc-gc-ok').addEventListener('click', function(){
-        var ownRows   = pendRows.filter(function(r){ return !r._fromOtherSession; });
-        var otherRows = pendRows.filter(function(r){ return  r._fromOtherSession; });
-        procConfirmGuiaEnvio(ownRows);
-        /* Guardar refs externas confirmadas em _procSentRefs para historial */
-        var today = new Date().toISOString().slice(0,10);
-        otherRows.forEach(function(row) {
-          var extKey = row.ref + '___EXT___' + (row.sessionName || row.sessionKey || 'ext');
-          if (!_procSentRefs[extKey]) _procSentRefs[extKey] = [];
-          _procSentRefs[extKey].push({ data: today, f: row.pendF, p: row.pendP });
-        });
-        confirmDiv.parentNode.removeChild(confirmDiv);
-        closeModal();
-        /* Aguardar que o Supabase das outras sessões seja actualizado antes
-           de reabrir a guia — evita que as refs reapareçam como pendentes */
-        procConfirmOtherSessionsEnvio(otherRows).then(function() {
-          setTimeout(function(){ procShowGuiaModal(); }, 150);
-        }).catch(function() {
-          setTimeout(function(){ procShowGuiaModal(); }, 150);
-        });
-      });
-    });
-
-    /* Export CSV */
-    modal.querySelector('#proc-guia-export-btn').addEventListener('click', function(){
-      var fRows = pendRows.filter(function(r){ return r.pendF>0; });
-      var pRows = pendRows.filter(function(r){ return r.pendP>0; });
-      var lines = ['\uFEFF' + 'Referencia;Qtd FNC;Referencia;Qtd PXO'];
-      for (var li = 0; li < Math.max(fRows.length, pRows.length); li++) {
-        var fc = fRows[li] ? fRows[li].ref + ';' + fRows[li].pendF : ';';
-        var pc = pRows[li] ? pRows[li].ref + ';' + pRows[li].pendP : ';';
-        lines.push(fc + ';' + pc);
-      }
-      var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
-      var url  = URL.createObjectURL(blob);
-      var a    = document.createElement('a');
-      a.href   = url;
-      a.download = 'Guia_' + new Date().toISOString().slice(0,10) + '.csv';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
-    });
-
-    modal.querySelector('#proc-guia-backdrop').addEventListener('click', closeModal);
-    modal.querySelector('#proc-guia-close-btn').addEventListener('click', closeModal);
-    document.addEventListener('keydown', function escG(e){
-      if (e.key==='Escape'){ closeModal(); document.removeEventListener('keydown', escG); }
-    });
+    procBuildGuiaRowsAsync().then(montarGuiaModal).catch(function() { montarGuiaModal([]); });
   }
 
   /* ── 19b. SENT REFS STATE (persisted in session) ── */
@@ -4378,10 +4441,14 @@
         })).then(atualizarTabela);
       }
 
-      /* Ao desligar o toggle: apaga imediatamente da tabela (optimista) e
-         pede ao RPC proc_borrar_referencias_rascunho que remova em Supabase
-         so as referencias sem guia_erp ainda atribuido (as com guia jamais
-         sao tocadas, o trigger do lado da base de dados garante isso). */
+      /* Ao desligar o toggle: apaga de imediato em Supabase (via RPC
+         proc_borrar_referencias_rascunho) tudo o que se tinha gerado.
+         Nada fica guardado quando o check esta desligado — o utilizador
+         pode ligar/desligar quantas vezes quiser, que o sistema recalcula
+         sempre do zero. O trigger da base de dados continua a impedir
+         fisicamente apagar qualquer referencia que ja tenha guia_erp
+         atribuido, portanto isto nunca pode tocar numa referencia real
+         ja usada. */
       function apagarReferenciasGeradasEAtualizar() {
         var geradas = items.filter(function(it) { return it.refNova; }).map(function(it) { return it.refNova; });
         items.forEach(function(it) { it.refNova = null; });

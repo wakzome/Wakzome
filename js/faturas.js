@@ -4366,13 +4366,17 @@
        chegam a pedir isto — mantem-se 100% o comportamento actual. */
     var elegivelSessao = _sessaoUsaReferenciaAutomatica;
 
-    function refExibida(it, ativo) {
+    /* Enquanto "carregando" for verdade e ainda nao houver refNova,
+       mostra reticencias em vez da referencia original — nunca deve
+       aparecer o numero errado nem um "salto" visual de um para o outro. */
+    function refExibida(it, ativo, carregando) {
+      if (ativo && !it.refNova && carregando) return '\u2026';
       return (ativo && it.refNova) ? it.refNova : (it.ref || '\u2014');
     }
 
-    function gerarRowsHTML(ativo) {
+    function gerarRowsHTML(ativo, carregando) {
       var html = items.map(function(it, idx) {
-        var refMostrar = refExibida(it, ativo);
+        var refMostrar = refExibida(it, ativo, carregando);
         return '<tr data-idx="' + idx + '" data-ref="' + refMostrar + '" data-nome="' + (it.nome||'') + '" data-pvp="' + (it.pvp != null ? it.pvp.toFixed(2) : '') + '">'
           + '<td class="td-ref">' + refMostrar + '</td>'
           + '<td class="td-nome">' + (it.nome || '\u2014') + '</td>'
@@ -4387,6 +4391,11 @@
     function montarModal(fornecedorInfo, categorias) {
       var podeGerar  = !!(elegivelSessao && fornecedorInfo && fornecedorInfo.codigo);
       var ativoAtual = podeGerar && fornecedorInfo.gera_referencia_automatica !== false;
+      /* "gerando" comeca logo verdadeiro se vamos gerar, para que a
+         PRIMEIRA pintura do modal ja mostre reticencias em vez da
+         referencia original — nunca ha um "salto" visivel. */
+      var gerando   = podeGerar && ativoAtual;
+      var geracaoId = 0;
 
       var toggleHTML = podeGerar
         ? ('<label class="proc-criacao-toggle-wrap" title="Gerar nova nomenclatura de refer\u00eancia para este fornecedor">'
@@ -4417,7 +4426,7 @@
         +         '<th class="right">%</th>'
         +         '<th class="right">PC</th>'
         +       '</tr></thead>'
-        +       '<tbody>' + gerarRowsHTML(ativoAtual) + '</tbody>'
+        +       '<tbody>' + gerarRowsHTML(ativoAtual, gerando) + '</tbody>'
         +     '</table>'
         +   '</div>'
         +   '<div id="proc-criacao-copy-hint">Clique numa linha para selecionar &mdash; clique numa c\u00e9lula para copiar</div>'
@@ -4427,18 +4436,36 @@
 
       function atualizarTabela() {
         var tbody = modal.querySelector('tbody');
-        if (tbody) tbody.innerHTML = gerarRowsHTML(ativoAtual);
+        if (tbody) tbody.innerHTML = gerarRowsHTML(ativoAtual, gerando);
       }
 
+      /* Gera as referencias UMA A UMA, em estrita ordem da tabela — nunca
+         em paralelo. A linha 1 so avanca para a linha 2 depois de a linha
+         1 ja ter o seu numero confirmado, por isso a ordem dos numeros
+         corresponde sempre, sem excepcao, a ordem visual das linhas. */
       function gerarReferenciasEAtualizar() {
         var pendentes = items.filter(function(it) { return it.ref && !it.refNova; });
-        if (!pendentes.length) { atualizarTabela(); return; }
-        Promise.all(pendentes.map(function(it) {
-          var categoria = procResolverCategoria(it.nome, categorias);
-          return procObtenerOuCriarReferencia(fornecedor, fornecedorInfo.codigo, it.ref, categoria, guiaAtual)
-            .then(function(refInterna) { if (refInterna) it.refNova = refInterna; })
-            .catch(function() {});
-        })).then(atualizarTabela);
+        if (!pendentes.length) { gerando = false; atualizarTabela(); return; }
+        var minhaGeracao = ++geracaoId;
+        gerando = true;
+        atualizarTabela();
+        var cadeia = Promise.resolve();
+        pendentes.forEach(function(it) {
+          cadeia = cadeia.then(function() {
+            if (minhaGeracao !== geracaoId) return; /* toggle mudou entretanto */
+            var categoria = procResolverCategoria(it.nome, categorias);
+            return procObtenerOuCriarReferencia(fornecedor, fornecedorInfo.codigo, it.ref, categoria, guiaAtual)
+              .then(function(refInterna) {
+                if (minhaGeracao !== geracaoId) return;
+                if (refInterna) it.refNova = refInterna;
+                atualizarTabela();
+              })
+              .catch(function() {});
+          });
+        });
+        cadeia.then(function() {
+          if (minhaGeracao === geracaoId) { gerando = false; atualizarTabela(); }
+        });
       }
 
       /* Ao desligar o toggle: apaga de imediato em Supabase (via RPC
@@ -4450,6 +4477,8 @@
          atribuido, portanto isto nunca pode tocar numa referencia real
          ja usada. */
       function apagarReferenciasGeradasEAtualizar() {
+        geracaoId++; /* invalida qualquer geracao sequencial ainda a decorrer */
+        gerando = false;
         var geradas = items.filter(function(it) { return it.refNova; }).map(function(it) { return it.refNova; });
         items.forEach(function(it) { it.refNova = null; });
         atualizarTabela();

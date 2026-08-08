@@ -2444,10 +2444,12 @@ input, textarea { cursor: text !important; }
   }
   #wz-emg-row #emg-mobile-bubble { margin: 0; }
   #wz-active-panel.wz-inline-mobile {
-    position: static;
-    top: auto; right: auto; left: auto; transform: none;
-    display: inline-flex; margin: 0;
-    z-index: auto;
+    display: inline-flex !important;
+    position: static !important;
+    top: auto !important; right: auto !important; left: auto !important; transform: none !important;
+    margin: 0 !important;
+    z-index: auto !important;
+    opacity: 1 !important;
   }
   #wz-active-panel.wz-inline-mobile #wz-active-tooltip {
     position: fixed;
@@ -2856,7 +2858,6 @@ input, textarea { cursor: text !important; }
 
   
   #saft-reminder { display: none !important; }
-  #wz-active-panel { display: none !important; }
 
   
   #tab-editor.active {
@@ -2898,7 +2899,6 @@ input, textarea { cursor: text !important; }
 
   
   #saft-reminder { display: none !important; }
-  #wz-active-panel { display: none !important; }
 
   
   #container-tables { overflow-x: hidden; overflow-y: auto; }

@@ -1262,12 +1262,13 @@ body {
 }
 @media (max-width:1024px) and (orientation:portrait) {
   #proc-content .proc-header-card { flex-direction:row !important; flex-wrap:nowrap !important; align-items:flex-end !important; gap:8px !important; padding:12px 14px !important; }
-  #proc-content .proc-forn-valor-row { flex-wrap:nowrap !important; gap:6px !important; flex:1 1 auto !important; min-width:0 !important; }
-  #proc-content .proc-forn-group { flex:1 1 90px !important; min-width:60px !important; }
-  #proc-content .proc-valorfat-group { flex:0 1 72px !important; min-width:56px !important; }
-  #proc-content .proc-forn-group input, #proc-content .proc-valorfat-group input { font-size:.74rem !important; padding:6px 6px !important; }
-  #proc-content .proc-field-label { font-size:.52rem !important; letter-spacing:.06em !important; white-space:nowrap !important; }
-  #proc-content .proc-total-box { flex:0 1 auto !important; min-width:0 !important; }
+  #proc-content .proc-forn-valor-row { flex-wrap:nowrap !important; gap:6px !important; flex:0 0 auto !important; min-width:0 !important; }
+  #proc-content .proc-forn-group { flex:0 1 78px !important; min-width:50px !important; }
+  #proc-content .proc-valorfat-group { flex:0 1 64px !important; min-width:48px !important; margin-left:2px !important; }
+  #proc-content .proc-forn-group input, #proc-content .proc-valorfat-group input { font-size:.74rem !important; padding:6px 4px !important; }
+  #proc-content .proc-field-label { font-size:.5rem !important; letter-spacing:.04em !important; white-space:nowrap !important; }
+  #proc-content .proc-totalcalc-group { flex:1 1 auto !important; min-width:0 !important; margin-left:8px !important; }
+  #proc-content .proc-total-box { flex:1 1 auto !important; min-width:0 !important; }
   #proc-content .proc-total-box .proc-amount { font-size:1rem !important; }
   #proc-content .proc-amount-row { flex-wrap:nowrap !important; gap:3px !important; }
   #proc-content .proc-criacao-btn { width:22px !important; height:22px !important; margin-left:2px !important; font-size:.6rem !important; }

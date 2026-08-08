@@ -1000,6 +1000,16 @@
   }
 
   /* ── 5. SESSION DROPDOWN ── */
+  function procSessionMenuBackdrop() {
+    var bd = document.getElementById('proc-session-menu-backdrop');
+    if (!bd) {
+      bd = document.createElement('div');
+      bd.id = 'proc-session-menu-backdrop';
+      bd.addEventListener('click', procCloseSessionMenu);
+      document.body.appendChild(bd);
+    }
+    return bd;
+  }
   function procToggleSessionMenu(e) {
     if (e) e.stopPropagation();
     var menu = document.getElementById('proc-sessionMenuDropdown');
@@ -1007,6 +1017,7 @@
     if (menu.classList.contains('hidden')) {
       procRenderSessionMenu();
       menu.classList.remove('hidden');
+      procSessionMenuBackdrop().style.display = 'block';
       /* Position dropdown relative to the trigger button using fixed coords */
       var btn = e && e.currentTarget ? e.currentTarget : (e && e.target ? e.target : null);
       if (btn) {
@@ -1014,14 +1025,21 @@
         menu.style.top   = (rect.bottom + 6) + 'px';
         menu.style.right = (window.innerWidth - rect.right) + 'px';
         menu.style.left  = 'auto';
+        /* Estica o modal o máximo possível no espaço livre abaixo do botão;
+           quando o conteúdo não couber, o scroll interno já definido no
+           CSS (overflow-y:auto) assume. */
+        var freeBelow = window.innerHeight - rect.bottom - 20;
+        menu.style.maxHeight = Math.max(180, Math.min(freeBelow, window.innerHeight * 0.7)) + 'px';
       }
     } else {
-      menu.classList.add('hidden');
+      procCloseSessionMenu();
     }
   }
   function procCloseSessionMenu() {
     var m = document.getElementById('proc-sessionMenuDropdown');
     if (m) m.classList.add('hidden');
+    var bd = document.getElementById('proc-session-menu-backdrop');
+    if (bd) bd.style.display = 'none';
   }
   function procRenderSessionMenu() {
     var menu = document.getElementById('proc-sessionMenuDropdown');
@@ -2777,7 +2795,7 @@
       +       '<button class="proc-btn primary" id="proc-start-new-btn">Iniciar nova sess\u00e3o</button>'
       +     '</div>'
       +     '<div id="proc-session-bar-right" style="display:none;">'
-      +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#128194; sess&#245;es &#x25be;</button>'
+      +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#9776; sess&#245;es &#x25be;</button>'
       +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
       +       '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
       +       '<button class="proc-btn" id="proc-guiaBtn" style="display:none;">&#128203;</button>'

@@ -1176,7 +1176,6 @@
       procUpdateHeader(fid);
       procSyncRefColWidth(fid);
       procSyncDescColWidth(fid);
-      procSyncObsColWidth(fid);
       /* Restore transp field */
       if (data.transpTotal) {
         var tEl      = document.getElementById('proc-transp-'      + fid);
@@ -1255,12 +1254,12 @@
       +         '<input type="checkbox" id="proc-guia-include-' + fid + '" checked onchange="procGuiaIncludeChange(' + fid + ')">'
       +         '<span class="proc-guia-include-label">guia</span>'
       +       '</label>'
+      +       '<button class="proc-btn primary proc-stock-btn" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
       +     '</div></div></div>'
       +   '<div class="proc-header-summary-col">'
       +     '<div class="proc-summary-item">N\u00ba Refer\u00eancias: <strong id="proc-lineCount-' + fid + '">0</strong></div>'
       +     '<div class="proc-summary-item">Pe\u00e7as totais: <strong id="proc-totalPiezas-' + fid + '">0</strong></div>'
       +     '<div class="proc-summary-item">Diferen\u00e7a: <span id="proc-diffChip-' + fid + '" class="proc-diff-chip zero">\u00b1 0.00 \u20ac</span></div>'
-      +     '<button class="proc-btn primary" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
       +   '</div>'
       + '</div>'
       /* Lock message */
@@ -1284,7 +1283,7 @@
       +   '<th>D / +1\u20ac</th>'
       +   '<th>pvp</th>'
       +   '<th>Margem</th>'
-      +   '<th class="left">OBS</th>'
+      +   '<th class="proc-obs-th">OBS</th>'
       +   '<th title="Assinalar linha">&#9873;</th>'
       +   '</tr></thead>'
       +   '<tbody id="proc-tableBody-' + fid + '"></tbody>'
@@ -1609,7 +1608,8 @@
         + '</td>'
         + '<td class="proc-cell-computed" id="proc-marg-'  + f + '-' + r + '">\u2014</td>'
         + '<td class="proc-obs-cell">'
-        +   '<input type="text" class="proc-obs-input" size="7" id="proc-obs-' + f + '-' + r + '">'
+        +   '<button type="button" class="proc-obs-btn" id="proc-obs-btn-' + f + '-' + r + '" title="Observa\u00e7\u00e3o" onclick="procObsEdit(this)"></button>'
+        +   '<input type="text" class="proc-obs-input" id="proc-obs-' + f + '-' + r + '" onblur="procObsCommit(this)" onkeydown="procObsKeydown(event,this)">'
         +   '<div class="proc-obs-tip" id="proc-obs-tip-' + f + '-' + r + '"></div>'
         + '</td>'
         + '<td class="proc-marg-td">'
@@ -1626,7 +1626,6 @@
     if (id === rowCounts[fid]) procAddRows(fid, 1);
     procSyncRefColWidth(fid);
     procSyncDescColWidth(fid);
-    procSyncObsColWidth(fid);
   }
 
   /* Measure the longest ref value in this fatura and set all ref inputs
@@ -1666,19 +1665,6 @@
     });
   }
 
-  function procSyncObsColWidth(fid) {
-    var tbody = document.getElementById('proc-tableBody-' + fid);
-    if (!tbody) return;
-    var inputs = tbody.querySelectorAll('input.proc-obs-input');
-    var maxLen = 6; /* minimum fallback chars */
-    inputs.forEach(function(inp) {
-      var len = inp.value ? inp.value.length : 0;
-      if (len > maxLen) maxLen = len;
-    });
-    inputs.forEach(function(inp) {
-      inp.setAttribute('size', maxLen + 1);
-    });
-  }
 
 
   function procAutoSplit(fid, id) {
@@ -2658,7 +2644,7 @@
     modal.className = 'proc-or-modal';
     modal.innerHTML =
         '<div class="proc-or-backdrop"></div>'
-      + '<div class="proc-or-panel">'
+      + '<div class="proc-or-panel proc-or-panel--stock">'
       +   '<div class="proc-or-panel-header">'
       +     '<div class="proc-or-panel-title">'
       +       '<span class="proc-or-panel-title-main">' + proveedor + '</span>'
@@ -2672,12 +2658,12 @@
       +     '</div>'
       +   '</div>'
       +   '<div class="proc-or-scroll">'
-      +     '<table class="proc-or-table"><thead><tr>'
-      +       '<th><div class="proc-guia-th2-inner"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="0">\u29c9</button>Refer\u00eancia</div></th>'
-      +       '<th class="center"><div class="proc-guia-th2-inner proc-th2-center-inner"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="1">\u29c9</button>ARM</div></th>'
-      +       '<th class="center"><div class="proc-guia-th2-inner proc-th2-center-inner"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="2">\u29c9</button>IVA</div></th>'
-      +       '<th class="center"><div class="proc-guia-th2-inner proc-th2-center-inner"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="3">\u29c9</button>\u20ac</div></th>'
-      +       '<th class="center"><div class="proc-guia-th2-inner proc-th2-center-inner"><button class="proc-or-copy-btn proc-guia-hdr-copy" data-col="4">\u29c9</button>Qtd.</div></th>'
+      +     '<table class="proc-or-table proc-stock-table"><thead><tr>'
+      +       '<th class="proc-stock-th-ref"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="0">Refer\u00eancia</button></th>'
+      +       '<th class="center proc-stock-th-arm"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="1">ARM</button></th>'
+      +       '<th class="center proc-stock-th-iva"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="2">IVA</button></th>'
+      +       '<th class="center proc-stock-th-preco"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="3">\u20ac</button></th>'
+      +       '<th class="center proc-stock-th-qtd"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="4">Qtd.</button></th>'
       +     '</tr></thead>'
       +     '<tbody id="proc-stock-tbody">' + buildTableRows() + '</tbody>'
       +     '</table>'
@@ -4265,6 +4251,9 @@
   window.procSaveSession         = procSaveSession;
   window.procUpdateTableLock     = procUpdateTableLock;
   window.procObsSync             = procObsSync;
+  window.procObsEdit              = procObsEdit;
+  window.procObsCommit            = procObsCommit;
+  window.procObsKeydown           = procObsKeydown;
   window.procShowGuiaModal       = procShowGuiaModal;
   window.procShowAuditPanel      = procShowAuditPanel;
   window.procShowCriacaoModal    = procShowCriacaoModal;
@@ -4372,16 +4361,44 @@
   }
 
   function procObsSync(input) {
-    /* Busca el tip como hermano siguiente del input dentro del mismo td */
+    /* Busca el tip y el botão asterisco como irmãos do input dentro do mesmo td */
     var cell = input.closest ? input.closest('.proc-obs-cell') : input.parentElement;
     var tip  = cell ? cell.querySelector('.proc-obs-tip') : null;
-    if (!tip) return;
-    tip.textContent = input.value || '';
-    if (input.value.trim()) {
-      tip.classList.add('has-text');
-    } else {
-      tip.classList.remove('has-text');
+    var btn  = cell ? cell.querySelector('.proc-obs-btn')  : null;
+    var val  = input.value || '';
+    var has  = !!val.trim();
+    if (tip) {
+      tip.textContent = val;
+      tip.classList.toggle('has-text', has);
     }
+    if (btn) {
+      btn.textContent = has ? '*' : '';
+      btn.classList.toggle('has-text', has);
+    }
+  }
+
+  /* Clique no asterisco (ou no espaço vazio da célula) abre o campo para escrever */
+  function procObsEdit(btn) {
+    var cell = btn.closest ? btn.closest('.proc-obs-cell') : btn.parentElement;
+    if (!cell) return;
+    var input = cell.querySelector('.proc-obs-input');
+    if (!input) return;
+    cell.classList.add('editing');
+    input.focus();
+    input.select();
+  }
+
+  /* Fecha a edição e volta a mostrar o asterisco (ou vazio) */
+  function procObsCommit(input) {
+    var cell = input.closest ? input.closest('.proc-obs-cell') : input.parentElement;
+    procObsSync(input);
+    if (cell) cell.classList.remove('editing');
+    procSaveSession(false);
+  }
+
+  function procObsKeydown(e, input) {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); input.blur(); }
   }
 
 })();

@@ -2774,9 +2774,9 @@
       +       '<span id="proc-saveStatus" class="proc-save-status" style="display:none;"></span>'
       +     '</div>'
       +     '<div id="proc-session-bar-center">'
-      +       '<button class="proc-btn primary" id="proc-start-new-btn">&#11088; Iniciar nova sess\u00e3o</button>'
+      +       '<button class="proc-btn primary" id="proc-start-new-btn">Iniciar nova sess\u00e3o</button>'
       +     '</div>'
-      +     '<div id="proc-session-bar-right">'
+      +     '<div id="proc-session-bar-right" style="display:none;">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#128194; sess&#245;es &#x25be;</button>'
       +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
       +       '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
@@ -2786,9 +2786,6 @@
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'
       +     '<div id="proc-session-start-inner">'
-      +       '<div class="proc-start-eyebrow">PROCESSAMENTO DE FATURAS</div>'
-      +       '<div class="proc-start-title">Escolhe uma sess\u00e3o ou inicia uma nova</div>'
-      +       '<div class="proc-start-desc">Para evitar sobreescrever dados, selecciona sempre a sess\u00e3o correcta.</div>'
       +       '<div id="proc-start-sessions-list"></div>'
       +     '</div>'
       +   '</div>'
@@ -2844,7 +2841,7 @@
       list.innerHTML = '';
       return;
     }
-    var html = '<div class="proc-section-label">Sess\u00f5es guardadas</div>';
+    var html = '<div class="proc-section-label">sess\u00f5es guardadas \u00b7 ' + keys.length + '</div>';
     keys.forEach(function(key) {
       var label = labelFromKey(key);
       var dateStr = '', nFat = '';
@@ -2947,6 +2944,8 @@
     if (start) start.style.display = 'none';
     var newBtnWrap1 = document.getElementById('proc-session-bar-center');
     if (newBtnWrap1) newBtnWrap1.style.display = 'none';
+    var barRight1 = document.getElementById('proc-session-bar-right');
+    if (barRight1) barRight1.style.display = '';
     if (main)  main.style.display  = '';
     if (addBtn) {
       var newAddBtn = addBtn.cloneNode(true);
@@ -2974,6 +2973,8 @@
     if (start) start.style.display = 'flex';
     var newBtnWrap2 = document.getElementById('proc-session-bar-center');
     if (newBtnWrap2) newBtnWrap2.style.display = '';
+    var barRight2 = document.getElementById('proc-session-bar-right');
+    if (barRight2) barRight2.style.display = 'none';
     if (main)  main.style.display  = 'none';
     var lbl = document.getElementById('proc-session-label');
     if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
@@ -3165,6 +3166,8 @@
     if (start) start.style.display = 'flex';
     var newBtnWrap3 = document.getElementById('proc-session-bar-center');
     if (newBtnWrap3) newBtnWrap3.style.display = '';
+    var barRight3 = document.getElementById('proc-session-bar-right');
+    if (barRight3) barRight3.style.display = 'none';
     procHideFloatingButtons();
     var backBtn = document.getElementById('adm-back-btn');
     if (backBtn) backBtn._procBound = false;

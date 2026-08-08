@@ -341,26 +341,24 @@
       '#pf-sess-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:300;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}',
       '#pf-sess-overlay.open{display:flex;flex-direction:column;align-items:stretch;}',
       '#pf-sess-topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e6e6e6;background:#fff;flex-shrink:0;}',
-      '#pf-sess-body{flex:1;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px 60px;}',
-      '#pf-sess-card{width:100%;max-width:480px;background:#fff;border:1.5px solid #e0e0e0;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);}',
-      '#pf-sess-card-top{padding:20px 28px 0;}',
-      '.pf-sess-pretitle{font-size:.68rem;font-weight:bold;letter-spacing:.12em;color:#aaa;text-transform:uppercase;margin-bottom:8px;}',
-      '.pf-sess-title{font-size:1.5rem;font-weight:bold;color:#000;margin-bottom:6px;}',
-      '.pf-sess-subtitle{font-size:.8rem;color:#888;margin-bottom:20px;}',
-      '.pf-sess-section-lbl{font-size:.68rem;font-weight:bold;letter-spacing:.1em;color:#aaa;text-transform:uppercase;padding:0 28px;margin-bottom:8px;}',
-      '.pf-sess-list{padding:0 16px;margin-bottom:8px;}',
-      '.pf-sess-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #e8e8e8;border-radius:10px;margin-bottom:8px;background:#fff;transition:border-color .15s;}',
-      '.pf-sess-row:hover{border-color:#bbb;}',
+      '#pf-sess-actionbar{display:flex;align-items:center;justify-content:center;padding:8px 0 12px;flex-shrink:0;}',
+      '#pf-sess-new-btn{padding:7px 16px;border:1px solid #ccc;border-radius:8px;background:transparent;color:#000;font-family:\'MontserratLight\',sans-serif;font-size:.78rem;font-weight:700;text-transform:lowercase;cursor:pointer;transition:background 0.15s,border-color 0.15s;white-space:nowrap;}',
+      '#pf-sess-new-btn:hover{background:#f0f0f0;border-color:#555;}',
+      '#pf-sess-body{flex:1;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;padding:12px 16px 60px;}',
+      '#pf-sess-card{width:100%;max-width:480px;font-family:\'MontserratLight\',sans-serif;}',
+      '.pf-sess-section-lbl{font-size:.62rem;font-weight:700;letter-spacing:.1em;color:#000;opacity:.4;text-transform:uppercase;margin-bottom:8px;}',
+      '.pf-sess-list{margin-bottom:8px;}',
+      '.pf-sess-row{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:8px;background:rgba(255,255,255,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.65);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.05);transition:background .15s ease,box-shadow .15s ease;}',
+      '.pf-sess-row:hover{background:rgba(255,255,255,0.72);box-shadow:0 4px 16px rgba(0,0,0,0.08);}',
+      '.pf-sess-row:last-child{margin-bottom:0;}',
       '.pf-sess-info{flex:1;min-width:0;}',
-      '.pf-sess-name{font-size:.88rem;font-weight:bold;color:#000;}',
-      '.pf-sess-meta{font-size:.7rem;color:#aaa;margin-top:2px;}',
-      '.pf-sess-load-btn{font-size:.75rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:6px 14px;border-radius:7px;border:1.5px solid #ccc;background:#fff;color:#000;white-space:nowrap;transition:background .15s;display:inline-flex;align-items:center;gap:5px;}',
-      '.pf-sess-load-btn:hover{background:#f0f0f0;border-color:#888;}',
-      '.pf-sess-del-btn{background:none;border:none;color:#ccc;font-size:.9rem;cursor:pointer;padding:4px 6px;border-radius:5px;transition:color .15s,background .15s;}',
-      '.pf-sess-del-btn:hover{color:#9B4D4D;background:#fdf0f0;}',
+      '.pf-sess-name{font-size:.84rem;font-weight:700;color:#000;}',
+      '.pf-sess-meta{font-size:.7rem;font-weight:600;color:#888;margin-top:2px;}',
+      '.pf-sess-load-btn{font-size:.7rem;font-weight:700;font-family:\'MontserratLight\',sans-serif;cursor:pointer;padding:3px 10px;border-radius:6px;border:1px solid #ccc;background:transparent;color:#000;white-space:nowrap;transition:background .14s,border-color .14s;}',
+      '.pf-sess-load-btn:hover{background:#f0f0f0;border-color:#555;}',
+      '.pf-sess-del-btn{background:transparent;border:1px solid #ddd;color:#000;font-size:.7rem;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px;transition:color .14s,border-color .14s,background .14s;}',
+      '.pf-sess-del-btn:hover{color:#9B4D4D;border-color:#9B4D4D;background:#F5EAEA;}',
       '.pf-sess-empty{text-align:center;padding:28px 16px;color:#ccc;font-size:.82rem;}',
-      '#pf-sess-new-btn{display:block;width:calc(100% - 56px);margin:12px 28px 28px;padding:14px;font-size:.88rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;border:1.5px solid #e0e0e0;border-radius:12px;background:#fff;color:#000;text-align:center;transition:background .15s,border-color .15s;}',
-      '#pf-sess-new-btn:hover{background:#f8f8f8;border-color:#bbb;}',
       '.pf-sess-loading{text-align:center;padding:20px;color:#aaa;font-size:.8rem;}',
       /* ── PVP Admin Modal ── */
       '#pf-pvp-modal{display:none;position:fixed;inset:0;z-index:320;}',
@@ -1126,6 +1124,9 @@
 
     var all = await pfLoadAllMerged();
     var sessions = Object.values(all).sort(function(a,b){ return (b.savedAt||0)-(a.savedAt||0); });
+
+    var lbl = document.getElementById('pf-sess-section-lbl');
+    if (lbl) lbl.textContent = 'sessões guardadas' + (sessions.length ? ' · ' + sessions.length : '');
 
     if (!list) return;
     if (!sessions.length) {
@@ -2381,14 +2382,13 @@
           '<button id="pf-sess-back" style="font-size:.9rem;font-weight:bold;font-family:\'MontserratLight\',sans-serif;cursor:pointer;color:#fff!important;background:#000;border:1.5px solid #000;padding:7px 16px 7px 12px;border-radius:10px;transition:background .2s;text-transform:lowercase;letter-spacing:.03em;box-shadow:0 2px 8px rgba(0,0,0,0.18);display:inline-flex;align-items:center;gap:8px;"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M8 2L4 6L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> início</button>' +
           '<span style="font-size:.82rem;font-weight:bold;text-transform:lowercase;letter-spacing:.06em;color:#000;">parfois</span>' +
         '</div>' +
+        '<div id="pf-sess-actionbar">' +
+          '<button id="pf-sess-new-btn">iniciar nova sessão</button>' +
+        '</div>' +
         '<div id="pf-sess-body">' +
           '<div id="pf-sess-card">' +
-            '<div id="pf-sess-card-top">' +
-              '<div class="pf-sess-title">Sessões</div>' +
-            '</div>' +
-            '<div class="pf-sess-section-lbl">sessões guardadas</div>' +
+            '<div class="pf-sess-section-lbl" id="pf-sess-section-lbl">sessões guardadas</div>' +
             '<div class="pf-sess-list" id="pf-sess-list"></div>' +
-            '<button id="pf-sess-new-btn">⭐ iniciar nova sessão</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(so);

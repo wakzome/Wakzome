@@ -307,11 +307,14 @@
   }
 
   /* Cria ou obtem a referencia interna atraves do RPC atomico
-     proc_obter_ou_criar_referencia (ver proc_referencias_atomico.sql).
-     Todo o "existe? / calcula proximo numero / grava" acontece numa unica
-     transacao dentro da base de dados — nao ha forma de duas chamadas
-     concorrentes colidirem, porque o Postgres serializa o UPDATE do
-     contador do fornecedor. */
+     proc_obter_ou_criar_referencia (ver proc_referencias_atomico_v3.sql).
+     Todo o "existe? / calcula proximo numero livre / grava" acontece numa
+     unica transacao dentro da base de dados, com a linha do fornecedor
+     bloqueada — nao ha forma de duas chamadas concorrentes colidirem.
+     Devolve { referencia_interna, criada_agora }: criada_agora=false
+     significa que a referencia ja existia antes desta chamada (pode
+     estar partilhada com outra factura) — so quando e true e que e
+     seguro apaga-la mais tarde se o utilizador desligar o toggle. */
   function procObtenerOuCriarReferencia(nomeFornecedor, codigoFornecedor, refOriginal, categoria, guiaAtual) {
     var proveedor = procNormalize(nomeFornecedor);
     var refNorm   = procNormalizarRefOriginal(refOriginal);
@@ -329,6 +332,10 @@
       })
     })
       .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(resultado) {
+        if (!resultado || !resultado.referencia_interna) return null;
+        return { referencia_interna: resultado.referencia_interna, criada_agora: !!resultado.criada_agora };
+      })
       .catch(function() { return null; });
   }
 
@@ -4459,9 +4466,15 @@
             if (minhaGeracao !== geracaoId) return; /* toggle mudou entretanto */
             var categoria = procResolverCategoria(it.nome, categorias);
             return procObtenerOuCriarReferencia(fornecedor, fornecedorInfo.codigo, it.ref, categoria, guiaAtual)
-              .then(function(refInterna) {
+              .then(function(resultado) {
                 if (minhaGeracao !== geracaoId) return;
-                if (refInterna) it.refNova = refInterna;
+                if (resultado) {
+                  it.refNova = resultado.referencia_interna;
+                  /* So marcamos para poder apagar mais tarde se esta
+                     chamada e que a criou agora mesmo — se ja existia
+                     (partilhada com outra factura, p.ex.), nunca se apaga. */
+                  it.refNovaCriadaAgora = resultado.criada_agora;
+                }
                 atualizarTabela();
               })
               .catch(function() {});
@@ -4473,18 +4486,20 @@
       }
 
       /* Ao desligar o toggle: apaga de imediato em Supabase (via RPC
-         proc_borrar_referencias_rascunho) tudo o que se tinha gerado.
-         Nada fica guardado quando o check esta desligado — o utilizador
-         pode ligar/desligar quantas vezes quiser, que o sistema recalcula
-         sempre do zero. O trigger da base de dados continua a impedir
-         fisicamente apagar qualquer referencia que ja tenha guia_erp
-         atribuido, portanto isto nunca pode tocar numa referencia real
-         ja usada. */
+         proc_borrar_referencias_rascunho) APENAS as referencias que esta
+         mesma passagem acabou de criar. Uma referencia que ja existia
+         antes (por exemplo, porque o mesmo artigo ja tinha sido criado
+         noutra factura) NUNCA e apagada por aqui — pode estar a ser usada
+         por essa outra factura, e apaga-la corromperia-a. O trigger da
+         base de dados continua, de qualquer forma, a impedir fisicamente
+         apagar qualquer referencia que ja tenha guia_erp atribuido. */
       function apagarReferenciasGeradasEAtualizar() {
         geracaoId++; /* invalida qualquer geracao sequencial ainda a decorrer */
         gerando = false;
-        var geradas = items.filter(function(it) { return it.refNova; }).map(function(it) { return it.refNova; });
-        items.forEach(function(it) { it.refNova = null; });
+        var geradas = items
+          .filter(function(it) { return it.refNova && it.refNovaCriadaAgora; })
+          .map(function(it) { return it.refNova; });
+        items.forEach(function(it) { it.refNova = null; it.refNovaCriadaAgora = false; });
         atualizarTabela();
         if (!geradas.length) return;
         procSbFetch('rpc/proc_borrar_referencias_rascunho', {

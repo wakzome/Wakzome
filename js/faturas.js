@@ -1245,7 +1245,7 @@
       +     '<div class="proc-field-group proc-valorfat-group"><div class="proc-field-label">Valor Fatura s/IVA (\u20ac)</div>'
       +       '<input type="number" id="proc-valorFactura-' + fid + '" placeholder="0.00" step="0.01" oninput="procUpdateHeader(' + fid + ');procUpdateTableLock(' + fid + ')"></div>'
       +   '</div>'
-      +   '<div class="proc-field-group"><div class="proc-field-label">Total Calculado (\u20ac)</div>'
+      +   '<div class="proc-field-group proc-totalcalc-group"><div class="proc-field-label">Total Calculado (\u20ac)</div>'
       +     '<div class="proc-total-box"><div class="proc-field-label">soma das linhas <button class="proc-audit-btn" id="proc-audit-btn-' + fid + '" onclick="procShowAuditPanel(' + fid + ')">&#128269; rever</button></div>'
       +     '<div class="proc-amount-row">'
       +       '<div class="proc-amount" id="proc-totalCalc-' + fid + '">0.00</div>'

@@ -1006,7 +1006,8 @@
       bd = document.createElement('div');
       bd.id = 'proc-session-menu-backdrop';
       bd.addEventListener('click', procCloseSessionMenu);
-      document.body.appendChild(bd);
+      var host = document.getElementById('proc-content') || document.body;
+      host.appendChild(bd);
     }
     return bd;
   }
@@ -1253,6 +1254,16 @@
       +         '<span class="proc-guia-include-label">guia</span>'
       +       '</label>'
       +     '</div></div></div>'
+      +   '<div class="proc-header-summary-row">'
+      +     '<div class="proc-summary-line">'
+      +       '<span>Linhas: <strong id="proc-lineCount-' + fid + '">0</strong></span>'
+      +       '<span>Pe\u00e7as totais: <strong id="proc-totalPiezas-' + fid + '">0</strong></span>'
+      +       '<span>Diferen\u00e7a: <span id="proc-diffChip-' + fid + '" class="proc-diff-chip zero">\u00b1 0.00 \u20ac</span></span>'
+      +     '</div>'
+      +     '<div class="proc-footer-actions">'
+      +       '<button class="proc-btn primary" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
+      +     '</div>'
+      +   '</div>'
       + '</div>'
       /* Lock message */
       + '<div class="proc-table-lock" id="proc-table-lock-' + fid + '">'
@@ -1280,17 +1291,7 @@
       +   '</tr></thead>'
       +   '<tbody id="proc-tableBody-' + fid + '"></tbody>'
       +   '</table></div></div>'
-      +   '<div class="proc-table-footer">'
-      +     '<div class="proc-summary-line">'
-      +       '<span>Linhas: <strong id="proc-lineCount-' + fid + '">0</strong></span>'
-      +       '<span>Pe\u00e7as totais: <strong id="proc-totalPiezas-' + fid + '">0</strong></span>'
-      +       '<span>Diferen\u00e7a: <span id="proc-diffChip-' + fid + '" class="proc-diff-chip zero">\u00b1 0.00 \u20ac</span></span>'
-      +     '</div>'
-      +     '<div class="proc-footer-actions">'
-      +       '<button class="proc-btn primary" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
-      +     '</div>'
-      +   '</div>'
-      + '</div>';
+      +   '</div>';
   }
 
   function procRemoveFatura(fid) {

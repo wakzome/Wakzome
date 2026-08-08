@@ -1233,10 +1233,10 @@ body {
   #proc-float-actions .proc-float-btn { width:46px; height:46px; }
 }
 @media (min-width:769px) and (max-width:1024px) {
-  #proc-content .proc-header-card { flex-direction:column; align-items:stretch; flex-wrap:nowrap; gap:12px; padding:16px; }
-  #proc-content .proc-header-summary-col { align-items:flex-start; border-left:none; border-top:1px solid #e0e0e0; padding-left:0; padding-top:12px; margin-left:0; }
-  #proc-content .proc-forn-valor-row { flex-wrap:wrap; }
+  #proc-content .proc-header-card { flex-wrap:wrap; row-gap:14px; column-gap:20px; padding:16px; }
+  #proc-content .proc-forn-valor-row { flex-wrap:wrap; row-gap:10px; }
   #proc-content .proc-amount-row { flex-wrap:wrap; }
+  #proc-content .proc-header-summary-col { flex:0 0 auto; }
   #proc-content .proc-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   #proc-content .proc-table-wrap td.td-ref {
     position:sticky; left:0; background:#fff; z-index:2;

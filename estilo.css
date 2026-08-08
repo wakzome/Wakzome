@@ -1317,7 +1317,8 @@ body {
   #proc-content .proc-forn-group { grid-area:forn !important; min-width:0 !important; width:100% !important; }
   #proc-content .proc-valorfat-group { grid-area:valor !important; min-width:0 !important; width:100% !important; }
   #proc-content .proc-forn-wrap input { width:100% !important; }
-  #proc-content .proc-forn-group input, #proc-content .proc-valorfat-group input { font-size:.72rem !important; padding:5px 5px !important; }
+  #proc-content .proc-forn-group input, #proc-content .proc-valorfat-group input { font-size:.72rem !important; padding:5px 4px !important; width:100% !important; box-sizing:border-box !important; }
+  #proc-content input[id^="proc-valorFactura-"] { width:100% !important; max-width:100% !important; }
   #proc-content .proc-field-label { font-size:.46rem !important; letter-spacing:.02em !important; white-space:nowrap !important; }
   #proc-content .proc-totalcalc-group { grid-area:total !important; min-width:0 !important; width:100% !important; margin-left:0 !important; }
   #proc-content .proc-total-box { min-width:0 !important; width:100% !important; }

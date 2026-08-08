@@ -1307,15 +1307,15 @@ body {
 @media (max-width:600px), (orientation:landscape) and (max-height:500px) {
   #proc-content .proc-header-card {
     display:grid !important;
-    grid-template-columns: 1fr auto !important;
+    grid-template-columns: minmax(0,1fr) 58px !important;
     grid-template-areas: "forn valor" "total total" "summary summary" !important;
     column-gap:8px !important; row-gap:8px !important;
     align-items:end !important;
     padding:10px 12px !important;
   }
   #proc-content .proc-forn-valor-row { display:contents !important; }
-  #proc-content .proc-forn-group { grid-area:forn !important; min-width:0 !important; }
-  #proc-content .proc-valorfat-group { grid-area:valor !important; min-width:0 !important; flex:0 0 auto !important; width:64px !important; }
+  #proc-content .proc-forn-group { grid-area:forn !important; min-width:0 !important; width:100% !important; }
+  #proc-content .proc-valorfat-group { grid-area:valor !important; min-width:0 !important; width:100% !important; }
   #proc-content .proc-forn-wrap input { width:100% !important; }
   #proc-content .proc-forn-group input, #proc-content .proc-valorfat-group input { font-size:.72rem !important; padding:5px 5px !important; }
   #proc-content .proc-field-label { font-size:.46rem !important; letter-spacing:.02em !important; white-space:nowrap !important; }

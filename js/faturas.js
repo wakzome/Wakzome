@@ -218,7 +218,11 @@
   }
 
   function procLoadCategoriasRemote() {
-    if (_categoriasCache) return Promise.resolve(_categoriasCache);
+    /* So reutiliza a cache quando realmente trouxe categorias. Um array
+       vazio NUNCA fica guardado como "carregado" — se a 1a tentativa falhar
+       ou vier vazia (rede lenta, RLS ainda a inicializar, etc.), a proxima
+       chamada tenta de novo em vez de resolver tudo como XX para sempre. */
+    if (_categoriasCache && _categoriasCache.length) return Promise.resolve(_categoriasCache);
     if (_categoriasLoading) return _categoriasLoading;
     _categoriasLoading = procSbFetch(
       'proc_categorias?select=codigo,categoria_pt,sinonimos_pt,sinonimos_es,sinonimos_en,sinonimos_it,sinonimos_fr,sinonimos_de,erros_comuns_pt,erros_comuns_es&ativo=eq.true',
@@ -226,7 +230,7 @@
     )
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(rows) {
-        _categoriasCache = (rows || []).map(function(row) {
+        var mapeadas = (rows || []).map(function(row) {
           var todos = []
             .concat(row.sinonimos_pt || [], row.sinonimos_es || [], row.sinonimos_en || [],
                     row.sinonimos_it || [], row.sinonimos_fr || [], row.sinonimos_de || [],
@@ -235,9 +239,11 @@
           termos.sort(function(a, b) { return b.split(' ').length - a.split(' ').length; });
           return { codigo: row.codigo, categoria_pt: row.categoria_pt, termos: termos };
         });
-        return _categoriasCache;
+        if (mapeadas.length) { _categoriasCache = mapeadas; }
+        _categoriasLoading = null;
+        return mapeadas;
       })
-      .catch(function() { _categoriasCache = []; return _categoriasCache; });
+      .catch(function() { _categoriasLoading = null; return []; });
     return _categoriasLoading;
   }
 
@@ -300,48 +306,29 @@
     return (ref || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
+  /* Cria ou obtem a referencia interna atraves do RPC atomico
+     proc_obter_ou_criar_referencia (ver proc_referencias_atomico.sql).
+     Todo o "existe? / calcula proximo numero / grava" acontece numa unica
+     transacao dentro da base de dados — nao ha forma de duas chamadas
+     concorrentes colidirem, porque o Postgres serializa o UPDATE do
+     contador do fornecedor. */
   function procObtenerOuCriarReferencia(nomeFornecedor, codigoFornecedor, refOriginal, categoria, guiaAtual) {
     var proveedor = procNormalize(nomeFornecedor);
     var refNorm   = procNormalizarRefOriginal(refOriginal);
     var ano       = new Date().getFullYear() % 100;
     if (!proveedor || !refNorm || !codigoFornecedor) return Promise.resolve(null);
 
-    var filtro = 'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedor)
-      + '&referencia_original=eq.' + encodeURIComponent(refNorm)
-      + '&categoria=eq.' + encodeURIComponent(categoria)
-      + '&ano=eq.' + ano
-      + '&select=referencia_interna,secuencial';
-
-    return procSbFetch(filtro, { method: 'GET' })
-      .then(function(r) { return r.ok ? r.json() : []; })
-      .then(function(rows) {
-        if (rows && rows.length) return rows[0].referencia_interna;
-
-        return procSbFetch(
-          'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedor) + '&select=secuencial&order=secuencial.desc&limit=1',
-          { method: 'GET' }
-        )
-          .then(function(r2) { return r2.ok ? r2.json() : []; })
-          .then(function(rowsSeq) {
-            var proximo = (rowsSeq && rowsSeq.length) ? (rowsSeq[0].secuencial + 1) : 1;
-            var numStr  = ('00000' + proximo).slice(-5);
-            var refInterna = ano + codigoFornecedor + categoria + '-' + numStr;
-            return procSbFetch('proc_referencias', {
-              method: 'POST',
-              headers: Object.assign(procSbHeaders(), { 'Prefer': 'return=minimal' }),
-              body: JSON.stringify({
-                proveedor: proveedor,
-                referencia_original: refNorm,
-                categoria: categoria,
-                ano: ano,
-                secuencial: proximo,
-                referencia_interna: refInterna,
-                guia_erp: guiaAtual || null
-              })
-            }).then(function() { return refInterna; })
-              .catch(function() { return refInterna; });
-          });
+    return procSbFetch('rpc/proc_obter_ou_criar_referencia', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_proveedor: proveedor,
+        p_referencia_original: refNorm,
+        p_categoria: categoria,
+        p_ano: ano,
+        p_guia: guiaAtual || null
       })
+    })
+      .then(function(r) { return r.ok ? r.json() : null; })
       .catch(function() { return null; });
   }
 
@@ -2788,172 +2775,210 @@
 
   /* ── 15. STOCK MODAL ── */
   function procShowStockModal(fid) {
-    var rows      = procCollectRows(fid);
-    var pEl       = document.getElementById('proc-proveedor-' + fid);
-    var proveedor = pEl ? (pEl.value || '\u2014') : '\u2014';
+    var rowsOriginais = procCollectRows(fid);
+    var pEl0           = document.getElementById('proc-proveedor-' + fid);
+    var proveedorNorm0 = pEl0 ? procNormalize(pEl0.value) : '';
 
-    /* ── Build raw lines, then merge equal refs per ARM ── */
-    var rawLines = [];
-    [['Funchal','A4'],['Porto Santo','A5']].forEach(function(pair) {
-      var loja = pair[0], cod = pair[1];
-      rows.forEach(function(r) {
-        var qty = cod === 'A4' ? r.a4 : r.a5;
-        if (qty > 0) rawLines.push({ ref:r.ref, loja:loja, cod:cod, precio:r.precoCusto, qty:qty });
+    function construirComRows(rows) {
+      var pEl       = document.getElementById('proc-proveedor-' + fid);
+      var proveedor = pEl ? (pEl.value || '\u2014') : '\u2014';
+
+      /* ── Build raw lines, then merge equal refs per ARM ── */
+      var rawLines = [];
+      [['Funchal','A4'],['Porto Santo','A5']].forEach(function(pair) {
+        var loja = pair[0], cod = pair[1];
+        rows.forEach(function(r) {
+          var qty = cod === 'A4' ? r.a4 : r.a5;
+          if (qty > 0) rawLines.push({ ref:r.ref, loja:loja, cod:cod, precio:r.precoCusto, qty:qty });
+        });
       });
-    });
 
-    /* Merge: group by ref+cod, sum qty, average price when prices differ */
-    var map = {};
-    rawLines.forEach(function(l) {
-      var key = l.ref + '||' + l.cod;
-      if (!map[key]) {
-        map[key] = { ref:l.ref, loja:l.loja, cod:l.cod, qty:0, _prices:[], _totalQty:0 };
-      }
-      map[key].qty      += l.qty;
-      map[key]._prices.push(l.precio);
-      map[key]._totalQty += l.qty;
-    });
-    var lines = Object.keys(map).map(function(k) {
-      var m = map[k];
-      var prices = m._prices;
-      /* Average price (weighted equally per row, not per unit) */
-      var avgPrice = prices.reduce(function(s,p){ return s+p; }, 0) / prices.length;
-      return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
-    });
+      /* Merge: group by ref+cod, sum qty, average price when prices differ */
+      var map = {};
+      rawLines.forEach(function(l) {
+        var key = l.ref + '||' + l.cod;
+        if (!map[key]) {
+          map[key] = { ref:l.ref, loja:l.loja, cod:l.cod, qty:0, _prices:[], _totalQty:0 };
+        }
+        map[key].qty      += l.qty;
+        map[key]._prices.push(l.precio);
+        map[key]._totalQty += l.qty;
+      });
+      var lines = Object.keys(map).map(function(k) {
+        var m = map[k];
+        var prices = m._prices;
+        /* Average price (weighted equally per row, not per unit) */
+        var avgPrice = prices.reduce(function(s,p){ return s+p; }, 0) / prices.length;
+        return { ref:m.ref, loja:m.loja, cod:m.cod, iva:'23', precio:avgPrice, qty:m.qty };
+      });
 
-    /* ── Simple nearest rounding: round each unit price to 2 decimals.
-       Max error per line = 0.005€, so for 73 lines max total drift ≈ ±0.36€ ── */
-    lines.forEach(function(l) {
-      l.precio = Math.round(l.precio * 100) / 100;
-    });
+      /* ── Simple nearest rounding: round each unit price to 2 decimals.
+         Max error per line = 0.005€, so for 73 lines max total drift ≈ ±0.36€ ── */
+      lines.forEach(function(l) {
+        l.precio = Math.round(l.precio * 100) / 100;
+      });
 
-    /* ── Ajuste de cêntimos: aproximar o total ao valor da fatura ── */
-    var vElAdj  = document.getElementById('proc-valorFactura-' + fid);
-    var ftValAdj = parseFloat(vElAdj ? vElAdj.value : 0) || 0;
-    if (ftValAdj > 0) {
-      var stockTotal = lines.reduce(function(s, l) {
-        return s + Math.round(l.precio * l.qty * 100) / 100;
-      }, 0);
-      var diffCents = Math.round((ftValAdj - stockTotal) * 100);
-      if (diffCents !== 0) {
-        /* Ordenar por qty ascendente — menos peças = menos impacto por cêntimo */
-        var sortedAdj = lines.slice().sort(function(a, b) { return a.qty - b.qty; });
-        for (var ai = 0; ai < sortedAdj.length && diffCents !== 0; ai++) {
-          var ll   = sortedAdj[ai];
-          var sign = diffCents > 0 ? 1 : -1;
-          var afterDiff = diffCents - sign * ll.qty;
-          if (Math.abs(afterDiff) <= Math.abs(diffCents)) {
-            ll.precio = Math.round((ll.precio + sign * 0.01) * 100) / 100;
-            diffCents = afterDiff;
+      /* ── Ajuste de cêntimos: aproximar o total ao valor da fatura ── */
+      var vElAdj  = document.getElementById('proc-valorFactura-' + fid);
+      var ftValAdj = parseFloat(vElAdj ? vElAdj.value : 0) || 0;
+      if (ftValAdj > 0) {
+        var stockTotal = lines.reduce(function(s, l) {
+          return s + Math.round(l.precio * l.qty * 100) / 100;
+        }, 0);
+        var diffCents = Math.round((ftValAdj - stockTotal) * 100);
+        if (diffCents !== 0) {
+          /* Ordenar por qty ascendente — menos peças = menos impacto por cêntimo */
+          var sortedAdj = lines.slice().sort(function(a, b) { return a.qty - b.qty; });
+          for (var ai = 0; ai < sortedAdj.length && diffCents !== 0; ai++) {
+            var ll   = sortedAdj[ai];
+            var sign = diffCents > 0 ? 1 : -1;
+            var afterDiff = diffCents - sign * ll.qty;
+            if (Math.abs(afterDiff) <= Math.abs(diffCents)) {
+              ll.precio = Math.round((ll.precio + sign * 0.01) * 100) / 100;
+              diffCents = afterDiff;
+            }
           }
         }
       }
-    }
 
-    /* ── Render helpers ── */
-    var currentIva = '23';
+      /* ── Render helpers ── */
+      var currentIva = '23';
 
-    function buildTableRows() {
-      if (!lines.length) return '<tr class="empty-row"><td colspan="5">Sem linhas com dados para mostrar</td></tr>';
-      return lines.map(function(l) {
-        return '<tr>'
-          + '<td>' + l.ref + '</td>'
-          + '<td class="center proc-cod-td">' + l.cod + '</td>'
-          + '<td class="center">' + currentIva + '</td>'
-          + '<td class="right">' + l.precio.toFixed(2) + '</td>'
-          + '<td class="center">' + l.qty + '</td>'
-          + '</tr>';
-      }).join('');
-    }
+      function buildTableRows() {
+        if (!lines.length) return '<tr class="empty-row"><td colspan="5">Sem linhas com dados para mostrar</td></tr>';
+        return lines.map(function(l) {
+          return '<tr>'
+            + '<td>' + l.ref + '</td>'
+            + '<td class="center proc-cod-td">' + l.cod + '</td>'
+            + '<td class="center">' + currentIva + '</td>'
+            + '<td class="right">' + l.precio.toFixed(2) + '</td>'
+            + '<td class="center">' + l.qty + '</td>'
+            + '</tr>';
+        }).join('');
+      }
 
-    var totalFunchal    = lines.filter(function(l) { return l.cod==='A4'; }).reduce(function(s,l) { return s+l.qty; }, 0);
-    var totalPortoSanto = lines.filter(function(l) { return l.cod==='A5'; }).reduce(function(s,l) { return s+l.qty; }, 0);
-    var totalStock      = lines.reduce(function(s,l) { return s + l.qty * l.precio; }, 0);
+      var totalFunchal    = lines.filter(function(l) { return l.cod==='A4'; }).reduce(function(s,l) { return s+l.qty; }, 0);
+      var totalPortoSanto = lines.filter(function(l) { return l.cod==='A5'; }).reduce(function(s,l) { return s+l.qty; }, 0);
+      var totalStock      = lines.reduce(function(s,l) { return s + l.qty * l.precio; }, 0);
 
-    /* Delta residual após ajuste de cêntimos */
-    var deltaLabel = '';
-    if (ftValAdj > 0) {
-      var residualCents = Math.round((ftValAdj - totalStock) * 100);
-      deltaLabel = residualCents === 0
-        ? ' \u00b7 \u0394 0,00 \u20ac'
-        : ' \u00b7 \u0394 ' + (residualCents > 0 ? '+' : '') + (residualCents / 100).toFixed(2) + ' \u20ac';
-    }
+      /* Delta residual após ajuste de cêntimos */
+      var deltaLabel = '';
+      if (ftValAdj > 0) {
+        var residualCents = Math.round((ftValAdj - totalStock) * 100);
+        deltaLabel = residualCents === 0
+          ? ' \u00b7 \u0394 0,00 \u20ac'
+          : ' \u00b7 \u0394 ' + (residualCents > 0 ? '+' : '') + (residualCents / 100).toFixed(2) + ' \u20ac';
+      }
 
-    var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
+      var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
 
-    var modal = document.createElement('div');
-    modal.className = 'proc-or-modal';
-    modal.innerHTML =
-        '<div class="proc-or-backdrop"></div>'
-      + '<div class="proc-or-panel proc-or-panel--stock">'
-      +   '<div class="proc-or-panel-header">'
-      +     '<div class="proc-or-panel-title">'
-      +       '<span class="proc-or-panel-title-main">' + proveedor + '</span>'
-      +       '<span class="proc-or-panel-title-sub">Ingresso de Stock \u00b7 ERP</span>'
-      +     '</div>'
-      +     '<div class="proc-or-panel-header-btns">'
-      +       '<label class="proc-stock-iva-label">IVA&nbsp;%</label>'
-      +       '<input id="proc-stock-iva-input" type="text" value="23" maxlength="6" />'
-      +       '<button class="proc-or-action-btn" id="proc-stock-export-btn">\u2b07 exportar CSV</button>'
-      +       '<button class="proc-or-close-btn">\u2715</button>'
-      +     '</div>'
-      +   '</div>'
-      +   '<div class="proc-or-scroll">'
-      +     '<table class="proc-or-table proc-stock-table"><thead><tr>'
-      +       '<th class="proc-stock-th-ref"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="0">Refer\u00eancia</button></th>'
-      +       '<th class="center proc-stock-th-arm"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="1">ARM</button></th>'
-      +       '<th class="center proc-stock-th-iva"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="2">IVA</button></th>'
-      +       '<th class="center proc-stock-th-preco"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="3">\u20ac</button></th>'
-      +       '<th class="center proc-stock-th-qtd"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="4">Qtd.</button></th>'
-      +     '</tr></thead>'
-      +     '<tbody id="proc-stock-tbody">' + buildTableRows() + '</tbody>'
-      +     '</table>'
-      +   '</div>'
-      +   '<div class="proc-or-panel-footer">'
-      +     lines.length + ' linhas \u00b7 ' + totalFunchal + ' un. Funchal \u00b7 ' + totalPortoSanto + ' un. Porto Santo'
-      +     ' \u00b7 <strong class="proc-stock-total-strong">Total: ' + totalStock.toFixed(2) + '</strong>'
-      +     deltaLabel
-      +     '<span class="proc-or-copy-msg" id="proc-stock-copy-msg"></span>'
-      +   '</div>'
-      + '</div>';
+      var modal = document.createElement('div');
+      modal.className = 'proc-or-modal';
+      modal.innerHTML =
+          '<div class="proc-or-backdrop"></div>'
+        + '<div class="proc-or-panel proc-or-panel--stock">'
+        +   '<div class="proc-or-panel-header">'
+        +     '<div class="proc-or-panel-title">'
+        +       '<span class="proc-or-panel-title-main">' + proveedor + '</span>'
+        +       '<span class="proc-or-panel-title-sub">Ingresso de Stock \u00b7 ERP</span>'
+        +     '</div>'
+        +     '<div class="proc-or-panel-header-btns">'
+        +       '<label class="proc-stock-iva-label">IVA&nbsp;%</label>'
+        +       '<input id="proc-stock-iva-input" type="text" value="23" maxlength="6" />'
+        +       '<button class="proc-or-action-btn" id="proc-stock-export-btn">\u2b07 exportar CSV</button>'
+        +       '<button class="proc-or-close-btn">\u2715</button>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div class="proc-or-scroll">'
+        +     '<table class="proc-or-table proc-stock-table"><thead><tr>'
+        +       '<th class="proc-stock-th-ref"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="0">Refer\u00eancia</button></th>'
+        +       '<th class="center proc-stock-th-arm"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="1">ARM</button></th>'
+        +       '<th class="center proc-stock-th-iva"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="2">IVA</button></th>'
+        +       '<th class="center proc-stock-th-preco"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="3">\u20ac</button></th>'
+        +       '<th class="center proc-stock-th-qtd"><button class="proc-or-copy-btn proc-or-copy-th-btn" data-col="4">Qtd.</button></th>'
+        +     '</tr></thead>'
+        +     '<tbody id="proc-stock-tbody">' + buildTableRows() + '</tbody>'
+        +     '</table>'
+        +   '</div>'
+        +   '<div class="proc-or-panel-footer">'
+        +     lines.length + ' linhas \u00b7 ' + totalFunchal + ' un. Funchal \u00b7 ' + totalPortoSanto + ' un. Porto Santo'
+        +     ' \u00b7 <strong class="proc-stock-total-strong">Total: ' + totalStock.toFixed(2) + '</strong>'
+        +     deltaLabel
+        +     '<span class="proc-or-copy-msg" id="proc-stock-copy-msg"></span>'
+        +   '</div>'
+        + '</div>';
 
-    /* ── IVA input: update entire column on change ── */
-    var ivaInput = modal.querySelector('#proc-stock-iva-input');
-    ivaInput.addEventListener('input', function() {
-      currentIva = ivaInput.value.trim();
-      var tbody = modal.querySelector('#proc-stock-tbody');
-      if (tbody) tbody.innerHTML = buildTableRows();
-    });
-    ivaInput.addEventListener('focus', function() { ivaInput.style.borderColor='#000'; });
-    ivaInput.addEventListener('blur',  function() { ivaInput.style.borderColor='#ccc'; });
-
-    procBindClose(modal);
-    procBindCopyBar(modal, COLS, function(ci) {
-      return lines.map(function(l) {
-        if (ci===0) return l.ref;
-        if (ci===1) return l.cod;
-        if (ci===2) return currentIva;
-        if (ci===3) return l.precio.toFixed(2).replace('.',',');
-        return String(l.qty);
+      /* ── IVA input: update entire column on change ── */
+      var ivaInput = modal.querySelector('#proc-stock-iva-input');
+      ivaInput.addEventListener('input', function() {
+        currentIva = ivaInput.value.trim();
+        var tbody = modal.querySelector('#proc-stock-tbody');
+        if (tbody) tbody.innerHTML = buildTableRows();
       });
-    });
+      ivaInput.addEventListener('focus', function() { ivaInput.style.borderColor='#000'; });
+      ivaInput.addEventListener('blur',  function() { ivaInput.style.borderColor='#ccc'; });
 
-    modal.querySelector('#proc-stock-export-btn').addEventListener('click', function() {
-      var bom    = '\uFEFF';
-      var header = 'Refer\u00eancia;Armaz\u00e9m;IVA;Pre\u00e7o;Quantidade';
-      var body   = lines.map(function(l) {
-        return [l.ref, l.cod, currentIva, l.precio.toFixed(2).replace('.',','), l.qty].join(';');
-      }).join('\r\n');
-      var blob = new Blob([bom + header + '\r\n' + body], { type:'text/csv;charset=utf-8;' });
-      var url  = URL.createObjectURL(blob);
-      var a    = document.createElement('a');
-      a.href = url;
-      a.download = 'Stock_' + proveedor.replace(/[^a-zA-Z0-9_-]/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.csv';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
-    });
+      procBindClose(modal);
+      procBindCopyBar(modal, COLS, function(ci) {
+        return lines.map(function(l) {
+          if (ci===0) return l.ref;
+          if (ci===1) return l.cod;
+          if (ci===2) return currentIva;
+          if (ci===3) return l.precio.toFixed(2).replace('.',',');
+          return String(l.qty);
+        });
+      });
 
-    procOpenModal(modal);
+      modal.querySelector('#proc-stock-export-btn').addEventListener('click', function() {
+        var bom    = '\uFEFF';
+        var header = 'Refer\u00eancia;Armaz\u00e9m;IVA;Pre\u00e7o;Quantidade';
+        var body   = lines.map(function(l) {
+          return [l.ref, l.cod, currentIva, l.precio.toFixed(2).replace('.',','), l.qty].join(';');
+        }).join('\r\n');
+        var blob = new Blob([bom + header + '\r\n' + body], { type:'text/csv;charset=utf-8;' });
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement('a');
+        a.href = url;
+        a.download = 'Stock_' + proveedor.replace(/[^a-zA-Z0-9_-]/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+      });
+
+      procOpenModal(modal);
+    }
+
+    if (!proveedorNorm0) { construirComRows(rowsOriginais); return; }
+
+    procLoadFornecedorInfo(pEl0.value).then(function(info) {
+      if (!info || !info.codigo || info.gera_referencia_automatica === false) {
+        construirComRows(rowsOriginais);
+        return;
+      }
+      var ano0 = new Date().getFullYear() % 100;
+      Promise.all([
+        procLoadCategoriasRemote(),
+        procSbFetch(
+          'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm0) + '&ano=eq.' + ano0 + '&select=referencia_interna,referencia_original,categoria',
+          { method: 'GET' }
+        ).then(function(r) { return r.ok ? r.json() : []; })
+      ])
+        .then(function(res) {
+          var categorias0  = res[0];
+          var todasDoAno0  = res[1] || [];
+          var mapa0 = {};
+          todasDoAno0.forEach(function(row) {
+            mapa0[row.referencia_original + '|' + row.categoria] = row.referencia_interna;
+          });
+          var rowsTraduzidas = rowsOriginais.map(function(r) {
+            var refNorm0    = procNormalizarRefOriginal(r.ref);
+            var categoria0  = procResolverCategoria(r.desc, categorias0);
+            var nova0       = mapa0[refNorm0 + '|' + categoria0];
+            return nova0 ? Object.assign({}, r, { ref: nova0 }) : r;
+          });
+          construirComRows(rowsTraduzidas);
+        })
+        .catch(function() { construirComRows(rowsOriginais); });
+    }).catch(function() { construirComRows(rowsOriginais); });
   }
 
   /* ── 15b. FLOATING ACTION BUTTONS ── */
@@ -4353,12 +4378,27 @@
         })).then(atualizarTabela);
       }
 
+      /* Ao desligar o toggle: apaga imediatamente da tabela (optimista) e
+         pede ao RPC proc_borrar_referencias_rascunho que remova em Supabase
+         so as referencias sem guia_erp ainda atribuido (as com guia jamais
+         sao tocadas, o trigger do lado da base de dados garante isso). */
+      function apagarReferenciasGeradasEAtualizar() {
+        var geradas = items.filter(function(it) { return it.refNova; }).map(function(it) { return it.refNova; });
+        items.forEach(function(it) { it.refNova = null; });
+        atualizarTabela();
+        if (!geradas.length) return;
+        procSbFetch('rpc/proc_borrar_referencias_rascunho', {
+          method: 'POST',
+          body: JSON.stringify({ p_proveedor: procNormalize(fornecedor), p_referencias: geradas })
+        }).catch(function() {});
+      }
+
       var toggleEl = document.getElementById('proc-criacao-toggle-' + fid);
       if (toggleEl) {
         toggleEl.addEventListener('change', function() {
           ativoAtual = toggleEl.checked;
           procGuardarPreferenciaFornecedor(fornecedor, ativoAtual);
-          if (ativoAtual) { gerarReferenciasEAtualizar(); } else { atualizarTabela(); }
+          if (ativoAtual) { gerarReferenciasEAtualizar(); } else { apagarReferenciasGeradasEAtualizar(); }
         });
       }
 

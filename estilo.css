@@ -1260,7 +1260,7 @@ body {
   #proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active td.td-ref { background:#111 !important; }
   #proc-content .proc-table-wrap tbody tr.proc-row-flagged.proc-row-active:hover td.td-ref { background:#111 !important; }
 }
-@media (min-width:769px) and (max-width:1024px) and (orientation:portrait) {
+@media (max-width:1024px) and (orientation:portrait) {
   #proc-content .proc-header-card { flex-direction:row !important; flex-wrap:nowrap !important; align-items:flex-end !important; gap:8px !important; padding:12px 14px !important; }
   #proc-content .proc-forn-valor-row { flex-wrap:nowrap !important; gap:6px !important; flex:1 1 auto !important; min-width:0 !important; }
   #proc-content .proc-forn-group { flex:1 1 90px !important; min-width:60px !important; }

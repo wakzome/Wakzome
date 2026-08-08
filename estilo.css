@@ -1285,7 +1285,7 @@ body {
 .proc-stock-iva-label { font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#000; opacity:.6; white-space:nowrap; }
 .proc-stock-total-strong { color:#000; font-size:1rem; letter-spacing:-.01em; }
 
-#proc-content .proc-sess-bar-divider { border-bottom:1px solid #9DB6C9; margin-bottom:18px; position:relative; }
+#proc-content .proc-sess-bar-divider { margin-bottom:18px; position:relative; }
 .proc-sess-start-wrap { display:flex; justify-content:center; padding:32px 0; }
 .proc-sess-start-inner { width:100%; max-width:460px; font-family:'MontserratLight',sans-serif; }
 
@@ -3092,17 +3092,19 @@ button:active:not(:disabled):not(#proc-content button):not(#proc-criacao-modal b
   display: flex; flex-direction: column; align-items: center;
   gap: 14px; margin-bottom: 24px; width: 100%; max-width: 480px;
 }
-#tam-upload-label {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; width: 100%; min-height: 130px;
-  border: 2px dashed #ccc; border-radius: 16px; cursor: pointer;
-  transition: border-color .2s, background .2s; padding: 20px;
-  text-align: center; color: #000; font-size: .95rem; font-weight: 600;
+#tam-upload-label, #upload-label {
+  display: inline-flex; flex-direction: row; align-items: center;
+  justify-content: center; gap: 8px; width: auto; min-height: 0;
+  border: 1px solid #ccc; border-radius: 8px; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s; padding: 7px 16px;
+  text-align: center; color: #000; font-family:'MontserratLight',sans-serif;
+  font-size: .78rem; font-weight: 700; text-transform: lowercase; background: transparent;
 }
-#tam-upload-label:hover, #tam-upload-label.drag-over { border-color: #555; background: #f9f9f9; color: #000; }
-#tam-upload-label .upload-icon { font-size: 2.2rem; margin-bottom: 8px; }
-#tam-upload-label.loaded { min-height: 0; padding: 10px 20px; }
-#tam-upload-label.loaded .upload-icon { display: none; }
+#tam-upload-label:hover, #tam-upload-label.drag-over,
+#upload-label:hover, #upload-label.drag-over { border-color: #555; background: #f0f0f0; color: #000; }
+#tam-upload-label .upload-icon, #upload-label .upload-icon { font-size: 1rem; margin-bottom: 0; }
+#tam-upload-label.loaded, #upload-label.loaded { min-height: 0; padding: 7px 16px; }
+#tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display: none; }
 #tam-file-input { display: none; }
 #tam-file-name { font-size: .85rem; color: #000; font-weight: 600; min-height: 18px; }
 #tam-status-msg { font-size: .9rem; font-weight: 600; color: #000; min-height: 20px; text-align: center; }
@@ -5315,7 +5317,7 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 .tam-freight-remove-btn { margin-left:auto; padding:3px 9px; background:transparent; border:1.5px solid #a5d6a7; border-radius:6px; font-size:.72rem; color:#388e3c; cursor:pointer; font-family:MontserratLight,sans-serif; transition:background .12s,color .12s; }
 .tam-freight-remove-btn:hover { background:#c8e6c9; color:#1b5e20; }
 .tam-tr-ship-ext td { color:#e65100!important; font-style:italic; }
-#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:8px 16px!important; }
+#tam-upload-label.loaded, #upload-label.loaded { min-height:0!important; padding:7px 16px!important; }
 #tam-upload-label.loaded .upload-icon, #upload-label.loaded .upload-icon { display:none!important; }
 #tam-session-dialog { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:800; display:flex; align-items:center; justify-content:center; }
 #tam-session-dialog-box { background:#fff; border-radius:16px; padding:24px 28px 22px; width:min(420px,92vw); font-family:'MontserratLight',sans-serif; box-shadow:0 16px 64px rgba(0,0,0,.18); }
@@ -5335,16 +5337,16 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #tam-guia-bar-btn { display:none; }
 #tam-close-session-btn { display:none; padding:7px 12px; font-size:.92rem; font-weight:700; font-family:'MontserratLight',sans-serif; cursor:pointer; border:1px solid #ccc; border-radius:8px; background:transparent; color:#000; transition:all 0.15s; white-space:nowrap; line-height:1; }
 #tam-close-session-btn:hover { border-color:#9B4D4D; color:#9B4D4D; background:rgba(155,77,77,.08); }
-#tam-sessions-inline { display:none; width:100%; max-width:960px; margin:16px auto 0; border:1px solid #e0e0e0; border-radius:14px; overflow:hidden; background:#fff; font-family:'MontserratLight',sans-serif; }
+#tam-sessions-inline { display:none; width:100%; max-width:520px; margin:16px auto 0; font-family:'MontserratLight',sans-serif; }
 #tab-tam:not(.tam-loaded) #tam-sessions-inline { display:block; }
-.tam-sessions-inline-title { padding:10px 18px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; border-bottom:1px solid #e0e0e0; background:#000!important; color:#fff!important; }
+.tam-sessions-inline-title { font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#000!important; opacity:.4; background:transparent!important; padding:0; margin-bottom:8px; }
 #tam-sessions-dropdown { width:100%; max-height:420px; overflow-y:auto; }
 #tam-sessions-btn { display:none; }
 #tab-tam.tam-loaded #tam-sessions-btn { display:inline-flex; }
 #tam-sessions-switch-modal { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:900; display:flex; align-items:center; justify-content:center; padding:16px; }
 #tam-sessions-switch-box { width:min(480px,100%); max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.25); font-family:'MontserratLight',sans-serif; }
 .tam-sessions-switch-hdr { display:flex; align-items:center; justify-content:space-between; background:#000!important; flex-shrink:0; }
-.tam-sessions-switch-hdr .tam-sessions-inline-title { border-bottom:none; flex:1; }
+.tam-sessions-switch-hdr .tam-sessions-inline-title { flex:1; opacity:1; color:#fff!important; padding:10px 18px; margin-bottom:0; background:#000!important; }
 #tam-sessions-switch-close { background:none; border:none; color:#fff!important; font-size:.85rem; cursor:pointer; padding:10px 18px; line-height:1; }
 #tam-sessions-switch-close:hover { opacity:.65; }
 #tam-sessions-switch-dropdown { overflow-y:auto; }

@@ -3833,6 +3833,72 @@
 
   var wzCountdownTimer = null;
 
+  // Em mobile (<=1024px) o painel de "pessoas ativas" deixa de ser
+  // position:fixed (ficaria a sobrepor os cartões do dashboard, tal como
+  // o comentário de utilitario.js explica para #emg-mobile-bubble) e passa
+  // a viver no fluxo normal, logo a seguir ao botão "código de acesso"
+  // (#emg-mobile-bubble, injetado por utilitario.js). Como os dois scripts
+  // carregam em paralelo, a bolha do emg pode ainda não existir quando este
+  // corre — por isso há uma pequena tentativa repetida antes de desistir.
+  var wzMobileWatchTries = 0;
+  // #adm-dashboard é flex-direction:column (cada filho direto ocupa a sua
+  // própria linha) — inserir o painel apenas como "afterend" de
+  // #emg-mobile-bubble punha-o por baixo, não ao lado. Por isso cria-se um
+  // wrapper em linha (#wz-emg-row) que passa a conter os dois botões.
+  function wzPlaceMobilePanel() {
+    var panel = document.getElementById('wz-active-panel');
+    if (!panel) return;
+    var isMobile = window.matchMedia('(max-width:1024px)').matches;
+    var emgBubble = document.getElementById('emg-mobile-bubble');
+    if (isMobile) {
+      if (emgBubble && emgBubble.parentNode) {
+        var wrap = document.getElementById('wz-emg-row');
+        if (!wrap || wrap !== emgBubble.parentNode) {
+          wrap = document.getElementById('wz-emg-row') || document.createElement('div');
+          wrap.id = 'wz-emg-row';
+          emgBubble.insertAdjacentElement('afterend', wrap);
+          wrap.appendChild(emgBubble);
+        }
+        if (panel.parentNode !== wrap) wrap.appendChild(panel);
+        panel.classList.add('wz-inline-mobile');
+      } else if (wzMobileWatchTries < 30) {
+        wzMobileWatchTries++;
+        setTimeout(wzPlaceMobilePanel, 200);
+      }
+    } else {
+      panel.classList.remove('wz-inline-mobile');
+      if (panel.parentNode !== document.body) document.body.appendChild(panel);
+    }
+  }
+
+  // :hover não existe em touch — a bolha do emg já resolve isto com clique
+  // (toggleEmgTooltip); replica-se aqui o mesmo padrão para o tooltip de
+  // "pessoas ativas" continuar acessível em mobile.
+  function wzBindMobileToggle() {
+    var panel = document.getElementById('wz-active-panel');
+    var bubble = document.getElementById('wz-active-bubble');
+    if (!panel || !bubble || bubble._wzToggleBound) return;
+    bubble._wzToggleBound = true;
+    bubble.setAttribute('role', 'button');
+    bubble.setAttribute('tabindex', '0');
+    bubble.setAttribute('aria-label', 'pessoas ativas agora');
+    bubble.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      panel.classList.toggle('tt-open');
+    });
+    bubble.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); panel.classList.toggle('tt-open'); }
+    });
+    document.addEventListener('click', function (ev) {
+      if (!panel.classList.contains('tt-open')) return;
+      if (panel.contains(ev.target)) return;
+      panel.classList.remove('tt-open');
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') panel.classList.remove('tt-open');
+    });
+  }
+
   function wzStartPanel() {
     if (wzStarted) return;
     wzStarted = true;
@@ -3845,6 +3911,10 @@
     wzLoadActive();
     wzScheduleNextRefresh();
     if (!wzCountdownTimer) wzCountdownTimer = setInterval(wzTickCountdowns, 1000);
+    wzPlaceMobilePanel();
+    wzBindMobileToggle();
+    window.addEventListener('resize', wzPlaceMobilePanel);
+    window.addEventListener('orientationchange', function () { setTimeout(wzPlaceMobilePanel, 250); });
   }
 
   var adminApp = document.getElementById('admin-app');

@@ -821,12 +821,12 @@ body {
 #proc-content .proc-remove-fatura-btn:hover { border-color:#c47a7a; color:#c47a7a; background:rgba(155,77,77,.12); }
 #proc-content .proc-guia-erp-wrap { display:flex; align-items:center; gap:6px; margin-left:auto; }
 #proc-content .proc-guia-erp-label { font-size:.58rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }
-#proc-content .proc-guia-erp-input { padding:4px 6px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:68px; text-align:center; outline:none; transition:border-color .15s,background .15s; }
+#proc-content .proc-guia-erp-input { padding:4px 6px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:68px !important; text-align:center; outline:none; transition:border-color .15s,background .15s; }
 #proc-content .proc-guia-erp-input:focus { border-color:#000; background:#fff; }
 #proc-content .proc-guia-erp-input.proc-guia-done { border-color:#3a3a3a !important; background:#3a3a3a !important; color:#fff !important; -webkit-text-fill-color:#fff !important; }
 #proc-content .proc-transp-wrap { display:flex; align-items:center; gap:6px; }
 #proc-content .proc-transp-label { font-size:.58rem; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:#000; opacity:.45; white-space:nowrap; }
-#proc-content .proc-transp-input { padding:4px 6px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:68px; text-align:center; outline:none; transition:border-color .15s,background .15s; -moz-appearance:textfield; }
+#proc-content .proc-transp-input { padding:4px 6px; border:1px solid #e0e0e0; border-radius:7px; background:#fafafa; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:700; color:#000; width:68px !important; text-align:center; outline:none; transition:border-color .15s,background .15s; -moz-appearance:textfield; }
 #proc-content .proc-transp-input::-webkit-inner-spin-button { -webkit-appearance:none; }
 #proc-content .proc-transp-input:focus { border-color:#000; background:#fff; }
 #proc-content .proc-transp-input.proc-transp-active { border-color:#5F7B94; background:#F0F4F7; color:#5F7B94; }
@@ -843,8 +843,8 @@ body {
 #proc-content .proc-fatura-instance.proc-collapsed { padding-bottom:12px; margin-bottom:16px; border-bottom-width:1px; border-bottom-style:dashed; }
 #proc-content .proc-fatura-banner.proc-banner-done { background:#f5f5f5; border-color:#ddd; }
 #proc-content .proc-fatura-instance .proc-header-card { border-radius:0; border-top:none; margin-top:0; }
-#proc-content .proc-fatura-instance .proc-table-footer { border-radius:0 0 12px 12px; }
 #proc-content .proc-header-card { background:#fff; border:1px solid #e0e0e0; border-radius:0; padding:20px; margin-bottom:10px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; align-items:end; }
+#proc-content .proc-header-summary-row { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding-top:14px; margin-top:2px; border-top:1px solid #e0e0e0; }
 #proc-content .proc-field-group { display:flex; flex-direction:column; gap:5px; }
 #proc-content .proc-field-label { font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#000 !important; opacity:1 !important; }
 #proc-content input[type="text"], #proc-content input[type="number"] { background:#fafafa; border:1px solid #e0e0e0; color:#000; font-family:'MontserratLight',sans-serif; font-size:.88rem; font-weight:700; padding:8px 10px; border-radius:8px; outline:none; width:100%; transition:border-color 0.15s; -moz-appearance:textfield; }
@@ -922,7 +922,6 @@ body {
 #proc-content .proc-margem-val { color:#4A7C6F; }
 #proc-content .proc-margem-val.low { color:#5F7B94; }
 #proc-content .proc-margem-val.very-low { color:#9B4D4D; }
-#proc-content .proc-table-footer { background:transparent; border-top:1px solid #e0e0e0; border-radius:0 0 12px 12px; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 #proc-content .proc-summary-line { display:flex; gap:20px; font-size:.78rem; color:#000; font-weight:700; }
 #proc-content .proc-summary-line strong { color:#000; }
 #proc-content .proc-diff-chip { font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:20px; border:1.5px solid; display:inline-flex; align-items:center; gap:5px; transition:background 0.3s ease,border-color 0.3s ease; }
@@ -1006,8 +1005,9 @@ body {
 #proc-content .proc-add-fatura-btn { padding:9px 32px; font-size:.82rem; border-style:dashed; border-color:#ccc; color:#000; background:transparent; border-radius:10px; }
 #proc-content .proc-add-fatura-btn:hover { background:#f0f0f0; border-color:#555; border-style:solid; }
 #proc-content .proc-disclaimer-msg { margin:4px 0 6px; padding:10px 16px; background:transparent; border:none; border-radius:0; font-size:.75rem; font-weight:800; color:#000; letter-spacing:.03em; text-align:center; opacity:1; }
-#proc-content .proc-criacao-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; border:1.5px solid #ccc; background:#fff; color:#000; font-size:.7rem; font-weight:700; cursor:pointer; font-family:'MontserratLight',sans-serif; transition:background .15s,border-color .15s,box-shadow .15s,transform .15s; box-shadow:0 1px 4px rgba(0,0,0,.10); flex-shrink:0; vertical-align:middle; margin-left:8px; }
-#proc-content .proc-criacao-btn:hover { background:#000; color:#fff; border-color:#000; box-shadow:0 3px 12px rgba(0,0,0,.22); transform:scale(1.08); }
+#proc-content .proc-criacao-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; border:1.5px solid #ccc; background:#fff; color:#000; font-size:.85rem; font-weight:700; cursor:pointer; font-family:'MontserratLight',sans-serif; transition:background .15s,border-color .15s,box-shadow .15s,transform .15s; box-shadow:0 1px 4px rgba(0,0,0,.10); flex-shrink:0; vertical-align:middle; margin-left:8px; animation:procCriacaoPulse 1.6s ease-in-out infinite; }
+@keyframes procCriacaoPulse { 0%,100% { box-shadow:0 1px 4px rgba(0,0,0,.10); transform:scale(1); } 50% { box-shadow:0 0 0 8px rgba(0,0,0,.10); transform:scale(1.06); } }
+#proc-content .proc-criacao-btn:hover { background:#000; color:#fff; border-color:#000; box-shadow:0 3px 12px rgba(0,0,0,.22); transform:scale(1.08); animation-play-state:paused; }
 #proc-content .proc-criacao-btn:active { transform:scale(0.96); }
 #proc-content .proc-guia-include-wrap { display:inline-flex; align-items:center; gap:5px; margin-left:10px; cursor:pointer; user-select:none; }
 #proc-content .proc-guia-include-wrap input[type="checkbox"] { width:14px; height:14px; cursor:pointer; accent-color:#000; flex-shrink:0; }
@@ -1133,6 +1133,8 @@ body {
 #proc-desc-global-sugg .proc-desc-item:last-child { border-bottom:none; }
 #proc-desc-global-sugg .proc-desc-item:hover { background:#f0f0f0; }
 #proc-content .proc-forn-wrap { position:relative; }
+#proc-content .proc-forn-wrap input { width:70% !important; transition:width .2s ease; }
+#proc-content .proc-forn-wrap input:focus { width:100% !important; }
 #proc-content .proc-forn-suggestions { position:absolute; top:calc(100% + 3px); left:0; right:0; background:#fff; border:1.5px solid #000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); z-index:500; overflow:hidden; max-height:220px; overflow-y:auto; }
 #proc-content .proc-forn-suggestions.hidden { display:none; }
 #proc-content .proc-forn-item { padding:8px 12px; font-size:.85rem; font-weight:700; color:#000; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; }
@@ -1204,7 +1206,6 @@ body {
   #proc-content .proc-table-wrap tbody tr.proc-row-flagged:hover td.td-ref { background:#f9e4e4 !important; }
   #proc-content .proc-top-bar { flex-direction:column; align-items:flex-start; }
   #proc-content .proc-footer-actions { flex-wrap:wrap; }
-  #proc-content .proc-table-footer { flex-direction:column; align-items:flex-start; gap:10px; }
   #proc-float-actions { right:12px; bottom:16px; }
   #proc-float-actions .proc-float-btn { width:46px; height:46px; }
 }

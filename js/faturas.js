@@ -1254,7 +1254,7 @@
       +         '<input type="checkbox" id="proc-guia-include-' + fid + '" checked onchange="procGuiaIncludeChange(' + fid + ')">'
       +         '<span class="proc-guia-include-label">guia</span>'
       +       '</label>'
-      +       '<button class="proc-btn primary proc-stock-btn" onclick="procShowStockModal(' + fid + ')">\ud83d\udce6 ingresso de stock</button>'
+      +       '<button class="proc-btn primary proc-stock-btn" onclick="procShowStockModal(' + fid + ')" title="Ingresso de Stock"><span class="proc-stock-btn-icon">\ud83d\udce6</span><span class="proc-stock-btn-label"> ingresso de stock</span></button>'
       +     '</div></div></div>'
       +   '<div class="proc-header-summary-col">'
       +     '<div class="proc-summary-item">N\u00ba Refer\u00eancias: <strong id="proc-lineCount-' + fid + '">0</strong></div>'

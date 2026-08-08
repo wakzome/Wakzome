@@ -786,7 +786,7 @@ body {
    (bloco CSS-in-JS original + estilos dispersos convertidos)
    ============================================================ */
 #proc-content *, #proc-content *::before, #proc-content *::after { box-sizing: border-box; }
-#proc-content { width:100%; min-height:100%; background:transparent; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:'MontserratLight', sans-serif; font-size:14px; font-weight:600; color:#000; }
+#proc-content { box-sizing:border-box; width:100%; min-height:100%; background:transparent; padding:20px; display:flex; flex-direction:column; align-items:center; font-family:'MontserratLight', sans-serif; font-size:14px; font-weight:600; color:#000; }
 #proc-root { width:100%; min-height:100%; }
 #proc-content .page-wrap { width:100%; max-width:1400px; margin:0 auto; flex:1 0 auto; display:flex; flex-direction:column; min-height:0; }
 #proc-content .proc-top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }

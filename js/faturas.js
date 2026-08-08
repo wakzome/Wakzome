@@ -2805,17 +2805,19 @@
       +     '<div class="proc-add-fatura-wrap">'
       +       '<button class="proc-add-fatura-btn proc-btn" id="proc-addFaturaBtn">&#65291; adicionar fatura</button>'
       +     '</div>'
+      +     '<div class="proc-disclaimer-bar">'
       +     '<div class="proc-disclaimer-msg">'
       +       '&#9888;&#65039; SE OS ITENS TIVEREM DESCONTO DEVES INSERIR O PRE\u00c7O NORMAL E, NA COLUNA DE %, INSERIR O VALOR DO DESCONTO (%).'
       +     '</div>'
       +     '<div class="proc-disclaimer-msg proc-disc-mt6">'
       +       '&#10133; SE FOR NECESS\u00c1RIO ADICIONAR 1\u20ac POR TRANSPORTE, ACTIVA O BOT\u00c3O <strong>+1\u20ac</strong> NA LINHA DA REFER\u00caNCIA CORRESPONDENTE.'
       +     '</div>'
-      +     '<div class="proc-disclaimer-msg proc-disc-mt6 proc-disc-mb20">'
+      +     '<div class="proc-disclaimer-msg proc-disc-mt6">'
       +       '&#9432;&#65039; <strong>BOT\u00c3O D \u2014 DILUI\u00c7\u00c3O DE PRE\u00c7O:</strong> '
       +       'Se faltarem pe\u00e7as e forem satisfeitas noutra fatura, ou se vierem pe\u00e7as a mais, activa o <strong>D</strong> para diluir o pre\u00e7o e fazer coincidir os c\u00e1lculos com a fatura. '
       +       'Se aguardas repositi\u00e7\u00e3o do fornecedor, n\u00e3o actives nada.'
       +     '</div>'
+      +   '</div>'
       +   '</div>'
       + '</div>';
 
@@ -4005,12 +4007,11 @@
           pvpVal = pvpEl._calcValue;
         }
       }
-      var marg = (pvpVal && preco) ? procCalcMargem(pvpVal / (pvpVal > 0 ? 1 : 1), preco) : null;
-      /* Recalculate margem properly using pvp1 */
-      if (pvpVal && preco) {
-        var pvpSemIVA = pvpVal / 1.23;
-        marg = ((pvpSemIVA - pc) / pvpSemIVA) * 100;
-      }
+      /* Margem: usar exatamente o que a tabela original já mostra —
+         nunca recalcular aqui, para nunca divergir do valor da linha. */
+      var margCellEl = document.getElementById('proc-marg-' + fid + '-' + i);
+      var margTxt = margCellEl ? margCellEl.textContent.trim() : '';
+      var marg = (margTxt && margTxt !== '\u2014') ? margTxt : null;
       items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc });
     }
 
@@ -4039,7 +4040,7 @@
         + '<td class="td-ref">' + (it.ref || '\u2014') + '</td>'
         + '<td class="td-nome">' + (it.nome || '\u2014') + '</td>'
         + '<td class="td-pvp">' + (it.pvp != null ? it.pvp.toFixed(2) : '\u2014') + '</td>'
-        + '<td class="td-marg">' + (it.marg != null ? it.marg.toFixed(1) + '%' : '\u2014') + '</td>'
+        + '<td class="td-marg">' + (it.marg != null ? it.marg : '\u2014') + '</td>'
         + '<td class="td-custo">' + (it.custo > 0 ? it.custo.toFixed(2) : '\u2014') + '</td>'
         + '</tr>';
     }).join('');

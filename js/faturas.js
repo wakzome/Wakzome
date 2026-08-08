@@ -4444,7 +4444,11 @@
          1 ja ter o seu numero confirmado, por isso a ordem dos numeros
          corresponde sempre, sem excepcao, a ordem visual das linhas. */
       function gerarReferenciasEAtualizar() {
-        var pendentes = items.filter(function(it) { return it.ref && !it.refNova; });
+        /* Sem descricao nao ha tentativa de classificacao — nunca se gera
+           (nem se guarda) uma referencia so por falta de nome. Fica
+           pendente ate o utilizador escrever a descricao; so ai entra
+           directamente com a categoria correcta, nunca com XX de mentira. */
+        var pendentes = items.filter(function(it) { return it.ref && it.nome && it.nome.trim() && !it.refNova; });
         if (!pendentes.length) { gerando = false; atualizarTabela(); return; }
         var minhaGeracao = ++geracaoId;
         gerando = true;

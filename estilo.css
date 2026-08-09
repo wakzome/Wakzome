@@ -1064,8 +1064,16 @@ body {
 #proc-criacao-table td.td-pvp { font-size:.88rem; font-weight:800; text-align:center; }
 #proc-criacao-table td.td-marg { font-size:.72rem; font-weight:700; text-align:center; opacity:.5; }
 #proc-criacao-table td.td-custo { font-size:.72rem; font-weight:700; text-align:center; opacity:.4; }
+#proc-criacao-table td.td-ref-original { font-size:.74rem; font-weight:600; text-align:center; color:#000; opacity:.4; }
+#proc-criacao-table tbody tr.proc-criacao-active td.td-ref-original { opacity:.7; }
 @keyframes proc-criacao-flash { 0%{opacity:1} 30%{opacity:.4} 100%{opacity:1} }
 #proc-criacao-table td.proc-cell-copied { animation:proc-criacao-flash .35s ease; }
+
+/* Revelação final das referências geradas: uma única entrada suave e em
+   cascata (não linha-a-linha em tempo real), para não dar o efeito de
+   "pipoca" quando o modal reabre e não há nada de novo para criar. */
+@keyframes proc-criacao-reveal { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
+#proc-criacao-table tbody.proc-reveal tr { animation:proc-criacao-reveal .32s ease both; animation-delay:calc(var(--i, 0) * 35ms); }
 #proc-criacao-table tbody tr.proc-criacao-active td.td-marg { opacity:.8; }
 #proc-criacao-table tbody tr.proc-criacao-active td.td-custo { opacity:.75; }
 #proc-criacao-copy-hint { padding:6px 22px 10px; font-size:.65rem; font-weight:700; color:#000; opacity:.35; letter-spacing:.04em; text-transform:uppercase; flex-shrink:0; border-top:1px solid #f0f0f0; }

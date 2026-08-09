@@ -1544,13 +1544,16 @@
     var ano = new Date().getFullYear() % 100;
 
     procLoadCategoriasRemote().then(function(categorias) {
+      var protegidas = procChavesUsadasPorOutrasFaturas(proveedorNorm, fid, categorias);
       var chaves = {};
       rows.forEach(function(r) {
         if (!r.ref) return;
         var refNorm = procNormalizarRefOriginal(r.ref);
         if (!refNorm) return;
         var categoria = procResolverCategoria(r.desc, categorias || []);
-        chaves[refNorm + '|' + categoria] = true;
+        var chave = refNorm + '|' + categoria;
+        if (protegidas.hasOwnProperty(chave)) return; /* outra factura activa ainda precisa */
+        chaves[chave] = true;
       });
       var listaChaves = Object.keys(chaves);
       if (!listaChaves.length) return;
@@ -2797,6 +2800,31 @@
                     precoCusto:pc3, obs:obs, flagged:flagged, pvpManual:pvpManual });
     }
     return result;
+  }
+
+  /* Devolve o conjunto de chaves (referencia_original|categoria) que
+     OUTRAS facturas activas (excepto fidExcluir) do MESMO fornecedor
+     ainda tem nas suas linhas neste momento. Usado para nunca apagar em
+     Supabase uma referencia de que outra factura aberta ainda precisa —
+     mesmo que a factura actual tenha total autonomia sobre o que E SO
+     DELA. */
+  function procChavesUsadasPorOutrasFaturas(proveedorNorm, fidExcluir, categorias) {
+    var chaves = {};
+    if (!proveedorNorm) return chaves;
+    activeFaturas.forEach(function(outroFid) {
+      if (outroFid === fidExcluir) return;
+      var pEl = document.getElementById('proc-proveedor-' + outroFid);
+      var outroForn = pEl ? procNormalize(pEl.value) : '';
+      if (outroForn !== proveedorNorm) return;
+      procCollectRows(outroFid).forEach(function(r) {
+        if (!r.ref) return;
+        var refNorm = procNormalizarRefOriginal(r.ref);
+        if (!refNorm) return;
+        var categoria = procResolverCategoria(r.desc, categorias || []);
+        chaves[refNorm + '|' + categoria] = true;
+      });
+    });
+    return chaves;
   }
 
   /* ── 13. COPY BAR HELPER ── */
@@ -4566,19 +4594,24 @@
       }
 
       /* Ao desligar o toggle: apaga de imediato em Supabase (via RPC
-         proc_borrar_referencias_rascunho) tudo o que ESTA factura tem
-         gerado neste momento — sem excepcao, mesmo que outra factura
-         esteja a mostrar a mesma referencia. Cada factura e totalmente
-         autonoma: o que ela imprime, ela pode apagar, e nunca deve ficar
-         impedida de o fazer por causa de outra factura. A unica protecao
-         real e a da base de dados: o trigger continua a impedir
-         fisicamente apagar qualquer referencia que ja tenha guia_erp
-         atribuido, esteja ou nao partilhada. */
+         proc_borrar_referencias_rascunho) o que ESTA factura tem gerado
+         neste momento — EXCEPTO uma referencia que outra factura ACTIVA
+         (aberta neste instante, do mesmo fornecedor) ainda tenha na sua
+         propria tabela. Cada factura decide livremente por si propria,
+         mas nunca pode apagar debaixo dos pes de outra factura que ainda
+         precisa da mesma referencia. A protecao final continua a ser da
+         base de dados: nunca se apaga nada com guia_erp atribuido. */
       function apagarReferenciasGeradasEAtualizar() {
         geracaoId++; /* invalida qualquer geracao sequencial ainda a decorrer */
         gerando = false;
+        var protegidas = procChavesUsadasPorOutrasFaturas(procNormalize(fornecedor), fid, categorias);
         var geradas = items
-          .filter(function(it) { return it.refNova; })
+          .filter(function(it) {
+            if (!it.refNova) return false;
+            var refNorm   = procNormalizarRefOriginal(it.ref);
+            var categoria = procResolverCategoria(it.nome, categorias);
+            return !protegidas.hasOwnProperty(refNorm + '|' + categoria);
+          })
           .map(function(it) { return it.refNova; });
         items.forEach(function(it) { it.refNova = null; it.refNovaCriadaAgora = false; });
         atualizarTabela();

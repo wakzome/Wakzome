@@ -335,12 +335,23 @@
         p_guia: guiaAtual || null
       })
     })
-      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(r) {
+        if (!r.ok) {
+          return r.text().then(function(txt) {
+            console.error('[proc] falha ao obter/criar referencia — status ' + r.status + ':', txt, { proveedor: proveedor, refNorm: refNorm, categoria: categoria, ano: ano });
+            return null;
+          });
+        }
+        return r.json();
+      })
       .then(function(resultado) {
         if (!resultado || !resultado.referencia_interna) return null;
         return { referencia_interna: resultado.referencia_interna, criada_agora: !!resultado.criada_agora };
       })
-      .catch(function() { return null; });
+      .catch(function(e) {
+        console.error('[proc] erro de rede ao obter/criar referencia:', e, { proveedor: proveedor, refNorm: refNorm, categoria: categoria, ano: ano });
+        return null;
+      });
   }
 
   function procValidarAdmin(token) {
@@ -4520,7 +4531,15 @@
         procSbFetch('rpc/proc_borrar_referencias_rascunho', {
           method: 'POST',
           body: JSON.stringify({ p_proveedor: procNormalize(fornecedor), p_referencias: geradas })
-        }).catch(function() {});
+        }).then(function(r) {
+          if (!r.ok) {
+            return r.text().then(function(txt) {
+              console.error('[proc] falha ao apagar referencias rascunho — status ' + r.status + ':', txt, 'referencias:', geradas);
+            });
+          }
+        }).catch(function(e) {
+          console.error('[proc] erro de rede ao apagar referencias rascunho:', e, 'referencias:', geradas);
+        });
       }
 
       var toggleEl = document.getElementById('proc-criacao-toggle-' + fid);

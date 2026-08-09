@@ -11,6 +11,10 @@
   var rowCounts     = {};
   var _procInited   = false;
   var _isSynced     = false;   /* true only after remote fetch completes on init */
+  /* Nova nomenclatura: decisao 100% por factura, nunca por fornecedor —
+     duas facturas do mesmo fornecedor sao mundos independentes. Por
+     omissao (chave ausente) considera-se activo. */
+  var _usaNomenclaturaPorFatura = {};
 
   /* ── UNDO HISTORY (Ctrl+Z, ultimos 10 estados) ── */
   var _undoStack   = [];
@@ -878,6 +882,7 @@
           transpTotal:   transpVal,
           transpApplied: transpApplied,
           guiaInclude:   guiaInclude,
+          usaNomenclatura: _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true,
           rows: rows
         };
       })
@@ -1331,6 +1336,9 @@
       if (vEl) vEl.value = data.valorFactura || '';
       procUpdateBannerProvider(fid);
       procUpdateTableLock(fid);
+      /* Nova nomenclatura: por defeito activo, excepto se esta factura
+         especifica ja tinha sido guardada com o toggle desligado. */
+      _usaNomenclaturaPorFatura[fid] = (data.usaNomenclatura !== false);
       /* Restore guia ERP — if present, always collapse on load */
       if (data.guiaErp) {
         var gEl = document.getElementById('proc-guia-erp-' + fid);
@@ -2954,10 +2962,12 @@
       procOpenModal(modal);
     }
 
-    if (!proveedorNorm0) { construirComRows(rowsOriginais); return; }
+    var usaNomenclaturaFatura = _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true;
+
+    if (!proveedorNorm0 || !usaNomenclaturaFatura) { construirComRows(rowsOriginais); return; }
 
     procLoadFornecedorInfo(pEl0.value).then(function(info) {
-      if (!info || !info.codigo || info.gera_referencia_automatica === false) {
+      if (!info || !info.codigo) {
         construirComRows(rowsOriginais);
         return;
       }
@@ -3494,7 +3504,10 @@
       var pEl = document.getElementById('proc-proveedor-' + fid);
       var forn = pEl ? (pEl.value || 'Fatura ' + fid) : 'Fatura ' + fid;
       var fornNorm = procNormalize(forn);
-      var mapa = mapasPorForn ? mapasPorForn[fornNorm] : null;
+      /* O mapa (dicionario) e do fornecedor, mas usa-lo ou nao e decisao
+         desta factura especifica — nunca herdada de outra factura. */
+      var usaFatura = _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true;
+      var mapa = (usaFatura && mapasPorForn) ? mapasPorForn[fornNorm] : null;
       fatRows.forEach(function(r) {
         if (!r.ref) return;
         if ((r.a4 || 0) === 0 && (r.a5 || 0) === 0) return;
@@ -3547,7 +3560,7 @@
 
     return Promise.all(listaFornNorm.map(function(fn) {
       return procLoadFornecedorInfo(fn).then(function(info) {
-        if (!info || !info.codigo || info.gera_referencia_automatica === false) {
+        if (!info || !info.codigo) {
           return { fornNorm: fn, mapa: null };
         }
         return procSbFetch(
@@ -4397,7 +4410,9 @@
 
     function montarModal(fornecedorInfo, categorias) {
       var podeGerar  = !!(elegivelSessao && fornecedorInfo && fornecedorInfo.codigo);
-      var ativoAtual = podeGerar && fornecedorInfo.gera_referencia_automatica !== false;
+      /* Decisao 100% desta factura (fid) — nunca herda nem contamina
+         outra factura do mesmo fornecedor. Por omissao, activo. */
+      var ativoAtual = podeGerar && (_usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true);
       /* "gerando" comeca logo verdadeiro se vamos gerar, para que a
          PRIMEIRA pintura do modal ja mostre reticencias em vez da
          referencia original — nunca ha um "salto" visivel. */
@@ -4512,7 +4527,10 @@
       if (toggleEl) {
         toggleEl.addEventListener('change', function() {
           ativoAtual = toggleEl.checked;
-          procGuardarPreferenciaFornecedor(fornecedor, ativoAtual);
+          /* Guarda so nesta factura (proc_sessoes), nunca no fornecedor —
+             outra factura do mesmo fornecedor nao e afectada. */
+          _usaNomenclaturaPorFatura[fid] = ativoAtual;
+          procSaveSession(false);
           if (ativoAtual) { gerarReferenciasEAtualizar(); } else { apagarReferenciasGeradasEAtualizar(); }
         });
       }

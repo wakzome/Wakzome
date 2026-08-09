@@ -1064,7 +1064,7 @@ body {
 #proc-criacao-table td.td-pvp { font-size:.88rem; font-weight:800; text-align:center; }
 #proc-criacao-table td.td-marg { font-size:.72rem; font-weight:700; text-align:center; opacity:.5; }
 #proc-criacao-table td.td-custo { font-size:.72rem; font-weight:700; text-align:center; opacity:.4; }
-#proc-criacao-table td.td-ref-original { font-size:.74rem; font-weight:600; text-align:center; color:#000; opacity:.4; }
+#proc-criacao-table td.td-ref-original { font-size:.74rem; font-weight:600; text-align:center; color:#000; opacity:.4; cursor:default; }
 #proc-criacao-table tbody tr.proc-criacao-active td.td-ref-original { opacity:.7; }
 @keyframes proc-criacao-flash { 0%{opacity:1} 30%{opacity:.4} 100%{opacity:1} }
 #proc-criacao-table td.proc-cell-copied { animation:proc-criacao-flash .35s ease; }

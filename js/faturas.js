@@ -4455,15 +4455,20 @@
       items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc, refNova: null });
     }
 
-    /* Dedupe por refer\u00eancia \u2014 v\u00e1rias linhas da fatura podem repetir
-       a mesma refer\u00eancia (ex.: quantidade dividida por v\u00e1rias linhas);
-       para cria\u00e7\u00e3o de artigos basta 1 linha por refer\u00eancia. */
+    /* Dedupe por referencia + descricao — varias linhas da fatura podem
+       repetir a mesma referencia com a MESMA descricao (ex.: quantidade
+       dividida por varias linhas de tamanhos diferentes); nesse caso
+       basta 1 linha. Mas a mesma referencia com descricao DIFERENTE e um
+       artigo genuinamente distinto (ex.: um conjunto dividido em duas
+       pecas com o mesmo codigo do fornecedor) — nunca deve ser fundida
+       com a outra, tem de gerar a sua propria nomenclatura. */
     if (items.length) {
       var seenRef = {};
       var deduped = [];
       items.forEach(function(it) {
-        var key = (it.ref || '').trim().toUpperCase();
-        if (!key) { deduped.push(it); return; }
+        var refKey = (it.ref || '').trim().toUpperCase();
+        if (!refKey) { deduped.push(it); return; }
+        var key = refKey + '||' + (it.nome || '').trim().toUpperCase();
         if (!Object.prototype.hasOwnProperty.call(seenRef, key)) {
           seenRef[key] = deduped.length;
           deduped.push(it);

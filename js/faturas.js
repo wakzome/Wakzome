@@ -3258,7 +3258,7 @@
       +   '<div id="proc-session-start">'
       +     '<div id="proc-session-start-inner">'
       +       '<div id="proc-busca-referencia-wrap">'
-      +         '<input type="text" id="proc-busca-referencia-input" class="proc-busca-input" autocomplete="off" placeholder="Consultar refer\u00eancia (original ou nova nomenclatura)\u2026">'
+      +         '<input type="text" id="proc-busca-referencia-input" class="proc-busca-input" autocomplete="off" placeholder="Consultar refer\u00eancia (original ou refer\u00eancia interna)\u2026">'
       +         '<div id="proc-busca-dropdown" class="proc-busca-dropdown hidden"></div>'
       +       '</div>'
       +       '<div id="proc-start-sessions-list"></div>'
@@ -5073,9 +5073,9 @@
       var geracaoId = 0;
 
       var toggleHTML = podeGerar
-        ? ('<label class="proc-criacao-toggle-wrap" title="Gerar nova nomenclatura de refer\u00eancia para este fornecedor">'
+        ? ('<label class="proc-criacao-toggle-wrap" title="Gerar refer\u00eancia interna para este fornecedor">'
           + '<input type="checkbox" id="proc-criacao-toggle-' + fid + '"' + (ativoAtual ? ' checked' : '') + '>'
-          + '<span>nova nomenclatura</span>'
+          + '<span>refer\u00eancia interna</span>'
           + '</label>')
         : '';
 

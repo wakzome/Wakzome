@@ -3258,23 +3258,110 @@
     return (q || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
-  function procBuscarCandidatosReferencia(qNorm) {
+  /* Constroi o padrao usado no ilike do PostgREST. Em vez de eliminar os
+     caracteres que nao sao letras/numeros (o que quebrava a busca ao colar
+     uma nomenclatura completa como "26RKZCA-00003", pois o valor guardado
+     mantem o hifen), colapsa qualquer sequencia desses caracteres num
+     "*", que o PostgREST traduz para um wildcard SQL. Assim "26RKZCA-00003"
+     vira "26RKZCA*00003", que encontra o valor guardado tenha ele hifen
+     ou nao. */
+  function procConstruirPadraoIlike(q) {
+    var bruto = (q || '').toString().toUpperCase().trim();
+    return bruto.replace(/[^A-Z0-9]+/g, '*').replace(/^\*+|\*+$/g, '');
+  }
+
+  function procBuscarCandidatosReferencia(valorBruto) {
+    var padrao = procConstruirPadraoIlike(valorBruto);
+    if (!padrao) return Promise.resolve([[], []]);
     return Promise.all([
       procSbFetch(
         'proc_referencias?select=referencia_interna,referencia_original,categoria,proveedor&or=(referencia_interna.ilike.*'
-          + encodeURIComponent(qNorm) + '*,referencia_original.ilike.*' + encodeURIComponent(qNorm) + '*)&limit=20',
+          + encodeURIComponent(padrao) + '*,referencia_original.ilike.*' + encodeURIComponent(padrao) + '*)&limit=20',
         { method: 'GET' }
       ).then(function(r) { return r.ok ? r.json() : []; }),
       procLoadCategoriasRemote()
     ]);
   }
 
+  /* Cache simples (por carregamento de pagina) de todas as sessoes
+     guardadas, reutilizado tanto pelo dropdown de sugestoes como pela
+     radiografia final — evita repetir o mesmo fetch pesado duas vezes
+     na mesma pesquisa. */
+  var _todasSessoesBuscaCache = null;
+  function procCarregarTodasSessoesBusca() {
+    if (_todasSessoesBuscaCache) return _todasSessoesBuscaCache;
+    _todasSessoesBuscaCache = procSbFetch(
+      'proc_sessoes?select=session_key,dados,updated_at&order=updated_at.desc',
+      { method: 'GET' }
+    ).then(function(r) { return r.ok ? r.json() : []; })
+     .catch(function() { _todasSessoesBuscaCache = null; return []; });
+    return _todasSessoesBuscaCache;
+  }
+
+  /* Varre todas as sessoes guardadas a procura de artigos cuja referencia
+     original bata com a pesquisa, mesmo que essa factura NUNCA tenha tido
+     a nomenclatura activada (logo, sem linha em proc_referencias). Cada
+     resultado e um "candidato virtual" — sem referencia_interna — que a
+     radiografia consegue mostrar na mesma, usando a referencia original
+     como identificador. */
+  function procBuscarCandidatosEmSessoes(qNorm, sessoes, categorias) {
+    var vistos = {};
+    var candidatos = [];
+    (sessoes || []).forEach(function(sess) {
+      var dados;
+      try { dados = JSON.parse(sess.dados); } catch (e) { return; }
+      if (!dados || !dados.faturas) return;
+      dados.faturas.forEach(function(fat) {
+        var provNorm = procNormalize(fat.proveedor || '');
+        if (!provNorm) return;
+        (fat.rows || []).forEach(function(row) {
+          if (!row.ref) return;
+          var refNorm = procNormalizarRefOriginal(row.ref);
+          if (!refNorm || refNorm.indexOf(qNorm) === -1) return;
+          var categoria = procResolverCategoria(row.desc, categorias || []);
+          var chave = provNorm + '|' + refNorm + '|' + categoria;
+          if (vistos[chave]) return;
+          vistos[chave] = true;
+          candidatos.push({
+            referencia_interna: null,
+            referencia_original: refNorm,
+            categoria: categoria,
+            proveedor: provNorm,
+            semNomenclatura: true
+          });
+        });
+      });
+    });
+    return candidatos;
+  }
+
+  /* Junta os resultados vindos de proc_referencias com os candidatos
+     virtuais encontrados directamente nas sessoes, sem duplicar quando
+     o mesmo artigo ja tem nomenclatura (nesse caso a versao com
+     referencia_interna e que fica). */
+  function procFundirCandidatos(candidatosDb, qNorm, sessoes, categorias) {
+    var vistos = {};
+    (candidatosDb || []).forEach(function(c) {
+      vistos[c.proveedor + '|' + c.referencia_original + '|' + c.categoria] = true;
+    });
+    var candidatosSessao = procBuscarCandidatosEmSessoes(qNorm, sessoes, categorias)
+      .filter(function(c) {
+        return !vistos[c.proveedor + '|' + c.referencia_original + '|' + c.categoria];
+      });
+    return (candidatosDb || []).concat(candidatosSessao);
+  }
+
   function procAtualizarBuscaDropdown(valorBruto) {
     var qNorm = procNormalizarBuscaQuery(valorBruto);
     if (!qNorm) { procFecharBuscaDropdown(); return; }
-    procBuscarCandidatosReferencia(qNorm).then(function(res) {
-      var candidatos = res[0] || [];
-      var categorias = res[1] || [];
+    Promise.all([
+      procBuscarCandidatosReferencia(valorBruto),
+      procCarregarTodasSessoesBusca()
+    ]).then(function(res) {
+      var candidatosDb = res[0][0] || [];
+      var categorias = res[0][1] || [];
+      var sessoes = res[1] || [];
+      var candidatos = procFundirCandidatos(candidatosDb, qNorm, sessoes, categorias);
       var dd = document.getElementById('proc-busca-dropdown');
       if (!dd) return;
       if (!candidatos.length) {
@@ -3286,8 +3373,10 @@
       categorias.forEach(function(c) { mapaCategorias[c.codigo] = c.categoria_pt; });
       dd.innerHTML = candidatos.map(function(c, idx) {
         var nomeCat = mapaCategorias[c.categoria] || c.categoria;
+        var refLabel = c.referencia_interna || c.referencia_original;
+        var tag = c.semNomenclatura ? '<span class="proc-busca-dropdown-semnom">sem nomenclatura</span>' : '';
         return '<div class="proc-busca-dropdown-item" data-idx="' + idx + '">'
-          + '<span class="proc-busca-dropdown-ref">' + c.referencia_interna + '</span>'
+          + '<span class="proc-busca-dropdown-ref">' + refLabel + tag + '</span>'
           + '<span class="proc-busca-dropdown-desc">' + nomeCat + ' \u00b7 ' + c.proveedor + '</span>'
           + '</div>';
       }).join('');
@@ -3298,7 +3387,7 @@
           var candidato = candidatos[idx];
           procFecharBuscaDropdown();
           var inputEl = document.getElementById('proc-busca-referencia-input');
-          if (inputEl) inputEl.value = candidato.referencia_interna;
+          if (inputEl) inputEl.value = candidato.referencia_interna || candidato.referencia_original;
           procAbrirRadiografia(null, [candidato]);
         });
       });
@@ -3385,13 +3474,19 @@
             }).join('')
           : '<tr class="empty-row"><td colspan="7">Sem hist\u00f3rico de sess\u00f5es</td></tr>';
 
+        var refNovaLabel = cand.referencia_interna
+          ? cand.referencia_interna
+          : (cand.referencia_original + ' <span class="proc-raio-semnom-tag">sem nomenclatura activa</span>');
+
         return '<div class="proc-raio-bloco">'
           + '<div class="proc-raio-bloco-header">'
           +   '<div>'
-          +     '<span class="proc-raio-ref-nova">' + cand.referencia_interna + '</span> '
+          +     '<span class="proc-raio-ref-nova">' + refNovaLabel + '</span> '
           +     '<span class="proc-raio-categoria">' + nomeCat + '</span>'
           +   '</div>'
-          +   '<span class="proc-raio-ref-original">Original: ' + cand.referencia_original + ' \u00b7 ' + cand.proveedor + '</span>'
+          +   (cand.referencia_interna
+                ? '<span class="proc-raio-ref-original">Original: ' + cand.referencia_original + ' \u00b7 ' + cand.proveedor + '</span>'
+                : '<span class="proc-raio-ref-original">' + cand.proveedor + '</span>')
           + '</div>'
           + (bloco.descricao ? '<div class="proc-raio-descricao">' + bloco.descricao + '</div>' : '')
           + '<div class="proc-raio-totais">'
@@ -3439,20 +3534,12 @@
         procMostrarRadiografiaModal([], categorias || []);
         return;
       }
-      procSbFetch('proc_sessoes?select=session_key,dados,updated_at&order=updated_at.desc', { method: 'GET' })
-        .then(function(r) { return r.ok ? r.json() : []; })
-        .then(function(sessoes) {
-          var blocos = candidatos.map(function(cand) {
-            return procMontarBlocoRadiografia(cand, sessoes || [], categorias || []);
-          });
-          procMostrarRadiografiaModal(blocos, categorias || []);
-        })
-        .catch(function() {
-          var blocos = candidatos.map(function(cand) {
-            return procMontarBlocoRadiografia(cand, [], categorias || []);
-          });
-          procMostrarRadiografiaModal(blocos, categorias || []);
+      procCarregarTodasSessoesBusca().then(function(sessoes) {
+        var blocos = candidatos.map(function(cand) {
+          return procMontarBlocoRadiografia(cand, sessoes || [], categorias || []);
         });
+        procMostrarRadiografiaModal(blocos, categorias || []);
+      });
     };
 
     if (candidatosForcados) {
@@ -3465,8 +3552,15 @@
     var qNorm = procNormalizarBuscaQuery(valorBruto);
     if (!qNorm) return;
 
-    procBuscarCandidatosReferencia(qNorm).then(function(res) {
-      abrirComCandidatos(res[0] || [], res[1] || []);
+    Promise.all([
+      procBuscarCandidatosReferencia(valorBruto),
+      procCarregarTodasSessoesBusca()
+    ]).then(function(res) {
+      var candidatosDb = res[0][0] || [];
+      var categorias = res[0][1] || [];
+      var sessoes = res[1] || [];
+      var candidatos = procFundirCandidatos(candidatosDb, qNorm, sessoes, categorias);
+      abrirComCandidatos(candidatos, categorias);
     }).catch(function() { procMostrarRadiografiaModal([], []); });
   }
 

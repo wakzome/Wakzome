@@ -833,6 +833,73 @@
     return keys.sort().reverse();
   }
 
+  /* ── Agrupamento de sessoes antigas por mes/ano ──
+     Para nao deixar a lista de sessoes eterna, so as do mes corrente
+     ficam soltas (tal como sempre estiveram); tudo o que for de meses
+     anteriores fica dentro de um bloco colapsavel por mes, e esse bloco
+     leva o ano no rotulo sempre que for diferente do ano actual — assim,
+     ao passar de ano, os grupos ja aparecem naturalmente separados por
+     ano tambem, sem precisar de um nivel extra de encaixe. */
+  var MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var _gruposSessaoExpandidos = {};
+
+  function procMesAnoDeChave(key) {
+    var stripped = key.replace(SESSION_PREFIX, '');
+    var m = stripped.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    return { ano: parseInt(m[1], 10), mes: parseInt(m[2], 10) };
+  }
+
+  function procAgruparSessoesPorMes(keys) {
+    var agora = new Date();
+    var anoAtual = agora.getFullYear(), mesAtual = agora.getMonth() + 1;
+    var soltas = [];
+    var grupos = [];
+    var atual = null;
+
+    keys.forEach(function(key) {
+      var ref = procMesAnoDeChave(key);
+      if (!ref) { soltas.push(key); return; }
+      if (ref.ano === anoAtual && ref.mes === mesAtual) { soltas.push(key); return; }
+      var chave = ref.ano + '-' + ref.mes;
+      if (!atual || atual.chave !== chave) {
+        var label = MESES_PT[ref.mes - 1] + (ref.ano !== anoAtual ? ' ' + ref.ano : '');
+        atual = { chave: chave, label: label, keys: [] };
+        grupos.push(atual);
+      }
+      atual.keys.push(key);
+    });
+
+    return { soltas: soltas, grupos: grupos };
+  }
+
+  /* Monta o cabecalho colapsavel comum aos dois sitios onde a lista de
+     sessoes aparece (ecra inicial e menu "sessoes" da barra superior). */
+  function procMontarGrupoSessaoHTML(grupo, itensHTML) {
+    var aberto = !!_gruposSessaoExpandidos[grupo.chave];
+    return '<div class="proc-session-group' + (aberto ? ' aberto' : '') + '" data-grupo="' + grupo.chave + '" onclick="event.stopPropagation()">'
+      + '<div class="proc-session-group-header">'
+      +   '<span>' + grupo.label + '</span>'
+      +   '<span class="proc-session-group-count">' + grupo.keys.length + ' sessões <span class="proc-session-group-arrow">' + (aberto ? '▾' : '▸') + '</span></span>'
+      + '</div>'
+      + '<div class="proc-session-group-body">' + itensHTML + '</div>'
+      + '</div>';
+  }
+
+  function procLigarGruposSessaoHTML(container) {
+    container.querySelectorAll('.proc-session-group-header').forEach(function(h) {
+      h.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var grp = h.parentNode;
+        var chave = grp.dataset.grupo;
+        _gruposSessaoExpandidos[chave] = !_gruposSessaoExpandidos[chave];
+        grp.classList.toggle('aberto', _gruposSessaoExpandidos[chave]);
+        var arrow = h.querySelector('.proc-session-group-arrow');
+        if (arrow) arrow.textContent = _gruposSessaoExpandidos[chave] ? '▾' : '▸';
+      });
+    });
+  }
+
   /* ── GENERIC FLOATING MODAL HELPER ── */
   function procFloatModal(opts) {
     /* opts: { title, body, buttons: [{label, style, cb}] } */
@@ -1253,13 +1320,24 @@
       procRenderSessionMenu();
       menu.classList.remove('hidden');
       procSessionMenuBackdrop().style.display = 'block';
-      /* Position dropdown relative to the trigger button using fixed coords */
+      /* Position dropdown relative to the trigger button using fixed coords.
+         Em ecrãs estreitos (telemóvel), ancorar pela direita do botão
+         empurrava o painel para fora do ecrã à esquerda — em vez disso,
+         centra-se horizontalmente no ecrã. */
       var btn = e && e.currentTarget ? e.currentTarget : (e && e.target ? e.target : null);
       if (btn) {
         var rect = btn.getBoundingClientRect();
-        menu.style.top   = (rect.bottom + 6) + 'px';
-        menu.style.right = (window.innerWidth - rect.right) + 'px';
-        menu.style.left  = 'auto';
+        var isMobile = window.innerWidth <= 640;
+        menu.style.top = (rect.bottom + 6) + 'px';
+        if (isMobile) {
+          menu.style.left = '50%';
+          menu.style.right = 'auto';
+          menu.style.transform = 'translateX(-50%)';
+        } else {
+          menu.style.right = (window.innerWidth - rect.right) + 'px';
+          menu.style.left  = 'auto';
+          menu.style.transform = 'none';
+        }
         /* Estica o modal o máximo possível no espaço livre abaixo do botão;
            quando o conteúdo não couber, o scroll interno já definido no
            CSS (overflow-y:auto) assume. */
@@ -1285,7 +1363,8 @@
       menu.innerHTML = '<div class="proc-session-menu-empty">Nenhuma sess\u00e3o guardada</div>';
       return;
     }
-    menu.innerHTML = keys.map(function(key) {
+
+    function montarItemHTML(key) {
       var savedAt = '';
       var nFat = '';
       try {
@@ -1308,7 +1387,15 @@
         + '<button class="proc-session-load-btn" onclick="procForceLoadSession(\'' + key + '\')">&#8635; carregar</button>'
         + '<button class="proc-session-delete-btn" onclick="procDeleteSession(\'' + key + '\')">\u2715</button>'
         + '</div></div>';
+    }
+
+    var agrupado = procAgruparSessoesPorMes(keys);
+    var html = agrupado.soltas.map(montarItemHTML).join('');
+    html += agrupado.grupos.map(function(g) {
+      return procMontarGrupoSessaoHTML(g, g.keys.map(montarItemHTML).join(''));
     }).join('');
+    menu.innerHTML = html;
+    procLigarGruposSessaoHTML(menu);
   }
 
   /* ── 6. FATURA MANAGEMENT ── */
@@ -3158,6 +3245,11 @@
       +     '<div id="proc-session-bar-right" style="display:none;">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#9776; sess&#245;es &#x25be;</button>'
       +       '<div id="proc-sessionMenuDropdown" class="proc-session-dropdown hidden"></div>'
+      +       '<button class="proc-btn proc-icon-btn" id="proc-buscaToggleBtn" title="Consultar refer\u00eancia">&#128269;</button>'
+      +       '<div id="proc-buscaPopover" class="proc-busca-popover hidden">'
+      +         '<input type="text" id="proc-busca-referencia-input-bar" class="proc-busca-input" autocomplete="off" placeholder="Consultar refer\u00eancia\u2026">'
+      +         '<div id="proc-busca-dropdown-bar" class="proc-busca-dropdown hidden"></div>'
+      +       '</div>'
       +       '<button class="proc-btn primary" id="proc-saveBtn" style="display:none;">&#128190;</button>'
       +       '<button class="proc-btn" id="proc-guiaBtn" style="display:none;">&#128203;</button>'
       +     '</div>'
@@ -3213,32 +3305,27 @@
     document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
     document.getElementById('proc-start-new-btn').addEventListener('click', function() { procStartNewSession(); });
 
-    /* ── Consulta rapida por referencia (original ou nova nomenclatura) ── */
-    var buscaInput = document.getElementById('proc-busca-referencia-input');
-    if (buscaInput) {
-      var buscaDebounce = null;
-      buscaInput.addEventListener('input', function() {
-        clearTimeout(buscaDebounce);
-        var val = buscaInput.value.trim();
-        if (val.length < 2) { procFecharBuscaDropdown(); return; }
-        buscaDebounce = setTimeout(function() { procAtualizarBuscaDropdown(val); }, 250);
-      });
-      buscaInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          var val = buscaInput.value.trim();
-          if (val.length < 2) return;
-          procFecharBuscaDropdown();
-          procAbrirRadiografia(val, null);
-        } else if (e.key === 'Escape') {
-          procFecharBuscaDropdown();
-        }
-      });
-      document.addEventListener('click', function(e) {
-        var wrap = document.getElementById('proc-busca-referencia-wrap');
-        if (wrap && !wrap.contains(e.target)) procFecharBuscaDropdown();
+    /* ── Consulta rapida por referencia (original ou nova nomenclatura) ──
+       Duas instancias independentes da mesma pesquisa: a do ecra inicial
+       (antes de haver sessao activa) e a do popover da barra superior
+       (acessivel a qualquer momento dentro de uma sessao). ── */
+    procConfigurarBuscaReferencia('proc-busca-referencia-input', 'proc-busca-dropdown', 'proc-busca-referencia-wrap');
+    procConfigurarBuscaReferencia('proc-busca-referencia-input-bar', 'proc-busca-dropdown-bar', 'proc-buscaPopover');
+
+    var buscaToggleBtn = document.getElementById('proc-buscaToggleBtn');
+    if (buscaToggleBtn) {
+      buscaToggleBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        procToggleBuscaPopover(e);
       });
     }
+    document.addEventListener('click', function(e) {
+      var pop = document.getElementById('proc-buscaPopover');
+      var btn = document.getElementById('proc-buscaToggleBtn');
+      if (pop && !pop.classList.contains('hidden') && !pop.contains(e.target) && e.target !== btn) {
+        procFecharBuscaPopover();
+      }
+    });
 
     /* close session menu on outside click */
     document.addEventListener('click', function() { procCloseSessionMenu(); });
@@ -3248,10 +3335,79 @@
      Aceita tanto a referencia original do fornecedor como a nova
      nomenclatura, por coincidencia parcial. Pode devolver mais que uma
      candidata (ex.: o mesmo codigo reutilizado para duas pecas
-     diferentes), cada uma tratada como um bloco independente. */
-  function procFecharBuscaDropdown() {
-    var dd = document.getElementById('proc-busca-dropdown');
+     diferentes), cada uma tratada como um bloco independente.
+     Existe em DUAS instancias na pagina — a do ecra inicial e a do
+     popover da barra de sessao — por isso todas as funcoes recebem o id
+     do dropdown/input que lhes diz respeito, em vez de assumirem sempre
+     os mesmos ids fixos. */
+  function procFecharBuscaDropdown(dropdownId) {
+    var dd = document.getElementById(dropdownId || 'proc-busca-dropdown');
     if (dd) { dd.classList.add('hidden'); dd.innerHTML = ''; }
+  }
+
+  /* Liga um par input+dropdown (identificados pelos seus ids) a logica de
+     pesquisa: debounce ao escrever, Enter abre directamente o Historico,
+     Escape fecha o dropdown, e um clique fora do "wrap" tambem o fecha. */
+  function procConfigurarBuscaReferencia(inputId, dropdownId, wrapId) {
+    var buscaInput = document.getElementById(inputId);
+    if (!buscaInput) return;
+    var buscaDebounce = null;
+    buscaInput.addEventListener('input', function() {
+      clearTimeout(buscaDebounce);
+      var val = buscaInput.value.trim();
+      if (val.length < 2) { procFecharBuscaDropdown(dropdownId); return; }
+      buscaDebounce = setTimeout(function() { procAtualizarBuscaDropdown(val, dropdownId, inputId); }, 250);
+    });
+    buscaInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var val = buscaInput.value.trim();
+        if (val.length < 2) return;
+        procFecharBuscaDropdown(dropdownId);
+        procAbrirRadiografia(val, null);
+      } else if (e.key === 'Escape') {
+        procFecharBuscaDropdown(dropdownId);
+      }
+    });
+    document.addEventListener('click', function(e) {
+      var wrap = document.getElementById(wrapId);
+      if (wrap && !wrap.contains(e.target)) procFecharBuscaDropdown(dropdownId);
+    });
+  }
+
+  /* Mostra/esconde o popover de pesquisa da barra de sessao (o icone da
+     lupa entre "sessoes" e o botao de guardar). */
+  function procToggleBuscaPopover(e) {
+    var pop = document.getElementById('proc-buscaPopover');
+    if (!pop) return;
+    if (pop.classList.contains('hidden')) {
+      pop.classList.remove('hidden');
+      var btn = document.getElementById('proc-buscaToggleBtn');
+      var isMobile = window.innerWidth <= 640;
+      if (btn) {
+        var rect = btn.getBoundingClientRect();
+        pop.style.top = (rect.bottom + 6) + 'px';
+        if (isMobile) {
+          pop.style.left = '50%';
+          pop.style.right = 'auto';
+          pop.style.transform = 'translateX(-50%)';
+        } else {
+          pop.style.right = (window.innerWidth - rect.right) + 'px';
+          pop.style.left = 'auto';
+          pop.style.transform = 'none';
+        }
+      }
+      var input = document.getElementById('proc-busca-referencia-input-bar');
+      if (input) { input.value = ''; setTimeout(function() { input.focus(); }, 0); }
+      procFecharBuscaDropdown('proc-busca-dropdown-bar');
+    } else {
+      procFecharBuscaPopover();
+    }
+  }
+  function procFecharBuscaPopover() {
+    var pop = document.getElementById('proc-buscaPopover');
+    if (pop) pop.classList.add('hidden');
+    procFecharBuscaDropdown('proc-busca-dropdown-bar');
   }
 
   function procNormalizarBuscaQuery(q) {
@@ -3351,9 +3507,11 @@
     return (candidatosDb || []).concat(candidatosSessao);
   }
 
-  function procAtualizarBuscaDropdown(valorBruto) {
+  function procAtualizarBuscaDropdown(valorBruto, dropdownId, inputId) {
+    dropdownId = dropdownId || 'proc-busca-dropdown';
+    inputId = inputId || 'proc-busca-referencia-input';
     var qNorm = procNormalizarBuscaQuery(valorBruto);
-    if (!qNorm) { procFecharBuscaDropdown(); return; }
+    if (!qNorm) { procFecharBuscaDropdown(dropdownId); return; }
     Promise.all([
       procBuscarCandidatosReferencia(valorBruto),
       procCarregarTodasSessoesBusca()
@@ -3362,7 +3520,7 @@
       var categorias = res[0][1] || [];
       var sessoes = res[1] || [];
       var candidatos = procFundirCandidatos(candidatosDb, qNorm, sessoes, categorias);
-      var dd = document.getElementById('proc-busca-dropdown');
+      var dd = document.getElementById(dropdownId);
       if (!dd) return;
       if (!candidatos.length) {
         dd.innerHTML = '<div class="proc-busca-dropdown-empty">Nenhuma refer\u00eancia encontrada</div>';
@@ -3384,13 +3542,13 @@
         el.addEventListener('click', function() {
           var idx = parseInt(el.dataset.idx, 10);
           var candidato = candidatos[idx];
-          procFecharBuscaDropdown();
-          var inputEl = document.getElementById('proc-busca-referencia-input');
+          procFecharBuscaDropdown(dropdownId);
+          var inputEl = document.getElementById(inputId);
           if (inputEl) inputEl.value = candidato.referencia_interna || candidato.referencia_original;
           procAbrirRadiografia(null, [candidato]);
         });
       });
-    }).catch(function() { procFecharBuscaDropdown(); });
+    }).catch(function() { procFecharBuscaDropdown(dropdownId); });
   }
 
   /* Monta o "raio-x" de uma referencia especifica, varrendo TODAS as
@@ -3596,8 +3754,8 @@
       list.innerHTML = '';
       return;
     }
-    var html = '<div class="proc-section-label">sess\u00f5es guardadas \u00b7 ' + keys.length + '</div>';
-    keys.forEach(function(key) {
+
+    function montarItemHTML(key) {
       var label = labelFromKey(key);
       var dateStr = '', nFat = '';
       try {
@@ -3609,7 +3767,7 @@
         if (d && d.faturas) nFat = d.faturas.length + ' fat.';
       } catch(e) {}
       var meta = [dateStr, nFat].filter(Boolean).join(' \u00b7 ');
-      html += '<div class="proc-session-item">'
+      return '<div class="proc-session-item">'
         + '<div class="proc-session-item-info">'
         +   '<div class="proc-session-item-label">' + label + '</div>'
         +   (meta ? '<div class="proc-session-item-meta">' + meta + '</div>' : '')
@@ -3619,8 +3777,16 @@
         +   '<button class="proc-start-del-btn" data-key="' + key + '">\u2715</button>'
         + '</div>'
         + '</div>';
-    });
+    }
+
+    var agrupado = procAgruparSessoesPorMes(keys);
+    var html = '<div class="proc-section-label">sess\u00f5es guardadas \u00b7 ' + keys.length + '</div>';
+    html += agrupado.soltas.map(montarItemHTML).join('');
+    html += agrupado.grupos.map(function(g) {
+      return procMontarGrupoSessaoHTML(g, g.keys.map(montarItemHTML).join(''));
+    }).join('');
     list.innerHTML = html;
+    procLigarGruposSessaoHTML(list);
 
     list.querySelectorAll('.proc-start-load-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {

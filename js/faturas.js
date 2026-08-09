@@ -4512,18 +4512,19 @@
       }
 
       /* Ao desligar o toggle: apaga de imediato em Supabase (via RPC
-         proc_borrar_referencias_rascunho) APENAS as referencias que esta
-         mesma passagem acabou de criar. Uma referencia que ja existia
-         antes (por exemplo, porque o mesmo artigo ja tinha sido criado
-         noutra factura) NUNCA e apagada por aqui — pode estar a ser usada
-         por essa outra factura, e apaga-la corromperia-a. O trigger da
-         base de dados continua, de qualquer forma, a impedir fisicamente
-         apagar qualquer referencia que ja tenha guia_erp atribuido. */
+         proc_borrar_referencias_rascunho) tudo o que ESTA factura tem
+         gerado neste momento — sem excepcao, mesmo que outra factura
+         esteja a mostrar a mesma referencia. Cada factura e totalmente
+         autonoma: o que ela imprime, ela pode apagar, e nunca deve ficar
+         impedida de o fazer por causa de outra factura. A unica protecao
+         real e a da base de dados: o trigger continua a impedir
+         fisicamente apagar qualquer referencia que ja tenha guia_erp
+         atribuido, esteja ou nao partilhada. */
       function apagarReferenciasGeradasEAtualizar() {
         geracaoId++; /* invalida qualquer geracao sequencial ainda a decorrer */
         gerando = false;
         var geradas = items
-          .filter(function(it) { return it.refNova && it.refNovaCriadaAgora; })
+          .filter(function(it) { return it.refNova; })
           .map(function(it) { return it.refNova; });
         items.forEach(function(it) { it.refNova = null; it.refNovaCriadaAgora = false; });
         atualizarTabela();

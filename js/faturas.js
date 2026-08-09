@@ -5285,6 +5285,13 @@
       var tr2 = e.target.closest('tr');
       if (!tr2) return;
 
+      /* A coluna "Referencia original" so aparece quando a referencia
+         interna esta activa — nesse caso e puramente informativa, para
+         nunca ser copiada nem usada por engano em vez da referencia
+         interna. Sem a referencia interna activa, a coluna nao existe e
+         a coluna "normal" volta a comportar-se como sempre. */
+      if (td && td.classList.contains('td-ref-original')) return;
+
       /* Clear previous active row inline styles */
       if (activeRow && activeRow !== tr2) {
         activeRow.classList.remove('proc-criacao-active');

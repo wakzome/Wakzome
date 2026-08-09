@@ -639,6 +639,14 @@
     var sugg  = document.getElementById('proc-forn-sugg-' + fid);
     if (!input || !sugg) return;
 
+    /* Guarda o nome com que se começou a editar, para no "blur" se poder
+       comparar com o nome final e detectar uma correcção/troca de
+       fornecedor (ex.: escreveu "REN KE ZHONG" por engano e corrigiu
+       para "CHLAMYS VARIA"). */
+    input.addEventListener('focus', function() {
+      input.dataset.prevValue = input.value.trim();
+    });
+
     input.addEventListener('input', function() {
       /* Força maiúsculas no valor real (não só visual), preservando a posição do cursor */
       var selStart = input.selectionStart, selEnd = input.selectionEnd;
@@ -674,6 +682,20 @@
           /* Fornecedor novo — entra na biblioteca remota (Supabase) */
           procSaveFornecedorRemote(raw);
         }
+
+        /* Se o nome mudou nesta edição, as referências internas geradas
+           sob o nome ANTIGO para as linhas desta factura deixaram de
+           corresponder a nada — nunca deviam ficar esquecidas em
+           Supabase. Apaga-se aqui de imediato (com a mesma protecção
+           contra outras facturas abertas que ainda usem esse nome
+           antigo), sem depender de o utilizador reabrir o modal de
+           Criação de Artigos. */
+        var anterior = input.dataset.prevValue || '';
+        var atual = input.value.trim();
+        if (anterior && procNormalize(anterior) !== procNormalize(atual)) {
+          procApagarReferenciasDaFatura(fid, anterior);
+        }
+        input.dataset.prevValue = atual;
       }, 180);
     });
 
@@ -1620,9 +1642,18 @@
      ela pode apagar). Falha silenciosa (so regista no console) — nunca
      deve impedir a remocao da factura em si. O trigger da base de dados
      continua a proteger fisicamente qualquer referencia com guia_erp. */
-  function procApagarReferenciasDaFatura(fid) {
-    var pEl = document.getElementById('proc-proveedor-' + fid);
-    var fornecedor = pEl ? pEl.value.trim() : '';
+  function procApagarReferenciasDaFatura(fid, proveedorOverride) {
+    var fornecedor;
+    if (proveedorOverride != null) {
+      /* Usado quando o nome do fornecedor acabou de mudar: o campo ja
+         tem o nome NOVO, por isso quem chama passa explicitamente o
+         nome ANTIGO — as referencias geradas sob esse nome deixaram de
+         corresponder a esta factura. */
+      fornecedor = proveedorOverride;
+    } else {
+      var pEl = document.getElementById('proc-proveedor-' + fid);
+      fornecedor = pEl ? pEl.value.trim() : '';
+    }
     var proveedorNorm = procNormalize(fornecedor);
     if (!proveedorNorm) return;
 

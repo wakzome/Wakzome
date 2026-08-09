@@ -1424,9 +1424,26 @@ body {
 
 /* ── Consulta rapida por referencia ── */
 #proc-busca-referencia-wrap { position:relative; margin-bottom:22px; }
-#proc-busca-referencia-input { width:100%; box-sizing:border-box; padding:11px 14px; border:1px solid #ccc; border-radius:10px; background:#fff; color:#000; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:600; transition:border-color .15s,box-shadow .15s; }
-#proc-busca-referencia-input:focus { outline:none; border-color:#555; box-shadow:0 2px 10px rgba(0,0,0,.06); }
-#proc-busca-referencia-input::placeholder { color:#999; font-weight:500; }
+.proc-busca-input { width:100%; box-sizing:border-box; padding:11px 14px; border:1px solid #ccc; border-radius:10px; background:#fff; color:#000; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:600; transition:border-color .15s,box-shadow .15s; }
+.proc-busca-input:focus { outline:none; border-color:#555; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+.proc-busca-input::placeholder { color:#999; font-weight:500; }
+
+/* ── Lupa + popover de pesquisa na barra de sessão ── */
+#proc-content .proc-icon-btn { padding:7px 11px; font-size:.95rem; line-height:1; }
+#proc-content .proc-busca-popover { position:fixed; width:min(360px,92vw); background:#fff; border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.14); z-index:9999; padding:10px; }
+#proc-content .proc-busca-popover.hidden { display:none; }
+#proc-content .proc-busca-popover .proc-busca-dropdown { position:relative; top:6px; left:0; right:0; }
+
+/* ── Grupos colapsáveis de sessões antigas (por mês/ano) ── */
+.proc-session-group { margin-bottom:6px; }
+.proc-session-group-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; cursor:pointer; background:#f2ede4; border-radius:10px; font-family:'MontserratLight',sans-serif; font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#7a6f5c; transition:background .15s; }
+.proc-session-group-header:hover { background:#ece5d8; }
+.proc-session-group-count { font-weight:600; text-transform:none; letter-spacing:0; color:#9a8a6f; font-size:.68rem; display:flex; align-items:center; gap:5px; }
+.proc-session-group-arrow { font-size:.6rem; }
+.proc-session-group-body { display:none; padding-top:6px; }
+.proc-session-group.aberto .proc-session-group-body { display:block; }
+#proc-sessionMenuDropdown .proc-session-group-header { margin:2px 8px; }
+#proc-sessionMenuDropdown .proc-session-group-body { padding-left:0; }
 #proc-busca-dropdown { position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #e0e0e0; border-radius:10px; box-shadow:0 10px 28px rgba(0,0,0,.14); max-height:280px; overflow-y:auto; overflow-x:hidden; z-index:30; }
 #proc-busca-dropdown.hidden { display:none; }
 .proc-busca-dropdown-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 14px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-family:'MontserratLight',sans-serif; min-width:0; }
@@ -1437,8 +1454,8 @@ body {
 .proc-busca-dropdown-empty { padding:14px; text-align:center; font-size:.75rem; color:#888; font-style:italic; font-family:'MontserratLight',sans-serif; }
 
 /* ── Modal "Historico da Referencia" ── */
-.proc-or-panel--radiografia { width:min(760px,96vw); max-width:96vw; overflow-x:hidden; }
-.proc-or-panel-scroll { overflow-y:auto; overflow-x:hidden; flex:1; min-height:0; }
+.proc-or-panel--radiografia { width:min(760px,96vw); max-width:96vw; }
+.proc-or-panel-scroll { overflow-y:auto; flex:1; min-height:0; }
 .proc-raio-vazio { padding:40px 20px; text-align:center; color:#888; font-style:italic; font-family:'MontserratLight',sans-serif; }
 .proc-raio-bloco { border-bottom:1px solid #e0e0e0; padding:16px 20px; }
 .proc-raio-bloco:last-child { border-bottom:none; }

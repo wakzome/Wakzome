@@ -5032,10 +5032,24 @@
       return (ativo && it.refNova) ? it.refNova : (it.ref || '\u2014');
     }
 
+    /* Cabecalho da tabela — a coluna "Referencia original" so existe
+       enquanto o toggle "nova nomenclatura" estiver activo; sem ela, a
+       propria coluna "Referencia" ja mostra o codigo original (via
+       refExibida), por isso duplicar essa informacao nao faz sentido. */
+    function gerarTheadRowHTML(ativo) {
+      return (ativo ? '<th>Refer\u00eancia original</th>' : '')
+        + '<th>Refer\u00eancia</th>'
+        + '<th>Nome</th>'
+        + '<th class="right">PVP</th>'
+        + '<th class="right">%</th>'
+        + '<th class="right">PC</th>';
+    }
+
     function gerarRowsHTML(ativo, carregando) {
       var html = items.map(function(it, idx) {
         var refMostrar = refExibida(it, ativo, carregando);
-        return '<tr data-idx="' + idx + '" data-ref="' + refMostrar + '" data-nome="' + (it.nome||'') + '" data-pvp="' + (it.pvp != null ? it.pvp.toFixed(2) : '') + '">'
+        return '<tr data-idx="' + idx + '" data-ref="' + refMostrar + '" data-nome="' + (it.nome||'') + '" data-pvp="' + (it.pvp != null ? it.pvp.toFixed(2) : '') + '" style="--i:' + idx + '">'
+          + (ativo ? '<td class="td-ref-original">' + (it.ref || '\u2014') + '</td>' : '')
           + '<td class="td-ref">' + refMostrar + '</td>'
           + '<td class="td-nome">' + (it.nome || '\u2014') + '</td>'
           + '<td class="td-pvp">' + (it.pvp != null ? it.pvp.toFixed(2) : '\u2014') + '</td>'
@@ -5043,7 +5057,8 @@
           + '<td class="td-custo">' + (it.custo > 0 ? it.custo.toFixed(2) : '\u2014') + '</td>'
           + '</tr>';
       }).join('');
-      return html || '<tr><td colspan="5" class="proc-table-empty-msg">Sem artigos com dados</td></tr>';
+      var colspan = ativo ? 6 : 5;
+      return html || ('<tr><td colspan="' + colspan + '" class="proc-table-empty-msg">Sem artigos com dados</td></tr>');
     }
 
     function montarModal(fornecedorInfo, categorias) {
@@ -5079,13 +5094,7 @@
         +   '</div>'
         +   '<div id="proc-criacao-scroll">'
         +     '<table id="proc-criacao-table">'
-        +       '<thead><tr>'
-        +         '<th>Refer\u00eancia</th>'
-        +         '<th>Nome</th>'
-        +         '<th class="right">PVP</th>'
-        +         '<th class="right">%</th>'
-        +         '<th class="right">PC</th>'
-        +       '</tr></thead>'
+        +       '<thead><tr>' + gerarTheadRowHTML(ativoAtual) + '</tr></thead>'
         +       '<tbody>' + gerarRowsHTML(ativoAtual, gerando) + '</tbody>'
         +     '</table>'
         +   '</div>'
@@ -5094,15 +5103,35 @@
 
       document.body.appendChild(modal);
 
-      function atualizarTabela() {
+      /* Actualiza cabecalho + corpo da tabela. O <tbody> nunca e
+         substituido como elemento (so o seu innerHTML muda) para nao
+         invalidar os listeners de clique/copia ja ligados a ele; o
+         cabecalho e reescrito porque a coluna extra da referencia
+         original aparece/desaparece consoante o toggle.
+         "comFade" aplica uma pequena animacao de entrada em cascata —
+         usado apenas na revelacao final, nunca durante o "a carregar". */
+      function atualizarTabela(comFade) {
+        var theadRow = modal.querySelector('#proc-criacao-table thead tr');
+        if (theadRow) theadRow.innerHTML = gerarTheadRowHTML(ativoAtual);
         var tbody = modal.querySelector('tbody');
-        if (tbody) tbody.innerHTML = gerarRowsHTML(ativoAtual, gerando);
+        if (!tbody) return;
+        tbody.innerHTML = gerarRowsHTML(ativoAtual, gerando);
+        if (comFade) {
+          tbody.classList.remove('proc-reveal');
+          void tbody.offsetWidth; /* forca reflow para reiniciar a animacao */
+          tbody.classList.add('proc-reveal');
+        }
       }
 
       /* Gera as referencias UMA A UMA, em estrita ordem da tabela — nunca
          em paralelo. A linha 1 so avanca para a linha 2 depois de a linha
          1 ja ter o seu numero confirmado, por isso a ordem dos numeros
-         corresponde sempre, sem excepcao, a ordem visual das linhas. */
+         corresponde sempre, sem excepcao, a ordem visual das linhas.
+         A tabela SO e repintada no inicio (mostrando reticencias) e no
+         fim (mostrando tudo de uma vez, com uma entrada suave) — nunca a
+         cada linha resolvida, que era o que dava aquele efeito de
+         "pipoca" a aparecerem uma a uma, mesmo quando nao havia nada
+         realmente novo para criar. */
       function gerarReferenciasEAtualizar() {
         /* Sem descricao nao ha tentativa de classificacao — nunca se gera
            (nem se guarda) uma referencia so por falta de nome. Fica
@@ -5128,13 +5157,12 @@
                      (partilhada com outra factura, p.ex.), nunca se apaga. */
                   it.refNovaCriadaAgora = resultado.criada_agora;
                 }
-                atualizarTabela();
               })
               .catch(function() {});
           });
         });
         cadeia.then(function() {
-          if (minhaGeracao === geracaoId) { gerando = false; atualizarTabela(); }
+          if (minhaGeracao === geracaoId) { gerando = false; atualizarTabela(true); }
         });
       }
 

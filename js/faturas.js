@@ -3374,9 +3374,8 @@
       dd.innerHTML = candidatos.map(function(c, idx) {
         var nomeCat = mapaCategorias[c.categoria] || c.categoria;
         var refLabel = c.referencia_interna || c.referencia_original;
-        var tag = c.semNomenclatura ? '<span class="proc-busca-dropdown-semnom">sem nomenclatura</span>' : '';
         return '<div class="proc-busca-dropdown-item" data-idx="' + idx + '">'
-          + '<span class="proc-busca-dropdown-ref">' + refLabel + tag + '</span>'
+          + '<span class="proc-busca-dropdown-ref">' + refLabel + '</span>'
           + '<span class="proc-busca-dropdown-desc">' + nomeCat + ' \u00b7 ' + c.proveedor + '</span>'
           + '</div>';
       }).join('');
@@ -3404,10 +3403,22 @@
     var linhas = [];
     var totalA4 = 0, totalA5 = 0, descricaoRef = '';
 
+    /* Uma mesma referencia pode aparecer em varias linhas dentro da MESMA
+       sessao — seja repetida na mesma factura, seja espalhada por facturas
+       diferentes dessa sessao. Em vez de mostrar uma linha por cada
+       ocorrencia (o que fica confuso e repetitivo), soma-se as
+       quantidades e, quando os precos diferem entre ocorrencias,
+       calcula-se a media ponderada pela quantidade de cada uma — assim o
+       preco de custo/PVP/margem mostrados reflectem o valor real medio
+       pago por peca, e nao apenas o da ultima linha encontrada. */
     sessoes.forEach(function(sess) {
       var dados;
       try { dados = JSON.parse(sess.dados); } catch(e) { return; }
       if (!dados || !dados.faturas) return;
+
+      var a4Sess = 0, a5Sess = 0, encontrado = false;
+      var pesoTotal = 0, custoPeso = 0, pvpPeso = 0, margPeso = 0;
+
       dados.faturas.forEach(function(fat) {
         if (procNormalize(fat.proveedor || '') !== candidato.proveedor) return;
         (fat.rows || []).forEach(function(row) {
@@ -3415,6 +3426,7 @@
           if (procNormalizarRefOriginal(row.ref) !== candidato.referencia_original) return;
           if (procResolverCategoria(row.desc, categorias) !== candidato.categoria) return;
 
+          encontrado = true;
           if (!descricaoRef) descricaoRef = row.desc || '';
 
           var pc3raw = procCalcPrecoCusto(row.preco, row.plus1, row.hasD, row.qtdFt, row.a4, row.a5);
@@ -3424,14 +3436,27 @@
           var marg = pvpResult ? procCalcMargem(pvpResult.pvp1, row.preco) : null;
 
           var a4 = row.a4 || 0, a5 = row.a5 || 0;
-          totalA4 += a4; totalA5 += a5;
+          var peso = a4 + a5;
+          a4Sess += a4; a5Sess += a5;
 
-          linhas.push({
-            label: labelFromKey(sess.session_key),
-            a4: a4, a5: a5, total: a4 + a5,
-            precoCusto: pc3, pvp: pvpFinal, margem: marg
-          });
+          if (peso > 0) {
+            pesoTotal += peso;
+            if (pc3 != null && !isNaN(pc3)) custoPeso += pc3 * peso;
+            if (pvpFinal != null && !isNaN(pvpFinal)) pvpPeso += pvpFinal * peso;
+            if (marg != null && !isNaN(marg)) margPeso += marg * peso;
+          }
         });
+      });
+
+      if (!encontrado) return;
+
+      totalA4 += a4Sess; totalA5 += a5Sess;
+      linhas.push({
+        label: labelFromKey(sess.session_key),
+        a4: a4Sess, a5: a5Sess, total: a4Sess + a5Sess,
+        precoCusto: pesoTotal ? (custoPeso / pesoTotal) : null,
+        pvp: pesoTotal ? (pvpPeso / pesoTotal) : null,
+        margem: pesoTotal ? (margPeso / pesoTotal) : null
       });
     });
 
@@ -3463,20 +3488,18 @@
         var linhasHTML = bloco.linhas.length
           ? bloco.linhas.map(function(l) {
               return '<tr>'
-                + '<td>' + l.label + '</td>'
+                + '<td class="center">' + l.label + '</td>'
                 + '<td class="center">' + l.a4 + '</td>'
                 + '<td class="center">' + l.a5 + '</td>'
                 + '<td class="center">' + l.total + '</td>'
-                + '<td class="right">' + (l.precoCusto ? l.precoCusto.toFixed(2) : '\u2014') + '</td>'
-                + '<td class="right">' + (l.pvp != null ? l.pvp.toFixed(2) : '\u2014') + '</td>'
-                + '<td class="right">' + (l.margem != null ? l.margem.toFixed(1) + '%' : '\u2014') + '</td>'
+                + '<td class="center">' + (l.precoCusto ? l.precoCusto.toFixed(2) : '\u2014') + '</td>'
+                + '<td class="center">' + (l.pvp != null ? l.pvp.toFixed(2) : '\u2014') + '</td>'
+                + '<td class="center">' + (l.margem != null ? l.margem.toFixed(1) + '%' : '\u2014') + '</td>'
                 + '</tr>';
             }).join('')
           : '<tr class="empty-row"><td colspan="7">Sem hist\u00f3rico de sess\u00f5es</td></tr>';
 
-        var refNovaLabel = cand.referencia_interna
-          ? cand.referencia_interna
-          : (cand.referencia_original + ' <span class="proc-raio-semnom-tag">sem nomenclatura activa</span>');
+        var refNovaLabel = cand.referencia_interna || cand.referencia_original;
 
         return '<div class="proc-raio-bloco">'
           + '<div class="proc-raio-bloco-header">'
@@ -3497,8 +3520,8 @@
           + '</div>'
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
-          +     '<th>Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center">Total</th>'
-          +     '<th class="right">P. Custo</th><th class="right">PVP</th><th class="right">Margem</th>'
+          +     '<th class="center">Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center">Total</th>'
+          +     '<th class="center">P. Custo</th><th class="center">PVP</th><th class="center">Margem</th>'
           +   '</tr></thead>'
           +   '<tbody>' + linhasHTML + '</tbody>'
           + '</table>'
@@ -3514,9 +3537,9 @@
       + '<div class="proc-or-panel proc-or-panel--radiografia">'
       +   '<div class="proc-or-panel-header">'
       +     '<div class="proc-or-panel-title">'
-      +       '<span class="proc-or-panel-title-main">Radiografia da Refer\u00eancia</span>'
+      +       '<span class="proc-or-panel-title-main">Hist\u00f3rico da Refer\u00eancia</span>'
       +       '<span class="proc-or-panel-title-sub">'
-      +         (blocos.length > 1 ? blocos.length + ' nomenclaturas encontradas' : (blocos.length === 1 ? '1 nomenclatura encontrada' : 'Sem resultados'))
+      +         (blocos.length > 1 ? blocos.length + ' refer\u00eancias encontradas' : (blocos.length === 1 ? '1 refer\u00eancia encontrada' : 'Sem resultados'))
       +       '</span>'
       +     '</div>'
       +     '<button class="proc-or-close-btn">\u2715 Fechar</button>'

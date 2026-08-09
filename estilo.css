@@ -1427,18 +1427,18 @@ body {
 #proc-busca-referencia-input { width:100%; box-sizing:border-box; padding:11px 14px; border:1px solid #ccc; border-radius:10px; background:#fff; color:#000; font-family:'MontserratLight',sans-serif; font-size:.82rem; font-weight:600; transition:border-color .15s,box-shadow .15s; }
 #proc-busca-referencia-input:focus { outline:none; border-color:#555; box-shadow:0 2px 10px rgba(0,0,0,.06); }
 #proc-busca-referencia-input::placeholder { color:#999; font-weight:500; }
-#proc-busca-dropdown { position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #e0e0e0; border-radius:10px; box-shadow:0 10px 28px rgba(0,0,0,.14); max-height:280px; overflow-y:auto; z-index:30; }
+#proc-busca-dropdown { position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #e0e0e0; border-radius:10px; box-shadow:0 10px 28px rgba(0,0,0,.14); max-height:280px; overflow-y:auto; overflow-x:hidden; z-index:30; }
 #proc-busca-dropdown.hidden { display:none; }
-.proc-busca-dropdown-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 14px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-family:'MontserratLight',sans-serif; }
+.proc-busca-dropdown-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 14px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-family:'MontserratLight',sans-serif; min-width:0; }
 .proc-busca-dropdown-item:last-child { border-bottom:none; }
 .proc-busca-dropdown-item:hover { background:#f5f5f5; }
-.proc-busca-dropdown-ref { font-size:.8rem; font-weight:800; color:#000; white-space:nowrap; }
-.proc-busca-dropdown-desc { font-size:.66rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; text-align:right; }
+.proc-busca-dropdown-ref { font-size:.8rem; font-weight:800; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto; }
+.proc-busca-dropdown-desc { font-size:.66rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; text-align:right; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 55%; }
 .proc-busca-dropdown-empty { padding:14px; text-align:center; font-size:.75rem; color:#888; font-style:italic; font-family:'MontserratLight',sans-serif; }
 
-/* ── Modal "Radiografia da Referencia" ── */
-.proc-or-panel--radiografia { width:min(760px,96vw); }
-.proc-or-panel-scroll { overflow-y:auto; flex:1; min-height:0; }
+/* ── Modal "Historico da Referencia" ── */
+.proc-or-panel--radiografia { width:min(760px,96vw); max-width:96vw; overflow-x:hidden; }
+.proc-or-panel-scroll { overflow-y:auto; overflow-x:hidden; flex:1; min-height:0; }
 .proc-raio-vazio { padding:40px 20px; text-align:center; color:#888; font-style:italic; font-family:'MontserratLight',sans-serif; }
 .proc-raio-bloco { border-bottom:1px solid #e0e0e0; padding:16px 20px; }
 .proc-raio-bloco:last-child { border-bottom:none; }
@@ -7015,29 +7015,3 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
   background-repeat: repeat !important;
 }
 
-.proc-busca-dropdown-semnom {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 7px;
-  border-radius: 5px;
-  background: #f2ede4;
-  color: #9a8a6f;
-  font-size: .58rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  vertical-align: middle;
-}
-.proc-raio-semnom-tag {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: #f2ede4;
-  color: #9a8a6f;
-  font-size: .58rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  vertical-align: middle;
-}

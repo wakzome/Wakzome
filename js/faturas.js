@@ -3165,6 +3165,10 @@
       /* ── Session start panel — visible only before a session is active ── */
       +   '<div id="proc-session-start">'
       +     '<div id="proc-session-start-inner">'
+      +       '<div id="proc-busca-referencia-wrap">'
+      +         '<input type="text" id="proc-busca-referencia-input" class="proc-busca-input" autocomplete="off" placeholder="Consultar refer\u00eancia (original ou nova nomenclatura)\u2026">'
+      +         '<div id="proc-busca-dropdown" class="proc-busca-dropdown hidden"></div>'
+      +       '</div>'
       +       '<div id="proc-start-sessions-list"></div>'
       +     '</div>'
       +   '</div>'
@@ -3209,8 +3213,261 @@
     document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
     document.getElementById('proc-start-new-btn').addEventListener('click', function() { procStartNewSession(); });
 
+    /* ── Consulta rapida por referencia (original ou nova nomenclatura) ── */
+    var buscaInput = document.getElementById('proc-busca-referencia-input');
+    if (buscaInput) {
+      var buscaDebounce = null;
+      buscaInput.addEventListener('input', function() {
+        clearTimeout(buscaDebounce);
+        var val = buscaInput.value.trim();
+        if (val.length < 2) { procFecharBuscaDropdown(); return; }
+        buscaDebounce = setTimeout(function() { procAtualizarBuscaDropdown(val); }, 250);
+      });
+      buscaInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var val = buscaInput.value.trim();
+          if (val.length < 2) return;
+          procFecharBuscaDropdown();
+          procAbrirRadiografia(val, null);
+        } else if (e.key === 'Escape') {
+          procFecharBuscaDropdown();
+        }
+      });
+      document.addEventListener('click', function(e) {
+        var wrap = document.getElementById('proc-busca-referencia-wrap');
+        if (wrap && !wrap.contains(e.target)) procFecharBuscaDropdown();
+      });
+    }
+
     /* close session menu on outside click */
     document.addEventListener('click', function() { procCloseSessionMenu(); });
+  }
+
+  /* ── Consulta rapida por referencia (radiografia da peca) ──
+     Aceita tanto a referencia original do fornecedor como a nova
+     nomenclatura, por coincidencia parcial. Pode devolver mais que uma
+     candidata (ex.: o mesmo codigo reutilizado para duas pecas
+     diferentes), cada uma tratada como um bloco independente. */
+  function procFecharBuscaDropdown() {
+    var dd = document.getElementById('proc-busca-dropdown');
+    if (dd) { dd.classList.add('hidden'); dd.innerHTML = ''; }
+  }
+
+  function procNormalizarBuscaQuery(q) {
+    return (q || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function procBuscarCandidatosReferencia(qNorm) {
+    return Promise.all([
+      procSbFetch(
+        'proc_referencias?select=referencia_interna,referencia_original,categoria,proveedor&or=(referencia_interna.ilike.*'
+          + encodeURIComponent(qNorm) + '*,referencia_original.ilike.*' + encodeURIComponent(qNorm) + '*)&limit=20',
+        { method: 'GET' }
+      ).then(function(r) { return r.ok ? r.json() : []; }),
+      procLoadCategoriasRemote()
+    ]);
+  }
+
+  function procAtualizarBuscaDropdown(valorBruto) {
+    var qNorm = procNormalizarBuscaQuery(valorBruto);
+    if (!qNorm) { procFecharBuscaDropdown(); return; }
+    procBuscarCandidatosReferencia(qNorm).then(function(res) {
+      var candidatos = res[0] || [];
+      var categorias = res[1] || [];
+      var dd = document.getElementById('proc-busca-dropdown');
+      if (!dd) return;
+      if (!candidatos.length) {
+        dd.innerHTML = '<div class="proc-busca-dropdown-empty">Nenhuma refer\u00eancia encontrada</div>';
+        dd.classList.remove('hidden');
+        return;
+      }
+      var mapaCategorias = {};
+      categorias.forEach(function(c) { mapaCategorias[c.codigo] = c.categoria_pt; });
+      dd.innerHTML = candidatos.map(function(c, idx) {
+        var nomeCat = mapaCategorias[c.categoria] || c.categoria;
+        return '<div class="proc-busca-dropdown-item" data-idx="' + idx + '">'
+          + '<span class="proc-busca-dropdown-ref">' + c.referencia_interna + '</span>'
+          + '<span class="proc-busca-dropdown-desc">' + nomeCat + ' \u00b7 ' + c.proveedor + '</span>'
+          + '</div>';
+      }).join('');
+      dd.classList.remove('hidden');
+      dd.querySelectorAll('.proc-busca-dropdown-item').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var idx = parseInt(el.dataset.idx, 10);
+          var candidato = candidatos[idx];
+          procFecharBuscaDropdown();
+          var inputEl = document.getElementById('proc-busca-referencia-input');
+          if (inputEl) inputEl.value = candidato.referencia_interna;
+          procAbrirRadiografia(null, [candidato]);
+        });
+      });
+    }).catch(function() { procFecharBuscaDropdown(); });
+  }
+
+  /* Monta o "raio-x" de uma referencia especifica, varrendo TODAS as
+     sessoes guardadas em busca de linhas que correspondam exactamente
+     (mesmo fornecedor, mesma referencia original normalizada, mesma
+     categoria). Preco de custo, PVP e margem sao recalculados a partir
+     dos dados brutos guardados, com as MESMAS formulas usadas ao vivo —
+     nunca inventa nada, nunca precisa de tocar na factura original. */
+  function procMontarBlocoRadiografia(candidato, sessoes, categorias) {
+    var linhas = [];
+    var totalA4 = 0, totalA5 = 0, descricaoRef = '';
+
+    sessoes.forEach(function(sess) {
+      var dados;
+      try { dados = JSON.parse(sess.dados); } catch(e) { return; }
+      if (!dados || !dados.faturas) return;
+      dados.faturas.forEach(function(fat) {
+        if (procNormalize(fat.proveedor || '') !== candidato.proveedor) return;
+        (fat.rows || []).forEach(function(row) {
+          if (!row.ref) return;
+          if (procNormalizarRefOriginal(row.ref) !== candidato.referencia_original) return;
+          if (procResolverCategoria(row.desc, categorias) !== candidato.categoria) return;
+
+          if (!descricaoRef) descricaoRef = row.desc || '';
+
+          var pc3raw = procCalcPrecoCusto(row.preco, row.plus1, row.hasD, row.qtdFt, row.a4, row.a5);
+          var pc3 = pc3raw * (1 - (row.descPct || 0) / 100);
+          var pvpResult = procCalcPVP(row.preco);
+          var pvpFinal = (row.pvpManual != null) ? row.pvpManual : (pvpResult ? pvpResult.pvpFinal : null);
+          var marg = pvpResult ? procCalcMargem(pvpResult.pvp1, row.preco) : null;
+
+          var a4 = row.a4 || 0, a5 = row.a5 || 0;
+          totalA4 += a4; totalA5 += a5;
+
+          linhas.push({
+            label: labelFromKey(sess.session_key),
+            a4: a4, a5: a5, total: a4 + a5,
+            precoCusto: pc3, pvp: pvpFinal, margem: marg
+          });
+        });
+      });
+    });
+
+    return {
+      candidato: candidato,
+      descricao: descricaoRef,
+      linhas: linhas,
+      totalA4: totalA4,
+      totalA5: totalA5,
+      totalGeral: totalA4 + totalA5,
+      numSessoes: linhas.length
+    };
+  }
+
+  function procMostrarRadiografiaModal(blocos, categorias) {
+    var old = document.getElementById('proc-radiografia-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var mapaCategorias = {};
+    (categorias || []).forEach(function(c) { mapaCategorias[c.codigo] = c.categoria_pt; });
+
+    var corpoHTML;
+    if (!blocos.length) {
+      corpoHTML = '<div class="proc-raio-vazio">Nenhuma refer\u00eancia encontrada.</div>';
+    } else {
+      corpoHTML = blocos.map(function(bloco) {
+        var cand = bloco.candidato;
+        var nomeCat = mapaCategorias[cand.categoria] || cand.categoria;
+        var linhasHTML = bloco.linhas.length
+          ? bloco.linhas.map(function(l) {
+              return '<tr>'
+                + '<td>' + l.label + '</td>'
+                + '<td class="center">' + l.a4 + '</td>'
+                + '<td class="center">' + l.a5 + '</td>'
+                + '<td class="center">' + l.total + '</td>'
+                + '<td class="right">' + (l.precoCusto ? l.precoCusto.toFixed(2) : '\u2014') + '</td>'
+                + '<td class="right">' + (l.pvp != null ? l.pvp.toFixed(2) : '\u2014') + '</td>'
+                + '<td class="right">' + (l.margem != null ? l.margem.toFixed(1) + '%' : '\u2014') + '</td>'
+                + '</tr>';
+            }).join('')
+          : '<tr class="empty-row"><td colspan="7">Sem hist\u00f3rico de sess\u00f5es</td></tr>';
+
+        return '<div class="proc-raio-bloco">'
+          + '<div class="proc-raio-bloco-header">'
+          +   '<div>'
+          +     '<span class="proc-raio-ref-nova">' + cand.referencia_interna + '</span> '
+          +     '<span class="proc-raio-categoria">' + nomeCat + '</span>'
+          +   '</div>'
+          +   '<span class="proc-raio-ref-original">Original: ' + cand.referencia_original + ' \u00b7 ' + cand.proveedor + '</span>'
+          + '</div>'
+          + (bloco.descricao ? '<div class="proc-raio-descricao">' + bloco.descricao + '</div>' : '')
+          + '<div class="proc-raio-totais">'
+          +   '<span>Sess\u00f5es:</span> ' + bloco.numSessoes + '&nbsp;&nbsp;'
+          +   '<span>Funchal:</span> ' + bloco.totalA4 + '&nbsp;&nbsp;'
+          +   '<span>Porto Santo:</span> ' + bloco.totalA5 + '&nbsp;&nbsp;'
+          +   '<span>Total:</span> ' + bloco.totalGeral
+          + '</div>'
+          + '<table class="proc-or-table">'
+          +   '<thead><tr>'
+          +     '<th>Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center">Total</th>'
+          +     '<th class="right">P. Custo</th><th class="right">PVP</th><th class="right">Margem</th>'
+          +   '</tr></thead>'
+          +   '<tbody>' + linhasHTML + '</tbody>'
+          + '</table>'
+          + '</div>';
+      }).join('');
+    }
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-radiografia-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel proc-or-panel--radiografia">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Radiografia da Refer\u00eancia</span>'
+      +       '<span class="proc-or-panel-title-sub">'
+      +         (blocos.length > 1 ? blocos.length + ' nomenclaturas encontradas' : (blocos.length === 1 ? '1 nomenclatura encontrada' : 'Sem resultados'))
+      +       '</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">\u2715 Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-panel-scroll">' + corpoHTML + '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+  }
+
+  function procAbrirRadiografia(valorBruto, candidatosForcados) {
+    var abrirComCandidatos = function(candidatos, categorias) {
+      if (!candidatos || !candidatos.length) {
+        procMostrarRadiografiaModal([], categorias || []);
+        return;
+      }
+      procSbFetch('proc_sessoes?select=session_key,dados,updated_at&order=updated_at.desc', { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(sessoes) {
+          var blocos = candidatos.map(function(cand) {
+            return procMontarBlocoRadiografia(cand, sessoes || [], categorias || []);
+          });
+          procMostrarRadiografiaModal(blocos, categorias || []);
+        })
+        .catch(function() {
+          var blocos = candidatos.map(function(cand) {
+            return procMontarBlocoRadiografia(cand, [], categorias || []);
+          });
+          procMostrarRadiografiaModal(blocos, categorias || []);
+        });
+    };
+
+    if (candidatosForcados) {
+      procLoadCategoriasRemote().then(function(categorias) {
+        abrirComCandidatos(candidatosForcados, categorias);
+      });
+      return;
+    }
+
+    var qNorm = procNormalizarBuscaQuery(valorBruto);
+    if (!qNorm) return;
+
+    procBuscarCandidatosReferencia(qNorm).then(function(res) {
+      abrirComCandidatos(res[0] || [], res[1] || []);
+    }).catch(function() { procMostrarRadiografiaModal([], []); });
   }
 
   /* ── Render session list in the start panel ── */

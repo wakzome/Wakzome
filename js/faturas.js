@@ -1528,6 +1528,59 @@
       +   '</div>';
   }
 
+  /* Apaga em Supabase as referencias que esta factura especifica tem
+     associadas (mesma logica/autonomia do toggle: o que a factura mostra,
+     ela pode apagar). Falha silenciosa (so regista no console) — nunca
+     deve impedir a remocao da factura em si. O trigger da base de dados
+     continua a proteger fisicamente qualquer referencia com guia_erp. */
+  function procApagarReferenciasDaFatura(fid) {
+    var pEl = document.getElementById('proc-proveedor-' + fid);
+    var fornecedor = pEl ? pEl.value.trim() : '';
+    var proveedorNorm = procNormalize(fornecedor);
+    if (!proveedorNorm) return;
+
+    var rows = procCollectRows(fid);
+    if (!rows.length) return;
+    var ano = new Date().getFullYear() % 100;
+
+    procLoadCategoriasRemote().then(function(categorias) {
+      var chaves = {};
+      rows.forEach(function(r) {
+        if (!r.ref) return;
+        var refNorm = procNormalizarRefOriginal(r.ref);
+        if (!refNorm) return;
+        var categoria = procResolverCategoria(r.desc, categorias || []);
+        chaves[refNorm + '|' + categoria] = true;
+      });
+      var listaChaves = Object.keys(chaves);
+      if (!listaChaves.length) return;
+
+      return procSbFetch(
+        'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm) + '&ano=eq.' + ano + '&select=referencia_interna,referencia_original,categoria',
+        { method: 'GET' }
+      )
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(todasDoAno) {
+          var referencias = (todasDoAno || [])
+            .filter(function(row) { return chaves.hasOwnProperty(row.referencia_original + '|' + row.categoria); })
+            .map(function(row) { return row.referencia_interna; });
+          if (!referencias.length) return;
+          return procSbFetch('rpc/proc_borrar_referencias_rascunho', {
+            method: 'POST',
+            body: JSON.stringify({ p_proveedor: proveedorNorm, p_referencias: referencias })
+          }).then(function(r2) {
+            if (!r2.ok) {
+              return r2.text().then(function(txt) {
+                console.error('[proc] falha ao apagar referencias da factura removida — status ' + r2.status + ':', txt);
+              });
+            }
+          });
+        });
+    }).catch(function(e) {
+      console.error('[proc] erro ao apagar referencias da factura removida:', e);
+    });
+  }
+
   function procRemoveFatura(fid) {
     if (activeFaturas.length <= 1) return;
     var guiaInput = document.getElementById('proc-guia-erp-' + fid);
@@ -1540,6 +1593,7 @@
     if (senha === null) return; /* cancelado */
     procValidarAdmin(senha).then(function(ok) {
       if (!ok) { window.alert('Senha incorrecta.'); return; }
+      procApagarReferenciasDaFatura(fid);
       procUndoSnapshot(); /* snapshot antes de remover */
       var el = document.getElementById('proc-fatura-' + fid);
       if (el) el.remove();

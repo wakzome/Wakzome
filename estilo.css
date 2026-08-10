@@ -2460,6 +2460,20 @@ input, textarea { cursor: text !important; }
   letter-spacing: .1em; color: #000; margin-bottom: 8px;
 }
 
+/* Fundo escurecido/blur atrás do tooltip de "pessoas ativas" em mobile —
+   elemento irmão do painel (nunca dentro dele), só visível ≤1024px via
+   .show (ver wzBindMobileToggle em nucleo.js). Por estar fora do painel,
+   um clique nele conta como "fora" para o listener de fecho existente. */
+#wz-active-mobile-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.28);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  z-index: 48;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
 /* ══ PAINEL "PESSOAS ATIVAS AGORA" (lado direito, espelha #saft-reminder) ══ */
 #wz-active-panel {
   position: fixed;
@@ -2577,11 +2591,19 @@ input, textarea { cursor: text !important; }
     position: fixed;
     top: auto; right: auto; bottom: 20px; left: 50%;
     transform: translateX(-50%) translateY(6px);
-    max-width: min(280px, 86vw);
+    width: calc(100vw - 32px);
+    max-width: 420px;
+  }
+  #wz-active-panel.wz-inline-mobile .wz-active-item {
+    white-space: normal;
+    flex-wrap: wrap;
   }
   #wz-active-panel.wz-inline-mobile.tt-open #wz-active-tooltip {
     opacity: 1; pointer-events: auto;
     transform: translateX(-50%) translateY(0);
+  }
+  #wz-active-mobile-backdrop.show {
+    display: block; opacity: 1; pointer-events: auto;
   }
 }
 #admin-app.module-open ~ #wz-active-panel { display: none !important; }
@@ -3008,9 +3030,12 @@ input, textarea { cursor: text !important; }
 
   
   #admin-app {
+    position: static !important;
     height: auto !important; min-height: 100vh;
+    overflow: visible !important;
     overflow-y: auto !important; overflow-x: hidden;
   }
+  #adm-dashboard { overflow-y: visible !important; }
 
   
   .tab-panel.active { flex: none; overflow: visible; min-height: 0; }

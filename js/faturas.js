@@ -1992,6 +1992,7 @@
         tr.dataset.edicaoActiva = '1';
         tr.dataset.prevRef  = rIn0 ? rIn0.value.trim() : '';
         tr.dataset.prevDesc = dIn0 ? dIn0.value.trim() : '';
+        console.log('[proc][diag] focusin — snapshot da linha', tr.id, { prevRef: tr.dataset.prevRef, prevDesc: tr.dataset.prevDesc });
       });
       tbody.addEventListener('focusout', function(e) {
         if (!e.target) return;
@@ -2001,20 +2002,22 @@
         if (!tr) return;
         setTimeout(function() {
           var activo = document.activeElement;
-          if (activo && tr.contains(activo)) return; /* ainda dentro da mesma linha (saltou ref↔desc) */
-          if (tr.dataset.edicaoActiva !== '1') return;
+          if (activo && tr.contains(activo)) { console.log('[proc][diag] focusout ignorado — ainda dentro da mesma linha', tr.id); return; }
+          if (tr.dataset.edicaoActiva !== '1') { console.log('[proc][diag] focusout ignorado — edicaoActiva != 1', tr.id); return; }
           tr.dataset.edicaoActiva = '0';
           var refAntigo  = tr.dataset.prevRef  || '';
           var descAntigo = tr.dataset.prevDesc || '';
           var m = tr.id.match(/^proc-row-(\d+)-(\d+)$/);
-          if (!m) return;
+          if (!m) { console.log('[proc][diag] focusout — id da linha nao bateu com o regex', tr.id); return; }
           var fidLinha = parseInt(m[1], 10);
           var iLinha   = parseInt(m[2], 10);
           var rInF = tr.querySelector('.proc-ref-input');
           var dInF = tr.querySelector('.proc-desc-input');
           var refFinal  = rInF ? rInF.value.trim() : '';
           var descFinal = dInF ? dInF.value.trim() : '';
-          if (refAntigo === refFinal && descAntigo === descFinal) return; /* nada mudou */
+          console.log('[proc][diag] focusout final da linha', tr.id, { refAntigo: refAntigo, descAntigo: descAntigo, refFinal: refFinal, descFinal: descFinal });
+          if (refAntigo === refFinal && descAntigo === descFinal) { console.log('[proc][diag] focusout — nada mudou, nao chama procTratarEdicaoLinha'); return; }
+          console.log('[proc][diag] focusout — MUDOU, a chamar procTratarEdicaoLinha', { fid: fidLinha, i: iLinha, refAntigo: refAntigo, descAntigo: descAntigo });
           procTratarEdicaoLinha(fidLinha, iLinha, refAntigo, descAntigo);
         }, 200);
       });
@@ -3039,42 +3042,52 @@
      artigo novo, e uma etiqueta ja impressa com essa referencia interna
      continua fisicamente valida. */
   function procTratarEdicaoLinha(fid, i, refAntigo, descAntigo) {
+    console.log('[proc][diag] procTratarEdicaoLinha chamada', { fid: fid, i: i, refAntigo: refAntigo, descAntigo: descAntigo });
     var pEl = document.getElementById('proc-proveedor-' + fid);
     var proveedorNorm = pEl ? procNormalize(pEl.value) : '';
-    if (!proveedorNorm) return;
+    if (!proveedorNorm) { console.log('[proc][diag] abortou — sem proveedorNorm'); return; }
     var refNormAntigo = procNormalizarRefOriginal(refAntigo);
-    if (!refNormAntigo) return; /* a linha nao tinha referencia antes — nada a corrigir */
+    if (!refNormAntigo) { console.log('[proc][diag] abortou — refAntigo normalizado ficou vazio (a linha nao tinha referencia antes)'); return; }
 
     var tr = document.getElementById('proc-row-' + fid + '-' + i);
-    if (!tr) return;
+    if (!tr) { console.log('[proc][diag] abortou — linha nao encontrada no DOM'); return; }
     var rIn = tr.querySelector('.proc-ref-input');
     var dIn = tr.querySelector('.proc-desc-input');
     var refNovo  = rIn ? rIn.value.trim() : '';
     var descNovo = dIn ? dIn.value.trim() : '';
     var ano = new Date().getFullYear() % 100;
+    console.log('[proc][diag] valores actuais da linha', { proveedorNorm: proveedorNorm, refNormAntigo: refNormAntigo, refNovo: refNovo, descNovo: descNovo, ano: ano });
 
     procLoadCategoriasRemote().then(function(categorias) {
       var categoriaAntiga = procResolverCategoria(descAntigo, categorias);
       var chaveAntiga = refNormAntigo + '|' + categoriaAntiga;
+      console.log('[proc][diag] categoria resolvida', { descAntigo: descAntigo, categoriaAntiga: categoriaAntiga, chaveAntiga: chaveAntiga, totalCategoriasCarregadas: (categorias || []).length });
 
-      if (procChaveEmUsoNoutraLinha(proveedorNorm, chaveAntiga, tr.id, categorias)) return;
+      var protegida = procChaveEmUsoNoutraLinha(proveedorNorm, chaveAntiga, tr.id, categorias);
+      console.log('[proc][diag] protegida por outra linha?', protegida);
+      if (protegida) return;
 
-      procSbFetch(
-        'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm) + '&ano=eq.' + ano
+      var urlSelect = 'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm) + '&ano=eq.' + ano
           + '&referencia_original=eq.' + encodeURIComponent(refNormAntigo) + '&categoria=eq.' + encodeURIComponent(categoriaAntiga)
-          + '&select=id,referencia_interna',
-        { method: 'GET' }
-      ).then(function(r) { return r.ok ? r.json() : []; })
+          + '&select=id,referencia_interna';
+      console.log('[proc][diag] a consultar Supabase', urlSelect);
+
+      procSbFetch(urlSelect, { method: 'GET' })
+       .then(function(r) { console.log('[proc][diag] resposta da consulta — status', r.status, r.ok); return r.ok ? r.json() : []; })
        .then(function(rows) {
-         if (!rows || !rows.length) return; /* nunca existiu referencia interna para o valor antigo */
+         console.log('[proc][diag] linhas encontradas em proc_referencias para a chave antiga', rows);
+         if (!rows || !rows.length) { console.log('[proc][diag] nada encontrado — nunca existiu referencia interna para este valor antigo, ou a categoria/chave nao bate certo'); return; }
 
          var totalmenteVazio = !refNovo && !descNovo;
+         console.log('[proc][diag] totalmenteVazio?', totalmenteVazio);
          if (totalmenteVazio) {
            var refs = rows.map(function(row) { return row.referencia_interna; });
+           console.log('[proc][diag] a apagar referencias', refs);
            procSbFetch('rpc/proc_borrar_referencias_rascunho', {
              method: 'POST',
              body: JSON.stringify({ p_proveedor: proveedorNorm, p_referencias: refs })
            }).then(function(r2) {
+             console.log('[proc][diag] resposta do borrado — status', r2.status, r2.ok);
              if (!r2.ok) {
                r2.text().then(function(txt) {
                  console.error('[proc] falha ao apagar referencia da linha limpa — status ' + r2.status + ':', txt);
@@ -3086,16 +3099,19 @@
            return;
          }
 
-         if (!refNovo) return; /* so a descricao ficou vazia — sem referencia nao ha o que corrigir */
+         if (!refNovo) { console.log('[proc][diag] abortou — so a descricao ficou vazia, sem referencia nao ha o que corrigir'); return; }
 
          var refNormNovo   = procNormalizarRefOriginal(refNovo);
          var categoriaNova = procResolverCategoria(descNovo, categorias);
-         if (refNormNovo === refNormAntigo && categoriaNova === categoriaAntiga) return; /* chave nao mudou de facto */
+         console.log('[proc][diag] chave nova calculada', { refNormNovo: refNormNovo, categoriaNova: categoriaNova });
+         if (refNormNovo === refNormAntigo && categoriaNova === categoriaAntiga) { console.log('[proc][diag] abortou — chave nao mudou de facto'); return; }
 
+         console.log('[proc][diag] a actualizar (PATCH) id=' + rows[0].id, { referencia_original: refNormNovo, categoria: categoriaNova });
          procSbFetch('proc_referencias?id=eq.' + rows[0].id, {
            method: 'PATCH',
            body: JSON.stringify({ referencia_original: refNormNovo, categoria: categoriaNova })
          }).then(function(r3) {
+           console.log('[proc][diag] resposta do PATCH — status', r3.status, r3.ok);
            if (!r3.ok) {
              r3.text().then(function(txt) {
                console.error('[proc] falha ao corrigir referencia da linha — status ' + r3.status + ':', txt);

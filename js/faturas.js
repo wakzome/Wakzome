@@ -1968,17 +1968,20 @@
         }
       });
     }
-    /* ── Deteta correcoes de referencia/descricao numa linha que ja tinha
-       referencia interna gerada — nunca deve ficar orfa em Supabase.
-       Guarda o valor com que a linha ENTROU na edicao (focusin no ref OU
-       na descricao) e, quando o foco sai de AMBOS os campos da linha
-       (focusout com debounce, para permitir saltar de um campo para o
-       outro sem disparar a meio), compara com o valor final:
-         - ficou tudo vazio  → apaga a referencia interna antiga;
-         - foi corrigido (continua com conteudo) → actualiza a referencia
-           original/categoria em Supabase MANTENDO a mesma referencia
-           interna, porque a intencao foi corrigir um erro, nao criar um
-           artigo novo — uma etiqueta ja impressa continua valida. */
+    if (!tbody._obsListening) {
+      tbody._obsListening = true;
+      tbody.addEventListener('input', function(e) {
+        if (e.target && e.target.classList.contains('proc-obs-input')) {
+          procObsSync(e.target);
+        }
+      });
+    }
+    /* ── Correcao de referencia/descricao ja gravada em Supabase ──
+       Deteta quando o utilizador termina de editar a referencia ou a
+       descricao de uma linha ja existente e decide, ao sair do campo,
+       se deve corrigir (preserva a referencia_interna) ou apagar
+       (referencia+descricao ficaram ambas vazias) a entrada
+       correspondente em proc_referencias. Ver procTratarEdicaoLinha. */
     if (!tbody._correcaoLinhaListening) {
       tbody._correcaoLinhaListening = true;
       tbody.addEventListener('focusin', function(e) {
@@ -1992,7 +1995,6 @@
         tr.dataset.edicaoActiva = '1';
         tr.dataset.prevRef  = rIn0 ? rIn0.value.trim() : '';
         tr.dataset.prevDesc = dIn0 ? dIn0.value.trim() : '';
-        console.log('[proc][diag] focusin — snapshot da linha', tr.id, { prevRef: tr.dataset.prevRef, prevDesc: tr.dataset.prevDesc });
       });
       tbody.addEventListener('focusout', function(e) {
         if (!e.target) return;
@@ -2002,32 +2004,22 @@
         if (!tr) return;
         setTimeout(function() {
           var activo = document.activeElement;
-          if (activo && tr.contains(activo)) { console.log('[proc][diag] focusout ignorado — ainda dentro da mesma linha', tr.id); return; }
-          if (tr.dataset.edicaoActiva !== '1') { console.log('[proc][diag] focusout ignorado — edicaoActiva != 1', tr.id); return; }
+          if (activo && tr.contains(activo)) return;
+          if (tr.dataset.edicaoActiva !== '1') return;
           tr.dataset.edicaoActiva = '0';
           var refAntigo  = tr.dataset.prevRef  || '';
           var descAntigo = tr.dataset.prevDesc || '';
           var m = tr.id.match(/^proc-row-(\d+)-(\d+)$/);
-          if (!m) { console.log('[proc][diag] focusout — id da linha nao bateu com o regex', tr.id); return; }
+          if (!m) return;
           var fidLinha = parseInt(m[1], 10);
           var iLinha   = parseInt(m[2], 10);
           var rInF = tr.querySelector('.proc-ref-input');
           var dInF = tr.querySelector('.proc-desc-input');
           var refFinal  = rInF ? rInF.value.trim() : '';
           var descFinal = dInF ? dInF.value.trim() : '';
-          console.log('[proc][diag] focusout final da linha', tr.id, { refAntigo: refAntigo, descAntigo: descAntigo, refFinal: refFinal, descFinal: descFinal });
-          if (refAntigo === refFinal && descAntigo === descFinal) { console.log('[proc][diag] focusout — nada mudou, nao chama procTratarEdicaoLinha'); return; }
-          console.log('[proc][diag] focusout — MUDOU, a chamar procTratarEdicaoLinha', { fid: fidLinha, i: iLinha, refAntigo: refAntigo, descAntigo: descAntigo });
+          if (refAntigo === refFinal && descAntigo === descFinal) return;
           procTratarEdicaoLinha(fidLinha, iLinha, refAntigo, descAntigo);
         }, 200);
-      });
-    }
-    if (!tbody._obsListening) {
-      tbody._obsListening = true;
-      tbody.addEventListener('input', function(e) {
-        if (e.target && e.target.classList.contains('proc-obs-input')) {
-          procObsSync(e.target);
-        }
       });
     }
     for (var i = 0; i < n; i++) {
@@ -2999,14 +2991,13 @@
     return chaves;
   }
 
-  /* Versao ao nivel da LINHA de procChavesUsadasPorOutrasFaturas: diz se
-     uma chave (referencia_original|categoria) ainda esta em uso nalguma
-     OUTRA linha (desta ou de outra factura activa, mesmo fornecedor) —
-     usada antes de apagar/actualizar em Supabase por causa da edicao de
-     UMA linha, para nunca corromper a referencia de uma linha vizinha
-     que por coincidencia partilhe a mesma referencia original (ex.: duas
-     linhas identicas "X1 CAMISA" — enquanto UMA delas ainda existir,
-     nunca se toca na referencia interna partilhada). */
+  /* Sibling de procChavesUsadasPorOutrasFaturas, mas a granularidade de
+     LINHA: verifica se alguma OUTRA linha (em qualquer factura aberta do
+     mesmo fornecedor, incluindo a mesma factura, mas excluindo a propria
+     linha que esta a ser editada) ainda usa a chave indicada. Garante que
+     duas linhas identicas (ex.: duas "X1 CAMISA") nunca fazem com que a
+     referencia seja apagada ou repontada enquanto pelo menos uma delas
+     ainda precisar dela. */
   function procChaveEmUsoNoutraLinha(proveedorNorm, chave, trIdAtual, categorias) {
     var encontrada = false;
     activeFaturas.forEach(function(outroFid) {
@@ -3030,100 +3021,80 @@
     return encontrada;
   }
 
-  /* Trata a correcao/limpeza de UMA linha depois de a referencia ou a
-     descricao terem mudado (ver o listener de focusout em procAddRows).
-     Regra de negocio explicita: se a linha ficou COMPLETAMENTE vazia,
-     apaga-se a referencia interna que tinha — deixou de existir esse
-     artigo. Mas se a linha continua com conteudo (o utilizador apenas
-     corrigiu um erro de digitacao na referencia original ou na
-     descricao), a referencia interna e PRESERVADA — so se actualiza a
-     referencia_original/categoria em Supabase para apontar para o valor
-     corrigido, porque a intencao foi reparar um erro, nunca criar um
-     artigo novo, e uma etiqueta ja impressa com essa referencia interna
-     continua fisicamente valida. */
+  /* Reage a uma edicao (correcao ou limpeza) da referencia/descricao de
+     uma linha cuja referencia_interna ja possa ter sido atribuida em
+     Supabase. Duas situacoes:
+       1. Referencia E descricao ficaram ambas vazias → a intencao foi
+          apagar a linha: apaga a entrada em proc_referencias (via RPC
+          proc_borrar_referencias_rascunho, que ja protege guias ja
+          enviadas ao ERP).
+       2. A linha ainda tem conteudo (correcao de um erro de digitacao,
+          possivelmente depois de a etiqueta ja ter sido impressa) → a
+          intencao foi CORRIGIR: a referencia_interna existente deve ser
+          preservada, apenas os campos referencia_original/categoria sao
+          actualizados. Isto e feito atomicamente do lado do servidor
+          via RPC proc_corrigir_referencia (SECURITY DEFINER) — nunca por
+          PATCH directo do browser, que fica bloqueado em silencio pelas
+          politicas de RLS (so ha politicas de INSERT/SELECT nesta
+          tabela). */
   function procTratarEdicaoLinha(fid, i, refAntigo, descAntigo) {
-    console.log('[proc][diag] procTratarEdicaoLinha chamada', { fid: fid, i: i, refAntigo: refAntigo, descAntigo: descAntigo });
     var pEl = document.getElementById('proc-proveedor-' + fid);
     var proveedorNorm = pEl ? procNormalize(pEl.value) : '';
-    if (!proveedorNorm) { console.log('[proc][diag] abortou — sem proveedorNorm'); return; }
+    if (!proveedorNorm) return;
     var refNormAntigo = procNormalizarRefOriginal(refAntigo);
-    if (!refNormAntigo) { console.log('[proc][diag] abortou — refAntigo normalizado ficou vazio (a linha nao tinha referencia antes)'); return; }
+    if (!refNormAntigo) return;
 
     var tr = document.getElementById('proc-row-' + fid + '-' + i);
-    if (!tr) { console.log('[proc][diag] abortou — linha nao encontrada no DOM'); return; }
+    if (!tr) return;
     var rIn = tr.querySelector('.proc-ref-input');
     var dIn = tr.querySelector('.proc-desc-input');
     var refNovo  = rIn ? rIn.value.trim() : '';
     var descNovo = dIn ? dIn.value.trim() : '';
     var ano = new Date().getFullYear() % 100;
-    console.log('[proc][diag] valores actuais da linha', { proveedorNorm: proveedorNorm, refNormAntigo: refNormAntigo, refNovo: refNovo, descNovo: descNovo, ano: ano });
 
     procLoadCategoriasRemote().then(function(categorias) {
       var categoriaAntiga = procResolverCategoria(descAntigo, categorias);
       var chaveAntiga = refNormAntigo + '|' + categoriaAntiga;
-      console.log('[proc][diag] categoria resolvida', { descAntigo: descAntigo, categoriaAntiga: categoriaAntiga, chaveAntiga: chaveAntiga, totalCategoriasCarregadas: (categorias || []).length });
 
-      var protegida = procChaveEmUsoNoutraLinha(proveedorNorm, chaveAntiga, tr.id, categorias);
-      console.log('[proc][diag] protegida por outra linha?', protegida);
-      if (protegida) return;
+      if (procChaveEmUsoNoutraLinha(proveedorNorm, chaveAntiga, tr.id, categorias)) return;
 
-      var urlSelect = 'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm) + '&ano=eq.' + ano
-          + '&referencia_original=eq.' + encodeURIComponent(refNormAntigo) + '&categoria=eq.' + encodeURIComponent(categoriaAntiga)
-          + '&select=id,referencia_interna';
-      console.log('[proc][diag] a consultar Supabase', urlSelect);
+      var totalmenteVazio = !refNovo && !descNovo;
 
-      procSbFetch(urlSelect, { method: 'GET' })
-       .then(function(r) { console.log('[proc][diag] resposta da consulta — status', r.status, r.ok); return r.ok ? r.json() : []; })
-       .then(function(rows) {
-         console.log('[proc][diag] linhas encontradas em proc_referencias para a chave antiga', rows);
-         if (!rows || !rows.length) { console.log('[proc][diag] nada encontrado — nunca existiu referencia interna para este valor antigo, ou a categoria/chave nao bate certo'); return; }
-
-         var totalmenteVazio = !refNovo && !descNovo;
-         console.log('[proc][diag] totalmenteVazio?', totalmenteVazio);
-         if (totalmenteVazio) {
+      if (totalmenteVazio) {
+        procSbFetch(
+          'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm) + '&ano=eq.' + ano
+            + '&referencia_original=eq.' + encodeURIComponent(refNormAntigo) + '&categoria=eq.' + encodeURIComponent(categoriaAntiga)
+            + '&select=id,referencia_interna',
+          { method: 'GET' }
+        ).then(function(r) { return r.ok ? r.json() : []; })
+         .then(function(rows) {
+           if (!rows || !rows.length) return;
            var refs = rows.map(function(row) { return row.referencia_interna; });
-           console.log('[proc][diag] a apagar referencias', refs);
            procSbFetch('rpc/proc_borrar_referencias_rascunho', {
              method: 'POST',
              body: JSON.stringify({ p_proveedor: proveedorNorm, p_referencias: refs })
-           }).then(function(r2) {
-             console.log('[proc][diag] resposta do borrado — status', r2.status, r2.ok);
-             if (!r2.ok) {
-               r2.text().then(function(txt) {
-                 console.error('[proc] falha ao apagar referencia da linha limpa — status ' + r2.status + ':', txt);
-               });
-             }
-           }).catch(function(e) {
-             console.error('[proc] erro de rede ao apagar referencia da linha limpa:', e);
-           });
-           return;
-         }
-
-         if (!refNovo) { console.log('[proc][diag] abortou — so a descricao ficou vazia, sem referencia nao ha o que corrigir'); return; }
-
-         var refNormNovo   = procNormalizarRefOriginal(refNovo);
-         var categoriaNova = procResolverCategoria(descNovo, categorias);
-         console.log('[proc][diag] chave nova calculada', { refNormNovo: refNormNovo, categoriaNova: categoriaNova });
-         if (refNormNovo === refNormAntigo && categoriaNova === categoriaAntiga) { console.log('[proc][diag] abortou — chave nao mudou de facto'); return; }
-
-         console.log('[proc][diag] a actualizar (PATCH) id=' + rows[0].id, { referencia_original: refNormNovo, categoria: categoriaNova });
-         procSbFetch('proc_referencias?id=eq.' + rows[0].id, {
-           method: 'PATCH',
-           body: JSON.stringify({ referencia_original: refNormNovo, categoria: categoriaNova })
-         }).then(function(r3) {
-           console.log('[proc][diag] resposta do PATCH — status', r3.status, r3.ok);
-           if (!r3.ok) {
-             r3.text().then(function(txt) {
-               console.error('[proc] falha ao corrigir referencia da linha — status ' + r3.status + ':', txt);
-             });
-           }
-         }).catch(function(e) {
-           console.error('[proc] erro de rede ao corrigir referencia da linha:', e);
+           }).catch(function() {});
          });
-       });
-    }).catch(function(e) {
-      console.error('[proc] erro ao tratar edicao de linha:', e);
-    });
+        return;
+      }
+
+      if (!refNovo) return;
+
+      var categoriaNova = procResolverCategoria(descNovo, categorias);
+      if (refNormAntigo === procNormalizarRefOriginal(refNovo) && categoriaAntiga === categoriaNova) return;
+
+      procSbFetch('rpc/proc_corrigir_referencia', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_proveedor: proveedorNorm,
+          p_referencia_original_antiga: refNormAntigo,
+          p_categoria_antiga: categoriaAntiga,
+          p_ano: ano,
+          p_referencia_original_nova: refNovo,
+          p_categoria_nova: categoriaNova
+        })
+      }).catch(function() {});
+    }).catch(function() {});
   }
 
   /* ── 13. COPY BAR HELPER ── */
@@ -4172,6 +4143,11 @@
 
     /* Carrega biblioteca de fornecedores remota (non-blocking) */
     procLoadFornecedoresRemote();
+
+    /* Pre-carrega categorias (non-blocking) — evita que a primeira
+       correcao/edicao de uma linha, logo a seguir a abrir a sessao,
+       resolva categoria='XX' por a cache ainda nao estar pronta. */
+    procLoadCategoriasRemote();
 
     /* Show start area (non-blocking) — loads remote keys then renders */
     procShowStartArea();

@@ -1953,21 +1953,36 @@
       const dayName = (dayHeaderRow[c] || '').trim();
       const date = (appearances[0].dateRow[c] || '').trim();
       let loja = '', display = '', isWork = false;
-      let apoioLoja = '', apoioDisplay = '';
+      const apoios = [];
       const recebeApoio = [];
 
+      // 1) Turno principal = a loja de maior duração total entre as que têm
+      //    os dois segmentos completos; qualquer OUTRA loja com turno
+      //    completo no mesmo dia vira reforço (nunca é descartada em silêncio).
+      const fullCandidates = [];
       for (const ap of appearances) {
         const top = (ap.entry.A[c] || '').trim();
         const bot = (ap.entry.B[c] || '').trim();
         if (hpsIsSchedule(top) && hpsIsSchedule(bot)) {
-          loja = ap.store; display = top + ' · ' + bot; isWork = true;
+          const dur = (hpsRangeMin(top)[1] - hpsRangeMin(top)[0]) + (hpsRangeMin(bot)[1] - hpsRangeMin(bot)[0]);
+          fullCandidates.push({ ap, top, bot, dur });
         } else if (hpsIsSchedule(top) && !bot) {
-          apoioLoja = ap.store; apoioDisplay = top;
+          apoios.push({ loja: ap.store, display: top });
         }
       }
-      if (!isWork && apoioDisplay) {
-        loja = apoioLoja; display = apoioDisplay; isWork = true;
-        apoioLoja = ''; apoioDisplay = '';
+      if (fullCandidates.length) {
+        fullCandidates.sort((a, b) => b.dur - a.dur);
+        const mainC = fullCandidates[0];
+        loja = mainC.ap.store; display = mainC.top + ' · ' + mainC.bot; isWork = true;
+        for (let fi = 1; fi < fullCandidates.length; fi++) {
+          const fc = fullCandidates[fi];
+          apoios.push({ loja: fc.ap.store, display: fc.top, label: hpsReforcoLabel(mainC.top, mainC.bot, fc.top) });
+          apoios.push({ loja: fc.ap.store, display: fc.bot, label: hpsReforcoLabel(mainC.top, mainC.bot, fc.bot) });
+        }
+      }
+      if (!isWork && apoios.length) {
+        const first = apoios.shift();
+        loja = first.loja; display = first.display; isWork = true;
       }
       if (!isWork) {
         for (const ap of appearances) {
@@ -1989,7 +2004,7 @@
         });
       }
 
-      dias.push({ dayName, date, loja, display, isWork, apoioLoja, apoioDisplay, recebeApoio });
+      dias.push({ dayName, date, loja, display, isWork, apoios, recebeApoio });
     }
     hpsRenderModal(personLabel, dias);
   }
@@ -2050,6 +2065,32 @@
   const HPS_HRS_SUFFIX_RE = /\s*\d+(?:[.,]\d+)?\s*hrs?\.?\s*$/i;
   function hpsStripHrs(name) { return (name || '').replace(HPS_HRS_SUFFIX_RE, '').trim(); }
 
+  // Duração/posição de um segmento "HH:MM-HH:MM", usadas para 1) escolher o
+  // turno principal quando há duas lojas com turno completo no mesmo dia
+  // (fica a de maior duração total) e 2) rotular o(s) reforço(s) da outra
+  // loja consoante caiam no intervalo do meio-dia (almoço) ou após o fecho.
+  function hpsTimeToMin(hhmm) {
+    var p = (hhmm || '').split(':');
+    return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+  }
+  function hpsRangeMin(range) {
+    var p = (range || '').split('-');
+    return [hpsTimeToMin(p[0]), hpsTimeToMin(p[1])];
+  }
+  function hpsReforcoLabel(mainTop, mainBot, segRange) {
+    var m1 = hpsRangeMin(mainTop), m2 = hpsRangeMin(mainBot), rs = hpsRangeMin(segRange);
+    if (rs[0] >= m2[1]) return 'fecho';
+    if (rs[0] >= m1[1] && rs[0] <= m2[0]) return 'almoço';
+    if (rs[1] <= m1[0]) return 'abertura';
+    return '';
+  }
+  function hpsIsToday(dateStr) {
+    var now = new Date();
+    var dd = String(now.getDate()).padStart(2, '0');
+    var mm = String(now.getMonth() + 1).padStart(2, '0');
+    return (dateStr || '').trim() === (dd + '/' + mm + '/' + now.getFullYear());
+  }
+
   // Repete a mesma leitura de blocos que renderPortoSanto já faz, mas devolve
   // dados estruturados em vez de HTML: { dayHeaderRow, stores:[{name, dateRow, people:[{name,A,B}]}] }
   function hpsCollectStores(rows) {
@@ -2094,24 +2135,37 @@
       const dayName = (dayHeaderRow[c] || '').trim();
       const date = (appearances[0].dateRow[c] || '').trim();
       let loja = '', display = '', isWork = false;
-      let apoioLoja = '', apoioDisplay = '';       // reforço que ELA dá noutra loja
+      const apoios = [];                            // reforço(s) que ELA dá noutra(s) loja(s)
       const recebeApoio = [];                       // reforço que ELA recebe na sua loja
 
-      // 1) Turno principal = a loja onde AMBOS os segmentos (manhã e tarde) têm
-      //    formato de hora — um turno normal exporta sempre os dois. Um único
-      //    segmento solto é reforço/apoio nessa loja, não o turno principal.
+      // 1) Turno principal = a loja de maior duração total entre as que têm
+      //    os dois segmentos (manhã e tarde) completos. Se OUTRA loja também
+      //    tiver turno completo no mesmo dia, os seus dois segmentos passam a
+      //    reforço (ex.: almoço/fecho) em vez de serem descartados em silêncio.
+      const fullCandidates = [];
       for (const ap of appearances) {
         const top = (ap.entry.A[c] || '').trim();
         const bot = (ap.entry.B[c] || '').trim();
         if (hpsIsSchedule(top) && hpsIsSchedule(bot)) {
-          loja = ap.store; display = top + ' · ' + bot; isWork = true;
+          const dur = (hpsRangeMin(top)[1] - hpsRangeMin(top)[0]) + (hpsRangeMin(bot)[1] - hpsRangeMin(bot)[0]);
+          fullCandidates.push({ ap, top, bot, dur });
         } else if (hpsIsSchedule(top) && !bot) {
-          apoioLoja = ap.store; apoioDisplay = top;
+          apoios.push({ loja: ap.store, display: top });
         }
       }
-      if (!isWork && apoioDisplay) {
-        loja = apoioLoja; display = apoioDisplay; isWork = true;
-        apoioLoja = ''; apoioDisplay = '';
+      if (fullCandidates.length) {
+        fullCandidates.sort((a, b) => b.dur - a.dur);
+        const mainC = fullCandidates[0];
+        loja = mainC.ap.store; display = mainC.top + ' · ' + mainC.bot; isWork = true;
+        for (let fi = 1; fi < fullCandidates.length; fi++) {
+          const fc = fullCandidates[fi];
+          apoios.push({ loja: fc.ap.store, display: fc.top, label: hpsReforcoLabel(mainC.top, mainC.bot, fc.top) });
+          apoios.push({ loja: fc.ap.store, display: fc.bot, label: hpsReforcoLabel(mainC.top, mainC.bot, fc.bot) });
+        }
+      }
+      if (!isWork && apoios.length) {
+        const first = apoios.shift();
+        loja = first.loja; display = first.display; isWork = true;
       }
       // 2) Sem horário em lado nenhum — a primeira palavra que não seja o nome
       //    de outra loja (FOLGA, FÉRIAS, LICENÇA, BAIXA MEDICA, etc.).
@@ -2138,7 +2192,7 @@
         });
       }
 
-      dias.push({ dayName, date, loja, display, isWork, apoioLoja, apoioDisplay, recebeApoio });
+      dias.push({ dayName, date, loja, display, isWork, apoios, recebeApoio });
     }
     hpsRenderModal(personLabel, dias);
   }
@@ -2156,7 +2210,9 @@
       #hps-modal-close { background:none; border:none; cursor:pointer; font-size:1.1rem; color:#888 !important; -webkit-text-fill-color:#888 !important; line-height:1; padding:2px 6px; border-radius:6px; }
       #hps-modal-close:hover { color:#fff !important; -webkit-text-fill-color:#fff !important; background:#333; }
       #hps-modal-body { overflow-y:auto; padding:14px 16px; flex:1; scrollbar-width:thin; scrollbar-color:#444 #1a1a1a; }
-      .hps-day-row { display:flex; align-items:center; gap:10px; background:#222 !important; border:1px solid #2e2e2e; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+      .hps-day-row { position:relative; display:flex; align-items:center; gap:10px; background:#222 !important; border:1px solid #2e2e2e; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+      .hps-day-row.today { background:#262624 !important; border-color:#48453a; }
+      .hps-day-row.today::before { content:''; position:absolute; left:-1px; top:8px; bottom:8px; width:3px; border-radius:2px; background:rgba(212,175,120,.55); }
       .hps-day-lbl { width:64px; flex-shrink:0; }
       .hps-day-name { font-size:.74rem; font-weight:800; letter-spacing:.06em; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
       .hps-day-date { font-size:.64rem; font-weight:700; color:#fff !important; -webkit-text-fill-color:#fff !important; display:block; }
@@ -2204,7 +2260,12 @@
       const recebeHtml = (d.recebeApoio || []).map(r =>
         `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(hpsStripHrs(r.name))}: ${escapeHtml(r.time)}</div>`
       ).join('');
-      return `<div class="hps-day-row">
+      const apoiosHtml = (d.apoios || []).map(a => {
+        const lbl = a.label ? ` de ${escapeHtml(a.label)}` : '';
+        return `<div class="hps-day-apoio">⚡ reforço${lbl} em ${escapeHtml(a.loja)}: ${escapeHtml(a.display)}</div>`;
+      }).join('');
+      const todayCls = hpsIsToday(d.date) ? ' today' : '';
+      return `<div class="hps-day-row${todayCls}">
         <div class="hps-day-lbl">
           <span class="hps-day-name">${escapeHtml(d.dayName)}</span>
           <span class="hps-day-date">${escapeHtml(d.date)}</span>
@@ -2212,7 +2273,7 @@
         <div class="hps-day-info">
           ${d.isWork ? `<div class="hps-day-store">${escapeHtml(d.loja)}</div>` : ''}
           <div class="hps-day-shift${off ? ' off' : ''}">${escapeHtml(d.display || '—')}</div>
-          ${d.apoioDisplay ? `<div class="hps-day-apoio">⚡ reforço em ${escapeHtml(d.apoioLoja)}: ${escapeHtml(d.apoioDisplay)}</div>` : ''}
+          ${apoiosHtml}
           ${recebeHtml}
         </div>
       </div>`;

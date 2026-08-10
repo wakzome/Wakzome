@@ -1463,20 +1463,20 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 .table-wrap { overflow-x:auto; display:flex; justify-content:center; transition: opacity 0.5s ease; }
-#table-container table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
-#table-container th, #table-container td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.73rem; font-weight:bold; color:#000; }
-#table-container th { background:#444; color:#fff !important; text-transform:uppercase; font-size:0.78rem; position:relative; top:0; z-index:2; }
-#table-container td.name { white-space:nowrap !important; text-align:center; border-radius:15px 0 0 15px; display:flex; align-items:center; justify-content:center; padding-left:8px; gap:2px; }
-#table-container td.name .h-name-txt { white-space:nowrap !important; flex-shrink:0; }
-#table-container td.multi-line { white-space:pre-line; }
-#table-container td.bold-row { font-weight:bold; }
-#table-container tr:hover td { background:#eaeaea; }
-#table-container th.h-th-merged { padding:5px 4px !important; line-height:1.15 !important; white-space:nowrap !important; }
-#table-container .h-th-day { font-size:.86em; font-weight:600; opacity:.85; letter-spacing:.02em; }
-#table-container .h-th-date { font-size:.94em; }
+#table-container table, .h-admin-tbl table { width:auto; border-collapse:separate; border-spacing:0; border-radius:15px; font-family:'MontserratLight', sans-serif; color:#000; }
+#table-container th, #table-container td, .h-admin-tbl th, .h-admin-tbl td { border:1px solid #e6e6e6; padding:1px 2px; text-align:center; vertical-align:middle; font-size:0.73rem; font-weight:bold; color:#000; }
+#table-container th, .h-admin-tbl th { background:#444; color:#fff !important; text-transform:uppercase; font-size:0.78rem; position:relative; top:0; z-index:2; }
+#table-container td.name, .h-admin-tbl td.name { white-space:nowrap !important; text-align:center; border-radius:15px 0 0 15px; display:flex; align-items:center; justify-content:center; padding-left:8px; gap:2px; }
+#table-container td.name .h-name-txt, .h-admin-tbl td.name .h-name-txt { white-space:nowrap !important; flex-shrink:0; }
+#table-container td.multi-line, .h-admin-tbl td.multi-line { white-space:pre-line; }
+#table-container td.bold-row, .h-admin-tbl td.bold-row { font-weight:bold; }
+#table-container tr:hover td, .h-admin-tbl tr:hover td { background:#eaeaea; }
+#table-container th.h-th-merged, .h-admin-tbl th.h-th-merged { padding:5px 4px !important; line-height:1.15 !important; white-space:nowrap !important; }
+#table-container .h-th-day, .h-admin-tbl .h-th-day { font-size:.86em; font-weight:600; opacity:.85; letter-spacing:.02em; }
+#table-container .h-th-date, .h-admin-tbl .h-th-date { font-size:.94em; }
 /* FOLGA/FÉRIAS perdiam-se visualmente ao lado dos horários — negrito máximo
    + leve destaque de fundo para nunca mais passar despercebido. */
-#table-container .h-cell-off {
+#table-container .h-cell-off, .h-admin-tbl .h-cell-off {
   font-weight:900 !important; letter-spacing:.03em !important;
   color:#7a1f1f !important; background:rgba(122,31,31,.08) !important;
   border-radius:5px; padding:1px 4px; display:inline-block;
@@ -1485,11 +1485,12 @@ body {
 /* Texto sobre fundo escuro (cabeçalhos, coluna "hoje") sempre branco,
    incluindo qualquer span lá dentro (h-th-day/h-th-date/etc.) */
 #table-container th, #table-container th * ,
+.h-admin-tbl th, .h-admin-tbl th * ,
 .funchal-store-card th, .funchal-store-card th * {
   color:#fff !important;
 }
 th.today-col, th.today-col * { color:#fff !important; }
-#table-container td, #table-container th { border-radius:10px; margin:2px; }
+#table-container td, #table-container th, .h-admin-tbl td, .h-admin-tbl th { border-radius:10px; margin:2px; }
 .today-col { background: #D7D7D7 !important; }
 .today-col:hover { background: #ffffff !important; }
 th.today-col { background: #222 !important; color: #fff !important; }
@@ -3104,7 +3105,7 @@ button:active:not(:disabled):not(#proc-content button):not(#proc-criacao-modal b
   animation: tabFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
 }
 
-#table-container tr { transition: background 0.15s ease; }
+#table-container tr, .h-admin-tbl tr { transition: background 0.15s ease; }
 
 .logo-text {
   transition: letter-spacing 0.35s cubic-bezier(0.22,1,0.36,1),
@@ -3642,8 +3643,8 @@ button:hover:not(#adm-back-btn):not(#agenda-overlay-back):not(#rotulos-overlay-b
 #adm-back-btn        { font-size: .84rem !important; }
 .tab-btn             { font-size: .95rem !important; }
 .drawer-tab-btn      { font-size: .98rem !important; }
-#table-container th          { font-size: .78rem !important; }
-#table-container td          { font-size: .73rem !important; }
+#table-container th, .h-admin-tbl th          { font-size: .78rem !important; }
+#table-container td, .h-admin-tbl td          { font-size: .73rem !important; }
 .f-card .f-name      { font-size: .94rem !important; }
 .f-card .f-dates     { font-size: .78rem !important; }
 .f-card .f-badge     { font-size: .75rem !important; }

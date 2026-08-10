@@ -564,9 +564,8 @@
           content = escapeHtml(row[0] || '');
         } else {
           const dayName = pendingDayNames ? (pendingDayNames[c] || '') : '';
-          const dateVal = row[c] || '';
-          content = (dayName ? '<span class="h-th-day">' + escapeHtml(dayName) + '</span>' : '')
-                  + (dayName && dateVal ? '<br>' : '')
+          const dateVal = hShortDate(row[c] || '');
+          content = (dayName ? '<span class="h-th-day">' + escapeHtml(dayName) + '</span> ' : '')
                   + (dateVal ? '<span class="h-th-date">' + escapeHtml(dateVal) + '</span>' : '');
         }
         html += `<th class="${cls} h-th-merged" style="width:${colWidths[c]*12}px;${bg}text-align:center;padding:6px 4px;">${content}</th>`;
@@ -586,7 +585,7 @@
         html += `<tr class="${activeCls}">`;
         html += `<td class="name hps-person-name" data-hps-person="${escapeHtml(A[0]||'')}" style="background:${FX_CELL_BG};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
                   <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};box-shadow:${fxDotGlow(circleColor)};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
-                  ${escapeHtml(A[0]||'')}
+                  <span class="h-name-txt" style="white-space:nowrap;">${escapeHtml(A[0]||'')}</span>
                  </td>`;
         for (let c = 1; c < cols; c++) {
           const cls = (c === todayCol ? 'today-col' : '');
@@ -698,9 +697,8 @@
           content = escapeHtml(rows[0][0] || '');
         } else {
           const dayName = headerRows[0][c] || '';
-          const dateVal = headerRows[1][c] || '';
-          content = (dayName ? '<span class="h-th-day">' + escapeHtml(dayName) + '</span>' : '')
-                  + (dayName && dateVal ? '<br>' : '')
+          const dateVal = hShortDate(headerRows[1][c] || '');
+          content = (dayName ? '<span class="h-th-day">' + escapeHtml(dayName) + '</span> ' : '')
                   + (dateVal ? '<span class="h-th-date">' + escapeHtml(dateVal) + '</span>' : '');
         }
         html+=`<th class="${cls} h-th-merged" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;padding:6px 4px;">${content}</th>`;
@@ -2024,6 +2022,13 @@
   // FOLGA/FÉRIAS perdem-se visualmente no meio dos horários — envolve-se
   // em <span class="h-cell-off"> para o CSS conseguir pô-las mais a negrito
   // sem ter de adivinhar a palavra a partir de texto solto.
+  // "10/08/2026" -> "10/08" — o ano nunca faz falta na tabela, e assim
+  // dia+data cabem sempre numa só linha.
+  function hShortDate(str){
+    var v = String(str||'').trim();
+    var parts = v.split('/');
+    return parts.length === 3 ? (parts[0] + '/' + parts[1]) : v;
+  }
   function hHighlightOff(str){
     var clean = String(str||'');
     var upper = clean.trim().toUpperCase();

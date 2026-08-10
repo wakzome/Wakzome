@@ -5023,7 +5023,7 @@
       var margCellEl = document.getElementById('proc-marg-' + fid + '-' + i);
       var margTxt = margCellEl ? margCellEl.textContent.trim() : '';
       var marg = (margTxt && margTxt !== '\u2014') ? margTxt : null;
-      items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc, refNova: null });
+      items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc, qtd: a4 + a5, refNova: null });
     }
 
     /* Dedupe por referencia + descricao — varias linhas da fatura podem
@@ -5043,8 +5043,17 @@
         if (!Object.prototype.hasOwnProperty.call(seenRef, key)) {
           seenRef[key] = deduped.length;
           deduped.push(it);
-        } else if ((it.pvp != null) && (deduped[seenRef[key]].pvp == null)) {
-          deduped[seenRef[key]] = it;
+        } else {
+          /* Mesma referencia + mesma descricao espalhada por varias
+             linhas (ex.: tamanhos diferentes) — funde-se numa so linha,
+             mas a quantidade tem de ser a SOMA de todas, nunca perder-se
+             a das linhas descartadas. */
+          var existente = deduped[seenRef[key]];
+          existente.qtd = (existente.qtd || 0) + (it.qtd || 0);
+          if ((it.pvp != null) && (existente.pvp == null)) {
+            it.qtd = existente.qtd;
+            deduped[seenRef[key]] = it;
+          }
         }
       });
       items = deduped;
@@ -5071,6 +5080,7 @@
       return (ativo ? '<th>Refer\u00eancia original</th>' : '')
         + '<th>Refer\u00eancia</th>'
         + '<th>Nome</th>'
+        + '<th class="right">Qtd.</th>'
         + '<th class="right">PVP</th>'
         + '<th class="right">%</th>'
         + '<th class="right">PC</th>';
@@ -5083,12 +5093,13 @@
           + (ativo ? '<td class="td-ref-original">' + (it.ref || '\u2014') + '</td>' : '')
           + '<td class="td-ref">' + refMostrar + '</td>'
           + '<td class="td-nome">' + (it.nome || '\u2014') + '</td>'
+          + '<td class="td-qtd">' + (it.qtd > 0 ? it.qtd : '\u2014') + '</td>'
           + '<td class="td-pvp">' + (it.pvp != null ? it.pvp.toFixed(2) : '\u2014') + '</td>'
           + '<td class="td-marg">' + (it.marg != null ? it.marg : '\u2014') + '</td>'
           + '<td class="td-custo">' + (it.custo > 0 ? it.custo.toFixed(2) : '\u2014') + '</td>'
           + '</tr>';
       }).join('');
-      var colspan = ativo ? 6 : 5;
+      var colspan = ativo ? 7 : 6;
       return html || ('<tr><td colspan="' + colspan + '" class="proc-table-empty-msg">Sem artigos com dados</td></tr>');
     }
 

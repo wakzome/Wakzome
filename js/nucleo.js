@@ -3631,18 +3631,28 @@
     var active = [];
     var todayCol = wzFindTodayCol(block[1]);
     if (todayCol < 0) return active;
-    var seen = {};
-    block.slice(2).forEach(function (row) {
+    var rows = block.slice(2);
+    var TIME_RE = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/;
+    var i = 0;
+    while (i < rows.length) {
+      var row = rows[i];
       var name = (row[0] || '').trim();
-      if (!name || seen[name]) return;
-      var val = (row[todayCol] || '').trim();
-      if (!val) return;
-      var info = wzScheduleInfo(val);
-      if (info) {
-        seen[name] = true;
-        active.push({ name: name, store: storeLabel, currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment, onBreak: !!info.onBreak });
+      if (!name) { i++; continue; }
+      var next = rows[i + 1];
+      var sameNext = !!(next && (next[0] || '').trim() === name);
+      var val1 = (row[todayCol] || '').trim();
+      var val2 = sameNext ? (next[todayCol] || '').trim() : '';
+      var seg1 = TIME_RE.test(val1) ? val1 : '';
+      var seg2 = TIME_RE.test(val2) ? val2 : '';
+      var schedule = (seg1 && seg2) ? (seg1 + ',' + seg2) : (seg1 || seg2);
+      if (schedule) {
+        var info = wzScheduleInfo(schedule);
+        if (info) {
+          active.push({ name: name, store: storeLabel, currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment, onBreak: !!info.onBreak });
+        }
       }
-    });
+      i += sameNext ? 2 : 1;
+    }
     return active;
   }
 
@@ -3654,28 +3664,39 @@
     var seen = {};
     var currentStore = null;
     var currentCol = -1;
-    rows.forEach(function (row) {
+    var TIME_RE = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/;
+    var i = 0;
+    while (i < rows.length) {
+      var row = rows[i];
       var c0 = (row[0] || '').trim();
       var c0Upper = c0.toUpperCase();
-      if (c0Upper === 'PORTO SANTO') return;
+      if (c0Upper === 'PORTO SANTO') { i++; continue; }
       if (row[1] && /^\d{2}\/\d{2}\/\d{4}$/.test(row[1])) {
         currentStore = c0;
         currentCol = wzFindTodayCol(row);
-        return;
+        i++; continue;
       }
-      if (!currentStore || currentCol < 0 || !c0) return;
+      if (!currentStore || currentCol < 0 || !c0) { i++; continue; }
       var m = c0.match(/^(.*?)(\d+(?:\.\d+)?hrs)$/i);
       var name = (m ? m[1] : c0).trim();
-      if (!name) return;
-      var val = (row[currentCol] || '').trim();
+      var next = rows[i + 1];
+      var sameNext = !!(next && (next[0] || '').trim() === c0);
+      if (!name) { i += sameNext ? 2 : 1; continue; }
+      var val1 = (row[currentCol] || '').trim();
+      var val2 = sameNext ? (next[currentCol] || '').trim() : '';
+      var seg1 = TIME_RE.test(val1) ? val1 : '';
+      var seg2 = TIME_RE.test(val2) ? val2 : '';
+      var schedule = (seg1 && seg2) ? (seg1 + ',' + seg2) : (seg1 || seg2);
       var key = name + '||' + currentStore;
-      if (!val || seen[key]) return;
-      var info = wzScheduleInfo(val);
-      if (info) {
-        seen[key] = true;
-        active.push({ name: name, store: wzTitleCase(currentStore), currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment, onBreak: !!info.onBreak });
+      if (schedule && !seen[key]) {
+        var info = wzScheduleInfo(schedule);
+        if (info) {
+          seen[key] = true;
+          active.push({ name: name, store: wzTitleCase(currentStore), currentEnd: info.currentEnd, finalEnd: info.finalEnd, isLastSegment: info.isLastSegment, onBreak: !!info.onBreak });
+        }
       }
-    });
+      i += sameNext ? 2 : 1;
+    }
     return active;
   }
 

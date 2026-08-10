@@ -541,16 +541,16 @@
     const colWidths = Array(cols).fill(0);
     rows.forEach(r => r.forEach((c, i) => colWidths[i] = Math.max(colWidths[i], (c||'').length)));
     let i = 0;
+    let pendingDayNames = null;
     while (i < rows.length) {
       const row = rows[i];
       const firstCell = (row[0] || '').trim().toLowerCase();
       if (firstCell === 'porto santo') {
-        html += '<tr>';
-        html += `<th style="width:${colWidths[0]*12}px;${FX_TH_NORMAL}text-align:center;padding:6px 4px;">${escapeHtml(row[0])}</th>`;
-        for (let c = 1; c < cols; c++) {
-          html += `<th style="width:${colWidths[c]*12}px;${FX_TH_NORMAL}text-align:center;padding:6px 4px;">${escapeHtml(row[c] || '')}</th>`;
-        }
-        html += '</tr>'; i++; continue;
+        // Já não se desenha esta linha sozinha (só tinha os dias da semana
+        // + a palavra "PORTO SANTO") — fica em espera para se fundir com a
+        // linha seguinte (nome da sub-loja + datas) numa única linha.
+        pendingDayNames = row;
+        i++; continue;
       }
       const todayCol = findTodayColPS(row);
       html += '<tr>';
@@ -559,7 +559,17 @@
         // Mesmos tons do cabeçalho do funchal unificado (FX_TH_NORMAL/
         // FX_TH_TODAY) — visual idêntico entre as duas vistas.
         const bg = (c === todayCol ? FX_TH_TODAY : FX_TH_NORMAL);
-        html += `<th class="${cls}" style="width:${colWidths[c]*12}px;${bg}text-align:center;padding:6px 4px;">${escapeHtml(row[c] || '')}</th>`;
+        let content;
+        if (c === 0) {
+          content = escapeHtml(row[0] || '');
+        } else {
+          const dayName = pendingDayNames ? (pendingDayNames[c] || '') : '';
+          const dateVal = row[c] || '';
+          content = (dayName ? '<span class="h-th-day">' + escapeHtml(dayName) + '</span>' : '')
+                  + (dayName && dateVal ? '<br>' : '')
+                  + (dateVal ? '<span class="h-th-date">' + escapeHtml(dateVal) + '</span>' : '');
+        }
+        html += `<th class="${cls} h-th-merged" style="width:${colWidths[c]*12}px;${bg}text-align:center;padding:6px 4px;">${content}</th>`;
       }
       html += '</tr>'; i++;
       while (i + 1 < rows.length && (rows[i][0] || '').toLowerCase() !== 'porto santo') {
@@ -590,11 +600,11 @@
                      (isSchedule(B[c]||'')||specialWords.includes(afternoon)||afternoon==='')
                      ? 'white-space:nowrap;' : '';
           if (morning && morning === afternoon && specialWords.includes(morning)) {
-            content = escapeHtml(morning);
+            content = hHighlightOff(morning);
           } else if (morning && afternoon) {
-            content = `${escapeHtml(A[c])}<br>${escapeHtml(B[c])}`;
+            content = `${hHighlightOff(A[c])}<br>${hHighlightOff(B[c])}`;
           } else {
-            content = escapeHtml(A[c] || B[c] || '');
+            content = hHighlightOff(A[c] || B[c] || '');
           }
           html += `<td class="${cls}" style="background:${cellBg};width:${colWidths[c]*12}px;text-align:center;${nw}">${content}</td>`;
         }
@@ -672,19 +682,30 @@
         ]);
       }
 
+      // Fila única: nome da loja na 1ª coluna (em vez de "SEMANA N") e
+      // dia da semana + data fundidos nas restantes (em vez de 2 filas
+      // separadas) — mesmo padrão usado no Porto Santo.
       let html='<table style="margin:0 auto;border-collapse:separate;border-spacing:0;">';
-      for(let r=0;r<2;r++){
-        html+='<tr>';
-        for(let c=0;c<cols;c++){
-          const cls=(c===todayCol?'today-col':'');
-          // Mesmas constantes partilhadas com Porto Santo (FX_TH_NORMAL/
-          // FX_TH_TODAY) — garante visual idêntico entre as duas vistas.
-          const thBg = (c===todayCol ? FX_TH_TODAY : FX_TH_NORMAL);
-          const thWrap=(c===0?'':'white-space:nowrap;');
-          html+=`<th class="${cls}" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;padding:6px 4px;">${escapeHtml(headerRows[r][c]||'')}</th>`;
+      html+='<tr>';
+      for(let c=0;c<cols;c++){
+        const cls=(c===todayCol?'today-col':'');
+        // Mesmas constantes partilhadas com Porto Santo (FX_TH_NORMAL/
+        // FX_TH_TODAY) — garante visual idêntico entre as duas vistas.
+        const thBg = (c===todayCol ? FX_TH_TODAY : FX_TH_NORMAL);
+        const thWrap=(c===0?'':'white-space:nowrap;');
+        let content;
+        if (c === 0) {
+          content = escapeHtml(rows[0][0] || '');
+        } else {
+          const dayName = headerRows[0][c] || '';
+          const dateVal = headerRows[1][c] || '';
+          content = (dayName ? '<span class="h-th-day">' + escapeHtml(dayName) + '</span>' : '')
+                  + (dayName && dateVal ? '<br>' : '')
+                  + (dateVal ? '<span class="h-th-date">' + escapeHtml(dateVal) + '</span>' : '');
         }
-        html+='</tr>';
+        html+=`<th class="${cls} h-th-merged" style="width:${colWidths[c]*12}px;${thBg}${thWrap}text-align:center;padding:6px 4px;">${content}</th>`;
       }
+      html+='</tr>';
       persons.forEach((p, pIdx)=>{
         const A = p[0] || Array(cols).fill('');
         const B = p[1] || Array(cols).fill('');
@@ -722,7 +743,7 @@
         html+=`<tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         html+=`<td class="name hps-person-name" data-hps-person="${escapeHtml(nameRaw)}" rowspan="2" style="background:${bg};width:${colWidths[0]*12}px;text-align:center;justify-content:center;cursor:pointer;">
                 <span class="funchal-live-dot" data-today="${escapeHtml(todayHorarios.join('|'))}"${liveIdAttr} style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${circleColor};box-shadow:${dotGlow};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
-                ${escapeHtml(nameRaw)}<br>${hrsLabel}</td>`;
+                ${escapeHtml(nameRaw)} ${hrsLabel}</td>`;
         for(let c=1;c<cols;c++){
           const cls=(c===todayCol?'today-col':'');
           const top=A[c]||'', bot=B[c]||'';
@@ -731,10 +752,10 @@
           const botNw = isSchedule(bot)||bot===''||bot.toUpperCase()==='FOLGA'||bot.toUpperCase()==='FERIAS';
           const nw = (topNw && botNw) ? 'white-space:nowrap;' : '';
           if(top===bot && top!==''){
-            html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;${nw}text-align:center;">${escapeHtml(top)}</td>`;
+            html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;${nw}text-align:center;">${hHighlightOff(top)}</td>`;
             rowspanCols.push(c);
           } else if(top!==''||bot!==''){
-            const cont=[top,bot].filter(v=>v).map(escapeHtml).join('<br>');
+            const cont=[top,bot].filter(v=>v).map(hHighlightOff).join('<br>');
             html+=`<td class="multi-line ${cls}" rowspan="2" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;${nw}text-align:center;">${cont}</td>`;
             rowspanCols.push(c);
           } else { html+=`<td class="${cls}" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;text-align:center;"></td>`; }
@@ -742,7 +763,7 @@
         html+=`</tr><tr class="${activeCls}" style="${rowVis}"${liveIdAttr}>`;
         for(let c=1;c<cols;c++){ if(rowspanCols.includes(c)) continue;
           const cls=(c===todayCol?'today-col':'');
-          html+=`<td class="${cls}" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;text-align:center;">${escapeHtml(B[c]||'')}</td>`;
+          html+=`<td class="${cls}" style="background:${cellBg(c===todayCol)};width:${colWidths[c]*12}px;text-align:center;">${hHighlightOff(B[c]||'')}</td>`;
         }
         html+='</tr>';
       });
@@ -2000,6 +2021,17 @@
   }
 
   function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  // FOLGA/FÉRIAS perdem-se visualmente no meio dos horários — envolve-se
+  // em <span class="h-cell-off"> para o CSS conseguir pô-las mais a negrito
+  // sem ter de adivinhar a palavra a partir de texto solto.
+  function hHighlightOff(str){
+    var clean = String(str||'');
+    var upper = clean.trim().toUpperCase();
+    if (upper === 'FOLGA' || upper === 'FERIAS' || upper === 'FÉRIAS') {
+      return '<span class="h-cell-off">' + escapeHtml(clean) + '</span>';
+    }
+    return escapeHtml(clean);
+  }
 
   // ══════════════════════════════════════════════════════════════
   //  MODAL: horário consolidado de UMA pessoa (só vista Porto Santo)

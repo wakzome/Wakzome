@@ -5023,7 +5023,10 @@
       var margCellEl = document.getElementById('proc-marg-' + fid + '-' + i);
       var margTxt = margCellEl ? margCellEl.textContent.trim() : '';
       var marg = (margTxt && margTxt !== '\u2014') ? margTxt : null;
-      items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc, qtd: a4 + a5, refNova: null });
+      /* Quantidade: vem da coluna "QTD." (total introduzido pelo
+         utilizador), nunca da soma da reparticao por armazem (FNC+PXO) —
+         sao conceitos diferentes e podem nao coincidir. */
+      items.push({ ref: ref, nome: nome, pvp: pvpVal, marg: marg, custo: pc, qtd: qtdFt, refNova: null });
     }
 
     /* Dedupe por referencia + descricao — varias linhas da fatura podem

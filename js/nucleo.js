@@ -1998,9 +1998,12 @@
       if (isWork && loja && storeByName[loja]) {
         storeByName[loja].people.forEach(p2 => {
           if (p2.name === personLabel) return;
+          const resolved2 = hpsResolvePersonDay(p2.name, c, stores);
+          if (!resolved2 || !resolved2.mainStore || resolved2.mainStore === loja) return;
           const t = (p2.A[c] || '').trim();
           const b = (p2.B[c] || '').trim();
-          if (hpsIsSchedule(t) && !b) recebeApoio.push({ name: p2.name, time: t });
+          if (hpsIsSchedule(t)) recebeApoio.push({ name: p2.name, time: t, label: hpsReforcoLabel(resolved2.mainTop, resolved2.mainBot, t) });
+          if (hpsIsSchedule(b)) recebeApoio.push({ name: p2.name, time: b, label: hpsReforcoLabel(resolved2.mainTop, resolved2.mainBot, b) });
         });
       }
 
@@ -2089,6 +2092,40 @@
     var dd = String(now.getDate()).padStart(2, '0');
     var mm = String(now.getMonth() + 1).padStart(2, '0');
     return (dateStr || '').trim() === (dd + '/' + mm + '/' + now.getFullYear());
+  }
+
+  // Resolve, para UMA pessoa (não necessariamente a do modal) e um dia
+  // concreto, qual é a loja "principal" entre TODAS as lojas onde ela
+  // aparece nesse dia — a de maior duração total, ou a única com um
+  // segmento solto se não houver nenhuma completa. Usado tanto para achar
+  // o turno principal da pessoa do modal como para saber, ao listar quem
+  // reforça a loja atual, se esse colega está ali de reforço (loja
+  // principal diferente) mesmo quando aparece com os dois segmentos
+  // preenchidos nessa loja (ex.: reforço de almoço + reforço de fecho).
+  function hpsResolvePersonDay(name, c, stores) {
+    const apps = stores
+      .map(s => ({ store: s.name, entry: s.people.find(p => p.name === name) }))
+      .filter(x => x.entry);
+    if (!apps.length) return null;
+    const full = [], loose = [];
+    apps.forEach(ap => {
+      const top = (ap.entry.A[c] || '').trim();
+      const bot = (ap.entry.B[c] || '').trim();
+      if (hpsIsSchedule(top) && hpsIsSchedule(bot)) {
+        const dur = (hpsRangeMin(top)[1] - hpsRangeMin(top)[0]) + (hpsRangeMin(bot)[1] - hpsRangeMin(bot)[0]);
+        full.push({ store: ap.store, top, bot, dur });
+      } else if (hpsIsSchedule(top) && !bot) {
+        loose.push({ store: ap.store, display: top });
+      }
+    });
+    if (full.length) {
+      full.sort((a, b) => b.dur - a.dur);
+      return { mainStore: full[0].store, mainTop: full[0].top, mainBot: full[0].bot, others: full.slice(1) };
+    }
+    if (loose.length) {
+      return { mainStore: loose[0].store, mainTop: null, mainBot: null, others: [] };
+    }
+    return { mainStore: null, mainTop: null, mainBot: null, others: [] };
   }
 
   // Repete a mesma leitura de blocos que renderPortoSanto já faz, mas devolve
@@ -2181,14 +2218,18 @@
         if (any) { display = (any.entry.A[c] || '').trim(); loja = any.store; }
       }
 
-      // 4) Reforço que ELA recebe: outras pessoas na SUA loja, nesse dia, com o
-      //    padrão de 1 segmento só (apoio) — não ela própria.
+      // 4) Reforço que ELA recebe: colegas cuja loja PRINCIPAL nesse dia é
+      //    outra (não esta), mas que ainda assim aparecem aqui com 1 ou 2
+      //    segmentos válidos (ex.: reforço de almoço + reforço de fecho).
       if (isWork && loja && storeByName[loja]) {
         storeByName[loja].people.forEach(p2 => {
           if (p2.name === personLabel) return;
+          const resolved2 = hpsResolvePersonDay(p2.name, c, stores);
+          if (!resolved2 || !resolved2.mainStore || resolved2.mainStore === loja) return;
           const t = (p2.A[c] || '').trim();
           const b = (p2.B[c] || '').trim();
-          if (hpsIsSchedule(t) && !b) recebeApoio.push({ name: p2.name, time: t });
+          if (hpsIsSchedule(t)) recebeApoio.push({ name: p2.name, time: t, label: hpsReforcoLabel(resolved2.mainTop, resolved2.mainBot, t) });
+          if (hpsIsSchedule(b)) recebeApoio.push({ name: p2.name, time: b, label: hpsReforcoLabel(resolved2.mainTop, resolved2.mainBot, b) });
         });
       }
 
@@ -2257,9 +2298,10 @@
     document.getElementById('hps-modal-title').textContent = personLabel;
     document.getElementById('hps-modal-body').innerHTML = dias.map(d => {
       const off = !d.isWork;
-      const recebeHtml = (d.recebeApoio || []).map(r =>
-        `<div class="hps-day-recebe">⚡ recebe reforço de ${escapeHtml(hpsStripHrs(r.name))}: ${escapeHtml(r.time)}</div>`
-      ).join('');
+      const recebeHtml = (d.recebeApoio || []).map(r => {
+        const rlbl = r.label ? ` de ${escapeHtml(r.label)}` : '';
+        return `<div class="hps-day-recebe">⚡ recebe reforço${rlbl} de ${escapeHtml(hpsStripHrs(r.name))}: ${escapeHtml(r.time)}</div>`;
+      }).join('');
       const apoiosHtml = (d.apoios || []).map(a => {
         const lbl = a.label ? ` de ${escapeHtml(a.label)}` : '';
         return `<div class="hps-day-apoio">⚡ reforço${lbl} em ${escapeHtml(a.loja)}: ${escapeHtml(a.display)}</div>`;

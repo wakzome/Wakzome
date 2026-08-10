@@ -3933,28 +3933,47 @@
   // :hover não existe em touch — a bolha do emg já resolve isto com clique
   // (toggleEmgTooltip); replica-se aqui o mesmo padrão para o tooltip de
   // "pessoas ativas" continuar acessível em mobile.
+  // Fundo escurecido/blur atrás do tooltip em mobile — elemento irmão do
+  // painel em document.body (nunca dentro dele), para que um clique nele
+  // seja sempre "fora do painel" aos olhos do listener de fecho abaixo,
+  // fechando o tooltip automaticamente sem precisar de lógica extra.
+  function wzGetMobileBackdrop() {
+    var bd = document.getElementById('wz-active-mobile-backdrop');
+    if (!bd) {
+      bd = document.createElement('div');
+      bd.id = 'wz-active-mobile-backdrop';
+      document.body.appendChild(bd);
+    }
+    return bd;
+  }
+
   function wzBindMobileToggle() {
     var panel = document.getElementById('wz-active-panel');
     var bubble = document.getElementById('wz-active-bubble');
     if (!panel || !bubble || bubble._wzToggleBound) return;
     bubble._wzToggleBound = true;
+    var backdrop = wzGetMobileBackdrop();
+    function setOpen(open) {
+      panel.classList.toggle('tt-open', open);
+      backdrop.classList.toggle('show', open);
+    }
     bubble.setAttribute('role', 'button');
     bubble.setAttribute('tabindex', '0');
     bubble.setAttribute('aria-label', 'pessoas ativas agora');
     bubble.addEventListener('click', function (ev) {
       ev.stopPropagation();
-      panel.classList.toggle('tt-open');
+      setOpen(!panel.classList.contains('tt-open'));
     });
     bubble.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); panel.classList.toggle('tt-open'); }
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpen(!panel.classList.contains('tt-open')); }
     });
     document.addEventListener('click', function (ev) {
       if (!panel.classList.contains('tt-open')) return;
       if (panel.contains(ev.target)) return;
-      panel.classList.remove('tt-open');
+      setOpen(false);
     });
     document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape') panel.classList.remove('tt-open');
+      if (ev.key === 'Escape') setOpen(false);
     });
   }
 

@@ -1968,6 +1968,57 @@
         }
       });
     }
+    /* ── Deteta correcoes de referencia/descricao numa linha que ja tinha
+       referencia interna gerada — nunca deve ficar orfa em Supabase.
+       Guarda o valor com que a linha ENTROU na edicao (focusin no ref OU
+       na descricao) e, quando o foco sai de AMBOS os campos da linha
+       (focusout com debounce, para permitir saltar de um campo para o
+       outro sem disparar a meio), compara com o valor final:
+         - ficou tudo vazio  → apaga a referencia interna antiga;
+         - foi corrigido (continua com conteudo) → actualiza a referencia
+           original/categoria em Supabase MANTENDO a mesma referencia
+           interna, porque a intencao foi corrigir um erro, nao criar um
+           artigo novo — uma etiqueta ja impressa continua valida. */
+    if (!tbody._correcaoLinhaListening) {
+      tbody._correcaoLinhaListening = true;
+      tbody.addEventListener('focusin', function(e) {
+        if (!e.target) return;
+        var isRefOuDesc = e.target.classList.contains('proc-ref-input') || e.target.classList.contains('proc-desc-input');
+        if (!isRefOuDesc) return;
+        var tr = e.target.closest('tr');
+        if (!tr || tr.dataset.edicaoActiva === '1') return;
+        var rIn0 = tr.querySelector('.proc-ref-input');
+        var dIn0 = tr.querySelector('.proc-desc-input');
+        tr.dataset.edicaoActiva = '1';
+        tr.dataset.prevRef  = rIn0 ? rIn0.value.trim() : '';
+        tr.dataset.prevDesc = dIn0 ? dIn0.value.trim() : '';
+      });
+      tbody.addEventListener('focusout', function(e) {
+        if (!e.target) return;
+        var isRefOuDesc = e.target.classList.contains('proc-ref-input') || e.target.classList.contains('proc-desc-input');
+        if (!isRefOuDesc) return;
+        var tr = e.target.closest('tr');
+        if (!tr) return;
+        setTimeout(function() {
+          var activo = document.activeElement;
+          if (activo && tr.contains(activo)) return; /* ainda dentro da mesma linha (saltou ref↔desc) */
+          if (tr.dataset.edicaoActiva !== '1') return;
+          tr.dataset.edicaoActiva = '0';
+          var refAntigo  = tr.dataset.prevRef  || '';
+          var descAntigo = tr.dataset.prevDesc || '';
+          var m = tr.id.match(/^proc-row-(\d+)-(\d+)$/);
+          if (!m) return;
+          var fidLinha = parseInt(m[1], 10);
+          var iLinha   = parseInt(m[2], 10);
+          var rInF = tr.querySelector('.proc-ref-input');
+          var dInF = tr.querySelector('.proc-desc-input');
+          var refFinal  = rInF ? rInF.value.trim() : '';
+          var descFinal = dInF ? dInF.value.trim() : '';
+          if (refAntigo === refFinal && descAntigo === descFinal) return; /* nada mudou */
+          procTratarEdicaoLinha(fidLinha, iLinha, refAntigo, descAntigo);
+        }, 200);
+      });
+    }
     if (!tbody._obsListening) {
       tbody._obsListening = true;
       tbody.addEventListener('input', function(e) {
@@ -2943,6 +2994,120 @@
       });
     });
     return chaves;
+  }
+
+  /* Versao ao nivel da LINHA de procChavesUsadasPorOutrasFaturas: diz se
+     uma chave (referencia_original|categoria) ainda esta em uso nalguma
+     OUTRA linha (desta ou de outra factura activa, mesmo fornecedor) —
+     usada antes de apagar/actualizar em Supabase por causa da edicao de
+     UMA linha, para nunca corromper a referencia de uma linha vizinha
+     que por coincidencia partilhe a mesma referencia original (ex.: duas
+     linhas identicas "X1 CAMISA" — enquanto UMA delas ainda existir,
+     nunca se toca na referencia interna partilhada). */
+  function procChaveEmUsoNoutraLinha(proveedorNorm, chave, trIdAtual, categorias) {
+    var encontrada = false;
+    activeFaturas.forEach(function(outroFid) {
+      if (encontrada) return;
+      var pEl = document.getElementById('proc-proveedor-' + outroFid);
+      var outroForn = pEl ? procNormalize(pEl.value) : '';
+      if (outroForn !== proveedorNorm) return;
+      var rc = rowCounts[outroFid] || 0;
+      for (var j = 1; j <= rc; j++) {
+        var tr = document.getElementById('proc-row-' + outroFid + '-' + j);
+        if (!tr || tr.id === trIdAtual) continue;
+        var rIn = tr.querySelector('.proc-ref-input');
+        var dIn = tr.querySelector('.proc-desc-input');
+        var ref = rIn ? rIn.value.trim() : '';
+        if (!ref) continue;
+        var refNorm = procNormalizarRefOriginal(ref);
+        var categoria = procResolverCategoria(dIn ? dIn.value.trim() : '', categorias || []);
+        if ((refNorm + '|' + categoria) === chave) { encontrada = true; break; }
+      }
+    });
+    return encontrada;
+  }
+
+  /* Trata a correcao/limpeza de UMA linha depois de a referencia ou a
+     descricao terem mudado (ver o listener de focusout em procAddRows).
+     Regra de negocio explicita: se a linha ficou COMPLETAMENTE vazia,
+     apaga-se a referencia interna que tinha — deixou de existir esse
+     artigo. Mas se a linha continua com conteudo (o utilizador apenas
+     corrigiu um erro de digitacao na referencia original ou na
+     descricao), a referencia interna e PRESERVADA — so se actualiza a
+     referencia_original/categoria em Supabase para apontar para o valor
+     corrigido, porque a intencao foi reparar um erro, nunca criar um
+     artigo novo, e uma etiqueta ja impressa com essa referencia interna
+     continua fisicamente valida. */
+  function procTratarEdicaoLinha(fid, i, refAntigo, descAntigo) {
+    var pEl = document.getElementById('proc-proveedor-' + fid);
+    var proveedorNorm = pEl ? procNormalize(pEl.value) : '';
+    if (!proveedorNorm) return;
+    var refNormAntigo = procNormalizarRefOriginal(refAntigo);
+    if (!refNormAntigo) return; /* a linha nao tinha referencia antes — nada a corrigir */
+
+    var tr = document.getElementById('proc-row-' + fid + '-' + i);
+    if (!tr) return;
+    var rIn = tr.querySelector('.proc-ref-input');
+    var dIn = tr.querySelector('.proc-desc-input');
+    var refNovo  = rIn ? rIn.value.trim() : '';
+    var descNovo = dIn ? dIn.value.trim() : '';
+    var ano = new Date().getFullYear() % 100;
+
+    procLoadCategoriasRemote().then(function(categorias) {
+      var categoriaAntiga = procResolverCategoria(descAntigo, categorias);
+      var chaveAntiga = refNormAntigo + '|' + categoriaAntiga;
+
+      if (procChaveEmUsoNoutraLinha(proveedorNorm, chaveAntiga, tr.id, categorias)) return;
+
+      procSbFetch(
+        'proc_referencias?proveedor=eq.' + encodeURIComponent(proveedorNorm) + '&ano=eq.' + ano
+          + '&referencia_original=eq.' + encodeURIComponent(refNormAntigo) + '&categoria=eq.' + encodeURIComponent(categoriaAntiga)
+          + '&select=id,referencia_interna',
+        { method: 'GET' }
+      ).then(function(r) { return r.ok ? r.json() : []; })
+       .then(function(rows) {
+         if (!rows || !rows.length) return; /* nunca existiu referencia interna para o valor antigo */
+
+         var totalmenteVazio = !refNovo && !descNovo;
+         if (totalmenteVazio) {
+           var refs = rows.map(function(row) { return row.referencia_interna; });
+           procSbFetch('rpc/proc_borrar_referencias_rascunho', {
+             method: 'POST',
+             body: JSON.stringify({ p_proveedor: proveedorNorm, p_referencias: refs })
+           }).then(function(r2) {
+             if (!r2.ok) {
+               r2.text().then(function(txt) {
+                 console.error('[proc] falha ao apagar referencia da linha limpa — status ' + r2.status + ':', txt);
+               });
+             }
+           }).catch(function(e) {
+             console.error('[proc] erro de rede ao apagar referencia da linha limpa:', e);
+           });
+           return;
+         }
+
+         if (!refNovo) return; /* so a descricao ficou vazia — sem referencia nao ha o que corrigir */
+
+         var refNormNovo   = procNormalizarRefOriginal(refNovo);
+         var categoriaNova = procResolverCategoria(descNovo, categorias);
+         if (refNormNovo === refNormAntigo && categoriaNova === categoriaAntiga) return; /* chave nao mudou de facto */
+
+         procSbFetch('proc_referencias?id=eq.' + rows[0].id, {
+           method: 'PATCH',
+           body: JSON.stringify({ referencia_original: refNormNovo, categoria: categoriaNova })
+         }).then(function(r3) {
+           if (!r3.ok) {
+             r3.text().then(function(txt) {
+               console.error('[proc] falha ao corrigir referencia da linha — status ' + r3.status + ':', txt);
+             });
+           }
+         }).catch(function(e) {
+           console.error('[proc] erro de rede ao corrigir referencia da linha:', e);
+         });
+       });
+    }).catch(function(e) {
+      console.error('[proc] erro ao tratar edicao de linha:', e);
+    });
   }
 
   /* ── 13. COPY BAR HELPER ── */

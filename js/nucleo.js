@@ -3466,6 +3466,7 @@
     // inline aqui destruía essa centragem e desalinhava tudo para um lado.
     const temp = document.createElement('div');
     temp.id = 'table-container';
+    temp.classList.add('h-admin-tbl');
     area.appendChild(temp);
 
     if (hCurrentStore === 'funchal') {

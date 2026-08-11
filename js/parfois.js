@@ -520,7 +520,8 @@
   function isArticleCode(s) {
     return /^\d{5,8}[_\-A-Z]/.test(s) ||
            /^\d{5,8}[A-Z]{2,4}$/.test(s) ||
-           /^\d{5,8}(NCL|NCS|NCM|BNL)$/.test(s);
+           /^\d{5,8}(NCL|NCS|NCM|BNL)$/.test(s) ||
+           /^\d{5,8}$/.test(s);
   }
   function isBoxCode(s) {
     return /^[OSGEP]\d{9,}/.test(s);
@@ -535,7 +536,7 @@
     return /^(XS-?S|S-?S|M-?L|XL|XXS|XS|S|M|L|XXL|\d+-\d+)$/.test(s);
   }
 
-  var SKIP_ROW = /^(Barata|BARATA|Contribuinte|Rua|www\.|INVOICE|Pág\.|Total Qtd|TOTAL EUR|Subtotal|Desconto|Frete|Seguro|Total IVA|Nº total|Peso|Volume|Local de|Lugar de|Processado|ATCUD:|Em caso|Data:|Hora:|Matric|Cliente|WAK|WAKZOME|Morada|PORTUGAL|Porto Santo|Rua Dr|FT\s+\d{4}\/|% IVA|Incidência|Valor IVA|23,00\s+\d|Obs\.\:|O Gestor|Nuno|Caixa\s|Código|artigo|Descrição|Composição|País|Cód\.|Preço|Desc\.|Pronto Pag|Air|CIF|ORIGINAL)/i;
+  var SKIP_ROW = /^(Barata|BARATA|Contribuinte|Rua|www\.|INVOICE|Pág\.|Total Qtd|TOTAL EUR|Subtotal|Desconto|Frete|Seguro|Total IVA|Nº total|Peso|Volume|Local de|Lugar de|Processado|ATCUD:|Em caso|Data:|Hora:|Matric|Cliente|WAK|WAKZOME|Morada|PORTUGAL|Porto Santo|Rua Dr|FT\s+\d{4}\/|% IVA|Incidência|Valor IVA|23,00\s+\d|Obs\.\:|O Gestor|Nuno|Código|artigo|Descrição|Composição|País|Cód\.|Preço|Desc\.|Pronto Pag|Air|CIF|ORIGINAL)/i;
 
   /* ── Wrapped article-code reconstruction ──
      Long article codes (e.g. "245766_DB37") can overflow the narrow
@@ -942,6 +943,104 @@
     return pfBuildResult(pfDedupe(items), meta);
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     MOTOR D — anchor-based, no-EAN column layout
+     Some Parfois/Barata & Ramilo invoices print only 10 columns
+     (no barcode/EAN column between Código do artigo and Código
+     Pautal). Motors A/B/C assume that EAN column exists, which
+     shifts Código Pautal, Descrição and Composição left into the
+     wrong X-ranges (Descrição gets read as Pautal and discarded;
+     Composição text leaks into Descrição). Motor D recalibrates
+     only those three ranges; Qtd/%IVA/Preço Unit./%Desc./Preço/
+     País keep the same X-ranges as A/B/C since they already match
+     this layout too.
+  ════════════════════════════════════════════════════════════════ */
+  function pfEngineD(allItems, meta, eanMap, codeAnchors) {
+    eanMap = eanMap || {};
+    codeAnchors = codeAnchors || pfMergeWrappedCodes(allItems);
+
+    function colTypeD(x) {
+      if (x >= 15  && x <= 45)  return 'CODE';
+      // no barcode/EAN column in this layout (x 46-79 is a blank gap)
+      if (x >= 80  && x <= 118) return 'PAUTAL';
+      if (x >= 119 && x <= 170) return 'DESC';
+      if (x >= 171 && x <= 260) return 'COMP';   // composição — ignored
+      if (x >= 345 && x <= 385) return 'COUNTRY';
+      if (x >= 386 && x <= 420) return 'QTY';
+      if (x >= 421 && x <= 455) return 'IVA';
+      if (x >= 456 && x <= 505) return 'UPRICE';
+      if (x >= 506 && x <= 540) return 'DISC';
+      if (x >= 541 && x <= 590) return 'TOTAL';
+      return 'UNKNOWN';
+    }
+
+    // Pass 1 — anchors (already reconstructed, wrap-safe)
+    var anchors = codeAnchors.map(function(item) {
+      return { y: item.y, code: item.str, eanParts: [], descParts: [],
+               pautal: '', country: '', qty: null, unitPrice: null, total: null };
+    });
+    anchors.sort(function(a, b) { return a.y - b.y; });
+
+    // Pass 2 — assign with per-column tolerance (±5, same as Motor A)
+    allItems.forEach(function(item) {
+      var ct = colTypeD(item.x);
+      if (ct === 'CODE' || ct === 'COMP' || ct === 'UNKNOWN') return;
+      if (SKIP_ROW.test(item.str)) return;
+      var best = null, bestDist = Infinity;
+      anchors.forEach(function(a) {
+        var d = Math.abs(item.y - a.y);
+        if (d < bestDist) { bestDist = d; best = a; }
+      });
+      if (!best) return;
+      if (bestDist > 5) return;
+      switch (ct) {
+        case 'PAUTAL':  if (!best.pautal  && isPautal(item.str))               best.pautal    = item.str; break;
+        case 'DESC':    best.descParts.push(item); break;
+        case 'COUNTRY': if (!best.country && COUNTRIES.test(item.str))         best.country   = item.str; break;
+        case 'QTY':     if (best.qty    === null && /^\d{1,3}$/.test(item.str)) best.qty     = parseInt(item.str); break;
+        case 'UPRICE':  if (best.unitPrice === null && isPrice(item.str))      best.unitPrice = parsePrice(item.str); break;
+        case 'TOTAL':   if (best.total  === null && isPrice(item.str))         best.total     = parsePrice(item.str); break;
+      }
+    });
+
+    // Pass 3 — consolidate
+    var items = [];
+    anchors.forEach(function(anchor) {
+      var ref = anchor.code.match(/^(\d+)/);
+      if (!ref) return;
+      var ean = eanMap[anchor.code] || '';
+      if (!ean) {
+        anchor.eanParts.sort(function(a, b) { return a.y - b.y; });
+        var parts = anchor.eanParts.map(function(p){ return p.str; });
+        var eanStr = parts.join('');
+        if (isFullEan(eanStr)) { ean = eanStr; }
+        else {
+          for (var i = 0; i < parts.length - 1; i++) {
+            if (isEanPart1(parts[i]) && isEanPart2(parts[i+1])) {
+              var c = parts[i] + parts[i+1];
+              if (c.length === 13) { ean = c; break; }
+            }
+          }
+        }
+      }
+      anchor.descParts.sort(function(a, b) { return Math.abs(a.y-b.y)<=2 ? a.x-b.x : a.y-b.y; });
+      var desc = '';
+      for (var di = 0; di < anchor.descParts.length; di++) {
+        var dt = anchor.descParts[di].str;
+        if (dt.length > 1 && !/^\d/.test(dt) &&
+            !/^(Forro:|Corpo:|Exterior:|Insole|superior:|forro:|sola:|Ext comp|Int comp|poliuretano|poliéster|algodão|poliprop|zinco|ferro|acrílico|papel|borracha|viscose|bambu)/i.test(dt)) {
+          desc = dt; break;
+        }
+      }
+      if (!desc || anchor.qty === null || anchor.total === null) return;
+      items.push({ ref: ref[1], code: anchor.code,
+                   ean: ean, desc: desc, qty: anchor.qty,
+                   unitPrice: anchor.unitPrice || 0, price: anchor.total });
+    });
+
+    return pfBuildResult(pfDedupe(items), meta);
+  }
+
   /* ══════════════════════════════════════════════════════════════
      EXTRACT META
 
@@ -980,12 +1079,13 @@
   /* ══════════════════════════════════════════════════════════════
      ENGINE SELECTION — pick best, detect conflict
   ══════════════════════════════════════════════════════════════ */
-  function pfPickEngine(resA, resB, resC) {
+  function pfPickEngine(resA, resB, resC, resD) {
     // Count how many engines agree on qty and price
     var results = [
       { label: 'A', res: resA },
       { label: 'B', res: resB },
-      { label: 'C', res: resC }
+      { label: 'C', res: resC },
+      { label: 'D', res: resD }
     ];
 
     // Prefer engines that pass cross-validation
@@ -1072,13 +1172,14 @@
     var resA = pfEngineA(allItems, meta, eanMap, codeAnchors);
     var resB = pfEngineB(allItems, meta, eanMap, codeAnchors);
     var resC = pfEngineC(allItems, meta, eanMap, codeAnchors);
+    var resD = pfEngineD(allItems, meta, eanMap, codeAnchors);
 
     var agree    = pfEnginesAgree(resA, resB, resC);
-    var autoEng  = pfPickEngine(resA, resB, resC);
+    var autoEng  = pfPickEngine(resA, resB, resC, resD);
 
     return Object.assign({}, meta, {
       _allItems:  allItems,
-      engineCache: { A: resA, B: resB, C: resC },
+      engineCache: { A: resA, B: resB, C: resC, D: resD },
       autoEngine:  autoEng,
       agree:       agree,
       // active engine result — will be set by pfGetActiveResult()
@@ -2305,6 +2406,60 @@
       grid.appendChild(card);
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       SESSION EXPORT — XLSX (all invoices in the session, flat list)
+    ══════════════════════════════════════════════════════════════ */
+    var PF_XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    var pfXlsxLoading = null;
+
+    function pfLoadXlsxLib() {
+      if (typeof XLSX !== 'undefined') return Promise.resolve();
+      if (pfXlsxLoading) return pfXlsxLoading;
+      pfXlsxLoading = new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = PF_XLSX_URL;
+        s.onload  = function() { resolve(); };
+        s.onerror = function() { pfXlsxLoading = null; reject(new Error('Não foi possível carregar a biblioteca XLSX')); };
+        document.head.appendChild(s);
+      });
+      return pfXlsxLoading;
+    }
+
+    async function pfExportSessionXlsx() {
+      if (!pfState.invoices.length) return;
+      var btn = document.getElementById('pf-export-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'a gerar…'; }
+      try {
+        await pfLoadXlsxLib();
+        var rows = [];
+        pfState.invoices.forEach(function(inv) {
+          var res = pfGetActiveResult(inv);
+          res.items.forEach(function(it) {
+            rows.push({
+              'Nº Fatura':  inv.invoiceNo,
+              'Data':       inv.invoiceDate,
+              'Referência': it.ref,
+              'Nome':       it.desc,
+              'Pcs':        it.qty,
+              'P.Unit (€)': it.unitPrice,
+              'Total (€)':  it.price
+            });
+          });
+        });
+        var ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{wch:14},{wch:11},{wch:14},{wch:32},{wch:7},{wch:10},{wch:10}];
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Faturas');
+        var fname = (pfState.sessionName || 'sessao-parfois').replace(/[\\/:*?"<>|]/g, '-') + '.xlsx';
+        XLSX.writeFile(wb, fname);
+      } catch (e) {
+        console.error('Parfois: erro ao exportar XLSX', e);
+        alert('Erro ao gerar o ficheiro Excel. Tente novamente.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'exportar sessão (.xlsx)'; }
+      }
+    }
+
     /* Main overlay */
     if (!document.getElementById('pf-overlay')) {
       var ov = document.createElement('div');
@@ -2328,6 +2483,7 @@
           '</label>' +
           '<div id="pf-status-bar">' +
             '<span id="pf-status-msg">nenhuma fatura carregada</span>' +
+            '<button id="pf-export-btn" class="pf-btn pf-btn-dark">exportar sessão (.xlsx)</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(ov);
@@ -2339,6 +2495,7 @@
           pfClear(); pfRender(); pfUpdateLbl();
         }
       });
+      document.getElementById('pf-export-btn').addEventListener('click', pfExportSessionXlsx);
       document.getElementById('pf-file-input').addEventListener('change', function(e){
         if (e.target.files.length) pfHandleFiles(e.target.files);
         e.target.value = '';

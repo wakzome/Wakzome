@@ -1470,6 +1470,7 @@
           /* Always collapse when guia exists, regardless of previous collapsed state */
           var wrapEl = document.getElementById('proc-fatura-' + fid);
           if (wrapEl && !wrapEl.classList.contains('proc-collapsed')) procToggleCollapse(fid);
+          procAtualizarBotaoRemover(fid);
         }
       } else if (data.collapsed) {
         /* No guia but was manually collapsed — restore that too */
@@ -1727,9 +1728,20 @@
     activeFaturas.forEach(function(fid, idx) {
       var nEl = document.getElementById('proc-fatura-banner-num-' + fid);
       if (nEl) nEl.textContent = 'Fatura ' + (idx + 1);
-      var btn = document.getElementById('proc-remove-btn-' + fid);
-      if (btn) btn.style.display = activeFaturas.length > 1 ? 'inline-block' : 'none';
+      procAtualizarBotaoRemover(fid);
     });
+  }
+
+  /* Esconde por completo o botao "remover" assim que a fatura ja tem
+     numero de guia (ja foi ingressada no ERP) — deixar de aparecer, em
+     vez de so bloquear ao clicar, evita que o utilizador pense que a
+     remocao e possivel e va a procura de outra forma de a forcar. */
+  function procAtualizarBotaoRemover(fid) {
+    var btn = document.getElementById('proc-remove-btn-' + fid);
+    if (!btn) return;
+    var guiaInput = document.getElementById('proc-guia-erp-' + fid);
+    var temGuia   = !!(guiaInput && guiaInput.value.trim().length > 0);
+    btn.style.display = (activeFaturas.length > 1 && !temGuia) ? 'inline-block' : 'none';
   }
 
   function procUpdateBannerProvider(fid) {
@@ -1760,6 +1772,7 @@
       input.classList.remove('proc-guia-done');
       if (banner) banner.classList.remove('proc-banner-done');
     }
+    procAtualizarBotaoRemover(fid);
     procSaveSession(false);
   }
 
@@ -5274,10 +5287,19 @@
       var gerando   = podeGerar && ativoAtual;
       var geracaoId = 0;
 
+      /* Fatura ja ingressada no ERP (tem numero de guia) → o toggle
+         fica bloqueado: alternar aqui criaria ou apagaria referencias
+         associadas a uma guia ja emitida, o que nunca deve acontecer
+         depois de fechado o ciclo com o ERP. */
+      var guiaElAtual   = document.getElementById('proc-guia-erp-' + fid);
+      var temGuiaFatura = !!(guiaElAtual && guiaElAtual.value.trim().length > 0);
+
       var toggleHTML = podeGerar
-        ? ('<label class="proc-criacao-toggle-wrap" title="Gerar refer\u00eancia interna para este fornecedor">'
-          + '<input type="checkbox" id="proc-criacao-toggle-' + fid + '"' + (ativoAtual ? ' checked' : '') + '>'
+        ? ('<label class="proc-criacao-toggle-wrap' + (temGuiaFatura ? ' proc-criacao-toggle-locked' : '') + '"'
+          + ' title="' + (temGuiaFatura ? 'Fatura j\u00e1 tem guia ERP associada \u2014 refer\u00eancia interna bloqueada' : 'Gerar refer\u00eancia interna para este fornecedor') + '">'
+          + '<input type="checkbox" id="proc-criacao-toggle-' + fid + '"' + (ativoAtual ? ' checked' : '') + (temGuiaFatura ? ' disabled' : '') + '>'
           + '<span>refer\u00eancia interna</span>'
+          + (temGuiaFatura ? '<span class="proc-criacao-toggle-lock-icon" style="margin-left:4px;opacity:.55;">\ud83d\udd12</span>' : '')
           + '</label>')
         : '';
 

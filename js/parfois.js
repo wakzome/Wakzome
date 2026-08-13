@@ -334,6 +334,14 @@
       '.pf-inv-hdr-top{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}',
       '.pf-inv-hdr-bot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}',
       '.pf-inv-spacer{flex:1;}',
+      /* N.\u00ba Guia ERP \u2014 mesmo espirito do campo em faturas.js
+         (#proc-guia-erp), adaptado ao cabecalho escuro da fatura Parfois. */
+      '.pf-guia-erp-wrap{display:flex;align-items:center;gap:6px;margin-left:auto;}',
+      '.pf-guia-erp-label{font-size:.62rem;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,0.5)!important;white-space:nowrap;}',
+      '.pf-guia-erp-input{padding:4px 7px;border:1px solid rgba(255,255,255,0.3);border-radius:7px;background:rgba(255,255,255,0.08);font-family:\'MontserratLight\',sans-serif;font-size:.78rem;font-weight:bold;color:#fff!important;width:74px;text-align:center;outline:none;transition:border-color .15s,background .15s;}',
+      '.pf-guia-erp-input::placeholder{color:rgba(255,255,255,0.35);}',
+      '.pf-guia-erp-input:focus{border-color:#fff;background:rgba(255,255,255,0.15);}',
+      '.pf-guia-erp-input.pf-guia-done{border-color:#5caa5c!important;background:rgba(42,90,42,0.35)!important;color:#eafeea!important;}',
       '@media(max-width:520px){.pf-table td,.pf-table th{padding:4px 6px;font-size:.72rem;}}',
       /* ── Parfois card gradient (missing from index.html) ── */
       '#faturas-sub-grid .adm-mod-card[data-faturas-module="parfois"]::before{background:linear-gradient(145deg,#1a0f0f 0%,#2e1515 60%,#3d1a1a 100%);}',
@@ -1367,6 +1375,10 @@
             '<button class="pf-btn pf-btn-mid" data-bc="' + idx + '">c\u00f3digos de barras</button>' +
             '<button class="pf-btn pf-btn-dark" data-st="' + idx + '">ingresso de stock</button>' +
             '<button class="pf-btn" data-pvp="' + idx + '" style="background:#1a1a2e!important;color:#fff!important;border-color:#1a1a2e!important;white-space:nowrap;">lista pvp</button>' +
+            '<div class="pf-guia-erp-wrap" title="N.\u00ba de guia ERP">' +
+              '<span class="pf-guia-erp-label">N.\u00ba Guia</span>' +
+              '<input type="text" class="pf-guia-erp-input' + (inv.guiaErp ? ' pf-guia-done' : '') + '" id="pf-guia-erp-' + idx + '" data-guia="' + idx + '" placeholder="ex: 2025/001" autocomplete="off" value="' + esc(inv.guiaErp || '') + '">' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="pf-inv-body"></div>';
@@ -1442,6 +1454,23 @@
     content.querySelectorAll('[data-pvp]').forEach(function(btn) {
       btn.addEventListener('click', function(){ pfOpenPVP(parseInt(btn.getAttribute('data-pvp'))); });
     });
+    content.querySelectorAll('[data-guia]').forEach(function(inp) {
+      inp.addEventListener('input', function(){ pfGuiaErpChange(parseInt(inp.getAttribute('data-guia'))); });
+    });
+  }
+
+  /* Guarda o numero de guia ERP directamente no objecto da fatura —
+     como pfBuildPayload() serializa pfState.invoices na integra, fica
+     automaticamente incluido em cada save/restauro, sem precisar de
+     nenhuma alteracao extra ao payload. */
+  function pfGuiaErpChange(idx) {
+    var inv   = pfState.invoices[idx];
+    var input = document.getElementById('pf-guia-erp-' + idx);
+    if (!inv || !input) return;
+    var val = input.value.trim();
+    inv.guiaErp = val;
+    input.classList.toggle('pf-guia-done', val.length > 0);
+    pfSave();
   }
 
   /* ══════════════════════════════════════════════════════════════

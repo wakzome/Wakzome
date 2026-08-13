@@ -16,6 +16,13 @@
      omissao (chave ausente) considera-se activo. */
   var _usaNomenclaturaPorFatura = {};
 
+  /* Uma factura com numero de guia fica com a tabela de artigos
+     bloqueada para edicao (protege dados ja enviados ao ERP). So fica
+     true depois do gesto deliberado de 3 clics no nome do fornecedor —
+     nunca persiste entre sessoes/recargas, para que cada abertura da
+     factura volte ao estado seguro por omissao. */
+  var _tabelaDesbloqueadaPorGuia = {};
+
   /* ── UNDO HISTORY (Ctrl+Z, ultimos 10 estados) ── */
   var _undoStack   = [];
   var _undoMaxSize = 10;
@@ -645,6 +652,10 @@
        para "CHLAMYS VARIA"). */
     input.addEventListener('focus', function() {
       input.dataset.prevValue = input.value.trim();
+    });
+
+    input.addEventListener('click', function(e) {
+      procTentarDesbloquearTabelaPorClique(fid, e);
     });
 
     input.addEventListener('input', function() {
@@ -1471,6 +1482,7 @@
           var wrapEl = document.getElementById('proc-fatura-' + fid);
           if (wrapEl && !wrapEl.classList.contains('proc-collapsed')) procToggleCollapse(fid);
           procAtualizarBotaoRemover(fid);
+          procAtualizarBloqueioGuia(fid);
         }
       } else if (data.collapsed) {
         /* No guia but was manually collapsed — restore that too */
@@ -1744,6 +1756,35 @@
     btn.style.display = (activeFaturas.length > 1 && !temGuia) ? 'inline-block' : 'none';
   }
 
+  /* Bloqueia visual e funcionalmente toda a tabela de artigos quando a
+     factura ja tem numero de guia — impede edicoes acidentais depois de
+     fechado o ciclo com o ERP. A unica forma de voltar a editar e o
+     gesto deliberado de 3 clics no nome do fornecedor (ver o listener
+     'click' registado em procInitProviderInput). */
+  function procAtualizarBloqueioGuia(fid) {
+    var block = document.getElementById('proc-table-block-' + fid);
+    if (!block) return;
+    var guiaInput = document.getElementById('proc-guia-erp-' + fid);
+    var temGuia   = !!(guiaInput && guiaInput.value.trim().length > 0);
+    var bloqueado = temGuia && !_tabelaDesbloqueadaPorGuia[fid];
+    block.classList.toggle('proc-table-guia-locked', bloqueado);
+    block.style.pointerEvents = bloqueado ? 'none' : '';
+    block.style.opacity       = bloqueado ? '0.5'  : '';
+    block.title = bloqueado ? 'Tabela bloqueada \u2014 esta factura j\u00e1 tem n\u00famero de guia. 3 clics no nome do fornecedor para desbloquear.' : '';
+  }
+
+  /* Gesto de desbloqueio: 3 clics no campo do fornecedor. e.detail conta
+     clics consecutivos na mesma posicao dentro do intervalo do sistema
+     (o mesmo mecanismo nativo do duplo-clique, generalizado a 3). */
+  function procTentarDesbloquearTabelaPorClique(fid, e) {
+    if (e.detail !== 3) return;
+    var guiaInput = document.getElementById('proc-guia-erp-' + fid);
+    var temGuia   = !!(guiaInput && guiaInput.value.trim().length > 0);
+    if (!temGuia || _tabelaDesbloqueadaPorGuia[fid]) return;
+    _tabelaDesbloqueadaPorGuia[fid] = true;
+    procAtualizarBloqueioGuia(fid);
+  }
+
   function procUpdateBannerProvider(fid) {
     var pEl = document.getElementById('proc-proveedor-'       + fid);
     var bEl = document.getElementById('proc-banner-provider-' + fid);
@@ -1773,6 +1814,7 @@
       if (banner) banner.classList.remove('proc-banner-done');
     }
     procAtualizarBotaoRemover(fid);
+    procAtualizarBloqueioGuia(fid);
     procSaveSession(false);
   }
 

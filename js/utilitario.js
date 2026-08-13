@@ -580,8 +580,7 @@ function agBindLogic() {
         var f=this.dataset.forn;
         if(agForn===f){agForn=null;container.querySelectorAll('.ag-fb').forEach(function(b){b.classList.remove('active');b.style.background='';b.style.borderColor='';b.style.color=''});}
         else{agForn=f;container.querySelectorAll('.ag-fb').forEach(function(b){b.classList.remove('active');b.style.background='';b.style.borderColor='';b.style.color='';});this.classList.add('active');
-          if(col&&!FC_BASE[f]){this.style.background=col;this.style.borderColor=col;this.style.color='#fff';}
-          agFilter='all';document.querySelectorAll('.ag-filter-btn').forEach(function(b){b.classList.remove('active');});document.querySelector('.ag-filter-btn[data-filter="all"]').classList.add('active');}
+          if(col&&!FC_BASE[f]){this.style.background=col;this.style.borderColor=col;this.style.color='#fff';}}
         rBanner();rTable();rForn();
       });
     });
@@ -734,16 +733,23 @@ function agBindLogic() {
   function rTable(){
     var tb=document.getElementById('ag-tbody'),em=document.getElementById('ag-empty');
     if(agForn){
-      var all=agF.filter(function(f){return f.fornecedor===agForn;});
-      var q=agQ.toLowerCase();if(q)all=all.filter(function(f){return f.factura.toLowerCase().indexOf(q)>=0;});
-      var pend=all.filter(function(f){return f.estado!=='pago'&&f.estado!=='nc';});
-      pend.sort(function(a,b){var da=a.vencimento||'9999',db=b.vencimento||'9999';return da<db?-1:da>db?1:0;});
-      var v=[],u=[],x=[],dist=[];
-      pend.forEach(function(f){var d=dd(f.vencimento);if(d===null||d<0)v.push(f);else if(d>=0&&d<=DAYS_TO_SUNDAY)u.push(f);else if(d<=30)x.push(f);else dist.push(f);});
-      if(!pend.length){tb.innerHTML='';em.style.display='block';em.textContent='sem faturas pendentes · '+agForn;return;}
+      var list=getS(getF());
+      if(!list.length){tb.innerHTML='';em.style.display='block';em.textContent=(agFilter==='pago'?'sem faturas pagas · ':agFilter==='vencida'?'sem faturas vencidas · ':'sem faturas pendentes · ')+agForn;return;}
       em.style.display='none';var rows=[],delay=0,seq=0;
-      function addSec(list,lbl,cls){if(!list.length)return;var t=list.reduce(function(s,f){return s+f.valor;},0);rows.push(secRow(lbl+' — '+list.length+' fatura'+(list.length>1?'s':''),cls));list.forEach(function(f){seq++;rows.push(bRow(f,delay,seq));delay+=32;});rows.push(subRow(list.length,t));}
-      addSec(v,'▲ vencidas','ag-sec-v');addSec(u,'● esta semana','ag-sec-u');addSec(x,'● próximas 30 dias','ag-sec-x');addSec(dist,'○ mais distantes','ag-sec-d');
+      function addSec(secList,lbl,cls){if(!secList.length)return;var t=secList.reduce(function(s,f){return s+f.valor;},0);rows.push(secRow(lbl+' — '+secList.length+' fatura'+(secList.length>1?'s':''),cls));secList.forEach(function(f){seq++;rows.push(bRow(f,delay,seq));delay+=32;});rows.push(subRow(secList.length,t));}
+      if(agFilter==='pago'){
+        addSec(list,'✓ pago / NC','ag-sec-d');
+      } else {
+        var pend=list.filter(function(f){return f.estado!=='pago'&&f.estado!=='nc';});
+        pend.sort(function(a,b){var da=a.vencimento||'9999',db=b.vencimento||'9999';return da<db?-1:da>db?1:0;});
+        var v=[],u=[],x=[],dist=[];
+        pend.forEach(function(f){var d=dd(f.vencimento);if(d===null||d<0)v.push(f);else if(d>=0&&d<=DAYS_TO_SUNDAY)u.push(f);else if(d<=30)x.push(f);else dist.push(f);});
+        addSec(v,'▲ vencidas','ag-sec-v');addSec(u,'● esta semana','ag-sec-u');addSec(x,'● próximas 30 dias','ag-sec-x');addSec(dist,'○ mais distantes','ag-sec-d');
+        if(agFilter==='all'){
+          var pago=list.filter(function(f){return f.estado==='pago'||f.estado==='nc';});
+          addSec(pago,'✓ pago / NC','ag-sec-d');
+        }
+      }
       tb.innerHTML=rows.join('');return;
     }
     var list=getS(getF());
@@ -847,7 +853,7 @@ function agBindLogic() {
     if(e.key==='n'&&!document.getElementById('ag-mo').classList.contains('open')&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='SELECT'){e.preventDefault();openM(null);}
   });
   document.querySelectorAll('.ag-filter-btn').forEach(function(btn){
-    btn.addEventListener('click',function(){agFilter=this.dataset.filter;agForn=null;document.querySelectorAll('.ag-fb').forEach(function(b){b.classList.remove('active');});document.querySelectorAll('.ag-filter-btn').forEach(function(b){b.classList.remove('active');});this.classList.add('active');if(agFilter==='pendente'){agSort.col='vencimento';agSort.dir='asc';}rBanner();rTable();rForn();});
+    btn.addEventListener('click',function(){agFilter=this.dataset.filter;document.querySelectorAll('.ag-filter-btn').forEach(function(b){b.classList.remove('active');});this.classList.add('active');if(agFilter==='pendente'){agSort.col='vencimento';agSort.dir='asc';}rBanner();rTable();rForn();});
   });
   document.querySelectorAll('#ag-table thead th[data-sort]').forEach(function(th){
     th.addEventListener('click',function(){var c=this.dataset.sort;agSort.dir=agSort.col===c?(agSort.dir==='asc'?'desc':'asc'):'asc';agSort.col=c;rTable();});

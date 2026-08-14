@@ -1763,12 +1763,19 @@
      'click' registado em procInitProviderInput). */
   function procAtualizarBloqueioGuia(fid) {
     var block = document.getElementById('proc-table-block-' + fid);
-    if (!block) return;
+    var table = document.getElementById('proc-mainTable-' + fid);
+    if (!block || !table) return;
     var guiaInput = document.getElementById('proc-guia-erp-' + fid);
     var temGuia   = !!(guiaInput && guiaInput.value.trim().length > 0);
     var bloqueado = temGuia && !_tabelaDesbloqueadaPorGuia[fid];
     block.classList.toggle('proc-table-guia-locked', bloqueado);
-    block.style.pointerEvents = bloqueado ? 'none' : '';
+    /* O pointer-events:none vai APENAS na <table>, nunca no wrapper que
+       tem o overflow-x:auto — assim o scroll horizontal em ecrans
+       pequenos continua a funcionar com a tabela bloqueada; so a
+       interacao com o conteudo da propria tabela (inputs, botoes) fica
+       desactivada. A opacidade continua a aplicar-se a toda a area,
+       e e so um efeito visual, nao interfere com o scroll. */
+    table.style.pointerEvents = bloqueado ? 'none' : '';
     block.style.opacity       = bloqueado ? '0.5'  : '';
     block.title = bloqueado ? 'Tabela bloqueada \u2014 esta factura j\u00e1 tem n\u00famero de guia. 3 clics no nome do fornecedor para desbloquear.' : '';
   }

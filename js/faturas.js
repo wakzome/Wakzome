@@ -14,7 +14,28 @@
   /* Nova nomenclatura: decisao 100% por factura, nunca por fornecedor —
      duas facturas do mesmo fornecedor sao mundos independentes. Por
      omissao (chave ausente) considera-se activo. */
+  /* ══ SUSPENSAO TEMPORARIA DAS REFERENCIAS INTERNAS (decisao de negocio) ══
+     Enquanto false, a funcionalidade fica bloqueada em todo o lado que a
+     consulta (checkbox aparece desactivado com cadeado, geracao nunca
+     corre, stock/exportacoes tratam como se estivesse desligada) — mas
+     NADA e removido: RPCs, correcao de linhas, toda a logica existente
+     continua intacta. As preferencias por factura ja guardadas (
+     _usaNomenclaturaPorFatura) tambem NAO sao alteradas nem apagadas
+     enquanto suspensa, para que ao reactivar cada factura volte
+     exactamente ao estado em que estava.
+     PARA REACTIVAR: mudar esta unica constante para true. Mais nada
+     precisa de ser tocado. */
+  var PROC_REFERENCIA_INTERNA_HABILITADA = false;
+
   var _usaNomenclaturaPorFatura = {};
+
+  /* Estado EFECTIVO (nao o guardado) — usar isto sempre que se quer
+     saber se a referencia interna esta activa AGORA para uma factura,
+     em vez de ler _usaNomenclaturaPorFatura directamente. */
+  function procNomenclaturaAtivaParaFatura(fid) {
+    if (!PROC_REFERENCIA_INTERNA_HABILITADA) return false;
+    return _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true;
+  }
 
   /* Uma factura com numero de guia fica com a tabela de artigos
      bloqueada para edicao (protege dados ja enviados ao ERP). So fica
@@ -3387,7 +3408,7 @@
       procOpenModal(modal);
     }
 
-    var usaNomenclaturaFatura = _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true;
+    var usaNomenclaturaFatura = procNomenclaturaAtivaParaFatura(fid);
 
     if (!proveedorNorm0 || !usaNomenclaturaFatura) { construirComRows(rowsOriginais); return; }
 
@@ -4389,7 +4410,7 @@
       var fornNorm = procNormalize(forn);
       /* O mapa (dicionario) e do fornecedor, mas usa-lo ou nao e decisao
          desta factura especifica — nunca herdada de outra factura. */
-      var usaFatura = _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true;
+      var usaFatura = procNomenclaturaAtivaParaFatura(fid);
       var mapa = (usaFatura && mapasPorForn) ? mapasPorForn[fornNorm] : null;
       fatRows.forEach(function(r) {
         if (!r.ref) return;
@@ -5328,8 +5349,11 @@
     function montarModal(fornecedorInfo, categorias) {
       var podeGerar  = !!(elegivelSessao && fornecedorInfo && fornecedorInfo.codigo);
       /* Decisao 100% desta factura (fid) — nunca herda nem contamina
-         outra factura do mesmo fornecedor. Por omissao, activo. */
-      var ativoAtual = podeGerar && (_usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true);
+         outra factura do mesmo fornecedor. Por omissao, activo — excepto
+         se a funcionalidade estiver suspensa globalmente (ver
+         PROC_REFERENCIA_INTERNA_HABILITADA), caso em que fica sempre
+         inactiva independentemente do que esta factura tinha guardado. */
+      var ativoAtual = podeGerar && procNomenclaturaAtivaParaFatura(fid);
       /* "gerando" comeca logo verdadeiro se vamos gerar, para que a
          PRIMEIRA pintura do modal ja mostre reticencias em vez da
          referencia original — nunca ha um "salto" visivel. */
@@ -5339,16 +5363,23 @@
       /* Fatura ja ingressada no ERP (tem numero de guia) → o toggle
          fica bloqueado: alternar aqui criaria ou apagaria referencias
          associadas a uma guia ja emitida, o que nunca deve acontecer
-         depois de fechado o ciclo com o ERP. */
+         depois de fechado o ciclo com o ERP. Ou, independentemente da
+         guia, a funcionalidade pode estar suspensa globalmente — em
+         ambos os casos o checkbox fica visivel mas bloqueado. */
       var guiaElAtual   = document.getElementById('proc-guia-erp-' + fid);
       var temGuiaFatura = !!(guiaElAtual && guiaElAtual.value.trim().length > 0);
+      var suspensaGlobal = !PROC_REFERENCIA_INTERNA_HABILITADA;
+      var toggleBloqueado = temGuiaFatura || suspensaGlobal;
+      var toggleTitulo = temGuiaFatura
+        ? 'Fatura j\u00e1 tem guia ERP associada \u2014 refer\u00eancia interna bloqueada'
+        : (suspensaGlobal ? 'Refer\u00eancias internas temporariamente suspensas' : 'Gerar refer\u00eancia interna para este fornecedor');
 
       var toggleHTML = podeGerar
-        ? ('<label class="proc-criacao-toggle-wrap' + (temGuiaFatura ? ' proc-criacao-toggle-locked' : '') + '"'
-          + ' title="' + (temGuiaFatura ? 'Fatura j\u00e1 tem guia ERP associada \u2014 refer\u00eancia interna bloqueada' : 'Gerar refer\u00eancia interna para este fornecedor') + '">'
-          + '<input type="checkbox" id="proc-criacao-toggle-' + fid + '"' + (ativoAtual ? ' checked' : '') + (temGuiaFatura ? ' disabled' : '') + '>'
+        ? ('<label class="proc-criacao-toggle-wrap' + (toggleBloqueado ? ' proc-criacao-toggle-locked' : '') + '"'
+          + ' title="' + toggleTitulo + '">'
+          + '<input type="checkbox" id="proc-criacao-toggle-' + fid + '"' + (ativoAtual ? ' checked' : '') + (toggleBloqueado ? ' disabled' : '') + '>'
           + '<span>refer\u00eancia interna</span>'
-          + (temGuiaFatura ? '<span class="proc-criacao-toggle-lock-icon" style="margin-left:4px;opacity:.55;">\ud83d\udd12</span>' : '')
+          + (toggleBloqueado ? '<span class="proc-criacao-toggle-lock-icon" style="margin-left:4px;opacity:.55;">\ud83d\udd12</span>' : '')
           + '</label>')
         : '';
 

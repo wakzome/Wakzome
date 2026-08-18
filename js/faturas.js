@@ -3747,6 +3747,11 @@
           candidatos.push({
             referencia_interna: null,
             referencia_original: refNorm,
+            /* Texto exactamente como foi escrito (com hifens e tudo) —
+               refNorm serve so para procurar/desduplicar, NUNCA para
+               mostrar; perder os hifens na visualizacao era o bug
+               reportado. */
+            referencia_original_raw: row.ref,
             categoria: categoria,
             proveedor: provNorm,
             semNomenclatura: true
@@ -3797,7 +3802,7 @@
       categorias.forEach(function(c) { mapaCategorias[c.codigo] = c.categoria_pt; });
       dd.innerHTML = candidatos.map(function(c, idx) {
         var nomeCat = mapaCategorias[c.categoria] || c.categoria;
-        var refLabel = c.referencia_interna || c.referencia_original;
+        var refLabel = c.referencia_interna || c.referencia_original_raw || c.referencia_original;
         return '<div class="proc-busca-dropdown-item" data-idx="' + idx + '">'
           + '<span class="proc-busca-dropdown-ref">' + refLabel + '</span>'
           + '<span class="proc-busca-dropdown-desc">' + nomeCat + ' \u00b7 ' + c.proveedor + '</span>'
@@ -3810,7 +3815,7 @@
           var candidato = candidatos[idx];
           procFecharBuscaDropdown(dropdownId);
           var inputEl = document.getElementById(inputId);
-          if (inputEl) inputEl.value = candidato.referencia_interna || candidato.referencia_original;
+          if (inputEl) inputEl.value = candidato.referencia_interna || candidato.referencia_original_raw || candidato.referencia_original;
           procAbrirRadiografia(null, [candidato]);
         });
       });
@@ -3877,11 +3882,23 @@
       totalA4 += a4Sess; totalA5 += a5Sess;
       linhas.push({
         label: labelFromKey(sess.session_key),
+        sessionKey: sess.session_key,
         a4: a4Sess, a5: a5Sess, total: a4Sess + a5Sess,
         precoCusto: pesoTotal ? (custoPeso / pesoTotal) : null,
         pvp: pesoTotal ? (pvpPeso / pesoTotal) : null,
         margem: pesoTotal ? (margPeso / pesoTotal) : null
       });
+    });
+
+    /* Ordem estritamente cronologica, mais recente primeiro — o
+       session_key (proc_fatura_YYYY-MM-DD[_N]) ordena correctamente
+       como texto, exactamente como getAllSessionKeys() ja faz noutro
+       lado do ficheiro. Nao dar por garantido que "sessoes" ja vem
+       ordenado por semana: vem ordenado por updated_at (ultima vez
+       gravado), que pode divergir da semana que a sessao representa
+       sempre que uma sessao antiga e reaberta/corrigida. */
+    linhas.sort(function(a, b) {
+      return a.sessionKey < b.sessionKey ? 1 : (a.sessionKey > b.sessionKey ? -1 : 0);
     });
 
     return {
@@ -3911,7 +3928,7 @@
         var nomeCat = mapaCategorias[cand.categoria] || cand.categoria;
         var linhasHTML = bloco.linhas.length
           ? bloco.linhas.map(function(l) {
-              return '<tr>'
+              return '<tr class="proc-raio-row-clickable" style="cursor:pointer" title="Abrir esta sess\u00e3o" onclick="procFecharRadiografiaEAbrirSessao(\'' + l.sessionKey + '\')">'
                 + '<td class="center">' + l.label + '</td>'
                 + '<td class="center">' + l.a4 + '</td>'
                 + '<td class="center">' + l.a5 + '</td>'
@@ -3923,7 +3940,7 @@
             }).join('')
           : '<tr class="empty-row"><td colspan="7">Sem hist\u00f3rico de sess\u00f5es</td></tr>';
 
-        var refNovaLabel = cand.referencia_interna || cand.referencia_original;
+        var refNovaLabel = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
 
         return '<div class="proc-raio-bloco">'
           + '<div class="proc-raio-bloco-header">'
@@ -3973,6 +3990,20 @@
 
     procOpenModal(modal);
     procBindClose(modal);
+  }
+
+  /* Clicar numa linha do historico fecha o modal (e qualquer popover de
+     busca ainda aberto) e abre directamente essa sessao — reaproveita
+     procForceLoadSession, o mesmo caminho ja usado pelo botao "carregar"
+     no menu "☰ sessões", por isso o comportamento (fetch remoto,
+     fallback local, lock, etc.) e identico e ja testado. */
+  function procFecharRadiografiaEAbrirSessao(sessionKey) {
+    if (!sessionKey) return;
+    var modal = document.getElementById('proc-radiografia-modal');
+    if (modal) procCloseModal(modal);
+    procFecharBuscaDropdown('proc-busca-dropdown');
+    if (typeof procFecharBuscaPopover === 'function') procFecharBuscaPopover();
+    procForceLoadSession(sessionKey);
   }
 
   function procAbrirRadiografia(valorBruto, candidatosForcados) {

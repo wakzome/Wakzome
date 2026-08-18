@@ -3932,7 +3932,7 @@
                 + '<td class="center">' + l.label + '</td>'
                 + '<td class="center">' + l.a4 + '</td>'
                 + '<td class="center">' + l.a5 + '</td>'
-                + '<td class="center">' + l.total + '</td>'
+                + '<td class="center" style="font-weight:700">' + l.total + '</td>'
                 + '<td class="center">' + (l.precoCusto ? l.precoCusto.toFixed(2) : '\u2014') + '</td>'
                 + '<td class="center">' + (l.pvp != null ? l.pvp.toFixed(2) : '\u2014') + '</td>'
                 + '<td class="center">' + (l.margem != null ? l.margem.toFixed(1) + '%' : '\u2014') + '</td>'
@@ -5773,6 +5773,7 @@
   window.procTranspApply         = procTranspApply;
   window.procTranspUndo          = procTranspUndo;
   window.procGuiaIncludeChange   = procGuiaIncludeChange;
+  window.procFecharRadiografiaEAbrirSessao = procFecharRadiografiaEAbrirSessao;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

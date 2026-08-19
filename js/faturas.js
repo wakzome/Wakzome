@@ -4075,6 +4075,7 @@
       +       '<div style="text-align:right;margin:2px 2px 10px;">'
       +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar hist\u00f3rico (Excel)</button>'
       +         '<button type="button" id="proc-totais-fornecedor-btn" onclick="procMostrarModalTotaisPorFornecedor()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Totais por Fornecedor</button>'
+      +         '<button type="button" id="proc-artigos-fornecedor-btn" onclick="procMostrarModalFornecedoresArtigos()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Artigos por Fornecedor</button>'
       +       '</div>'
       +       '<div id="proc-start-sessions-list"></div>'
       +     '</div>'
@@ -4840,6 +4841,171 @@
       var body = document.getElementById('proc-totais-fornecedor-corte-body');
       if (body) body.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
       console.warn('[proc] erro ao carregar totais por fornecedor (corte):', e);
+    });
+  }
+
+  /* ══════════════ ARTIGOS POR FORNECEDOR ══════════════
+     Reaproveita procCarregarFaturasComData() (mesma fonte de dados de
+     Totais por Fornecedor — um so fetch a Supabase). Modal A lista os
+     fornecedores (mesmo agrupamento por procNormalize); ao clicar um
+     fornecedor, Modal B lista as suas referencias com o total de
+     pecas compradas por ano (soma de qtdFt) + coluna Total, ordenadas
+     "naturalmente" — numeros comparados numericamente, texto
+     alfabeticamente, via Intl.Collator numeric:true. Ao clicar numa
+     referencia, reaproveita directamente procAbrirRadiografia(ref) —
+     o mesmo modal de historico que a busca do campo principal ja usa,
+     incluindo a distribuicao A4/A5. Nunca escreve nada. */
+
+  function procMostrarModalFornecedoresArtigos() {
+    var old = document.getElementById('proc-fornecedores-artigos-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-fornecedores-artigos-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:520px;width:90vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Artigos por Fornecedor</span>'
+      +       '<span class="proc-or-panel-title-sub">Selecione um fornecedor</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll" id="proc-fornecedores-artigos-body">'
+      +     '<p style="font-size:.8rem;color:#888;padding:20px;">A carregar…</p>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    procCarregarFaturasComData().then(function(lista) {
+      var body = document.getElementById('proc-fornecedores-artigos-body');
+      if (!body) return;
+      var nomes = {};
+      lista.forEach(function(item) {
+        var bruto = (item.fatura.proveedor || '').trim();
+        if (!bruto) return;
+        var norm = procNormalize(bruto);
+        if (norm) nomes[norm] = true;
+      });
+      var fornecedores = Object.keys(nomes).sort(function(a, b) { return a.localeCompare(b, 'pt'); });
+      if (!fornecedores.length) {
+        body.innerHTML = '<p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p>';
+        return;
+      }
+      body.innerHTML = '<div style="padding:14px;">' + fornecedores.map(function(f) {
+        return '<button type="button" class="proc-fornecedor-artigos-item" data-fornecedor="' + f.replace(/"/g, '&quot;') + '" '
+          + 'style="display:block;width:100%;text-align:left;padding:10px 14px;margin:0 0 6px;border:1px solid #e2e2e2;border-radius:6px;background:#fafafa;cursor:pointer;font-size:.8rem;font-weight:700;letter-spacing:.03em;color:#222;">'
+          + f + '</button>';
+      }).join('') + '</div>';
+
+      body.querySelectorAll('[data-fornecedor]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var norm = btn.getAttribute('data-fornecedor');
+          procCloseModal(modal);
+          procMostrarModalArtigosDoFornecedor(norm, lista);
+        });
+      });
+    }).catch(function(e) {
+      var body = document.getElementById('proc-fornecedores-artigos-body');
+      if (body) body.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
+      console.warn('[proc] erro ao carregar fornecedores:', e);
+    });
+  }
+
+  /* Modal B — referencias de um fornecedor especifico, com pecas
+     compradas por ano + Total. "lista" e reaproveitada do Modal A,
+     sem novo fetch a Supabase. */
+  function procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista) {
+    var old = document.getElementById('proc-artigos-fornecedor-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-artigos-fornecedor-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:1040px;width:95vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">' + fornecedorNorm + '</span>'
+      +       '<span class="proc-or-panel-title-sub">Peças compradas por referência e por ano · clique numa referência para ver o histórico</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll" id="proc-artigos-fornecedor-body">'
+      +     '<p style="font-size:.8rem;color:#888;padding:20px;">A carregar…</p>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    var body = document.getElementById('proc-artigos-fornecedor-body');
+    if (!body) return;
+
+    var mapa = {}; /* ref → { display, anos:{ano:pecas} } */
+    lista.forEach(function(item) {
+      var bruto = (item.fatura.proveedor || '').trim();
+      if (!bruto || procNormalize(bruto) !== fornecedorNorm) return;
+      (item.fatura.rows || []).forEach(function(r) {
+        var ref = (r.ref || '').trim();
+        if (!ref) return;
+        var pecas = r.qtdFt || ((r.a4 || 0) + (r.a5 || 0));
+        if (!pecas) return;
+        if (!mapa[ref]) mapa[ref] = { display: ref, anos: {} };
+        mapa[ref].anos[item.ano] = (mapa[ref].anos[item.ano] || 0) + pecas;
+      });
+    });
+
+    var referencias = Object.keys(mapa);
+    if (!referencias.length) {
+      body.innerHTML = '<p style="font-size:.8rem;color:#888;padding:20px;">Sem artigos.</p>';
+      return;
+    }
+    /* Ordenacao natural: numeros comparados pelo valor, texto pela
+       ordem alfabetica — o mesmo criterio, sem precisar de detectar
+       manualmente se a referencia "e" numerica ou nao. */
+    var collator = new Intl.Collator('pt', { numeric: true, sensitivity: 'base' });
+    referencias.sort(function(a, b) { return collator.compare(a, b); });
+
+    var anosSet = {};
+    referencias.forEach(function(ref) {
+      Object.keys(mapa[ref].anos).forEach(function(a) { anosSet[a] = true; });
+    });
+    var anos = Object.keys(anosSet).map(Number).sort(function(a, b) { return a - b; });
+
+    var theadHTML = '<tr><th>Referência</th>'
+      + anos.map(function(a) { return '<th class="center">' + a + '</th>'; }).join('')
+      + '<th class="center"><strong>Total</strong></th></tr>';
+
+    var tbodyHTML = referencias.map(function(ref) {
+      var linha = mapa[ref];
+      var totalLinha = 0;
+      var cels = anos.map(function(a) {
+        var v = linha.anos[a] || 0;
+        totalLinha += v;
+        return '<td class="center">' + (v || '—') + '</td>';
+      }).join('');
+      return '<tr class="proc-artigo-row" data-ref="' + linha.display.replace(/"/g, '&quot;') + '" style="cursor:pointer;">'
+        + '<td>' + linha.display + '</td>' + cels
+        + '<td class="center"><strong>' + totalLinha + '</strong></td></tr>';
+    }).join('');
+
+    body.innerHTML = '<table class="proc-or-table">'
+      + '<thead>' + theadHTML + '</thead>'
+      + '<tbody>' + tbodyHTML + '</tbody>'
+      + '</table>';
+
+    body.querySelectorAll('.proc-artigo-row').forEach(function(tr) {
+      tr.addEventListener('click', function() {
+        var ref = tr.getAttribute('data-ref');
+        procCloseModal(modal);
+        procAbrirRadiografia(ref);
+      });
     });
   }
 
@@ -6593,6 +6759,7 @@
   window.procFecharRadiografiaEAbrirSessao = procFecharRadiografiaEAbrirSessao;
   window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
+  window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

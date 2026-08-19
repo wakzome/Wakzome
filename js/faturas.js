@@ -4074,6 +4074,7 @@
       +       '</div>'
       +       '<div style="text-align:right;margin:2px 2px 10px;">'
       +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar hist\u00f3rico (Excel)</button>'
+      +         '<button type="button" id="proc-totais-fornecedor-btn" onclick="procMostrarModalTotaisPorFornecedor()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Totais por Fornecedor</button>'
       +       '</div>'
       +       '<div id="proc-start-sessions-list"></div>'
       +     '</div>'
@@ -4588,6 +4589,117 @@
       var candidatos = procFundirCandidatos(candidatosDb, qNorm, sessoes, categorias);
       abrirComCandidatos(candidatos, categorias);
     }).catch(function() { procMostrarRadiografiaModal([], []); });
+  }
+
+  /* ══════════════ TOTAIS POR FORNECEDOR / ANO ══════════════
+     Modal so de leitura, nunca escreve nada. Percorre TODAS as sessoes
+     em proc_sessoes, soma o total de cada factura (mesma formula usada
+     em procUpdateSummary para o "Total" ao vivo de cada factura:
+     (a4+a5) * procCalcPrecoCusto(...) * (1 - desc%)) agrupado por
+     fornecedor (procNormalize, mesma normalizacao usada em todo o
+     resto do ficheiro) e por ano (extraido do session_key). As colunas
+     de ano sao calculadas na hora a partir dos anos realmente
+     presentes nos dados — nunca fixas, por isso um ano novo aparece
+     sozinho assim que houver a primeira factura desse ano. */
+
+  /* Mesma formula de procUpdateSummary, em forma pura (sem DOM) para
+     poder ser aplicada a facturas guardadas em Supabase. */
+  function procCalcularTotalLinhasFatura(fatura) {
+    var total = 0;
+    (fatura.rows || []).forEach(function(r) {
+      var a4 = r.a4 || 0, a5 = r.a5 || 0, pcs = a4 + a5;
+      var preco = r.preco || 0;
+      if (preco && pcs) {
+        var pc = procCalcPrecoCusto(preco, r.plus1, r.hasD, r.qtdFt, a4, a5);
+        total += pcs * pc * (1 - (r.descPct || 0) / 100);
+      }
+    });
+    return total;
+  }
+
+  async function procCarregarTotaisPorFornecedorAno() {
+    var mapa = {}; /* fornecedorNorm → { display, anos:{ano:total} } */
+    var res = await procSbFetch('proc_sessoes?select=session_key,dados', { method: 'GET' });
+    if (!res.ok) return mapa;
+    var rows = await res.json();
+    rows.forEach(function(row) {
+      var ref = procMesAnoDeChave(row.session_key);
+      if (!ref) return;
+      var data;
+      try { data = JSON.parse(row.dados); } catch (e) { return; }
+      if (!data.faturas || !data.faturas.length) return;
+      data.faturas.forEach(function(fat) {
+        var nomeBruto = (fat.proveedor || '').trim();
+        if (!nomeBruto) return;
+        var norm = procNormalize(nomeBruto);
+        if (!norm) return;
+        var totalFat = procCalcularTotalLinhasFatura(fat);
+        if (!totalFat) return;
+        if (!mapa[norm]) mapa[norm] = { display: norm, anos: {} };
+        mapa[norm].anos[ref.ano] = (mapa[norm].anos[ref.ano] || 0) + totalFat;
+      });
+    });
+    return mapa;
+  }
+
+  function procMostrarModalTotaisPorFornecedor() {
+    var old = document.getElementById('proc-totais-fornecedor-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-totais-fornecedor-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:860px;width:92vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Totais por Fornecedor</span>'
+      +       '<span class="proc-or-panel-title-sub">Soma de compras por ano · todo o histórico</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll" id="proc-totais-fornecedor-body">'
+      +     '<p style="font-size:.8rem;color:#888;padding:20px;">A carregar…</p>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    procCarregarTotaisPorFornecedorAno().then(function(mapa) {
+      var body = document.getElementById('proc-totais-fornecedor-body');
+      if (!body) return;
+      var fornecedores = Object.keys(mapa).sort(function(a, b) { return a.localeCompare(b, 'pt'); });
+      if (!fornecedores.length) {
+        body.innerHTML = '<p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p>';
+        return;
+      }
+      var anosSet = {};
+      fornecedores.forEach(function(f) {
+        Object.keys(mapa[f].anos).forEach(function(a) { anosSet[a] = true; });
+      });
+      var anos = Object.keys(anosSet).map(Number).sort(function(a, b) { return a - b; });
+
+      var theadHTML = '<tr><th>Fornecedor</th>' + anos.map(function(a) { return '<th class="center">' + a + '</th>'; }).join('') + '</tr>';
+      var tbodyHTML = fornecedores.map(function(f) {
+        var linha = mapa[f];
+        var cels = anos.map(function(a) {
+          var v = linha.anos[a];
+          return '<td class="center">' + (v ? v.toFixed(2) + ' €' : '—') + '</td>';
+        }).join('');
+        return '<tr><td>' + esc(linha.display) + '</td>' + cels + '</tr>';
+      }).join('');
+
+      body.innerHTML = '<table class="proc-or-table">'
+        + '<thead>' + theadHTML + '</thead>'
+        + '<tbody>' + tbodyHTML + '</tbody>'
+        + '</table>';
+    }).catch(function(e) {
+      var body = document.getElementById('proc-totais-fornecedor-body');
+      if (body) body.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
+      console.warn('[proc] erro ao carregar totais por fornecedor:', e);
+    });
   }
 
   /* ── Render session list in the start panel ── */
@@ -6339,6 +6451,7 @@
   window.procGuiaIncludeChange   = procGuiaIncludeChange;
   window.procFecharRadiografiaEAbrirSessao = procFecharRadiografiaEAbrirSessao;
   window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
+  window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

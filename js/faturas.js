@@ -714,6 +714,105 @@
     });
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     IMPORTACAO AUTOMATICA DE FACTURAS TAM (tam_sessions → proc_sessoes)
+     Corre sozinha, sem botao, sempre que a aplicacao inicia. So traz
+     facturas de TAM que ja tenham numero de guia ERP preenchido (ou
+     seja, ja fechadas) e cuja data seja a partir de 18/08/2026 — nunca
+     nada anterior, porque tudo o que e anterior a essa data ja foi
+     trazido manualmente pelo importador do Excel. Nunca escreve nem
+     alterar nada em tam_sessions (so le); nunca toca em sentRefs, por
+     isso nao interfere com o que "PENDENTES DE OUTRAS SESSOES" ja
+     deteta correctamente como por enviar na guia de transporte.
+     Reaproveita procImportarSessoesHistorico — a mesma logica seguem de
+     nunca sobrescrever, nunca duplicar (fornecedor+guia+semana) usada
+     no importador do Excel. */
+  var TAM_IMPORT_CUTOFF = new Date(2026, 7, 18); /* 18 de Agosto de 2026 */
+
+  /* "DD.MM.YYYY" → segunda-feira dessa semana, calculada com getters
+     LOCAIS (nunca toISOString()/getUTC*) — mesma correccao critica de
+     fuso horario aplicada ao importador do Excel. */
+  function procDataTamParaSegunda(dataStr) {
+    if (!dataStr) return null;
+    var m = String(dataStr).trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!m) return null;
+    var d = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+    if (isNaN(d.getTime())) return null;
+    var diaSemana = d.getDay();
+    var diff = (diaSemana === 0) ? -6 : (1 - diaSemana);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+  }
+
+  /* Mapeia os artigos (grouped) de uma factura TAM para o formato de
+     linha do Processamento — FNC/PXO vem da soma de session.boxes por
+     referencia (a mesma conta que procGetPendingFromTamSessions ja usa
+     para calcular pendentes), preco e o custo puro sem transporte
+     (totalCost/pieces — o unitPriceWithShip ja traz o transporte
+     prorrateado, e isso e um mecanismo proprio do Processamento via
+     Transp./Desc., nunca deve vir ja embutido). semPvp:true porque
+     estas pecas vem a preco de fabrica, sem PVP nem margem aplicavel. */
+  function procMapearLinhasFacturaTam(sessionData, inv) {
+    var boxes = sessionData.boxes || [];
+    var linhas = [];
+    (inv.grouped || []).forEach(function(g) {
+      if (!g.ref) return;
+      var distF = 0, distP = 0;
+      boxes.forEach(function(box) {
+        if (box.refs && box.refs[g.ref]) {
+          distF += box.refs[g.ref].f || 0;
+          distP += box.refs[g.ref].p || 0;
+        }
+      });
+      var pieces = g.pieces || 0;
+      var a4 = distF, a5 = distP;
+      /* Sem distribuicao registada nas caixas — nunca perde a
+         quantidade, atribui tudo a Funchal por omissao. */
+      if (a4 === 0 && a5 === 0 && pieces > 0) a4 = pieces;
+      var preco = pieces > 0 ? (g.totalCost || 0) / pieces : 0;
+      var desc  = g.garmentType ? (g.garmentType + (g.name ? ' \u00b7 ' + g.name : '')) : (g.name || '');
+      linhas.push({
+        ref: String(g.ref).trim(), desc: desc, qtdFt: pieces, a4: a4, a5: a5,
+        preco: preco, descPct: 0, hasD: false, plus1: false, obs: '', flagged: false,
+        pvpManual: null, semPvp: true
+      });
+    });
+    return linhas;
+  }
+
+  function procImportarTamAutomatico() {
+    procSbFetch('tam_sessions?select=session_name,data', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var sessionsMap = {};
+        (rows || []).forEach(function(row) {
+          var data;
+          try { data = JSON.parse(row.data); } catch (e) { return; }
+          if (!data || !data.invoices) return;
+          data.invoices.forEach(function(inv) {
+            var guia = (inv.guiaErp || '').toString().trim();
+            if (!guia) return;
+            var segunda = procDataTamParaSegunda(inv.invoiceDate);
+            if (!segunda || segunda < TAM_IMPORT_CUTOFF) return;
+            var linhas = procMapearLinhasFacturaTam(data, inv);
+            if (!linhas.length) return;
+            var dataISO = segunda.getFullYear() + '-' + String(segunda.getMonth() + 1).padStart(2, '0') + '-' + String(segunda.getDate()).padStart(2, '0');
+            var sessionKey = 'proc_fatura_' + dataISO;
+            if (!sessionsMap[sessionKey]) sessionsMap[sessionKey] = [];
+            sessionsMap[sessionKey].push({
+              proveedor: 'TAM',
+              proveedorNorm: procNormalize('TAM'),
+              valorFactura: (inv.grandTotal != null) ? String(inv.grandTotal) : '',
+              guiaErp: guia,
+              rows: linhas
+            });
+          });
+        });
+        if (!Object.keys(sessionsMap).length) return;
+        procImportarSessoesHistorico(sessionsMap, function(msg) { console.log('[proc][tam-auto]', msg); }, function() {});
+      })
+      .catch(function(e) { console.warn('[proc] erro ao importar facturas TAM automaticamente:', e); });
+  }
+
   /* Vincula retroactivamente a guia ERP as referencias ja criadas para
      esta factura (proveedor + referencias/categorias das linhas actuais).
      Chamada quando o utilizador preenche o campo "Guia ERP". Falha
@@ -1346,7 +1445,7 @@
       faturas: activeFaturas.map(function(fid) {
         var rows = procCollectRows(fid).map(function(r) {
           return { ref:r.ref, desc:r.desc, qtdFt:r.qtdFt, a4:r.a4, a5:r.a5,
-                   preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs, flagged:r.flagged, pvpManual:r.pvpManual };
+                   preco:r.preco, descPct:r.descPct, hasD:r.hasD, plus1:r.plus1, obs:r.obs, flagged:r.flagged, pvpManual:r.pvpManual, semPvp:r.semPvp };
         });
         var transpInput = document.getElementById('proc-transp-' + fid);
         var transpVal   = transpInput ? transpInput.value : '';
@@ -1892,6 +1991,10 @@
           if (flagBtn) flagBtn.classList.add('flagged');
           if (flagTr)  flagTr.classList.add('proc-row-flagged');
         }
+        /* Tem de ficar marcado ANTES do primeiro procRecalcRow, para a
+           pintura inicial ja vir sem PVP/margem (ex.: linhas importadas
+           de TAM, preco de fabrica sem margem de venda aplicavel). */
+        tr.dataset.semPvp = row.semPvp ? '1' : '0';
         procRecalcRow(fid, rid);
         /* Restore manual PVP override after recalc */
         if (row.pvpManual != null && !isNaN(row.pvpManual)) {
@@ -2933,7 +3036,12 @@
     }
 
     var pc = procCalcPrecoCusto(preco, plus1, hasD, qtdFt, a4, a5);
-    var pvpResult = procCalcPVP(preco);
+    /* Linhas marcadas sem PVP (ex.: importadas de TAM, preco de
+       fabrica sem margem de venda aplicavel) nunca calculam PVP nem
+       margem, seja qual for o preco de custo — o preco de custo em
+       si continua normal, so o PVP/margem ficam sempre vazios. */
+    var semPvp = tr.dataset.semPvp === '1';
+    var pvpResult = semPvp ? null : procCalcPVP(preco);
     var pvpEl = document.getElementById('proc-pvp-' + fid + '-' + id);
     if (pvpEl) {
       var pvpDisplay = pvpEl.querySelector('.proc-pvp-display');
@@ -3395,9 +3503,10 @@
       /* Collect manual PVP override if any */
       var pvpEl3    = document.getElementById('proc-pvp-' + fid + '-' + i);
       var pvpManual = (pvpEl3 && pvpEl3._manualOverride) ? parseFloat((pvpEl3.querySelector('.proc-pvp-display') || {}).textContent) || null : null;
+      var semPvp3   = tr.dataset.semPvp === '1';
       result.push({ ref:ref, desc:desc, qtdFt:qtdFt, a4:a4, a5:a5,
                     preco:preco, descPct:dPct, hasD:hasD3, plus1:plus3,
-                    precoCusto:pc3, obs:obs, flagged:flagged, pvpManual:pvpManual });
+                    precoCusto:pc3, obs:obs, flagged:flagged, pvpManual:pvpManual, semPvp:semPvp3 });
     }
     return result;
   }
@@ -4624,6 +4733,11 @@
        correcao/edicao de uma linha, logo a seguir a abrir a sessao,
        resolva categoria='XX' por a cache ainda nao estar pronta. */
     procLoadCategoriasRemote();
+
+    /* Importa automaticamente facturas TAM ja fechadas (com guia ERP),
+       desde 18/08/2026 em diante (non-blocking, silenciosa, nunca
+       sobrescreve nem duplica — ver procImportarTamAutomatico). */
+    procImportarTamAutomatico();
 
     /* Show start area (non-blocking) — loads remote keys then renders */
     procShowStartArea();

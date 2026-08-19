@@ -813,6 +813,89 @@
       .catch(function(e) { console.warn('[proc] erro ao importar facturas TAM automaticamente:', e); });
   }
 
+  /* ══════════════ IMPORTACAO AUTOMATICA — PARFOIS ══════════════
+     Mesmo mecanismo do TAM acima (mesmo corte TAM_IMPORT_CUTOFF,
+     18/08/2026, reaproveitado tal e qual), com as diferencas proprias
+     do modulo Parfois: data no formato "DD/MM/AAAA" (barras, nao
+     pontos); armazem sempre fixo em A5 — Parfois nao distribui por
+     caixas F/P como o TAM, por isso a4 fica sempre 0 e a5 recebe toda
+     a quantidade; preco ja vem pronto como preco unitario por
+     referencia (unitPrice), sem calculo nenhum. semPvp:true em todas
+     as linhas, pelo mesmo motivo do TAM (preco de fabrica, sem margem
+     de venda aplicavel). Nunca escreve nem altera nada em
+     parfois_sessions (so le). Reaproveita procImportarSessoesHistorico,
+     a mesma logica de nunca sobrescrever nem duplicar. */
+
+  /* "DD/MM/AAAA" → segunda-feira dessa semana, com getters LOCAIS
+     (nunca toISOString()/getUTC*). */
+  function procDataParfoisParaSegunda(dataStr) {
+    if (!dataStr) return null;
+    var m = String(dataStr).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    var d = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+    if (isNaN(d.getTime())) return null;
+    var diaSemana = d.getDay();
+    var diff = (diaSemana === 0) ? -6 : (1 - diaSemana);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+  }
+
+  /* Le os items do engine activo da factura (o mesmo que pfGetActiveResult
+     usaria no proprio parfois.js: activeEngines[fileName] || autoEngine
+     || 'A', com fallback para o cache 'A') e mapeia para o formato de
+     linha do Processamento. */
+  function procMapearLinhasFacturaParfois(sessionData, inv) {
+    var linhas = [];
+    if (!inv.engineCache) return linhas;
+    var activeEngines = (sessionData && sessionData.activeEngines) || {};
+    var label = activeEngines[inv.fileName] || inv.autoEngine || 'A';
+    var cached = inv.engineCache[label] || inv.engineCache.A;
+    var items = (cached && cached.items) || [];
+    items.forEach(function(it) {
+      if (!it.ref) return;
+      var qty = it.qty || 0;
+      linhas.push({
+        ref: String(it.ref).trim(), desc: it.desc || '', qtdFt: qty, a4: 0, a5: qty,
+        preco: it.unitPrice || 0, descPct: 0, hasD: false, plus1: false, obs: '', flagged: false,
+        pvpManual: null, semPvp: true
+      });
+    });
+    return linhas;
+  }
+
+  function procImportarParfoisAutomatico() {
+    procSbFetch('parfois_sessions?select=session_name,data', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var sessionsMap = {};
+        (rows || []).forEach(function(row) {
+          var data;
+          try { data = JSON.parse(row.data); } catch (e) { return; }
+          if (!data || !data.invoices) return;
+          data.invoices.forEach(function(inv) {
+            var guia = (inv.guiaErp || '').toString().trim();
+            if (!guia) return;
+            var segunda = procDataParfoisParaSegunda(inv.invoiceDate);
+            if (!segunda || segunda < TAM_IMPORT_CUTOFF) return;
+            var linhas = procMapearLinhasFacturaParfois(data, inv);
+            if (!linhas.length) return;
+            var dataISO = segunda.getFullYear() + '-' + String(segunda.getMonth() + 1).padStart(2, '0') + '-' + String(segunda.getDate()).padStart(2, '0');
+            var sessionKey = 'proc_fatura_' + dataISO;
+            if (!sessionsMap[sessionKey]) sessionsMap[sessionKey] = [];
+            sessionsMap[sessionKey].push({
+              proveedor: 'PARFOIS',
+              proveedorNorm: procNormalize('PARFOIS'),
+              valorFactura: (inv.totalEur != null) ? String(inv.totalEur) : '',
+              guiaErp: guia,
+              rows: linhas
+            });
+          });
+        });
+        if (!Object.keys(sessionsMap).length) return;
+        procImportarSessoesHistorico(sessionsMap, function(msg) { console.log('[proc][parfois-auto]', msg); }, function() {});
+      })
+      .catch(function(e) { console.warn('[proc] erro ao importar facturas Parfois automaticamente:', e); });
+  }
+
   /* Vincula retroactivamente a guia ERP as referencias ja criadas para
      esta factura (proveedor + referencias/categorias das linhas actuais).
      Chamada quando o utilizador preenche o campo "Guia ERP". Falha
@@ -4738,6 +4821,11 @@
        desde 18/08/2026 em diante (non-blocking, silenciosa, nunca
        sobrescreve nem duplica — ver procImportarTamAutomatico). */
     procImportarTamAutomatico();
+
+    /* Importa automaticamente facturas Parfois ja fechadas (com guia ERP),
+       desde 18/08/2026 em diante (non-blocking, silenciosa, nunca
+       sobrescreve nem duplica — ver procImportarParfoisAutomatico). */
+    procImportarParfoisAutomatico();
 
     /* Show start area (non-blocking) — loads remote keys then renders */
     procShowStartArea();

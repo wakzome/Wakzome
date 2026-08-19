@@ -1230,23 +1230,48 @@
     var agora = new Date();
     var anoAtual = agora.getFullYear(), mesAtual = agora.getMonth() + 1;
     var soltas = [];
-    var grupos = [];
-    var atual = null;
+    var grupos = [];      /* meses do ano actual — soltos, tal como sempre foi */
+    var gruposAno = [];   /* anos anteriores — cada um colapsavel, com os seus meses la dentro */
+    var atualMes = null;
+    var anosMap = {};
 
+    /* Assume keys ja ordenadas (mais recente primeiro), tal como
+       getAllSessionKeys() sempre devolveu — por isso um mesmo mes/ano
+       aparece sempre em bloco contiguo, nunca espalhado. */
     keys.forEach(function(key) {
       var ref = procMesAnoDeChave(key);
       if (!ref) { soltas.push(key); return; }
       if (ref.ano === anoAtual && ref.mes === mesAtual) { soltas.push(key); return; }
-      var chave = ref.ano + '-' + ref.mes;
-      if (!atual || atual.chave !== chave) {
-        var label = MESES_PT[ref.mes - 1] + (ref.ano !== anoAtual ? ' ' + ref.ano : '');
-        atual = { chave: chave, label: label, keys: [] };
-        grupos.push(atual);
+
+      if (ref.ano === anoAtual) {
+        var chaveMes = ref.ano + '-' + ref.mes;
+        if (!atualMes || atualMes.chave !== chaveMes) {
+          atualMes = { chave: chaveMes, label: MESES_PT[ref.mes - 1], keys: [] };
+          grupos.push(atualMes);
+        }
+        atualMes.keys.push(key);
+        return;
       }
-      atual.keys.push(key);
+
+      /* Ano diferente do actual: em vez de um bloco de mes solto por
+         ano (que enchia a lista com dezenas de blocos quando ha varios
+         anos de historico), fica tudo dentro de UM bloco colapsavel
+         por ano, com os meses desse ano la dentro. */
+      if (!anosMap[ref.ano]) {
+        anosMap[ref.ano] = { chave: 'ano-' + ref.ano, label: String(ref.ano), keys: [], gruposMes: [], atualMes: null };
+        gruposAno.push(anosMap[ref.ano]);
+      }
+      var bloco = anosMap[ref.ano];
+      bloco.keys.push(key);
+      var chaveMes2 = ref.ano + '-' + ref.mes;
+      if (!bloco.atualMes || bloco.atualMes.chave !== chaveMes2) {
+        bloco.atualMes = { chave: chaveMes2, label: MESES_PT[ref.mes - 1], keys: [] };
+        bloco.gruposMes.push(bloco.atualMes);
+      }
+      bloco.atualMes.keys.push(key);
     });
 
-    return { soltas: soltas, grupos: grupos };
+    return { soltas: soltas, grupos: grupos, gruposAno: gruposAno };
   }
 
   /* Monta o cabecalho colapsavel comum aos dois sitios onde a lista de
@@ -1769,6 +1794,12 @@
     var html = agrupado.soltas.map(montarItemHTML).join('');
     html += agrupado.grupos.map(function(g) {
       return procMontarGrupoSessaoHTML(g, g.keys.map(montarItemHTML).join(''));
+    }).join('');
+    html += agrupado.gruposAno.map(function(ga) {
+      var mesesHTML = ga.gruposMes.map(function(g) {
+        return procMontarGrupoSessaoHTML(g, g.keys.map(montarItemHTML).join(''));
+      }).join('');
+      return procMontarGrupoSessaoHTML(ga, mesesHTML);
     }).join('');
     menu.innerHTML = html;
     procLigarGruposSessaoHTML(menu);
@@ -4406,6 +4437,12 @@
     html += agrupado.soltas.map(montarItemHTML).join('');
     html += agrupado.grupos.map(function(g) {
       return procMontarGrupoSessaoHTML(g, g.keys.map(montarItemHTML).join(''));
+    }).join('');
+    html += agrupado.gruposAno.map(function(ga) {
+      var mesesHTML = ga.gruposMes.map(function(g) {
+        return procMontarGrupoSessaoHTML(g, g.keys.map(montarItemHTML).join(''));
+      }).join('');
+      return procMontarGrupoSessaoHTML(ga, mesesHTML);
     }).join('');
     list.innerHTML = html;
     procLigarGruposSessaoHTML(list);

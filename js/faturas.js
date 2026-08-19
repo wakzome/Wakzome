@@ -4688,7 +4688,7 @@
           var v = linha.anos[a];
           return '<td class="center">' + (v ? v.toFixed(2) + ' €' : '—') + '</td>';
         }).join('');
-        return '<tr><td>' + esc(linha.display) + '</td>' + cels + '</tr>';
+        return '<tr><td>' + linha.display + '</td>' + cels + '</tr>';
       }).join('');
 
       body.innerHTML = '<table class="proc-or-table">'

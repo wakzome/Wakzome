@@ -4600,7 +4600,15 @@
      resto do ficheiro) e por ano (extraido do session_key). As colunas
      de ano sao calculadas na hora a partir dos anos realmente
      presentes nos dados — nunca fixas, por isso um ano novo aparece
-     sozinho assim que houver a primeira factura desse ano. */
+     sozinho assim que houver a primeira factura desse ano. Inclui
+     tambem uma coluna "Total" (soma de todos os anos, por fornecedor)
+     e uma linha de totais por ano no fundo da tabela — ambas a negrito.
+     Um segundo modal, aberto a partir de um botao dentro do primeiro,
+     mostra a mesma comparacao mas cortada: usa a data da sessao mais
+     recente do ano corrente (mes/dia) como corte, e aplica esse MESMO
+     corte (so mes/dia, ignorando o ano) a todos os anos — permite
+     comparar "quanto se comprou ate este ponto do calendario" de forma
+     justa entre anos. */
 
   /* Mesma formula de procUpdateSummary, em forma pura (sem DOM) para
      poder ser aplicada a facturas guardadas em Supabase. */
@@ -4617,29 +4625,124 @@
     return total;
   }
 
-  async function procCarregarTotaisPorFornecedorAno() {
-    var mapa = {}; /* fornecedorNorm → { display, anos:{ano:total} } */
+  /* Formato monetario com separador de milhares, locale pt-PT
+     (ex.: 85569.69 → "85.569,69 €"). */
+  function procFormatarMoeda(v) {
+    return (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+
+  /* "proc_fatura_YYYY-MM-DD[_N]" → { ano, mes, dia }, todos numericos.
+     Versao estendida de procMesAnoDeChave que tambem devolve o dia,
+     necessaria para o corte por mes/dia usado na comparacao ano-a-ano. */
+  function procDataDeChave(key) {
+    var stripped = key.replace(SESSION_PREFIX, '');
+    var m = stripped.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    return { ano: parseInt(m[1], 10), mes: parseInt(m[2], 10), dia: parseInt(m[3], 10) };
+  }
+
+  /* Carrega TODAS as sessoes de proc_sessoes uma unica vez e devolve
+     uma lista plana { ano, mes, dia, fatura } — uma entrada por
+     factura, com a data completa da sua sessao. Serve de base tanto
+     para a tabela "todo o historico" como para a tabela "com corte",
+     evitando duas idas a Supabase. */
+  async function procCarregarFaturasComData() {
+    var out = [];
     var res = await procSbFetch('proc_sessoes?select=session_key,dados', { method: 'GET' });
-    if (!res.ok) return mapa;
+    if (!res.ok) return out;
     var rows = await res.json();
     rows.forEach(function(row) {
-      var ref = procMesAnoDeChave(row.session_key);
-      if (!ref) return;
+      var d = procDataDeChave(row.session_key);
+      if (!d) return;
       var data;
       try { data = JSON.parse(row.dados); } catch (e) { return; }
       if (!data.faturas || !data.faturas.length) return;
       data.faturas.forEach(function(fat) {
-        var nomeBruto = (fat.proveedor || '').trim();
-        if (!nomeBruto) return;
-        var norm = procNormalize(nomeBruto);
-        if (!norm) return;
-        var totalFat = procCalcularTotalLinhasFatura(fat);
-        if (!totalFat) return;
-        if (!mapa[norm]) mapa[norm] = { display: norm, anos: {} };
-        mapa[norm].anos[ref.ano] = (mapa[norm].anos[ref.ano] || 0) + totalFat;
+        out.push({ ano: d.ano, mes: d.mes, dia: d.dia, fatura: fat });
       });
     });
+    return out;
+  }
+
+  /* Agrupa a lista plana por fornecedor + ano, somando o total de cada
+     factura. "filtro", se fornecido, decide que entradas entram (usado
+     para aplicar o corte por mes/dia). */
+  function procAgregarPorFornecedorAno(lista, filtro) {
+    var mapa = {}; /* fornecedorNorm → { display, anos:{ano:total} } */
+    lista.forEach(function(item) {
+      if (filtro && !filtro(item)) return;
+      var nomeBruto = (item.fatura.proveedor || '').trim();
+      if (!nomeBruto) return;
+      var norm = procNormalize(nomeBruto);
+      if (!norm) return;
+      var totalFat = procCalcularTotalLinhasFatura(item.fatura);
+      if (!totalFat) return;
+      if (!mapa[norm]) mapa[norm] = { display: norm, anos: {} };
+      mapa[norm].anos[item.ano] = (mapa[norm].anos[item.ano] || 0) + totalFat;
+    });
     return mapa;
+  }
+
+  /* Determina o corte (mes, dia) a partir da sessao mais recente do
+     ano corrente. Devolve null se ainda nao houver nenhuma sessao no
+     ano corrente. */
+  function procCalcularCorteAnoAtual(lista) {
+    var anoAtual = new Date().getFullYear();
+    var maxMes = 0, maxDia = 0;
+    lista.forEach(function(item) {
+      if (item.ano !== anoAtual) return;
+      if (item.mes > maxMes || (item.mes === maxMes && item.dia > maxDia)) {
+        maxMes = item.mes; maxDia = item.dia;
+      }
+    });
+    if (!maxMes) return null;
+    return { mes: maxMes, dia: maxDia };
+  }
+
+  /* Constroi a tabela (HTML) a partir de um mapa fornecedor→ano→total.
+     Reaproveitada pelos dois modais (historico completo e com corte).
+     Inclui coluna "Total" por fornecedor e linha de totais por ano no
+     fundo — ambas a negrito. Devolve null se nao houver fornecedores. */
+  function procMontarTabelaTotaisFornecedor(mapa) {
+    var fornecedores = Object.keys(mapa).sort(function(a, b) { return a.localeCompare(b, 'pt'); });
+    if (!fornecedores.length) return null;
+
+    var anosSet = {};
+    fornecedores.forEach(function(f) {
+      Object.keys(mapa[f].anos).forEach(function(a) { anosSet[a] = true; });
+    });
+    var anos = Object.keys(anosSet).map(Number).sort(function(a, b) { return a - b; });
+
+    var theadHTML = '<tr><th>Fornecedor</th>'
+      + anos.map(function(a) { return '<th class="center">' + a + '</th>'; }).join('')
+      + '<th class="center"><strong>Total</strong></th></tr>';
+
+    var totaisPorAno = {};
+    anos.forEach(function(a) { totaisPorAno[a] = 0; });
+    var granTotal = 0;
+
+    var tbodyHTML = fornecedores.map(function(f) {
+      var linha = mapa[f];
+      var totalLinha = 0;
+      var cels = anos.map(function(a) {
+        var v = linha.anos[a] || 0;
+        totaisPorAno[a] += v;
+        totalLinha += v;
+        return '<td class="center">' + (v ? procFormatarMoeda(v) : '—') + '</td>';
+      }).join('');
+      granTotal += totalLinha;
+      return '<tr><td>' + linha.display + '</td>' + cels + '<td class="center"><strong>' + procFormatarMoeda(totalLinha) + '</strong></td></tr>';
+    }).join('');
+
+    var tfootHTML = '<tr style="border-top:2px solid #ccc;background:#f7f7f7;"><td><strong>Total</strong></td>'
+      + anos.map(function(a) { return '<td class="center"><strong>' + procFormatarMoeda(totaisPorAno[a]) + '</strong></td>'; }).join('')
+      + '<td class="center"><strong>' + procFormatarMoeda(granTotal) + '</strong></td></tr>';
+
+    return '<table class="proc-or-table">'
+      + '<thead>' + theadHTML + '</thead>'
+      + '<tbody>' + tbodyHTML + '</tbody>'
+      + '<tfoot>' + tfootHTML + '</tfoot>'
+      + '</table>';
   }
 
   function procMostrarModalTotaisPorFornecedor() {
@@ -4651,13 +4754,16 @@
     modal.className = 'proc-or-modal';
     modal.innerHTML =
         '<div class="proc-or-backdrop"></div>'
-      + '<div class="proc-or-panel" style="max-width:860px;width:92vw;">'
+      + '<div class="proc-or-panel" style="max-width:1040px;width:95vw;">'
       +   '<div class="proc-or-panel-header">'
       +     '<div class="proc-or-panel-title">'
       +       '<span class="proc-or-panel-title-main">Totais por Fornecedor</span>'
       +       '<span class="proc-or-panel-title-sub">Soma de compras por ano · todo o histórico</span>'
       +     '</div>'
-      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +     '<div class="proc-or-panel-header-btns">'
+      +       '<button class="proc-or-action-btn" id="proc-totais-corte-btn">comparar até esta data (todos os anos)</button>'
+      +       '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +     '</div>'
       +   '</div>'
       +   '<div class="proc-or-scroll" id="proc-totais-fornecedor-body">'
       +     '<p style="font-size:.8rem;color:#888;padding:20px;">A carregar…</p>'
@@ -4667,38 +4773,73 @@
     procOpenModal(modal);
     procBindClose(modal);
 
-    procCarregarTotaisPorFornecedorAno().then(function(mapa) {
+    var corteBtn = modal.querySelector('#proc-totais-corte-btn');
+    if (corteBtn) corteBtn.addEventListener('click', function() { procMostrarModalTotaisPorFornecedorCorte(); });
+
+    procCarregarFaturasComData().then(function(lista) {
       var body = document.getElementById('proc-totais-fornecedor-body');
       if (!body) return;
-      var fornecedores = Object.keys(mapa).sort(function(a, b) { return a.localeCompare(b, 'pt'); });
-      if (!fornecedores.length) {
-        body.innerHTML = '<p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p>';
-        return;
-      }
-      var anosSet = {};
-      fornecedores.forEach(function(f) {
-        Object.keys(mapa[f].anos).forEach(function(a) { anosSet[a] = true; });
-      });
-      var anos = Object.keys(anosSet).map(Number).sort(function(a, b) { return a - b; });
-
-      var theadHTML = '<tr><th>Fornecedor</th>' + anos.map(function(a) { return '<th class="center">' + a + '</th>'; }).join('') + '</tr>';
-      var tbodyHTML = fornecedores.map(function(f) {
-        var linha = mapa[f];
-        var cels = anos.map(function(a) {
-          var v = linha.anos[a];
-          return '<td class="center">' + (v ? v.toFixed(2) + ' €' : '—') + '</td>';
-        }).join('');
-        return '<tr><td>' + linha.display + '</td>' + cels + '</tr>';
-      }).join('');
-
-      body.innerHTML = '<table class="proc-or-table">'
-        + '<thead>' + theadHTML + '</thead>'
-        + '<tbody>' + tbodyHTML + '</tbody>'
-        + '</table>';
+      var mapa = procAgregarPorFornecedorAno(lista, null);
+      var tabelaHTML = procMontarTabelaTotaisFornecedor(mapa);
+      body.innerHTML = tabelaHTML || '<p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p>';
     }).catch(function(e) {
       var body = document.getElementById('proc-totais-fornecedor-body');
       if (body) body.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
       console.warn('[proc] erro ao carregar totais por fornecedor:', e);
+    });
+  }
+
+  /* Segundo modal: mesma tabela, mas cortada pela data (mes/dia) da
+     sessao mais recente do ano corrente, aplicada por igual a todos
+     os anos — comparacao "ate este ponto do calendario". */
+  function procMostrarModalTotaisPorFornecedorCorte() {
+    var old = document.getElementById('proc-totais-fornecedor-corte-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-totais-fornecedor-corte-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:1040px;width:95vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Totais por Fornecedor · até esta data</span>'
+      +       '<span class="proc-or-panel-title-sub" id="proc-totais-corte-sub">A calcular corte…</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll" id="proc-totais-fornecedor-corte-body">'
+      +     '<p style="font-size:.8rem;color:#888;padding:20px;">A carregar…</p>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    procCarregarFaturasComData().then(function(lista) {
+      var body = document.getElementById('proc-totais-fornecedor-corte-body');
+      var sub  = document.getElementById('proc-totais-corte-sub');
+      if (!body) return;
+      var corte = procCalcularCorteAnoAtual(lista);
+      if (!corte) {
+        if (sub) sub.textContent = 'Sem sessões no ano corrente';
+        body.innerHTML = '<p style="font-size:.8rem;color:#888;padding:20px;">Ainda não há sessões no ano corrente para definir o corte.</p>';
+        return;
+      }
+      var diaStr = String(corte.dia).padStart(2, '0') + '/' + String(corte.mes).padStart(2, '0');
+      if (sub) sub.textContent = 'Compras até ' + diaStr + ' de cada ano · mesmo corte em todos os anos';
+
+      var corteChave = corte.mes * 100 + corte.dia;
+      var mapa = procAgregarPorFornecedorAno(lista, function(item) {
+        return (item.mes * 100 + item.dia) <= corteChave;
+      });
+      var tabelaHTML = procMontarTabelaTotaisFornecedor(mapa);
+      body.innerHTML = tabelaHTML || '<p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p>';
+    }).catch(function(e) {
+      var body = document.getElementById('proc-totais-fornecedor-corte-body');
+      if (body) body.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
+      console.warn('[proc] erro ao carregar totais por fornecedor (corte):', e);
     });
   }
 

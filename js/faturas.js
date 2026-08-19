@@ -392,6 +392,314 @@
       .catch(function() { return false; });
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     IMPORTADOR DE HISTORICO (Excel → Supabase) — ferramenta pontual,
+     usada uma unica vez para trazer para proc_sessoes os dados de anos
+     anteriores guardados numa folha Excel externa. Pode ser removida
+     depois de usada; nao faz parte do fluxo normal da aplicacao.
+
+     Regra de ouro: NUNCA sobrescreve nem apaga nada que ja exista.
+     Cada factura candidata so e admitida se a combinacao
+     fornecedor + numero de guia + semana ainda nao existir em nenhuma
+     sessao ja gravada (incluindo sufixos _2, _3... da mesma semana);
+     caso contrario e descartada silenciosamente (fica so no relatorio).
+  ══════════════════════════════════════════════════════════════ */
+
+  function procCarregarSheetJS() {
+    if (window.XLSX) return Promise.resolve();
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload  = function() { resolve(); };
+      s.onerror = function() { reject(new Error('Falha ao carregar SheetJS')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  /* Le a folha linha a linha e reconstroi cada factura exactamente como
+     no excel: uma linha do excel = uma linha do produto num armazem
+     (A4 ou A5). Agrupa-se por (referencia, descricao, preco) — nunca so
+     por referencia — e somam-se as quantidades de cada armazem dentro
+     desse grupo. Isto e uma copia FIEL: se a mesma referencia aparecer
+     com precos diferentes na mesma factura, fica em linhas separadas,
+     nunca se faz media nem se descarta nada (essa media so se aplica
+     depois, ao ingresso de stock — nunca aqui na importacao). Uma nova
+     factura comeca sempre que a coluna GUIA tem valor; uma sessao
+     (semana) e identificada pela DATA SESSAO da PRIMEIRA linha de cada
+     factura, convertida para a mesma chave proc_fatura_YYYY-MM-DD que a
+     aplicacao ja usa (as datas do SheetJS vem em UTC, exactamente como
+     saem do Excel, por isso toISOString() nunca desvia o dia). */
+  function procAgruparExcelHistorico(arrayBuffer) {
+    var wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+    var sessions = {};
+    var avisos = [];
+    var blocoAtual = null;
+
+    /* Fecha e regista o bloco (factura) ACTUALMENTE aberto — auto-
+       contida, nunca depende de estado partilhado fora desta funcao. */
+    function fecharBlocoAtual() {
+      if (!blocoAtual) return;
+      var bloco = blocoAtual;
+      blocoAtual = null;
+
+      var rows = [];
+      for (var i = 0; i < bloco.order.length; i++) {
+        var g = bloco.groups[bloco.order[i]];
+        rows.push({
+          ref: g.ref, desc: g.desc, qtdFt: g.a4 + g.a5, a4: g.a4, a5: g.a5,
+          preco: g.preco, descPct: 0, hasD: false, plus1: false, obs: '', flagged: false, pvpManual: null
+        });
+      }
+      if (!rows.length) return;
+
+      var d = bloco.data ? new Date(bloco.data) : null;
+      if (!d || isNaN(d.getTime())) {
+        avisos.push('Factura com guia ' + bloco.guia + ' (' + (bloco.fornecedor || '?') + ') ignorada \u2014 data de sess\u00e3o inv\u00e1lida.');
+        return;
+      }
+      var proveedorNorm = procNormalize(bloco.fornecedor || '');
+      var guiaErp = (bloco.guia != null) ? String(bloco.guia).trim() : '';
+      if (!proveedorNorm || !guiaErp) {
+        avisos.push('Factura com guia ' + bloco.guia + ' ignorada \u2014 fornecedor ou guia em falta.');
+        return;
+      }
+
+      var sessionKey = 'proc_fatura_' + d.toISOString().slice(0, 10);
+      if (!sessions[sessionKey]) sessions[sessionKey] = [];
+      sessions[sessionKey].push({
+        proveedor: bloco.fornecedor || '',
+        proveedorNorm: proveedorNorm,
+        valorFactura: (bloco.totalFt != null && bloco.totalFt !== '') ? String(bloco.totalFt) : '',
+        guiaErp: guiaErp,
+        rows: rows
+      });
+    }
+
+    for (var r = 1; r < linhas.length; r++) {
+      var row = linhas[r] || [];
+      var guia = row[0], ref = row[1], desc = row[2], arm = row[3],
+          preco = row[5], qtda = row[6], totalFt = row[8], dataSessao = row[9], fornecedor = row[10];
+
+      if (guia != null && guia !== '') {
+        fecharBlocoAtual();
+        blocoAtual = { guia: guia, fornecedor: fornecedor, data: dataSessao, totalFt: totalFt, groups: {}, order: [] };
+      }
+      if (!blocoAtual) continue;
+      if (ref == null || ref === '') continue;
+
+      var refStr   = String(ref).trim();
+      var descStr  = (desc == null) ? '' : String(desc).trim();
+      var precoNum = (preco != null && preco !== '') ? parseFloat(preco) : 0;
+      var qtdaNum  = (qtda  != null && qtda  !== '') ? parseFloat(qtda)  : 0;
+      var chave = refStr + '\u0001' + descStr + '\u0001' + precoNum;
+
+      if (!blocoAtual.groups[chave]) {
+        blocoAtual.groups[chave] = { ref: refStr, desc: descStr, preco: precoNum, a4: 0, a5: 0 };
+        blocoAtual.order.push(chave);
+      }
+      if (arm === 'A4') blocoAtual.groups[chave].a4 += qtdaNum;
+      else if (arm === 'A5') blocoAtual.groups[chave].a5 += qtdaNum;
+      else blocoAtual.groups[chave].a4 += qtdaNum;
+    }
+    fecharBlocoAtual();
+
+    var totalInv = 0, totalR = 0;
+    Object.keys(sessions).forEach(function(k) {
+      totalInv += sessions[k].length;
+      sessions[k].forEach(function(inv) { totalR += inv.rows.length; });
+    });
+
+    return { sessions: sessions, totalInvoices: totalInv, totalRows: totalR, avisos: avisos };
+  }
+
+  /* Importa sessao a sessao, sempre sequencialmente (nunca em paralelo,
+     para nao haver corrida entre o GET e o POST da mesma sessao). Por
+     cada semana, procura TODAS as sessoes ja gravadas com esse prefixo
+     (a base + eventuais sufixos _2, _3...), junta as chaves
+     fornecedor+guia de TODAS elas, e so acrescenta as facturas
+     candidatas cuja chave ainda nao apareca em lado nenhum. As facturas
+     ja existentes nunca sao tocadas nem reescritas — so se acrescenta
+     ao array, nunca se substitui. */
+  function procImportarSessoesHistorico(sessoesMap, log, onDone) {
+    var chaves = Object.keys(sessoesMap).sort();
+    var idx = 0;
+    var resumo = { sessoesNovas: 0, sessoesAtualizadas: 0, facturasAdicionadas: 0, facturasDescartadas: 0, erros: 0 };
+
+    function proximo() {
+      if (idx >= chaves.length) {
+        log('\n\u2713 Importa\u00e7\u00e3o conclu\u00edda. Sess\u00f5es novas: ' + resumo.sessoesNovas
+          + ' \u00b7 sess\u00f5es actualizadas: ' + resumo.sessoesAtualizadas
+          + ' \u00b7 facturas adicionadas: ' + resumo.facturasAdicionadas
+          + ' \u00b7 facturas descartadas (j\u00e1 existiam): ' + resumo.facturasDescartadas
+          + (resumo.erros ? ' \u00b7 erros: ' + resumo.erros : ''));
+        if (onDone) onDone(resumo);
+        return;
+      }
+      var sessionKey = chaves[idx++];
+      var candidatos = sessoesMap[sessionKey];
+
+      procSbFetch('proc_sessoes?session_key=like.' + encodeURIComponent(sessionKey) + '*&select=session_key,dados', { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(existentes) {
+          var vistas = {};
+          (existentes || []).forEach(function(row) {
+            try {
+              var dados = JSON.parse(row.dados);
+              (dados.faturas || []).forEach(function(f) {
+                var chave = procNormalize(f.proveedor || '') + '|' + (f.guiaErp || '').toString().trim();
+                vistas[chave] = true;
+              });
+            } catch (e) {}
+          });
+
+          var novas = candidatos.filter(function(c) {
+            var chave = c.proveedorNorm + '|' + c.guiaErp;
+            if (vistas[chave]) { resumo.facturasDescartadas++; return false; }
+            vistas[chave] = true;
+            return true;
+          });
+
+          if (!novas.length) {
+            log('\u2014 ' + sessionKey + ': nada novo (' + candidatos.length + ' j\u00e1 exist' + (candidatos.length === 1 ? 'ia' : 'iam') + ')');
+            proximo();
+            return;
+          }
+
+          var baseExistente = (existentes || []).filter(function(row) { return row.session_key === sessionKey; })[0];
+          var payload;
+          if (baseExistente) {
+            try { payload = JSON.parse(baseExistente.dados); } catch (e) { payload = null; }
+          }
+          if (!payload) payload = { savedAt: new Date().toISOString(), sentRefs: {}, faturas: [] };
+          if (!payload.faturas) payload.faturas = [];
+
+          novas.forEach(function(c) {
+            payload.faturas.push({
+              proveedor: c.proveedor, valorFactura: c.valorFactura, guiaErp: c.guiaErp,
+              collapsed: false, transpTotal: '', transpApplied: false, guiaInclude: true,
+              usaNomenclatura: false, rows: c.rows
+            });
+          });
+          payload.savedAt = new Date().toISOString();
+
+          procSbFetch('proc_sessoes', {
+            method: 'POST',
+            headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+            body: JSON.stringify({ session_key: sessionKey, dados: JSON.stringify(payload), updated_at: payload.savedAt })
+          }).then(function(r) {
+            if (r.ok) {
+              if (baseExistente) resumo.sessoesAtualizadas++; else resumo.sessoesNovas++;
+              resumo.facturasAdicionadas += novas.length;
+              log('\u2713 ' + sessionKey + ': +' + novas.length + ' factura(s)' + (candidatos.length > novas.length ? ' (' + (candidatos.length - novas.length) + ' j\u00e1 exist' + ((candidatos.length - novas.length) === 1 ? 'ia' : 'iam') + ')' : ''));
+            } else {
+              resumo.erros++;
+              log('\u26a0 ' + sessionKey + ': erro ao gravar');
+            }
+            proximo();
+          }).catch(function() {
+            resumo.erros++;
+            log('\u26a0 ' + sessionKey + ': erro de rede ao gravar');
+            proximo();
+          });
+        })
+        .catch(function() {
+          resumo.erros++;
+          log('\u26a0 ' + sessionKey + ': erro ao ler sess\u00e3o existente');
+          proximo();
+        });
+    }
+
+    proximo();
+  }
+
+  function procMostrarModalImportadorHistorico() {
+    var old = document.getElementById('proc-import-hist-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-import-hist-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:560px;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Importar Hist\u00f3rico (Excel)</span>'
+      +       '<span class="proc-or-panel-title-sub">Nunca sobrescreve o que j\u00e1 existe</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">\u2715 Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-panel-scroll" style="padding:20px;">'
+      +     '<p style="font-size:.8rem;color:#555;line-height:1.5;margin:0 0 14px;">Cada factura \u00e9 comparada por <strong>fornecedor + n\u00famero de guia + semana</strong> contra o que j\u00e1 est\u00e1 em Supabase \u2014 se j\u00e1 existir, \u00e9 descartada. Nada existente \u00e9 alterado ou apagado.</p>'
+      +     '<input type="file" id="proc-import-hist-file" accept=".xlsx" style="font-size:.8rem;">'
+      +     '<div style="margin-top:14px;">'
+      +       '<button class="proc-btn primary" id="proc-import-hist-start-btn" disabled>Iniciar importa\u00e7\u00e3o</button>'
+      +     '</div>'
+      +     '<div id="proc-import-hist-log" style="display:none;font-family:monospace;font-size:.7rem;white-space:pre-wrap;max-height:320px;overflow-y:auto;background:#f7f7f7;border-radius:8px;padding:10px;margin-top:14px;"></div>'
+      +   '</div>'
+      + '</div>';
+
+    document.body.appendChild(modal);
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    var fileInput = document.getElementById('proc-import-hist-file');
+    var startBtn  = document.getElementById('proc-import-hist-start-btn');
+    var logEl     = document.getElementById('proc-import-hist-log');
+    var arquivoSelecionado = null;
+
+    fileInput.addEventListener('change', function() {
+      arquivoSelecionado = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+      startBtn.disabled = !arquivoSelecionado;
+    });
+
+    function log(msg) {
+      logEl.style.display = 'block';
+      logEl.textContent += (logEl.textContent ? '\n' : '') + msg;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    startBtn.addEventListener('click', function() {
+      if (!arquivoSelecionado) return;
+      startBtn.disabled = true;
+      fileInput.disabled = true;
+      log('A carregar ficheiro\u2026');
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        procCarregarSheetJS().then(function() {
+          log('A processar Excel\u2026');
+          var resultado;
+          try {
+            resultado = procAgruparExcelHistorico(e.target.result);
+          } catch (err) {
+            log('\u26a0 Erro ao processar o Excel: ' + (err && err.message ? err.message : err));
+            return;
+          }
+          (resultado.avisos || []).forEach(function(a) { log('\u26a0 ' + a); });
+          var numSessoes = Object.keys(resultado.sessions).length;
+          log(numSessoes + ' sess\u00f5es encontradas \u00b7 ' + resultado.totalInvoices + ' factura(s) \u00b7 ' + resultado.totalRows + ' linha(s). A comparar com o Supabase e a importar\u2026');
+          procImportarSessoesHistorico(resultado.sessions, log, function() {});
+        }).catch(function() {
+          log('\u26a0 N\u00e3o foi poss\u00edvel carregar a biblioteca de leitura de Excel.');
+        });
+      };
+      reader.onerror = function() { log('\u26a0 Erro ao ler o ficheiro.'); };
+      reader.readAsArrayBuffer(arquivoSelecionado);
+    });
+  }
+
+  function procAbrirImportadorHistorico() {
+    var senha = window.prompt('Esta a\u00e7\u00e3o requer a senha de administrador:');
+    if (senha === null) return;
+    procValidarAdmin(senha).then(function(ok) {
+      if (!ok) { window.alert('Senha incorrecta.'); return; }
+      procMostrarModalImportadorHistorico();
+    });
+  }
+
   /* Vincula retroactivamente a guia ERP as referencias ja criadas para
      esta factura (proveedor + referencias/categorias das linhas actuais).
      Chamada quando o utilizador preenche o campo "Guia ERP". Falha
@@ -3527,6 +3835,9 @@
       +         '<input type="text" id="proc-busca-referencia-input" class="proc-busca-input" autocomplete="off" placeholder="Consultar refer\u00eancia (original ou refer\u00eancia interna)\u2026">'
       +         '<div id="proc-busca-dropdown" class="proc-busca-dropdown hidden"></div>'
       +       '</div>'
+      +       '<div style="text-align:right;margin:2px 2px 10px;">'
+      +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar hist\u00f3rico (Excel)</button>'
+      +       '</div>'
       +       '<div id="proc-start-sessions-list"></div>'
       +     '</div>'
       +   '</div>'
@@ -5774,6 +6085,7 @@
   window.procTranspUndo          = procTranspUndo;
   window.procGuiaIncludeChange   = procGuiaIncludeChange;
   window.procFecharRadiografiaEAbrirSessao = procFecharRadiografiaEAbrirSessao;
+  window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

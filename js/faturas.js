@@ -467,7 +467,21 @@
         return;
       }
 
-      var sessionKey = 'proc_fatura_' + d.toISOString().slice(0, 10);
+      /* CRITICO: usar SEMPRE os getters LOCAIS (getFullYear/getMonth/
+         getDate), nunca toISOString()/getUTC*. O SheetJS constroi as
+         datas das celulas usando o fuso horario LOCAL do browser — em
+         horario de Verao (Portugal/Madeira, UTC+1), a meia-noite local
+         de segunda-feira e as 23:00 UTC de domingo, por isso
+         toISOString() (que devolve em UTC) dava domingo em vez de
+         segunda em mais de metade dos registos.
+         Se a data nao cair numa segunda-feira, usa-se a segunda-feira
+         dessa mesma semana (nunca se rejeita a factura). */
+      var diaSemanaLocal = d.getDay();
+      var diffParaSegunda = (diaSemanaLocal === 0) ? -6 : (1 - diaSemanaLocal);
+      var segunda = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffParaSegunda);
+      var dataLocalISO = segunda.getFullYear() + '-' + String(segunda.getMonth() + 1).padStart(2, '0') + '-' + String(segunda.getDate()).padStart(2, '0');
+
+      var sessionKey = 'proc_fatura_' + dataLocalISO;
       if (!sessions[sessionKey]) sessions[sessionKey] = [];
       sessions[sessionKey].push({
         proveedor: bloco.fornecedor || '',
@@ -579,7 +593,7 @@
           novas.forEach(function(c) {
             payload.faturas.push({
               proveedor: c.proveedor, valorFactura: c.valorFactura, guiaErp: c.guiaErp,
-              collapsed: false, transpTotal: '', transpApplied: false, guiaInclude: true,
+              collapsed: false, transpTotal: '', transpApplied: false, guiaInclude: false,
               usaNomenclatura: false, rows: c.rows
             });
           });

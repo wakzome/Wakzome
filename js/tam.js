@@ -1598,31 +1598,9 @@
 
     var showAnomalyCol = anyDistrib;
 
-    var qd = tamSession && tamSession.quickDistrib && tamSession.quickDistrib[invIdx];
-    var anomalyExtra = showAnomalyCol ? '<th class="tam-th-empty"></th>' : '';
-    var quickHeaderHtml = qd
-      ? '<tr class="tam-quick-split-row">' +
-          '<th colspan="6" class="tam-th-empty"></th>' +
-          '<th colspan="2" class="tam-th tam-th-funchal" style="text-align:center;padding:4px;">' +
-            '<span class="tam-inv-quick-active">' + (qd === 'funchal' ? '100% FNC' : qd === 'porto' ? '100% PS' : '50/50') + ' ativo</span>' +
-            ' <button class="tam-inv-quick-btn tam-inv-quick-undo" data-inv="' + invIdx + '" data-mode="undo">↩ desfazer</button>' +
-          '</th>' +
-          '<th class="tam-th-empty"></th>' +
-          anomalyExtra +
-        '</tr>'
-      : '<tr class="tam-quick-split-row">' +
-          '<th colspan="6" class="tam-th-empty"></th>' +
-          '<th colspan="2" class="tam-th-split-cell" style="text-align:center;padding:3px;">' +
-            '<button class="tam-inv-quick-btn tam-inv-quick-split" data-inv="' + invIdx + '" data-mode="split">50 / 50</button>' +
-          '</th>' +
-          '<th class="tam-th-empty"></th>' +
-          anomalyExtra +
-        '</tr>';
-
     var html =
       '<table class="tam-table">' +
       '<thead>' +
-      quickHeaderHtml +
       '<tr>' +
         '<th class="tam-th">#</th>' +
         '<th class="tam-th">referência</th>' +
@@ -1630,8 +1608,8 @@
         '<th class="tam-th">UND</th>' +
         '<th class="tam-th">P.Unit/T</th>' +
         '<th class="tam-th">Total</th>' +
-        '<th class="tam-th tam-th-funchal"><button class="tam-th-quick-col-btn" data-inv="' + invIdx + '" data-mode="funchal">FNC</button></th>' +
-        '<th class="tam-th tam-th-porto"><button class="tam-th-quick-col-btn" data-inv="' + invIdx + '" data-mode="porto">PS</button></th>' +
+        '<th class="tam-th tam-th-funchal">FNC</th>' +
+        '<th class="tam-th tam-th-porto">PS</th>' +
         '<th class="tam-th tam-th-actions"></th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
@@ -1667,10 +1645,6 @@
         }
       }
 
-        var btnFActive = (fVal === g.pieces && pVal === 0)                          ? ' tam-row-action-active' : '';
-        var btnPActive = (pVal === g.pieces && fVal === 0)                          ? ' tam-row-action-active' : '';
-        var btnSActive = (fVal > 0 && pVal > 0 && fVal + pVal === g.pieces)        ? ' tam-row-action-active' : '';
-
       html +=
         '<tr class="' + trClass + '"' + (conf==='CONFLICT' ? ' title="' + tamEsc(g.conflictDetail||'') + '"' : '') + '>' +
         '<td class="tam-td tam-td-num">' + (i+1) + '</td>' +
@@ -1681,13 +1655,7 @@
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
         '<td class="tam-td tam-td-num tam-cell-funchal" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-city="f">' + (fVal > 0 ? fVal : '—') + '</td>' +
         '<td class="tam-td tam-td-num tam-cell-porto"   data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-city="p">' + (pVal > 0 ? pVal : '—') + '</td>' +
-        '<td class="tam-td tam-cell-actions">' +
-          '<div class="tam-row-action-cell">' +
-            '<button class="tam-row-action-btn' + btnFActive + '" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="funchal">F</button>' +
-            '<button class="tam-row-action-btn' + btnPActive + '" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="porto">P</button>' +
-            '<button class="tam-row-action-btn' + btnSActive + '" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-mode="split">½</button>' +
-          '</div>' +
-        '</td>' +
+        '<td class="tam-td tam-cell-actions"></td>' +
         anomalyCell +
         '</tr>';
     });
@@ -1730,30 +1698,6 @@
       '</tfoot></table>';
 
     container.innerHTML = html;
-    container.querySelectorAll('.tam-inv-quick-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var i    = parseInt(btn.getAttribute('data-inv'));
-        var mode = btn.getAttribute('data-mode');
-        tamQuickDistribInvoice(i, mode);
-      });
-    });
-    container.querySelectorAll('.tam-th-quick-col-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var i    = parseInt(btn.getAttribute('data-inv'));
-        var mode = btn.getAttribute('data-mode');
-        tamQuickDistribInvoice(i, mode);
-      });
-    });
-    container.querySelectorAll('.tam-row-action-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var i      = parseInt(btn.getAttribute('data-inv'));
-        var ref    = btn.getAttribute('data-ref');
-        var pieces = parseInt(btn.getAttribute('data-pieces'));
-        var mode   = btn.getAttribute('data-mode');
-        tamQuickDistribRef(i, ref, pieces, mode);
-      });
-    });
 
     container.querySelectorAll('.tam-cell-funchal[data-ref], .tam-cell-porto[data-ref]').forEach(function(cell) {
       cell.addEventListener('dblclick', function(e) {

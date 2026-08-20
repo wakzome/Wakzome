@@ -1957,7 +1957,10 @@
 
   var LOJAS = ['MAXX','MEZKA AVENIDA','MEZKA FUNCHAL','MEZKA MERCADO','PARFOIS ARCADAS SAO FRANCISCO','PARFOIS MADEIRA SHOPPING','SHANA'];
   var LOJA_LABELS = {'MAXX':'Maxx','MEZKA AVENIDA':'Mezka Avenida','MEZKA FUNCHAL':'Mezka Funchal','MEZKA MERCADO':'Mezka Mercado','PARFOIS ARCADAS SAO FRANCISCO':'Parfois Arcadas','PARFOIS MADEIRA SHOPPING':'Madeira Shopping','SHANA':'Shana'};
-  var ZONA_PARFOIS  = ['PARFOIS ARCADAS SAO FRANCISCO','PARFOIS MADEIRA SHOPPING'];
+  // Parfois Madeira Shopping fechou definitivamente (ver MADEIRA_LOJA/_isMadeiraPosCorte
+  // abaixo) — deixa de contar para a zona geral "Parfois", que passa a comportar-se
+  // exactamente como "Parfois Arcadas" em qualquer comparação (mês/trimestre/ano).
+  var ZONA_PARFOIS  = ['PARFOIS ARCADAS SAO FRANCISCO'];
   var ZONA_PRIMAVERA= ['MEZKA FUNCHAL','MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
   var ZONA_MEZKAPS  = ['MEZKA AVENIDA','MEZKA MERCADO','SHANA','MAXX'];
   var ZONA_MEZKAFNC = ['MEZKA FUNCHAL'];
@@ -2079,6 +2082,19 @@
   var MADEIRA_CORTE_MD = '08-01';
   function _isMadeiraPosCorte(r) {
     return r.loja === MADEIRA_LOJA && r.data.substring(5) >= MADEIRA_CORTE_MD;
+  }
+
+  // Quando a zona activa é APENAS Madeira Shopping (botão "Parfois Madeira" ou a
+  // loja seleccionada directamente no dropdown), a "hoje" real (ex.: 20/08) já não
+  // reflecte actividade da loja — fechou a 01/08. Sem este tecto, Ano/T1-T4 esticariam
+  // o período/denominador até hoje, diluindo a média diária. Nunca se aplica a "Mes"
+  // nem afecta qualquer outra zona/loja (para essas, devolve sempre o valor original).
+  function _isMadeiraOnlyZone(lojas) {
+    return !!lojas && lojas.length === 1 && lojas[0] === MADEIRA_LOJA;
+  }
+  function _madeiraCappedDay(dayStr, lojas) {
+    if (!_isMadeiraOnlyZone(lojas)) return dayStr;
+    return dayStr.substring(5) >= MADEIRA_CORTE_MD ? dayStr.substring(0, 4) + '-07-31' : dayStr;
   }
 
   function _buildComparisonsExact(from, to, rows) {
@@ -2369,14 +2385,17 @@
       
       // Para Q: limitar siempre al fin real del trimestre; si el Q aún no terminó, limitar a lastDay
       var toVal=lastDay;
+      if(_activePeriodBtn==='hadm-btn-ano') toVal=_madeiraCappedDay(lastDay,zonaLojas);
       var isQBtn=['hadm-btn-q1','hadm-btn-q2','hadm-btn-q3','hadm-btn-q4'].indexOf(_activePeriodBtn)>=0;
       if(isQBtn){
         var qEndDates={'hadm-btn-q1':'03-31','hadm-btn-q2':'06-30','hadm-btn-q3':'09-30','hadm-btn-q4':'12-31'};
         var qEndStr=tD.getFullYear()+'-'+qEndDates[_activePeriodBtn];
+        // lastDay topado a 31/07 se a zona activa for só Madeira Shopping (loja fechada) — ver _madeiraCappedDay
+        var qLastDay=_madeiraCappedDay(lastDay,zonaLojas);
         // Si el trimestre aún no empezó → ventana completa hacia adelante (fin del trimestre)
         // Si ya terminó → fin del trimestre exacto · si está en curso → lastDay (último día con datos)
-        if(fromVal>lastDay) toVal=qEndStr;
-        else                toVal=qEndStr<lastDay?qEndStr:lastDay;
+        if(fromVal>qLastDay) toVal=qEndStr;
+        else                toVal=qEndStr<qLastDay?qEndStr:qLastDay;
       }
       
       f={from:fromVal, to:toVal};
@@ -2469,7 +2488,7 @@
     var _periodoAbierto=_todayNow>=f.from&&_todayNow<=_projTo;
     var _maxxNaZonaVendas=zonaLojas.indexOf('MAXX')>=0;
 
-    if(!isTotal&&_isPeriodoCurso&&_periodoAbierto){
+    if(!isTotal&&_isPeriodoCurso&&_periodoAbierto&&!_isMadeiraOnlyZone(zonaLojas)){
       var hRight=_el('div','hadm-h-right');
       var _periodoLabel={'hadm-btn-mes':'Mês','hadm-btn-ano':'Ano','hadm-btn-q1':'T1','hadm-btn-q2':'T2','hadm-btn-q3':'T3','hadm-btn-q4':'T4'}[_activePeriodBtn]||'';
 

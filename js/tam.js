@@ -1610,7 +1610,6 @@
         '<th class="tam-th">Total</th>' +
         '<th class="tam-th tam-th-funchal">FNC</th>' +
         '<th class="tam-th tam-th-porto">PS</th>' +
-        '<th class="tam-th tam-th-actions"></th>' +
         (showAnomalyCol ? '<th class="tam-th tam-th-anomaly">±</th>' : '') +
       '</tr></thead><tbody>';
 
@@ -1655,7 +1654,6 @@
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(g.grandTotal) + '</strong></td>' +
         '<td class="tam-td tam-td-num tam-cell-funchal" data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-city="f">' + (fVal > 0 ? fVal : '—') + '</td>' +
         '<td class="tam-td tam-td-num tam-cell-porto"   data-inv="' + invIdx + '" data-ref="' + tamEsc(g.ref) + '" data-pieces="' + g.pieces + '" data-city="p">' + (pVal > 0 ? pVal : '—') + '</td>' +
-        '<td class="tam-td tam-cell-actions"></td>' +
         anomalyCell +
         '</tr>';
     });
@@ -1678,14 +1676,14 @@
         '<td class="tam-td tam-td-num"><strong>' + r.totalPieces + '</strong></td>' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.subtotalGoods) + '</strong></td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
+        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '<tr class="tam-tr-ship' + (r._externalShipping ? ' tam-tr-ship-ext' : '') + '">' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td" colspan="2">' + shipLabel + '</td>' +
         '<td class="tam-td"></td><td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num">' + tamFmtEU(r.shipping) + '</td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
+        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '<tr class="tam-tr-grand">' +
         '<td class="tam-td"></td>' +
@@ -1693,7 +1691,7 @@
         '<td class="tam-td tam-td-num"><strong>' + r.totalPieces + '</strong></td>' +
         '<td class="tam-td"></td>' +
         '<td class="tam-td tam-td-num"><strong>' + tamFmtEU(r.grandTotal) + '</strong></td>' +
-        '<td class="tam-td"></td><td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
+        '<td class="tam-td"></td><td class="tam-td"></td>' + extraTd +
       '</tr>' +
       '</tfoot></table>';
 

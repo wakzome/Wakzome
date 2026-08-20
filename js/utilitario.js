@@ -1858,6 +1858,46 @@ function rtBindLogic() {
   if(delOk) delOk.addEventListener('click', rtConfirmDel);
 
   rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
+
+  /* ── Auto-refresh remoto: sincroniza alterações feitas noutro
+     dispositivo a cada 5 min, sem interromper edições em curso.
+     · Não mexe em CL/preview (rótulos gerados/impressos e ainda
+       não guardados permanecem intactos no ecrã).
+     · Não corre enquanto CL tiver itens pendentes de guardar, nem
+       enquanto os modais "adicionar loja" ou "envio histórico"
+       estiverem abertos, para não perder o que está a ser escrito. ── */
+  var RT_REFRESH_MS = 5 * 60 * 1000;
+  function rtPullRemote(){
+    var sb = rtSB();
+    if (!sb) return;
+    if (CL.length) return;
+    var addOpen  = document.getElementById('rt-mm-add');
+    var histOpen = document.getElementById('rt-hist-modal');
+    if ((addOpen && addOpen.classList.contains('open')) || (histOpen && histOpen.classList.contains('open'))) return;
+    setSyncDot('syncing');
+    sb.from('rotulos_data').select('payload').eq('id', SK).single()
+      .then(function(res){
+        setSyncDot('');
+        if (res.error || !res.data || !res.data.payload) return;
+        var saved = res.data.payload;
+        var pendingQty = {};
+        allS().forEach(function(s){
+          var el = document.getElementById('rtq_'+s.id);
+          if (el && el.value) pendingQty[s.id] = el.value;
+        });
+        D.stores    = mergeStores(saved);
+        D.shipments = saved.shipments || [];
+        D.acc       = saved.acc || {};
+        localStorage.setItem(SK, JSON.stringify(D));
+        rtRStores(); rtRAcc(); rtRSum(); rtRCtrl();
+        Object.keys(pendingQty).forEach(function(sid){
+          var el = document.getElementById('rtq_'+sid);
+          if (el) el.value = pendingQty[sid];
+        });
+      })
+      .catch(function(e){ setSyncDot(''); console.warn('RT Supabase refresh error', e); });
+  }
+  setInterval(rtPullRemote, RT_REFRESH_MS);
 }
 
 })();

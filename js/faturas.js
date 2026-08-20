@@ -4705,7 +4705,7 @@
      Reaproveitada pelos dois modais (historico completo e com corte).
      Inclui coluna "Total" por fornecedor e linha de totais por ano no
      fundo — ambas a negrito. Devolve null se nao houver fornecedores. */
-  function procMontarTabelaTotaisFornecedor(mapa) {
+  function procMontarTabelaTotaisFornecedor(mapa, clicavel) {
     var fornecedores = Object.keys(mapa);
     if (!fornecedores.length) return null;
 
@@ -4746,7 +4746,14 @@
         return '<td class="center">' + (v ? procFormatarMoeda(v) : '—') + '</td>';
       }).join('');
       granTotal += totalLinha;
-      return '<tr><td>' + linha.display + '</td>' + cels + '<td class="center"><strong>' + procFormatarMoeda(totalLinha) + '</strong></td></tr>';
+      /* "clicavel" so e true na tabela do modulo geral (Totais por
+         Fornecedor) — a tabela do modulo de comparacao por corte
+         reaproveita esta mesma funcao sem o passar, por isso as suas
+         linhas continuam nao-clicaveis, exactamente como antes. */
+      var trAttrs = clicavel
+        ? ' class="proc-fornecedor-total-row" data-fornecedor="' + linha.display.replace(/"/g, '&quot;') + '" style="cursor:pointer;"'
+        : '';
+      return '<tr' + trAttrs + '><td>' + linha.display + '</td>' + cels + '<td class="center"><strong>' + procFormatarMoeda(totalLinha) + '</strong></td></tr>';
     }).join('');
 
     var tfootHTML = '<tr style="border-top:2px solid #ccc;background:#f7f7f7;"><td><strong>Total</strong></td>'
@@ -4795,13 +4802,75 @@
       var body = document.getElementById('proc-totais-fornecedor-body');
       if (!body) return;
       var mapa = procAgregarPorFornecedorAno(lista, null);
-      var tabelaHTML = procMontarTabelaTotaisFornecedor(mapa);
+      var tabelaHTML = procMontarTabelaTotaisFornecedor(mapa, true);
       body.innerHTML = tabelaHTML || '<p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p>';
+
+      /* So no modulo geral: clicar num fornecedor abre a lista de
+         todas as suas facturas, da mais recente a mais antiga. Reusa
+         a mesma "lista" ja carregada (sem novo fetch a Supabase). */
+      body.querySelectorAll('.proc-fornecedor-total-row').forEach(function(tr) {
+        tr.addEventListener('click', function() {
+          var norm = tr.getAttribute('data-fornecedor');
+          procMostrarModalFacturasFornecedor(norm, lista);
+        });
+      });
     }).catch(function(e) {
       var body = document.getElementById('proc-totais-fornecedor-body');
       if (body) body.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
       console.warn('[proc] erro ao carregar totais por fornecedor:', e);
     });
+  }
+
+  /* Modal aberto a partir de uma linha do modulo geral de Totais por
+     Fornecedor: lista TODAS as facturas desse fornecedor (todas as
+     sessoes, todos os anos), ordenadas cronologicamente da mais
+     recente a mais antiga. "lista" e reaproveitada do modal anterior,
+     sem novo fetch a Supabase. So leitura, nunca escreve nada. */
+  function procMostrarModalFacturasFornecedor(fornecedorNorm, lista) {
+    var old = document.getElementById('proc-facturas-fornecedor-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var itens = lista.filter(function(item) {
+      var bruto = (item.fatura.proveedor || '').trim();
+      return bruto && procNormalize(bruto) === fornecedorNorm;
+    }).slice().sort(function(a, b) {
+      return (b.ano * 10000 + b.mes * 100 + b.dia) - (a.ano * 10000 + a.mes * 100 + a.dia);
+    });
+
+    var linhasHTML = itens.length ? itens.map(function(item) {
+      var dataStr = String(item.dia).padStart(2, '0') + '/' + String(item.mes).padStart(2, '0') + '/' + item.ano;
+      var total = procCalcularTotalLinhasFatura(item.fatura);
+      var guia = (item.fatura.guiaErp || '').toString().trim();
+      return '<tr>'
+        + '<td>' + dataStr + '</td>'
+        + '<td class="center">' + (guia || '—') + '</td>'
+        + '<td class="center"><strong>' + procFormatarMoeda(total) + '</strong></td>'
+        + '</tr>';
+    }).join('') : '<tr><td colspan="3" style="text-align:center;color:#888;">Sem facturas.</td></tr>';
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-facturas-fornecedor-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:620px;width:92vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">' + fornecedorNorm + '</span>'
+      +       '<span class="proc-or-panel-title-sub">Faturas · da mais recente à mais antiga</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll">'
+      +     '<table class="proc-or-table">'
+      +       '<thead><tr><th>Data</th><th class="center">Guia ERP</th><th class="center">Total</th></tr></thead>'
+      +       '<tbody>' + linhasHTML + '</tbody>'
+      +     '</table>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
   }
 
   /* Segundo modal: mesma tabela, mas cortada pela data (mes/dia) da

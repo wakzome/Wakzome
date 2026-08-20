@@ -4706,7 +4706,7 @@
      Inclui coluna "Total" por fornecedor e linha de totais por ano no
      fundo — ambas a negrito. Devolve null se nao houver fornecedores. */
   function procMontarTabelaTotaisFornecedor(mapa) {
-    var fornecedores = Object.keys(mapa).sort(function(a, b) { return a.localeCompare(b, 'pt'); });
+    var fornecedores = Object.keys(mapa);
     if (!fornecedores.length) return null;
 
     var anosSet = {};
@@ -4714,6 +4714,20 @@
       Object.keys(mapa[f].anos).forEach(function(a) { anosSet[a] = true; });
     });
     var anos = Object.keys(anosSet).map(Number).sort(function(a, b) { return a - b; });
+
+    /* Pre-calcula o total geral de cada fornecedor para poder ordenar
+       por hierarquia de gasto (maior para menor); em empate, ordem
+       alfabetica para o resultado ficar estavel. Usado tanto pela
+       tabela de historico completo como pela de comparacao por corte,
+       ja que ambas reaproveitam esta mesma funcao. */
+    fornecedores.forEach(function(f) {
+      var t = 0;
+      anos.forEach(function(a) { t += mapa[f].anos[a] || 0; });
+      mapa[f].totalGeral = t;
+    });
+    fornecedores.sort(function(a, b) {
+      return mapa[b].totalGeral - mapa[a].totalGeral || mapa[a].display.localeCompare(mapa[b].display, 'pt');
+    });
 
     var theadHTML = '<tr><th>Fornecedor</th>'
       + anos.map(function(a) { return '<th class="center">' + a + '</th>'; }).join('')
@@ -4725,11 +4739,10 @@
 
     var tbodyHTML = fornecedores.map(function(f) {
       var linha = mapa[f];
-      var totalLinha = 0;
+      var totalLinha = linha.totalGeral;
       var cels = anos.map(function(a) {
         var v = linha.anos[a] || 0;
         totaisPorAno[a] += v;
-        totalLinha += v;
         return '<td class="center">' + (v ? procFormatarMoeda(v) : '—') + '</td>';
       }).join('');
       granTotal += totalLinha;
@@ -5064,7 +5077,7 @@
       return '<tr class="proc-artigo-row" data-ref="' + linha.display.replace(/"/g, '&quot;') + '" '
         + 'data-filtro="' + (linha.display + ' ' + (linha.desc || '')).toLowerCase().replace(/"/g, '&quot;') + '" style="cursor:pointer;">'
         + '<td>' + linha.display + '</td>'
-        + '<td>' + (linha.desc || '—') + '</td>'
+        + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + cels
         + '<td class="center"><strong>' + linha.total + '</strong></td></tr>';
     }).join('');

@@ -5133,18 +5133,30 @@
       return mapa[b].total - mapa[a].total || mapa[a].display.localeCompare(mapa[b].display, 'pt');
     });
 
+    /* Cabecalho de cada ano vira um botao clicavel: filtra a lista
+       para so mostrar referencias com pecas compradas nesse ano.
+       Clicar de novo no mesmo ano remove o filtro (ver
+       procAplicarFiltrosArtigos mais abaixo). */
     var theadHTML = '<tr><th>Referência</th><th>Descrição</th>'
-      + anos.map(function(a) { return '<th class="center" style="width:56px;padding-left:4px;padding-right:4px;">' + a + '</th>'; }).join('')
+      + anos.map(function(a) {
+          return '<th class="center" style="width:56px;padding-left:4px;padding-right:4px;">'
+            + '<button type="button" class="proc-artigos-ano-btn" data-ano="' + a + '" '
+            + 'style="background:none;border:none;padding:2px 6px;font:inherit;font-weight:700;letter-spacing:.03em;cursor:pointer;color:inherit;">'
+            + a + '</button></th>';
+        }).join('')
       + '<th class="center" style="width:70px;"><strong>Total</strong></th></tr>';
 
     var tbodyHTML = referencias.map(function(ref) {
       var linha = mapa[ref];
+      var anosComPecas = [];
       var cels = anos.map(function(a) {
         var v = linha.anos[a] || 0;
+        if (v) anosComPecas.push(a);
         return '<td class="center" style="padding-left:4px;padding-right:4px;">' + (v || '—') + '</td>';
       }).join('');
       return '<tr class="proc-artigo-row" data-ref="' + linha.display.replace(/"/g, '&quot;') + '" '
-        + 'data-filtro="' + (linha.display + ' ' + (linha.desc || '')).toLowerCase().replace(/"/g, '&quot;') + '" style="cursor:pointer;">'
+        + 'data-filtro="' + (linha.display + ' ' + (linha.desc || '')).toLowerCase().replace(/"/g, '&quot;') + '" '
+        + 'data-anos="' + anosComPecas.join(',') + '" style="cursor:pointer;">'
         + '<td>' + linha.display + '</td>'
         + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + cels
@@ -5166,16 +5178,38 @@
       });
     });
 
+    /* Filtro combinado: texto (referencia/descricao) + ano activo
+       (botao no cabecalho da coluna). Uma linha so fica visivel se
+       passar nos dois criterios ao mesmo tempo. */
+    var anoAtivo = null;
     var filtroInput = modal.querySelector('#proc-artigos-filtro');
-    if (filtroInput) {
-      filtroInput.addEventListener('input', function() {
-        var q = filtroInput.value.trim().toLowerCase();
-        body.querySelectorAll('.proc-artigo-row').forEach(function(tr) {
-          var alvo = tr.getAttribute('data-filtro') || '';
-          tr.style.display = (!q || alvo.indexOf(q) !== -1) ? '' : 'none';
-        });
+
+    function procAplicarFiltrosArtigos() {
+      var q = filtroInput ? filtroInput.value.trim().toLowerCase() : '';
+      body.querySelectorAll('.proc-artigo-row').forEach(function(tr) {
+        var alvo = tr.getAttribute('data-filtro') || '';
+        var passaTexto = !q || alvo.indexOf(q) !== -1;
+        var anosLinha = (tr.getAttribute('data-anos') || '').split(',');
+        var passaAno = anoAtivo === null || anosLinha.indexOf(String(anoAtivo)) !== -1;
+        tr.style.display = (passaTexto && passaAno) ? '' : 'none';
       });
     }
+
+    if (filtroInput) filtroInput.addEventListener('input', procAplicarFiltrosArtigos);
+
+    modal.querySelectorAll('.proc-artigos-ano-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var ano = parseInt(btn.getAttribute('data-ano'), 10);
+        anoAtivo = (anoAtivo === ano) ? null : ano;
+        modal.querySelectorAll('.proc-artigos-ano-btn').forEach(function(b) {
+          var activo = anoAtivo !== null && parseInt(b.getAttribute('data-ano'), 10) === anoAtivo;
+          b.style.background = activo ? '#222' : 'none';
+          b.style.color = activo ? '#fff' : 'inherit';
+          b.style.borderRadius = activo ? '4px' : '0';
+        });
+        procAplicarFiltrosArtigos();
+      });
+    });
   }
 
   /* ── Render session list in the start panel ── */

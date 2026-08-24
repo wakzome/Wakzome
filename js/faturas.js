@@ -5136,12 +5136,16 @@
     /* Cabecalho de cada ano vira um botao clicavel: filtra a lista
        para so mostrar referencias com pecas compradas nesse ano.
        Clicar de novo no mesmo ano remove o filtro (ver
-       procAplicarFiltrosArtigos mais abaixo). */
+       procAplicarFiltrosArtigos mais abaixo). As cores sao aplicadas
+       via setProperty(..., 'important') porque o estilo inline normal
+       pode ser sobreposto por regras !important da folha de estilos
+       do "th" — assim garante-se sempre o contraste correcto. */
     var theadHTML = '<tr><th>Referência</th><th>Descrição</th>'
       + anos.map(function(a) {
-          return '<th class="center" style="width:56px;padding-left:4px;padding-right:4px;">'
+          return '<th class="center" style="width:56px;padding-left:2px;padding-right:2px;">'
             + '<button type="button" class="proc-artigos-ano-btn" data-ano="' + a + '" '
-            + 'style="background:none;border:none;padding:2px 6px;font:inherit;font-weight:700;letter-spacing:.03em;cursor:pointer;color:inherit;">'
+            + 'style="display:inline-block;padding:3px 10px;font:inherit;font-weight:700;letter-spacing:.03em;'
+            + 'cursor:pointer;border:1px solid #ccc;border-radius:12px;background:#f2f2f2;color:#333;line-height:1.4;">'
             + a + '</button></th>';
         }).join('')
       + '<th class="center" style="width:70px;"><strong>Total</strong></th></tr>';
@@ -5197,15 +5201,30 @@
 
     if (filtroInput) filtroInput.addEventListener('input', procAplicarFiltrosArtigos);
 
+    /* setProperty(..., 'important') garante que a cor/fundo do botao
+       nunca fica sobreposta por regras !important externas do "th"
+       — inline !important tem sempre a prioridade mais alta da
+       cascata CSS, acima de qualquer !important de folha de estilos. */
+    function procPintarBotaoAno(b, activo) {
+      if (activo) {
+        b.style.setProperty('background', '#222', 'important');
+        b.style.setProperty('color', '#fff', 'important');
+        b.style.setProperty('border-color', '#222', 'important');
+      } else {
+        b.style.setProperty('background', '#f2f2f2', 'important');
+        b.style.setProperty('color', '#333', 'important');
+        b.style.setProperty('border-color', '#ccc', 'important');
+      }
+    }
+
     modal.querySelectorAll('.proc-artigos-ano-btn').forEach(function(btn) {
+      procPintarBotaoAno(btn, false);
       btn.addEventListener('click', function() {
         var ano = parseInt(btn.getAttribute('data-ano'), 10);
         anoAtivo = (anoAtivo === ano) ? null : ano;
         modal.querySelectorAll('.proc-artigos-ano-btn').forEach(function(b) {
           var activo = anoAtivo !== null && parseInt(b.getAttribute('data-ano'), 10) === anoAtivo;
-          b.style.background = activo ? '#222' : 'none';
-          b.style.color = activo ? '#fff' : 'inherit';
-          b.style.borderRadius = activo ? '4px' : '0';
+          procPintarBotaoAno(b, activo);
         });
         procAplicarFiltrosArtigos();
       });

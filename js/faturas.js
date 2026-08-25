@@ -4949,15 +4949,15 @@
                 : '<span class="proc-raio-ref-original">' + cand.proveedor + '</span>')
           + '</div>'
           + (bloco.descricao ? '<div class="proc-raio-descricao">' + bloco.descricao + '</div>' : '')
-          + '<div class="proc-raio-totais" style="color:#000 !important;font-size:1.1em !important;">'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Sess\u00f5es:</span> <span style="color:#000 !important;font-weight:700 !important;">' + bloco.numSessoes + '</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Funchal:</span> <span style="color:#000 !important;font-weight:700 !important;">' + bloco.totalA4 + '</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Porto Santo:</span> <span style="color:#000 !important;font-weight:700 !important;">' + bloco.totalA5 + '</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Total:</span> <span style="color:#000 !important;font-weight:700 !important;">' + bloco.totalGeral + '</span>'
+          + '<div class="proc-raio-totais">'
+          +   '<span>Sess\u00f5es:</span> ' + bloco.numSessoes + '&nbsp;&nbsp;'
+          +   '<span>Funchal:</span> ' + bloco.totalA4 + '&nbsp;&nbsp;'
+          +   '<span>Porto Santo:</span> ' + bloco.totalA5 + '&nbsp;&nbsp;'
+          +   '<span>Total:</span> ' + bloco.totalGeral
           +   '&nbsp;&nbsp;<span style="color:#999;">|</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4" style="color:#000 !important;font-weight:700 !important;">\u2026</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5" style="color:#000 !important;font-weight:700 !important;">\u2026</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000 !important;font-weight:700 !important;">\u2026</span></strong>'
+          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4" style="color:#000;font-size:1.05em;font-weight:700;">\u2026</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5" style="color:#000;font-size:1.05em;font-weight:700;">\u2026</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000;font-size:1.05em;">\u2026</span></strong>'
           + '</div>'
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
@@ -5807,7 +5807,7 @@
       +   '<th rowspan="2" style="vertical-align:bottom;">Referência</th>'
       +   '<th rowspan="2" style="vertical-align:bottom;">Descrição</th>'
       +   '<th colspan="' + (anos.length + 1) + '" class="center" style="border-bottom:1px solid #ddd;">Peças compradas</th>'
-      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual <button type="button" id="proc-stock-sort-btn" disabled title="A carregar stock\u2026" style="display:inline-block;margin-left:8px;padding:2px 9px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;vertical-align:middle;">\u21c5 Ordenar por Stock</button></th>'
+      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual</th>'
       + '</tr>'
       + '<tr>'
       + anos.map(function(a) {
@@ -5948,51 +5948,10 @@
         if (venda.temLojaNaoMapeada) {
           celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
         }
-        tr.setAttribute('data-stock-total', String(stockA4 + stockA5));
       });
-
-      /* Botão "⇅ Ordenar por Stock" — só fica activo depois de todas
-         as células de stock estarem preenchidas (data-stock-total já
-         calculado em cada linha). Ordena por Stock Total decrescente
-         (maior primeiro), para destacar rapidamente as referências
-         com mais peças paradas em stock. Reordena os nós <tr>
-         directamente no DOM — preserva o estado de filtro (texto/ano)
-         e os listeners de clique já ligados a cada linha. */
-      var sortBtn = modal.querySelector('#proc-stock-sort-btn');
-      if (sortBtn) {
-        var ordemOriginalStock = Array.prototype.slice.call(trEls);
-        var ordenadoPorStock = false;
-        sortBtn.disabled = false;
-        sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
-        sortBtn.style.setProperty('background', '#f2f2f2', 'important');
-        sortBtn.style.setProperty('color', '#333', 'important');
-        sortBtn.style.cursor = 'pointer';
-        sortBtn.addEventListener('click', function() {
-          var tbodyEl = body.querySelector('tbody');
-          if (!tbodyEl) return;
-          if (ordenadoPorStock) {
-            ordemOriginalStock.forEach(function(tr) { tbodyEl.appendChild(tr); });
-            sortBtn.style.setProperty('background', '#f2f2f2', 'important');
-            sortBtn.style.setProperty('color', '#333', 'important');
-            sortBtn.style.setProperty('border-color', '#ccc', 'important');
-            sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
-            ordenadoPorStock = false;
-            return;
-          }
-          var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-artigo-row'));
-          linhasTbody.sort(function(a, b) {
-            return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
-          });
-          linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
-          sortBtn.style.setProperty('background', '#222', 'important');
-          sortBtn.style.setProperty('color', '#fff', 'important');
-          sortBtn.style.setProperty('border-color', '#222', 'important');
-          sortBtn.title = 'Clicar para voltar à ordem original';
-          ordenadoPorStock = true;
-        });
-      }
     });
   }
+
   /* ── Render session list in the start panel ── */
   function procRenderStartPanel() {
     var list = document.getElementById('proc-start-sessions-list');

@@ -4962,6 +4962,11 @@
             return;
           }
           var venda = stockMapa[refTexto] || { vendidoA4: 0, vendidoA5: 0, temLojaNaoMapeada: false };
+          if (venda.erro) {
+            celA4.textContent = celA5.textContent = celTotal.textContent = '\u26a0';
+            celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase. Tenta recarregar.';
+            return;
+          }
           var stockA4 = bloco.totalA4 - venda.vendidoA4;
           var stockA5 = bloco.totalA5 - venda.vendidoA5;
           celA4.textContent = stockA4;
@@ -5095,23 +5100,49 @@
      para o browser. callback(null) sinaliza falha (distinto de
      callback({}) que significa "sem vendas ainda"), para a UI poder
      distinguir erro de stock zero. */
+  /* O PostgREST do Supabase limita por omissão qualquer resposta a
+     1000 linhas (o mesmo limite que já tinha aparecido no resumo de
+     vendas por ano) — um fornecedor com mais de 1000 referências
+     distintas (ex.: AMORADO tem 1105) fazia a função devolver tudo
+     correctamente, mas a resposta chegava cortada ao browser, e as
+     referências que ficassem de fora do corte apareciam com stock
+     igual ao comprado (0 vendido), como se nunca tivessem sido
+     vendidas. Corrigido dividindo o pedido em lotes bem abaixo desse
+     limite — cada lote é um pedido HTTP independente, os resultados
+     são fundidos num único mapa antes do callback. */
   function procCalcularStockLote(pares, callback) {
     if (!pares || !pares.length) { callback({}); return; }
-    procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: pares }) })
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(rows) {
-        if (!rows) { callback(null); return; }
-        var mapa = {};
-        rows.forEach(function(row) {
-          mapa[row.referencia] = {
-            vendidoA4: Number(row.vendido_a4) || 0,
-            vendidoA5: Number(row.vendido_a5) || 0,
-            temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
-          };
+    var TAMANHO_LOTE = 400;
+    var lotes = [];
+    for (var i = 0; i < pares.length; i += TAMANHO_LOTE) {
+      lotes.push(pares.slice(i, i + TAMANHO_LOTE));
+    }
+    var mapaFinal = {};
+    var pendentes = lotes.length;
+    lotes.forEach(function(lote) {
+      procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: lote }) })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(rows) {
+          if (rows) {
+            rows.forEach(function(row) {
+              mapaFinal[row.referencia] = {
+                vendidoA4: Number(row.vendido_a4) || 0,
+                vendidoA5: Number(row.vendido_a5) || 0,
+                temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
+              };
+            });
+          } else {
+            lote.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
+          }
+        })
+        .catch(function() {
+          lote.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
+        })
+        .then(function() {
+          pendentes--;
+          if (pendentes === 0) callback(mapaFinal);
         });
-        callback(mapa);
-      })
-      .catch(function() { callback(null); });
+    });
   }
 
   /* Carrega TODAS as sessoes de proc_sessoes uma unica vez e devolve
@@ -5748,6 +5779,11 @@
           return;
         }
         var venda = stockMapa[ref] || { vendidoA4: 0, vendidoA5: 0, temLojaNaoMapeada: false };
+        if (venda.erro) {
+          celA4.textContent = '⚠'; celA5.textContent = '⚠'; celTotal.textContent = '⚠';
+          celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase (ref=' + ref + '). Tenta recarregar.';
+          return;
+        }
         var stockA4 = compras.comprasA4 - venda.vendidoA4;
         var stockA5 = compras.comprasA5 - venda.vendidoA5;
         celA4.textContent = stockA4;

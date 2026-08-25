@@ -715,6 +715,291 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     IMPORTADOR DE VENDAS (PRIMAVERA) → vendas_primavera
+     Le o Excel exportado do Primavera (colunas: Utilizador, Artigo,
+     Descricao, Quantidade, V.Liquido, V.Bruto, Valor IVA, Descontos,
+     Custo, Margem, Perc.Margem, Data, Hora Venda) e grava-o, fiel,
+     linha a linha, em vendas_primavera. Nunca resume nem descarta
+     nenhuma coluna. Deduplicacao SEMPRE por dia inteiro (nunca linha
+     a linha, dado o volume — 100k+ linhas por ano) contra a tabela de
+     controlo vendas_primavera_dias: se um dia ja existir, e ignorado
+     por inteiro; caso contrario, insere-se em blocos. Serve tanto
+     para a carga historica inicial (um ficheiro por ano) como para as
+     cargas semanais futuras — o mesmo mecanismo, sem distincao.
+     Mapeamento de armazem (Utilizador → A4/A5), usado mais tarde pelo
+     calculo de stock (nao por este importador):
+       A4 (Funchal):     Mezka.funchal, Mezka.funchal1
+       A5 (Porto Santo):  Mezka.PS, Shana, Maxx, Mezka.Avenida,
+                          Duarte, pri
+     Qualquer "Utilizador" fora desta lista NUNCA deve ser atribuido
+     a um armazem por omissao — fica por rever, avisado explicitamente
+     no relatorio do calculo de stock (a construir a seguir). Este
+     importador em si nao faz essa atribuicao — so grava os dados tal
+     como vem do Excel. */
+
+  /* "Data" (celula Date do SheetJS) → "YYYY-MM-DD" com getters LOCAIS,
+     nunca toISOString()/getUTC* — mesma regra critica de fuso horario
+     ja aplicada ao importador de compras. */
+  function procDataVendaLocalISO(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  /* "Hora Venda" vem como texto tipo "Jan  2 2023  4:07PM" (sem
+     segundos, por vezes com espacos duplicados). Em vez de confiar no
+     parser de datas livres do proprio motor JS (inconsistente entre
+     navegadores), extrai-se a hora/minuto/AM-PM por regex e combina-se
+     com a data já correcta (local) da própria linha. Devolve null se
+     não conseguir interpretar — nunca bloqueia a linha, hora_venda_texto
+     fica sempre gravado tal qual, com ou sem data_hora calculada. */
+  function procParseHoraVendaPrimavera(dataBase, horaTexto) {
+    if (!horaTexto) return null;
+    var m = String(horaTexto).match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
+    if (!m) return null;
+    var h = parseInt(m[1], 10);
+    var min = parseInt(m[2], 10);
+    var ap = m[3].toUpperCase();
+    if (ap === 'PM' && h !== 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    var dh = new Date(dataBase.getFullYear(), dataBase.getMonth(), dataBase.getDate(), h, min, 0);
+    if (isNaN(dh.getTime())) return null;
+    return dh.toISOString();
+  }
+
+  function procNumOuNullVenda(v) {
+    if (v === null || v === undefined || v === '') return null;
+    var n = Number(v);
+    return isNaN(n) ? null : n;
+  }
+
+  /* Mapeia uma linha bruta do Excel (array por indice de coluna) para
+     o formato de gravacao em vendas_primavera. Devolve null se faltar
+     loja, referencia ou data valida (linha descartada, nunca inventada). */
+  function procMapearLinhaVendaPrimavera(row) {
+    var loja = row[0] != null ? String(row[0]).trim() : '';
+    var referencia = row[1] != null ? String(row[1]).trim() : '';
+    var dataCell = row[11];
+    var d = (dataCell instanceof Date) ? dataCell : null;
+    if (!loja || !referencia || !d || isNaN(d.getTime())) return null;
+
+    var dataISO = procDataVendaLocalISO(d);
+    var horaTexto = row[12] != null ? String(row[12]).trim() : '';
+    var dataHoraISO = procParseHoraVendaPrimavera(d, horaTexto);
+
+    return {
+      dia: dataISO,
+      payload: {
+        loja: loja,
+        referencia: referencia,
+        descricao: row[2] != null ? String(row[2]) : null,
+        quantidade: procNumOuNullVenda(row[3]) || 0,
+        valor_liquido: procNumOuNullVenda(row[4]),
+        valor_bruto: procNumOuNullVenda(row[5]),
+        valor_iva: procNumOuNullVenda(row[6]),
+        descontos: procNumOuNullVenda(row[7]),
+        custo: procNumOuNullVenda(row[8]),
+        margem: procNumOuNullVenda(row[9]),
+        perc_margem: procNumOuNullVenda(row[10]),
+        data: dataISO,
+        hora_venda_texto: horaTexto || null,
+        data_hora: dataHoraISO
+      }
+    };
+  }
+
+  /* Le a folha inteira e agrupa as linhas por dia (chave "YYYY-MM-DD").
+     Nunca ordena nem filtra por armazem — isso e feito mais tarde, no
+     calculo de stock, nao aqui. */
+  function procAgruparVendasPrimavera(arrayBuffer) {
+    var wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+    var diasMap = {};
+    var totalLinhas = 0, linhasIgnoradas = 0;
+
+    for (var r = 1; r < linhas.length; r++) {
+      var row = linhas[r] || [];
+      if (!row.length) continue;
+      var mapeada = procMapearLinhaVendaPrimavera(row);
+      if (!mapeada) { linhasIgnoradas++; continue; }
+      if (!diasMap[mapeada.dia]) diasMap[mapeada.dia] = [];
+      diasMap[mapeada.dia].push(mapeada.payload);
+      totalLinhas++;
+    }
+
+    return {
+      diasMap: diasMap,
+      totalLinhas: totalLinhas,
+      linhasIgnoradas: linhasIgnoradas,
+      totalDias: Object.keys(diasMap).length
+    };
+  }
+
+  /* Insere as linhas de UM dia em blocos sequenciais (nunca em
+     paralelo, para nao sobrecarregar o Supabase com ficheiros de
+     100k+ linhas) e so no fim marca o dia como importado na tabela
+     de controlo. Se falhar a meio, o dia fica por marcar — por isso
+     uma nova tentativa mais tarde volta a inserir esse dia inteiro,
+     nunca fica "meio importado" de forma invisivel. */
+  function procInserirDiaVendas(dia, linhasPayload, log, cb) {
+    var TAMANHO_LOTE = 2000;
+    var pos = 0;
+
+    function proximoLote() {
+      if (pos >= linhasPayload.length) {
+        procSbFetch('vendas_primavera_dias', {
+          method: 'POST',
+          headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+          body: JSON.stringify([{ data: dia, linhas: linhasPayload.length }])
+        }).then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          cb(true);
+        }).catch(function(e) {
+          log('⚠ ' + dia + ': erro ao marcar dia como importado — ' + (e && e.message ? e.message : e));
+          cb(false);
+        });
+        return;
+      }
+      var lote = linhasPayload.slice(pos, pos + TAMANHO_LOTE);
+      pos += TAMANHO_LOTE;
+      procSbFetch('vendas_primavera', {
+        method: 'POST',
+        headers: Object.assign(procSbHeaders(), { 'Prefer': 'return=minimal' }),
+        body: JSON.stringify(lote)
+      }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        proximoLote();
+      }).catch(function(e) {
+        log('⚠ ' + dia + ': erro ao inserir linhas — ' + (e && e.message ? e.message : e));
+        cb(false);
+      });
+    }
+    proximoLote();
+  }
+
+  /* Motor de importacao: consulta UMA vez quais os dias ja existentes
+     (tabela de controlo, pequena, consulta rapida mesmo com anos de
+     historico acumulado), e depois processa os dias do ficheiro em
+     ordem cronologica, sequencialmente, saltando os que ja existem. */
+  function procImportarVendasPrimavera(diasMap, log, onDone) {
+    var diasChaves = Object.keys(diasMap).sort();
+    if (!diasChaves.length) { log('Nenhuma linha válida encontrada.'); onDone(); return; }
+
+    procSbFetch('vendas_primavera_dias?select=data', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(existentes) {
+        var jaImportados = {};
+        (existentes || []).forEach(function(row) { jaImportados[row.data] = true; });
+
+        var idx = 0;
+        function proximoDia() {
+          if (idx >= diasChaves.length) { onDone(); return; }
+          var dia = diasChaves[idx++];
+          if (jaImportados[dia]) {
+            log('— ' + dia + ' já importado, ignorado.');
+            proximoDia();
+            return;
+          }
+          var linhasPayload = diasMap[dia];
+          procInserirDiaVendas(dia, linhasPayload, log, function(ok) {
+            if (ok) log('✓ ' + dia + ' — ' + linhasPayload.length + ' linha(s) importada(s).');
+            proximoDia();
+          });
+        }
+        proximoDia();
+      })
+      .catch(function(e) {
+        log('⚠ Erro ao consultar dias já importados: ' + (e && e.message ? e.message : e));
+        onDone();
+      });
+  }
+
+  function procMostrarModalImportadorVendas() {
+    var old = document.getElementById('proc-import-vendas-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-import-vendas-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:560px;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Importar Vendas (Primavera)</span>'
+      +       '<span class="proc-or-panel-title-sub">Deduplicado por dia — nunca duplica</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-panel-scroll" style="padding:20px;">'
+      +     '<p style="font-size:.8rem;color:#555;line-height:1.5;margin:0 0 14px;">Cada dia do ficheiro é comparado com o que já está em Supabase — se o dia já existir, é ignorado por inteiro. Nada existente é alterado ou apagado.</p>'
+      +     '<input type="file" id="proc-import-vendas-file" accept=".xlsx" style="font-size:.8rem;">'
+      +     '<div style="margin-top:14px;">'
+      +       '<button class="proc-btn primary" id="proc-import-vendas-start-btn" disabled>Iniciar importação</button>'
+      +     '</div>'
+      +     '<div id="proc-import-vendas-log" style="display:none;font-family:monospace;font-size:.7rem;white-space:pre-wrap;max-height:320px;overflow-y:auto;background:#f7f7f7;border-radius:8px;padding:10px;margin-top:14px;"></div>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    var fileInput = document.getElementById('proc-import-vendas-file');
+    var startBtn  = document.getElementById('proc-import-vendas-start-btn');
+    var logEl     = document.getElementById('proc-import-vendas-log');
+    var arquivoSelecionado = null;
+
+    fileInput.addEventListener('change', function() {
+      arquivoSelecionado = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+      startBtn.disabled = !arquivoSelecionado;
+    });
+
+    function log(msg) {
+      logEl.style.display = 'block';
+      logEl.textContent += (logEl.textContent ? '\n' : '') + msg;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    startBtn.addEventListener('click', function() {
+      if (!arquivoSelecionado) return;
+      startBtn.disabled = true;
+      fileInput.disabled = true;
+      log('A carregar ficheiro…');
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        procCarregarSheetJS().then(function() {
+          log('A processar Excel…');
+          var resultado;
+          try {
+            resultado = procAgruparVendasPrimavera(e.target.result);
+          } catch (err) {
+            log('⚠ Erro ao processar o Excel: ' + (err && err.message ? err.message : err));
+            return;
+          }
+          if (resultado.linhasIgnoradas) log('⚠ ' + resultado.linhasIgnoradas + ' linha(s) ignorada(s) por falta de loja/referência/data válida.');
+          log(resultado.totalDias + ' dia(s) encontrados · ' + resultado.totalLinhas + ' linha(s). A comparar com o Supabase e a importar…');
+          procImportarVendasPrimavera(resultado.diasMap, log, function() {
+            log('✓ Concluído.');
+          });
+        }).catch(function() {
+          log('⚠ Não foi possível carregar a biblioteca de leitura de Excel.');
+        });
+      };
+      reader.onerror = function() { log('⚠ Erro ao ler o ficheiro.'); };
+      reader.readAsArrayBuffer(arquivoSelecionado);
+    });
+  }
+
+  function procAbrirImportadorVendas() {
+    var senha = window.prompt('Esta ação requer a senha de administrador:');
+    if (senha === null) return;
+    procValidarAdmin(senha).then(function(ok) {
+      if (!ok) { window.alert('Senha incorrecta.'); return; }
+      procMostrarModalImportadorVendas();
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      IMPORTACAO AUTOMATICA DE FACTURAS TAM (tam_sessions → proc_sessoes)
      Corre sozinha, sem botao, sempre que a aplicacao inicia. So traz
      facturas de TAM que ja tenham numero de guia ERP preenchido (ou
@@ -4074,6 +4359,7 @@
       +       '</div>'
       +       '<div style="text-align:right;margin:2px 2px 10px;">'
       +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar hist\u00f3rico (Excel)</button>'
+      +         '<button type="button" id="proc-import-vendas-btn" onclick="procAbrirImportadorVendas()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar Vendas (Primavera)</button>'
       +         '<button type="button" id="proc-totais-fornecedor-btn" onclick="procMostrarModalTotaisPorFornecedor()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Totais por Fornecedor</button>'
       +         '<button type="button" id="proc-artigos-fornecedor-btn" onclick="procMostrarModalFornecedoresArtigos()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Artigos por Fornecedor</button>'
       +       '</div>'
@@ -6980,6 +7266,7 @@
   window.procGuiaIncludeChange   = procGuiaIncludeChange;
   window.procFecharRadiografiaEAbrirSessao = procFecharRadiografiaEAbrirSessao;
   window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
+  window.procAbrirImportadorVendas = procAbrirImportadorVendas;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
   window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
 

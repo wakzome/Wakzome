@@ -914,6 +914,49 @@
       });
   }
 
+  /* Consulta so a tabela de controlo vendas_primavera_dias (uma linha
+     por dia, muito mais leve que a tabela principal) e agrega por ano
+     — total de linhas, quantos dias distintos e o primeiro/ultimo dia
+     cobertos. Serve para verificar rapidamente se uma importacao ficou
+     completa, sem ter de tocar na tabela grande de vendas. */
+  function procVerResumoVendasPorAno(container) {
+    container.innerHTML = '<p style="font-size:.8rem;color:#888;">A consultar…</p>';
+    procSbFetch('vendas_primavera_dias?select=data,linhas&order=data.asc', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        if (!rows || !rows.length) {
+          container.innerHTML = '<p style="font-size:.8rem;color:#888;">Ainda não há nada importado.</p>';
+          return;
+        }
+        var porAno = {}; /* ano → { linhas, dias, min, max } */
+        rows.forEach(function(row) {
+          var ano = String(row.data).slice(0, 4);
+          if (!porAno[ano]) porAno[ano] = { linhas: 0, dias: 0, min: row.data, max: row.data };
+          porAno[ano].linhas += row.linhas || 0;
+          porAno[ano].dias += 1;
+          if (row.data < porAno[ano].min) porAno[ano].min = row.data;
+          if (row.data > porAno[ano].max) porAno[ano].max = row.data;
+        });
+        var anos = Object.keys(porAno).sort();
+        function ddmmaaaa(iso) { return iso.split('-').reverse().join('/'); }
+        var linhasHTML = anos.map(function(a) {
+          var v = porAno[a];
+          return '<tr><td>' + a + '</td>'
+            + '<td class="center">' + v.linhas.toLocaleString('pt-PT') + '</td>'
+            + '<td class="center">' + v.dias + '</td>'
+            + '<td class="center">' + ddmmaaaa(v.min) + '</td>'
+            + '<td class="center">' + ddmmaaaa(v.max) + '</td></tr>';
+        }).join('');
+        container.innerHTML = '<table class="proc-or-table">'
+          + '<thead><tr><th>Ano</th><th class="center">Linhas</th><th class="center">Dias</th><th class="center">Primeiro dia</th><th class="center">Último dia</th></tr></thead>'
+          + '<tbody>' + linhasHTML + '</tbody>'
+          + '</table>';
+      })
+      .catch(function(e) {
+        container.innerHTML = '<p style="font-size:.8rem;color:#c00;">Erro ao consultar: ' + (e && e.message ? e.message : e) + '</p>';
+      });
+  }
+
   function procMostrarModalImportadorVendas() {
     var old = document.getElementById('proc-import-vendas-modal');
     if (old && old.parentNode) old.parentNode.removeChild(old);
@@ -933,6 +976,10 @@
       +   '</div>'
       +   '<div class="proc-or-panel-scroll" style="padding:20px;">'
       +     '<p style="font-size:.8rem;color:#555;line-height:1.5;margin:0 0 14px;">Cada dia do ficheiro é comparado com o que já está em Supabase — se o dia já existir, é ignorado por inteiro. Nada existente é alterado ou apagado.</p>'
+      +     '<div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid #eee;">'
+      +       '<button type="button" class="proc-btn" id="proc-vendas-resumo-btn">Ver resumo por ano</button>'
+      +       '<div id="proc-vendas-resumo-body" style="margin-top:12px;"></div>'
+      +     '</div>'
       +     '<input type="file" id="proc-import-vendas-file" accept=".xlsx" style="font-size:.8rem;">'
       +     '<div style="margin-top:14px;">'
       +       '<button class="proc-btn primary" id="proc-import-vendas-start-btn" disabled>Iniciar importação</button>'
@@ -943,6 +990,10 @@
 
     procOpenModal(modal);
     procBindClose(modal);
+
+    var resumoBtn  = document.getElementById('proc-vendas-resumo-btn');
+    var resumoBody = document.getElementById('proc-vendas-resumo-body');
+    if (resumoBtn) resumoBtn.addEventListener('click', function() { procVerResumoVendasPorAno(resumoBody); });
 
     var fileInput = document.getElementById('proc-import-vendas-file');
     var startBtn  = document.getElementById('proc-import-vendas-start-btn');

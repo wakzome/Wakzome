@@ -4949,15 +4949,15 @@
                 : '<span class="proc-raio-ref-original">' + cand.proveedor + '</span>')
           + '</div>'
           + (bloco.descricao ? '<div class="proc-raio-descricao">' + bloco.descricao + '</div>' : '')
-          + '<div class="proc-raio-totais">'
-          +   '<span>Sess\u00f5es:</span> ' + bloco.numSessoes + '&nbsp;&nbsp;'
-          +   '<span>Funchal:</span> ' + bloco.totalA4 + '&nbsp;&nbsp;'
-          +   '<span>Porto Santo:</span> ' + bloco.totalA5 + '&nbsp;&nbsp;'
-          +   '<span>Total:</span> ' + bloco.totalGeral
+          + '<div class="proc-raio-totais" style="color:#000 !important;font-size:1.15em !important;">'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Sess\u00f5es:</span> <span style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">' + bloco.numSessoes + '</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Funchal:</span> <span style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">' + bloco.totalA4 + '</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Porto Santo:</span> <span style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">' + bloco.totalA5 + '</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Total:</span> <span style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">' + bloco.totalGeral + '</span>'
           +   '&nbsp;&nbsp;<span style="color:#999;">|</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4" style="color:#000;font-size:1.05em;font-weight:700;">\u2026</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5" style="color:#000;font-size:1.05em;font-weight:700;">\u2026</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000;font-size:1.05em;">\u2026</span></strong>'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4" style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">\u2026</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5" style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">\u2026</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000 !important;font-size:1.15em !important;font-weight:600 !important;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000 !important;font-size:1.15em !important;font-weight:700 !important;">\u2026</span></strong>'
           + '</div>'
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
@@ -5960,6 +5960,8 @@
          e os listeners de clique já ligados a cada linha. */
       var sortBtn = modal.querySelector('#proc-stock-sort-btn');
       if (sortBtn) {
+        var ordemOriginalStock = Array.prototype.slice.call(trEls);
+        var ordenadoPorStock = false;
         sortBtn.disabled = false;
         sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
         sortBtn.style.setProperty('background', '#f2f2f2', 'important');
@@ -5968,6 +5970,15 @@
         sortBtn.addEventListener('click', function() {
           var tbodyEl = body.querySelector('tbody');
           if (!tbodyEl) return;
+          if (ordenadoPorStock) {
+            ordemOriginalStock.forEach(function(tr) { tbodyEl.appendChild(tr); });
+            sortBtn.style.setProperty('background', '#f2f2f2', 'important');
+            sortBtn.style.setProperty('color', '#333', 'important');
+            sortBtn.style.setProperty('border-color', '#ccc', 'important');
+            sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
+            ordenadoPorStock = false;
+            return;
+          }
           var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-artigo-row'));
           linhasTbody.sort(function(a, b) {
             return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
@@ -5976,6 +5987,8 @@
           sortBtn.style.setProperty('background', '#222', 'important');
           sortBtn.style.setProperty('color', '#fff', 'important');
           sortBtn.style.setProperty('border-color', '#222', 'important');
+          sortBtn.title = 'Clicar para voltar à ordem original';
+          ordenadoPorStock = true;
         });
       }
     });

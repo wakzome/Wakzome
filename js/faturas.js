@@ -914,41 +914,80 @@
       });
   }
 
-  /* Consulta so a tabela de controlo vendas_primavera_dias (uma linha
-     por dia, muito mais leve que a tabela principal) e agrega por ano
-     — total de linhas, quantos dias distintos e o primeiro/ultimo dia
-     cobertos. Serve para verificar rapidamente se uma importacao ficou
-     completa, sem ter de tocar na tabela grande de vendas. */
+  /* Busca todas as paginas de um endpoint PostgREST, contornando o
+     limite por omissao de 1000 linhas por pedido — sem isto, qualquer
+     tabela com mais de 1000 linhas fica silenciosamente cortada. */
+  function procFetchTodasPaginas(pathBase) {
+    var TAMANHO_PAGINA = 1000;
+    var tudo = [];
+    function proximaPagina(offset) {
+      var sep = pathBase.indexOf('?') === -1 ? '?' : '&';
+      return procSbFetch(pathBase + sep + 'limit=' + TAMANHO_PAGINA + '&offset=' + offset, { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(pagina) {
+          tudo = tudo.concat(pagina || []);
+          if (!pagina || pagina.length < TAMANHO_PAGINA) return tudo;
+          return proximaPagina(offset + TAMANHO_PAGINA);
+        });
+    }
+    return proximaPagina(0);
+  }
+
+  /* Consulta a tabela de controlo vendas_primavera_dias (paginada, para
+     nao ficar sujeita ao limite de 1000 linhas do PostgREST) para obter
+     dias cobertos e intervalo de datas por ano, e em paralelo chama a
+     funcao resumo_vendas_por_ano() (agregacao feita no Postgres) para
+     obter o total de peças e o total líquido por ano a partir da tabela
+     grande de vendas, sem transferir centenas de milhares de linhas
+     para o browser. Serve para verificar rapidamente se uma importação
+     ficou completa. */
   function procVerResumoVendasPorAno(container) {
     container.innerHTML = '<p style="font-size:.8rem;color:#888;">A consultar…</p>';
-    procSbFetch('vendas_primavera_dias?select=data,linhas&order=data.asc', { method: 'GET' })
-      .then(function(r) { return r.ok ? r.json() : []; })
-      .then(function(rows) {
-        if (!rows || !rows.length) {
+    Promise.all([
+      procFetchTodasPaginas('vendas_primavera_dias?select=data&order=data.asc'),
+      procSbFetch('rpc/resumo_vendas_por_ano', { method: 'POST', body: JSON.stringify({}) })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; })
+    ]).then(function(res) {
+        var diasRows = res[0] || [];
+        var rpcRows  = res[1];
+        if (!diasRows.length) {
           container.innerHTML = '<p style="font-size:.8rem;color:#888;">Ainda não há nada importado.</p>';
           return;
         }
-        var porAno = {}; /* ano → { linhas, dias, min, max } */
-        rows.forEach(function(row) {
+        var porAno = {}; /* ano → { dias, min, max, pecas, liquido } */
+        diasRows.forEach(function(row) {
           var ano = String(row.data).slice(0, 4);
-          if (!porAno[ano]) porAno[ano] = { linhas: 0, dias: 0, min: row.data, max: row.data };
-          porAno[ano].linhas += row.linhas || 0;
+          if (!porAno[ano]) porAno[ano] = { dias: 0, min: row.data, max: row.data, pecas: null, liquido: null };
           porAno[ano].dias += 1;
           if (row.data < porAno[ano].min) porAno[ano].min = row.data;
           if (row.data > porAno[ano].max) porAno[ano].max = row.data;
         });
+        var rpcFalhou = !rpcRows;
+        if (rpcRows) {
+          rpcRows.forEach(function(r) {
+            var ano = String(r.ano);
+            if (!porAno[ano]) porAno[ano] = { dias: 0, min: null, max: null, pecas: null, liquido: null };
+            porAno[ano].pecas = Number(r.total_pecas) || 0;
+            porAno[ano].liquido = Number(r.total_liquido) || 0;
+          });
+        }
         var anos = Object.keys(porAno).sort();
-        function ddmmaaaa(iso) { return iso.split('-').reverse().join('/'); }
+        function ddmmaaaa(iso) { return iso ? iso.split('-').reverse().join('/') : '—'; }
         var linhasHTML = anos.map(function(a) {
           var v = porAno[a];
           return '<tr><td>' + a + '</td>'
-            + '<td class="center">' + v.linhas.toLocaleString('pt-PT') + '</td>'
+            + '<td class="center">' + (v.pecas === null ? '—' : v.pecas.toLocaleString('pt-PT')) + '</td>'
+            + '<td class="center">' + (v.liquido === null ? '—' : procFormatarMoeda(v.liquido)) + '</td>'
             + '<td class="center">' + v.dias + '</td>'
             + '<td class="center">' + ddmmaaaa(v.min) + '</td>'
             + '<td class="center">' + ddmmaaaa(v.max) + '</td></tr>';
         }).join('');
-        container.innerHTML = '<table class="proc-or-table">'
-          + '<thead><tr><th>Ano</th><th class="center">Linhas</th><th class="center">Dias</th><th class="center">Primeiro dia</th><th class="center">Último dia</th></tr></thead>'
+        container.innerHTML = (rpcFalhou
+            ? '<p style="font-size:.72rem;color:#c00;margin:0 0 8px;">⚠ Não foi possível obter Peças/Líquido (função resumo_vendas_por_ano ainda não existe em Supabase?). A mostrar apenas Dias/datas.</p>'
+            : '')
+          + '<table class="proc-or-table">'
+          + '<thead><tr><th>Ano</th><th class="center">Peças</th><th class="center">Líquido</th><th class="center">Dias</th><th class="center">Primeiro dia</th><th class="center">Último dia</th></tr></thead>'
           + '<tbody>' + linhasHTML + '</tbody>'
           + '</table>';
       })

@@ -4945,6 +4945,14 @@
         blocos.forEach(function(bloco, idxBloco) {
           var cand = bloco.candidato;
           var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
+          var cutoffA4Dbg = null, cutoffA5Dbg = null;
+          bloco.linhas.forEach(function(l) {
+            var d = procDataDeChave(l.sessionKey);
+            if (!d) return;
+            var iso = procIsoAAAAMMDD(d.ano, d.mes, d.dia);
+            if (l.a4 > 0 && (!cutoffA4Dbg || iso < cutoffA4Dbg)) cutoffA4Dbg = iso;
+            if (l.a5 > 0 && (!cutoffA5Dbg || iso < cutoffA5Dbg)) cutoffA5Dbg = iso;
+          });
           var celA4 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a4"]');
           var celA5 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a5"]');
           var celTotal = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="total"]');
@@ -4959,6 +4967,12 @@
           celA4.textContent = stockA4;
           celA5.textContent = stockA5;
           celTotal.textContent = (stockA4 + stockA5) + (venda.temLojaNaoMapeada ? ' \u26a0' : '');
+          var infoDebugRadio = 'ref="' + refTexto + '" | corte A4=' + (cutoffA4Dbg || 'sem compra A4')
+            + ' \u00b7 corte A5=' + (cutoffA5Dbg || 'sem compra A5')
+            + ' | compras A4=' + bloco.totalA4 + ' A5=' + bloco.totalA5
+            + ' | vendido A4=' + venda.vendidoA4 + ' A5=' + venda.vendidoA5
+            + (venda.temLojaNaoMapeada ? ' | tem loja n\u00e3o mapeada' : '');
+          celA4.title = celA5.title = celTotal.title = infoDebugRadio;
         });
       });
     }
@@ -5730,7 +5744,7 @@
         if (!celA4 || !celA5 || !celTotal) return;
         if (!stockMapa) {
           celA4.textContent = '⚠'; celA5.textContent = '⚠'; celTotal.textContent = '⚠';
-          celA4.title = celA5.title = celTotal.title = 'Erro ao calcular o stock.';
+          celA4.title = celA5.title = celTotal.title = 'Erro ao calcular o stock (ref=' + ref + ').';
           return;
         }
         var venda = stockMapa[ref] || { vendidoA4: 0, vendidoA5: 0, temLojaNaoMapeada: false };
@@ -5739,9 +5753,17 @@
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
         celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
-        if (venda.temLojaNaoMapeada) {
-          celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
-        }
+        /* Diagnostico temporario: mostra em tooltip exactamente o que
+           foi enviado (referencia + datas de corte) e o que voltou do
+           Supabase (pecas vendidas por armazem), para se poder
+           confirmar de imediato se o problema esta nos dados enviados
+           ou na resposta recebida, sem precisar da consola do browser. */
+        var infoDebug = 'ref="' + ref + '" | corte A4=' + (compras.cutoffA4 || 'sem compra A4')
+          + ' · corte A5=' + (compras.cutoffA5 || 'sem compra A5')
+          + ' | compras A4=' + compras.comprasA4 + ' A5=' + compras.comprasA5
+          + ' | vendido A4=' + venda.vendidoA4 + ' A5=' + venda.vendidoA5
+          + (venda.temLojaNaoMapeada ? ' | tem loja não mapeada' : '');
+        celA4.title = celA5.title = celTotal.title = infoDebug;
       });
     });
   }

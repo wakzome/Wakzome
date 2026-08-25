@@ -5807,7 +5807,7 @@
       +   '<th rowspan="2" style="vertical-align:bottom;">Referência</th>'
       +   '<th rowspan="2" style="vertical-align:bottom;">Descrição</th>'
       +   '<th colspan="' + (anos.length + 1) + '" class="center" style="border-bottom:1px solid #ddd;">Peças compradas</th>'
-      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual</th>'
+      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual <button type="button" id="proc-stock-sort-btn" disabled title="A carregar stock\u2026" style="display:inline-block;margin-left:8px;padding:2px 9px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;vertical-align:middle;">\u21c5 Ordenar por Stock</button></th>'
       + '</tr>'
       + '<tr>'
       + anos.map(function(a) {
@@ -5934,24 +5934,40 @@
           celA4.textContent = '⚠'; celA5.textContent = '⚠'; celTotal.textContent = '⚠';
           celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase (ref=' + ref + '). Tenta recarregar.';
           return;
-        }
-        var stockA4 = compras.comprasA4 - venda.vendidoA4;
-        var stockA5 = compras.comprasA5 - venda.vendidoA5;
-        celA4.textContent = stockA4;
-        celA5.textContent = stockA5;
-        var detalheTextoA5 = procFormatarDetalheA5(venda.detalheA5);
-        if (detalheTextoA5) {
-          celA5.title = detalheTextoA5;
-          celA5.style.cursor = 'help';
-        }
-        celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
-        if (venda.temLojaNaoMapeada) {
           celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
         }
+        tr.setAttribute('data-stock-total', String(stockA4 + stockA5));
       });
+
+      /* Botão "⇅ Ordenar por Stock" — só fica activo depois de todas
+         as células de stock estarem preenchidas (data-stock-total já
+         calculado em cada linha). Ordena por Stock Total decrescente
+         (maior primeiro), para destacar rapidamente as referências
+         com mais peças paradas em stock. Reordena os nós <tr>
+         directamente no DOM — preserva o estado de filtro (texto/ano)
+         e os listeners de clique já ligados a cada linha. */
+      var sortBtn = modal.querySelector('#proc-stock-sort-btn');
+      if (sortBtn) {
+        sortBtn.disabled = false;
+        sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
+        sortBtn.style.setProperty('background', '#f2f2f2', 'important');
+        sortBtn.style.setProperty('color', '#333', 'important');
+        sortBtn.style.cursor = 'pointer';
+        sortBtn.addEventListener('click', function() {
+          var tbodyEl = body.querySelector('tbody');
+          if (!tbodyEl) return;
+          var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-artigo-row'));
+          linhasTbody.sort(function(a, b) {
+            return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
+          });
+          linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
+          sortBtn.style.setProperty('background', '#222', 'important');
+          sortBtn.style.setProperty('color', '#fff', 'important');
+          sortBtn.style.setProperty('border-color', '#222', 'important');
+        });
+      }
     });
   }
-
   /* ── Render session list in the start panel ── */
   function procRenderStartPanel() {
     var list = document.getElementById('proc-start-sessions-list');

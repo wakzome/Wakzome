@@ -4849,7 +4849,7 @@
     if (!blocos.length) {
       corpoHTML = '<div class="proc-raio-vazio">Nenhuma refer\u00eancia encontrada.</div>';
     } else {
-      corpoHTML = blocos.map(function(bloco) {
+      corpoHTML = blocos.map(function(bloco, idxBloco) {
         var cand = bloco.candidato;
         var nomeCat = mapaCategorias[cand.categoria] || cand.categoria;
         var linhasHTML = bloco.linhas.length
@@ -4884,6 +4884,10 @@
           +   '<span>Funchal:</span> ' + bloco.totalA4 + '&nbsp;&nbsp;'
           +   '<span>Porto Santo:</span> ' + bloco.totalA5 + '&nbsp;&nbsp;'
           +   '<span>Total:</span> ' + bloco.totalGeral
+          +   '&nbsp;&nbsp;<span style="color:#999;">|</span>&nbsp;&nbsp;'
+          +   '<span>Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4">\u2026</span>&nbsp;&nbsp;'
+          +   '<span>Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5">\u2026</span>&nbsp;&nbsp;'
+          +   '<span>Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total">\u2026</span></strong>'
           + '</div>'
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
@@ -4917,6 +4921,47 @@
     procOpenModal(modal);
     procBindClose(modal);
     procLigarVoltar(modal, aoVoltar);
+
+    /* Stock actual por bloco (A4/A5/Total) = pecas compradas ate hoje
+       menos as vendidas desde a primeira compra em cada armazem —
+       um unico pedido em lote ao Supabase para todos os blocos deste
+       modal. Preenche os placeholders "\u2026" depois do modal ja estar
+       visivel, para nao atrasar a abertura. */
+    if (blocos.length) {
+      var paresStockRadio = blocos.map(function(bloco) {
+        var cand = bloco.candidato;
+        var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
+        var cutoffA4 = null, cutoffA5 = null;
+        bloco.linhas.forEach(function(l) {
+          var d = procDataDeChave(l.sessionKey);
+          if (!d) return;
+          var iso = procIsoAAAAMMDD(d.ano, d.mes, d.dia);
+          if (l.a4 > 0 && (!cutoffA4 || iso < cutoffA4)) cutoffA4 = iso;
+          if (l.a5 > 0 && (!cutoffA5 || iso < cutoffA5)) cutoffA5 = iso;
+        });
+        return { referencia: refTexto, cutoff_a4: cutoffA4, cutoff_a5: cutoffA5 };
+      });
+      procCalcularStockLote(paresStockRadio, function(stockMapa) {
+        blocos.forEach(function(bloco, idxBloco) {
+          var cand = bloco.candidato;
+          var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
+          var celA4 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a4"]');
+          var celA5 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a5"]');
+          var celTotal = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="total"]');
+          if (!celA4 || !celA5 || !celTotal) return;
+          if (!stockMapa) {
+            celA4.textContent = celA5.textContent = celTotal.textContent = '\u26a0';
+            return;
+          }
+          var venda = stockMapa[refTexto] || { vendidoA4: 0, vendidoA5: 0, temLojaNaoMapeada: false };
+          var stockA4 = bloco.totalA4 - venda.vendidoA4;
+          var stockA5 = bloco.totalA5 - venda.vendidoA5;
+          celA4.textContent = stockA4;
+          celA5.textContent = stockA5;
+          celTotal.textContent = (stockA4 + stockA5) + (venda.temLojaNaoMapeada ? ' \u26a0' : '');
+        });
+      });
+    }
   }
 
   /* Clicar numa linha do historico fecha o modal (e qualquer popover de
@@ -5019,6 +5064,43 @@
     return { ano: parseInt(m[1], 10), mes: parseInt(m[2], 10), dia: parseInt(m[3], 10) };
   }
 
+  /* 'YYYY-MM-DD' a partir de ano/mes/dia numericos — usado para
+     construir as datas de corte enviadas ao calculo de stock. */
+  function procIsoAAAAMMDD(ano, mes, dia) {
+    var mm = (mes < 10 ? '0' : '') + mes;
+    var dd = (dia < 10 ? '0' : '') + dia;
+    return ano + '-' + mm + '-' + dd;
+  }
+
+  /* Chama a funcao stock_por_referencias(jsonb) no Supabase para um
+     lote de referencias de uma so vez — cada par indica a referencia
+     e a data de corte propria de cada armazem (primeira compra nesse
+     armazem). O calculo real (soma de vendas por loja mapeada para
+     A4/A5, filtrada pela data de corte) e feito inteiramente no
+     Postgres, evitando transferir linhas da tabela grande de vendas
+     para o browser. callback(null) sinaliza falha (distinto de
+     callback({}) que significa "sem vendas ainda"), para a UI poder
+     distinguir erro de stock zero. */
+  function procCalcularStockLote(pares, callback) {
+    if (!pares || !pares.length) { callback({}); return; }
+    procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: pares }) })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(rows) {
+        if (!rows) { callback(null); return; }
+        var mapa = {};
+        rows.forEach(function(row) {
+          mapa[row.referencia] = {
+            vendidoA4: Number(row.vendido_a4) || 0,
+            vendidoA5: Number(row.vendido_a5) || 0,
+            temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
+          };
+        });
+        callback(mapa);
+      })
+      .catch(function() { callback(null); });
+  }
+
+  /* Carrega TODAS as sessoes de proc_sessoes uma unica vez e devolve
   /* Carrega TODAS as sessoes de proc_sessoes uma unica vez e devolve
      uma lista plana { ano, mes, dia, fatura } — uma entrada por
      factura, com a data completa da sua sessao. Serve de base tanto
@@ -5470,18 +5552,24 @@
     var body = document.getElementById('proc-artigos-fornecedor-body');
     if (!body) return;
 
-    var mapa = {}; /* ref → { display, desc, anos:{ano:pecas} } */
+    var mapa = {}; /* ref → { display, desc, anos:{ano:pecas}, comprasA4, comprasA5, cutoffA4, cutoffA5 } */
     lista.forEach(function(item) {
       var bruto = (item.fatura.proveedor || '').trim();
       if (!bruto || procNormalize(bruto) !== fornecedorNorm) return;
       (item.fatura.rows || []).forEach(function(r) {
         var ref = (r.ref || '').trim();
         if (!ref) return;
-        var pecas = r.qtdFt || ((r.a4 || 0) + (r.a5 || 0));
+        var a4v = r.a4 || 0, a5v = r.a5 || 0;
+        var pecas = r.qtdFt || (a4v + a5v);
         if (!pecas) return;
-        if (!mapa[ref]) mapa[ref] = { display: ref, desc: '', anos: {} };
+        if (!mapa[ref]) mapa[ref] = { display: ref, desc: '', anos: {}, comprasA4: 0, comprasA5: 0, cutoffA4: null, cutoffA5: null };
         if (!mapa[ref].desc && r.desc) mapa[ref].desc = r.desc;
         mapa[ref].anos[item.ano] = (mapa[ref].anos[item.ano] || 0) + pecas;
+        mapa[ref].comprasA4 += a4v;
+        mapa[ref].comprasA5 += a5v;
+        var isoData = procIsoAAAAMMDD(item.ano, item.mes, item.dia);
+        if (a4v > 0 && (!mapa[ref].cutoffA4 || isoData < mapa[ref].cutoffA4)) mapa[ref].cutoffA4 = isoData;
+        if (a5v > 0 && (!mapa[ref].cutoffA5 || isoData < mapa[ref].cutoffA5)) mapa[ref].cutoffA5 = isoData;
       });
     });
 
@@ -5515,8 +5603,17 @@
        procAplicarFiltrosArtigos mais abaixo). As cores sao aplicadas
        via setProperty(..., 'important') porque o estilo inline normal
        pode ser sobreposto por regras !important da folha de estilos
-       do "th" — assim garante-se sempre o contraste correcto. */
-    var theadHTML = '<tr><th>Referência</th><th>Descrição</th>'
+       do "th" — assim garante-se sempre o contraste correcto.
+       O cabecalho ganhou uma segunda linha de grupo ("Peças compradas"
+       / "Stock atual") para nao confundir o Total de compras historico
+       com o Total de stock actual, que sao coisas diferentes. */
+    var theadHTML = '<tr>'
+      +   '<th rowspan="2" style="vertical-align:bottom;">Referência</th>'
+      +   '<th rowspan="2" style="vertical-align:bottom;">Descrição</th>'
+      +   '<th colspan="' + (anos.length + 1) + '" class="center" style="border-bottom:1px solid #ddd;">Peças compradas</th>'
+      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual</th>'
+      + '</tr>'
+      + '<tr>'
       + anos.map(function(a) {
           return '<th class="center" style="width:56px;padding-left:2px;padding-right:2px;">'
             + '<button type="button" class="proc-artigos-ano-btn" data-ano="' + a + '" '
@@ -5524,7 +5621,11 @@
             + 'cursor:pointer;border:1px solid #ccc;border-radius:12px;background:#f2f2f2;color:#333;line-height:1.4;">'
             + a + '</button></th>';
         }).join('')
-      + '<th class="center" style="width:70px;"><strong>Total</strong></th></tr>';
+      +   '<th class="center" style="width:70px;"><strong>Total</strong></th>'
+      +   '<th class="center" style="width:56px;">A4</th>'
+      +   '<th class="center" style="width:56px;">A5</th>'
+      +   '<th class="center" style="width:70px;"><strong>Total</strong></th>'
+      + '</tr>';
 
     var tbodyHTML = referencias.map(function(ref) {
       var linha = mapa[ref];
@@ -5540,7 +5641,10 @@
         + '<td>' + linha.display + '</td>'
         + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + cels
-        + '<td class="center"><strong>' + linha.total + '</strong></td></tr>';
+        + '<td class="center"><strong>' + linha.total + '</strong></td>'
+        + '<td class="center proc-stock-a4">…</td>'
+        + '<td class="center proc-stock-a5">…</td>'
+        + '<td class="center proc-stock-total">…</td></tr>';
     }).join('');
 
     body.innerHTML = '<table class="proc-or-table">'
@@ -5603,6 +5707,41 @@
           procPintarBotaoAno(b, activo);
         });
         procAplicarFiltrosArtigos();
+      });
+    });
+
+    /* Stock actual (A4/A5/Total) = pecas compradas ate hoje menos as
+       vendidas desde a primeira compra em cada armazem — calculado
+       num unico pedido em lote ao Supabase (RPC stock_por_referencias)
+       para nao bater no limite de tempo com uma chamada por
+       referencia. Preenche as celulas placeholder "…" depois da
+       tabela ja estar visivel, para nao atrasar a abertura do modal. */
+    var paresStock = referencias.map(function(ref) {
+      return { referencia: ref, cutoff_a4: mapa[ref].cutoffA4, cutoff_a5: mapa[ref].cutoffA5 };
+    });
+    procCalcularStockLote(paresStock, function(stockMapa) {
+      var trEls = body.querySelectorAll('.proc-artigo-row');
+      trEls.forEach(function(tr, i) {
+        var ref = referencias[i];
+        var compras = mapa[ref];
+        var celA4 = tr.querySelector('.proc-stock-a4');
+        var celA5 = tr.querySelector('.proc-stock-a5');
+        var celTotal = tr.querySelector('.proc-stock-total');
+        if (!celA4 || !celA5 || !celTotal) return;
+        if (!stockMapa) {
+          celA4.textContent = '⚠'; celA5.textContent = '⚠'; celTotal.textContent = '⚠';
+          celA4.title = celA5.title = celTotal.title = 'Erro ao calcular o stock.';
+          return;
+        }
+        var venda = stockMapa[ref] || { vendidoA4: 0, vendidoA5: 0, temLojaNaoMapeada: false };
+        var stockA4 = compras.comprasA4 - venda.vendidoA4;
+        var stockA5 = compras.comprasA5 - venda.vendidoA5;
+        celA4.textContent = stockA4;
+        celA5.textContent = stockA5;
+        celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
+        if (venda.temLojaNaoMapeada) {
+          celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
+        }
       });
     });
   }

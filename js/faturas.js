@@ -5214,10 +5214,10 @@
      calculo (essa continua a viver inteiramente no RPC, agrupada por
      loja normalizada em minusculas). */
   var LOJAS_A5_LABEL = {
-    'mezka.ps': 'Mezka.PS',
+    'mezka.ps': 'Mezka Mercado',
     'shana': 'Shana',
     'maxx': 'Maxx',
-    'mezka.avenida': 'Mezka.Avenida',
+    'mezka.avenida': 'Mezka Avenida',
     'duarte': 'Duarte',
     'pri': 'Pri'
   };
@@ -5226,15 +5226,20 @@
      partir do "detalheA5" devolvido pelo RPC stock_por_referencias —
      um array [{ loja, qty }, ...] ja filtrado pelo mesmo corte+folga
      usado no calculo do stock A5, ordenado da loja com mais vendas
-     para a de menos. Devolve null quando nao ha nada para mostrar. */
+     para a de menos. Devolve null quando nao ha nada para mostrar.
+     A chave e normalizada (lower/trim) antes do lookup em
+     LOJAS_A5_LABEL, para nunca mostrar o codigo interno em bruto por
+     causa de uma diferenca de capitalizacao vinda do RPC. */
   function procFormatarDetalheA5(detalhe) {
     if (!detalhe || !detalhe.length) return null;
     var linhas = detalhe.slice().sort(function(a, b) { return (b.qty || 0) - (a.qty || 0); }).map(function(d) {
-      var nome = LOJAS_A5_LABEL[d.loja] || d.loja;
+      var chave = String(d.loja || '').toLowerCase().trim();
+      var nome = LOJAS_A5_LABEL[chave] || d.loja;
       return nome + ': ' + (d.qty || 0);
     });
     return 'Vendido em (Porto Santo):\n' + linhas.join('\n');
   }
+
 
   /* Chama a funcao stock_por_referencias(jsonb) no Supabase para um
      lote de referencias de uma so vez — cada par indica a referencia

@@ -5934,6 +5934,18 @@
           celA4.textContent = '⚠'; celA5.textContent = '⚠'; celTotal.textContent = '⚠';
           celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase (ref=' + ref + '). Tenta recarregar.';
           return;
+        }
+        var stockA4 = compras.comprasA4 - venda.vendidoA4;
+        var stockA5 = compras.comprasA5 - venda.vendidoA5;
+        celA4.textContent = stockA4;
+        celA5.textContent = stockA5;
+        var detalheTextoA5 = procFormatarDetalheA5(venda.detalheA5);
+        if (detalheTextoA5) {
+          celA5.title = detalheTextoA5;
+          celA5.style.cursor = 'help';
+        }
+        celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
+        if (venda.temLojaNaoMapeada) {
           celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
         }
         tr.setAttribute('data-stock-total', String(stockA4 + stockA5));

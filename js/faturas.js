@@ -4928,7 +4928,7 @@
                 + '<td class="center">' + l.label + '</td>'
                 + '<td class="center">' + l.a4 + '</td>'
                 + '<td class="center">' + l.a5 + '</td>'
-                + '<td class="center" style="font-weight:700">' + l.total + '</td>'
+                + '<td class="center" style="font-weight:700;font-size:1.15em;color:#000;">' + l.total + '</td>'
                 + '<td class="center">' + (l.precoCusto ? l.precoCusto.toFixed(2) : '\u2014') + '</td>'
                 + '<td class="center">' + (l.pvp != null ? l.pvp.toFixed(2) : '\u2014') + '</td>'
                 + '<td class="center">' + (l.margem != null ? l.margem.toFixed(1) + '%' : '\u2014') + '</td>'
@@ -4941,7 +4941,7 @@
         return '<div class="proc-raio-bloco">'
           + '<div class="proc-raio-bloco-header">'
           +   '<div>'
-          +     '<span class="proc-raio-ref-nova">' + refNovaLabel + '</span> '
+          +     '<span class="proc-raio-ref-nova proc-raio-ref-copiar" style="cursor:pointer;" title="Clicar para copiar">' + refNovaLabel + '</span> '
           +     '<span class="proc-raio-categoria">' + nomeCat + '</span>'
           +   '</div>'
           +   (cand.referencia_interna
@@ -4955,13 +4955,13 @@
           +   '<span>Porto Santo:</span> ' + bloco.totalA5 + '&nbsp;&nbsp;'
           +   '<span>Total:</span> ' + bloco.totalGeral
           +   '&nbsp;&nbsp;<span style="color:#999;">|</span>&nbsp;&nbsp;'
-          +   '<span>Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4">\u2026</span>&nbsp;&nbsp;'
-          +   '<span>Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5">\u2026</span>&nbsp;&nbsp;'
-          +   '<span>Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total">\u2026</span></strong>'
+          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4" style="color:#000;font-size:1.05em;font-weight:700;">\u2026</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5" style="color:#000;font-size:1.05em;font-weight:700;">\u2026</span>&nbsp;&nbsp;'
+          +   '<span style="color:#000;font-size:1.05em;font-weight:600;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000;font-size:1.05em;">\u2026</span></strong>'
           + '</div>'
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
-          +     '<th class="center">Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center">Total</th>'
+          +     '<th class="center">Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center" style="font-size:1.15em;font-weight:700;color:#000;">Total</th>'
           +     '<th class="center">P. Custo</th><th class="center">PVP</th><th class="center">Margem</th>'
           +   '</tr></thead>'
           +   '<tbody>' + linhasHTML + '</tbody>'
@@ -4991,6 +4991,38 @@
     procOpenModal(modal);
     procBindClose(modal);
     procLigarVoltar(modal, aoVoltar);
+
+
+    /* Clicar na referencia (canto superior de cada bloco) copia-a para
+       a area de transferencia — evita ter de seleccionar o texto
+       manualmente. Feedback visual breve (fundo verde claro + title
+       "copiado!") em vez de qualquer alert/popup. */
+    modal.querySelectorAll('.proc-raio-ref-copiar').forEach(function(span) {
+      span.addEventListener('click', function() {
+        var texto = span.textContent.trim();
+        if (!texto) return;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(texto);
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = texto;
+            ta.className = 'proc-clipboard-hack';
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+          }
+        } catch (ex) {}
+        var origTitle = span.getAttribute('title');
+        var origBg = span.style.backgroundColor;
+        span.title = '✓ copiado!';
+        span.style.backgroundColor = '#dff5e1';
+        clearTimeout(span._procCopyT);
+        span._procCopyT = setTimeout(function() {
+          span.title = origTitle || '';
+          span.style.backgroundColor = origBg || '';
+        }, 900);
+      });
+    });
 
     /* Stock actual por bloco (A4/A5/Total) = pecas compradas ate hoje
        menos as vendidas desde a primeira compra em cada armazem —
@@ -5033,9 +5065,14 @@
           var stockA5 = bloco.totalA5 - venda.vendidoA5;
           celA4.textContent = stockA4;
           celA5.textContent = stockA5;
+          var detalheTextoA5Radio = procFormatarDetalheA5(venda.detalheA5);
+          if (detalheTextoA5Radio) {
+            celA5.title = detalheTextoA5Radio;
+            celA5.style.cursor = 'help';
+          }
           celTotal.textContent = (stockA4 + stockA5) + (venda.temLojaNaoMapeada ? ' \u26a0' : '');
           if (venda.temLojaNaoMapeada) {
-            celA4.title = celA5.title = celTotal.title = 'H\u00e1 vendas desta refer\u00eancia num posto de venda n\u00e3o mapeado para A4/A5 \u2014 n\u00e3o entraram neste c\u00e1lculo.';
+            celTotal.title = 'H\u00e1 vendas desta refer\u00eancia num posto de venda n\u00e3o mapeado para A4/A5 \u2014 n\u00e3o entraram neste c\u00e1lculo.';
           }
         });
       });
@@ -5171,6 +5208,34 @@
 
   var FOLGA_CORTE_DIAS = 28;
 
+  /* Nomes amigaveis dos "postos de venda" que compoem o armazem A5
+     (Porto Santo) — usados so para mostrar ao utilizador no tooltip
+     de "quais lojas venderam esta referencia", nunca para logica de
+     calculo (essa continua a viver inteiramente no RPC, agrupada por
+     loja normalizada em minusculas). */
+  var LOJAS_A5_LABEL = {
+    'mezka.ps': 'Mezka.PS',
+    'shana': 'Shana',
+    'maxx': 'Maxx',
+    'mezka.avenida': 'Mezka.Avenida',
+    'duarte': 'Duarte',
+    'pri': 'Pri'
+  };
+
+  /* Constroi o texto do tooltip (title nativo, uma loja por linha) a
+     partir do "detalheA5" devolvido pelo RPC stock_por_referencias —
+     um array [{ loja, qty }, ...] ja filtrado pelo mesmo corte+folga
+     usado no calculo do stock A5, ordenado da loja com mais vendas
+     para a de menos. Devolve null quando nao ha nada para mostrar. */
+  function procFormatarDetalheA5(detalhe) {
+    if (!detalhe || !detalhe.length) return null;
+    var linhas = detalhe.slice().sort(function(a, b) { return (b.qty || 0) - (a.qty || 0); }).map(function(d) {
+      var nome = LOJAS_A5_LABEL[d.loja] || d.loja;
+      return nome + ': ' + (d.qty || 0);
+    });
+    return 'Vendido em (Porto Santo):\n' + linhas.join('\n');
+  }
+
   /* Chama a funcao stock_por_referencias(jsonb) no Supabase para um
      lote de referencias de uma so vez — cada par indica a referencia
      e a data de corte propria de cada armazem (primeira compra nesse
@@ -5208,6 +5273,7 @@
               mapaFinal[row.referencia] = {
                 vendidoA4: Number(row.vendido_a4) || 0,
                 vendidoA5: Number(row.vendido_a5) || 0,
+                detalheA5: row.detalhe_a5 || [],
                 temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
               };
             });
@@ -5868,6 +5934,11 @@
         var stockA5 = compras.comprasA5 - venda.vendidoA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
+        var detalheTextoA5 = procFormatarDetalheA5(venda.detalheA5);
+        if (detalheTextoA5) {
+          celA5.title = detalheTextoA5;
+          celA5.style.cursor = 'help';
+        }
         celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
         if (venda.temLojaNaoMapeada) {
           celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';

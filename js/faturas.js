@@ -29,6 +29,34 @@
 
   var _usaNomenclaturaPorFatura = {};
 
+  /* Correcao manual da data real de uma factura, para o caso raro em
+     que ela chegou fisicamente numa data mas so foi lancada no
+     Primavera semanas depois (sem a data de lancamento ser corrigida
+     la). Guardado por fid: { data: 'DD/MM/AAAA', movida: bool,
+     sessaoDestino, movidaEm } — "movida" fica permanentemente
+     marcado depois da factura ser realmente deslocada para a sessao
+     da semana correcta, ao fechar a sessao (ver procCloseActiveSession
+     e procMoverFacturaParaSemanaCorrigida). */
+  var _procDataCorrigidaPorFatura = {};
+
+  /* Estilo inline do botao de correcao de data no modal "Ingresso de
+     Stock", conforme o estado actual (nunca tocado / correcao
+     pendente / ja movida) — usado tanto na primeira renderizacao como
+     depois de o utilizador gravar uma correcao, para o botao mudar de
+     aspecto na hora sem ter de reabrir o modal. */
+  function procEstiloBotaoDataCorrigida(corr) {
+    var base = 'display:inline-block;margin-left:6px;width:20px;height:20px;line-height:18px;text-align:center;border-radius:50%;font-size:.8rem;cursor:pointer;font-weight:700;';
+    if (corr && corr.movida) return base + 'border:1px solid #9B4D4D;background:#F5EAEA;color:#9B4D4D;';
+    if (corr && corr.data)   return base + 'border:1px solid #C9A227;background:#FBF3D9;color:#8a6d1a;';
+    return base + 'border:1px solid #ccc;background:#fff;color:#999;';
+  }
+
+  function procTituloBotaoDataCorrigida(corr) {
+    if (corr && corr.movida) return 'Factura movida para a semana de ' + corr.data + ' (' + (corr.sessaoDestino || '') + ').';
+    if (corr && corr.data)   return 'Data corrigida pendente: ' + corr.data + ' (será movida ao fechar a sessão).';
+    return 'Corrigir a data real desta factura.';
+  }
+
   /* Estado EFECTIVO (nao o guardado) — usar isto sempre que se quer
      saber se a referencia interna esta activa AGORA para uma factura,
      em vez de ler _usaNomenclaturaPorFatura directamente. */
@@ -1919,6 +1947,7 @@
           transpApplied: transpApplied,
           guiaInclude:   guiaInclude,
           usaNomenclatura: _usaNomenclaturaPorFatura.hasOwnProperty(fid) ? _usaNomenclaturaPorFatura[fid] : true,
+          dataCorrigida: _procDataCorrigidaPorFatura.hasOwnProperty(fid) ? _procDataCorrigidaPorFatura[fid] : null,
           rows: rows
         };
       })
@@ -2401,6 +2430,7 @@
       /* Nova nomenclatura: por defeito activo, excepto se esta factura
          especifica ja tinha sido guardada com o toggle desligado. */
       _usaNomenclaturaPorFatura[fid] = (data.usaNomenclatura !== false);
+      _procDataCorrigidaPorFatura[fid] = data.dataCorrigida || null;
       /* Restore guia ERP — if present, always collapse on load */
       if (data.guiaErp) {
         var gEl = document.getElementById('proc-guia-erp-' + fid);
@@ -4253,6 +4283,8 @@
 
       var COLS = ['Refer\u00eancia','ARM','IVA','\u20ac','Qtd.'];
 
+      var corrAtual = _procDataCorrigidaPorFatura[fid] || null;
+
       var modal = document.createElement('div');
       modal.className = 'proc-or-modal';
       modal.innerHTML =
@@ -4262,6 +4294,7 @@
         +     '<div class="proc-or-panel-title">'
         +       '<span class="proc-or-panel-title-main">' + proveedor + '</span>'
         +       '<span class="proc-or-panel-title-sub">Ingresso de Stock \u00b7 ERP</span>'
+        +       '<span class="proc-stock-corrigir-data-btn" id="proc-stock-corrigir-data-btn" title="' + procTituloBotaoDataCorrigida(corrAtual).replace(/"/g,'&quot;') + '" style="' + procEstiloBotaoDataCorrigida(corrAtual) + '">\u2731</span>'
         +     '</div>'
         +     '<div class="proc-or-panel-header-btns">'
         +       '<label class="proc-stock-iva-label">IVA&nbsp;%</label>'
@@ -4298,6 +4331,43 @@
       });
       ivaInput.addEventListener('focus', function() { ivaInput.style.borderColor='#000'; });
       ivaInput.addEventListener('blur',  function() { ivaInput.style.borderColor='#ccc'; });
+
+      /* Bot\u00e3o \u2731 \u2014 corrigir manualmente a data real desta factura.
+         window.prompt() em vez de procFloatModal porque este ultimo
+         remove o body do DOM antes de invocar o callback do botao,
+         o que impossibilitaria ler um <input> colocado la dentro. */
+      var corrBtn = modal.querySelector('#proc-stock-corrigir-data-btn');
+      if (corrBtn) {
+        corrBtn.addEventListener('click', function() {
+          var atual = _procDataCorrigidaPorFatura[fid] || null;
+          var sugestao = atual && atual.data ? atual.data : '';
+          var resp = window.prompt('Data real desta factura (DD/MM/AAAA):', sugestao);
+          if (resp === null) return;
+          resp = resp.trim();
+          if (!resp) {
+            delete _procDataCorrigidaPorFatura[fid];
+            corrBtn.setAttribute('style', procEstiloBotaoDataCorrigida(null));
+            corrBtn.setAttribute('title', procTituloBotaoDataCorrigida(null));
+            procSaveSession(true);
+            return;
+          }
+          if (!/^\d{2}\/\d{2}\/\d{4}$/.test(resp)) {
+            window.alert('Formato inv\u00e1lido. Use DD/MM/AAAA.');
+            return;
+          }
+          var partes = resp.split('/');
+          var dia = parseInt(partes[0], 10), mes = parseInt(partes[1], 10), ano = parseInt(partes[2], 10);
+          var dataObj = new Date(ano, mes - 1, dia);
+          if (dataObj.getFullYear() !== ano || (dataObj.getMonth() + 1) !== mes || dataObj.getDate() !== dia) {
+            window.alert('Data inv\u00e1lida.');
+            return;
+          }
+          _procDataCorrigidaPorFatura[fid] = { data: resp, movida: false, sessaoDestino: null, movidaEm: null };
+          corrBtn.setAttribute('style', procEstiloBotaoDataCorrigida(_procDataCorrigidaPorFatura[fid]));
+          corrBtn.setAttribute('title', procTituloBotaoDataCorrigida(_procDataCorrigidaPorFatura[fid]));
+          procSaveSession(true);
+        });
+      }
 
       procBindClose(modal);
       procBindCopyBar(modal, COLS, function(ci) {
@@ -4939,20 +5009,12 @@
           if (l.a4 > 0 && (!cutoffA4 || iso < cutoffA4)) cutoffA4 = iso;
           if (l.a5 > 0 && (!cutoffA5 || iso < cutoffA5)) cutoffA5 = iso;
         });
-        return { referencia: refTexto, cutoff_a4: cutoffA4, cutoff_a5: cutoffA5 };
+        return { referencia: refTexto, cutoff_a4: procSubtrairDiasIso(cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(cutoffA5, FOLGA_CORTE_DIAS) };
       });
       procCalcularStockLote(paresStockRadio, function(stockMapa) {
         blocos.forEach(function(bloco, idxBloco) {
           var cand = bloco.candidato;
           var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
-          var cutoffA4Dbg = null, cutoffA5Dbg = null;
-          bloco.linhas.forEach(function(l) {
-            var d = procDataDeChave(l.sessionKey);
-            if (!d) return;
-            var iso = procIsoAAAAMMDD(d.ano, d.mes, d.dia);
-            if (l.a4 > 0 && (!cutoffA4Dbg || iso < cutoffA4Dbg)) cutoffA4Dbg = iso;
-            if (l.a5 > 0 && (!cutoffA5Dbg || iso < cutoffA5Dbg)) cutoffA5Dbg = iso;
-          });
           var celA4 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a4"]');
           var celA5 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a5"]');
           var celTotal = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="total"]');
@@ -4972,12 +5034,9 @@
           celA4.textContent = stockA4;
           celA5.textContent = stockA5;
           celTotal.textContent = (stockA4 + stockA5) + (venda.temLojaNaoMapeada ? ' \u26a0' : '');
-          var infoDebugRadio = 'ref="' + refTexto + '" | corte A4=' + (cutoffA4Dbg || 'sem compra A4')
-            + ' \u00b7 corte A5=' + (cutoffA5Dbg || 'sem compra A5')
-            + ' | compras A4=' + bloco.totalA4 + ' A5=' + bloco.totalA5
-            + ' | vendido A4=' + venda.vendidoA4 + ' A5=' + venda.vendidoA5
-            + (venda.temLojaNaoMapeada ? ' | tem loja n\u00e3o mapeada' : '');
-          celA4.title = celA5.title = celTotal.title = infoDebugRadio;
+          if (venda.temLojaNaoMapeada) {
+            celA4.title = celA5.title = celTotal.title = 'H\u00e1 vendas desta refer\u00eancia num posto de venda n\u00e3o mapeado para A4/A5 \u2014 n\u00e3o entraram neste c\u00e1lculo.';
+          }
         });
       });
     }
@@ -5090,6 +5149,27 @@
     var dd = (dia < 10 ? '0' : '') + dia;
     return ano + '-' + mm + '-' + dd;
   }
+
+  /* Subtrai N dias a uma data 'YYYY-MM-DD', devolvendo outra data no
+     mesmo formato. Ancorado ao meio-dia UTC e lido de volta com os
+     mesmos metodos UTC (nunca locais) para a aritmetica de datas
+     nunca ser afectada por fuso horario ou DST. Usado para dar uma
+     folga de tolerancia (FOLGA_CORTE_DIAS) ao corte de stock: por
+     vezes a factura chega fisicamente numa data mas so e' lancada no
+     Primavera semanas depois, sem que a data de lancamento seja
+     corrigida — esta folga evita descartar por engano vendas que na
+     realidade ja pertencem a essa compra. */
+  function procSubtrairDiasIso(iso, dias) {
+    if (!iso) return iso;
+    var partes = iso.split('-');
+    var d = new Date(Date.UTC(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10), 12, 0, 0));
+    d.setUTCDate(d.getUTCDate() - dias);
+    var mm = (d.getUTCMonth() + 1 < 10 ? '0' : '') + (d.getUTCMonth() + 1);
+    var dd = (d.getUTCDate() < 10 ? '0' : '') + d.getUTCDate();
+    return d.getUTCFullYear() + '-' + mm + '-' + dd;
+  }
+
+  var FOLGA_CORTE_DIAS = 28;
 
   /* Chama a funcao stock_por_referencias(jsonb) no Supabase para um
      lote de referencias de uma so vez — cada par indica a referencia
@@ -5762,7 +5842,7 @@
        referencia. Preenche as celulas placeholder "…" depois da
        tabela ja estar visivel, para nao atrasar a abertura do modal. */
     var paresStock = referencias.map(function(ref) {
-      return { referencia: ref, cutoff_a4: mapa[ref].cutoffA4, cutoff_a5: mapa[ref].cutoffA5 };
+      return { referencia: ref, cutoff_a4: procSubtrairDiasIso(mapa[ref].cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(mapa[ref].cutoffA5, FOLGA_CORTE_DIAS) };
     });
     procCalcularStockLote(paresStock, function(stockMapa) {
       var trEls = body.querySelectorAll('.proc-artigo-row');
@@ -5789,17 +5869,9 @@
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
         celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
-        /* Diagnostico temporario: mostra em tooltip exactamente o que
-           foi enviado (referencia + datas de corte) e o que voltou do
-           Supabase (pecas vendidas por armazem), para se poder
-           confirmar de imediato se o problema esta nos dados enviados
-           ou na resposta recebida, sem precisar da consola do browser. */
-        var infoDebug = 'ref="' + ref + '" | corte A4=' + (compras.cutoffA4 || 'sem compra A4')
-          + ' · corte A5=' + (compras.cutoffA5 || 'sem compra A5')
-          + ' | compras A4=' + compras.comprasA4 + ' A5=' + compras.comprasA5
-          + ' | vendido A4=' + venda.vendidoA4 + ' A5=' + venda.vendidoA5
-          + (venda.temLojaNaoMapeada ? ' | tem loja não mapeada' : '');
-        celA4.title = celA5.title = celTotal.title = infoDebug;
+        if (venda.temLojaNaoMapeada) {
+          celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
+        }
       });
     });
   }
@@ -5977,7 +6049,65 @@
     procLoadRemoteKeys(procRenderStartPanel);
   }
 
-  /* ── 16b. CLOSE / RESET SESSION ── */
+  /* Ao fechar uma sess\u00e3o com facturas cuja data foi corrigida
+     manualmente (ver _procDataCorrigidaPorFatura / procShowStockModal),
+     move cada uma delas para a sess\u00e3o semanal correcta (segunda-feira
+     da data corrigida), criando essa sess\u00e3o se ainda n\u00e3o existir.
+     Sequencial (n\u00e3o paralelo) para nunca haver duas escritas
+     concorrentes na mesma sess\u00e3o de destino quando duas facturas
+     corrigidas caem na mesma semana. A sess\u00e3o de origem fica apenas
+     com as facturas \u201cmantidas\u201d (payloadCompleto.faturas menos as
+     pendentes); se n\u00e3o sobrar nenhuma, a sess\u00e3o de origem \u00e9 apagada. */
+  function procResolverFecharComFacturasCorrigidas(keyAtual, payloadCompleto, pendentes, onDone) {
+    var mantidas = payloadCompleto.faturas.filter(function(f) {
+      return pendentes.indexOf(f) === -1;
+    });
+
+    function moverProxima(idx) {
+      if (idx >= pendentes.length) { if (onDone) onDone(); return; }
+      var fatura  = pendentes[idx];
+      var segunda = procDataParfoisParaSegunda(fatura.dataCorrigida.data);
+      if (!segunda) { moverProxima(idx + 1); return; }
+      var targetKey = SESSION_PREFIX + procIsoAAAAMMDD(segunda.getFullYear(), segunda.getMonth() + 1, segunda.getDate());
+      var agoraIso  = new Date().toISOString();
+      var faturaMovida = Object.assign({}, fatura, {
+        dataCorrigida: { data: fatura.dataCorrigida.data, movida: true, sessaoDestino: targetKey, movidaEm: agoraIso }
+      });
+      procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(targetKey) + '&select=dados', { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(rows) {
+          var payloadDestino;
+          if (rows && rows.length && rows[0].dados) {
+            try { payloadDestino = JSON.parse(rows[0].dados); } catch (e) { payloadDestino = null; }
+          }
+          if (!payloadDestino) payloadDestino = { savedAt: agoraIso, sentRefs: {}, faturas: [] };
+          if (!payloadDestino.faturas) payloadDestino.faturas = [];
+          payloadDestino.faturas.push(faturaMovida);
+          payloadDestino.savedAt = new Date().toISOString();
+          return procSbFetch('proc_sessoes', {
+            method: 'POST',
+            headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+            body: JSON.stringify({ session_key: targetKey, dados: JSON.stringify(payloadDestino), updated_at: payloadDestino.savedAt })
+          });
+        })
+        .then(function() { moverProxima(idx + 1); })
+        .catch(function() { moverProxima(idx + 1); });
+    }
+
+    if (mantidas.length) {
+      var payloadMantidas = { savedAt: new Date().toISOString(), sentRefs: payloadCompleto.sentRefs || {}, faturas: mantidas };
+      procSbFetch('proc_sessoes', {
+        method: 'POST',
+        headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify({ session_key: keyAtual, dados: JSON.stringify(payloadMantidas), updated_at: payloadMantidas.savedAt })
+      }).then(function() { moverProxima(0); }).catch(function() { moverProxima(0); });
+    } else {
+      procSbFetch('proc_sessoes?session_key=eq.' + encodeURIComponent(keyAtual), { method: 'DELETE' })
+        .then(function() { moverProxima(0); }).catch(function() { moverProxima(0); });
+    }
+  }
+
+  /* \u2500\u2500 16b. CLOSE / RESET SESSION \u2500\u2500 */
   function procCloseActiveSession() {
     procFloatModal({
       label: 'Fechar sess\u00e3o',
@@ -5988,23 +6118,41 @@
           label: '\ud83d\udcbe Guardar e fechar',
           style: 'background:#F5EAEA;border:1px solid #e8c5c5;color:#9B4D4D;font-weight:700;',
           cb: function() {
-            if (_isSynced) procSaveSession(true);
-            procLockRelease();
-            setTimeout(function() {
-              _isSynced = false;
-              _activeSessionKey = null;
-              _procInited = false;
-              faturaCount   = 0;
-              activeFaturas = [];
-              Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-              _procSentRefs = {};
-              var cont = document.getElementById('proc-faturasContainer');
-              if (cont) cont.innerHTML = '';
-              var saveBtn = document.getElementById('proc-saveBtn');
-              if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
-              procSetSyncStatus('ok', 'sess\u00e3o fechada');
-              procShowStartArea();
-            }, 400);
+            var payloadAtual = _isSynced ? procBuildSavePayload() : null;
+            var pendentes = [];
+            if (payloadAtual) {
+              pendentes = payloadAtual.faturas.filter(function(f) {
+                return f.dataCorrigida && f.dataCorrigida.data && !f.dataCorrigida.movida;
+              });
+            }
+
+            function finalizarFecho() {
+              procLockRelease();
+              setTimeout(function() {
+                _isSynced = false;
+                _activeSessionKey = null;
+                _procInited = false;
+                faturaCount   = 0;
+                activeFaturas = [];
+                Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+                _procSentRefs = {};
+                var cont = document.getElementById('proc-faturasContainer');
+                if (cont) cont.innerHTML = '';
+                var saveBtn = document.getElementById('proc-saveBtn');
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
+                procSetSyncStatus('ok', 'sess\u00e3o fechada');
+                procShowStartArea();
+              }, 400);
+            }
+
+            if (_isSynced && payloadAtual && pendentes.length) {
+              var keyAtual = _activeSessionKey || getSessionKey();
+              procSetSyncStatus('syncing', 'a mover factura(s) corrigida(s)\u2026');
+              procResolverFecharComFacturasCorrigidas(keyAtual, payloadAtual, pendentes, finalizarFecho);
+            } else {
+              if (_isSynced) procSaveSession(true);
+              finalizarFecho();
+            }
           }
         },
         { label: 'Cancelar', style: 'background:#fff;border:1px solid #9DB6C9;color:#000;', cb: null }

@@ -1162,15 +1162,19 @@
   }
 
   /* Mapeia os artigos (grouped) de uma factura TAM para o formato de
-     linha do Processamento — FNC/PXO vem da soma de session.boxes por
-     referencia (a mesma conta que procGetPendingFromTamSessions ja usa
-     para calcular pendentes), preco e o custo puro sem transporte
-     (totalCost/pieces — o unitPriceWithShip ja traz o transporte
-     prorrateado, e isso e um mecanismo proprio do Processamento via
-     Transp./Desc., nunca deve vir ja embutido). semPvp:true porque
-     estas pecas vem a preco de fabrica, sem PVP nem margem aplicavel. */
-  function procMapearLinhasFacturaTam(sessionData, inv) {
-    var boxes = sessionData.boxes || [];
+     linha do Processamento — FNC/PXO vem da soma das caixas que
+     pertencem A ESTA FACTURA (box.invIdx === invIndex), nunca de
+     todas as caixas da sessao — uma sessao TAM pode conter varias
+     facturas, e cada caixa esta marcada com o indice da factura a que
+     pertence; sem este filtro, referencias repetidas noutra factura
+     da mesma sessao contaminavam a distribuicao desta. Preco e o
+     custo puro sem transporte (totalCost/pieces — o unitPriceWithShip
+     ja traz o transporte prorrateado, e isso e um mecanismo proprio
+     do Processamento via Transp./Desc., nunca deve vir ja embutido).
+     semPvp:true porque estas pecas vem a preco de fabrica, sem PVP
+     nem margem aplicavel. */
+  function procMapearLinhasFacturaTam(sessionData, inv, invIndex) {
+    var boxes = (sessionData.boxes || []).filter(function(box) { return box.invIdx === invIndex; });
     var linhas = [];
     (inv.grouped || []).forEach(function(g) {
       if (!g.ref) return;
@@ -1206,14 +1210,14 @@
           var data;
           try { data = JSON.parse(row.data); } catch (e) { return; }
           if (!data || !data.invoices) return;
-          data.invoices.forEach(function(inv) {
+          data.invoices.forEach(function(inv, invIndex) {
             var guia = (inv.guiaErp || '').toString().trim();
             if (!guia) return;
             var segunda = procDataTamParaSegunda(inv.invoiceDate);
             if (!segunda) return;
             var eExcecao = TAM_IMPORT_EXCECOES.some(function(ex) { return ex.data === inv.invoiceDate && ex.guia === guia; });
             if (segunda < TAM_IMPORT_CUTOFF && !eExcecao) return;
-            var linhas = procMapearLinhasFacturaTam(data, inv);
+            var linhas = procMapearLinhasFacturaTam(data, inv, invIndex);
             if (!linhas.length) return;
             var dataISO = segunda.getFullYear() + '-' + String(segunda.getMonth() + 1).padStart(2, '0') + '-' + String(segunda.getDate()).padStart(2, '0');
             var sessionKey = 'proc_fatura_' + dataISO;

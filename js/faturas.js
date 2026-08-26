@@ -4938,11 +4938,26 @@
 
         var refNovaLabel = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
 
+        /* Partilha entre fornecedores: se outro bloco desta mesma busca
+           tiver a MESMA referencia mas outro proveedor, mostra um
+           aviso — o stock desta referencia esta a ser calculado em
+           FIFO entre esses fornecedores (ver procAlocarFifo mais
+           abaixo, na secção "Stock actual por bloco"). */
+        var outrosFornecedores = blocos.filter(function(b, i) {
+          if (i === idxBloco) return false;
+          var refOutro = b.candidato.referencia_interna || b.candidato.referencia_original_raw || b.candidato.referencia_original;
+          return refOutro === refNovaLabel;
+        }).map(function(b) { return b.candidato.proveedor; });
+        var badgeCompartilhada = outrosFornecedores.length
+          ? ' <span class="proc-ref-compartilhada" title="Esta refer\u00eancia tamb\u00e9m \u00e9 comprada a: ' + outrosFornecedores.join(', ').replace(/"/g, '&quot;') + '. Stock calculado em FIFO entre fornecedores (o lote mais antigo esgota primeiro)." style="display:inline-block;margin-left:6px;font-size:.7rem;font-weight:600;color:#8a6d1a;border:1px solid #C9A227;background:#FBF3D9;border-radius:8px;padding:1px 7px;cursor:help;vertical-align:middle;">\u21c4 partilhada</span>'
+          : '';
+
         return '<div class="proc-raio-bloco">'
           + '<div class="proc-raio-bloco-header">'
           +   '<div>'
           +     '<span class="proc-raio-ref-nova proc-raio-ref-copiar" style="cursor:pointer;" title="Clicar para copiar">' + refNovaLabel + '</span> '
           +     '<span class="proc-raio-categoria">' + nomeCat + '</span>'
+          +     badgeCompartilhada
           +   '</div>'
           +   (cand.referencia_interna
                 ? '<span class="proc-raio-ref-original">Original: ' + cand.referencia_original + ' \u00b7 ' + cand.proveedor + '</span>'
@@ -5025,12 +5040,17 @@
     });
 
     /* Stock actual por bloco (A4/A5/Total) = pecas compradas ate hoje
-       menos as vendidas desde a primeira compra em cada armazem —
-       um unico pedido em lote ao Supabase para todos os blocos deste
-       modal. Preenche os placeholders "\u2026" depois do modal ja estar
-       visivel, para nao atrasar a abertura. */
+       menos as vendidas desde a primeira compra em cada armazem — um
+       unico pedido em lote ao Supabase para todos os blocos deste
+       modal. Preenche os placeholders "\u2026" depois do modal ja
+       estar visivel, para nao atrasar a abertura.
+       Quando dois blocos partilham a mesma referencia (fornecedores
+       diferentes, ver badgeCompartilhada acima), sao tratados como
+       lotes FIFO: o RPC e chamado uma so vez por referencia com o
+       cutoff do lote mais antigo, e o total vendido e repartido entre
+       os blocos por ordem de data de compra (ver procAlocarFifo). */
     if (blocos.length) {
-      var paresStockRadio = blocos.map(function(bloco) {
+      var infoPorBloco = blocos.map(function(bloco) {
         var cand = bloco.candidato;
         var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
         var cutoffA4 = null, cutoffA5 = null;
@@ -5041,12 +5061,38 @@
           if (l.a4 > 0 && (!cutoffA4 || iso < cutoffA4)) cutoffA4 = iso;
           if (l.a5 > 0 && (!cutoffA5 || iso < cutoffA5)) cutoffA5 = iso;
         });
+        return { refTexto: refTexto, cutoffA4: cutoffA4, cutoffA5: cutoffA5, comprasA4: bloco.totalA4, comprasA5: bloco.totalA5, fornecedorNorm: procNormalize(cand.proveedor || '') };
+      });
+
+      var gruposPorRef = {};
+      infoPorBloco.forEach(function(info) {
+        if (!gruposPorRef[info.refTexto]) gruposPorRef[info.refTexto] = [];
+        gruposPorRef[info.refTexto].push(info);
+      });
+
+      var paresStockRadio = Object.keys(gruposPorRef).map(function(refTexto) {
+        var grupo = gruposPorRef[refTexto];
+        var lotesA4 = procLotesOrdenados(grupo, 'comprasA4', 'cutoffA4');
+        var lotesA5 = procLotesOrdenados(grupo, 'comprasA5', 'cutoffA5');
+        var cutoffA4 = lotesA4.length ? lotesA4[0].cutoffA4 : null;
+        var cutoffA5 = lotesA5.length ? lotesA5[0].cutoffA5 : null;
         return { referencia: refTexto, cutoff_a4: procSubtrairDiasIso(cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(cutoffA5, FOLGA_CORTE_DIAS) };
       });
+
       procCalcularStockLote(paresStockRadio, function(stockMapa) {
+        Object.keys(gruposPorRef).forEach(function(refTexto) {
+          var grupo = gruposPorRef[refTexto];
+          var venda = stockMapa ? stockMapa[refTexto] : null;
+          if (stockMapa && venda && !venda.erro) {
+            var lotesA4 = procLotesOrdenados(grupo, 'comprasA4', 'cutoffA4');
+            var lotesA5 = procLotesOrdenados(grupo, 'comprasA5', 'cutoffA5');
+            procAlocarFifo(lotesA4, venda.vendidoA4, 'comprasA4', 'stockA4');
+            procAlocarFifo(lotesA5, venda.vendidoA5, 'comprasA5', 'stockA5');
+          }
+        });
         blocos.forEach(function(bloco, idxBloco) {
-          var cand = bloco.candidato;
-          var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
+          var info = infoPorBloco[idxBloco];
+          var refTexto = info.refTexto;
           var celA4 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a4"]');
           var celA5 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a5"]');
           var celTotal = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="total"]');
@@ -5061,8 +5107,8 @@
             celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase. Tenta recarregar.';
             return;
           }
-          var stockA4 = bloco.totalA4 - venda.vendidoA4;
-          var stockA5 = bloco.totalA5 - venda.vendidoA5;
+          var stockA4 = info.hasOwnProperty('stockA4') ? info.stockA4 : bloco.totalA4;
+          var stockA5 = info.hasOwnProperty('stockA5') ? info.stockA5 : bloco.totalA5;
           celA4.textContent = stockA4;
           celA5.textContent = stockA5;
           var detalheTextoA5Radio = procFormatarDetalheA5(venda.detalheA5);
@@ -5238,6 +5284,91 @@
       return nome + ': ' + (d.qty || 0);
     });
     return 'Vendido em (Porto Santo):\n' + linhas.join('\n');
+  }
+
+  /* ════════════ FIFO ENTRE FORNECEDORES (referencia partilhada) ════════════
+     Duas empresas fornecedoras podem, por coincidencia (ou por venderem
+     mesmo o mesmo artigo), usar identico codigo de referencia. A tabela
+     vendas_primavera so tem referencia/loja/data/quantidade — nao sabe
+     a qual compra pertence cada venda. Sem tratamento especial, cada
+     fornecedor "reclamava" as MESMAS vendas no seu proprio calculo de
+     stock, descontando-as duas vezes e disparando o stock para
+     negativos sem sentido. Resolvido tratando as compras de cada
+     fornecedor dessa referencia como um "lote" numa fila FIFO ordenada
+     pela data da primeira compra: as vendas desde a data mais antiga
+     entre todos os lotes sao pedidas UMA SO VEZ ao RPC, e depois
+     distribuidas — o lote mais antigo esgota-se primeiro, so depois se
+     desconta do seguinte. */
+
+  /* Constroi, a partir de uma lista completa de facturas (todos os
+     fornecedores — ja disponivel em memoria em ambos os modais de
+     stock), um mapa referencia -> array de lotes { fornecedorNorm,
+     fornecedorDisplay, comprasA4, comprasA5, cutoffA4, cutoffA5 }, um
+     lote por cada fornecedor que alguma vez comprou essa referencia. */
+  function procConstruirLotesPorReferencia(listaCompleta) {
+    var porRef = {};
+    (listaCompleta || []).forEach(function(item) {
+      var bruto = (item.fatura.proveedor || '').trim();
+      if (!bruto) return;
+      var norm = procNormalize(bruto);
+      (item.fatura.rows || []).forEach(function(r) {
+        var ref = (r.ref || '').trim();
+        if (!ref) return;
+        var a4v = r.a4 || 0, a5v = r.a5 || 0;
+        if (!a4v && !a5v) return;
+        if (!porRef[ref]) porRef[ref] = {};
+        if (!porRef[ref][norm]) {
+          porRef[ref][norm] = { fornecedorNorm: norm, fornecedorDisplay: bruto, comprasA4: 0, comprasA5: 0, cutoffA4: null, cutoffA5: null };
+        }
+        var lote = porRef[ref][norm];
+        lote.comprasA4 += a4v;
+        lote.comprasA5 += a5v;
+        var isoData = procIsoAAAAMMDD(item.ano, item.mes, item.dia);
+        if (a4v > 0 && (!lote.cutoffA4 || isoData < lote.cutoffA4)) lote.cutoffA4 = isoData;
+        if (a5v > 0 && (!lote.cutoffA5 || isoData < lote.cutoffA5)) lote.cutoffA5 = isoData;
+      });
+    });
+    var out = {};
+    Object.keys(porRef).forEach(function(ref) {
+      out[ref] = Object.keys(porRef[ref]).map(function(k) { return porRef[ref][k]; });
+    });
+    return out;
+  }
+
+  /* Filtra os lotes que realmente compraram neste armazem (campoCompras
+     > 0) e ordena do mais antigo para o mais recente pela data de
+     corte desse armazem — a ordem exacta que a fila FIFO precisa. */
+  function procLotesOrdenados(lotes, campoCompras, campoCutoff) {
+    return (lotes || []).filter(function(l) { return (l[campoCompras] || 0) > 0; }).sort(function(a, b) {
+      var ca = a[campoCutoff], cb = b[campoCutoff];
+      if (ca === cb) return 0;
+      if (!ca) return 1;
+      if (!cb) return -1;
+      return ca < cb ? -1 : 1;
+    });
+  }
+
+  /* Distribui "vendidoTotal" (ja obtido do RPC, contado desde a data
+     de corte do lote mais antigo) pelos lotes recebidos, ja ordenados
+     do mais antigo para o mais recente: consome por completo cada
+     lote antes de tocar no seguinte. So o ULTIMO lote da fila pode
+     ficar com stock negativo, caso a soma vendida exceda tudo o que
+     foi comprado em todos os lotes — sinal real de historico de
+     compras incompleto, tal como ja acontecia antes para um unico
+     fornecedor. Muta cada lote, preenchendo lote[campoStock]. */
+  function procAlocarFifo(lotesOrdenados, vendidoTotal, campoCompras, campoStock) {
+    var restante = vendidoTotal || 0;
+    for (var i = 0; i < lotesOrdenados.length; i++) {
+      var lote = lotesOrdenados[i];
+      var disponivel = lote[campoCompras] || 0;
+      if (i === lotesOrdenados.length - 1) {
+        lote[campoStock] = disponivel - restante;
+      } else {
+        var consumido = Math.min(disponivel, restante);
+        lote[campoStock] = disponivel - consumido;
+        restante -= consumido;
+      }
+    }
   }
 
 
@@ -5769,8 +5900,12 @@
       });
     });
 
-    var referencias = Object.keys(mapa);
-    if (!referencias.length) {
+    /* Lotes de TODOS os fornecedores por referencia (nao so este) —
+       para o FIFO entre fornecedores quando duas empresas partilham o
+       mesmo codigo de referencia (ver procConstruirLotesPorReferencia). */
+    var lotesPorReferencia = procConstruirLotesPorReferencia(lista);
+
+    var referencias = Object.keys(mapa);    if (!referencias.length) {
       body.innerHTML = '<p style="font-size:.8rem;color:#888;padding:20px;">Sem artigos.</p>';
       return;
     }
@@ -5831,10 +5966,14 @@
         if (v) anosComPecas.push(a);
         return '<td class="center" style="padding-left:4px;padding-right:4px;">' + (v || '—') + '</td>';
       }).join('');
+      var outrosFornecedores = (lotesPorReferencia[ref] || []).filter(function(l) { return l.fornecedorNorm !== fornecedorNorm; });
+      var badgeCompartilhada = outrosFornecedores.length
+        ? ' <span class="proc-ref-compartilhada" title="Esta referência também é comprada a: ' + outrosFornecedores.map(function(l) { return l.fornecedorDisplay; }).join(', ').replace(/"/g, '&quot;') + '. Stock calculado em FIFO entre fornecedores (o lote mais antigo esgota primeiro)." style="display:inline-block;margin-left:6px;font-size:.7rem;font-weight:600;color:#8a6d1a;border:1px solid #C9A227;background:#FBF3D9;border-radius:8px;padding:1px 7px;cursor:help;vertical-align:middle;">⇄ partilhada</span>'
+        : '';
       return '<tr class="proc-artigo-row" data-ref="' + linha.display.replace(/"/g, '&quot;') + '" '
         + 'data-filtro="' + (linha.display + ' ' + (linha.desc || '')).toLowerCase().replace(/"/g, '&quot;') + '" '
         + 'data-anos="' + anosComPecas.join(',') + '" style="cursor:pointer;">'
-        + '<td>' + linha.display + '</td>'
+        + '<td>' + linha.display + badgeCompartilhada + '</td>'
         + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + cels
         + '<td class="center"><strong>' + linha.total + '</strong></td>'
@@ -5842,7 +5981,6 @@
         + '<td class="center proc-stock-a5">…</td>'
         + '<td class="center proc-stock-total">…</td></tr>';
     }).join('');
-
     body.innerHTML = '<table class="proc-or-table">'
       + '<thead>' + theadHTML + '</thead>'
       + '<tbody>' + tbodyHTML + '</tbody>'
@@ -5911,9 +6049,17 @@
        num unico pedido em lote ao Supabase (RPC stock_por_referencias)
        para nao bater no limite de tempo com uma chamada por
        referencia. Preenche as celulas placeholder "…" depois da
-       tabela ja estar visivel, para nao atrasar a abertura do modal. */
+       tabela ja estar visivel, para nao atrasar a abertura do modal.
+       Quando uma referencia tem lotes de mais de um fornecedor, o
+       cutoff enviado ao RPC é o do lote MAIS ANTIGO entre todos —
+       depois o total vendido é repartido em FIFO (ver procAlocarFifo),
+       e só a parte deste fornecedor é mostrada aqui. */
     var paresStock = referencias.map(function(ref) {
-      return { referencia: ref, cutoff_a4: procSubtrairDiasIso(mapa[ref].cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(mapa[ref].cutoffA5, FOLGA_CORTE_DIAS) };
+      var lotesA4 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA4', 'cutoffA4');
+      var lotesA5 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA5', 'cutoffA5');
+      var cutoffA4 = lotesA4.length ? lotesA4[0].cutoffA4 : null;
+      var cutoffA5 = lotesA5.length ? lotesA5[0].cutoffA5 : null;
+      return { referencia: ref, cutoff_a4: procSubtrairDiasIso(cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(cutoffA5, FOLGA_CORTE_DIAS) };
     });
     procCalcularStockLote(paresStock, function(stockMapa) {
       var trEls = body.querySelectorAll('.proc-artigo-row');
@@ -5935,8 +6081,14 @@
           celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase (ref=' + ref + '). Tenta recarregar.';
           return;
         }
-        var stockA4 = compras.comprasA4 - venda.vendidoA4;
-        var stockA5 = compras.comprasA5 - venda.vendidoA5;
+        var lotesA4 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA4', 'cutoffA4');
+        var lotesA5 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA5', 'cutoffA5');
+        procAlocarFifo(lotesA4, venda.vendidoA4, 'comprasA4', 'stockA4');
+        procAlocarFifo(lotesA5, venda.vendidoA5, 'comprasA5', 'stockA5');
+        var meuLoteA4 = lotesA4.filter(function(l) { return l.fornecedorNorm === fornecedorNorm; })[0];
+        var meuLoteA5 = lotesA5.filter(function(l) { return l.fornecedorNorm === fornecedorNorm; })[0];
+        var stockA4 = meuLoteA4 ? meuLoteA4.stockA4 : compras.comprasA4;
+        var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : compras.comprasA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
         var detalheTextoA5 = procFormatarDetalheA5(venda.detalheA5);
@@ -5992,8 +6144,7 @@
           ordenadoPorStock = true;
         });
       }
-    });
-  }
+    });  }
 
   /* ── Render session list in the start panel ── */
   function procRenderStartPanel() {

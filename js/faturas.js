@@ -1190,7 +1190,14 @@
       /* Sem distribuicao registada nas caixas — nunca perde a
          quantidade, atribui tudo a Funchal por omissao. */
       if (a4 === 0 && a5 === 0 && pieces > 0) a4 = pieces;
-      var preco = pieces > 0 ? (g.totalCost || 0) / pieces : 0;
+      /* Preco: copia directa de g.unitPriceWithShip (preco unitario
+         que a TAM ja calcula, incluindo transporte prorrateado) —
+         nunca g.totalCost/pieces (custo puro sem transporte), que
+         deixava a soma das linhas sempre abaixo do valor da factura.
+         So cai para o custo puro se unitPriceWithShip vier vazio. */
+      var preco = (g.unitPriceWithShip != null && g.unitPriceWithShip !== '')
+        ? g.unitPriceWithShip
+        : (pieces > 0 ? (g.totalCost || 0) / pieces : 0);
       var desc  = g.garmentType ? (g.garmentType + (g.name ? ' \u00b7 ' + g.name : '')) : (g.name || '');
       linhas.push({
         ref: String(g.ref).trim(), desc: desc, qtdFt: pieces, a4: a4, a5: a5,

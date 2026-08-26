@@ -1190,14 +1190,15 @@
       /* Sem distribuicao registada nas caixas — nunca perde a
          quantidade, atribui tudo a Funchal por omissao. */
       if (a4 === 0 && a5 === 0 && pieces > 0) a4 = pieces;
-      /* Preco: copia directa de g.unitPriceWithShip (preco unitario
-         que a TAM ja calcula, incluindo transporte prorrateado) —
-         nunca g.totalCost/pieces (custo puro sem transporte), que
-         deixava a soma das linhas sempre abaixo do valor da factura.
-         So cai para o custo puro se unitPriceWithShip vier vazio. */
-      var preco = (g.unitPriceWithShip != null && g.unitPriceWithShip !== '')
-        ? g.unitPriceWithShip
-        : (pieces > 0 ? (g.totalCost || 0) / pieces : 0);
+      /* Preco: g.grandTotal e o valor total que a TAM ja da para esta
+         referencia (a soma de todos os g.grandTotal de uma factura
+         reconstroi exactamente o valor total da factura, inv.grandTotal
+         — verificado). E o unico campo copiado sem qualquer desvio.
+         Divide-se por pieces so porque a grelha do Processamento guarda
+         preco por unidade, nunca um total por linha — nao e um calculo
+         de negocio, e o minimo necessario para encaixar o mesmo valor
+         no formato da grelha. */
+      var preco = pieces > 0 ? (g.grandTotal != null ? g.grandTotal : (g.totalCost || 0)) / pieces : 0;
       var desc  = g.garmentType ? (g.garmentType + (g.name ? ' \u00b7 ' + g.name : '')) : (g.name || '');
       linhas.push({
         ref: String(g.ref).trim(), desc: desc, qtdFt: pieces, a4: a4, a5: a5,

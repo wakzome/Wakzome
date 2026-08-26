@@ -5847,6 +5847,36 @@
      anterior ao fechar este (ver procLigarVoltar) e troca o texto do
      botao para "Voltar". */
   function procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar) {
+
+  /* Cache simples da ultima data de vendas carregada no sistema
+     (tabela vendas_primavera_dias, ja pequena e ordenada por dia —
+     muito mais rapido que MAX(data) sobre vendas_primavera, que tem
+     quase 400 mil linhas). So pede ao Supabase uma vez por sessao
+     de pagina; chamadas seguintes reaproveitam o valor em cache
+     (incluindo null, se a consulta falhar, para nao ficar em
+     loop a tentar de novo). Devolve ao callback a data formatada
+     'DD/MM/AAAA', ou null se ainda nao houver nenhuma linha. */
+  var _ultimoDiaVendasCache;
+  function procObterUltimoDiaVendasCarregado(callback) {
+    if (_ultimoDiaVendasCache !== undefined) { callback(_ultimoDiaVendasCache); return; }
+    procSbFetch('vendas_primavera_dias?select=data&order=data.desc&limit=1', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var iso = (rows && rows.length) ? rows[0].data : null;
+        var formatado = null;
+        if (iso) {
+          var partes = String(iso).split('-');
+          if (partes.length === 3) formatado = partes[2] + '/' + partes[1] + '/' + partes[0];
+        }
+        _ultimoDiaVendasCache = formatado;
+        callback(formatado);
+      })
+      .catch(function() {
+        _ultimoDiaVendasCache = null;
+        callback(null);
+      });
+  }
+
     var old = document.getElementById('proc-artigos-fornecedor-modal');
     if (old && old.parentNode) old.parentNode.removeChild(old);
 
@@ -5859,7 +5889,7 @@
       +   '<div class="proc-or-panel-header">'
       +     '<div class="proc-or-panel-title">'
       +       '<span class="proc-or-panel-title-main">' + fornecedorNorm + '</span>'
-      +       '<span class="proc-or-panel-title-sub">Peças compradas por referência e por ano · clique numa referência para ver o histórico</span>'
+      +       '<span class="proc-or-panel-title-sub">Peças compradas por referência e por ano · clique numa referência para ver o histórico<span id="proc-artigos-ultima-data" style="color:#8a6d1a;"></span></span>'
       +     '</div>'
       +     '<button class="proc-or-close-btn">' + (aoVoltar ? '‹ Voltar' : '✕ Fechar') + '</button>'
       +   '</div>'
@@ -5875,6 +5905,11 @@
     procOpenModal(modal);
     procBindClose(modal);
     procLigarVoltar(modal, aoVoltar);
+
+    procObterUltimoDiaVendasCarregado(function(dataStr) {
+      var elData = document.getElementById('proc-artigos-ultima-data');
+      if (elData && dataStr) elData.textContent = ' · Informe atualizado até ' + dataStr;
+    });
 
     var body = document.getElementById('proc-artigos-fornecedor-body');
     if (!body) return;

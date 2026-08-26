@@ -1132,6 +1132,21 @@
      no importador do Excel. */
   var TAM_IMPORT_CUTOFF = new Date(2026, 7, 18); /* 18 de Agosto de 2026 */
 
+  /* Excecao pontual e exclusiva: estas duas facturas TAM ficaram
+     pendentes de distribuicao porque as caixas so chegaram fisicamente
+     a 26/08/2026, data em que finalmente ganharam guia ERP. Sao
+     anteriores ao corte geral acima, por isso sem esta lista o
+     importador automatico nunca as traria. O match exige DATA e GUIA
+     identicos em simultaneo — nunca deixa passar nenhuma outra
+     factura, mesmo que partilhe a mesma data ou a mesma guia
+     isoladamente. Nao precisa de remocao manual depois de importadas:
+     a deduplicacao normal (proveedor+guia+semana) torna-a inofensiva
+     em qualquer execucao futura. */
+  var TAM_IMPORT_EXCECOES = [
+    { data: '14.08.2026', guia: '210' },
+    { data: '17.08.2026', guia: '211' }
+  ];
+
   /* "DD.MM.YYYY" → segunda-feira dessa semana, calculada com getters
      LOCAIS (nunca toISOString()/getUTC*) — mesma correccao critica de
      fuso horario aplicada ao importador do Excel. */
@@ -1195,7 +1210,9 @@
             var guia = (inv.guiaErp || '').toString().trim();
             if (!guia) return;
             var segunda = procDataTamParaSegunda(inv.invoiceDate);
-            if (!segunda || segunda < TAM_IMPORT_CUTOFF) return;
+            if (!segunda) return;
+            var eExcecao = TAM_IMPORT_EXCECOES.some(function(ex) { return ex.data === inv.invoiceDate && ex.guia === guia; });
+            if (segunda < TAM_IMPORT_CUTOFF && !eExcecao) return;
             var linhas = procMapearLinhasFacturaTam(data, inv);
             if (!linhas.length) return;
             var dataISO = segunda.getFullYear() + '-' + String(segunda.getMonth() + 1).padStart(2, '0') + '-' + String(segunda.getDate()).padStart(2, '0');

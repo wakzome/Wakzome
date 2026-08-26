@@ -1173,6 +1173,32 @@
      do Processamento via Transp./Desc., nunca deve vir ja embutido).
      semPvp:true porque estas pecas vem a preco de fabrica, sem PVP
      nem margem aplicavel. */
+  /* Ajuste de centimos — MESMA logica ja usada e confiavel do modal
+     "Ingresso de Stock · ERP" (procShowStockModal): arredonda cada
+     preco a 2 casas e depois reparte os centimos de diferenca residual
+     (linha a linha, das menores quantidades para as maiores) ate a
+     soma bater exactamente com o valor declarado da factura. Reaproveita
+     o mesmo algoritmo, nao inventa nenhum novo — so o aplica mais cedo,
+     no momento da importacao, para que a factura ja fique quadrada
+     desde a origem, exactamente como o Ingresso de Stock ja mostra. */
+  function procAjustarCentimosParaTotal(linhas, valorTotal) {
+    if (!(valorTotal > 0) || !linhas.length) return;
+    linhas.forEach(function(l) { l.preco = Math.round(l.preco * 100) / 100; });
+    var somaAtual = linhas.reduce(function(s, l) { return s + Math.round(l.preco * l.qtdFt * 100) / 100; }, 0);
+    var diffCents = Math.round((valorTotal - somaAtual) * 100);
+    if (diffCents === 0) return;
+    var ordenado = linhas.slice().sort(function(a, b) { return a.qtdFt - b.qtdFt; });
+    for (var i = 0; i < ordenado.length && diffCents !== 0; i++) {
+      var l = ordenado[i];
+      var sign = diffCents > 0 ? 1 : -1;
+      var after = diffCents - sign * l.qtdFt;
+      if (Math.abs(after) <= Math.abs(diffCents)) {
+        l.preco = Math.round((l.preco + sign * 0.01) * 100) / 100;
+        diffCents = after;
+      }
+    }
+  }
+
   function procMapearLinhasFacturaTam(sessionData, inv, invIndex) {
     var boxes = (sessionData.boxes || []).filter(function(box) { return box.invIdx === invIndex; });
     var linhas = [];
@@ -1206,6 +1232,7 @@
         pvpManual: null, semPvp: true
       });
     });
+    procAjustarCentimosParaTotal(linhas, inv.grandTotal);
     return linhas;
   }
 

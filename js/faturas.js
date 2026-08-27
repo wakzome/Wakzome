@@ -4552,8 +4552,13 @@
       +       '<span id="proc-session-label" style="display:none;"></span>'
       +       '<span id="proc-saveStatus" class="proc-save-status" style="display:none;"></span>'
       +     '</div>'
-      +     '<div id="proc-session-bar-center">'
+      +     '<div id="proc-session-bar-center" style="position:relative;">'
       +       '<button class="proc-btn primary" id="proc-start-new-btn">Iniciar nova sess\u00e3o</button>'
+      +       '<button type="button" id="proc-start-extra-btn" title="Importar hist\u00f3ricos" style="margin-left:6px;font-size:.85rem;font-weight:700;color:#8a6d1a;background:none;border:1px solid #C9A227;border-radius:6px;width:28px;height:28px;line-height:1;cursor:pointer;vertical-align:middle;">\u2731</button>'
+      +       '<div id="proc-start-extra-menu" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.14);z-index:20;min-width:220px;overflow:hidden;text-align:left;">'
+      +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;">Importar hist\u00f3rico</button>'
+      +         '<button type="button" id="proc-import-vendas-btn" onclick="procAbrirImportadorVendas();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;border-top:1px solid #eee;">Importar vendas (Primavera)</button>'
+      +       '</div>'
       +     '</div>'
       +     '<div id="proc-session-bar-right" style="display:none;">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#9776; sess&#245;es &#x25be;</button>'
@@ -4575,8 +4580,6 @@
       +         '<div id="proc-busca-dropdown" class="proc-busca-dropdown hidden"></div>'
       +       '</div>'
       +       '<div style="text-align:right;margin:2px 2px 10px;">'
-      +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar hist\u00f3rico (Excel)</button>'
-      +         '<button type="button" id="proc-import-vendas-btn" onclick="procAbrirImportadorVendas()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Importar Vendas (Primavera)</button>'
       +         '<button type="button" id="proc-totais-fornecedor-btn" onclick="procMostrarModalTotaisPorFornecedor()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Totais por Fornecedor</button>'
       +         '<button type="button" id="proc-artigos-fornecedor-btn" onclick="procMostrarModalFornecedoresArtigos()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Artigos por Fornecedor</button>'
       +       '</div>'
@@ -4623,6 +4626,24 @@
     document.getElementById('proc-sessionMenuBtn').addEventListener('click', function(e) { procToggleSessionMenu(e); });
     document.getElementById('proc-guiaBtn').addEventListener('click', function() { procShowGuiaModal(); });
     document.getElementById('proc-start-new-btn').addEventListener('click', function() { procStartNewSession(); });
+
+    /* ── ✱ ao lado de "Iniciar nova sessão": abre/fecha o menu com
+       Importar histórico / Importar vendas (Primavera) — simples
+       toggle de display, fecha ao clicar fora ou num dos itens. ── */
+    (function() {
+      var extraBtn  = document.getElementById('proc-start-extra-btn');
+      var extraMenu = document.getElementById('proc-start-extra-menu');
+      if (!extraBtn || !extraMenu) return;
+      extraBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        extraMenu.style.display = (extraMenu.style.display === 'none') ? 'block' : 'none';
+      });
+      document.addEventListener('click', function(e) {
+        if (extraMenu.style.display !== 'none' && !extraMenu.contains(e.target) && e.target !== extraBtn) {
+          extraMenu.style.display = 'none';
+        }
+      });
+    })();
 
     /* ── Consulta rapida por referencia (original ou nova nomenclatura) ──
        Duas instancias independentes da mesma pesquisa: a do ecra inicial

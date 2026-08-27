@@ -6193,6 +6193,14 @@
      modal recomecava do zero — texto de busca, ano activo e ordenacao
      por Stock/🔥 todos perdidos, obrigando a reconfigurar tudo outra
      vez so para continuar a consultar a mesma lista. */
+  /* Cache do ultimo fogo/stock calculado, por (lista, fornecedorNorm).
+     "lista" e sempre o MESMO array (nunca reconstruido) ao longo de
+     um percurso Totais/Artigos → radiografia → voltar, por isso
+     comparar por identidade (===) chega para saber com seguranca que
+     os dados nao mudaram — sem isto, voltar da radiografia repetia os
+     dois pedidos ao Supabase (fogo + stock) e a tabela ficava outra
+     vez com "…" por uns instantes, mesmo sem nada ter mudado. */
+  var _procCacheStockFogoArtigos = null;
   function procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar, estadoInicial) {
     var estadoOrdenacaoAtual = (estadoInicial && estadoInicial.estadoOrdenacao) || 0;
 
@@ -6470,7 +6478,12 @@
        referencia so para mostrar 1 badge — ver o novo terceiro
        argumento (omitido = false) de procObterFogoPorReferencias, que
        agora filtra so a linha "destaque" no proprio Supabase. */
-    var fogoMapaArt = null, stockMapaArt = null, prontosArt = 0;
+    var cacheArtigosValido = !!(_procCacheStockFogoArtigos
+      && _procCacheStockFogoArtigos.lista === lista
+      && _procCacheStockFogoArtigos.fornecedorNorm === fornecedorNorm);
+    var fogoMapaArt = cacheArtigosValido ? _procCacheStockFogoArtigos.fogoMapa : null;
+    var stockMapaArt = cacheArtigosValido ? _procCacheStockFogoArtigos.stockMapa : null;
+    var prontosArt = 0;
     function procTentarRenderArtigosStock() {
       prontosArt++;
       if (prontosArt < 2) return;
@@ -6589,9 +6602,22 @@
            radiografia (ver estadoInicial no topo da funcao). */
         procAplicarEstadoOrdenacaoArt();
       }
+
+      /* Guarda em cache para a proxima vez que se voltar a este mesmo
+         fornecedor (ex.: apos consultar a radiografia de uma
+         referencia) nao repetir os pedidos ao Supabase. */
+      _procCacheStockFogoArtigos = { lista: lista, fornecedorNorm: fornecedorNorm, fogoMapa: fogoMapa, stockMapa: stockMapa };
     }
-    procObterFogoPorReferencias(referencias, function(fogoMapa) { fogoMapaArt = fogoMapa; procTentarRenderArtigosStock(); });
-    procCalcularStockLote(paresStock, function(stockMapa) { stockMapaArt = stockMapa; procTentarRenderArtigosStock(); });
+    if (cacheArtigosValido) {
+      /* Ja temos fogo+stock desta mesma lista/fornecedor — chama a
+         renderizacao directamente, duas vezes (uma por "pedido" que
+         normalmente resolveria), sem tocar na rede. */
+      procTentarRenderArtigosStock();
+      procTentarRenderArtigosStock();
+    } else {
+      procObterFogoPorReferencias(referencias, function(fogoMapa) { fogoMapaArt = fogoMapa; procTentarRenderArtigosStock(); });
+      procCalcularStockLote(paresStock, function(stockMapa) { stockMapaArt = stockMapa; procTentarRenderArtigosStock(); });
+    }
   }
 
 

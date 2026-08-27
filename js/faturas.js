@@ -5683,9 +5683,10 @@
       var dataStr = String(item.dia).padStart(2, '0') + '/' + String(item.mes).padStart(2, '0') + '/' + item.ano;
       var total = procCalcularTotalLinhasFatura(item.fatura);
       var guia = (item.fatura.guiaErp || '').toString().trim();
+      var sessionKey = SESSION_PREFIX + procIsoAAAAMMDD(item.ano, item.mes, item.dia);
       return '<tr>'
         + '<td>' + dataStr + '</td>'
-        + '<td class="center">' + (guia || '—') + '</td>'
+        + '<td class="center proc-guia-ir-sessao" data-session-key="' + sessionKey + '" title="Ir para a sessão" style="cursor:pointer;color:#8a6d1a;text-decoration:underline;text-decoration-style:dotted;">' + (guia || '—') + '</td>'
         + '<td class="center"><strong>' + procFormatarMoeda(total) + '</strong></td>'
         + '</tr>';
     }).join('') : '<tr><td colspan="3" style="text-align:center;color:#888;">Sem facturas.</td></tr>';
@@ -5713,6 +5714,22 @@
 
     procOpenModal(modal);
     procBindClose(modal);
+
+    /* Clicar na guia ERP (“entrada de stock”) leva directamente à
+       sessão semanal que contem essa factura — fecha todos os modais
+       abertos por cima (este e o de Totais por Fornecedor) e reaproveita
+       procLoadSessionFromStart, a mesma funcao ja usada pelo botão
+       "↩ carregar" do painel inicial, nunca uma nova. */
+    modal.querySelectorAll('.proc-guia-ir-sessao').forEach(function(td) {
+      td.addEventListener('click', function() {
+        var sessionKey = td.getAttribute('data-session-key');
+        if (!sessionKey) return;
+        procCloseModal(modal);
+        var totaisModal = document.getElementById('proc-totais-fornecedor-modal');
+        if (totaisModal) procCloseModal(totaisModal);
+        procLoadSessionFromStart(sessionKey);
+      });
+    });
   }
 
   /* Segundo modal: mesma tabela, mas cortada pela data (mes/dia) da

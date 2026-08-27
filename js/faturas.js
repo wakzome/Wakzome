@@ -5163,7 +5163,6 @@
         gruposPorRef[info.refTexto].push(info);
       });
 
-      procObterFogoPorReferencias(Object.keys(gruposPorRef), function(fogoMapa) {
       var paresStockRadio = Object.keys(gruposPorRef).map(function(refTexto) {
         var grupo = gruposPorRef[refTexto];
         var lotesA4 = procLotesOrdenados(grupo, 'comprasA4', 'cutoffA4');
@@ -5173,7 +5172,17 @@
         return { referencia: refTexto, cutoff_a4: procSubtrairDiasIso(cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(cutoffA5, FOLGA_CORTE_DIAS) };
       });
 
-      procCalcularStockLote(paresStockRadio, function(stockMapa) {
+      /* Fogo (proc_referencia_velocidade) e stock (stock_por_referencias)
+         sao dois pedidos independentes ao Supabase — passam a correr em
+         paralelo, nunca um dentro do callback do outro. Encadea-los so
+         somava as duas latencias sem necessidade: o stock nao depende
+         do fogo para nada. */
+      var fogoMapaRadio = null, stockMapaRadio = null, prontosRadio = 0;
+      function procTentarRenderRadioStock() {
+        prontosRadio++;
+        if (prontosRadio < 2) return;
+        var fogoMapa = fogoMapaRadio || {};
+        var stockMapa = stockMapaRadio;
         Object.keys(gruposPorRef).forEach(function(refTexto) {
           var grupo = gruposPorRef[refTexto];
           var venda = stockMapa ? stockMapa[refTexto] : null;
@@ -5272,8 +5281,9 @@
             celVeloc.textContent = (lote.velocidade_dia != null) ? Number(lote.velocidade_dia).toFixed(2) : '\u2014';
           });
         });
-      });
-      });
+      }
+      procObterFogoPorReferencias(Object.keys(gruposPorRef), function(fogoMapa) { fogoMapaRadio = fogoMapa; procTentarRenderRadioStock(); }, true);
+      procCalcularStockLote(paresStockRadio, function(stockMapa) { stockMapaRadio = stockMapa; procTentarRenderRadioStock(); });
     }
   }
 
@@ -5465,40 +5475,69 @@
      de vendas de Wakzome (percentil 90 de velocidade), nunca um numero
      fixo no código. Aqui so se pede, por lote de referencias, se cada
      uma esta ou nao "em fogo" — sem nenhum calculo do lado do cliente. */
-  function procObterFogoPorReferencias(refs, callback) {
+  function procObterFogoPorReferencias(refs, callback, incluirLotes) {
     var unicas = Array.prototype.filter.call(refs || [], function(r, i, arr) {
       return r && arr.indexOf(r) === i;
     });
     if (!unicas.length) { callback({}); return; }
     var listaIn = unicas.map(function(r) { return encodeURIComponent(r); }).join(',');
-    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')&select=referencia,lote_num,data_compra,qtd_lote,data_esgotamento,dias,velocidade_dia,ativo,destaque,fire_level', { method: 'GET' })
+    var campos = 'referencia,lote_num,data_compra,qtd_lote,data_esgotamento,dias,velocidade_dia,ativo,destaque,recompra,fire_level';
+    /* Por omissão (incluirLotes falso) só se pede a linha "destaque" de
+       cada referência — filtrado no próprio Supabase — o suficiente
+       para o badge/tooltip resumido. Sem este filtro, uma referência
+       com várias compras ao longo do tempo devolvia um lote por cada
+       uma (até 14+ no caso mais extremo), multiplicando o volume de
+       dados só para mostrar 1 ícone; numa lista com o catálogo inteiro
+       de um fornecedor isso tornava o pedido lento. Só a radiografia
+       (poucas referências de cada vez) precisa do histórico completo
+       por lote, para casar cada sessão de compra com o seu próprio
+       lote — essa chamada passa incluirLotes=true. */
+    var filtroDestaque = incluirLotes ? '' : '&destaque=eq.true';
+    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')' + filtroDestaque + '&select=' + campos, { method: 'GET' })
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(rows) {
-        var porRef = {};
-        (rows || []).forEach(function(row) {
-          if (!porRef[row.referencia]) porRef[row.referencia] = [];
-          porRef[row.referencia].push(row);
-        });
         var mapa = {};
-        Object.keys(porRef).forEach(function(ref) {
-          var lotes = porRef[ref];
-          var destaqueRow = lotes.filter(function(l) { return l.destaque; })[0] || lotes[lotes.length - 1];
-          mapa[ref] = {
-            fireLevel: destaqueRow.fire_level || 0,
-            ativo: !!destaqueRow.ativo,
-            dias: destaqueRow.dias,
-            velocidadeDia: destaqueRow.velocidade_dia,
-            qtdLote: destaqueRow.qtd_lote,
-            dataCompra: destaqueRow.data_compra,
-            dataEsgotamento: destaqueRow.data_esgotamento,
-            recompra: lotes.length > 1,
-            lotes: lotes
-          };
-        });
+        if (incluirLotes) {
+          var porRef = {};
+          (rows || []).forEach(function(row) {
+            if (!porRef[row.referencia]) porRef[row.referencia] = [];
+            porRef[row.referencia].push(row);
+          });
+          Object.keys(porRef).forEach(function(ref) {
+            var lotes = porRef[ref];
+            var destaqueRow = lotes.filter(function(l) { return l.destaque; })[0] || lotes[lotes.length - 1];
+            mapa[ref] = {
+              fireLevel: destaqueRow.fire_level || 0,
+              ativo: !!destaqueRow.ativo,
+              dias: destaqueRow.dias,
+              velocidadeDia: destaqueRow.velocidade_dia,
+              qtdLote: destaqueRow.qtd_lote,
+              dataCompra: destaqueRow.data_compra,
+              dataEsgotamento: destaqueRow.data_esgotamento,
+              recompra: !!destaqueRow.recompra,
+              lotes: lotes
+            };
+          });
+        } else {
+          (rows || []).forEach(function(row) {
+            mapa[row.referencia] = {
+              fireLevel: row.fire_level || 0,
+              ativo: !!row.ativo,
+              dias: row.dias,
+              velocidadeDia: row.velocidade_dia,
+              qtdLote: row.qtd_lote,
+              dataCompra: row.data_compra,
+              dataEsgotamento: row.data_esgotamento,
+              recompra: !!row.recompra,
+              lotes: null
+            };
+          });
+        }
         callback(mapa);
       })
       .catch(function() { callback({}); });
   }
+
 
   /* Texto do tooltip do 🔥, construido so a partir de numeros ja
      calculados e guardados por lote (nunca um novo calculo de negocio,
@@ -6365,7 +6404,6 @@
        cutoff enviado ao RPC é o do lote MAIS ANTIGO entre todos —
        depois o total vendido é repartido em FIFO (ver procAlocarFifo),
        e só a parte deste fornecedor é mostrada aqui. */
-    procObterFogoPorReferencias(referencias, function(fogoMapa) {
     var paresStock = referencias.map(function(ref) {
       var lotesA4 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA4', 'cutoffA4');
       var lotesA5 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA5', 'cutoffA5');
@@ -6373,7 +6411,22 @@
       var cutoffA5 = lotesA5.length ? lotesA5[0].cutoffA5 : null;
       return { referencia: ref, cutoff_a4: procSubtrairDiasIso(cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(cutoffA5, FOLGA_CORTE_DIAS) };
     });
-    procCalcularStockLote(paresStock, function(stockMapa) {
+
+    /* Fogo (proc_referencia_velocidade) e stock (stock_por_referencias)
+       correm em paralelo, nunca um dentro do callback do outro — ver
+       nota identica em procMostrarRadiografiaModal. Antes disto, uma
+       lista grande de referencias (ex.: catalogo completo de um
+       fornecedor) ficava a espera do fogo terminar antes sequer de
+       pedir o stock, e o fogo pedia TODO o historico de lotes de cada
+       referencia so para mostrar 1 badge — ver o novo terceiro
+       argumento (omitido = false) de procObterFogoPorReferencias, que
+       agora filtra so a linha "destaque" no proprio Supabase. */
+    var fogoMapaArt = null, stockMapaArt = null, prontosArt = 0;
+    function procTentarRenderArtigosStock() {
+      prontosArt++;
+      if (prontosArt < 2) return;
+      var fogoMapa = fogoMapaArt || {};
+      var stockMapa = stockMapaArt;
       var trEls = body.querySelectorAll('.proc-artigo-row');
       trEls.forEach(function(tr, i) {
         var ref = referencias[i];
@@ -6479,8 +6532,9 @@
           sortBtn.title = 'Clicar para voltar à ordem original';
         });
       }
-    });
-    });
+    }
+    procObterFogoPorReferencias(referencias, function(fogoMapa) { fogoMapaArt = fogoMapa; procTentarRenderArtigosStock(); });
+    procCalcularStockLote(paresStock, function(stockMapa) { stockMapaArt = stockMapa; procTentarRenderArtigosStock(); });
   }
 
 

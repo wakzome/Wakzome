@@ -5213,9 +5213,12 @@
           var celFogo = modal.querySelector('.proc-raio-fogo[data-idx="' + idxBloco + '"]');
           if (celFogo) {
             var fogoInfoRadio = fogoMapa[refTexto];
-            celFogo.innerHTML = (fogoInfoRadio && fogoInfoRadio.fire)
-              ? ' <span class="proc-ref-fogo" title="' + procTituloFogo(fogoInfoRadio).replace(/"/g, '&quot;') + '">\ud83d\udd25</span>'
-              : '';
+            if (fogoInfoRadio && fogoInfoRadio.fireLevel > 0) {
+              var opacidadeFogoRadio = (fogoInfoRadio.fireLevel === 2) ? '1' : '.45';
+              celFogo.innerHTML = ' <span class="proc-ref-fogo" data-fire-level="' + fogoInfoRadio.fireLevel + '" style="opacity:' + opacidadeFogoRadio + ';" title="' + procTituloFogo(fogoInfoRadio, stockA4 + stockA5).replace(/"/g, '&quot;') + '">\ud83d\udd25</span>';
+            } else {
+              celFogo.innerHTML = '';
+            }
           }
         });
       });
@@ -5417,15 +5420,27 @@
     });
     if (!unicas.length) { callback({}); return; }
     var listaIn = unicas.map(function(r) { return encodeURIComponent(r); }).join(',');
-    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')&select=referencia,fire,esgotado,dias_ativo,velocidade_dia,total_comprado,total_vendido', { method: 'GET' })
+    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')&select=referencia,lote_num,data_compra,qtd_lote,data_esgotamento,dias,velocidade_dia,ativo,destaque,fire_level', { method: 'GET' })
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(rows) {
-        var mapa = {};
+        var porRef = {};
         (rows || []).forEach(function(row) {
-          mapa[row.referencia] = {
-            fire: !!row.fire, esgotado: !!row.esgotado,
-            diasAtivo: row.dias_ativo, velocidadeDia: row.velocidade_dia,
-            totalComprado: row.total_comprado, totalVendido: row.total_vendido
+          if (!porRef[row.referencia]) porRef[row.referencia] = [];
+          porRef[row.referencia].push(row);
+        });
+        var mapa = {};
+        Object.keys(porRef).forEach(function(ref) {
+          var lotes = porRef[ref];
+          var destaqueRow = lotes.filter(function(l) { return l.destaque; })[0] || lotes[lotes.length - 1];
+          mapa[ref] = {
+            fireLevel: destaqueRow.fire_level || 0,
+            ativo: !!destaqueRow.ativo,
+            dias: destaqueRow.dias,
+            velocidadeDia: destaqueRow.velocidade_dia,
+            qtdLote: destaqueRow.qtd_lote,
+            dataCompra: destaqueRow.data_compra,
+            dataEsgotamento: destaqueRow.data_esgotamento,
+            recompra: lotes.length > 1
           };
         });
         callback(mapa);
@@ -5434,26 +5449,43 @@
   }
 
   /* Texto do tooltip do 🔥, construido so a partir de numeros ja
-     calculados e guardados (nunca um novo calculo de negocio): se ja
-     esgotou, quantos dias levou desde a primeira venda; se ainda tem
-     stock, a velocidade actual, quantas pecas restam, e em quantos
-     dias se esgotaria a esse ritmo — o suficiente para decidir se vale
-     a pena recomprar, sem abrir mais nada. */
-  function procTituloFogo(info) {
+     calculados e guardados por lote (nunca um novo calculo de negocio,
+     e nunca uma media ao longo de toda a vida da referencia — ver nota
+     em proc_recalcular_velocidade). "recompra" distingue o fraseado:
+     numa referencia com um so lote, mostrar "esgotou em X dias" tem
+     substancia; numa referencia com varias compras ao longo do tempo,
+     mostrar sempre o LOTE mais recente (o activo, se ainda estiver a
+     vender, senao o ultimo que esgotou) evita a media absurda tipo
+     "esgotou em 933 dias desde a primeira venda". Quando conhecido, o
+     stockAtual (2º argumento, já calculado no local da chamada) deixa
+     estimar tambem "esgota em ~N dias" para o lote em curso. */
+  function procTituloFogo(info, stockAtual) {
     if (!info) return 'Top 10% de velocidade de venda em Wakzome.';
+    var nivel = (info.fireLevel === 2) ? 'Top 10%' : 'Top 20%';
     var vel = (info.velocidadeDia != null) ? Number(info.velocidadeDia).toFixed(2) : null;
-    if (info.esgotado) {
-      var dias = (info.diasAtivo != null) ? info.diasAtivo : null;
-      return 'Top 10% de velocidade de venda em Wakzome'
-        + (dias != null ? ' — esgotou em ' + dias + ' dia' + (dias === 1 ? '' : 's') + ' desde a primeira venda' : '')
-        + (vel ? ' (' + vel + ' peças/dia).' : '.');
+
+    if (info.ativo) {
+      var diasEstimados = (stockAtual != null && info.velocidadeDia > 0) ? Math.round(stockAtual / info.velocidadeDia) : null;
+      var prefixo = info.recompra ? ' — o lote actual' : '';
+      return nivel + ' de velocidade de venda em Wakzome' + prefixo
+        + (vel ? (prefixo ? ' vende' : ' — vende') + ' a ' + vel + ' peças/dia' : '')
+        + (stockAtual != null ? '; restam ' + stockAtual + ' peças' : '')
+        + (diasEstimados != null ? '; ao ritmo actual esgota em ~' + diasEstimados + ' dia' + (diasEstimados === 1 ? '' : 's') : '')
+        + '.';
     }
-    var restante = (info.totalComprado != null && info.totalVendido != null) ? (info.totalComprado - info.totalVendido) : null;
-    var diasParaEsgotar = (restante != null && info.velocidadeDia > 0) ? Math.round(restante / info.velocidadeDia) : null;
-    return 'Top 10% de velocidade de venda em Wakzome'
-      + (vel ? ' — ' + vel + ' peças/dia' : '')
-      + (restante != null ? '; restam ' + restante + ' peças' : '')
-      + (diasParaEsgotar != null ? '; ao ritmo actual esgota em ~' + diasParaEsgotar + ' dia' + (diasParaEsgotar === 1 ? '' : 's') : '')
+
+    var dias = info.dias;
+    if (info.recompra) {
+      var qtd = (info.qtdLote != null) ? Math.round(info.qtdLote) : null;
+      return nivel + ' de velocidade de venda em Wakzome — o último lote'
+        + (qtd != null ? ' (' + qtd + ' peças)' : '')
+        + (dias != null ? ' esgotou em ' + dias + ' dia' + (dias === 1 ? '' : 's') : '')
+        + (vel ? ' (' + vel + ' peças/dia)' : '')
+        + '.';
+    }
+    return nivel + ' de velocidade de venda em Wakzome'
+      + (dias != null ? ' — esgotou em ' + dias + ' dia' + (dias === 1 ? '' : 's') : '')
+      + (vel ? ' (' + vel + ' peças/dia)' : '')
       + '.';
   }
 
@@ -6326,55 +6358,73 @@
         }
         var fogoInfo = fogoMapa[ref];
         var badgeFogo = '';
-        if (fogoInfo && fogoInfo.fire) {
-          badgeFogo = ' <span class="proc-ref-fogo" title="' + procTituloFogo(fogoInfo).replace(/"/g, '&quot;') + '">🔥</span>';
+        var fireLevelAtual = (fogoInfo && fogoInfo.fireLevel) || 0;
+        if (fireLevelAtual > 0) {
+          var opacidadeFogo = (fireLevelAtual === 2) ? '1' : '.45';
+          badgeFogo = ' <span class="proc-ref-fogo" style="opacity:' + opacidadeFogo + ';" title="' + procTituloFogo(fogoInfo, stockA4 + stockA5).replace(/"/g, '&quot;') + '">🔥</span>';
         }
         celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + badgeFogo + (venda.temLojaNaoMapeada ? ' ⚠' : '');
         if (venda.temLojaNaoMapeada) {
           celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
         }
         tr.setAttribute('data-stock-total', String(stockA4 + stockA5));
+        tr.setAttribute('data-fire-level', String(fireLevelAtual));
       });
 
-      /* Botão "⇅ Ordenar por Stock" — só fica activo depois de todas
-         as células de stock estarem preenchidas (data-stock-total já
-         calculado em cada linha). Funciona como interruptor: um clique
-         ordena por Stock Total decrescente (maior primeiro, para
-         destacar as referências com mais peças paradas em stock); um
-         segundo clique restaura a ordem original (por peças compradas).
-         Reordena os nós <tr> directamente no DOM — preserva o estado
-         de filtro (texto/ano) e os listeners de clique de cada linha. */
+      /* Botão de ordenar — cicla por 3 estados a cada clique: Stock
+         Total desc. (estado 1) → velocidade de venda desc. (estado 2,
+         usa data-fire-level com o Stock Total como desempate) →
+         ordem original (estado 0, por peças compradas). Só fica activo
+         depois de todas as células de stock/🔥 estarem preenchidas
+         (data-stock-total e data-fire-level já calculados em cada
+         linha). Reordena os nós <tr> directamente no DOM — preserva o
+         estado de filtro (texto/ano) e os listeners de clique de cada
+         linha. O rótulo usa sempre a mesma emoji 🔥 (nunca a palavra)
+         para identificar o estado de ordenação por velocidade. */
       var sortBtn = modal.querySelector('#proc-stock-sort-btn');
       if (sortBtn) {
         var ordemOriginalStock = Array.prototype.slice.call(trEls);
-        var ordenadoPorStock = false;
+        var estadoOrdenacao = 0; /* 0 = original, 1 = stock, 2 = velocidade (🔥) */
         sortBtn.disabled = false;
         sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
         sortBtn.style.setProperty('background', '#f2f2f2', 'important');
         sortBtn.style.setProperty('color', '#333', 'important');
         sortBtn.style.cursor = 'pointer';
+        var procPintarSortBtn = function(activo) {
+          sortBtn.style.setProperty('background', activo ? '#222' : '#f2f2f2', 'important');
+          sortBtn.style.setProperty('color', activo ? '#fff' : '#333', 'important');
+          sortBtn.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
+        };
         sortBtn.addEventListener('click', function() {
           var tbodyEl = body.querySelector('tbody');
           if (!tbodyEl) return;
-          if (ordenadoPorStock) {
+          estadoOrdenacao = (estadoOrdenacao + 1) % 3;
+          if (estadoOrdenacao === 0) {
             ordemOriginalStock.forEach(function(tr) { tbodyEl.appendChild(tr); });
-            sortBtn.style.setProperty('background', '#f2f2f2', 'important');
-            sortBtn.style.setProperty('color', '#333', 'important');
-            sortBtn.style.setProperty('border-color', '#ccc', 'important');
+            procPintarSortBtn(false);
+            sortBtn.innerHTML = '⇅ Ordenar por Stock';
             sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
-            ordenadoPorStock = false;
             return;
           }
           var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-artigo-row'));
+          if (estadoOrdenacao === 1) {
+            linhasTbody.sort(function(a, b) {
+              return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
+            });
+            linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
+            procPintarSortBtn(true);
+            sortBtn.innerHTML = '⇅ Ordenar por Stock';
+            sortBtn.title = 'Clicar para ordenar por 🔥 — clicar de novo volta à ordem original';
+            return;
+          }
           linhasTbody.sort(function(a, b) {
-            return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
+            return (parseInt(b.getAttribute('data-fire-level'), 10) || 0) - (parseInt(a.getAttribute('data-fire-level'), 10) || 0)
+              || ((parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0));
           });
           linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
-          sortBtn.style.setProperty('background', '#222', 'important');
-          sortBtn.style.setProperty('color', '#fff', 'important');
-          sortBtn.style.setProperty('border-color', '#222', 'important');
+          procPintarSortBtn(true);
+          sortBtn.innerHTML = '⇅ Ordenar por 🔥';
           sortBtn.title = 'Clicar para voltar à ordem original';
-          ordenadoPorStock = true;
         });
       }
     });

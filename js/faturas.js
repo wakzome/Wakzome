@@ -4552,13 +4552,13 @@
       +       '<span id="proc-session-label" style="display:none;"></span>'
       +       '<span id="proc-saveStatus" class="proc-save-status" style="display:none;"></span>'
       +     '</div>'
-      +     '<div id="proc-session-bar-center" style="position:relative;">'
-      +       '<button class="proc-btn primary" id="proc-start-new-btn">Iniciar nova sess\u00e3o</button>'
-      +       '<button type="button" id="proc-start-extra-btn" title="Importar hist\u00f3ricos" style="margin-left:6px;font-size:.85rem;font-weight:700;color:#8a6d1a;background:none;border:1px solid #C9A227;border-radius:6px;width:28px;height:28px;line-height:1;cursor:pointer;vertical-align:middle;">\u2731</button>'
-      +       '<div id="proc-start-extra-menu" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.14);z-index:20;min-width:220px;overflow:hidden;text-align:left;">'
-      +         '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;">Importar hist\u00f3rico</button>'
-      +         '<button type="button" id="proc-import-vendas-btn" onclick="procAbrirImportadorVendas();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;border-top:1px solid #eee;">Importar vendas (Primavera)</button>'
-      +       '</div>'
+      +     '<div id="proc-session-bar-center">'
+      +       '<button class="proc-btn primary" id="proc-start-new-btn">Iniciar nova sessão</button>'
+      +       '<button type="button" id="proc-start-extra-btn" title="Importar históricos" style="margin-left:6px;font-size:.85rem;font-weight:700;color:#8a6d1a;background:none;border:1px solid #C9A227;border-radius:6px;width:28px;height:28px;line-height:1;cursor:pointer;vertical-align:middle;">✱</button>'
+      +     '</div>'
+      +     '<div id="proc-start-extra-menu" style="display:none;position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.14);z-index:50;min-width:220px;overflow:hidden;text-align:left;">'
+      +       '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;">Importar histórico</button>'
+      +       '<button type="button" id="proc-import-vendas-btn2" onclick="procAbrirImportadorVendas();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;border-top:1px solid #eee;">Importar vendas (Primavera)</button>'
       +     '</div>'
       +     '<div id="proc-session-bar-right" style="display:none;">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#9776; sess&#245;es &#x25be;</button>'
@@ -4628,15 +4628,26 @@
     document.getElementById('proc-start-new-btn').addEventListener('click', function() { procStartNewSession(); });
 
     /* ── ✱ ao lado de "Iniciar nova sessão": abre/fecha o menu com
-       Importar histórico / Importar vendas (Primavera) — simples
-       toggle de display, fecha ao clicar fora ou num dos itens. ── */
+       Importar histórico / Importar vendas (Primavera). Posicionamento
+       fixed calculado a partir do botão (mesma técnica já usada e
+       comprovada por procToggleSessionMenu), nunca dependente do
+       layout do proc-session-bar-center — evita alterar o container
+       existente. ── */
     (function() {
       var extraBtn  = document.getElementById('proc-start-extra-btn');
       var extraMenu = document.getElementById('proc-start-extra-menu');
       if (!extraBtn || !extraMenu) return;
       extraBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        extraMenu.style.display = (extraMenu.style.display === 'none') ? 'block' : 'none';
+        var isHidden = extraMenu.style.display === 'none' || !extraMenu.style.display;
+        if (isHidden) {
+          var rect = extraBtn.getBoundingClientRect();
+          extraMenu.style.top  = (rect.bottom + 6) + 'px';
+          extraMenu.style.left = rect.left + 'px';
+          extraMenu.style.display = 'block';
+        } else {
+          extraMenu.style.display = 'none';
+        }
       });
       document.addEventListener('click', function(e) {
         if (extraMenu.style.display !== 'none' && !extraMenu.contains(e.target) && e.target !== extraBtn) {

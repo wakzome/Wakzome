@@ -1144,7 +1144,8 @@
      em qualquer execucao futura. */
   var TAM_IMPORT_EXCECOES = [
     { data: '14.08.2026', guia: '210' },
-    { data: '17.08.2026', guia: '211' }
+    { data: '17.08.2026', guia: '211' },
+    { data: '21.08.2026', guia: '220' }
   ];
 
   /* "DD.MM.YYYY" → segunda-feira dessa semana, calculada com getters

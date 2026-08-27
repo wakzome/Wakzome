@@ -5241,6 +5241,8 @@
             if (fogoInfoRadio && fogoInfoRadio.fireLevel > 0) {
               var opacidadeFogoRadio = (fogoInfoRadio.fireLevel === 2) ? '1' : '.45';
               celFogo.innerHTML = ' <span class="proc-ref-fogo" data-fire-level="' + fogoInfoRadio.fireLevel + '" style="opacity:' + opacidadeFogoRadio + ';" title="' + procTituloFogo(fogoInfoRadio, stockA4 + stockA5).replace(/"/g, '&quot;') + '">\ud83d\udd25</span>';
+            } else if (procReferenciaEmGelo(fogoInfoRadio)) {
+              celFogo.innerHTML = ' <span class="proc-ref-gelo" title="' + procTituloGelo(fogoInfoRadio, stockA4 + stockA5).replace(/"/g, '&quot;') + '">\u2744\ufe0f</span>';
             } else {
               celFogo.innerHTML = '';
             }
@@ -5581,6 +5583,26 @@
     return nivel + ' de velocidade de venda em Wakzome'
       + (dias != null ? ' — esgotou em ' + dias + ' dia' + (dias === 1 ? '' : 's') : '')
       + (vel ? ' (' + vel + ' peças/dia)' : '')
+      + '.';
+  }
+
+  /* GELO — lote parado ha mais de 21 dias sem nenhuma venda. So se
+     aplica ao lote que a FIFO ja alcancou e esta mesmo "em curso"
+     (front_ativo — dias/velocidade so vem preenchidos nesse caso,
+     ver proc_recalcular_velocidade). Um lote ainda em fila ("ainda
+     nao tocado") tambem tem 0 vendas, mas nao por falta de procura —
+     nunca conta como gelo. Nunca coincide com o 🔥 (fogo exige sempre
+     velocidade > 0). */
+  var GELO_DIAS_MINIMO = 21;
+  function procReferenciaEmGelo(info) {
+    return !!(info && info.ativo && info.dias != null && info.dias > GELO_DIAS_MINIMO && Number(info.velocidadeDia) <= 0);
+  }
+
+  function procTituloGelo(info, stockAtual) {
+    if (!info) return 'Sem vendas há mais de ' + GELO_DIAS_MINIMO + ' dias desde a compra.';
+    var dias = info.dias;
+    return 'Sem nenhuma venda há ' + dias + ' dia' + (dias === 1 ? '' : 's') + ' desde a compra'
+      + (stockAtual != null ? ' — ' + stockAtual + ' peças por vender' : '')
       + '.';
   }
 
@@ -6494,6 +6516,8 @@
         if (fireLevelAtual > 0) {
           var opacidadeFogo = (fireLevelAtual === 2) ? '1' : '.45';
           badgeFogo = ' <span class="proc-ref-fogo" style="opacity:' + opacidadeFogo + ';" title="' + procTituloFogo(fogoInfo, stockA4 + stockA5).replace(/"/g, '&quot;') + '">🔥</span>';
+        } else if (procReferenciaEmGelo(fogoInfo)) {
+          badgeFogo = ' <span class="proc-ref-gelo" title="' + procTituloGelo(fogoInfo, stockA4 + stockA5).replace(/"/g, '&quot;') + '">❄️</span>';
         }
         celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + badgeFogo + (venda.temLojaNaoMapeada ? ' ⚠' : '');
         if (venda.temLojaNaoMapeada) {

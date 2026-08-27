@@ -5061,7 +5061,7 @@
           +   '&nbsp;&nbsp;<span style="color:#999;">|</span>&nbsp;&nbsp;'
           +   '<span style="color:#000 !important;font-weight:600 !important;opacity:1 !important;">Stock A4:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a4" style="color:#000 !important;font-weight:700 !important;opacity:1 !important;">\u2026</span>&nbsp;&nbsp;'
           +   '<span style="color:#000 !important;font-weight:600 !important;opacity:1 !important;">Stock A5:</span> <span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="a5" style="color:#000 !important;font-weight:700 !important;opacity:1 !important;">\u2026</span>&nbsp;&nbsp;'
-          +   '<span style="color:#000 !important;font-weight:600 !important;opacity:1 !important;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000 !important;font-weight:700 !important;opacity:1 !important;">\u2026</span></strong>'
+          +   '<span style="color:#000 !important;font-weight:600 !important;opacity:1 !important;">Stock Total:</span> <strong><span class="proc-raio-stock" data-idx="' + idxBloco + '" data-campo="total" style="color:#000 !important;font-weight:700 !important;opacity:1 !important;">\u2026</span></strong>' + '<span class="proc-raio-fogo" data-idx="' + idxBloco + '"></span>'
           + '</div>'
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
@@ -5159,6 +5159,7 @@
         gruposPorRef[info.refTexto].push(info);
       });
 
+      procObterFogoPorReferencias(Object.keys(gruposPorRef), function(fogoMapa) {
       var paresStockRadio = Object.keys(gruposPorRef).map(function(refTexto) {
         var grupo = gruposPorRef[refTexto];
         var lotesA4 = procLotesOrdenados(grupo, 'comprasA4', 'cutoffA4');
@@ -5209,7 +5210,15 @@
           if (venda.temLojaNaoMapeada) {
             celTotal.title = 'H\u00e1 vendas desta refer\u00eancia num posto de venda n\u00e3o mapeado para A4/A5 \u2014 n\u00e3o entraram neste c\u00e1lculo.';
           }
+          var celFogo = modal.querySelector('.proc-raio-fogo[data-idx="' + idxBloco + '"]');
+          if (celFogo) {
+            var fogoInfoRadio = fogoMapa[refTexto];
+            celFogo.innerHTML = (fogoInfoRadio && fogoInfoRadio.fire)
+              ? ' <span class="proc-ref-fogo" title="Velocidade de venda no topo 10% de Wakzome.">\ud83d\udd25</span>'
+              : '';
+          }
         });
+      });
       });
     }
   }
@@ -5394,6 +5403,53 @@
      stock), um mapa referencia -> array de lotes { fornecedorNorm,
      fornecedorDisplay, comprasA4, comprasA5, cutoffA4, cutoffA5 }, um
      lote por cada fornecedor que alguma vez comprou essa referencia. */
+  /* ══════════════ FOGO — VELOCIDADE DE VENDA POR REFERENCIA ══════════════
+     Le (nunca calcula) os dados ja prontos em proc_referencia_velocidade,
+     preenchidos pela RPC proc_recalcular_velocidade — essa RPC corre no
+     Postgres a cada 15 dias (ver procVerificarVelocidadeStock, chamada
+     uma vez ao iniciar o modulo) e define "rapido" pelo proprio historico
+     de vendas de Wakzome (percentil 90 de velocidade), nunca um numero
+     fixo no código. Aqui so se pede, por lote de referencias, se cada
+     uma esta ou nao "em fogo" — sem nenhum calculo do lado do cliente. */
+  function procObterFogoPorReferencias(refs, callback) {
+    var unicas = Array.prototype.filter.call(refs || [], function(r, i, arr) {
+      return r && arr.indexOf(r) === i;
+    });
+    if (!unicas.length) { callback({}); return; }
+    var listaIn = unicas.map(function(r) { return encodeURIComponent(r); }).join(',');
+    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')&select=referencia,fire,esgotado', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var mapa = {};
+        (rows || []).forEach(function(row) { mapa[row.referencia] = { fire: !!row.fire, esgotado: !!row.esgotado }; });
+        callback(mapa);
+      })
+      .catch(function() { callback({}); });
+  }
+
+  /* Verifica, uma vez ao iniciar o modulo, se ja passaram 15 dias desde
+     o ultimo calculo (proc_velocidade_meta.computed_at) — se sim, chama
+     a RPC para recalcular (assincrono, nunca bloqueia a UI; a proxima
+     abertura de um modal ja le o resultado novo). Nunca corre a cada
+     consulta de stock — so nesta verificacao pontual ao iniciar. */
+  var VELOCIDADE_RECALCULO_DIAS = 15;
+  function procVerificarVelocidadeStock() {
+    procSbFetch('proc_velocidade_meta?select=computed_at&limit=1', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        var precisaRecalcular = true;
+        if (rows && rows.length && rows[0].computed_at) {
+          var dias = (Date.now() - new Date(rows[0].computed_at).getTime()) / 86400000;
+          precisaRecalcular = dias >= VELOCIDADE_RECALCULO_DIAS;
+        }
+        if (!precisaRecalcular) return;
+        procSbFetch('rpc/proc_recalcular_velocidade', { method: 'POST' })
+          .then(function(r) { if (!r.ok) console.warn('[proc] falha ao recalcular velocidade de stock, status', r.status); })
+          .catch(function(e) { console.warn('[proc] erro ao recalcular velocidade de stock:', e); });
+      })
+      .catch(function(e) { console.warn('[proc] erro ao verificar velocidade de stock:', e); });
+  }
+
   function procConstruirLotesPorReferencia(listaCompleta) {
     var porRef = {};
     (listaCompleta || []).forEach(function(item) {
@@ -6195,6 +6251,7 @@
        cutoff enviado ao RPC é o do lote MAIS ANTIGO entre todos —
        depois o total vendido é repartido em FIFO (ver procAlocarFifo),
        e só a parte deste fornecedor é mostrada aqui. */
+    procObterFogoPorReferencias(referencias, function(fogoMapa) {
     var paresStock = referencias.map(function(ref) {
       var lotesA4 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA4', 'cutoffA4');
       var lotesA5 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA5', 'cutoffA5');
@@ -6237,7 +6294,13 @@
           celA5.title = detalheTextoA5;
           celA5.style.cursor = 'help';
         }
-        celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + (venda.temLojaNaoMapeada ? ' ⚠' : '');
+        var fogoInfo = fogoMapa[ref];
+        var badgeFogo = '';
+        if (fogoInfo && fogoInfo.fire) {
+          var tituloFogo = 'Velocidade de venda no topo 10% de Wakzome (' + (fogoInfo.esgotado ? 'já esgotou' : 'ainda em stock, atenção à ruptura') + ').';
+          badgeFogo = ' <span class="proc-ref-fogo" title="' + tituloFogo.replace(/"/g, '&quot;') + '">🔥</span>';
+        }
+        celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + badgeFogo + (venda.temLojaNaoMapeada ? ' ⚠' : '');
         if (venda.temLojaNaoMapeada) {
           celTotal.title = 'Há vendas desta referência num posto de venda não mapeado para A4/A5 — não entraram neste cálculo.';
         }
@@ -6285,7 +6348,10 @@
           ordenadoPorStock = true;
         });
       }
-    });  }
+    });
+    });
+  }
+
 
   /* ── Render session list in the start panel ── */
   function procRenderStartPanel() {
@@ -6600,6 +6666,11 @@
        sobrescreve nem duplica — ver procImportarParfoisAutomatico). */
     procImportarParfoisAutomatico();
 
+
+    /* Verifica se ja toca recalcular a velocidade de venda por
+       referencia (percentil 90, a cada 15 dias — ver
+       procVerificarVelocidadeStock). Non-blocking, silenciosa. */
+    procVerificarVelocidadeStock();
     /* Show start area (non-blocking) — loads remote keys then renders */
     procShowStartArea();
 

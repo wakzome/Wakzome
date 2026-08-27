@@ -6598,7 +6598,12 @@
     /* Undo keyboard shortcut (Ctrl+Z) */
     procInitUndoKeyboard();
 
-    /* ── adm-back-btn: guardar, fechar sessão e ocultar botões flutuantes ── */
+    /* ── adm-back-btn: guardar, fechar sessão e ocultar botões flutuantes ──
+       Antes de guardar, verifica se ha facturas com data corrigida ainda
+       por mover (ver botão ✱ / procResolverFecharComFacturasCorrigidas)
+       — se houver, move-as primeiro para a sessão semanal correcta (a
+       mesma logica ja usada e confiavel, so agora ligada ao botao real de
+       sair, que antes nunca a disparava). */
     (function() {
       var backBtn = document.getElementById('adm-back-btn');
       if (!backBtn || backBtn._procBound) return;
@@ -6606,23 +6611,39 @@
       backBtn.addEventListener('click', function(e) {
         if (!_isSynced || !_activeSessionKey) return;
         e.stopImmediatePropagation();
-        if (_isSynced) procSaveSession(false);
-        procLockRelease();
-        procHideFloatingButtons();
-        _isSynced         = false;
-        _activeSessionKey = null;
-        _procInited       = false;
-        faturaCount   = 0;
-        activeFaturas = [];
-        Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-        _procSentRefs = {};
-        var cont = document.getElementById('proc-faturasContainer');
-        if (cont) cont.innerHTML = '';
-        setTimeout(function() {
-          backBtn._procBound = false;
-          backBtn.click();
-          backBtn._procBound = true;
-        }, 80);
+
+        function finalizarSaidaVoltar() {
+          procLockRelease();
+          procHideFloatingButtons();
+          _isSynced         = false;
+          _activeSessionKey = null;
+          _procInited       = false;
+          faturaCount   = 0;
+          activeFaturas = [];
+          Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+          _procSentRefs = {};
+          var cont = document.getElementById('proc-faturasContainer');
+          if (cont) cont.innerHTML = '';
+          setTimeout(function() {
+            backBtn._procBound = false;
+            backBtn.click();
+            backBtn._procBound = true;
+          }, 80);
+        }
+
+        var payloadAtual = procBuildSavePayload();
+        var pendentes = payloadAtual ? payloadAtual.faturas.filter(function(f) {
+          return f.dataCorrigida && f.dataCorrigida.data && !f.dataCorrigida.movida;
+        }) : [];
+
+        if (payloadAtual && pendentes.length) {
+          var keyAtual = _activeSessionKey || getSessionKey();
+          procSetSyncStatus('syncing', 'a mover factura(s) corrigida(s)…');
+          procResolverFecharComFacturasCorrigidas(keyAtual, payloadAtual, pendentes, finalizarSaidaVoltar);
+        } else {
+          procSaveSession(false);
+          finalizarSaidaVoltar();
+        }
       }, true);
     })();
   }
@@ -6650,39 +6671,59 @@
     /* Se há sessão activa, a UI já está correcta */
   }
 
-  /* ── procDoCloseSession: guarda e reseta o estado da sessão ── */
+  /* ── procDoCloseSession: guarda e reseta o estado da sessão ──
+     Mesma verificacao de facturas com data corrigida pendente (ver
+     adm-back-btn acima) — esta e a outra saida real do modulo (fechar
+     a overlay), por isso precisa da mesma ligacao. */
   function procDoCloseSession() {
-    if (_isSynced && _activeSessionKey) procSaveSession(false);
-    procLockRelease();
-    _isSynced         = false;
-    _activeSessionKey = null;
-    _procInited       = false;
-    faturaCount       = 0;
-    activeFaturas     = [];
-    Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
-    _procSentRefs     = {};
-    var cont = document.getElementById('proc-faturasContainer');
-    if (cont) cont.innerHTML = '';
-    var saveBtn = document.getElementById('proc-saveBtn');
-    if (saveBtn) { saveBtn.style.display = 'none'; saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
-    var guiaBtn = document.getElementById('proc-guiaBtn');
-    if (guiaBtn) guiaBtn.style.display = 'none';
-    var saveStatus = document.getElementById('proc-saveStatus');
-    if (saveStatus) saveStatus.style.display = 'none';
-    var lbl = document.getElementById('proc-session-label');
-    if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
-    var main = document.getElementById('proc-main-area');
-    if (main) main.style.display = 'none';
-    var start = document.getElementById('proc-session-start');
-    if (start) start.style.display = 'flex';
-    var newBtnWrap3 = document.getElementById('proc-session-bar-center');
-    if (newBtnWrap3) newBtnWrap3.style.display = '';
-    var barRight3 = document.getElementById('proc-session-bar-right');
-    if (barRight3) barRight3.style.display = 'none';
-    procHideFloatingButtons();
-    var backBtn = document.getElementById('adm-back-btn');
-    if (backBtn) backBtn._procBound = false;
-    procLoadRemoteKeys(procRenderStartPanel);
+    function finalizarFecho() {
+      procLockRelease();
+      _isSynced         = false;
+      _activeSessionKey = null;
+      _procInited       = false;
+      faturaCount       = 0;
+      activeFaturas     = [];
+      Object.keys(rowCounts).forEach(function(k) { delete rowCounts[k]; });
+      _procSentRefs     = {};
+      var cont = document.getElementById('proc-faturasContainer');
+      if (cont) cont.innerHTML = '';
+      var saveBtn = document.getElementById('proc-saveBtn');
+      if (saveBtn) { saveBtn.style.display = 'none'; saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
+      var guiaBtn = document.getElementById('proc-guiaBtn');
+      if (guiaBtn) guiaBtn.style.display = 'none';
+      var saveStatus = document.getElementById('proc-saveStatus');
+      if (saveStatus) saveStatus.style.display = 'none';
+      var lbl = document.getElementById('proc-session-label');
+      if (lbl) { lbl.textContent = ''; lbl.style.display = 'none'; }
+      var main = document.getElementById('proc-main-area');
+      if (main) main.style.display = 'none';
+      var start = document.getElementById('proc-session-start');
+      if (start) start.style.display = 'flex';
+      var newBtnWrap3 = document.getElementById('proc-session-bar-center');
+      if (newBtnWrap3) newBtnWrap3.style.display = '';
+      var barRight3 = document.getElementById('proc-session-bar-right');
+      if (barRight3) barRight3.style.display = 'none';
+      procHideFloatingButtons();
+      var backBtn = document.getElementById('adm-back-btn');
+      if (backBtn) backBtn._procBound = false;
+      procLoadRemoteKeys(procRenderStartPanel);
+    }
+
+    if (!_isSynced || !_activeSessionKey) { finalizarFecho(); return; }
+
+    var payloadAtual = procBuildSavePayload();
+    var pendentes = payloadAtual ? payloadAtual.faturas.filter(function(f) {
+      return f.dataCorrigida && f.dataCorrigida.data && !f.dataCorrigida.movida;
+    }) : [];
+
+    if (payloadAtual && pendentes.length) {
+      var keyAtual = _activeSessionKey || getSessionKey();
+      procSetSyncStatus('syncing', 'a mover factura(s) corrigida(s)…');
+      procResolverFecharComFacturasCorrigidas(keyAtual, payloadAtual, pendentes, finalizarFecho);
+    } else {
+      procSaveSession(false);
+      finalizarFecho();
+    }
   }
 
   function closeProcessamentoOverlay() {

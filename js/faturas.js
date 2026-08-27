@@ -5018,12 +5018,15 @@
                 + '<td class="center">' + l.a4 + '</td>'
                 + '<td class="center">' + l.a5 + '</td>'
                 + '<td class="center" style="font-weight:700;font-size:1.15em;color:#000;">' + l.total + '</td>'
+                + '<td class="center proc-raio-lote-esgotou" data-idx="' + idxBloco + '" data-session="' + l.sessionKey + '">\u2026</td>'
+                + '<td class="center proc-raio-lote-dias" data-idx="' + idxBloco + '" data-session="' + l.sessionKey + '">\u2026</td>'
+                + '<td class="center proc-raio-lote-veloc" data-idx="' + idxBloco + '" data-session="' + l.sessionKey + '">\u2026</td>'
                 + '<td class="center">' + (l.precoCusto ? l.precoCusto.toFixed(2) : '\u2014') + '</td>'
                 + '<td class="center">' + (l.pvp != null ? l.pvp.toFixed(2) : '\u2014') + '</td>'
                 + '<td class="center">' + (l.margem != null ? l.margem.toFixed(1) + '%' : '\u2014') + '</td>'
                 + '</tr>';
             }).join('')
-          : '<tr class="empty-row"><td colspan="7">Sem hist\u00f3rico de sess\u00f5es</td></tr>';
+          : '<tr class="empty-row"><td colspan="10">Sem hist\u00f3rico de sess\u00f5es</td></tr>';
 
         var refNovaLabel = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
 
@@ -5066,6 +5069,7 @@
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
           +     '<th class="center">Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center" style="font-size:1.15em;font-weight:700;color:#000;">Total</th>'
+          +     '<th class="center">Esgotou em</th><th class="center">Dias</th><th class="center">Un/dia</th>'
           +     '<th class="center">P. Custo</th><th class="center">PVP</th><th class="center">Margem</th>'
           +   '</tr></thead>'
           +   '<tbody>' + linhasHTML + '</tbody>'
@@ -5079,7 +5083,7 @@
     modal.className = 'proc-or-modal';
     modal.innerHTML =
         '<div class="proc-or-backdrop"></div>'
-      + '<div class="proc-or-panel proc-or-panel--radiografia">'
+      + '<div class="proc-or-panel proc-or-panel--radiografia" style="max-width:1320px;width:97vw;">'
       +   '<div class="proc-or-panel-header">'
       +     '<div class="proc-or-panel-title">'
       +       '<span class="proc-or-panel-title-main">Hist\u00f3rico da Refer\u00eancia</span>'
@@ -5187,14 +5191,26 @@
           var celA5 = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="a5"]');
           var celTotal = modal.querySelector('.proc-raio-stock[data-idx="' + idxBloco + '"][data-campo="total"]');
           if (!celA4 || !celA5 || !celTotal) return;
+          function procPreencherLotesErroRadio() {
+            bloco.linhas.forEach(function(l) {
+              var ce = modal.querySelector('.proc-raio-lote-esgotou[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
+              var cd = modal.querySelector('.proc-raio-lote-dias[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
+              var cv = modal.querySelector('.proc-raio-lote-veloc[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
+              if (ce) ce.textContent = '\u26a0';
+              if (cd) cd.textContent = '\u26a0';
+              if (cv) cv.textContent = '\u26a0';
+            });
+          }
           if (!stockMapa) {
             celA4.textContent = celA5.textContent = celTotal.textContent = '\u26a0';
+            procPreencherLotesErroRadio();
             return;
           }
           var venda = stockMapa[refTexto] || { vendidoA4: 0, vendidoA5: 0, temLojaNaoMapeada: false };
           if (venda.erro) {
             celA4.textContent = celA5.textContent = celTotal.textContent = '\u26a0';
             celA4.title = celA5.title = celTotal.title = 'Erro ao obter este lote do Supabase. Tenta recarregar.';
+            procPreencherLotesErroRadio();
             return;
           }
           var stockA4 = info.hasOwnProperty('stockA4') ? info.stockA4 : bloco.totalA4;
@@ -5210,9 +5226,9 @@
           if (venda.temLojaNaoMapeada) {
             celTotal.title = 'H\u00e1 vendas desta refer\u00eancia num posto de venda n\u00e3o mapeado para A4/A5 \u2014 n\u00e3o entraram neste c\u00e1lculo.';
           }
+          var fogoInfoRadio = fogoMapa[refTexto];
           var celFogo = modal.querySelector('.proc-raio-fogo[data-idx="' + idxBloco + '"]');
           if (celFogo) {
-            var fogoInfoRadio = fogoMapa[refTexto];
             if (fogoInfoRadio && fogoInfoRadio.fireLevel > 0) {
               var opacidadeFogoRadio = (fogoInfoRadio.fireLevel === 2) ? '1' : '.45';
               celFogo.innerHTML = ' <span class="proc-ref-fogo" data-fire-level="' + fogoInfoRadio.fireLevel + '" style="opacity:' + opacidadeFogoRadio + ';" title="' + procTituloFogo(fogoInfoRadio, stockA4 + stockA5).replace(/"/g, '&quot;') + '">\ud83d\udd25</span>';
@@ -5220,6 +5236,41 @@
               celFogo.innerHTML = '';
             }
           }
+
+          /* Colunas "Esgotou em / Dias / Un/dia" por sess\u00e3o \u2014 casa cada
+             linha (uma sess\u00e3o de compra) com o lote correspondente em
+             proc_referencia_velocidade pela DATA da sess\u00e3o, a mesma
+             data que a RPC usa como data_compra (nunca pela posi\u00e7\u00e3o na
+             lista: os lotes v\u00eam do mais antigo para o mais recente, as
+             linhas v\u00eam do mais recente primeiro). Sem correspond\u00eancia
+             (ex.: sess\u00e3o com menos de 5 pe\u00e7as hist\u00f3ricas, fora do
+             c\u00e1lculo) mostra "\u2014" em vez de ficar preso no "\u2026". */
+          var lotesRef = (fogoInfoRadio && fogoInfoRadio.lotes) || [];
+          bloco.linhas.forEach(function(l) {
+            var celEsgotou = modal.querySelector('.proc-raio-lote-esgotou[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
+            var celDias = modal.querySelector('.proc-raio-lote-dias[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
+            var celVeloc = modal.querySelector('.proc-raio-lote-veloc[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
+            if (!celEsgotou || !celDias || !celVeloc) return;
+            var dChave = procDataDeChave(l.sessionKey);
+            var isoLinha = dChave ? procIsoAAAAMMDD(dChave.ano, dChave.mes, dChave.dia) : null;
+            var lote = isoLinha ? lotesRef.filter(function(lt) { return lt.data_compra === isoLinha; })[0] : null;
+            if (!lote) {
+              celEsgotou.textContent = '\u2014';
+              celDias.textContent = '\u2014';
+              celVeloc.textContent = '\u2014';
+              return;
+            }
+            if (lote.data_esgotamento) {
+              var de = lote.data_esgotamento.split('-');
+              celEsgotou.textContent = de[2] + '/' + de[1] + '/' + de[0].slice(2);
+            } else if (lote.ativo) {
+              celEsgotou.textContent = '\u2014 (em curso)';
+            } else {
+              celEsgotou.textContent = '\u2014';
+            }
+            celDias.textContent = (lote.dias != null) ? lote.dias : '\u2014';
+            celVeloc.textContent = (lote.velocidade_dia != null) ? Number(lote.velocidade_dia).toFixed(2) : '\u2014';
+          });
         });
       });
       });
@@ -5440,7 +5491,8 @@
             qtdLote: destaqueRow.qtd_lote,
             dataCompra: destaqueRow.data_compra,
             dataEsgotamento: destaqueRow.data_esgotamento,
-            recompra: lotes.length > 1
+            recompra: lotes.length > 1,
+            lotes: lotes
           };
         });
         callback(mapa);

@@ -5272,8 +5272,12 @@
             if (lote.data_esgotamento) {
               var de = lote.data_esgotamento.split('-');
               celEsgotou.textContent = de[2] + '/' + de[1] + '/' + de[0].slice(2);
-            } else if (lote.ativo) {
+            } else if (lote.ativo && lote.velocidade_dia != null) {
+              /* front_ativo (calculado no servidor): a FIFO ja chegou a este lote, esta mesmo a vender agora. */
               celEsgotou.textContent = '\u2014 (em curso)';
+            } else if (lote.ativo) {
+              /* Ainda ativo mas em fila atras de um lote mais antigo por esgotar — dias/velocidade ficam null na RPC precisamente para nao sugerir uma venda a 0 un/dia. */
+              celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
             } else {
               celEsgotou.textContent = '\u2014';
             }
@@ -6161,7 +6165,14 @@
      fetch a Supabase. "aoVoltar", se fornecido, reabre o modal
      anterior ao fechar este (ver procLigarVoltar) e troca o texto do
      botao para "Voltar". */
-  function procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar) {
+  /* estadoInicial (opcional) restaura filtro/ordenacao ao voltar da
+     radiografia: { filtro, anoAtivo, estadoOrdenacao }. Sem isto, cada
+     vez que se abria o historico de uma referencia e se voltava, o
+     modal recomecava do zero — texto de busca, ano activo e ordenacao
+     por Stock/🔥 todos perdidos, obrigando a reconfigurar tudo outra
+     vez so para continuar a consultar a mesma lista. */
+  function procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar, estadoInicial) {
+    var estadoOrdenacaoAtual = (estadoInicial && estadoInicial.estadoOrdenacao) || 0;
 
   /* Cache simples da ultima data de vendas carregada no sistema
      (tabela vendas_primavera_dias, ja pequena e ordenada por dia —
@@ -6339,9 +6350,18 @@
     body.querySelectorAll('.proc-artigo-row').forEach(function(tr) {
       tr.addEventListener('click', function() {
         var ref = tr.getAttribute('data-ref');
+        /* Captura o filtro/ordenacao actuais (var hoisted, ja tem os
+           valores reais neste ponto — o clique so acontece depois de
+           todo o setup sincrono abaixo ja ter corrido) para os poder
+           restaurar quando se volta desta referencia. */
+        var estadoAoAbrir = {
+          filtro: filtroInput ? filtroInput.value : '',
+          anoAtivo: anoAtivo,
+          estadoOrdenacao: estadoOrdenacaoAtual
+        };
         procCloseModal(modal);
         procAbrirRadiografia(ref, null, function() {
-          procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar);
+          procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar, estadoAoAbrir);
         });
       });
     });
@@ -6349,8 +6369,9 @@
     /* Filtro combinado: texto (referencia/descricao) + ano activo
        (botao no cabecalho da coluna). Uma linha so fica visivel se
        passar nos dois criterios ao mesmo tempo. */
-    var anoAtivo = null;
+    var anoAtivo = (estadoInicial && estadoInicial.anoAtivo != null) ? estadoInicial.anoAtivo : null;
     var filtroInput = modal.querySelector('#proc-artigos-filtro');
+    if (filtroInput && estadoInicial && estadoInicial.filtro) filtroInput.value = estadoInicial.filtro;
 
     function procAplicarFiltrosArtigos() {
       var q = filtroInput ? filtroInput.value.trim().toLowerCase() : '';
@@ -6382,7 +6403,8 @@
     }
 
     modal.querySelectorAll('.proc-artigos-ano-btn').forEach(function(btn) {
-      procPintarBotaoAno(btn, false);
+      var activoInit = anoAtivo !== null && parseInt(btn.getAttribute('data-ano'), 10) === anoAtivo;
+      procPintarBotaoAno(btn, activoInit);
       btn.addEventListener('click', function() {
         var ano = parseInt(btn.getAttribute('data-ano'), 10);
         anoAtivo = (anoAtivo === ano) ? null : ano;
@@ -6393,6 +6415,11 @@
         procAplicarFiltrosArtigos();
       });
     });
+
+    /* Aplica de imediato o filtro/ano restaurados de estadoInicial —
+       sem isto o texto/ano ficavam visualmente correctos mas as linhas
+       so seriam filtradas no proximo "input"/clique manual. */
+    if (estadoInicial && (estadoInicial.filtro || estadoInicial.anoAtivo != null)) procAplicarFiltrosArtigos();
 
     /* Stock actual (A4/A5/Total) = pecas compradas ate hoje menos as
        vendidas desde a primeira compra em cada armazem — calculado
@@ -6489,22 +6516,21 @@
       var sortBtn = modal.querySelector('#proc-stock-sort-btn');
       if (sortBtn) {
         var ordemOriginalStock = Array.prototype.slice.call(trEls);
-        var estadoOrdenacao = 0; /* 0 = original, 1 = stock, 2 = velocidade (🔥) */
         sortBtn.disabled = false;
-        sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
-        sortBtn.style.setProperty('background', '#f2f2f2', 'important');
-        sortBtn.style.setProperty('color', '#333', 'important');
         sortBtn.style.cursor = 'pointer';
         var procPintarSortBtn = function(activo) {
           sortBtn.style.setProperty('background', activo ? '#222' : '#f2f2f2', 'important');
           sortBtn.style.setProperty('color', activo ? '#fff' : '#333', 'important');
           sortBtn.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
         };
-        sortBtn.addEventListener('click', function() {
+        /* Aplica visualmente o estado actual de estadoOrdenacaoAtual —
+           chamada tanto pelo clique (que primeiro avança o estado) como
+           na restauracao inicial (estadoInicial.estadoOrdenacao), para
+           nao duplicar a logica de reordenar/pintar em dois sitios. */
+        var procAplicarEstadoOrdenacaoArt = function() {
           var tbodyEl = body.querySelector('tbody');
           if (!tbodyEl) return;
-          estadoOrdenacao = (estadoOrdenacao + 1) % 3;
-          if (estadoOrdenacao === 0) {
+          if (estadoOrdenacaoAtual === 0) {
             ordemOriginalStock.forEach(function(tr) { tbodyEl.appendChild(tr); });
             procPintarSortBtn(false);
             sortBtn.innerHTML = '⇅ Ordenar por Stock';
@@ -6512,7 +6538,7 @@
             return;
           }
           var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-artigo-row'));
-          if (estadoOrdenacao === 1) {
+          if (estadoOrdenacaoAtual === 1) {
             linhasTbody.sort(function(a, b) {
               return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
             });
@@ -6530,7 +6556,14 @@
           procPintarSortBtn(true);
           sortBtn.innerHTML = '⇅ Ordenar por 🔥';
           sortBtn.title = 'Clicar para voltar à ordem original';
+        };
+        sortBtn.addEventListener('click', function() {
+          estadoOrdenacaoAtual = (estadoOrdenacaoAtual + 1) % 3;
+          procAplicarEstadoOrdenacaoArt();
         });
+        /* Restaura a ordenacao que estava activa antes de ir para a
+           radiografia (ver estadoInicial no topo da funcao). */
+        procAplicarEstadoOrdenacaoArt();
       }
     }
     procObterFogoPorReferencias(referencias, function(fogoMapa) { fogoMapaArt = fogoMapa; procTentarRenderArtigosStock(); });

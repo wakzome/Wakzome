@@ -5214,7 +5214,7 @@
           if (celFogo) {
             var fogoInfoRadio = fogoMapa[refTexto];
             celFogo.innerHTML = (fogoInfoRadio && fogoInfoRadio.fire)
-              ? ' <span class="proc-ref-fogo" title="Velocidade de venda no topo 10% de Wakzome.">\ud83d\udd25</span>'
+              ? ' <span class="proc-ref-fogo" title="' + procTituloFogo(fogoInfoRadio).replace(/"/g, '&quot;') + '">\ud83d\udd25</span>'
               : '';
           }
         });
@@ -5417,14 +5417,44 @@
     });
     if (!unicas.length) { callback({}); return; }
     var listaIn = unicas.map(function(r) { return encodeURIComponent(r); }).join(',');
-    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')&select=referencia,fire,esgotado', { method: 'GET' })
+    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')&select=referencia,fire,esgotado,dias_ativo,velocidade_dia,total_comprado,total_vendido', { method: 'GET' })
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(rows) {
         var mapa = {};
-        (rows || []).forEach(function(row) { mapa[row.referencia] = { fire: !!row.fire, esgotado: !!row.esgotado }; });
+        (rows || []).forEach(function(row) {
+          mapa[row.referencia] = {
+            fire: !!row.fire, esgotado: !!row.esgotado,
+            diasAtivo: row.dias_ativo, velocidadeDia: row.velocidade_dia,
+            totalComprado: row.total_comprado, totalVendido: row.total_vendido
+          };
+        });
         callback(mapa);
       })
       .catch(function() { callback({}); });
+  }
+
+  /* Texto do tooltip do 🔥, construido so a partir de numeros ja
+     calculados e guardados (nunca um novo calculo de negocio): se ja
+     esgotou, quantos dias levou desde a primeira venda; se ainda tem
+     stock, a velocidade actual, quantas pecas restam, e em quantos
+     dias se esgotaria a esse ritmo — o suficiente para decidir se vale
+     a pena recomprar, sem abrir mais nada. */
+  function procTituloFogo(info) {
+    if (!info) return 'Top 10% de velocidade de venda em Wakzome.';
+    var vel = (info.velocidadeDia != null) ? Number(info.velocidadeDia).toFixed(2) : null;
+    if (info.esgotado) {
+      var dias = (info.diasAtivo != null) ? info.diasAtivo : null;
+      return 'Top 10% de velocidade de venda em Wakzome'
+        + (dias != null ? ' — esgotou em ' + dias + ' dia' + (dias === 1 ? '' : 's') + ' desde a primeira venda' : '')
+        + (vel ? ' (' + vel + ' peças/dia).' : '.');
+    }
+    var restante = (info.totalComprado != null && info.totalVendido != null) ? (info.totalComprado - info.totalVendido) : null;
+    var diasParaEsgotar = (restante != null && info.velocidadeDia > 0) ? Math.round(restante / info.velocidadeDia) : null;
+    return 'Top 10% de velocidade de venda em Wakzome'
+      + (vel ? ' — ' + vel + ' peças/dia' : '')
+      + (restante != null ? '; restam ' + restante + ' peças' : '')
+      + (diasParaEsgotar != null ? '; ao ritmo actual esgota em ~' + diasParaEsgotar + ' dia' + (diasParaEsgotar === 1 ? '' : 's') : '')
+      + '.';
   }
 
   /* Verifica, uma vez ao iniciar o modulo, se ja passaram 15 dias desde
@@ -6297,8 +6327,7 @@
         var fogoInfo = fogoMapa[ref];
         var badgeFogo = '';
         if (fogoInfo && fogoInfo.fire) {
-          var tituloFogo = 'Velocidade de venda no topo 10% de Wakzome (' + (fogoInfo.esgotado ? 'já esgotou' : 'ainda em stock, atenção à ruptura') + ').';
-          badgeFogo = ' <span class="proc-ref-fogo" title="' + tituloFogo.replace(/"/g, '&quot;') + '">🔥</span>';
+          badgeFogo = ' <span class="proc-ref-fogo" title="' + procTituloFogo(fogoInfo).replace(/"/g, '&quot;') + '">🔥</span>';
         }
         celTotal.innerHTML = '<strong>' + (stockA4 + stockA5) + '</strong>' + badgeFogo + (venda.temLojaNaoMapeada ? ' ⚠' : '');
         if (venda.temLojaNaoMapeada) {

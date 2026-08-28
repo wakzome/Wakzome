@@ -4579,9 +4579,10 @@
       +         '<input type="text" id="proc-busca-referencia-input" class="proc-busca-input" autocomplete="off" placeholder="Consultar refer\u00eancia (original ou refer\u00eancia interna)\u2026">'
       +         '<div id="proc-busca-dropdown" class="proc-busca-dropdown hidden"></div>'
       +       '</div>'
-      +       '<div style="text-align:right;margin:2px 2px 10px;">'
-      +         '<button type="button" id="proc-totais-fornecedor-btn" onclick="procMostrarModalTotaisPorFornecedor()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Totais por Fornecedor</button>'
-      +         '<button type="button" id="proc-artigos-fornecedor-btn" onclick="procMostrarModalFornecedoresArtigos()" style="font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#000;opacity:.35;background:none;border:none;cursor:pointer;padding:2px 4px;">Artigos por Fornecedor</button>'
+      +       '<div style="text-align:center;margin:2px 2px 14px;display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +         '<button type="button" id="proc-totais-fornecedor-btn" onclick="procMostrarModalTotaisPorFornecedor()" style="font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#333;background:#f2f2f2;border:1px solid #ccc;border-radius:8px;cursor:pointer;padding:8px 14px;">Totais por Fornecedor</button>'
+      +         '<button type="button" id="proc-artigos-fornecedor-btn" onclick="procMostrarModalFornecedoresArtigos()" style="font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#333;background:#f2f2f2;border:1px solid #ccc;border-radius:8px;cursor:pointer;padding:8px 14px;">Artigos por Fornecedor</button>'
+      +         '<button type="button" id="proc-alertas-globais-btn" onclick="procMostrarModalAlertasGlobais()" title="Alertas globais — 🔥 ❄️ ⚠ em todos os fornecedores" style="font-size:.85rem;font-weight:700;color:#8a6d1a;background:none;border:1px solid #C9A227;border-radius:6px;width:34px;height:34px;line-height:1;cursor:pointer;vertical-align:middle;">✱</button>'
       +       '</div>'
       +       '<div id="proc-start-sessions-list"></div>'
       +     '</div>'
@@ -6619,6 +6620,370 @@
       procCalcularStockLote(paresStock, function(stockMapa) { stockMapaArt = stockMapa; procTentarRenderArtigosStock(); });
     }
   }
+
+  /* ══════════════ ALERTAS GLOBAIS (✱ ao lado de "Artigos por Fornecedor") ══════════════
+     Achata TODOS os fornecedores numa unica tabela — uma linha por
+     par (fornecedor, referencia) — para se poder ordenar o catalogo
+     inteiro pelos 3 sinais de risco ja calculados noutros sitios da
+     app (🔥 velocidade de venda, ❄️ parado ha mais de 21 dias, ⚠
+     stock negativo), sem ter de abrir fornecedor a fornecedor. Reusa
+     inteiramente a mesma logica de stock partilhado/FIFO ja usada em
+     procMostrarModalArtigosDoFornecedor (procConstruirLotesPorReferencia
+     + procAlocarFifo): quando duas referencias do mesmo codigo vem de
+     fornecedores diferentes, o pedido de stock ao Supabase e feito
+     UMA SO VEZ por referencia (nunca uma vez por fornecedor — o total
+     vendido tem de ser repartido em FIFO entre eles, exactamente como
+     ja acontecia), so a apresentacao final e que mostra a parte de
+     cada fornecedor em linhas separadas. */
+  function procTituloNegativo(stockTotal) {
+    return 'Stock negativo (' + stockTotal + ' peças) — normalmente sinal de um movimento entre lojas não registado no Primavera. A investigar.';
+  }
+
+  var _procCacheStockFogoAlertas = null;
+  function procMostrarModalAlertasGlobais(listaParam, estadoInicial) {
+    if (!listaParam) {
+      var oldLoading = document.getElementById('proc-alertas-globais-modal');
+      if (oldLoading && oldLoading.parentNode) oldLoading.parentNode.removeChild(oldLoading);
+      var modalLoading = document.createElement('div');
+      modalLoading.id = 'proc-alertas-globais-modal';
+      modalLoading.className = 'proc-or-modal';
+      modalLoading.innerHTML =
+          '<div class="proc-or-backdrop"></div>'
+        + '<div class="proc-or-panel" style="max-width:1320px;width:97vw;">'
+        +   '<div class="proc-or-panel-header">'
+        +     '<div class="proc-or-panel-title"><span class="proc-or-panel-title-main">Alertas · Todos os Fornecedores</span></div>'
+        +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+        +   '</div>'
+        +   '<div class="proc-or-scroll" id="proc-alertas-globais-body"><p style="font-size:.8rem;color:#888;padding:20px;">A carregar…</p></div>'
+        + '</div>';
+      procOpenModal(modalLoading);
+      procBindClose(modalLoading);
+      procCarregarFaturasComData().then(function(lista) {
+        procMostrarModalAlertasGlobais(lista, estadoInicial);
+      }).catch(function(e) {
+        var b = document.getElementById('proc-alertas-globais-body');
+        if (b) b.innerHTML = '<p style="font-size:.8rem;color:#c00;padding:20px;">Erro ao carregar dados.</p>';
+        console.warn('[proc] erro ao carregar alertas globais:', e);
+      });
+      return;
+    }
+    var lista = listaParam;
+    var criterioAtivo = (estadoInicial && estadoInicial.criterio) || null; /* null | 'fogo' | 'gelo' | 'negativo' */
+
+    var old = document.getElementById('proc-alertas-globais-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    /* Acumula compras por (fornecedor, referencia) — mesma logica de
+       procMostrarModalArtigosDoFornecedor, so que sem filtrar por um
+       fornecedorNorm especifico. Separador  (nunca aparece em
+       texto normal) garante que a chave nunca colide entre um
+       fornecedor "AB"+referencia "C1" e "A"+"BC1". */
+    var mapaGlobal = {};
+    var anosSet = {};
+    lista.forEach(function(item) {
+      var bruto = (item.fatura.proveedor || '').trim();
+      if (!bruto) return;
+      var norm = procNormalize(bruto);
+      (item.fatura.rows || []).forEach(function(r) {
+        var ref = (r.ref || '').trim();
+        if (!ref) return;
+        var a4v = r.a4 || 0, a5v = r.a5 || 0;
+        var pecas = r.qtdFt || (a4v + a5v);
+        if (!pecas) return;
+        var chave = norm + '' + ref;
+        if (!mapaGlobal[chave]) mapaGlobal[chave] = { ref: ref, fornecedorNorm: norm, desc: '', anos: {}, comprasA4: 0, comprasA5: 0 };
+        var linha = mapaGlobal[chave];
+        if (!linha.desc && r.desc) linha.desc = r.desc;
+        linha.anos[item.ano] = (linha.anos[item.ano] || 0) + pecas;
+        linha.comprasA4 += a4v;
+        linha.comprasA5 += a5v;
+        anosSet[item.ano] = true;
+      });
+    });
+    var chaves = Object.keys(mapaGlobal);
+    var modal = document.createElement('div');
+    modal.id = 'proc-alertas-globais-modal';
+    modal.className = 'proc-or-modal';
+
+    if (!chaves.length) {
+      modal.innerHTML =
+          '<div class="proc-or-backdrop"></div>'
+        + '<div class="proc-or-panel" style="max-width:520px;width:90vw;">'
+        +   '<div class="proc-or-panel-header">'
+        +     '<div class="proc-or-panel-title"><span class="proc-or-panel-title-main">Alertas · Todos os Fornecedores</span></div>'
+        +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+        +   '</div>'
+        +   '<div class="proc-or-scroll"><p style="font-size:.8rem;color:#888;padding:20px;">Sem dados.</p></div>'
+        + '</div>';
+      procOpenModal(modal);
+      procBindClose(modal);
+      return;
+    }
+
+    var anos = Object.keys(anosSet).map(Number).sort(function(a, b) { return a - b; });
+    chaves.forEach(function(chave) {
+      var linha = mapaGlobal[chave];
+      var t = 0;
+      anos.forEach(function(a) { t += linha.anos[a] || 0; });
+      linha.total = t;
+    });
+    /* Ordem inicial por total comprado (maior para menor) — a mesma
+       convencao ja usada em Artigos por Fornecedor; os 3 botoes de
+       🔥/❄️/⚠ reordenam a partir daqui quando activados. */
+    chaves.sort(function(a, b) {
+      return mapaGlobal[b].total - mapaGlobal[a].total || mapaGlobal[a].ref.localeCompare(mapaGlobal[b].ref, 'pt');
+    });
+
+    var theadHTML = '<tr>'
+      +   '<th rowspan="2" style="vertical-align:bottom;">Referência</th>'
+      +   '<th rowspan="2" style="vertical-align:bottom;">Descrição</th>'
+      +   '<th rowspan="2" style="vertical-align:bottom;">Fornecedor</th>'
+      +   '<th colspan="' + (anos.length + 1) + '" class="center" style="border-bottom:1px solid #ddd;">Peças compradas</th>'
+      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual</th>'
+      +   '<th rowspan="2" style="vertical-align:bottom;">&nbsp;</th>'
+      + '</tr>'
+      + '<tr>'
+      + anos.map(function(a) { return '<th class="center" style="width:52px;">' + a + '</th>'; }).join('')
+      +   '<th class="center" style="width:66px;"><strong>Total</strong></th>'
+      +   '<th class="center" style="width:52px;">A4</th>'
+      +   '<th class="center" style="width:52px;">A5</th>'
+      +   '<th class="center" style="width:66px;"><strong>Total</strong></th>'
+      + '</tr>';
+
+    var tbodyHTML = chaves.map(function(chave, idx) {
+      var linha = mapaGlobal[chave];
+      var anosComPecas = [];
+      var cels = anos.map(function(a) {
+        var v = linha.anos[a] || 0;
+        if (v) anosComPecas.push(a);
+        return '<td class="center" style="padding-left:4px;padding-right:4px;">' + (v || '—') + '</td>';
+      }).join('');
+      return '<tr class="proc-alerta-row" data-idx="' + idx + '" '
+        + 'data-ref="' + linha.ref.replace(/"/g, '&quot;') + '" '
+        + 'data-filtro="' + (linha.ref + ' ' + (linha.desc || '') + ' ' + linha.fornecedorNorm).toLowerCase().replace(/"/g, '&quot;') + '" '
+        + 'data-anos="' + anosComPecas.join(',') + '" style="cursor:pointer;">'
+        + '<td>' + linha.ref + '</td>'
+        + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
+        + '<td style="font-size:.72rem;color:#666;">' + linha.fornecedorNorm + '</td>'
+        + cels
+        + '<td class="center"><strong>' + linha.total + '</strong></td>'
+        + '<td class="center proc-alerta-a4">…</td>'
+        + '<td class="center proc-alerta-a5">…</td>'
+        + '<td class="center proc-alerta-total">…</td>'
+        + '<td class="center proc-alerta-badge">…</td>'
+        + '</tr>';
+    }).join('');
+
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:1320px;width:97vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Alertas · Todos os Fornecedores</span>'
+      +       '<span class="proc-or-panel-title-sub">' + chaves.length + ' referências · ordenar por 🔥, ❄️ ou ⚠</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div style="padding:12px 20px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+      +     '<input type="text" id="proc-alertas-filtro" placeholder="Filtrar por referência, descrição ou fornecedor…" '
+      +       'style="flex:1;min-width:220px;box-sizing:border-box;padding:8px 10px;font-size:.8rem;border:1px solid #ddd;border-radius:6px;">'
+      +     '<button type="button" id="proc-alertas-sort-fogo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">🔥 Ordenar</button>'
+      +     '<button type="button" id="proc-alertas-sort-gelo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">❄️ Ordenar</button>'
+      +     '<button type="button" id="proc-alertas-sort-neg" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">⚠ Ordenar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll" id="proc-alertas-globais-body">'
+      +     '<table class="proc-or-table"><thead>' + theadHTML + '</thead><tbody>' + tbodyHTML + '</tbody></table>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    var body = modal.querySelector('#proc-alertas-globais-body');
+    var filtroInput = modal.querySelector('#proc-alertas-filtro');
+    if (filtroInput && estadoInicial && estadoInicial.filtro) filtroInput.value = estadoInicial.filtro;
+
+    function procAplicarFiltroAlertas() {
+      var q = filtroInput ? filtroInput.value.trim().toLowerCase() : '';
+      modal.querySelectorAll('.proc-alerta-row').forEach(function(tr) {
+        var alvo = tr.getAttribute('data-filtro') || '';
+        tr.style.display = (!q || alvo.indexOf(q) !== -1) ? '' : 'none';
+      });
+    }
+    if (filtroInput) {
+      filtroInput.addEventListener('input', procAplicarFiltroAlertas);
+      if (estadoInicial && estadoInicial.filtro) procAplicarFiltroAlertas();
+    }
+
+    modal.querySelectorAll('.proc-alerta-row').forEach(function(tr) {
+      tr.addEventListener('click', function() {
+        var ref = tr.getAttribute('data-ref');
+        var estadoAoAbrir = { filtro: filtroInput ? filtroInput.value : '', criterio: criterioAtivo };
+        procCloseModal(modal);
+        procAbrirRadiografia(ref, null, function() {
+          procMostrarModalAlertasGlobais(lista, estadoAoAbrir);
+        });
+      });
+    });
+
+    /* Stock global: UM SO pedido por referencia unica (nunca por par
+       fornecedor+referencia — ver nota no topo desta funcao), tal
+       como ja acontece em procMostrarModalArtigosDoFornecedor. */
+    var lotesPorReferencia = procConstruirLotesPorReferencia(lista);
+    var referenciasUnicas = Object.keys(lotesPorReferencia);
+    var paresStock = referenciasUnicas.map(function(ref) {
+      var lotesA4 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA4', 'cutoffA4');
+      var lotesA5 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA5', 'cutoffA5');
+      var cutoffA4 = lotesA4.length ? lotesA4[0].cutoffA4 : null;
+      var cutoffA5 = lotesA5.length ? lotesA5[0].cutoffA5 : null;
+      return { referencia: ref, cutoff_a4: procSubtrairDiasIso(cutoffA4, FOLGA_CORTE_DIAS), cutoff_a5: procSubtrairDiasIso(cutoffA5, FOLGA_CORTE_DIAS) };
+    });
+
+    var cacheValido = !!(_procCacheStockFogoAlertas && _procCacheStockFogoAlertas.lista === lista);
+    var fogoMapaGlobal = cacheValido ? _procCacheStockFogoAlertas.fogoMapa : null;
+    var stockMapaGlobal = cacheValido ? _procCacheStockFogoAlertas.stockMapa : null;
+    var prontosGlobal = 0;
+
+    function procTentarRenderAlertas() {
+      prontosGlobal++;
+      if (prontosGlobal < 2) return;
+      var fogoMapa = fogoMapaGlobal || {};
+      var stockMapa = stockMapaGlobal;
+
+      /* Preenche stockA4/stockA5 em CADA lote de lotesPorReferencia
+         (FIFO, uma so vez por referencia) — igual ao que ja acontecia
+         em procMostrarModalArtigosDoFornecedor. */
+      referenciasUnicas.forEach(function(ref) {
+        var venda = stockMapa ? stockMapa[ref] : null;
+        if (stockMapa && venda && !venda.erro) {
+          var lotesA4 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA4', 'cutoffA4');
+          var lotesA5 = procLotesOrdenados(lotesPorReferencia[ref], 'comprasA5', 'cutoffA5');
+          procAlocarFifo(lotesA4, venda.vendidoA4, 'comprasA4', 'stockA4');
+          procAlocarFifo(lotesA5, venda.vendidoA5, 'comprasA5', 'stockA5');
+        }
+      });
+
+      var trEls = modal.querySelectorAll('.proc-alerta-row');
+      chaves.forEach(function(chave, idx) {
+        var linha = mapaGlobal[chave];
+        var tr = trEls[idx];
+        if (!tr) return;
+        var celA4 = tr.querySelector('.proc-alerta-a4');
+        var celA5 = tr.querySelector('.proc-alerta-a5');
+        var celTotal = tr.querySelector('.proc-alerta-total');
+        var celBadge = tr.querySelector('.proc-alerta-badge');
+        if (!celA4 || !celA5 || !celTotal || !celBadge) return;
+        if (!stockMapa) {
+          celA4.textContent = celA5.textContent = celTotal.textContent = '⚠';
+          celBadge.textContent = '';
+          return;
+        }
+        var venda = stockMapa[linha.ref] || { erro: true };
+        if (venda.erro) {
+          celA4.textContent = celA5.textContent = celTotal.textContent = '⚠';
+          celBadge.textContent = '';
+          return;
+        }
+        var meuLote = (lotesPorReferencia[linha.ref] || []).filter(function(l) { return l.fornecedorNorm === linha.fornecedorNorm; })[0];
+        var stockA4 = meuLote ? meuLote.stockA4 : linha.comprasA4;
+        var stockA5 = meuLote ? meuLote.stockA5 : linha.comprasA5;
+        var stockTotal = stockA4 + stockA5;
+        celA4.textContent = stockA4;
+        celA5.textContent = stockA5;
+        celTotal.innerHTML = '<strong>' + stockTotal + '</strong>';
+
+        var fogoInfo = fogoMapa[linha.ref];
+        var fireLevelAtual = (fogoInfo && fogoInfo.fireLevel) || 0;
+        var gelo = procReferenciaEmGelo(fogoInfo);
+        var negativo = stockTotal < 0;
+        tr.setAttribute('data-fire-level', String(fireLevelAtual));
+        tr.setAttribute('data-gelo-dias', String(gelo ? fogoInfo.dias : 0));
+        tr.setAttribute('data-stock-total', String(stockTotal));
+
+        var badges = '';
+        if (fireLevelAtual > 0) {
+          var opacidadeFogo = (fireLevelAtual === 2) ? '1' : '.45';
+          badges += '<span class="proc-ref-fogo" style="opacity:' + opacidadeFogo + ';" title="' + procTituloFogo(fogoInfo, stockTotal).replace(/"/g, '&quot;') + '">🔥</span>';
+        } else if (gelo) {
+          badges += '<span class="proc-ref-gelo" title="' + procTituloGelo(fogoInfo, stockTotal).replace(/"/g, '&quot;') + '">❄️</span>';
+        }
+        if (negativo) {
+          badges += ' <span title="' + procTituloNegativo(stockTotal).replace(/"/g, '&quot;') + '">⚠</span>';
+        }
+        celBadge.innerHTML = badges || '—';
+      });
+
+      _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa };
+
+      /* 3 botoes de ordenacao — cada um so um switch (activo/inactivo);
+         activar um desliga os outros dois. Reordena os <tr> no DOM,
+         igual ao padrao ja usado no botao "⇅ Ordenar por Stock". */
+      var ordemOriginal = Array.prototype.slice.call(modal.querySelectorAll('.proc-alerta-row'));
+      var btnFogo = modal.querySelector('#proc-alertas-sort-fogo');
+      var btnGelo = modal.querySelector('#proc-alertas-sort-gelo');
+      var btnNeg  = modal.querySelector('#proc-alertas-sort-neg');
+      [btnFogo, btnGelo, btnNeg].forEach(function(b) {
+        if (!b) return;
+        b.disabled = false;
+        b.style.cursor = 'pointer';
+      });
+      function procPintarBtnAlerta(b, activo) {
+        if (!b) return;
+        b.style.setProperty('background', activo ? '#222' : '#f2f2f2', 'important');
+        b.style.setProperty('color', activo ? '#fff' : '#333', 'important');
+        b.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
+      }
+      function procAplicarOrdenacaoAlertas() {
+        var tbodyEl = body.querySelector('tbody');
+        if (!tbodyEl) return;
+        procPintarBtnAlerta(btnFogo, criterioAtivo === 'fogo');
+        procPintarBtnAlerta(btnGelo, criterioAtivo === 'gelo');
+        procPintarBtnAlerta(btnNeg, criterioAtivo === 'negativo');
+        if (!criterioAtivo) {
+          ordemOriginal.forEach(function(tr) { tbodyEl.appendChild(tr); });
+          return;
+        }
+        var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-alerta-row'));
+        if (criterioAtivo === 'fogo') {
+          linhasTbody.sort(function(a, b) {
+            return (parseInt(b.getAttribute('data-fire-level'), 10) || 0) - (parseInt(a.getAttribute('data-fire-level'), 10) || 0)
+              || ((parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0));
+          });
+        } else if (criterioAtivo === 'gelo') {
+          linhasTbody.sort(function(a, b) {
+            return (parseInt(b.getAttribute('data-gelo-dias'), 10) || 0) - (parseInt(a.getAttribute('data-gelo-dias'), 10) || 0);
+          });
+        } else {
+          linhasTbody.sort(function(a, b) {
+            return (parseFloat(a.getAttribute('data-stock-total')) || 0) - (parseFloat(b.getAttribute('data-stock-total')) || 0);
+          });
+        }
+        linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
+      }
+      function procLigarBotaoOrdenacaoAlerta(btn, criterio) {
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+          criterioAtivo = (criterioAtivo === criterio) ? null : criterio;
+          procAplicarOrdenacaoAlertas();
+        });
+      }
+      procLigarBotaoOrdenacaoAlerta(btnFogo, 'fogo');
+      procLigarBotaoOrdenacaoAlerta(btnGelo, 'gelo');
+      procLigarBotaoOrdenacaoAlerta(btnNeg, 'negativo');
+      /* Restaura o criterio activo antes de ir para a radiografia
+         (ver estadoInicial no topo da funcao). */
+      procAplicarOrdenacaoAlertas();
+    }
+
+    if (cacheValido) {
+      procTentarRenderAlertas();
+      procTentarRenderAlertas();
+    } else {
+      procObterFogoPorReferencias(referenciasUnicas, function(fogoMapa) { fogoMapaGlobal = fogoMapa; procTentarRenderAlertas(); });
+      procCalcularStockLote(paresStock, function(stockMapa) { stockMapaGlobal = stockMapa; procTentarRenderAlertas(); });
+    }
+  }
+
 
 
   /* ── Render session list in the start panel ── */

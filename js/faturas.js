@@ -6864,6 +6864,14 @@
   }
 
   var _procCacheStockFogoAlertas = null;
+  /* Cache da lista completa de faturas (procCarregarFaturasComData) —
+     o botao ✱ chama procMostrarModalAlertasGlobais() SEM argumentos,
+     por isso cada vez que se fechava e reabria o modal (sem passar
+     pela radiografia, onde a lista ja vem em memoria) disparava um
+     pedido novo a Supabase e recalculava tudo do zero — mesmo sem a
+     pagina ter sido recarregada. So se refaz o pedido quando a pagina
+     e recarregada (var de modulo, nunca expira sozinha). */
+  var _procCacheFaturasComData = null;
   function procMostrarModalAlertasGlobais(listaParam, estadoInicial) {
     if (!listaParam) {
       var oldLoading = document.getElementById('proc-alertas-globais-modal');
@@ -6882,7 +6890,10 @@
         + '</div>';
       procOpenModal(modalLoading);
       procBindClose(modalLoading);
-      procCarregarFaturasComData().then(function(lista) {
+      var promessaLista = _procCacheFaturasComData
+        ? Promise.resolve(_procCacheFaturasComData)
+        : procCarregarFaturasComData().then(function(lista) { _procCacheFaturasComData = lista; return lista; });
+      promessaLista.then(function(lista) {
         procMostrarModalAlertasGlobais(lista, estadoInicial);
       }).catch(function(e) {
         var b = document.getElementById('proc-alertas-globais-body');
@@ -7243,6 +7254,11 @@
         var stockTotal = stockA4 + stockA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
+        var detalheTextoA5Alerta = procFormatarDetalheA5(venda.detalheA5);
+        if (detalheTextoA5Alerta) {
+          celA5.title = detalheTextoA5Alerta;
+          celA5.style.cursor = 'help';
+        }
         celTotal.innerHTML = '<strong>' + stockTotal + '</strong>';
 
         var fogoInfo = fogoMapa[linha.ref];

@@ -5297,8 +5297,16 @@
               var de = lote.data_esgotamento.split('-');
               celEsgotou.textContent = de[2] + '/' + de[1] + '/' + de[0].slice(2);
             } else if (lote.ativo && lote.velocidade_dia != null) {
-              /* front_ativo (calculado no servidor): a FIFO ja chegou a este lote, esta mesmo a vender agora. */
-              celEsgotou.textContent = '\u2014 (em curso)';
+              /* front_ativo (calculado no servidor): a FIFO ja chegou a este lote. "Em curso"
+                 so faz sentido se ja houve pelo menos uma venda — um lote a 0 un/dia (nenhuma
+                 peca vendida ate agora, seja de compra unica ou apos recompra) fica com o
+                 mesmo texto "ainda nao tocado" da fila, porque "em curso" sugeria uma venda
+                 que na realidade nao aconteceu. */
+              if (Number(lote.velocidade_dia) > 0) {
+                celEsgotou.textContent = '\u2014 (em curso)';
+              } else {
+                celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
+              }
             } else if (lote.ativo) {
               /* Ainda ativo mas em fila atras de um lote mais antigo por esgotar — dias/velocidade ficam null na RPC precisamente para nao sugerir uma venda a 0 un/dia. */
               celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
@@ -6954,7 +6962,8 @@
         + 'data-ref="' + linha.ref.replace(/"/g, '&quot;') + '" '
         + 'data-filtro="' + (linha.ref + ' ' + (linha.desc || '') + ' ' + linha.fornecedorNorm).toLowerCase().replace(/"/g, '&quot;') + '" '
         + 'data-anos="' + anosComPecas.join(',') + '" style="cursor:pointer;">'
-        + '<td>' + linha.ref + '</td>'
+        + '<td><span class="proc-alerta-ref-copiar" data-ref-copiar="' + linha.ref.replace(/"/g, '&quot;') + '" title="Copiar referência" '
+        + 'style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C9A227;margin-right:7px;vertical-align:middle;cursor:pointer;"></span>' + linha.ref + '</td>'
         + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + '<td style="font-size:.72rem;color:#666;">' + linha.fornecedorNorm + '</td>'
         + cels
@@ -7046,6 +7055,35 @@
         procAbrirRadiografia(ref, null, function() {
           procMostrarModalAlertasGlobais(lista, estadoAoAbrir);
         });
+      });
+    });
+
+    /* Circulo junto a referencia — copia sem abrir a radiografia
+       (stopPropagation impede que o clique tambem dispare o listener
+       do <tr>, que navega para a radiografia). */
+    modal.querySelectorAll('.proc-alerta-ref-copiar').forEach(function(span) {
+      span.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        var texto = span.getAttribute('data-ref-copiar') || '';
+        if (!texto) return;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(texto);
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = texto;
+            ta.className = 'proc-clipboard-hack';
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+          }
+        } catch (ex) {}
+        span.style.background = '#2e8b57';
+        span.title = '✓ copiado!';
+        clearTimeout(span._procCopyT);
+        span._procCopyT = setTimeout(function() {
+          span.style.background = '#C9A227';
+          span.title = 'Copiar referência';
+        }, 900);
       });
     });
 

@@ -5482,12 +5482,47 @@
      de vendas de Wakzome (percentil 90 de velocidade), nunca um numero
      fixo no código. Aqui so se pede, por lote de referencias, se cada
      uma esta ou nao "em fogo" — sem nenhum calculo do lado do cliente. */
+  /* Executa fetchLote(loteDeItens) para cada lote de "itens" (tamanho
+     tamanhoLote), no maximo "concorrencia" pedidos em simultaneo ao
+     Supabase — sem isto, uma lista muito grande (ex.: o catalogo
+     inteiro no modal de Alertas Globais, 12000+ referencias) disparava
+     dezenas de pedidos pesados de uma so vez: uns tantos excediam o
+     limite de tamanho de URL (pedidos GET com referencia=in.(...)),
+     outros saturavam o Postgres ao ponto de outros pedidos do mesmo
+     utilizador — incluindo os de outros modais, como a radiografia —
+     tambem comecarem a falhar ou a ficar lentos. fetchLote deve
+     devolver uma Promise que resolve com o resultado desse lote (nunca
+     rejeita — falhas devem resolver com null, para nao travar os
+     restantes lotes); mergeResultado acumula esse resultado; callback
+     corre quando todos os lotes tiverem terminado. */
+  function procExecutarEmLotesLimitados(itens, tamanhoLote, concorrencia, fetchLote, mergeResultado, callback) {
+    var lotes = [];
+    for (var i = 0; i < itens.length; i += tamanhoLote) lotes.push(itens.slice(i, i + tamanhoLote));
+    if (!lotes.length) { callback(); return; }
+    var proximo = 0, activos = 0, concluidos = 0;
+    function disparar() {
+      while (activos < concorrencia && proximo < lotes.length) {
+        (function(lote) {
+          activos++;
+          fetchLote(lote)
+            .then(mergeResultado)
+            .catch(function() { mergeResultado(null); })
+            .then(function() {
+              activos--; concluidos++;
+              if (concluidos === lotes.length) { callback(); return; }
+              disparar();
+            });
+        })(lotes[proximo++]);
+      }
+    }
+    disparar();
+  }
+
   function procObterFogoPorReferencias(refs, callback, incluirLotes) {
     var unicas = Array.prototype.filter.call(refs || [], function(r, i, arr) {
       return r && arr.indexOf(r) === i;
     });
     if (!unicas.length) { callback({}); return; }
-    var listaIn = unicas.map(function(r) { return encodeURIComponent(r); }).join(',');
     var campos = 'referencia,lote_num,data_compra,qtd_lote,data_esgotamento,dias,velocidade_dia,ativo,destaque,recompra,fire_level';
     /* Por omissão (incluirLotes falso) só se pede a linha "destaque" de
        cada referência — filtrado no próprio Supabase — o suficiente
@@ -5500,49 +5535,53 @@
        por lote, para casar cada sessão de compra com o seu próprio
        lote — essa chamada passa incluirLotes=true. */
     var filtroDestaque = incluirLotes ? '' : '&destaque=eq.true';
-    procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')' + filtroDestaque + '&select=' + campos, { method: 'GET' })
-      .then(function(r) { return r.ok ? r.json() : []; })
-      .then(function(rows) {
-        var mapa = {};
-        if (incluirLotes) {
-          var porRef = {};
-          (rows || []).forEach(function(row) {
-            if (!porRef[row.referencia]) porRef[row.referencia] = [];
-            porRef[row.referencia].push(row);
-          });
-          Object.keys(porRef).forEach(function(ref) {
-            var lotes = porRef[ref];
-            var destaqueRow = lotes.filter(function(l) { return l.destaque; })[0] || lotes[lotes.length - 1];
-            mapa[ref] = {
-              fireLevel: destaqueRow.fire_level || 0,
-              ativo: !!destaqueRow.ativo,
-              dias: destaqueRow.dias,
-              velocidadeDia: destaqueRow.velocidade_dia,
-              qtdLote: destaqueRow.qtd_lote,
-              dataCompra: destaqueRow.data_compra,
-              dataEsgotamento: destaqueRow.data_esgotamento,
-              recompra: !!destaqueRow.recompra,
-              lotes: lotes
-            };
-          });
-        } else {
-          (rows || []).forEach(function(row) {
-            mapa[row.referencia] = {
-              fireLevel: row.fire_level || 0,
-              ativo: !!row.ativo,
-              dias: row.dias,
-              velocidadeDia: row.velocidade_dia,
-              qtdLote: row.qtd_lote,
-              dataCompra: row.data_compra,
-              dataEsgotamento: row.data_esgotamento,
-              recompra: !!row.recompra,
-              lotes: null
-            };
-          });
-        }
-        callback(mapa);
-      })
-      .catch(function() { callback({}); });
+    var todasLinhas = [];
+    procExecutarEmLotesLimitados(unicas, 200, 5, function(loteRefs) {
+      var listaIn = loteRefs.map(function(r) { return encodeURIComponent(r); }).join(',');
+      return procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')' + filtroDestaque + '&select=' + campos, { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : []; });
+    }, function(linhas) {
+      if (linhas && linhas.length) todasLinhas = todasLinhas.concat(linhas);
+    }, function() {
+      var mapa = {};
+      if (incluirLotes) {
+        var porRef = {};
+        todasLinhas.forEach(function(row) {
+          if (!porRef[row.referencia]) porRef[row.referencia] = [];
+          porRef[row.referencia].push(row);
+        });
+        Object.keys(porRef).forEach(function(ref) {
+          var lotes = porRef[ref];
+          var destaqueRow = lotes.filter(function(l) { return l.destaque; })[0] || lotes[lotes.length - 1];
+          mapa[ref] = {
+            fireLevel: destaqueRow.fire_level || 0,
+            ativo: !!destaqueRow.ativo,
+            dias: destaqueRow.dias,
+            velocidadeDia: destaqueRow.velocidade_dia,
+            qtdLote: destaqueRow.qtd_lote,
+            dataCompra: destaqueRow.data_compra,
+            dataEsgotamento: destaqueRow.data_esgotamento,
+            recompra: !!destaqueRow.recompra,
+            lotes: lotes
+          };
+        });
+      } else {
+        todasLinhas.forEach(function(row) {
+          mapa[row.referencia] = {
+            fireLevel: row.fire_level || 0,
+            ativo: !!row.ativo,
+            dias: row.dias,
+            velocidadeDia: row.velocidade_dia,
+            qtdLote: row.qtd_lote,
+            dataCompra: row.data_compra,
+            dataEsgotamento: row.data_esgotamento,
+            recompra: !!row.recompra,
+            lotes: null
+          };
+        });
+      }
+      callback(mapa);
+    });
   }
 
 
@@ -5718,38 +5757,37 @@
      são fundidos num único mapa antes do callback. */
   function procCalcularStockLote(pares, callback) {
     if (!pares || !pares.length) { callback({}); return; }
-    var TAMANHO_LOTE = 400;
-    var lotes = [];
-    for (var i = 0; i < pares.length; i += TAMANHO_LOTE) {
-      lotes.push(pares.slice(i, i + TAMANHO_LOTE));
-    }
     var mapaFinal = {};
-    var pendentes = lotes.length;
-    lotes.forEach(function(lote) {
-      procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: lote }) })
+    /* Concorrencia limitada a 4 pedidos POST em simultaneo — ver
+       procExecutarEmLotesLimitados. Cada pedido corre stock_por_referencias
+       sobre a tabela de vendas inteira para ate 400 referencias; disparar
+       dezenas destes de uma vez (ex.: 31 para o catalogo global de 12000+
+       referencias) satura o Postgres e faz varios voltarem com erro. */
+    procExecutarEmLotesLimitados(pares, 400, 4, function(lote) {
+      /* fetchLote nunca rejeita — mesmo uma falha de rede resolve com
+         rows:null, para o merge abaixo poder marcar {erro:true} nas
+         referencias DESSE lote especificamente (ver comentario na
+         definicao de procExecutarEmLotesLimitados: o "catch" generico
+         do helper so recebe null, sem saber a que lote pertencia). */
+      return procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: lote }) })
         .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(rows) {
-          if (rows) {
-            rows.forEach(function(row) {
-              mapaFinal[row.referencia] = {
-                vendidoA4: Number(row.vendido_a4) || 0,
-                vendidoA5: Number(row.vendido_a5) || 0,
-                detalheA5: row.detalhe_a5 || [],
-                temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
-              };
-            });
-          } else {
-            lote.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
-          }
-        })
-        .catch(function() {
-          lote.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
-        })
-        .then(function() {
-          pendentes--;
-          if (pendentes === 0) callback(mapaFinal);
+        .then(function(rows) { return { lote: lote, rows: rows }; })
+        .catch(function() { return { lote: lote, rows: null }; });
+    }, function(resultado) {
+      if (!resultado) return;
+      if (resultado.rows) {
+        resultado.rows.forEach(function(row) {
+          mapaFinal[row.referencia] = {
+            vendidoA4: Number(row.vendido_a4) || 0,
+            vendidoA5: Number(row.vendido_a5) || 0,
+            detalheA5: row.detalhe_a5 || [],
+            temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
+          };
         });
-    });
+      } else {
+        resultado.lote.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
+      }
+    }, function() { callback(mapaFinal); });
   }
 
   /* Carrega TODAS as sessoes de proc_sessoes uma unica vez e devolve
@@ -6884,9 +6922,18 @@
           celBadge.textContent = '';
           return;
         }
-        var meuLote = (lotesPorReferencia[linha.ref] || []).filter(function(l) { return l.fornecedorNorm === linha.fornecedorNorm; })[0];
-        var stockA4 = meuLote ? meuLote.stockA4 : linha.comprasA4;
-        var stockA5 = meuLote ? meuLote.stockA5 : linha.comprasA5;
+        /* meuLoteA4/meuLoteA5 procurados SEPARADAMENTE nas listas ja
+           filtradas por armazem (nao no array bruto de
+           lotesPorReferencia) — um fornecedor que so comprou por A4
+           nunca aparece nos lotes de A5, por isso o seu lote nunca
+           recebeu .stockA5 do procAlocarFifo; ler stockA5 desse lote
+           "errado" dava undefined e undefined+numero = NaN. */
+        var lotesA4Ref = procLotesOrdenados(lotesPorReferencia[linha.ref], 'comprasA4', 'cutoffA4');
+        var lotesA5Ref = procLotesOrdenados(lotesPorReferencia[linha.ref], 'comprasA5', 'cutoffA5');
+        var meuLoteA4 = lotesA4Ref.filter(function(l) { return l.fornecedorNorm === linha.fornecedorNorm; })[0];
+        var meuLoteA5 = lotesA5Ref.filter(function(l) { return l.fornecedorNorm === linha.fornecedorNorm; })[0];
+        var stockA4 = meuLoteA4 ? meuLoteA4.stockA4 : linha.comprasA4;
+        var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : linha.comprasA5;
         var stockTotal = stockA4 + stockA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;

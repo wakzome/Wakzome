@@ -6903,7 +6903,12 @@
       return;
     }
     var lista = listaParam;
-    var criterioAtivo = (estadoInicial && estadoInicial.criterio) || null; /* null | 'fogo' | 'gelo' | 'negativo' */
+    /* Os 3 indicadores passaram de "ordenar por" a FILTROS
+       independentes (varios podem estar activos ao mesmo tempo, logica
+       OU) — uma peca com mais de um indicador aparece em qualquer
+       filtro que a inclua. O agrupamento de pares/familias deixou de
+       depender de nenhum botao: e sempre aplicado (ver mais abaixo). */
+    var criteriosAtivos = (estadoInicial && estadoInicial.criterios) || { fogo: false, gelo: false, negativo: false };
     var anoAtivo = (estadoInicial && estadoInicial.anoAtivo != null) ? estadoInicial.anoAtivo : null;
 
     var old = document.getElementById('proc-alertas-globais-modal');
@@ -7005,7 +7010,7 @@
         + 'data-filtro="' + (linha.ref + ' ' + (linha.desc || '') + ' ' + linha.fornecedorNorm).toLowerCase().replace(/"/g, '&quot;') + '" '
         + 'data-anos="' + anosComPecas.join(',') + '" style="cursor:pointer;">'
         + '<td><span class="proc-alerta-ref-copiar" data-ref-copiar="' + linha.ref.replace(/"/g, '&quot;') + '" title="Copiar referência" '
-        + 'style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C9A227;margin-right:7px;vertical-align:middle;cursor:pointer;"></span>' + linha.ref + '</td>'
+        + 'style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#C9A227;margin-right:8px;vertical-align:middle;cursor:pointer;"></span>' + linha.ref + '</td>'
         + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + '<td style="font-size:.72rem;color:#666;">' + linha.fornecedorNorm + '</td>'
         + cels
@@ -7030,9 +7035,9 @@
       +   '<div style="padding:12px 20px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
       +     '<input type="text" id="proc-alertas-filtro" placeholder="Filtrar por referência, descrição ou fornecedor…" '
       +       'style="flex:1;min-width:220px;box-sizing:border-box;padding:8px 10px;font-size:.8rem;border:1px solid #ddd;border-radius:6px;">'
-      +     '<button type="button" id="proc-alertas-sort-fogo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">🔥 Ordenar</button>'
-      +     '<button type="button" id="proc-alertas-sort-gelo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">❄️ Ordenar</button>'
-      +     '<button type="button" id="proc-alertas-sort-neg" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">⚠ Ordenar</button>'
+      +     '<button type="button" id="proc-alertas-sort-fogo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">🔥 Filtrar</button>'
+      +     '<button type="button" id="proc-alertas-sort-gelo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">❄️ Filtrar</button>'
+      +     '<button type="button" id="proc-alertas-sort-neg" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">⚠ Filtrar</button>'
       +   '</div>'
       +   '<style>@keyframes procAlertasPisca { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }</style>'
       +   '<div id="proc-alertas-loading-msg" style="margin:10px 20px 0;padding:6px 14px 0;text-align:center;font-size:.85rem;font-weight:700;color:#333;animation:procAlertasPisca 1.1s ease-in-out infinite;">Dá-me um momento, estou a calcular esta informação…</div>'
@@ -7050,7 +7055,25 @@
 
     function procAplicarFiltroAlertas() {
       var q = filtroInput ? filtroInput.value.trim().toLowerCase() : '';
-      modal.querySelectorAll('.proc-alerta-row').forEach(function(tr) {
+      var algumCriterioAtivo = criteriosAtivos.fogo || criteriosAtivos.gelo || criteriosAtivos.negativo;
+      var todasLinhas = Array.prototype.slice.call(modal.querySelectorAll('.proc-alerta-row'));
+      function linhaCumpreCriterios(tr) {
+        if (!algumCriterioAtivo) return true;
+        var fireLevel = parseInt(tr.getAttribute('data-fire-level'), 10) || 0;
+        var geloDias = parseInt(tr.getAttribute('data-gelo-dias'), 10) || 0;
+        var stockTotal = parseFloat(tr.getAttribute('data-stock-total')) || 0;
+        return (criteriosAtivos.fogo && fireLevel > 0) || (criteriosAtivos.gelo && geloDias > 0) || (criteriosAtivos.negativo && stockTotal < 0);
+      }
+      /* Um membro de par/familia SEM alerta proprio (ex.: 25-7373-1)
+         so aparece com um filtro activo se algum parceiro do MESMO
+         grupo cumprir esse criterio — assim o grupo continua completo
+         em vez de mostrar so a peca isolada que activou o filtro. */
+      var gruposQueCumprem = {};
+      todasLinhas.forEach(function(tr) {
+        var parIdG = tr.getAttribute('data-par-id');
+        if (parIdG && linhaCumpreCriterios(tr)) gruposQueCumprem[parIdG] = true;
+      });
+      todasLinhas.forEach(function(tr) {
         var alvo = tr.getAttribute('data-filtro') || '';
         var passaTexto = !q || alvo.indexOf(q) !== -1;
         var anosLinha = (tr.getAttribute('data-anos') || '').split(',');
@@ -7059,7 +7082,9 @@
            sem 🔥/❄️/⚠ (ou ainda por calcular) fica sempre escondida,
            mesmo que passe nos filtros de texto/ano. */
         var passaAlerta = tr.getAttribute('data-tem-alerta') === '1';
-        tr.style.display = (passaTexto && passaAno && passaAlerta) ? '' : 'none';
+        var parId = tr.getAttribute('data-par-id');
+        var passaCriterios = linhaCumpreCriterios(tr) || (parId && gruposQueCumprem[parId]);
+        tr.style.display = (passaTexto && passaAno && passaAlerta && passaCriterios) ? '' : 'none';
       });
     }
     if (filtroInput) {
@@ -7092,7 +7117,7 @@
     modal.querySelectorAll('.proc-alerta-row').forEach(function(tr) {
       tr.addEventListener('click', function() {
         var ref = tr.getAttribute('data-ref');
-        var estadoAoAbrir = { filtro: filtroInput ? filtroInput.value : '', criterio: criterioAtivo, anoAtivo: anoAtivo };
+        var estadoAoAbrir = { filtro: filtroInput ? filtroInput.value : '', criterios: criteriosAtivos, anoAtivo: anoAtivo };
         procCloseModal(modal);
         procAbrirRadiografia(ref, null, function() {
           procMostrarModalAlertasGlobais(lista, estadoAoAbrir);
@@ -7318,14 +7343,38 @@
         contadorEl.textContent = totalAlertas + (totalAlertas === 1 ? ' referência com alerta' : ' referências com alerta')
           + ' (de ' + chaves.length + ') · 🔥 ❄️ ⚠';
       }
-      procAplicarFiltroAlertas();
+
+      /* Agrupamento de pares/familias suspeitas — SEMPRE aplicado,
+         nao depende de nenhum botao (os 3 indicadores agora sao
+         filtros, nao ordenacao — ver procAplicarFiltroAlertas). A
+         linha "negativa" fica antes da "parada" dentro de cada grupo
+         (foi ela que chamou a atencao primeiro); o resto mantem a
+         ordem original (compra total desc). Array.prototype.sort e
+         estavel nos motores actuais, por isso devolver 0 preserva a
+         ordem relativa de quem nao pertence a nenhum grupo. */
+      var tbodyElAgrupar = body.querySelector('tbody');
+      if (tbodyElAgrupar) {
+        var linhasParaAgrupar = Array.prototype.slice.call(tbodyElAgrupar.querySelectorAll('.proc-alerta-row'));
+        linhasParaAgrupar.sort(function(a, b) {
+          var parA = a.getAttribute('data-par-id') || '';
+          var parB = b.getAttribute('data-par-id') || '';
+          if (parA && parA === parB) {
+            var tipoA = a.getAttribute('data-par-tipo');
+            return tipoA === 'negativa' ? -1 : 1;
+          }
+          var temParA = parA ? 1 : 0, temParB = parB ? 1 : 0;
+          if (temParA !== temParB) return temParB - temParA;
+          if (parA !== parB) return parA < parB ? -1 : 1;
+          return 0;
+        });
+        linhasParaAgrupar.forEach(function(tr) { tbodyElAgrupar.appendChild(tr); });
+      }
 
       _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa, pares: paresSuspeitosGlobal, familias: familiasSuspeitasGlobal };
 
-      /* 3 botoes de ordenacao — cada um so um switch (activo/inactivo);
-         activar um desliga os outros dois. Reordena os <tr> no DOM,
-         igual ao padrao ja usado no botao "⇅ Ordenar por Stock". */
-      var ordemOriginal = Array.prototype.slice.call(modal.querySelectorAll('.proc-alerta-row'));
+      /* 3 botoes de FILTRO — cada um e um interruptor independente;
+         varios podem estar activos em simultaneo (logica OU, ver
+         procAplicarFiltroAlertas). Ja nao reordenam nada. */
       var btnFogo = modal.querySelector('#proc-alertas-sort-fogo');
       var btnGelo = modal.querySelector('#proc-alertas-sort-gelo');
       var btnNeg  = modal.querySelector('#proc-alertas-sort-neg');
@@ -7340,61 +7389,26 @@
         b.style.setProperty('color', activo ? '#fff' : '#333', 'important');
         b.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
       }
-      function procAplicarOrdenacaoAlertas() {
-        var tbodyEl = body.querySelector('tbody');
-        if (!tbodyEl) return;
-        procPintarBtnAlerta(btnFogo, criterioAtivo === 'fogo');
-        procPintarBtnAlerta(btnGelo, criterioAtivo === 'gelo');
-        procPintarBtnAlerta(btnNeg, criterioAtivo === 'negativo');
-        if (!criterioAtivo) {
-          ordemOriginal.forEach(function(tr) { tbodyEl.appendChild(tr); });
-          return;
-        }
-        var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-alerta-row'));
-        if (criterioAtivo === 'fogo') {
-          linhasTbody.sort(function(a, b) {
-            return (parseInt(b.getAttribute('data-fire-level'), 10) || 0) - (parseInt(a.getAttribute('data-fire-level'), 10) || 0)
-              || ((parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0));
-          });
-        } else if (criterioAtivo === 'gelo') {
-          linhasTbody.sort(function(a, b) {
-            return (parseInt(b.getAttribute('data-gelo-dias'), 10) || 0) - (parseInt(a.getAttribute('data-gelo-dias'), 10) || 0);
-          });
-        } else {
-          /* Pares suspeitos primeiro, agrupados lado a lado (a linha
-             "negativa" antes da "parada" — foi ela que disparou o ⚠),
-             depois o resto ordenado por stock total como antes. Sem
-             isto, uma referencia parada (stock perto de 0) nunca
-             ficaria perto da sua negativa no ordenar por ⚠, mesmo
-             sendo o mesmo caso. */
-          linhasTbody.sort(function(a, b) {
-            var parA = a.getAttribute('data-par-id') || '';
-            var parB = b.getAttribute('data-par-id') || '';
-            if (parA && parA === parB) {
-              var tipoA = a.getAttribute('data-par-tipo');
-              return tipoA === 'negativa' ? -1 : 1;
-            }
-            var temParA = parA ? 1 : 0, temParB = parB ? 1 : 0;
-            if (temParA !== temParB) return temParB - temParA;
-            if (parA !== parB) return parA < parB ? -1 : 1;
-            return (parseFloat(a.getAttribute('data-stock-total')) || 0) - (parseFloat(b.getAttribute('data-stock-total')) || 0);
-          });
-        }
-        linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
+      function procPintarBotoesFiltro() {
+        procPintarBtnAlerta(btnFogo, criteriosAtivos.fogo);
+        procPintarBtnAlerta(btnGelo, criteriosAtivos.gelo);
+        procPintarBtnAlerta(btnNeg, criteriosAtivos.negativo);
       }
-      function procLigarBotaoOrdenacaoAlerta(btn, criterio) {
+      function procLigarBotaoFiltroAlerta(btn, criterio) {
         if (!btn) return;
         btn.addEventListener('click', function() {
-          criterioAtivo = (criterioAtivo === criterio) ? null : criterio;
-          procAplicarOrdenacaoAlertas();
+          criteriosAtivos[criterio] = !criteriosAtivos[criterio];
+          procPintarBotoesFiltro();
+          procAplicarFiltroAlertas();
         });
       }
-      procLigarBotaoOrdenacaoAlerta(btnFogo, 'fogo');
-      procLigarBotaoOrdenacaoAlerta(btnGelo, 'gelo');
-      procLigarBotaoOrdenacaoAlerta(btnNeg, 'negativo');
-      /* Restaura o criterio activo antes de ir para a radiografia
+      procLigarBotaoFiltroAlerta(btnFogo, 'fogo');
+      procLigarBotaoFiltroAlerta(btnGelo, 'gelo');
+      procLigarBotaoFiltroAlerta(btnNeg, 'negativo');
+      /* Restaura os filtros activos antes de ir para a radiografia
          (ver estadoInicial no topo da funcao). */
-      procAplicarOrdenacaoAlertas();
+      procPintarBotoesFiltro();
+      procAplicarFiltroAlertas();
     }
 
     if (cacheValido) {

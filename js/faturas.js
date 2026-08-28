@@ -5372,8 +5372,9 @@
       var pvpFinal = (row.pvpManual != null) ? row.pvpManual : (pvpResult ? pvpResult.pvpFinal : null);
       var marg = pvpResult ? procCalcMargem(pvpResult.pvp1, row.preco) : null;
       var a4 = row.a4 || 0, a5 = row.a5 || 0;
+      var marcador = destacar ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C9A227;margin-right:6px;vertical-align:middle;" title="Referência consultada na radiografia"></span>' : '';
       return '<tr' + (destacar ? ' style="background:#FBF3D9;"' : '') + '>'
-        + '<td' + (destacar ? ' style="font-weight:700;"' : '') + '>' + (row.ref || '—') + '</td>'
+        + '<td' + (destacar ? ' style="font-weight:700;"' : '') + '>' + marcador + (row.ref || '—') + '</td>'
         + '<td>' + (row.desc || '—').toUpperCase() + '</td>'
         + '<td class="center">' + a4 + '</td>'
         + '<td class="center">' + a5 + '</td>'
@@ -6927,7 +6928,7 @@
       +   '<div class="proc-or-panel-header">'
       +     '<div class="proc-or-panel-title">'
       +       '<span class="proc-or-panel-title-main">Alertas · Todos os Fornecedores</span>'
-      +       '<span class="proc-or-panel-title-sub">' + chaves.length + ' referências · ordenar por 🔥, ❄️ ou ⚠</span>'
+      +       '<span class="proc-or-panel-title-sub" id="proc-alertas-contador">' + chaves.length + ' referências · ordenar por 🔥, ❄️ ou ⚠</span>'
       +     '</div>'
       +     '<button class="proc-or-close-btn">✕ Fechar</button>'
       +   '</div>'
@@ -6938,7 +6939,8 @@
       +     '<button type="button" id="proc-alertas-sort-gelo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">❄️ Ordenar</button>'
       +     '<button type="button" id="proc-alertas-sort-neg" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">⚠ Ordenar</button>'
       +   '</div>'
-      +   '<div id="proc-alertas-loading-msg" style="margin:10px 20px 0;padding:8px 14px;font-size:.78rem;color:#8a6d1a;background:#FBF3D9;border:1px solid #eddca0;border-radius:6px;">Dá-me um momento, estou a calcular esta informação…</div>'
+      +   '<style>@keyframes procAlertasPisca { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }</style>'
+      +   '<div id="proc-alertas-loading-msg" style="margin:10px 20px 0;padding:6px 14px 0;text-align:center;font-size:.85rem;font-weight:700;color:#333;animation:procAlertasPisca 1.1s ease-in-out infinite;">Dá-me um momento, estou a calcular esta informação…</div>'
       +   '<div class="proc-or-scroll" id="proc-alertas-globais-body">'
       +     '<table class="proc-or-table"><thead>' + theadHTML + '</thead><tbody>' + tbodyHTML + '</tbody></table>'
       +   '</div>'
@@ -6958,7 +6960,11 @@
         var passaTexto = !q || alvo.indexOf(q) !== -1;
         var anosLinha = (tr.getAttribute('data-anos') || '').split(',');
         var passaAno = anoAtivo === null || anosLinha.indexOf(String(anoAtivo)) !== -1;
-        tr.style.display = (passaTexto && passaAno) ? '' : 'none';
+        /* Este modal so faz sentido para chamar a atencao — uma linha
+           sem 🔥/❄️/⚠ (ou ainda por calcular) fica sempre escondida,
+           mesmo que passe nos filtros de texto/ano. */
+        var passaAlerta = tr.getAttribute('data-tem-alerta') === '1';
+        tr.style.display = (passaTexto && passaAno && passaAlerta) ? '' : 'none';
       });
     }
     if (filtroInput) {
@@ -7039,6 +7045,7 @@
       });
 
       var trEls = modal.querySelectorAll('.proc-alerta-row');
+      var totalAlertas = 0;
       chaves.forEach(function(chave, idx) {
         var linha = mapaGlobal[chave];
         var tr = trEls[idx];
@@ -7051,12 +7058,16 @@
         if (!stockMapa) {
           celA4.textContent = celA5.textContent = celTotal.textContent = '⚠';
           celBadge.textContent = '';
+          tr.setAttribute('data-tem-alerta', '1');
+          totalAlertas++;
           return;
         }
         var venda = stockMapa[linha.ref] || { erro: true };
         if (venda.erro) {
           celA4.textContent = celA5.textContent = celTotal.textContent = '⚠';
           celBadge.textContent = '';
+          tr.setAttribute('data-tem-alerta', '1');
+          totalAlertas++;
           return;
         }
         /* meuLoteA4/meuLoteA5 procurados SEPARADAMENTE nas listas ja
@@ -7083,6 +7094,9 @@
         tr.setAttribute('data-fire-level', String(fireLevelAtual));
         tr.setAttribute('data-gelo-dias', String(gelo ? fogoInfo.dias : 0));
         tr.setAttribute('data-stock-total', String(stockTotal));
+        var temAlerta = fireLevelAtual > 0 || gelo || negativo;
+        tr.setAttribute('data-tem-alerta', temAlerta ? '1' : '0');
+        if (temAlerta) totalAlertas++;
 
         var badges = '';
         if (fireLevelAtual > 0) {
@@ -7096,6 +7110,16 @@
         }
         celBadge.innerHTML = badges || '—';
       });
+
+      /* So depois de calculado o alerta de CADA linha e que faz
+         sentido aplicar o filtro/objectivo deste modal (mostrar so
+         quem precisa de atencao) e actualizar a contagem no titulo. */
+      var contadorEl = modal.querySelector('#proc-alertas-contador');
+      if (contadorEl) {
+        contadorEl.textContent = totalAlertas + (totalAlertas === 1 ? ' referência com alerta' : ' referências com alerta')
+          + ' (de ' + chaves.length + ') · 🔥 ❄️ ⚠';
+      }
+      procAplicarFiltroAlertas();
 
       _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa };
 

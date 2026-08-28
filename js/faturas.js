@@ -5621,6 +5621,35 @@
     disparar();
   }
 
+  /* Tenta obter um lote de itens de uma so vez; se a chamada falhar
+     (fetchUmLote devolve null — nunca rejeita), o lote e dividido ao
+     meio e cada metade e tentada de novo, recursivamente, ate um
+     tamanho minimo (nao ate 1-a-1, para nao multiplicar o numero de
+     pedidos indefinidamente se a falha for generalizada e nao apenas
+     de uma referencia especifica). Isola automaticamente referencias
+     "pesadas" (ex.: SAC-P/SAC-M, com dezenas de milhares de vendas
+     associadas, que sozinhas podem estourar o timeout de 15s da RPC
+     stock_por_referencias e arrastar consigo um lote inteiro de 400
+     referencias normais) sem ser preciso conhecer essas referencias
+     a priori — funciona para qualquer futura referencia problematica.
+     Devolve sempre { rows, falhas } — nunca rejeita — onde "falhas"
+     sao os itens que ainda assim nao foi possivel obter, mesmo depois
+     de subdivididos ate ao tamanho minimo. */
+  function procFetchComBisecao(itens, fetchUmLote, tamanhoMinimo) {
+    var minimo = tamanhoMinimo || 10;
+    return fetchUmLote(itens).then(function(rows) {
+      if (rows !== null) return { rows: rows, falhas: [] };
+      if (itens.length <= minimo) return { rows: [], falhas: itens.slice() };
+      var meio = Math.ceil(itens.length / 2);
+      return Promise.all([
+        procFetchComBisecao(itens.slice(0, meio), fetchUmLote, minimo),
+        procFetchComBisecao(itens.slice(meio), fetchUmLote, minimo)
+      ]).then(function(partes) {
+        return { rows: partes[0].rows.concat(partes[1].rows), falhas: partes[0].falhas.concat(partes[1].falhas) };
+      });
+    });
+  }
+
   function procObterFogoPorReferencias(refs, callback, incluirLotes) {
     var unicas = Array.prototype.filter.call(refs || [], function(r, i, arr) {
       return r && arr.indexOf(r) === i;
@@ -5640,9 +5669,22 @@
     var filtroDestaque = incluirLotes ? '' : '&destaque=eq.true';
     var todasLinhas = [];
     procExecutarEmLotesLimitados(unicas, 200, 5, function(loteRefs) {
-      var listaIn = loteRefs.map(function(r) { return encodeURIComponent(r); }).join(',');
-      return procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')' + filtroDestaque + '&select=' + campos, { method: 'GET' })
-        .then(function(r) { return r.ok ? r.json() : []; });
+      /* Igual a procCalcularStockLote: um lote de 200 que falhe (rede,
+         sobrecarga do Postgres, etc.) e subdividido por procFetchComBisecao
+         em vez de simplesmente desaparecer do resultado — sem isto, as
+         referencias desse lote ficavam silenciosamente sem 🔥/❄️, sem
+         sequer um ⚠ a avisar (ao contrario do stock, aqui nao ha noção
+         de erro visivel — uma referencia sem fogo/gelo calculado fica
+         so sem badge, que e tambem o estado normal de "nao e das mais
+         rapidas nem esta parada"; por isso vale a pena tentar a serio
+         antes de desistir). */
+      function fetchUmLote(subRefs) {
+        var listaIn = subRefs.map(function(r) { return encodeURIComponent(r); }).join(',');
+        return procSbFetch('proc_referencia_velocidade?referencia=in.(' + listaIn + ')' + filtroDestaque + '&select=' + campos, { method: 'GET' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .catch(function() { return null; });
+      }
+      return procFetchComBisecao(loteRefs, fetchUmLote, 10).then(function(resultado) { return resultado.rows; });
     }, function(linhas) {
       if (linhas && linhas.length) todasLinhas = todasLinhas.concat(linhas);
     }, function() {
@@ -5867,29 +5909,31 @@
        dezenas destes de uma vez (ex.: 31 para o catalogo global de 12000+
        referencias) satura o Postgres e faz varios voltarem com erro. */
     procExecutarEmLotesLimitados(pares, 400, 4, function(lote) {
-      /* fetchLote nunca rejeita — mesmo uma falha de rede resolve com
-         rows:null, para o merge abaixo poder marcar {erro:true} nas
-         referencias DESSE lote especificamente (ver comentario na
-         definicao de procExecutarEmLotesLimitados: o "catch" generico
-         do helper so recebe null, sem saber a que lote pertencia). */
-      return procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: lote }) })
-        .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(rows) { return { lote: lote, rows: rows }; })
-        .catch(function() { return { lote: lote, rows: null }; });
+      /* fetchUmLote nunca rejeita — mesmo uma falha de rede ou um
+         estouro do statement_timeout (15s) resolve com null, para o
+         procFetchComBisecao poder subdividir este lote de 400 e isolar
+         so a(s) referencia(s) realmente pesada(s), em vez de marcar as
+         400 inteiras como erro (ver nota em procFetchComBisecao). */
+      function fetchUmLote(subLote) {
+        return procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: subLote }) })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .catch(function() { return null; });
+      }
+      return procFetchComBisecao(lote, fetchUmLote, 10);
     }, function(resultado) {
       if (!resultado) return;
-      if (resultado.rows) {
-        resultado.rows.forEach(function(row) {
-          mapaFinal[row.referencia] = {
-            vendidoA4: Number(row.vendido_a4) || 0,
-            vendidoA5: Number(row.vendido_a5) || 0,
-            detalheA5: row.detalhe_a5 || [],
-            temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
-          };
-        });
-      } else {
-        resultado.lote.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
-      }
+      resultado.rows.forEach(function(row) {
+        mapaFinal[row.referencia] = {
+          vendidoA4: Number(row.vendido_a4) || 0,
+          vendidoA5: Number(row.vendido_a5) || 0,
+          detalheA5: row.detalhe_a5 || [],
+          temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
+        };
+      });
+      /* So chega aqui uma referencia que, mesmo isolada num lote de
+         ate 10, continuou a falhar — ai sim e mesmo essa referencia
+         (nunca ~400 vizinhas saudaveis) que fica marcada com erro. */
+      resultado.falhas.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
     }, function() { callback(mapaFinal); });
   }
 

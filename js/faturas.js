@@ -8860,6 +8860,7 @@
   window.procAbrirImportadorVendas = procAbrirImportadorVendas;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
   window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
+  window.procMostrarModalAlertasGlobais = procMostrarModalAlertasGlobais;
 
   /* ── Shared helper: highlight the row of any button/input element ── */
   function procActivateRow(el) {

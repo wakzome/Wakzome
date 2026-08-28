@@ -6427,7 +6427,7 @@
      vez com "…" por uns instantes, mesmo sem nada ter mudado. */
   var _procCacheStockFogoArtigos = null;
   function procMostrarModalArtigosDoFornecedor(fornecedorNorm, lista, aoVoltar, estadoInicial) {
-    var estadoOrdenacaoAtual = (estadoInicial && estadoInicial.estadoOrdenacao) || 0;
+    var estadoOrdenacaoAtual = (estadoInicial && estadoInicial.estadoOrdenacao) || null;
 
   /* Cache simples da ultima data de vendas carregada no sistema
      (tabela vendas_primavera_dias, ja pequena e ordenada por dia —
@@ -6505,7 +6505,7 @@
         var a4v = r.a4 || 0, a5v = r.a5 || 0;
         var pecas = r.qtdFt || (a4v + a5v);
         if (!pecas) return;
-        if (!mapa[ref]) mapa[ref] = { display: ref, desc: '', anos: {}, comprasA4: 0, comprasA5: 0, cutoffA4: null, cutoffA5: null };
+        if (!mapa[ref]) mapa[ref] = { display: ref, desc: '', anos: {}, comprasA4: 0, comprasA5: 0, cutoffA4: null, cutoffA5: null, ultimaCompra: null };
         if (!mapa[ref].desc && r.desc) mapa[ref].desc = r.desc;
         mapa[ref].anos[item.ano] = (mapa[ref].anos[item.ano] || 0) + pecas;
         mapa[ref].comprasA4 += a4v;
@@ -6513,6 +6513,10 @@
         var isoData = procIsoAAAAMMDD(item.ano, item.mes, item.dia);
         if (a4v > 0 && (!mapa[ref].cutoffA4 || isoData < mapa[ref].cutoffA4)) mapa[ref].cutoffA4 = isoData;
         if (a5v > 0 && (!mapa[ref].cutoffA5 || isoData < mapa[ref].cutoffA5)) mapa[ref].cutoffA5 = isoData;
+        /* Ultima compra (data mais recente, qualquer armazem) — usada
+           para o indicador "novo" (menos de 40 dias) e para o tooltip
+           ao passar o rato na referencia. */
+        if (!mapa[ref].ultimaCompra || isoData > mapa[ref].ultimaCompra) mapa[ref].ultimaCompra = isoData;
       });
     });
 
@@ -6558,7 +6562,13 @@
       +   '<th rowspan="2" style="vertical-align:bottom;">Referência</th>'
       +   '<th rowspan="2" style="vertical-align:bottom;">Descrição</th>'
       +   '<th colspan="' + (anos.length + 1) + '" class="center" style="border-bottom:1px solid #ddd;">Peças compradas</th>'
-      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual <button type="button" id="proc-stock-sort-btn" disabled title="A carregar stock\u2026" style="display:inline-block;margin-left:8px;padding:2px 9px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;vertical-align:middle;">\u21c5 Ordenar por Stock</button></th>'
+      +   '<th colspan="3" class="center" style="border-bottom:1px solid #ddd;">Stock actual '
+      +   '<span id="proc-artigos-sort-group" style="display:inline-block;margin-left:6px;vertical-align:middle;">'
+      +     '<button type="button" id="proc-artigos-sort-stock" disabled title="A carregar stock\u2026" style="display:inline-block;margin:1px;padding:2px 8px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;">\u21c5 Stock</button>'
+      +     '<button type="button" id="proc-artigos-sort-fogo" disabled title="A carregar\u2026" style="display:inline-block;margin:1px;padding:2px 8px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;">\ud83d\udd25</button>'
+      +     '<button type="button" id="proc-artigos-sort-gelo" disabled title="A carregar\u2026" style="display:inline-block;margin:1px;padding:2px 8px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;">\u2744\ufe0f</button>'
+      +     '<button type="button" id="proc-artigos-sort-alerta" disabled title="A carregar\u2026" style="display:inline-block;margin:1px;padding:2px 8px;font-size:.68rem;font-weight:700;letter-spacing:.02em;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#999;cursor:not-allowed;">\u26a0</button>'
+      +   '</span></th>'
       + '</tr>'
       + '<tr>'
       + anos.map(function(a) {
@@ -6586,10 +6596,24 @@
       var badgeCompartilhada = outrosFornecedores.length
         ? ' <span class="proc-ref-compartilhada" title="Esta referência também é comprada a: ' + outrosFornecedores.map(function(l) { return l.fornecedorDisplay; }).join(', ').replace(/"/g, '&quot;') + '. Stock calculado em FIFO entre fornecedores (o lote mais antigo esgota primeiro)." style="display:inline-block;margin-left:6px;font-size:.7rem;font-weight:600;color:#8a6d1a;border:1px solid #C9A227;background:#FBF3D9;border-radius:8px;padding:1px 7px;cursor:help;vertical-align:middle;">⇄ partilhada</span>'
         : '';
+      /* Indicador "novo" (estilo expoente) para referencias cuja
+         ultima compra (qualquer armazem) foi ha menos de 40 dias —
+         e tooltip com essa data ao passar o rato em cima da
+         referencia, para QUALQUER referencia (nao so as novas). */
+      var badgeNovo = '';
+      var tituloUltimaCompra = '';
+      if (linha.ultimaCompra) {
+        var dataFormatadaUltimaCompra = linha.ultimaCompra.split('-').reverse().join('/');
+        tituloUltimaCompra = 'Última compra: ' + dataFormatadaUltimaCompra;
+        var diasDesdeUltimaCompra = Math.floor((Date.now() - new Date(linha.ultimaCompra + 'T00:00:00Z').getTime()) / 86400000);
+        if (diasDesdeUltimaCompra >= 0 && diasDesdeUltimaCompra < 40) {
+          badgeNovo = '<sup title="' + (tituloUltimaCompra + ' — há ' + diasDesdeUltimaCompra + ' dias').replace(/"/g, '&quot;') + '" style="font-size:.55rem;font-weight:800;color:#1a7a3c;background:#e6f7ec;border:1px solid #9fd8b6;border-radius:5px;padding:0 4px;margin-left:4px;vertical-align:super;letter-spacing:.02em;cursor:help;">novo</sup>';
+        }
+      }
       return '<tr class="proc-artigo-row" data-ref="' + linha.display.replace(/"/g, '&quot;') + '" '
         + 'data-filtro="' + (linha.display + ' ' + (linha.desc || '')).toLowerCase().replace(/"/g, '&quot;') + '" '
         + 'data-anos="' + anosComPecas.join(',') + '" style="cursor:pointer;">'
-        + '<td>' + linha.display + badgeCompartilhada + '</td>'
+        + '<td' + (tituloUltimaCompra ? ' title="' + tituloUltimaCompra.replace(/"/g, '&quot;') + '" style="cursor:help;"' : '') + '>' + linha.display + badgeNovo + badgeCompartilhada + '</td>'
         + '<td>' + (linha.desc || '—').toUpperCase() + '</td>'
         + cels
         + '<td class="center"><strong>' + linha.total + '</strong></td>'
@@ -6708,13 +6732,38 @@
       && _procCacheStockFogoArtigos.fornecedorNorm === fornecedorNorm);
     var fogoMapaArt = cacheArtigosValido ? _procCacheStockFogoArtigos.fogoMapa : null;
     var stockMapaArt = cacheArtigosValido ? _procCacheStockFogoArtigos.stockMapa : null;
+    var paresSuspeitosArt = cacheArtigosValido ? _procCacheStockFogoArtigos.pares : null;
+    var familiasSuspeitasArt = cacheArtigosValido ? _procCacheStockFogoArtigos.familias : null;
     var prontosArt = 0;
     function procTentarRenderArtigosStock() {
       prontosArt++;
-      if (prontosArt < 2) return;
+      if (prontosArt < 4) return;
       var fogoMapa = fogoMapaArt || {};
       var stockMapa = stockMapaArt;
       var trEls = body.querySelectorAll('.proc-artigo-row');
+      /* Pares/familias suspeitas (fiscalizador) — mesma deteccao usada
+         em Alertas Globais, aqui so para o botao ⚠ poder AGRUPAR (nunca
+         filtrar) as referencias irmas adjacentes quando activado. */
+      var paresPorRefArt = {};
+      var familiasPorIdArt = {};
+      (familiasSuspeitasArt || []).forEach(function(m) {
+        if (!familiasPorIdArt[m.familia_id]) familiasPorIdArt[m.familia_id] = [];
+        familiasPorIdArt[m.familia_id].push(m);
+      });
+      Object.keys(familiasPorIdArt).forEach(function(fid) {
+        familiasPorIdArt[fid].forEach(function(m) {
+          var fornecedorNormFamArt = procNormalize(m.fornecedor || '');
+          paresPorRefArt[m.referencia + '|' + fornecedorNormFamArt] = { tipo: 'familia', idPar: 'fam-' + fid };
+        });
+      });
+      (paresSuspeitosArt || []).forEach(function(par) {
+        var fornecedorNormParArt = procNormalize(par.fornecedor || '');
+        var idParArt = [par.referencia_parada, par.referencia_negativa].sort().join('|') + '|' + fornecedorNormParArt;
+        var chaveParadaArt = par.referencia_parada + '|' + fornecedorNormParArt;
+        var chaveNegativaArt = par.referencia_negativa + '|' + fornecedorNormParArt;
+        if (!paresPorRefArt[chaveParadaArt]) paresPorRefArt[chaveParadaArt] = { tipo: 'parada', idPar: idParArt };
+        if (!paresPorRefArt[chaveNegativaArt]) paresPorRefArt[chaveNegativaArt] = { tipo: 'negativa', idPar: idParArt };
+      });
       trEls.forEach(function(tr, i) {
         var ref = referencias[i];
         var compras = mapa[ref];
@@ -6763,65 +6812,105 @@
         }
         tr.setAttribute('data-stock-total', String(stockA4 + stockA5));
         tr.setAttribute('data-fire-level', String(fireLevelAtual));
+        tr.setAttribute('data-gelo-dias', String(procReferenciaEmGelo(fogoInfo) ? fogoInfo.dias : 0));
+        var infoParArt = paresPorRefArt[ref + '|' + fornecedorNorm];
+        if (infoParArt) {
+          tr.setAttribute('data-par-id', infoParArt.idPar);
+          tr.setAttribute('data-par-tipo', infoParArt.tipo);
+        } else {
+          tr.removeAttribute('data-par-id');
+          tr.removeAttribute('data-par-tipo');
+        }
       });
 
-      /* Botão de ordenar — cicla por 3 estados a cada clique: Stock
-         Total desc. (estado 1) → velocidade de venda desc. (estado 2,
-         usa data-fire-level com o Stock Total como desempate) →
-         ordem original (estado 0, por peças compradas). Só fica activo
-         depois de todas as células de stock/🔥 estarem preenchidas
-         (data-stock-total e data-fire-level já calculados em cada
-         linha). Reordena os nós <tr> directamente no DOM — preserva o
-         estado de filtro (texto/ano) e os listeners de clique de cada
-         linha. O rótulo usa sempre a mesma emoji 🔥 (nunca a palavra)
-         para identificar o estado de ordenação por velocidade. */
-      var sortBtn = modal.querySelector('#proc-stock-sort-btn');
-      if (sortBtn) {
+      /* Grupo de 4 botões — cada um e um interruptor PURO de
+         reordenacao (ao contrario dos equivalentes em Alertas Globais,
+         que agora FILTRAM: aqui nunca escondem linhas, so as
+         reordenam). No maximo um fica activo de cada vez; clicar no
+         botao ja activo volta a ordem original (por pecas compradas).
+         O botao ⚠ nao ordena por um numero — agrupa referencias
+         irmas/suspeitas adjacentes (mesma deteccao de pares/familias
+         do fiscalizador usada em Alertas Globais, ver paresPorRefArt
+         acima), com a "negativa" sempre antes da "parada"/familia
+         dentro de cada grupo. Só fica activo depois de todas as
+         células de stock/🔥/❄️ e do fiscalizador estarem prontas
+         (prontosArt chega a 4). */
+      var sortBtnStock = modal.querySelector('#proc-artigos-sort-stock');
+      var sortBtnFogo = modal.querySelector('#proc-artigos-sort-fogo');
+      var sortBtnGelo = modal.querySelector('#proc-artigos-sort-gelo');
+      var sortBtnAlerta = modal.querySelector('#proc-artigos-sort-alerta');
+      if (sortBtnStock && sortBtnFogo && sortBtnGelo && sortBtnAlerta) {
         var ordemOriginalStock = Array.prototype.slice.call(trEls);
-        sortBtn.disabled = false;
-        sortBtn.style.cursor = 'pointer';
-        var procPintarSortBtn = function(activo) {
-          sortBtn.style.setProperty('background', activo ? '#222' : '#f2f2f2', 'important');
-          sortBtn.style.setProperty('color', activo ? '#fff' : '#333', 'important');
-          sortBtn.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
+        var botoesOrdenacaoArt = [
+          { chave: 'stock', btn: sortBtnStock, desc: 'Stock Total (maior para menor)' },
+          { chave: 'fogo', btn: sortBtnFogo, desc: '🔥 velocidade de venda (maior para menor)' },
+          { chave: 'gelo', btn: sortBtnGelo, desc: '❄️ dias parado (maior para menor)' },
+          { chave: 'alerta', btn: sortBtnAlerta, desc: '⚠ referências irmãs/suspeitas do fiscalizador, agrupadas' }
+        ];
+        botoesOrdenacaoArt.forEach(function(b) {
+          b.btn.disabled = false;
+          b.btn.style.cursor = 'pointer';
+        });
+        var procPintarBotoesOrdenacaoArt = function() {
+          botoesOrdenacaoArt.forEach(function(b) {
+            var activo = (estadoOrdenacaoAtual === b.chave);
+            b.btn.style.setProperty('background', activo ? '#222' : '#f2f2f2', 'important');
+            b.btn.style.setProperty('color', activo ? '#fff' : '#333', 'important');
+            b.btn.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
+            b.btn.title = (activo ? 'Ordenado por ' : 'Ordenar por ') + b.desc + ' — clicar de novo volta à ordem original.';
+          });
+        };
+        var procCompararAlertaArt = function(a, b) {
+          var parA = a.getAttribute('data-par-id') || '';
+          var parB = b.getAttribute('data-par-id') || '';
+          if (parA && parA === parB) {
+            var tipoA = a.getAttribute('data-par-tipo');
+            return tipoA === 'negativa' ? -1 : 1;
+          }
+          var temParA = parA ? 1 : 0, temParB = parB ? 1 : 0;
+          if (temParA !== temParB) return temParB - temParA;
+          if (parA !== parB) return parA < parB ? -1 : 1;
+          var negA = (parseFloat(a.getAttribute('data-stock-total')) || 0) < 0 ? 1 : 0;
+          var negB = (parseFloat(b.getAttribute('data-stock-total')) || 0) < 0 ? 1 : 0;
+          return negB - negA;
         };
         /* Aplica visualmente o estado actual de estadoOrdenacaoAtual —
-           chamada tanto pelo clique (que primeiro avança o estado) como
-           na restauracao inicial (estadoInicial.estadoOrdenacao), para
-           nao duplicar a logica de reordenar/pintar em dois sitios. */
+           chamada tanto pelo clique como na restauracao inicial
+           (estadoInicial.estadoOrdenacao), para nao duplicar a logica
+           de reordenar/pintar em dois sitios. */
         var procAplicarEstadoOrdenacaoArt = function() {
           var tbodyEl = body.querySelector('tbody');
           if (!tbodyEl) return;
-          if (estadoOrdenacaoAtual === 0) {
+          procPintarBotoesOrdenacaoArt();
+          if (!estadoOrdenacaoAtual) {
             ordemOriginalStock.forEach(function(tr) { tbodyEl.appendChild(tr); });
-            procPintarSortBtn(false);
-            sortBtn.innerHTML = '⇅ Ordenar por Stock';
-            sortBtn.title = 'Ordenar as referências pelo Stock Total (maior para menor)';
             return;
           }
           var linhasTbody = Array.prototype.slice.call(tbodyEl.querySelectorAll('.proc-artigo-row'));
-          if (estadoOrdenacaoAtual === 1) {
+          if (estadoOrdenacaoAtual === 'stock') {
             linhasTbody.sort(function(a, b) {
               return (parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0);
             });
-            linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
-            procPintarSortBtn(true);
-            sortBtn.innerHTML = '⇅ Ordenar por Stock';
-            sortBtn.title = 'Clicar para ordenar por 🔥 — clicar de novo volta à ordem original';
-            return;
+          } else if (estadoOrdenacaoAtual === 'fogo') {
+            linhasTbody.sort(function(a, b) {
+              return (parseInt(b.getAttribute('data-fire-level'), 10) || 0) - (parseInt(a.getAttribute('data-fire-level'), 10) || 0)
+                || ((parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0));
+            });
+          } else if (estadoOrdenacaoAtual === 'gelo') {
+            linhasTbody.sort(function(a, b) {
+              return (parseInt(b.getAttribute('data-gelo-dias'), 10) || 0) - (parseInt(a.getAttribute('data-gelo-dias'), 10) || 0)
+                || ((parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0));
+            });
+          } else if (estadoOrdenacaoAtual === 'alerta') {
+            linhasTbody.sort(procCompararAlertaArt);
           }
-          linhasTbody.sort(function(a, b) {
-            return (parseInt(b.getAttribute('data-fire-level'), 10) || 0) - (parseInt(a.getAttribute('data-fire-level'), 10) || 0)
-              || ((parseFloat(b.getAttribute('data-stock-total')) || 0) - (parseFloat(a.getAttribute('data-stock-total')) || 0));
-          });
           linhasTbody.forEach(function(tr) { tbodyEl.appendChild(tr); });
-          procPintarSortBtn(true);
-          sortBtn.innerHTML = '⇅ Ordenar por 🔥';
-          sortBtn.title = 'Clicar para voltar à ordem original';
         };
-        sortBtn.addEventListener('click', function() {
-          estadoOrdenacaoAtual = (estadoOrdenacaoAtual + 1) % 3;
-          procAplicarEstadoOrdenacaoArt();
+        botoesOrdenacaoArt.forEach(function(b) {
+          b.btn.addEventListener('click', function() {
+            estadoOrdenacaoAtual = (estadoOrdenacaoAtual === b.chave) ? null : b.chave;
+            procAplicarEstadoOrdenacaoArt();
+          });
         });
         /* Restaura a ordenacao que estava activa antes de ir para a
            radiografia (ver estadoInicial no topo da funcao). */
@@ -6831,17 +6920,21 @@
       /* Guarda em cache para a proxima vez que se voltar a este mesmo
          fornecedor (ex.: apos consultar a radiografia de uma
          referencia) nao repetir os pedidos ao Supabase. */
-      _procCacheStockFogoArtigos = { lista: lista, fornecedorNorm: fornecedorNorm, fogoMapa: fogoMapa, stockMapa: stockMapa };
+      _procCacheStockFogoArtigos = { lista: lista, fornecedorNorm: fornecedorNorm, fogoMapa: fogoMapa, stockMapa: stockMapa, pares: paresSuspeitosArt, familias: familiasSuspeitasArt };
     }
     if (cacheArtigosValido) {
-      /* Ja temos fogo+stock desta mesma lista/fornecedor — chama a
-         renderizacao directamente, duas vezes (uma por "pedido" que
-         normalmente resolveria), sem tocar na rede. */
+      /* Ja temos fogo+stock+fiscalizador desta mesma lista/fornecedor —
+         chama a renderizacao directamente, quatro vezes (uma por
+         "pedido" que normalmente resolveria), sem tocar na rede. */
+      procTentarRenderArtigosStock();
+      procTentarRenderArtigosStock();
       procTentarRenderArtigosStock();
       procTentarRenderArtigosStock();
     } else {
       procObterFogoPorReferencias(referencias, function(fogoMapa) { fogoMapaArt = fogoMapa; procTentarRenderArtigosStock(); });
       procCalcularStockLote(paresStock, function(stockMapa) { stockMapaArt = stockMapa; procTentarRenderArtigosStock(); });
+      procObterParesSuspeitos(function(pares) { paresSuspeitosArt = pares; procTentarRenderArtigosStock(); });
+      procObterFamiliasSuspeitas(function(familias) { familiasSuspeitasArt = familias; procTentarRenderArtigosStock(); });
     }
   }
 

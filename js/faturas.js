@@ -5908,6 +5908,21 @@
      vendidas. Corrigido dividindo o pedido em lotes bem abaixo desse
      limite — cada lote é um pedido HTTP independente, os resultados
      são fundidos num único mapa antes do callback. */
+  /* Le (nunca calcula) os pares "parada + negativa" ja detectados
+     pelo fiscalizador (proc_recalcular_pares_suspeitos, corre no
+     Postgres) — referencias do MESMO fornecedor cujo codigo partilha
+     o mesmo nucleo (sem prefixo de ano "25-" nem sufixo "-0") e onde
+     uma esta parada (❄️ real) e a outra vendeu mais do que comprou
+     (⚠ real). So expoe — nunca corrige nada em proc_sessoes ou
+     vendas_primavera; a decisao de investigar/corrigir a factura
+     continua sempre manual. */
+  function procObterParesSuspeitos(callback) {
+    procSbFetch('proc_referencia_pares_suspeitos?select=referencia_parada,dias_parada,referencia_negativa,excesso_vendido,fornecedor,descricao_parada,descricao_negativa,similitude_descricao', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) { callback(rows || []); })
+      .catch(function() { callback([]); });
+  }
+
   function procCalcularStockLote(pares, callback) {
     if (!pares || !pares.length) { callback({}); return; }
     var mapaFinal = {};
@@ -7103,11 +7118,12 @@
     var cacheValido = !!(_procCacheStockFogoAlertas && _procCacheStockFogoAlertas.lista === lista);
     var fogoMapaGlobal = cacheValido ? _procCacheStockFogoAlertas.fogoMapa : null;
     var stockMapaGlobal = cacheValido ? _procCacheStockFogoAlertas.stockMapa : null;
+    var paresSuspeitosGlobal = cacheValido ? _procCacheStockFogoAlertas.pares : null;
     var prontosGlobal = 0;
 
     function procTentarRenderAlertas() {
       prontosGlobal++;
-      if (prontosGlobal < 2) return;
+      if (prontosGlobal < 3) return;
       var fogoMapa = fogoMapaGlobal || {};
       var stockMapa = stockMapaGlobal;
       var loadingMsgEl = modal.querySelector('#proc-alertas-loading-msg');
@@ -7128,6 +7144,22 @@
 
       var trEls = modal.querySelectorAll('.proc-alerta-row');
       var totalAlertas = 0;
+      /* Mapa referencia+fornecedor -> par suspeito (ambos os papeis:
+         a linha "parada" aponta para a sua negativa, e vice-versa),
+         construido uma so vez antes do loop principal. */
+      var paresPorRef = {};
+      (paresSuspeitosGlobal || []).forEach(function(par) {
+        var fornecedorNormPar = procNormalize(par.fornecedor || '');
+        var idPar = [par.referencia_parada, par.referencia_negativa].sort().join('|') + '|' + fornecedorNormPar;
+        paresPorRef[par.referencia_parada + '|' + fornecedorNormPar] = {
+          tipo: 'parada', idPar: idPar, parceiro: par.referencia_negativa,
+          dias: par.dias_parada, excesso: par.excesso_vendido, descricaoParceiro: par.descricao_negativa
+        };
+        paresPorRef[par.referencia_negativa + '|' + fornecedorNormPar] = {
+          tipo: 'negativa', idPar: idPar, parceiro: par.referencia_parada,
+          dias: par.dias_parada, excesso: par.excesso_vendido, descricaoParceiro: par.descricao_parada
+        };
+      });
       chaves.forEach(function(chave, idx) {
         var linha = mapaGlobal[chave];
         var tr = trEls[idx];
@@ -7190,6 +7222,22 @@
         if (negativo) {
           badges += ' <span title="' + procTituloNegativo(stockTotal).replace(/"/g, '&quot;') + '">⚠</span>';
         }
+        /* Par suspeito (fiscalizador): so liga referencias do MESMO
+           fornecedor com nucleo de codigo identico onde uma esta
+           parada e a outra negativa — nunca corrige nada, so aponta
+           para o parceiro para o utilizador investigar. */
+        var infoPar = paresPorRef[linha.ref + '|' + linha.fornecedorNorm];
+        if (infoPar) {
+          tr.setAttribute('data-par-id', infoPar.idPar);
+          tr.setAttribute('data-par-tipo', infoPar.tipo);
+          var tituloPar = (infoPar.tipo === 'parada')
+            ? 'Possível referência trocada: ligado a ' + infoPar.parceiro + ' (' + (infoPar.descricaoParceiro || '—') + '), que tem ' + infoPar.excesso + ' peças vendidas a mais do que compradas.'
+            : 'Possível referência trocada: ligado a ' + infoPar.parceiro + ' (' + (infoPar.descricaoParceiro || '—') + '), parado há ' + infoPar.dias + ' dias sem vender.';
+          badges = '<span class="proc-ref-par" title="' + tituloPar.replace(/"/g, '&quot;') + '">🔗</span> ' + badges;
+        } else {
+          tr.removeAttribute('data-par-id');
+          tr.removeAttribute('data-par-tipo');
+        }
         celBadge.innerHTML = badges || '—';
       });
 
@@ -7203,7 +7251,7 @@
       }
       procAplicarFiltroAlertas();
 
-      _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa };
+      _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa, pares: paresSuspeitosGlobal };
 
       /* 3 botoes de ordenacao — cada um so um switch (activo/inactivo);
          activar um desliga os outros dois. Reordena os <tr> no DOM,
@@ -7244,7 +7292,22 @@
             return (parseInt(b.getAttribute('data-gelo-dias'), 10) || 0) - (parseInt(a.getAttribute('data-gelo-dias'), 10) || 0);
           });
         } else {
+          /* Pares suspeitos primeiro, agrupados lado a lado (a linha
+             "negativa" antes da "parada" — foi ela que disparou o ⚠),
+             depois o resto ordenado por stock total como antes. Sem
+             isto, uma referencia parada (stock perto de 0) nunca
+             ficaria perto da sua negativa no ordenar por ⚠, mesmo
+             sendo o mesmo caso. */
           linhasTbody.sort(function(a, b) {
+            var parA = a.getAttribute('data-par-id') || '';
+            var parB = b.getAttribute('data-par-id') || '';
+            if (parA && parA === parB) {
+              var tipoA = a.getAttribute('data-par-tipo');
+              return tipoA === 'negativa' ? -1 : 1;
+            }
+            var temParA = parA ? 1 : 0, temParB = parB ? 1 : 0;
+            if (temParA !== temParB) return temParB - temParA;
+            if (parA !== parB) return parA < parB ? -1 : 1;
             return (parseFloat(a.getAttribute('data-stock-total')) || 0) - (parseFloat(b.getAttribute('data-stock-total')) || 0);
           });
         }
@@ -7268,9 +7331,11 @@
     if (cacheValido) {
       procTentarRenderAlertas();
       procTentarRenderAlertas();
+      procTentarRenderAlertas();
     } else {
       procObterFogoPorReferencias(referenciasUnicas, function(fogoMapa) { fogoMapaGlobal = fogoMapa; procTentarRenderAlertas(); });
       procCalcularStockLote(paresStock, function(stockMapa) { stockMapaGlobal = stockMapa; procTentarRenderAlertas(); });
+      procObterParesSuspeitos(function(pares) { paresSuspeitosGlobal = pares; procTentarRenderAlertas(); });
     }
   }
 

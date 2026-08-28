@@ -4998,7 +4998,7 @@
     };
   }
 
-  function procMostrarRadiografiaModal(blocos, categorias, aoVoltar) {
+  function procMostrarRadiografiaModal(blocos, categorias, aoVoltar, sessoes) {
     var old = document.getElementById('proc-radiografia-modal');
     if (old && old.parentNode) old.parentNode.removeChild(old);
 
@@ -5014,7 +5014,7 @@
         var nomeCat = mapaCategorias[cand.categoria] || cand.categoria;
         var linhasHTML = bloco.linhas.length
           ? bloco.linhas.map(function(l) {
-              return '<tr class="proc-raio-row-clickable" style="cursor:pointer" title="Abrir esta sess\u00e3o" onclick="procFecharRadiografiaEAbrirSessao(\'' + l.sessionKey + '\')">'
+              return '<tr class="proc-raio-row-clickable" data-idx-bloco="' + idxBloco + '" data-session-key="' + l.sessionKey + '" style="cursor:pointer" title="Ver esta factura">'
                 + '<td class="center">' + l.label + '</td>'
                 + '<td class="center">' + l.a4 + '</td>'
                 + '<td class="center">' + l.a5 + '</td>'
@@ -5106,6 +5106,27 @@
        a area de transferencia — evita ter de seleccionar o texto
        manualmente. Feedback visual breve (fundo verde claro + title
        "copiado!") em vez de qualquer alert/popup. */
+    /* Clicar numa sessao da tabela mostra a factura concreta dessa
+       compra num modal por cima — em vez de abandonar a radiografia e
+       saltar para o modo de edicao dessa semana (como acontecia antes
+       com procFecharRadiografiaEAbrirSessao), o que fazia perder toda
+       a pesquisa em curso, incluindo qual referencia se estava a
+       investigar. "Voltar" fecha a factura e reabre esta mesma
+       radiografia (blocos/categorias/sessoes ja em memoria, sem novo
+       pedido ao Supabase). */
+    modal.querySelectorAll('.proc-raio-row-clickable').forEach(function(tr) {
+      tr.addEventListener('click', function() {
+        var idxBlocoAttr = parseInt(tr.getAttribute('data-idx-bloco'), 10);
+        var sessionKey = tr.getAttribute('data-session-key');
+        var candidato = blocos[idxBlocoAttr] && blocos[idxBlocoAttr].candidato;
+        if (!candidato || !sessionKey) return;
+        procCloseModal(modal);
+        procMostrarModalFaturaDetalhe(sessionKey, sessoes, candidato, categorias, function() {
+          procMostrarRadiografiaModal(blocos, categorias, aoVoltar, sessoes);
+        });
+      });
+    });
+
     modal.querySelectorAll('.proc-raio-ref-copiar').forEach(function(span) {
       span.addEventListener('click', function() {
         var texto = span.textContent.trim();
@@ -5294,18 +5315,99 @@
     }
   }
 
-  /* Clicar numa linha do historico fecha o modal (e qualquer popover de
-     busca ainda aberto) e abre directamente essa sessao — reaproveita
-     procForceLoadSession, o mesmo caminho ja usado pelo botao "carregar"
-     no menu "☰ sessões", por isso o comportamento (fetch remoto,
-     fallback local, lock, etc.) e identico e ja testado. */
-  function procFecharRadiografiaEAbrirSessao(sessionKey) {
-    if (!sessionKey) return;
-    var modal = document.getElementById('proc-radiografia-modal');
-    if (modal) procCloseModal(modal);
-    procFecharBuscaDropdown('proc-busca-dropdown');
-    if (typeof procFecharBuscaPopover === 'function') procFecharBuscaPopover();
-    procForceLoadSession(sessionKey);
+  /* Mostra, num modal por cima, a factura CONCRETA de uma sessao onde
+     apareceu a referencia que se estava a investigar na radiografia —
+     so leitura, nunca entra no modo de edicao dessa semana. "sessoes"
+     ja vem em memoria (a mesma lista carregada uma unica vez para
+     montar toda a radiografia, ver procAbrirRadiografia), por isso
+     isto nunca faz um novo pedido ao Supabase. A linha exacta que
+     corresponde a "candidato" fica destacada, para nao ter de a
+     procurar visualmente numa factura que pode ter dezenas de linhas. */
+  function procMostrarModalFaturaDetalhe(sessionKey, sessoes, candidato, categorias, aoVoltar) {
+    var old = document.getElementById('proc-fatura-detalhe-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var sess = (sessoes || []).filter(function(s) { return s.session_key === sessionKey; })[0];
+    var dados = null;
+    if (sess) { try { dados = JSON.parse(sess.dados); } catch (e) { dados = null; } }
+
+    var fat = null;
+    if (dados && dados.faturas) {
+      fat = dados.faturas.filter(function(f) {
+        if (procNormalize(f.proveedor || '') !== candidato.proveedor) return false;
+        return (f.rows || []).some(function(row) {
+          return row.ref
+            && procNormalizarRefOriginal(row.ref) === candidato.referencia_original
+            && procResolverCategoria(row.desc, categorias) === candidato.categoria;
+        });
+      })[0] || null;
+    }
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-fatura-detalhe-modal';
+    modal.className = 'proc-or-modal';
+
+    if (!fat) {
+      modal.innerHTML =
+          '<div class="proc-or-backdrop"></div>'
+        + '<div class="proc-or-panel" style="max-width:520px;width:90vw;">'
+        +   '<div class="proc-or-panel-header">'
+        +     '<div class="proc-or-panel-title"><span class="proc-or-panel-title-main">' + labelFromKey(sessionKey) + '</span></div>'
+        +     '<button class="proc-or-close-btn">‹ Voltar</button>'
+        +   '</div>'
+        +   '<div class="proc-or-scroll"><p style="font-size:.8rem;color:#888;padding:20px;">Não foi possível encontrar esta factura.</p></div>'
+        + '</div>';
+      procOpenModal(modal);
+      procBindClose(modal);
+      procLigarVoltar(modal, aoVoltar);
+      return;
+    }
+
+    var refAlvo = candidato.referencia_original;
+    var catAlvo = candidato.categoria;
+    var linhasHTML = (fat.rows || []).map(function(row) {
+      var destacar = row.ref && procNormalizarRefOriginal(row.ref) === refAlvo && procResolverCategoria(row.desc, categorias) === catAlvo;
+      var pc = procCalcPrecoCusto(row.preco, row.plus1, row.hasD, row.qtdFt, row.a4, row.a5) * (1 - (row.descPct || 0) / 100);
+      var pvpResult = procCalcPVP(row.preco);
+      var pvpFinal = (row.pvpManual != null) ? row.pvpManual : (pvpResult ? pvpResult.pvpFinal : null);
+      var marg = pvpResult ? procCalcMargem(pvpResult.pvp1, row.preco) : null;
+      var a4 = row.a4 || 0, a5 = row.a5 || 0;
+      return '<tr' + (destacar ? ' style="background:#FBF3D9;"' : '') + '>'
+        + '<td' + (destacar ? ' style="font-weight:700;"' : '') + '>' + (row.ref || '—') + '</td>'
+        + '<td>' + (row.desc || '—').toUpperCase() + '</td>'
+        + '<td class="center">' + a4 + '</td>'
+        + '<td class="center">' + a5 + '</td>'
+        + '<td class="center"><strong>' + (a4 + a5) + '</strong></td>'
+        + '<td class="center">' + (pc != null && !isNaN(pc) ? pc.toFixed(2) : '—') + '</td>'
+        + '<td class="center">' + (pvpFinal != null ? Number(pvpFinal).toFixed(2) : '—') + '</td>'
+        + '<td class="center">' + (marg != null ? marg.toFixed(1) + '%' : '—') + '</td>'
+        + '</tr>';
+    }).join('');
+
+    var total = procCalcularTotalLinhasFatura(fat);
+    var guia = (fat.guiaErp || '').toString().trim();
+
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:900px;width:94vw;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">' + (fat.proveedor || candidato.proveedor) + '</span>'
+      +       '<span class="proc-or-panel-title-sub">' + labelFromKey(sessionKey) + (guia ? ' · Guia ERP ' + guia : '') + ' · ' + procFormatarMoeda(total) + '</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">‹ Voltar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-scroll">'
+      +     '<table class="proc-or-table">'
+      +       '<thead><tr><th>Referência</th><th>Descrição</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center">Total</th><th class="center">P. Custo</th><th class="center">PVP</th><th class="center">Margem</th></tr></thead>'
+      +       '<tbody>' + linhasHTML + '</tbody>'
+      +     '</table>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+    procLigarVoltar(modal, aoVoltar);
   }
 
   function procAbrirRadiografia(valorBruto, candidatosForcados, aoVoltar) {
@@ -5318,7 +5420,7 @@
         var blocos = candidatos.map(function(cand) {
           return procMontarBlocoRadiografia(cand, sessoes || [], categorias || []);
         });
-        procMostrarRadiografiaModal(blocos, categorias || [], aoVoltar);
+        procMostrarRadiografiaModal(blocos, categorias || [], aoVoltar, sessoes || []);
       });
     };
 
@@ -6707,6 +6809,7 @@
     }
     var lista = listaParam;
     var criterioAtivo = (estadoInicial && estadoInicial.criterio) || null; /* null | 'fogo' | 'gelo' | 'negativo' */
+    var anoAtivo = (estadoInicial && estadoInicial.anoAtivo != null) ? estadoInicial.anoAtivo : null;
 
     var old = document.getElementById('proc-alertas-globais-modal');
     if (old && old.parentNode) old.parentNode.removeChild(old);
@@ -6781,7 +6884,13 @@
       +   '<th rowspan="2" style="vertical-align:bottom;">&nbsp;</th>'
       + '</tr>'
       + '<tr>'
-      + anos.map(function(a) { return '<th class="center" style="width:52px;">' + a + '</th>'; }).join('')
+      + anos.map(function(a) {
+          return '<th class="center" style="width:56px;padding-left:2px;padding-right:2px;">'
+            + '<button type="button" class="proc-alertas-ano-btn" data-ano="' + a + '" '
+            + 'style="display:inline-block;padding:3px 8px;font:inherit;font-size:.68rem;font-weight:700;letter-spacing:.02em;'
+            + 'cursor:pointer;border:1px solid #ccc;border-radius:10px;background:#f2f2f2;color:#333;line-height:1.4;">'
+            + a + '</button></th>';
+        }).join('')
       +   '<th class="center" style="width:66px;"><strong>Total</strong></th>'
       +   '<th class="center" style="width:52px;">A4</th>'
       +   '<th class="center" style="width:52px;">A5</th>'
@@ -6805,10 +6914,10 @@
         + '<td style="font-size:.72rem;color:#666;">' + linha.fornecedorNorm + '</td>'
         + cels
         + '<td class="center"><strong>' + linha.total + '</strong></td>'
-        + '<td class="center proc-alerta-a4">…</td>'
-        + '<td class="center proc-alerta-a5">…</td>'
-        + '<td class="center proc-alerta-total">…</td>'
-        + '<td class="center proc-alerta-badge">…</td>'
+        + '<td class="center proc-alerta-a4"></td>'
+        + '<td class="center proc-alerta-a5"></td>'
+        + '<td class="center proc-alerta-total"></td>'
+        + '<td class="center proc-alerta-badge"></td>'
         + '</tr>';
     }).join('');
 
@@ -6829,6 +6938,7 @@
       +     '<button type="button" id="proc-alertas-sort-gelo" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">❄️ Ordenar</button>'
       +     '<button type="button" id="proc-alertas-sort-neg" disabled style="font-size:.75rem;font-weight:700;border:1px solid #ccc;border-radius:8px;background:#f2f2f2;color:#999;padding:6px 12px;cursor:not-allowed;">⚠ Ordenar</button>'
       +   '</div>'
+      +   '<div id="proc-alertas-loading-msg" style="margin:10px 20px 0;padding:8px 14px;font-size:.78rem;color:#8a6d1a;background:#FBF3D9;border:1px solid #eddca0;border-radius:6px;">Dá-me um momento, estou a calcular esta informação…</div>'
       +   '<div class="proc-or-scroll" id="proc-alertas-globais-body">'
       +     '<table class="proc-or-table"><thead>' + theadHTML + '</thead><tbody>' + tbodyHTML + '</tbody></table>'
       +   '</div>'
@@ -6845,18 +6955,43 @@
       var q = filtroInput ? filtroInput.value.trim().toLowerCase() : '';
       modal.querySelectorAll('.proc-alerta-row').forEach(function(tr) {
         var alvo = tr.getAttribute('data-filtro') || '';
-        tr.style.display = (!q || alvo.indexOf(q) !== -1) ? '' : 'none';
+        var passaTexto = !q || alvo.indexOf(q) !== -1;
+        var anosLinha = (tr.getAttribute('data-anos') || '').split(',');
+        var passaAno = anoAtivo === null || anosLinha.indexOf(String(anoAtivo)) !== -1;
+        tr.style.display = (passaTexto && passaAno) ? '' : 'none';
       });
     }
     if (filtroInput) {
       filtroInput.addEventListener('input', procAplicarFiltroAlertas);
-      if (estadoInicial && estadoInicial.filtro) procAplicarFiltroAlertas();
     }
+    /* Botões de ano — igual ao padrão .proc-artigos-ano-btn já usado em
+       Artigos por Fornecedor: clicar activa (fica preto) e filtra as
+       linhas que tiveram peças compradas nesse ano (data-anos); clicar
+       de novo no mesmo ano desliga o filtro. Estado persiste ao voltar
+       da radiografia via estadoInicial.anoAtivo. */
+    modal.querySelectorAll('.proc-alertas-ano-btn').forEach(function(btn) {
+      var ano = parseInt(btn.getAttribute('data-ano'), 10);
+      var activoInit = anoAtivo !== null && ano === anoAtivo;
+      btn.style.setProperty('background', activoInit ? '#222' : '#f2f2f2', 'important');
+      btn.style.setProperty('color', activoInit ? '#fff' : '#333', 'important');
+      btn.style.setProperty('border-color', activoInit ? '#222' : '#ccc', 'important');
+      btn.addEventListener('click', function() {
+        anoAtivo = (anoAtivo === ano) ? null : ano;
+        modal.querySelectorAll('.proc-alertas-ano-btn').forEach(function(b) {
+          var activo = anoAtivo !== null && parseInt(b.getAttribute('data-ano'), 10) === anoAtivo;
+          b.style.setProperty('background', activo ? '#222' : '#f2f2f2', 'important');
+          b.style.setProperty('color', activo ? '#fff' : '#333', 'important');
+          b.style.setProperty('border-color', activo ? '#222' : '#ccc', 'important');
+        });
+        procAplicarFiltroAlertas();
+      });
+    });
+    if (estadoInicial && (estadoInicial.filtro || estadoInicial.anoAtivo != null)) procAplicarFiltroAlertas();
 
     modal.querySelectorAll('.proc-alerta-row').forEach(function(tr) {
       tr.addEventListener('click', function() {
         var ref = tr.getAttribute('data-ref');
-        var estadoAoAbrir = { filtro: filtroInput ? filtroInput.value : '', criterio: criterioAtivo };
+        var estadoAoAbrir = { filtro: filtroInput ? filtroInput.value : '', criterio: criterioAtivo, anoAtivo: anoAtivo };
         procCloseModal(modal);
         procAbrirRadiografia(ref, null, function() {
           procMostrarModalAlertasGlobais(lista, estadoAoAbrir);
@@ -6887,6 +7022,8 @@
       if (prontosGlobal < 2) return;
       var fogoMapa = fogoMapaGlobal || {};
       var stockMapa = stockMapaGlobal;
+      var loadingMsgEl = modal.querySelector('#proc-alertas-loading-msg');
+      if (loadingMsgEl) loadingMsgEl.style.display = 'none';
 
       /* Preenche stockA4/stockA5 em CADA lote de lotesPorReferencia
          (FIFO, uma so vez por referencia) — igual ao que ja acontecia
@@ -8902,7 +9039,6 @@
   window.procTranspApply         = procTranspApply;
   window.procTranspUndo          = procTranspUndo;
   window.procGuiaIncludeChange   = procGuiaIncludeChange;
-  window.procFecharRadiografiaEAbrirSessao = procFecharRadiografiaEAbrirSessao;
   window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
   window.procAbrirImportadorVendas = procAbrirImportadorVendas;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;

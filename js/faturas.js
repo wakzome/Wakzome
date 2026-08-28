@@ -5923,6 +5923,22 @@
       .catch(function() { callback([]); });
   }
 
+  /* Le os grupos de referencias do MESMO fornecedor e MESMO nucleo de
+     codigo cujos periodos de compra NAO SE SOBREPOEM (proc_recalcular_familias_suspeitas,
+     corre no Postgres) — sinal de que e o MESMO artigo recodificado ao
+     longo do tempo (ex.: 7373 → 7373-1 → 25-7373-1), nao variantes
+     genuinas compradas em paralelo. So entra na tabela quando pelo
+     menos um membro do grupo ja tem um alerta real. Complementa
+     (nao substitui) procObterParesSuspeitos: um par "parada+negativa"
+     comprado no MESMO dia (ex.: 3658/3658-0) nao passa no requisito de
+     datas nao sobrepostas, por isso continuamos a precisar dos dois. */
+  function procObterFamiliasSuspeitas(callback) {
+    procSbFetch('proc_referencia_familias_suspeitas?select=familia_id,referencia,fornecedor,descricao,primeira_compra,ultima_compra,tem_alerta_propria', { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) { callback(rows || []); })
+      .catch(function() { callback([]); });
+  }
+
   function procCalcularStockLote(pares, callback) {
     if (!pares || !pares.length) { callback({}); return; }
     var mapaFinal = {};
@@ -7119,11 +7135,12 @@
     var fogoMapaGlobal = cacheValido ? _procCacheStockFogoAlertas.fogoMapa : null;
     var stockMapaGlobal = cacheValido ? _procCacheStockFogoAlertas.stockMapa : null;
     var paresSuspeitosGlobal = cacheValido ? _procCacheStockFogoAlertas.pares : null;
+    var familiasSuspeitasGlobal = cacheValido ? _procCacheStockFogoAlertas.familias : null;
     var prontosGlobal = 0;
 
     function procTentarRenderAlertas() {
       prontosGlobal++;
-      if (prontosGlobal < 3) return;
+      if (prontosGlobal < 4) return;
       var fogoMapa = fogoMapaGlobal || {};
       var stockMapa = stockMapaGlobal;
       var loadingMsgEl = modal.querySelector('#proc-alertas-loading-msg');
@@ -7148,17 +7165,44 @@
          a linha "parada" aponta para a sua negativa, e vice-versa),
          construido uma so vez antes do loop principal. */
       var paresPorRef = {};
+      /* Familias primeiro (grupos de N membros, mais contexto) — um
+         membro sem alerta proprio (ex.: 25-7373-1) tambem entra aqui,
+         so para poder ser mostrado ao lado dos irmaos que TEM alerta;
+         a linha desse membro fica marcada como "sem alerta proprio"
+         no tooltip, para nao confundir. */
+      var familiasPorId = {};
+      (familiasSuspeitasGlobal || []).forEach(function(m) {
+        if (!familiasPorId[m.familia_id]) familiasPorId[m.familia_id] = [];
+        familiasPorId[m.familia_id].push(m);
+      });
+      Object.keys(familiasPorId).forEach(function(fid) {
+        var membros = familiasPorId[fid];
+        membros.forEach(function(m) {
+          var fornecedorNormFam = procNormalize(m.fornecedor || '');
+          var outros = membros.filter(function(x) { return x !== m; });
+          paresPorRef[m.referencia + '|' + fornecedorNormFam] = {
+            tipo: 'familia', idPar: 'fam-' + fid, temAlertaProprio: !!m.tem_alerta_propria,
+            parceiros: outros.map(function(o) { return o.referencia + ' (' + (o.descricao || '—') + ')'; }).join(', ')
+          };
+        });
+      });
       (paresSuspeitosGlobal || []).forEach(function(par) {
         var fornecedorNormPar = procNormalize(par.fornecedor || '');
         var idPar = [par.referencia_parada, par.referencia_negativa].sort().join('|') + '|' + fornecedorNormPar;
-        paresPorRef[par.referencia_parada + '|' + fornecedorNormPar] = {
-          tipo: 'parada', idPar: idPar, parceiro: par.referencia_negativa,
-          dias: par.dias_parada, excesso: par.excesso_vendido, descricaoParceiro: par.descricao_negativa
-        };
-        paresPorRef[par.referencia_negativa + '|' + fornecedorNormPar] = {
-          tipo: 'negativa', idPar: idPar, parceiro: par.referencia_parada,
-          dias: par.dias_parada, excesso: par.excesso_vendido, descricaoParceiro: par.descricao_parada
-        };
+        var chaveParada = par.referencia_parada + '|' + fornecedorNormPar;
+        var chaveNegativa = par.referencia_negativa + '|' + fornecedorNormPar;
+        if (!paresPorRef[chaveParada]) {
+          paresPorRef[chaveParada] = {
+            tipo: 'parada', idPar: idPar, parceiro: par.referencia_negativa, temAlertaProprio: true,
+            dias: par.dias_parada, excesso: par.excesso_vendido, descricaoParceiro: par.descricao_negativa
+          };
+        }
+        if (!paresPorRef[chaveNegativa]) {
+          paresPorRef[chaveNegativa] = {
+            tipo: 'negativa', idPar: idPar, parceiro: par.referencia_parada, temAlertaProprio: true,
+            dias: par.dias_parada, excesso: par.excesso_vendido, descricaoParceiro: par.descricao_parada
+          };
+        }
       });
       chaves.forEach(function(chave, idx) {
         var linha = mapaGlobal[chave];
@@ -7209,8 +7253,6 @@
         tr.setAttribute('data-gelo-dias', String(gelo ? fogoInfo.dias : 0));
         tr.setAttribute('data-stock-total', String(stockTotal));
         var temAlerta = fireLevelAtual > 0 || gelo || negativo;
-        tr.setAttribute('data-tem-alerta', temAlerta ? '1' : '0');
-        if (temAlerta) totalAlertas++;
 
         var badges = '';
         if (fireLevelAtual > 0) {
@@ -7222,22 +7264,33 @@
         if (negativo) {
           badges += ' <span title="' + procTituloNegativo(stockTotal).replace(/"/g, '&quot;') + '">⚠</span>';
         }
-        /* Par suspeito (fiscalizador): so liga referencias do MESMO
-           fornecedor com nucleo de codigo identico onde uma esta
-           parada e a outra negativa — nunca corrige nada, so aponta
-           para o parceiro para o utilizador investigar. */
+        /* Par/familia suspeitos (fiscalizador): so ligam referencias do
+           MESMO fornecedor com nucleo de codigo identico — nunca
+           corrigem nada, so apontam para o(s) parceiro(s) para o
+           utilizador investigar. Um membro de familia SEM alerta
+           proprio (ex.: 25-7373-1) fica visivel na mesma na — para
+           dar contexto completo do grupo — mesmo sem 🔥/❄️/⚠ dele. */
         var infoPar = paresPorRef[linha.ref + '|' + linha.fornecedorNorm];
         if (infoPar) {
           tr.setAttribute('data-par-id', infoPar.idPar);
           tr.setAttribute('data-par-tipo', infoPar.tipo);
-          var tituloPar = (infoPar.tipo === 'parada')
-            ? 'Possível referência trocada: ligado a ' + infoPar.parceiro + ' (' + (infoPar.descricaoParceiro || '—') + '), que tem ' + infoPar.excesso + ' peças vendidas a mais do que compradas.'
-            : 'Possível referência trocada: ligado a ' + infoPar.parceiro + ' (' + (infoPar.descricaoParceiro || '—') + '), parado há ' + infoPar.dias + ' dias sem vender.';
+          var tituloPar;
+          if (infoPar.tipo === 'familia') {
+            tituloPar = 'Possível referência recodificada ao longo do tempo — ligada a: ' + infoPar.parceiros + '.'
+              + (infoPar.temAlertaProprio ? '' : ' Esta linha em concreto não tem alerta próprio, mostrada para dar contexto do grupo.');
+          } else if (infoPar.tipo === 'parada') {
+            tituloPar = 'Possível referência trocada: ligado a ' + infoPar.parceiro + ' (' + (infoPar.descricaoParceiro || '—') + '), que tem ' + infoPar.excesso + ' peças vendidas a mais do que compradas.';
+          } else {
+            tituloPar = 'Possível referência trocada: ligado a ' + infoPar.parceiro + ' (' + (infoPar.descricaoParceiro || '—') + '), parado há ' + infoPar.dias + ' dias sem vender.';
+          }
           badges = '<span class="proc-ref-par" title="' + tituloPar.replace(/"/g, '&quot;') + '">🔗</span> ' + badges;
+          if (!temAlerta) temAlerta = true; /* forca visibilidade do membro sem alerta proprio */
         } else {
           tr.removeAttribute('data-par-id');
           tr.removeAttribute('data-par-tipo');
         }
+        tr.setAttribute('data-tem-alerta', temAlerta ? '1' : '0');
+        if (temAlerta) totalAlertas++;
         celBadge.innerHTML = badges || '—';
       });
 
@@ -7251,7 +7304,7 @@
       }
       procAplicarFiltroAlertas();
 
-      _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa, pares: paresSuspeitosGlobal };
+      _procCacheStockFogoAlertas = { lista: lista, fogoMapa: fogoMapa, stockMapa: stockMapa, pares: paresSuspeitosGlobal, familias: familiasSuspeitasGlobal };
 
       /* 3 botoes de ordenacao — cada um so um switch (activo/inactivo);
          activar um desliga os outros dois. Reordena os <tr> no DOM,
@@ -7332,10 +7385,12 @@
       procTentarRenderAlertas();
       procTentarRenderAlertas();
       procTentarRenderAlertas();
+      procTentarRenderAlertas();
     } else {
       procObterFogoPorReferencias(referenciasUnicas, function(fogoMapa) { fogoMapaGlobal = fogoMapa; procTentarRenderAlertas(); });
       procCalcularStockLote(paresStock, function(stockMapa) { stockMapaGlobal = stockMapa; procTentarRenderAlertas(); });
       procObterParesSuspeitos(function(pares) { paresSuspeitosGlobal = pares; procTentarRenderAlertas(); });
+      procObterFamiliasSuspeitas(function(familias) { familiasSuspeitasGlobal = familias; procTentarRenderAlertas(); });
     }
   }
 

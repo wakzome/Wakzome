@@ -131,15 +131,30 @@ function _renderEmgCodes() {
 
   if (dateEl) dateEl.textContent = displayDate;
 
-  var stores = ['Shana', 'Mezka Avenida', 'Mezka Mercado', 'Maxx', 'Mezka Funchal', 'Parfois Arcadas'];
+  // Label = o que aparece no ecra (curto, para nao alargar o painel).
+  // Key = o texto EXATO que o modulo de vendas usa internamente para
+  // calcular o codigo de emergencia (ver FUNCHAL_STORES/_emergencyCode
+  // em ventas.js). Para a maioria das lojas label e key coincidem (a
+  // diferenca de maiusculas/minusculas nao afeta o calculo), mas
+  // "Parfois Arcadas" tem de usar o nome interno completo
+  // ('parfois arcadas sao francisco' com acento), senao o codigo
+  // mostrado aqui nunca coincide com o que ventas.js espera.
+  var stores = [
+    { label: 'Shana',           key: 'Shana' },
+    { label: 'Mezka Avenida',   key: 'Mezka Avenida' },
+    { label: 'Mezka Mercado',   key: 'Mezka Mercado' },
+    { label: 'Maxx',            key: 'Maxx' },
+    { label: 'Mezka Funchal',   key: 'Mezka Funchal' },
+    { label: 'Parfois Arcadas', key: 'parfois arcadas são francisco' }
+  ];
   list.innerHTML = '';
   stores.forEach(function (s) {
-    var code = _emergencyCode(s, dateStr);
+    var code = _emergencyCode(s.key, dateStr);
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:2px 0;border-bottom:1px solid #f0f0f0;';
     var nameEl = document.createElement('span');
     nameEl.style.cssText = 'font-size:.65rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    nameEl.textContent = s;
+    nameEl.textContent = s.label;
     var codeEl = document.createElement('span');
     codeEl.style.cssText = 'font-size:.82rem;font-weight:bold;color:#000;letter-spacing:.08em;white-space:nowrap;';
     codeEl.textContent = code;

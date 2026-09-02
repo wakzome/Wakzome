@@ -875,13 +875,14 @@ body {
 /* ── Colunas QTD./FNC/PXO/€/%- não tinham text-align definido (o th está
    centrado, o td ficava com o alinhamento por omissão do browser à
    esquerda) — daí a tabela parecer torta. Centram-se pela posição (mesma
-   ordem das colunas no thead), sem tocar nas 2 primeiras (Referência/
-   Descrição, à esquerda de propósito). ── */
-#proc-content .proc-table-wrap td:nth-child(3),
-#proc-content .proc-table-wrap td:nth-child(4),
+   ordem das colunas no thead), sem tocar nas 4 primeiras (olhos/ajuda/
+   Referência/Descrição, à esquerda de propósito). Posições +2 desde que
+   as colunas de olhos e asterisco de ajuda passaram a ser as 2 primeiras. ── */
 #proc-content .proc-table-wrap td:nth-child(5),
+#proc-content .proc-table-wrap td:nth-child(6),
 #proc-content .proc-table-wrap td:nth-child(7),
-#proc-content .proc-table-wrap td:nth-child(8) { text-align:center; }
+#proc-content .proc-table-wrap td:nth-child(9),
+#proc-content .proc-table-wrap td:nth-child(10) { text-align:center; }
 #proc-content .proc-table-wrap td input[type="text"], #proc-content .proc-table-wrap td input[type="number"] { background:transparent; border:1px solid transparent; font-size:.85rem; font-weight:800; padding:3px 4px; border-radius:6px; width:100%; color:#000; text-align:center; }
 #proc-content .proc-table-wrap td input[type="number"] { width:44px; text-align:center; }
 #proc-content .proc-table-wrap td input.proc-ref-input { width:auto; min-width:0; text-align:left; text-transform:uppercase; }

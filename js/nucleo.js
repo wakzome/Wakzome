@@ -3637,12 +3637,15 @@
   }
 
   var CSV_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/datosfnc.csv';
+  var FUNCHAL_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/FUNCHAL.csv';
   var PORTO_BASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s';
   var BASE_DATE = new Date('2026-01-05T00:00:00');
 
+  // key = rótulo exato do bloco tal como vem em FUNCHAL.csv (ver nameMapping em loadData());
+  // label = nome curto mostrado no widget, para não alargar o painel.
   var STANDARD_STORES = [
     { key: 'mezka funchal', label: 'Mezka Funchal' },
-    { key: 'parfois arcadas', label: 'Parfois Arcadas' }
+    { key: 'parfois arcadas são francisco', label: 'Parfois Arcadas' }
   ];
 
   var wzStarted = false;
@@ -3950,9 +3953,18 @@
       var csvText = await wzFetchText(CSV_URL + '?t=' + Date.now());
       var blocks = wzParseCsvBlocks(csvText);
 
+      // Mezka Funchal + Parfois Arcadas deixaram de estar em datosfnc.csv e
+      // passaram a viver em FUNCHAL.csv; lido à parte para que uma falha
+      // aqui não derrube o painel de Porto Santo (que continua em datosfnc.csv).
+      var funchalBlocks = [];
+      try {
+        var funchalCsvText = await wzFetchText(FUNCHAL_URL + '?t=' + Date.now());
+        funchalBlocks = wzParseCsvBlocks(funchalCsvText);
+      } catch (fErr) { /* segue sem Mezka Funchal / Parfois Arcadas neste ciclo */ }
+
       var results = [];
       STANDARD_STORES.forEach(function (store) {
-        var candidates = blocks.filter(function (b) { return (b[0][0] || '').toLowerCase() === store.key; });
+        var candidates = funchalBlocks.filter(function (b) { return (b[0][0] || '').toLowerCase() === store.key; });
         var match = null;
         for (var i = 0; i < candidates.length; i++) {
           if (wzFindTodayCol(candidates[i][1]) >= 0) { match = candidates[i]; break; }

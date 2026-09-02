@@ -382,6 +382,20 @@
     return (ref || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
+  /* Verifica se qNorm corresponde a um SEGMENTO completo (delimitado por
+     hifens) da referencia, ou ao seu valor normalizado por inteiro — nunca
+     a uma simples substring solta dentro de um segmento maior ou de um
+     codigo numerico continuo. Ex.: query "2515" bate com "26-2515" e
+     "2515-XX", mas NAO com "26-25152" nem com "264962515". */
+  function procQuerySegmentoBate(qNorm, refRaw) {
+    if (!qNorm || !refRaw) return false;
+    var partes = String(refRaw).toUpperCase().split('-')
+      .map(function(p) { return p.replace(/[^A-Z0-9]/g, ''); })
+      .filter(Boolean);
+    if (partes.indexOf(qNorm) !== -1) return true;
+    return procNormalizarRefOriginal(refRaw) === qNorm;
+  }
+
   /* Cria ou obtem a referencia interna atraves do RPC atomico
      proc_obter_ou_criar_referencia (ver proc_referencias_atomico_v3.sql).
      Todo o "existe? / calcula proximo numero livre / grava" acontece numa
@@ -5399,12 +5413,18 @@
   function procBuscarCandidatosReferencia(valorBruto) {
     var padrao = procConstruirPadraoIlike(valorBruto);
     if (!padrao) return Promise.resolve([[], []]);
+    var qNorm = procNormalizarBuscaQuery(valorBruto);
     return Promise.all([
       procSbFetch(
         'proc_referencias?select=referencia_interna,referencia_original,categoria,proveedor&or=(referencia_interna.ilike.*'
           + encodeURIComponent(padrao) + '*,referencia_original.ilike.*' + encodeURIComponent(padrao) + '*)&limit=20',
         { method: 'GET' }
-      ).then(function(r) { return r.ok ? r.json() : []; }),
+      ).then(function(r) { return r.ok ? r.json() : []; })
+       .then(function(lista) {
+         return (lista || []).filter(function(c) {
+           return procQuerySegmentoBate(qNorm, c.referencia_interna) || procQuerySegmentoBate(qNorm, c.referencia_original);
+         });
+       }),
       procLoadCategoriasRemote()
     ]);
   }
@@ -5442,8 +5462,9 @@
         if (!provNorm) return;
         (fat.rows || []).forEach(function(row) {
           if (!row.ref) return;
+          if (!procQuerySegmentoBate(qNorm, row.ref)) return;
           var refNorm = procNormalizarRefOriginal(row.ref);
-          if (!refNorm || refNorm.indexOf(qNorm) === -1) return;
+          if (!refNorm) return;
           var categoria = procResolverCategoria(row.desc, categorias || []);
           var chave = provNorm + '|' + refNorm + '|' + categoria;
           if (vistos[chave]) return;

@@ -1024,12 +1024,72 @@
      integra para memoria do browser — uma unica vez por sessao,
      nunca por tecla premida. Se falhar (offline, etc.), o assistente
      fica silenciosamente desactivado; nunca impede o processamento. */
+  /* Numero total de linhas de uma tabela/consulta, via o cabecalho
+     Content-Range que o PostgREST devolve quando se pede
+     Prefer: count=exact (mesmo com limit=1 — o count e sempre sobre o
+     total, nao sobre a pagina pedida). Necessario para saber de
+     antemao quantas paginas existem e pedi-las todas em paralelo, em
+     vez de descobrir uma pagina de cada vez. */
+  function procContarLinhasTabela(pathBaseComOrder) {
+    var sep = pathBaseComOrder.indexOf('?') === -1 ? '?' : '&';
+    return procSbFetch(pathBaseComOrder + sep + 'limit=1', {
+      method: 'GET',
+      headers: Object.assign(procSbHeaders(), { 'Prefer': 'count=exact' })
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ao contar ' + pathBaseComOrder);
+      var range = r.headers.get('content-range') || '';
+      var total = parseInt(range.split('/')[1], 10);
+      if (isNaN(total)) throw new Error('content-range em falta/invalido ao contar ' + pathBaseComOrder);
+      return total;
+    });
+  }
+
+  /* Busca todas as paginas de pathBaseComOrder com concorrencia
+     limitada (varias pedidas ao mesmo tempo, nunca todas de uma vez —
+     protege o tier Nano do Supabase) em vez de uma de cada vez. A
+     ordenacao (order=referencia.asc, ja incluida em pathBaseComOrder
+     pelo chamador) e OBRIGATORIA: sem ela, o Postgres nao garante a
+     mesma ordem entre pedidos sucessivos, e paginar por offset pode
+     saltar ou repetir linhas de forma imprevisivel — o que deixaria
+     referencias em falta no assistente sem qualquer aviso, por mais
+     tempo que se esperasse. Ao contrario de procFetchTodasPaginas,
+     REJEITA se alguma pagina falhar — antes falhar ruidosamente do
+     que ficar com uma biblioteca incompleta em silencio. */
+  function procFetchPaginasConcorrente(pathBaseComOrder, totalLinhas, concorrencia) {
+    var TAMANHO_PAGINA = 1000;
+    var sep = pathBaseComOrder.indexOf('?') === -1 ? '?' : '&';
+    var offsets = [];
+    for (var o = 0; o < totalLinhas; o += TAMANHO_PAGINA) offsets.push(o);
+    if (!offsets.length) return Promise.resolve([]);
+    var tudo = [];
+    var falhas = 0;
+    return new Promise(function(resolve, reject) {
+      procExecutarEmLotesLimitados(offsets, 1, concorrencia, function(loteOffsets) {
+        var offset = loteOffsets[0];
+        return procSbFetch(pathBaseComOrder + sep + 'limit=' + TAMANHO_PAGINA + '&offset=' + offset, { method: 'GET' })
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status + ' no offset ' + offset);
+            return r.json();
+          });
+      }, function(pagina) {
+        if (pagina === null) { falhas++; return; }
+        tudo = tudo.concat(pagina || []);
+      }, function() {
+        if (falhas > 0) reject(new Error(falhas + ' página(s) falharam ao carregar ' + pathBaseComOrder));
+        else resolve(tudo);
+      });
+    });
+  }
+
   function procCarregarAssistenteBiblioteca() {
     if (_bibliotecaAssistenteCarregada || _bibliotecaAssistenteCarregando) return;
     _bibliotecaAssistenteCarregando = true;
+    var CONCORRENCIA = 6;
+    var pathArtigos = 'proc_biblioteca_artigos?select=referencia,nome,pvp&order=referencia.asc';
+    var pathCompras = 'proc_biblioteca_compras_cache?select=referencia,primeira_compra,ultima_compra,total_a4,total_a5&order=referencia.asc';
     Promise.all([
-      procFetchTodasPaginas('proc_biblioteca_artigos?select=referencia,nome,pvp'),
-      procFetchTodasPaginas('proc_biblioteca_compras_cache?select=referencia,primeira_compra,ultima_compra,total_a4,total_a5')
+      procContarLinhasTabela(pathArtigos).then(function(total) { return procFetchPaginasConcorrente(pathArtigos, total, CONCORRENCIA); }),
+      procContarLinhasTabela(pathCompras).then(function(total) { return procFetchPaginasConcorrente(pathCompras, total, CONCORRENCIA); })
     ]).then(function(res) {
       var artigos = res[0] || [];
       var compras = res[1] || [];
@@ -1062,7 +1122,9 @@
       procAtualizarTodasAjudasBiblioteca();
     }).catch(function() {
       _bibliotecaAssistenteCarregando = false;
-      /* offline/erro — assistente fica desligado, sem afectar o resto */
+      /* falha real (rede/servidor/pagina em falta) — nunca fica marcado
+         como carregado com dados parciais; nunca bloqueia o resto do
+         processamento. Uma nova sessao (reload) tenta de novo do zero. */
     });
   }
 

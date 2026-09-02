@@ -9901,6 +9901,7 @@
   window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
   window.procAbrirImportadorVendas = procAbrirImportadorVendas;
   window.procAbrirImportadorBiblioteca = procAbrirImportadorBiblioteca;
+  window.procAtualizarAjudaBiblioteca = procAtualizarAjudaBiblioteca;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
   window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
   window.procMostrarModalAlertasGlobais = procMostrarModalAlertasGlobais;

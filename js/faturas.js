@@ -1189,11 +1189,22 @@
      vendido) e mostrado antes do recebido, por ser a informacao mais
      acionavel. Se a 1.ª e a ultima compra forem o mesmo dia, mostra
      so uma data em vez de repetir. */
+  function procEscaparHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  /* Devolve HTML (nao texto simples) — o title nativo do HTML nunca
+     pode ter negrito/centralizado (limitacao do proprio atributo),
+     por isso o popover proprio (procMostrarAjudaTouch) e que passou a
+     ser o unico mecanismo, tanto em toque como em clique de rato. */
   function procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas) {
     var linhas = [];
     var nome = (artigo && artigo.nome) ? artigo.nome : '';
     if (nome) {
-      var linhaNome = nome;
+      var linhaNome = procEscaparHtml(nome);
       if (artigo && artigo.pvp) linhaNome += '  ·  ' + artigo.pvp.toFixed(2).replace('.', ',') + ' €';
       linhas.push(linhaNome);
     }
@@ -1201,7 +1212,7 @@
       var stock = _bibliotecaStockMap[refNorm] || null;
       var stockA4 = compra.totalA4 - (stock ? stock.vendidoA4 : 0);
       var stockA5 = compra.totalA5 - (stock ? stock.vendidoA5 : 0);
-      linhas.push('Stock — FNC: ' + stockA4 + ' un.  ·  PXO: ' + stockA5 + ' un.');
+      linhas.push('<strong style="font-weight:bold!important;">Stock — FNC: ' + stockA4 + ' un.  ·  PXO: ' + stockA5 + ' un.</strong>');
       linhas.push('Recebido — FNC: ' + compra.totalA4 + ' un.  ·  PXO: ' + compra.totalA5 + ' un.');
       if (compra.primeira && compra.primeira === compra.ultima) {
         linhas.push('Comprado em: ' + procFormatarDataCompraCurta(compra.primeira));
@@ -1213,10 +1224,10 @@
       if (linhas.length) linhas.push('');
       linhas.push('Referências relacionadas:');
       relacionadas.forEach(function(r) {
-        linhas.push('• ' + procDescreverReferenciaRelacionada(r));
+        linhas.push('• ' + procEscaparHtml(procDescreverReferenciaRelacionada(r)));
       });
     }
-    return linhas.join('\n');
+    return linhas.join('<br>');
   }
 
   /* Disparado so no blur (saida) do campo de descricao — nunca por
@@ -1266,15 +1277,15 @@
   function procMostrarAjudaTouch(el) {
     var tr = el.closest ? el.closest('tr') : null;
     var help = tr ? tr.querySelector('.proc-ref-help') : null;
-    var texto = help ? help.title : '';
+    var htmlTexto = help ? (help.dataset.ajudaHtml || '') : '';
     var jaAberto = !!_procAjudaTouchPopover;
     procFecharAjudaTouch();
-    if (jaAberto || !texto) return;
+    if (jaAberto || !htmlTexto) return;
 
     var rect = el.getBoundingClientRect();
     var pop = document.createElement('div');
     pop.className = 'proc-ajuda-touch-popover';
-    pop.textContent = texto;
+    pop.innerHTML = htmlTexto;
     pop.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
     pop.style.left = (rect.left + window.scrollX) + 'px';
     document.body.appendChild(pop);
@@ -1298,6 +1309,7 @@
        aviso, nao um segundo indicador independente). */
     function ocultarAjuda() {
       help.style.display = 'none';
+      help.dataset.ajudaHtml = '';
       if (olhos) olhos.style.display = 'none';
     }
     if (!_bibliotecaAssistenteCarregada) { ocultarAjuda(); return; }
@@ -1324,7 +1336,7 @@
 
     var temExata = !!(artigo || compra);
     help.className = 'proc-ref-help' + (!temExata && relacionadas.length ? ' proc-ref-help-aviso' : '');
-    help.title = procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas);
+    help.dataset.ajudaHtml = procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas);
     help.style.display = 'inline-block';
     if (olhos) olhos.style.display = 'inline-flex';
   }
@@ -1373,9 +1385,9 @@
       'animation:procRefHelpPisca 1.1s ease-in-out infinite;}' +
       '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}' +
       '.proc-ajuda-touch-popover{position:absolute;z-index:9999;max-width:260px;' +
-      'background:#fff;border:1px solid #ccc;border-radius:6px;' +
+      'background:#fff;border:1px solid #ccc;border-radius:6px;text-align:center;' +
       'box-shadow:0 4px 14px rgba(0,0,0,.18);padding:8px 10px;font-size:.75rem;' +
-      'line-height:1.4;color:#333;white-space:pre-line;}';
+      'line-height:1.4;color:#333;}';
     document.head.appendChild(style);
   }
 

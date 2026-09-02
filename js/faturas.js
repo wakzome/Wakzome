@@ -5966,38 +5966,35 @@
   function procCalcularStockLote(pares, callback) {
     if (!pares || !pares.length) { callback({}); return; }
     var mapaFinal = {};
-    /* Concorrencia limitada a 4 pedidos POST em simultaneo — ver
-       procExecutarEmLotesLimitados. Cada pedido corre stock_por_referencias
-       sobre a tabela de vendas inteira para ate 400 referencias; disparar
-       dezenas destes de uma vez (ex.: 31 para o catalogo global de 12000+
-       referencias) satura o Postgres e faz varios voltarem com erro. */
-    procExecutarEmLotesLimitados(pares, 150, 2, function(lote) {
-      /* fetchUmLote nunca rejeita — mesmo uma falha de rede ou um
-         estouro do statement_timeout (15s) resolve com null, para o
-         procFetchComBisecao poder subdividir este lote de 400 e isolar
-         so a(s) referencia(s) realmente pesada(s), em vez de marcar as
-         400 inteiras como erro (ver nota em procFetchComBisecao). */
+    /* Le o stock ja pre-calculado em proc_stock_referencias_cache (uma
+       leitura simples e indexada por referencia), em vez de recalcular
+       ao vivo com o RPC stock_por_referencias a cada abertura de modal.
+       A cache e recalculada no Postgres a cada 10 minutos (so quando ha
+       vendas novas — ver proc_verificar_e_recalcular_stock_cache), e
+       validada byte a byte contra o calculo ao vivo antes de entrar em
+       producao. cutoff_a4/cutoff_a5 de "pares" ja nao sao enviados —
+       so servem aqui para a lista de referencias a pedir; o calculo em
+       si (incluindo os cutoffs) ja foi feito do lado do Postgres. */
+    procExecutarEmLotesLimitados(pares, 200, 4, function(lote) {
       function fetchUmLote(subLote) {
-        return procSbFetch('rpc/stock_por_referencias', { method: 'POST', body: JSON.stringify({ pares: subLote }) })
+        var listaIn = subLote.map(function(p) { return encodeURIComponent(p.referencia); }).join(',');
+        return procSbFetch('proc_stock_referencias_cache?referencia=in.(' + listaIn + ')&select=referencia,vendido_a4,vendido_a5,tem_loja_nao_mapeada,detalhe_a4,detalhe_a5', { method: 'GET' })
           .then(function(r) { return r.ok ? r.json() : null; })
           .catch(function() { return null; });
       }
-      return procFetchComBisecao(lote, fetchUmLote, 10);
-    }, function(resultado) {
-      if (!resultado) return;
-      resultado.rows.forEach(function(row) {
-        mapaFinal[row.referencia] = {
-          vendidoA4: Number(row.vendido_a4) || 0,
-          vendidoA5: Number(row.vendido_a5) || 0,
-          detalheA4: row.detalhe_a4 || [],
-          detalheA5: row.detalhe_a5 || [],
-          temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
-        };
-      });
-      /* So chega aqui uma referencia que, mesmo isolada num lote de
-         ate 10, continuou a falhar — ai sim e mesmo essa referencia
-         (nunca ~400 vizinhas saudaveis) que fica marcada com erro. */
-      resultado.falhas.forEach(function(par) { mapaFinal[par.referencia] = { erro: true }; });
+      return procFetchComBisecao(lote, fetchUmLote, 10).then(function(resultado) { return resultado.rows; });
+    }, function(linhas) {
+      if (linhas && linhas.length) {
+        linhas.forEach(function(row) {
+          mapaFinal[row.referencia] = {
+            vendidoA4: Number(row.vendido_a4) || 0,
+            vendidoA5: Number(row.vendido_a5) || 0,
+            detalheA4: row.detalhe_a4 || [],
+            detalheA5: row.detalhe_a5 || [],
+            temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
+          };
+        });
+      }
     }, function() { callback(mapaFinal); });
   }
 

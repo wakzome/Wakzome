@@ -1311,13 +1311,15 @@
          fora da caixa da tabela fica recortada por esse scroll. Como
          coluna normal, participa do fluxo e aparece sempre. Tamanho a
          condizer com o ✱ de "Importar históricos" (.85rem). */
-      '.proc-th-olhos,.proc-td-olhos{width:80px;padding-left:4px!important;padding-right:0!important;}' +
-      '.proc-olhos{display:inline-flex;gap:8px;align-items:center;transform-origin:center;' +
+      '.proc-th-olhos,.proc-td-olhos{width:40px;padding-left:4px!important;padding-right:0!important;}' +
+      '.proc-olhos{display:inline-flex;gap:4px;align-items:center;transform-origin:center;' +
       'animation:procOlhosPisca 4.5s ease-in-out infinite;}' +
-      '.proc-olho{width:35px;height:35px;border-radius:50%;background:#fff;border:2px solid #555;' +
+      /* Pupila deslocada para a direita — os olhos "olham" para o
+         asterisco, que fica logo a seguir a esta coluna. */
+      '.proc-olho{width:17px;height:17px;border-radius:50%;background:#fff;border:1px solid #555;' +
       'position:relative;display:inline-block;}' +
-      '.proc-olho::after{content:\'\';position:absolute;width:15px;height:15px;border-radius:50%;' +
-      'background:#333;top:8px;left:8px;}' +
+      '.proc-olho::after{content:\'\';position:absolute;width:7px;height:7px;border-radius:50%;' +
+      'background:#333;top:5px;left:8px;}' +
       '@keyframes procOlhosPisca{0%,90%,100%{transform:scaleY(1);}94%{transform:scaleY(.1);}}' +
       '.proc-th-ajuda,.proc-td-ajuda{width:22px;padding-left:4px!important;padding-right:0!important;}' +
       '.proc-ref-help{display:none;font-size:1.2rem;font-weight:700;line-height:1;cursor:help;' +

@@ -5971,7 +5971,7 @@
        sobre a tabela de vendas inteira para ate 400 referencias; disparar
        dezenas destes de uma vez (ex.: 31 para o catalogo global de 12000+
        referencias) satura o Postgres e faz varios voltarem com erro. */
-    procExecutarEmLotesLimitados(pares, 400, 4, function(lote) {
+    procExecutarEmLotesLimitados(pares, 150, 2, function(lote) {
       /* fetchUmLote nunca rejeita — mesmo uma falha de rede ou um
          estouro do statement_timeout (15s) resolve com null, para o
          procFetchComBisecao poder subdividir este lote de 400 e isolar

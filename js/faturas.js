@@ -5248,6 +5248,11 @@
           var stockA5 = info.hasOwnProperty('stockA5') ? info.stockA5 : bloco.totalA5;
           celA4.textContent = stockA4;
           celA5.textContent = stockA5;
+          var detalheTextoA4Radio = procFormatarDetalheA4(venda.detalheA4);
+          if (detalheTextoA4Radio) {
+            celA4.title = detalheTextoA4Radio;
+            celA4.style.cursor = 'help';
+          }
           var detalheTextoA5Radio = procFormatarDetalheA5(venda.detalheA5);
           if (detalheTextoA5Radio) {
             celA5.title = detalheTextoA5Radio;
@@ -5564,6 +5569,25 @@
       return nome + ': ' + (d.qty || 0);
     });
     return 'Vendido em (Porto Santo):\n' + linhas.join('\n');
+  }
+
+  /* Mesma ideia de LOJAS_A5_LABEL/procFormatarDetalheA5, mas para o
+     tooltip do stock A4 — le "detalheA4" (devolvido pelo RPC
+     stock_por_referencias, coluna detalhe_a4, adicionada a par de
+     detalhe_a5). As lojas A4 sao so as duas do Funchal. */
+  var LOJAS_A4_LABEL = {
+    'mezka.funchal': 'Mezka Funchal',
+    'mezka.funchal1': 'Mezka Funchal 1'
+  };
+
+  function procFormatarDetalheA4(detalhe) {
+    if (!detalhe || !detalhe.length) return null;
+    var linhas = detalhe.slice().sort(function(a, b) { return (b.qty || 0) - (a.qty || 0); }).map(function(d) {
+      var chave = String(d.loja || '').toLowerCase().trim();
+      var nome = LOJAS_A4_LABEL[chave] || d.loja;
+      return nome + ': ' + (d.qty || 0);
+    });
+    return 'Vendido em (Funchal):\n' + linhas.join('\n');
   }
 
   /* ════════════ FIFO ENTRE FORNECEDORES (referencia partilhada) ════════════
@@ -5965,6 +5989,7 @@
         mapaFinal[row.referencia] = {
           vendidoA4: Number(row.vendido_a4) || 0,
           vendidoA5: Number(row.vendido_a5) || 0,
+          detalheA4: row.detalhe_a4 || [],
           detalheA5: row.detalhe_a5 || [],
           temLojaNaoMapeada: !!row.tem_loja_nao_mapeada
         };
@@ -6792,6 +6817,11 @@
         var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : compras.comprasA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
+        var detalheTextoA4 = procFormatarDetalheA4(venda.detalheA4);
+        if (detalheTextoA4) {
+          celA4.title = detalheTextoA4;
+          celA4.style.cursor = 'help';
+        }
         var detalheTextoA5 = procFormatarDetalheA5(venda.detalheA5);
         if (detalheTextoA5) {
           celA5.title = detalheTextoA5;
@@ -7372,6 +7402,11 @@
         var stockTotal = stockA4 + stockA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
+        var detalheTextoA4Alerta = procFormatarDetalheA4(venda.detalheA4);
+        if (detalheTextoA4Alerta) {
+          celA4.title = detalheTextoA4Alerta;
+          celA4.style.cursor = 'help';
+        }
         var detalheTextoA5Alerta = procFormatarDetalheA5(venda.detalheA5);
         if (detalheTextoA5Alerta) {
           celA5.title = detalheTextoA5Alerta;

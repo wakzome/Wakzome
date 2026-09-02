@@ -77,6 +77,21 @@
   var _undoMaxSize = 10;
   var _undoPaused  = false; /* evita gravacao durante restore */
 
+  /* ══ ASSISTENTE DE BIBLIOTECA — ajuda anti-typo na referencia ══
+     Carregado uma unica vez (nao bloqueia o arranque) a partir de
+     proc_biblioteca_artigos (catalogo oficial Primavera) e
+     proc_biblioteca_compras_cache (resumo pre-calculado do historico
+     de compras desde 2023, mesmo padrao de cache+watermark+pg_cron ja
+     usado em proc_stock_referencias_cache). Tudo em memoria do
+     browser — nenhuma consulta ao Supabase por tecla premida, para
+     nunca repetir o incidente de sobrecarga do tier Nano. */
+  var _bibliotecaArtigosMap      = {};  /* REFERENCIA -> { nome, pvp } */
+  var _bibliotecaComprasMap      = {};  /* REFERENCIA -> { primeira, ultima, totalA4, totalA5 } */
+  var _bibliotecaTokenIndex      = {};  /* token (segmento entre hifens) -> [REFERENCIA, ...] */
+  var _bibliotecaAssistenteCarregada   = false;
+  var _bibliotecaAssistenteCarregando  = false;
+  var _bibliotecaAjudaDebounce   = {};  /* 'fid-id' -> timeout handle */
+
   /* ── 2a. SUPABASE CONFIG ── */
   // Lee credenciales dinámicamente en cada llamada para respetar el timing de initSupabase
   function procSbHeaders() {
@@ -959,6 +974,229 @@
         });
     }
     return proximaPagina(0);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     ASSISTENTE DE BIBLIOTECA — ajuda anti-typo na referencia.
+     Ve funcionar_relacao.md do pedido original: um utilizador que
+     esquece o prefixo/sufixo que usou numa compra anterior (ex.:
+     escreve "PEPITO" quando o historico tem "26-PEPITO") faz o stock
+     dividir-se em duas referencias diferentes sem que ninguem repare —
+     um lado fica com negativos, o outro com stock que nunca se mexe.
+     Este assistente nao pode bloquear nem validar nada (o Primavera e
+     sempre a fonte final), so avisa.
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Divide uma referencia pelos hifens e devolve so os segmentos
+     "core" — descarta segmentos puramente numericos de 1-2 digitos
+     (prefixos de ano/lote, ex. "25", "26") porque partilhar so isso
+     nao significa nada (26-PEPITO e 26-CAMISA nao devem correlacionar-
+     se so por "26"). Nunca faz correspondencia por substring/prefixo
+     parcial — so por segmento inteiro. */
+  function procTokensReferencia(ref) {
+    return String(ref || '').toUpperCase().split('-')
+      .map(function(t) { return t.trim(); })
+      .filter(function(t) { return t && !(t.length <= 2 && /^\d+$/.test(t)); });
+  }
+
+  /* Indice invertido token -> [referencias], construido uma unica vez
+     apos o carregamento, a partir da uniao das referencias conhecidas
+     em biblioteca (catalogo oficial) e em compras (historico interno,
+     mais completo — pode ter referencias que a biblioteca ainda nao
+     tem). */
+  function procConstruirIndiceTokensBiblioteca() {
+    var indice = {};
+    function registar(ref) {
+      procTokensReferencia(ref).forEach(function(tok) {
+        if (!indice[tok]) indice[tok] = [];
+        if (indice[tok].indexOf(ref) === -1) indice[tok].push(ref);
+      });
+    }
+    Object.keys(_bibliotecaArtigosMap).forEach(registar);
+    Object.keys(_bibliotecaComprasMap).forEach(function(ref) {
+      if (!_bibliotecaArtigosMap[ref]) registar(ref);
+    });
+    _bibliotecaTokenIndex = indice;
+  }
+
+  /* Carrega o catalogo oficial (proc_biblioteca_artigos) e o resumo
+     pre-calculado de compras (proc_biblioteca_compras_cache) na
+     integra para memoria do browser — uma unica vez por sessao,
+     nunca por tecla premida. Se falhar (offline, etc.), o assistente
+     fica silenciosamente desactivado; nunca impede o processamento. */
+  function procCarregarAssistenteBiblioteca() {
+    if (_bibliotecaAssistenteCarregada || _bibliotecaAssistenteCarregando) return;
+    _bibliotecaAssistenteCarregando = true;
+    Promise.all([
+      procFetchTodasPaginas('proc_biblioteca_artigos?select=referencia,nome,pvp'),
+      procFetchTodasPaginas('proc_biblioteca_compras_cache?select=referencia,primeira_compra,ultima_compra,total_a4,total_a5')
+    ]).then(function(res) {
+      var artigos = res[0] || [];
+      var compras = res[1] || [];
+      var mapaArtigos = {};
+      artigos.forEach(function(row) {
+        if (!row || !row.referencia) return;
+        mapaArtigos[String(row.referencia).toUpperCase()] = {
+          nome: row.nome || '',
+          pvp: Number(row.pvp) || 0
+        };
+      });
+      var mapaCompras = {};
+      compras.forEach(function(row) {
+        if (!row || !row.referencia) return;
+        mapaCompras[String(row.referencia).toUpperCase()] = {
+          primeira: row.primeira_compra || null,
+          ultima: row.ultima_compra || null,
+          totalA4: Number(row.total_a4) || 0,
+          totalA5: Number(row.total_a5) || 0
+        };
+      });
+      _bibliotecaArtigosMap = mapaArtigos;
+      _bibliotecaComprasMap = mapaCompras;
+      procConstruirIndiceTokensBiblioteca();
+      _bibliotecaAssistenteCarregada = true;
+      _bibliotecaAssistenteCarregando = false;
+      /* O restauro de uma sessao guardada pode ter corrido antes deste
+         carregamento terminar — reavalia agora todas as linhas ja no
+         DOM, para nao ficarem "cegas" so por causa do timing. */
+      procAtualizarTodasAjudasBiblioteca();
+    }).catch(function() {
+      _bibliotecaAssistenteCarregando = false;
+      /* offline/erro — assistente fica desligado, sem afectar o resto */
+    });
+  }
+
+  /* Referencias que partilham pelo menos um token "core" com ref,
+     excluindo ela propria — maximo 8 resultados. */
+  function procReferenciasRelacionadasBiblioteca(refNorm) {
+    var tokens = procTokensReferencia(refNorm);
+    if (!tokens.length) return [];
+    var vistas = {};
+    var resultado = [];
+    for (var i = 0; i < tokens.length && resultado.length < 8; i++) {
+      var lista = _bibliotecaTokenIndex[tokens[i]];
+      if (!lista) continue;
+      for (var j = 0; j < lista.length && resultado.length < 8; j++) {
+        var r2 = lista[j];
+        if (r2 === refNorm || vistas[r2]) continue;
+        vistas[r2] = true;
+        resultado.push(r2);
+      }
+    }
+    return resultado;
+  }
+
+  function procFormatarDataCompraCurta(iso) {
+    if (!iso) return '?';
+    var partes = String(iso).split('-');
+    if (partes.length !== 3) return String(iso);
+    return partes[2] + '/' + partes[1] + '/' + partes[0].slice(2);
+  }
+
+  /* Nome curto para uma referencia relacionada, a mostrar na lista de
+     sugestoes — prefere o nome da biblioteca oficial, sem esticar
+     demasiado o tooltip. */
+  function procDescreverReferenciaRelacionada(ref) {
+    var artigo = _bibliotecaArtigosMap[ref];
+    if (artigo && artigo.nome) return ref + ' — ' + artigo.nome;
+    return ref;
+  }
+
+  /* Constroi o texto (title nativo, multi-linha) do asterisco de
+     ajuda para uma referencia. A base interna de compras (mais
+     completa, desde 2023) tem sempre prioridade sobre a biblioteca
+     quando ambas existem — a biblioteca so complementa com nome/PVP
+     oficial quando a base interna nao chega. Recepcao so existe a
+     nivel de rede (FNC=Funchal / PXO=Porto Santo) — nunca por loja
+     individual, porque a app nunca trackeou isso ao nivel da compra. */
+  function procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas) {
+    var linhas = [];
+    if (artigo) {
+      linhas.push('Biblioteca (Primavera): ' + (artigo.nome || '(sem nome)'));
+      linhas.push('PVP oficial: ' + artigo.pvp.toFixed(2).replace('.', ',') + ' €');
+    }
+    if (compra) {
+      if (linhas.length) linhas.push('');
+      linhas.push('Compras desde 2023:');
+      linhas.push('1.ª compra: ' + procFormatarDataCompraCurta(compra.primeira) + '  ·  última: ' + procFormatarDataCompraCurta(compra.ultima));
+      linhas.push('Recebido — FNC: ' + compra.totalA4 + ' un.  ·  PXO: ' + compra.totalA5 + ' un.');
+    }
+    if (relacionadas.length) {
+      if (linhas.length) linhas.push('');
+      linhas.push('Referências relacionadas:');
+      relacionadas.forEach(function(r) {
+        linhas.push('• ' + procDescreverReferenciaRelacionada(r));
+      });
+    }
+    return linhas.join('\n');
+  }
+
+  /* Disparado so no blur (saida) do campo de descricao — nunca por
+     tecla premida em referencia/descricao, para nao avaliar a meio de
+     uma referencia ainda incompleta. O debounce de 250ms e so uma
+     protecao extra contra saltos rapidos entre campos (tab a direito). */
+  function procAtualizarAjudaBiblioteca(fid, id) {
+    var key = fid + '-' + id;
+    clearTimeout(_bibliotecaAjudaDebounce[key]);
+    _bibliotecaAjudaDebounce[key] = setTimeout(function() {
+      procRenderAjudaBiblioteca(fid, id);
+    }, 250);
+  }
+
+  function procRenderAjudaBiblioteca(fid, id) {
+    var help = document.getElementById('proc-ref-help-' + fid + '-' + id);
+    if (!help) return;
+    if (!_bibliotecaAssistenteCarregada) { help.style.display = 'none'; return; }
+    /* Factura ja fechada (com numero de guia) — ja esta tratada, nunca
+       mostra ajuda aqui. So faz sentido para facturas ainda em aberto. */
+    var guiaInput = document.getElementById('proc-guia-erp-' + fid);
+    if (guiaInput && guiaInput.value.trim().length > 0) { help.style.display = 'none'; return; }
+    var tr = document.getElementById('proc-row-' + fid + '-' + id);
+    if (!tr) return;
+    var rIn = tr.querySelector('.proc-ref-input');
+    var refNorm = rIn ? rIn.value.trim().toUpperCase() : '';
+    if (!refNorm) { help.style.display = 'none'; return; }
+
+    var artigo = _bibliotecaArtigosMap[refNorm] || null;
+    var compra = _bibliotecaComprasMap[refNorm] || null;
+    var relacionadas = procReferenciasRelacionadasBiblioteca(refNorm);
+
+    if (!artigo && !compra && !relacionadas.length) { help.style.display = 'none'; return; }
+
+    var temExata = !!(artigo || compra);
+    help.className = 'proc-ref-help' + (!temExata && relacionadas.length ? ' proc-ref-help-aviso' : '');
+    help.title = procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas);
+    help.style.display = 'inline-block';
+  }
+
+  /* Reavalia o asterisco de ajuda em todas as linhas actualmente no
+     DOM (todas as facturas abertas) — usado depois do assistente
+     terminar de carregar, para cobrir linhas que ja tinham sido
+     restauradas antes disso. */
+  function procAtualizarTodasAjudasBiblioteca() {
+    var spans = document.querySelectorAll('.proc-ref-help');
+    for (var i = 0; i < spans.length; i++) {
+      var m = spans[i].id.match(/^proc-ref-help-(\d+)-(\d+)$/);
+      if (!m) continue;
+      procRenderAjudaBiblioteca(parseInt(m[1], 10), parseInt(m[2], 10));
+    }
+  }
+
+  /* Injecta uma unica vez o CSS do asterisco de ajuda (o resto do
+     styling desta pagina vive fora deste ficheiro, em index.html, por
+     isso o keyframe/posicionamento tem de vir daqui). Idempotente. */
+  function procInjetarEstiloAjudaBiblioteca() {
+    if (document.getElementById('proc-estilo-ajuda-biblioteca')) return;
+    var style = document.createElement('style');
+    style.id = 'proc-estilo-ajuda-biblioteca';
+    style.textContent =
+      '.proc-ref-wrap{position:relative;}' +
+      '.proc-ref-help{position:absolute;left:-13px;top:50%;transform:translateY(-50%);' +
+      'font-size:11px;line-height:1;cursor:help;color:#b8b8b8;user-select:none;}' +
+      '.proc-ref-help.proc-ref-help-aviso{color:#C9A227;font-weight:700;' +
+      'animation:procRefHelpPisca 1.1s ease-in-out infinite;}' +
+      '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}';
+    document.head.appendChild(style);
   }
 
   /* Consulta a tabela de controlo vendas_primavera_dias (paginada, para
@@ -2708,6 +2946,7 @@
            de TAM, preco de fabrica sem margem de venda aplicavel). */
         tr.dataset.semPvp = row.semPvp ? '1' : '0';
         procRecalcRow(fid, rid);
+        procRenderAjudaBiblioteca(fid, rid);
         /* Restore manual PVP override after recalc */
         if (row.pvpManual != null && !isNaN(row.pvpManual)) {
           var pvpElR  = document.getElementById('proc-pvp-' + fid + '-' + rid);
@@ -3283,6 +3522,7 @@
       tr.innerHTML =
           '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'
+        + '<span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span>'
         + '<input type="text" class="proc-ref-input"'
         + ' onfocus="procActivateRow(this)"'
         + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
@@ -3291,7 +3531,8 @@
         + '<div class="proc-desc-wrap">'
         + '<input type="text" class="proc-desc-input" size="22"'
         + ' onfocus="procActivateRow(this)"'
-        + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procCheckAutoExpand(' + f + ',' + r + ')">'
+        + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procCheckAutoExpand(' + f + ',' + r + ')"'
+        + ' onblur="procAtualizarAjudaBiblioteca(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td><input type="number" min="0" step="1" maxlength="5"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
@@ -8017,6 +8258,12 @@
 
     /* Carrega biblioteca de fornecedores remota (non-blocking) */
     procLoadFornecedoresRemote();
+
+    /* Carrega assistente de biblioteca (catalogo + historico de compras),
+       tambem non-blocking — enquanto nao carrega, o asterisco de ajuda
+       simplesmente nao aparece (nunca bloqueia o processamento). */
+    procInjetarEstiloAjudaBiblioteca();
+    procCarregarAssistenteBiblioteca();
 
     /* Pre-carrega categorias (non-blocking) — evita que a primeira
        correcao/edicao de uma linha, logo a seguir a abrir a sessao,

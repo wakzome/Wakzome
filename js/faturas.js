@@ -1189,7 +1189,11 @@
   function procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas) {
     var linhas = [];
     var nome = (artigo && artigo.nome) ? artigo.nome : '';
-    if (nome) linhas.push(nome);
+    if (nome) {
+      var linhaNome = nome;
+      if (artigo && artigo.pvp) linhaNome += '  ·  ' + artigo.pvp.toFixed(2).replace('.', ',') + ' €';
+      linhas.push(linhaNome);
+    }
     if (compra) {
       var stock = _bibliotecaStockMap[refNorm] || null;
       var stockA4 = compra.totalA4 - (stock ? stock.vendidoA4 : 0);

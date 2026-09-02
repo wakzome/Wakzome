@@ -5609,10 +5609,10 @@
       try { dados = JSON.parse(sess.dados); } catch(e) { return; }
       if (!dados || !dados.faturas) return;
 
-      var a4Sess = 0, a5Sess = 0, encontrado = false;
+      var a4Sess = 0, a5Sess = 0, encontrado = false, ordemSess = null;
       var pesoTotal = 0, custoPeso = 0, pvpPeso = 0, margPeso = 0;
 
-      dados.faturas.forEach(function(fat) {
+      dados.faturas.forEach(function(fat, faturaIdx) {
         if (procNormalize(fat.proveedor || '') !== candidato.proveedor) return;
         (fat.rows || []).forEach(function(row) {
           if (!row.ref) return;
@@ -5620,6 +5620,7 @@
           if (procResolverCategoria(row.desc, categorias) !== candidato.categoria) return;
 
           encontrado = true;
+          if (ordemSess === null) ordemSess = faturaIdx;
           if (!descricaoRef) descricaoRef = row.desc || '';
 
           var pc3raw = procCalcPrecoCusto(row.preco, row.plus1, row.hasD, row.qtdFt, row.a4, row.a5);
@@ -5650,7 +5651,8 @@
         a4: a4Sess, a5: a5Sess, total: a4Sess + a5Sess,
         precoCusto: pesoTotal ? (custoPeso / pesoTotal) : null,
         pvp: pesoTotal ? (pvpPeso / pesoTotal) : null,
-        margem: pesoTotal ? (margPeso / pesoTotal) : null
+        margem: pesoTotal ? (margPeso / pesoTotal) : null,
+        ordemNaSessao: ordemSess
       });
     });
 
@@ -5846,15 +5848,15 @@
       var infoPorBloco = blocos.map(function(bloco) {
         var cand = bloco.candidato;
         var refTexto = cand.referencia_interna || cand.referencia_original_raw || cand.referencia_original;
-        var cutoffA4 = null, cutoffA5 = null;
+        var cutoffA4 = null, cutoffA5 = null, ordemNoDiaA4 = null, ordemNoDiaA5 = null;
         bloco.linhas.forEach(function(l) {
           var d = procDataDeChave(l.sessionKey);
           if (!d) return;
           var iso = procIsoAAAAMMDD(d.ano, d.mes, d.dia);
-          if (l.a4 > 0 && (!cutoffA4 || iso < cutoffA4)) cutoffA4 = iso;
-          if (l.a5 > 0 && (!cutoffA5 || iso < cutoffA5)) cutoffA5 = iso;
+          if (l.a4 > 0 && (!cutoffA4 || iso < cutoffA4)) { cutoffA4 = iso; ordemNoDiaA4 = l.ordemNaSessao; }
+          if (l.a5 > 0 && (!cutoffA5 || iso < cutoffA5)) { cutoffA5 = iso; ordemNoDiaA5 = l.ordemNaSessao; }
         });
-        return { refTexto: refTexto, cutoffA4: cutoffA4, cutoffA5: cutoffA5, comprasA4: bloco.totalA4, comprasA5: bloco.totalA5, fornecedorNorm: procNormalize(cand.proveedor || '') };
+        return { refTexto: refTexto, cutoffA4: cutoffA4, cutoffA5: cutoffA5, ordemNoDiaA4: ordemNoDiaA4, ordemNoDiaA5: ordemNoDiaA5, comprasA4: bloco.totalA4, comprasA5: bloco.totalA5, fornecedorNorm: procNormalize(cand.proveedor || '') };
       });
 
       var gruposPorRef = {};
@@ -6548,14 +6550,14 @@
         if (!a4v && !a5v) return;
         if (!porRef[ref]) porRef[ref] = {};
         if (!porRef[ref][norm]) {
-          porRef[ref][norm] = { fornecedorNorm: norm, fornecedorDisplay: bruto, comprasA4: 0, comprasA5: 0, cutoffA4: null, cutoffA5: null };
+          porRef[ref][norm] = { fornecedorNorm: norm, fornecedorDisplay: bruto, comprasA4: 0, comprasA5: 0, cutoffA4: null, cutoffA5: null, ordemNoDiaA4: null, ordemNoDiaA5: null };
         }
         var lote = porRef[ref][norm];
         lote.comprasA4 += a4v;
         lote.comprasA5 += a5v;
         var isoData = procIsoAAAAMMDD(item.ano, item.mes, item.dia);
-        if (a4v > 0 && (!lote.cutoffA4 || isoData < lote.cutoffA4)) lote.cutoffA4 = isoData;
-        if (a5v > 0 && (!lote.cutoffA5 || isoData < lote.cutoffA5)) lote.cutoffA5 = isoData;
+        if (a4v > 0 && (!lote.cutoffA4 || isoData < lote.cutoffA4)) { lote.cutoffA4 = isoData; lote.ordemNoDiaA4 = item.ordemNaSessao; }
+        if (a5v > 0 && (!lote.cutoffA5 || isoData < lote.cutoffA5)) { lote.cutoffA5 = isoData; lote.ordemNoDiaA5 = item.ordemNaSessao; }
       });
     });
     var out = {};
@@ -6569,9 +6571,21 @@
      > 0) e ordena do mais antigo para o mais recente pela data de
      corte desse armazem — a ordem exacta que a fila FIFO precisa. */
   function procLotesOrdenados(lotes, campoCompras, campoCutoff) {
+    var campoOrdem = campoCutoff.replace('cutoff', 'ordemNoDia');
     return (lotes || []).filter(function(l) { return (l[campoCompras] || 0) > 0; }).sort(function(a, b) {
       var ca = a[campoCutoff], cb = b[campoCutoff];
-      if (ca === cb) return 0;
+      if (ca === cb) {
+        /* Mesma data de compra — desempate pela ordem em que as facturas
+           foram introduzidas nessa sessao (indice em dados.faturas):
+           a que entrou primeiro conta-se como mais antiga no FIFO. Sem
+           essa ordem disponivel (ex.: candidato virtual sem sessao),
+           mantem a ordem original (sort estavel), como antes. */
+        var oa = a[campoOrdem], ob = b[campoOrdem];
+        if (oa == null && ob == null) return 0;
+        if (oa == null) return 1;
+        if (ob == null) return -1;
+        return oa - ob;
+      }
       if (!ca) return 1;
       if (!cb) return -1;
       return ca < cb ? -1 : 1;
@@ -6704,8 +6718,8 @@
       var data;
       try { data = JSON.parse(row.dados); } catch (e) { return; }
       if (!data.faturas || !data.faturas.length) return;
-      data.faturas.forEach(function(fat) {
-        out.push({ ano: d.ano, mes: d.mes, dia: d.dia, fatura: fat });
+      data.faturas.forEach(function(fat, faturaIdx) {
+        out.push({ ano: d.ano, mes: d.mes, dia: d.dia, fatura: fat, ordemNaSessao: faturaIdx });
       });
     });
     return out;

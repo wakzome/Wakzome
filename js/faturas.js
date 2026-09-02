@@ -1247,11 +1247,19 @@
   function procRenderAjudaBiblioteca(fid, id) {
     var help = document.getElementById('proc-ref-help-' + fid + '-' + id);
     if (!help) return;
-    if (!_bibliotecaAssistenteCarregada) { help.style.display = 'none'; return; }
+    var olhos = document.getElementById('proc-olhos-' + fid + '-' + id);
+    /* Os olhinhos so aparecem exactamente quando o asterisco aparece —
+       nunca por conta propria (sao so um reforco visual do mesmo
+       aviso, nao um segundo indicador independente). */
+    function ocultarAjuda() {
+      help.style.display = 'none';
+      if (olhos) olhos.style.display = 'none';
+    }
+    if (!_bibliotecaAssistenteCarregada) { ocultarAjuda(); return; }
     /* Factura ja fechada (com numero de guia) — ja esta tratada, nunca
        mostra ajuda aqui. So faz sentido para facturas ainda em aberto. */
     var guiaInput = document.getElementById('proc-guia-erp-' + fid);
-    if (guiaInput && guiaInput.value.trim().length > 0) { help.style.display = 'none'; return; }
+    if (guiaInput && guiaInput.value.trim().length > 0) { ocultarAjuda(); return; }
     var tr = document.getElementById('proc-row-' + fid + '-' + id);
     if (!tr) return;
     /* Marca que o fluxo desta linha ja foi avaliado pelo menos uma vez
@@ -1261,18 +1269,19 @@
     tr.dataset.ajudaBibliotecaIniciada = '1';
     var rIn = tr.querySelector('.proc-ref-input');
     var refNorm = rIn ? rIn.value.trim().toUpperCase() : '';
-    if (!refNorm) { help.style.display = 'none'; return; }
+    if (!refNorm) { ocultarAjuda(); return; }
 
     var artigo = _bibliotecaArtigosMap[refNorm] || null;
     var compra = _bibliotecaComprasMap[refNorm] || null;
     var relacionadas = procReferenciasRelacionadasBiblioteca(refNorm);
 
-    if (!artigo && !compra && !relacionadas.length) { help.style.display = 'none'; return; }
+    if (!artigo && !compra && !relacionadas.length) { ocultarAjuda(); return; }
 
     var temExata = !!(artigo || compra);
     help.className = 'proc-ref-help' + (!temExata && relacionadas.length ? ' proc-ref-help-aviso' : '');
     help.title = procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas);
     help.style.display = 'inline-block';
+    if (olhos) olhos.style.display = 'inline-flex';
   }
 
   /* Reavalia o asterisco de ajuda em todas as linhas actualmente no
@@ -1302,13 +1311,13 @@
          fora da caixa da tabela fica recortada por esse scroll. Como
          coluna normal, participa do fluxo e aparece sempre. Tamanho a
          condizer com o ✱ de "Importar históricos" (.85rem). */
-      '.proc-th-olhos,.proc-td-olhos{width:20px;padding-left:4px!important;padding-right:0!important;}' +
-      '.proc-olhos{display:inline-flex;gap:2px;align-items:center;transform-origin:center;' +
+      '.proc-th-olhos,.proc-td-olhos{width:80px;padding-left:4px!important;padding-right:0!important;}' +
+      '.proc-olhos{display:inline-flex;gap:8px;align-items:center;transform-origin:center;' +
       'animation:procOlhosPisca 4.5s ease-in-out infinite;}' +
-      '.proc-olho{width:7px;height:7px;border-radius:50%;background:#fff;border:1px solid #555;' +
+      '.proc-olho{width:35px;height:35px;border-radius:50%;background:#fff;border:2px solid #555;' +
       'position:relative;display:inline-block;}' +
-      '.proc-olho::after{content:\'\';position:absolute;width:3px;height:3px;border-radius:50%;' +
-      'background:#333;top:1.5px;left:1.5px;}' +
+      '.proc-olho::after{content:\'\';position:absolute;width:15px;height:15px;border-radius:50%;' +
+      'background:#333;top:8px;left:8px;}' +
       '@keyframes procOlhosPisca{0%,90%,100%{transform:scaleY(1);}94%{transform:scaleY(.1);}}' +
       '.proc-th-ajuda,.proc-td-ajuda{width:22px;padding-left:4px!important;padding-right:0!important;}' +
       '.proc-ref-help{display:none;font-size:1.2rem;font-weight:700;line-height:1;cursor:help;' +
@@ -3642,7 +3651,7 @@
       var tr = document.createElement('tr');
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
-          '<td class="proc-td-olhos"><span class="proc-olhos" aria-hidden="true"><span class="proc-olho"></span><span class="proc-olho"></span></span></td>'
+          '<td class="proc-td-olhos"><span class="proc-olhos" id="proc-olhos-' + f + '-' + r + '" style="display:none;" aria-hidden="true"><span class="proc-olho"></span><span class="proc-olho"></span></span></td>'
         + '<td class="proc-td-ajuda"><span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span></td>'
         + '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'

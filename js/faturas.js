@@ -1244,6 +1244,51 @@
     procAtualizarAjudaBiblioteca(fid, id);
   }
 
+  var _procAjudaTouchPopover = null;
+  var _procAjudaTouchFechar  = null;
+
+  function procFecharAjudaTouch() {
+    if (_procAjudaTouchPopover && _procAjudaTouchPopover.parentNode) {
+      _procAjudaTouchPopover.parentNode.removeChild(_procAjudaTouchPopover);
+    }
+    _procAjudaTouchPopover = null;
+    if (_procAjudaTouchFechar) {
+      document.removeEventListener('click', _procAjudaTouchFechar, true);
+      _procAjudaTouchFechar = null;
+    }
+  }
+
+  /* Em ecrans tacteis (telemovel/tablet) o "title" nativo do HTML
+     nunca aparece — nao ha hover. Este popover replica o mesmo texto
+     num toque, tanto nos olhos como no asterisco (qualquer um dos
+     dois abre a mesma informacao, ligados ao mesmo .proc-ref-help da
+     linha). Tocar de novo no mesmo sitio, ou fora, fecha. */
+  function procMostrarAjudaTouch(el) {
+    var tr = el.closest ? el.closest('tr') : null;
+    var help = tr ? tr.querySelector('.proc-ref-help') : null;
+    var texto = help ? help.title : '';
+    var jaAberto = !!_procAjudaTouchPopover;
+    procFecharAjudaTouch();
+    if (jaAberto || !texto) return;
+
+    var rect = el.getBoundingClientRect();
+    var pop = document.createElement('div');
+    pop.className = 'proc-ajuda-touch-popover';
+    pop.textContent = texto;
+    pop.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+    pop.style.left = (rect.left + window.scrollX) + 'px';
+    document.body.appendChild(pop);
+    _procAjudaTouchPopover = pop;
+
+    setTimeout(function() {
+      _procAjudaTouchFechar = function(e) {
+        if (pop.contains(e.target)) return;
+        procFecharAjudaTouch();
+      };
+      document.addEventListener('click', _procAjudaTouchFechar, true);
+    }, 0);
+  }
+
   function procRenderAjudaBiblioteca(fid, id) {
     var help = document.getElementById('proc-ref-help-' + fid + '-' + id);
     if (!help) return;
@@ -1326,7 +1371,11 @@
       'color:#999;user-select:none;}' +
       '.proc-ref-help.proc-ref-help-aviso{color:#C9A227;font-weight:700;' +
       'animation:procRefHelpPisca 1.1s ease-in-out infinite;}' +
-      '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}';
+      '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}' +
+      '.proc-ajuda-touch-popover{position:absolute;z-index:9999;max-width:260px;' +
+      'background:#fff;border:1px solid #ccc;border-radius:6px;' +
+      'box-shadow:0 4px 14px rgba(0,0,0,.18);padding:8px 10px;font-size:.75rem;' +
+      'line-height:1.4;color:#333;white-space:pre-line;}';
     document.head.appendChild(style);
   }
 
@@ -3653,8 +3702,8 @@
       var tr = document.createElement('tr');
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
-          '<td class="proc-td-olhos"><span class="proc-olhos" id="proc-olhos-' + f + '-' + r + '" style="display:none;" aria-hidden="true"><span class="proc-olho"></span><span class="proc-olho"></span></span></td>'
-        + '<td class="proc-td-ajuda"><span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span></td>'
+          '<td class="proc-td-olhos"><span class="proc-olhos" id="proc-olhos-' + f + '-' + r + '" style="display:none;" aria-hidden="true" onclick="procMostrarAjudaTouch(this)"><span class="proc-olho"></span><span class="proc-olho"></span></span></td>'
+        + '<td class="proc-td-ajuda"><span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="" onclick="procMostrarAjudaTouch(this)">*</span></td>'
         + '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'
         + '<input type="text" class="proc-ref-input"'
@@ -9976,6 +10025,7 @@
   window.procAbrirImportadorBiblioteca = procAbrirImportadorBiblioteca;
   window.procAtualizarAjudaBiblioteca = procAtualizarAjudaBiblioteca;
   window.procAtualizarAjudaBibliotecaSeIniciada = procAtualizarAjudaBibliotecaSeIniciada;
+  window.procMostrarAjudaTouch = procMostrarAjudaTouch;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
   window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
   window.procMostrarModalAlertasGlobais = procMostrarModalAlertasGlobais;

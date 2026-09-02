@@ -3641,11 +3641,12 @@
   var PORTO_BASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co/storage/v1/object/public/horarios/porto_s';
   var BASE_DATE = new Date('2026-01-05T00:00:00');
 
-  // key = rótulo exato do bloco tal como vem em FUNCHAL.csv (ver nameMapping em loadData());
+  // key = prefixo do rótulo do bloco em FUNCHAL.csv, comparado com startsWith
+  // (não ===) para não voltar a partir-se se o rótulo ganhar um sufixo;
   // label = nome curto mostrado no widget, para não alargar o painel.
   var STANDARD_STORES = [
     { key: 'mezka funchal', label: 'Mezka Funchal' },
-    { key: 'parfois arcadas são francisco', label: 'Parfois Arcadas' }
+    { key: 'parfois arcadas', label: 'Parfois Arcadas' }
   ];
 
   var wzStarted = false;
@@ -3964,7 +3965,7 @@
 
       var results = [];
       STANDARD_STORES.forEach(function (store) {
-        var candidates = funchalBlocks.filter(function (b) { return (b[0][0] || '').toLowerCase() === store.key; });
+        var candidates = funchalBlocks.filter(function (b) { return (b[0][0] || '').toLowerCase().indexOf(store.key) === 0; });
         var match = null;
         for (var i = 0; i < candidates.length; i++) {
           if (wzFindTodayCol(candidates[i][1]) >= 0) { match = candidates[i]; break; }

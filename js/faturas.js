@@ -1252,9 +1252,14 @@
     var style = document.createElement('style');
     style.id = 'proc-estilo-ajuda-biblioteca';
     style.textContent =
-      '.proc-ref-wrap{position:relative;}' +
-      '.proc-ref-help{position:absolute;left:-13px;top:50%;transform:translateY(-50%);' +
-      'font-size:11px;line-height:1;cursor:help;color:#b8b8b8;user-select:none;}' +
+      /* Fluxo normal (nao absolute) — nunca fica a mercer de um
+         ancestral com overflow:hidden/auto a recortar um offset
+         negativo. Fica como primeiro filho de .proc-ref-wrap, mesmo
+         nivel do input, por isso aparece sempre imediatamente a
+         esquerda da referencia. */
+      '.proc-ref-help{display:none;width:11px;text-align:center;' +
+      'font-size:12px;line-height:1;cursor:help;color:#b8b8b8;user-select:none;' +
+      'vertical-align:middle;}' +
       '.proc-ref-help.proc-ref-help-aviso{color:#C9A227;font-weight:700;' +
       'animation:procRefHelpPisca 1.1s ease-in-out infinite;}' +
       '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}';

@@ -87,6 +87,7 @@
      nunca repetir o incidente de sobrecarga do tier Nano. */
   var _bibliotecaArtigosMap      = {};  /* REFERENCIA -> { nome, pvp } */
   var _bibliotecaComprasMap      = {};  /* REFERENCIA -> { primeira, ultima, totalA4, totalA5 } */
+  var _bibliotecaStockMap        = {};  /* REFERENCIA -> { vendidoA4, vendidoA5 } */
   var _bibliotecaTokenIndex      = {};  /* token (segmento entre hifens) -> [REFERENCIA, ...] */
   var _bibliotecaAssistenteCarregada   = false;
   var _bibliotecaAssistenteCarregando  = false;
@@ -1087,12 +1088,15 @@
     var CONCORRENCIA = 6;
     var pathArtigos = 'proc_biblioteca_artigos?select=referencia,nome,pvp&order=referencia.asc';
     var pathCompras = 'proc_biblioteca_compras_cache?select=referencia,primeira_compra,ultima_compra,total_a4,total_a5&order=referencia.asc';
+    var pathStock   = 'proc_stock_referencias_cache?select=referencia,vendido_a4,vendido_a5&order=referencia.asc';
     Promise.all([
       procContarLinhasTabela(pathArtigos).then(function(total) { return procFetchPaginasConcorrente(pathArtigos, total, CONCORRENCIA); }),
-      procContarLinhasTabela(pathCompras).then(function(total) { return procFetchPaginasConcorrente(pathCompras, total, CONCORRENCIA); })
+      procContarLinhasTabela(pathCompras).then(function(total) { return procFetchPaginasConcorrente(pathCompras, total, CONCORRENCIA); }),
+      procContarLinhasTabela(pathStock).then(function(total) { return procFetchPaginasConcorrente(pathStock, total, CONCORRENCIA); })
     ]).then(function(res) {
       var artigos = res[0] || [];
       var compras = res[1] || [];
+      var stocks  = res[2] || [];
       var mapaArtigos = {};
       artigos.forEach(function(row) {
         if (!row || !row.referencia) return;
@@ -1111,8 +1115,17 @@
           totalA5: Number(row.total_a5) || 0
         };
       });
+      var mapaStock = {};
+      stocks.forEach(function(row) {
+        if (!row || !row.referencia) return;
+        mapaStock[String(row.referencia).toUpperCase()] = {
+          vendidoA4: Number(row.vendido_a4) || 0,
+          vendidoA5: Number(row.vendido_a5) || 0
+        };
+      });
       _bibliotecaArtigosMap = mapaArtigos;
       _bibliotecaComprasMap = mapaCompras;
+      _bibliotecaStockMap = mapaStock;
       procConstruirIndiceTokensBiblioteca();
       _bibliotecaAssistenteCarregada = true;
       _bibliotecaAssistenteCarregando = false;
@@ -1165,23 +1178,29 @@
   }
 
   /* Constroi o texto (title nativo, multi-linha) do asterisco de
-     ajuda para uma referencia. A base interna de compras (mais
-     completa, desde 2023) tem sempre prioridade sobre a biblioteca
-     quando ambas existem — a biblioteca so complementa com nome/PVP
-     oficial quando a base interna nao chega. Recepcao so existe a
-     nivel de rede (FNC=Funchal / PXO=Porto Santo) — nunca por loja
-     individual, porque a app nunca trackeou isso ao nivel da compra. */
+     ajuda para uma referencia. So o nome (sem rotulos de "biblioteca"
+     nem PVP — o utilizador so quer saber se ja existe e a que se
+     parece). Recepcao so existe a nivel de rede (FNC=Funchal /
+     PXO=Porto Santo) — nunca por loja individual, porque a app nunca
+     trackeou isso ao nivel da compra; o STOCK (recebido menos
+     vendido) e mostrado antes do recebido, por ser a informacao mais
+     acionavel. Se a 1.ª e a ultima compra forem o mesmo dia, mostra
+     so uma data em vez de repetir. */
   function procFormatarAjudaBiblioteca(refNorm, artigo, compra, relacionadas) {
     var linhas = [];
-    if (artigo) {
-      linhas.push('Biblioteca (Primavera): ' + (artigo.nome || '(sem nome)'));
-      linhas.push('PVP oficial: ' + artigo.pvp.toFixed(2).replace('.', ',') + ' €');
-    }
+    var nome = (artigo && artigo.nome) ? artigo.nome : '';
+    if (nome) linhas.push(nome);
     if (compra) {
-      if (linhas.length) linhas.push('');
-      linhas.push('Compras desde 2023:');
-      linhas.push('1.ª compra: ' + procFormatarDataCompraCurta(compra.primeira) + '  ·  última: ' + procFormatarDataCompraCurta(compra.ultima));
+      var stock = _bibliotecaStockMap[refNorm] || null;
+      var stockA4 = compra.totalA4 - (stock ? stock.vendidoA4 : 0);
+      var stockA5 = compra.totalA5 - (stock ? stock.vendidoA5 : 0);
+      linhas.push('Stock — FNC: ' + stockA4 + ' un.  ·  PXO: ' + stockA5 + ' un.');
       linhas.push('Recebido — FNC: ' + compra.totalA4 + ' un.  ·  PXO: ' + compra.totalA5 + ' un.');
+      if (compra.primeira && compra.primeira === compra.ultima) {
+        linhas.push('Comprado em: ' + procFormatarDataCompraCurta(compra.primeira));
+      } else {
+        linhas.push('1.ª compra: ' + procFormatarDataCompraCurta(compra.primeira) + '  ·  última: ' + procFormatarDataCompraCurta(compra.ultima));
+      }
     }
     if (relacionadas.length) {
       if (linhas.length) linhas.push('');
@@ -1205,6 +1224,19 @@
     }, 250);
   }
 
+  /* Usado no blur da REFERENCIA (nao da descricao). So reavalia se a
+     linha ja tiver passado pelo primeiro disparo (via descricao) —
+     antes disso, ainda a meio de preencher uma linha nova, corrigir a
+     referencia nao dispara nada (evita avaliar uma referencia ainda
+     incompleta so porque o utilizador saiu do campo por engano). Depois
+     do primeiro disparo, corrigir a referencia (ex.: apos ver o aviso e
+     perceber que faltava um prefixo) reavalia na hora. */
+  function procAtualizarAjudaBibliotecaSeIniciada(fid, id) {
+    var tr = document.getElementById('proc-row-' + fid + '-' + id);
+    if (!tr || tr.dataset.ajudaBibliotecaIniciada !== '1') return;
+    procAtualizarAjudaBiblioteca(fid, id);
+  }
+
   function procRenderAjudaBiblioteca(fid, id) {
     var help = document.getElementById('proc-ref-help-' + fid + '-' + id);
     if (!help) return;
@@ -1215,6 +1247,11 @@
     if (guiaInput && guiaInput.value.trim().length > 0) { help.style.display = 'none'; return; }
     var tr = document.getElementById('proc-row-' + fid + '-' + id);
     if (!tr) return;
+    /* Marca que o fluxo desta linha ja foi avaliado pelo menos uma vez
+       (via blur da descricao) — a partir daqui, corrigir so a
+       referencia (procAtualizarAjudaBibliotecaSeIniciada) reavalia na
+       hora, sem ser preciso voltar a tocar a descricao. */
+    tr.dataset.ajudaBibliotecaIniciada = '1';
     var rIn = tr.querySelector('.proc-ref-input');
     var refNorm = rIn ? rIn.value.trim().toUpperCase() : '';
     if (!refNorm) { help.style.display = 'none'; return; }
@@ -1252,14 +1289,15 @@
     var style = document.createElement('style');
     style.id = 'proc-estilo-ajuda-biblioteca';
     style.textContent =
-      /* Fluxo normal (nao absolute) — nunca fica a mercer de um
-         ancestral com overflow:hidden/auto a recortar um offset
-         negativo. Fica como primeiro filho de .proc-ref-wrap, mesmo
-         nivel do input, por isso aparece sempre imediatamente a
-         esquerda da referencia. */
-      '.proc-ref-help{display:none;width:11px;text-align:center;' +
-      'font-size:12px;line-height:1;cursor:help;color:#b8b8b8;user-select:none;' +
-      'vertical-align:middle;}' +
+      /* Coluna propria, fora da celula da referencia — nunca dentro de
+         .proc-ref-wrap nem posicionado em absolute: a tabela tem um
+         wrapper com overflow-x:auto, e qualquer coisa a "flutuar" para
+         fora da caixa da tabela fica recortada por esse scroll. Como
+         coluna normal, participa do fluxo e aparece sempre. Tamanho a
+         condizer com o ✱ de "Importar históricos" (.85rem). */
+      '.proc-th-ajuda,.proc-td-ajuda{width:16px;padding-left:2px!important;padding-right:0!important;}' +
+      '.proc-ref-help{display:none;font-size:.85rem;line-height:1;cursor:help;' +
+      'color:#b8b8b8;user-select:none;}' +
       '.proc-ref-help.proc-ref-help-aviso{color:#C9A227;font-weight:700;' +
       'animation:procRefHelpPisca 1.1s ease-in-out infinite;}' +
       '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}';
@@ -3125,6 +3163,7 @@
       + '<div id="proc-table-block-' + fid + '">'
       +   '<div class="proc-table-block"><div class="proc-table-wrap"><table id="proc-mainTable-' + fid + '">'
       +   '<thead><tr>'
+      +   '<th class="proc-th-ajuda"></th>'
       +   '<th class="left">Refer\u00eancia</th>'
       +   '<th class="left">Descri\u00e7\u00e3o</th>'
       +   '<th>QTD.</th>'
@@ -3587,12 +3626,13 @@
       var tr = document.createElement('tr');
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
-          '<td class="td-ref">'
+          '<td class="proc-td-ajuda"><span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span></td>'
+        + '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'
-        + '<span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span>'
         + '<input type="text" class="proc-ref-input"'
         + ' onfocus="procActivateRow(this)"'
-        + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')">'
+        + ' oninput="var s=this.selectionStart,e=this.selectionEnd;this.value=this.value.toUpperCase();this.setSelectionRange(s,e);procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ')"'
+        + ' onblur="procAtualizarAjudaBibliotecaSeIniciada(' + f + ',' + r + ')">'
         + '</div></td>'
         + '<td class="td-desc">'
         + '<div class="proc-desc-wrap">'
@@ -3676,7 +3716,7 @@
     /* Also size the header th to match */
     var table = document.getElementById('proc-mainTable-' + fid);
     if (table) {
-      var th = table.querySelector('thead th.left:first-child');
+      var th = table.querySelector('thead th.proc-th-ajuda + th.left');
       if (th) th.style.minWidth = '';
     }
   }
@@ -9907,6 +9947,7 @@
   window.procAbrirImportadorVendas = procAbrirImportadorVendas;
   window.procAbrirImportadorBiblioteca = procAbrirImportadorBiblioteca;
   window.procAtualizarAjudaBiblioteca = procAtualizarAjudaBiblioteca;
+  window.procAtualizarAjudaBibliotecaSeIniciada = procAtualizarAjudaBibliotecaSeIniciada;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
   window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
   window.procMostrarModalAlertasGlobais = procMostrarModalAlertasGlobais;

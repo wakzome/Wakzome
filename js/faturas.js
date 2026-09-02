@@ -5880,6 +5880,15 @@
          somava as duas latencias sem necessidade: o stock nao depende
          do fogo para nada. */
       var fogoMapaRadio = null, stockMapaRadio = null, prontosRadio = 0;
+      /* "Total Vendidos" por linha (idxBloco + sessionKey) — FIFO
+         calculado aqui no browser, ao nivel de cada compra concreta (nao
+         por fornecedor agregado), reutilizando o MESMO total vendido
+         (venda.vendidoA4/A5) ja pedido ao Supabase para a referencia.
+         Nunca usa proc_referencia_velocidade para isto: essa tabela
+         agrupa por referencia+data sem distinguir fornecedor, por isso
+         mostrava o mesmo total em blocos de fornecedores diferentes que
+         compraram no mesmo dia. */
+      var mapaVendidoLinha = {};
       function procTentarRenderRadioStock() {
         prontosRadio++;
         if (prontosRadio < 2) return;
@@ -5893,6 +5902,39 @@
             var lotesA5 = procLotesOrdenados(grupo, 'comprasA5', 'cutoffA5');
             procAlocarFifo(lotesA4, venda.vendidoA4, 'comprasA4', 'stockA4');
             procAlocarFifo(lotesA5, venda.vendidoA5, 'comprasA5', 'stockA5');
+
+            var linhasDaRef = [];
+            blocos.forEach(function(bloco, idxB) {
+              if (infoPorBloco[idxB].refTexto !== refTexto) return;
+              bloco.linhas.forEach(function(l) {
+                var d = procDataDeChave(l.sessionKey);
+                var iso = d ? procIsoAAAAMMDD(d.ano, d.mes, d.dia) : null;
+                linhasDaRef.push({
+                  idxBloco: idxB, sessionKey: l.sessionKey,
+                  comprasA4: l.a4, comprasA5: l.a5,
+                  cutoffA4: (l.a4 > 0) ? iso : null,
+                  cutoffA5: (l.a5 > 0) ? iso : null,
+                  ordemNoDiaA4: l.ordemNaSessao, ordemNoDiaA5: l.ordemNaSessao
+                });
+              });
+            });
+            var linhasOrdA4 = procLotesOrdenados(linhasDaRef, 'comprasA4', 'cutoffA4');
+            var linhasOrdA5 = procLotesOrdenados(linhasDaRef, 'comprasA5', 'cutoffA5');
+            procAlocarFifo(linhasOrdA4, venda.vendidoA4, 'comprasA4', 'stockLinhaA4');
+            procAlocarFifo(linhasOrdA5, venda.vendidoA5, 'comprasA5', 'stockLinhaA5');
+            var vendidoA4PorLinha = {}, vendidoA5PorLinha = {};
+            linhasOrdA4.forEach(function(ln) {
+              vendidoA4PorLinha[ln.idxBloco + '|' + ln.sessionKey] = ln.comprasA4 - ln.stockLinhaA4;
+            });
+            linhasOrdA5.forEach(function(ln) {
+              vendidoA5PorLinha[ln.idxBloco + '|' + ln.sessionKey] = ln.comprasA5 - ln.stockLinhaA5;
+            });
+            linhasDaRef.forEach(function(ln) {
+              var chave = ln.idxBloco + '|' + ln.sessionKey;
+              var vA4 = vendidoA4PorLinha.hasOwnProperty(chave) ? vendidoA4PorLinha[chave] : 0;
+              var vA5 = vendidoA5PorLinha.hasOwnProperty(chave) ? vendidoA5PorLinha[chave] : 0;
+              mapaVendidoLinha[chave] = vA4 + vA5;
+            });
           }
         });
         blocos.forEach(function(bloco, idxBloco) {
@@ -5969,13 +6011,21 @@
             var celDias = modal.querySelector('.proc-raio-lote-dias[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
             var celVeloc = modal.querySelector('.proc-raio-lote-veloc[data-idx="' + idxBloco + '"][data-session="' + l.sessionKey + '"]');
             if (!celEsgotou || !celDias || !celVeloc) return;
+
+            /* Total Vendidos (A4+A5) — FIFO por linha calculado acima em
+               mapaVendidoLinha, NUNCA a partir de proc_referencia_velocidade
+               (essa agrupa por referencia+data sem distinguir fornecedor,
+               por isso mostrava o mesmo total em blocos de fornecedores
+               diferentes que compraram no mesmo dia). */
+            var vendidoLinha = mapaVendidoLinha[idxBloco + '|' + l.sessionKey];
+            celVeloc.textContent = (vendidoLinha != null) ? vendidoLinha : '\u2014';
+
             var dChave = procDataDeChave(l.sessionKey);
             var isoLinha = dChave ? procIsoAAAAMMDD(dChave.ano, dChave.mes, dChave.dia) : null;
             var lote = isoLinha ? lotesRef.filter(function(lt) { return lt.data_compra === isoLinha; })[0] : null;
             if (!lote) {
               celEsgotou.textContent = '\u2014';
               celDias.textContent = '\u2014';
-              celVeloc.textContent = '\u2014';
               return;
             }
             if (lote.data_esgotamento) {
@@ -5999,18 +6049,6 @@
               celEsgotou.textContent = '\u2014';
             }
             celDias.textContent = (lote.dias != null) ? lote.dias : '\u2014';
-            /* Total Vendidos (A4+A5, geral) em vez de Un/dia: lote ja
-               esgotado vendeu o qtd_lote inteiro; lote ainda em curso usa
-               a mesma velocidade_dia*dias que a RPC ja usa internamente
-               para projetar a data de esgotamento — nao inventa nada
-               novo, so mostra o total em vez da taxa diaria. */
-            var totalVendidoLote = null;
-            if (lote.data_esgotamento) {
-              totalVendidoLote = lote.qtd_lote;
-            } else if (lote.velocidade_dia != null && lote.dias != null) {
-              totalVendidoLote = Math.round(Number(lote.velocidade_dia) * Number(lote.dias));
-            }
-            celVeloc.textContent = (totalVendidoLote != null) ? totalVendidoLote : '\u2014';
           });
         });
       }

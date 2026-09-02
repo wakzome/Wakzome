@@ -5966,8 +5966,19 @@
             procPreencherLotesErroRadio();
             return;
           }
-          var stockA4 = info.hasOwnProperty('stockA4') ? info.stockA4 : bloco.totalA4;
-          var stockA5 = info.hasOwnProperty('stockA5') ? info.stockA5 : bloco.totalA5;
+          /* Sem lote (referencia nunca comprada neste armazem por
+             NINGUEM) o fallback antigo mostrava sempre o total comprado
+             (aqui sempre 0), escondendo uma venda organica nesse armazem
+             — nunca aparecia negativo mesmo quando devia, apagando a
+             evidencia do erro humano. So se aplica quando NAO ha lote
+             nenhum (nem deste nem de outro fornecedor); havendo lotes de
+             outros fornecedores partilhando a referencia, o vendido ja
+             foi correctamente distribuido pela FIFO entre eles. */
+          var grupoRef = gruposPorRef[refTexto] || [];
+          var algumTemLoteA4 = grupoRef.some(function(g) { return (g.comprasA4 || 0) > 0; });
+          var algumTemLoteA5 = grupoRef.some(function(g) { return (g.comprasA5 || 0) > 0; });
+          var stockA4 = info.hasOwnProperty('stockA4') ? info.stockA4 : (algumTemLoteA4 ? bloco.totalA4 : bloco.totalA4 - venda.vendidoA4);
+          var stockA5 = info.hasOwnProperty('stockA5') ? info.stockA5 : (algumTemLoteA5 ? bloco.totalA5 : bloco.totalA5 - venda.vendidoA5);
           celA4.textContent = stockA4;
           celA5.textContent = stockA5;
           var detalheTextoA4Radio = procFormatarDetalheA4(venda.detalheA4);
@@ -6023,15 +6034,24 @@
             var dChave = procDataDeChave(l.sessionKey);
             var isoLinha = dChave ? procIsoAAAAMMDD(dChave.ano, dChave.mes, dChave.dia) : null;
             var lote = isoLinha ? lotesRef.filter(function(lt) { return lt.data_compra === isoLinha; })[0] : null;
-            if (!lote) {
-              celEsgotou.textContent = '\u2014';
-              celDias.textContent = '\u2014';
-              return;
-            }
-            if (lote.data_esgotamento) {
+
+            /* Estoque restante desta linha, pelo MESMO FIFO por linha que
+               ja calcula "Total Vendidos" \u2014 mais preciso que a RPC
+               proc_referencia_velocidade, que mistura fornecedores do
+               mesmo dia num so lote e por isso podia continuar a dizer
+               "em curso" para um lote que, por fornecedor, ja vendeu
+               tudo o que comprou. Usado so como correcao quando a RPC
+               nao concorda; a data exacta (quando existe) continua a
+               vir da RPC, que e a unica com o historico dia-a-dia. */
+            var comprasLinha = (l.a4 || 0) + (l.a5 || 0);
+            var estoqueLinhaRestante = comprasLinha - ((vendidoLinha != null) ? vendidoLinha : 0);
+
+            if (lote && lote.data_esgotamento) {
               var de = lote.data_esgotamento.split('-');
               celEsgotou.textContent = de[2] + '/' + de[1] + '/' + de[0].slice(2);
-            } else if (lote.ativo && lote.velocidade_dia != null) {
+            } else if (comprasLinha > 0 && estoqueLinhaRestante <= 0) {
+              celEsgotou.textContent = 'Esgotado';
+            } else if (lote && lote.ativo && lote.velocidade_dia != null) {
               /* front_ativo (calculado no servidor): a FIFO ja chegou a este lote. "Em curso"
                  so faz sentido se ja houve pelo menos uma venda — um lote a 0 un/dia (nenhuma
                  peca vendida ate agora, seja de compra unica ou apos recompra) fica com o
@@ -6042,13 +6062,13 @@
               } else {
                 celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
               }
-            } else if (lote.ativo) {
+            } else if (lote && lote.ativo) {
               /* Ainda ativo mas em fila atras de um lote mais antigo por esgotar — dias/velocidade ficam null na RPC precisamente para nao sugerir uma venda a 0 un/dia. */
               celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
             } else {
               celEsgotou.textContent = '\u2014';
             }
-            celDias.textContent = (lote.dias != null) ? lote.dias : '\u2014';
+            celDias.textContent = (lote && lote.dias != null) ? lote.dias : '\u2014';
           });
         });
       }
@@ -7552,8 +7572,12 @@
         procAlocarFifo(lotesA5, venda.vendidoA5, 'comprasA5', 'stockA5');
         var meuLoteA4 = lotesA4.filter(function(l) { return l.fornecedorNorm === fornecedorNorm; })[0];
         var meuLoteA5 = lotesA5.filter(function(l) { return l.fornecedorNorm === fornecedorNorm; })[0];
-        var stockA4 = meuLoteA4 ? meuLoteA4.stockA4 : compras.comprasA4;
-        var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : compras.comprasA5;
+        /* Ver nota identica em procMostrarRadiografiaModal: so aplica o
+           vendido como negativo quando NAO ha lote nenhum para este
+           armazem (nem deste nem de outro fornecedor) — nunca esconde
+           uma venda organica atras de um "0" que parece limpo. */
+        var stockA4 = meuLoteA4 ? meuLoteA4.stockA4 : (lotesA4.length ? compras.comprasA4 : compras.comprasA4 - venda.vendidoA4);
+        var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : (lotesA5.length ? compras.comprasA5 : compras.comprasA5 - venda.vendidoA5);
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;
         var detalheTextoA4 = procFormatarDetalheA4(venda.detalheA4);
@@ -8136,8 +8160,9 @@
         var lotesA5Ref = procLotesOrdenados(lotesPorReferencia[linha.ref], 'comprasA5', 'cutoffA5');
         var meuLoteA4 = lotesA4Ref.filter(function(l) { return l.fornecedorNorm === linha.fornecedorNorm; })[0];
         var meuLoteA5 = lotesA5Ref.filter(function(l) { return l.fornecedorNorm === linha.fornecedorNorm; })[0];
-        var stockA4 = meuLoteA4 ? meuLoteA4.stockA4 : linha.comprasA4;
-        var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : linha.comprasA5;
+        /* Ver nota identica em procMostrarRadiografiaModal. */
+        var stockA4 = meuLoteA4 ? meuLoteA4.stockA4 : (lotesA4Ref.length ? linha.comprasA4 : linha.comprasA4 - venda.vendidoA4);
+        var stockA5 = meuLoteA5 ? meuLoteA5.stockA5 : (lotesA5Ref.length ? linha.comprasA5 : linha.comprasA5 - venda.vendidoA5);
         var stockTotal = stockA4 + stockA5;
         celA4.textContent = stockA4;
         celA5.textContent = stockA5;

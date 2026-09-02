@@ -1238,6 +1238,12 @@
     var key = fid + '-' + id;
     clearTimeout(_bibliotecaAjudaDebounce[key]);
     _bibliotecaAjudaDebounce[key] = setTimeout(function() {
+      /* Unico ponto onde uma linha passa a "iniciada" — disparado pelo
+         blur da descricao (o fluxo normal) ou, ja com a flag posta,
+         pelo blur da propria referencia (procAtualizarAjudaBibliotecaSeIniciada).
+         Nunca marcado so por a referencia ter algo escrito a meio. */
+      var tr = document.getElementById('proc-row-' + fid + '-' + id);
+      if (tr) tr.dataset.ajudaBibliotecaIniciada = '1';
       procRenderAjudaBiblioteca(fid, id);
     }, 250);
   }
@@ -1319,11 +1325,6 @@
     if (guiaInput && guiaInput.value.trim().length > 0) { ocultarAjuda(); return; }
     var tr = document.getElementById('proc-row-' + fid + '-' + id);
     if (!tr) return;
-    /* Marca que o fluxo desta linha ja foi avaliado pelo menos uma vez
-       (via blur da descricao) — a partir daqui, corrigir so a
-       referencia (procAtualizarAjudaBibliotecaSeIniciada) reavalia na
-       hora, sem ser preciso voltar a tocar a descricao. */
-    tr.dataset.ajudaBibliotecaIniciada = '1';
     var rIn = tr.querySelector('.proc-ref-input');
     var refNorm = rIn ? rIn.value.trim().toUpperCase() : '';
     if (!refNorm) { ocultarAjuda(); return; }
@@ -1350,7 +1351,15 @@
     for (var i = 0; i < spans.length; i++) {
       var m = spans[i].id.match(/^proc-ref-help-(\d+)-(\d+)$/);
       if (!m) continue;
-      procRenderAjudaBiblioteca(parseInt(m[1], 10), parseInt(m[2], 10));
+      var fid = parseInt(m[1], 10), id = parseInt(m[2], 10);
+      var tr = document.getElementById('proc-row-' + fid + '-' + id);
+      /* Nunca inicia o fluxo por conta propria — so refresca linhas que
+         ja passaram pelo blur da descricao (ou foram restauradas de
+         uma sessao guardada). Uma linha ainda vazia ou a meio de ser
+         escrita fica exactamente como estava ate o utilizador sair da
+         descricao normalmente. */
+      if (!tr || tr.dataset.ajudaBibliotecaIniciada !== '1') continue;
+      procRenderAjudaBiblioteca(fid, id);
     }
   }
 
@@ -3138,6 +3147,10 @@
            de TAM, preco de fabrica sem margem de venda aplicavel). */
         tr.dataset.semPvp = row.semPvp ? '1' : '0';
         procRecalcRow(fid, rid);
+        /* Linha restaurada de uma sessao guardada — ja tem referencia e
+           descricao, logo ja passou pelo fluxo; marca directamente em
+           vez de depender de um blur que nunca vai acontecer aqui. */
+        tr.dataset.ajudaBibliotecaIniciada = '1';
         procRenderAjudaBiblioteca(fid, rid);
         /* Restore manual PVP override after recalc */
         if (row.pvpManual != null && !isNaN(row.pvpManual)) {
@@ -3732,13 +3745,13 @@
         + '</div></td>'
         + '<td><input type="number" min="0" step="1" maxlength="5"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
-        + '<td><input type="number" min="0" step="1" maxlength="5"'
+        + '<td><input type="number" min="0" step="1" maxlength="5" style="text-align:center;"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
         + '<td><input type="number" min="0" step="1" maxlength="5"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
         + '<td class="center-col"><button class="proc-split-btn" onclick="procAutoSplit(' + f + ',' + r + ')"'
         + ' title="Dividir Qtd. FT entre Funchal e Porto Santo">\u00f7</button></td>'
-        + '<td><input type="number" min="0" step="0.01" class="proc-preco-input"'
+        + '<td><input type="number" min="0" step="0.01" class="proc-preco-input" style="text-align:center;"'
         + ' onfocus="procActivateRow(this)"'
         + ' oninput="procRecalcRow(' + f + ',' + r + ');procCheckAutoExpand(' + f + ',' + r + ');procLimitDigits(this,5)"></td>'
         + '<td><input type="number" min="0" max="100" step="0.1" class="proc-desc-pct-input"'

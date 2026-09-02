@@ -1173,8 +1173,11 @@
      demasiado o tooltip. */
   function procDescreverReferenciaRelacionada(ref) {
     var artigo = _bibliotecaArtigosMap[ref];
-    if (artigo && artigo.nome) return ref + ' — ' + artigo.nome;
-    return ref;
+    if (!artigo) return ref;
+    var desc = ref;
+    if (artigo.nome) desc += ' — ' + artigo.nome;
+    if (artigo.pvp) desc += '  ·  ' + artigo.pvp.toFixed(2).replace('.', ',') + ' €';
+    return desc;
   }
 
   /* Constroi o texto (title nativo, multi-linha) do asterisco de

@@ -1175,6 +1175,42 @@
     return resultado;
   }
 
+  /* Quantidade (a4+a5) que a PROPRIA factura em edicao (fid) ja tem
+     escrita para uma referencia, somando TODAS as suas linhas — nunca
+     olha para outras facturas, fechadas ou nao. Usado para nunca
+     mostrar ao utilizador, no asterisco/olhos, informacao que nao e
+     mais do que o eco do que ele proprio esta a escrever nesta mesma
+     factura, agora mesmo. */
+  function procQtdPropriaFatura(fid, refNorm) {
+    var tbody = document.getElementById('proc-tableBody-' + fid);
+    if (!tbody) return { a4: 0, a5: 0 };
+    var a4 = 0, a5 = 0;
+    var linhas = tbody.querySelectorAll('tr');
+    for (var i = 0; i < linhas.length; i++) {
+      var rIn = linhas[i].querySelector('.proc-ref-input');
+      if (!rIn || rIn.value.trim().toUpperCase() !== refNorm) continue;
+      var nums = linhas[i].querySelectorAll('input[type="number"]');
+      a4 += parseFloat(nums[1] && nums[1].value) || 0;
+      a5 += parseFloat(nums[2] && nums[2].value) || 0;
+    }
+    return { a4: a4, a5: a5 };
+  }
+
+  /* Devolve "compra" so com a parte EXTERNA a esta factura (outras
+     facturas, fechadas ou nao — essas continuam validas) — ou null se,
+     depois de descontar o que a propria factura ja contribui, nao
+     sobrar nenhuma compra externa (ou seja, a "historia" nao passava
+     do que esta a ser escrito agora mesmo nesta factura). */
+  function procCompraExterna(fid, refNorm, compra) {
+    if (!compra) return null;
+    var propria = procQtdPropriaFatura(fid, refNorm);
+    var extA4 = Math.max(0, compra.totalA4 - propria.a4);
+    var extA5 = Math.max(0, compra.totalA5 - propria.a5);
+    if (extA4 <= 0 && extA5 <= 0) return null;
+    if (extA4 === compra.totalA4 && extA5 === compra.totalA5) return compra;
+    return { primeira: compra.primeira, ultima: compra.ultima, totalA4: extA4, totalA5: extA5 };
+  }
+
   function procFormatarDataCompraCurta(iso) {
     if (!iso) return '?';
     var partes = String(iso).split('-');
@@ -1344,8 +1380,11 @@
     if (!refNorm) { ocultarAjuda(); return; }
 
     var artigo = _bibliotecaArtigosMap[refNorm] || null;
-    var compra = _bibliotecaComprasMap[refNorm] || null;
-    var relacionadas = procReferenciasRelacionadasBiblioteca(refNorm);
+    var compra = procCompraExterna(fid, refNorm, _bibliotecaComprasMap[refNorm] || null);
+    var relacionadas = procReferenciasRelacionadasBiblioteca(refNorm).filter(function(r2) {
+      if (_bibliotecaArtigosMap[r2]) return true;
+      return !!procCompraExterna(fid, r2, _bibliotecaComprasMap[r2] || null);
+    });
 
     if (!artigo && !compra && !relacionadas.length) { ocultarAjuda(); return; }
 
@@ -5709,7 +5748,7 @@
           + '<table class="proc-or-table">'
           +   '<thead><tr>'
           +     '<th class="center">Sess\u00e3o</th><th class="center">Funchal</th><th class="center">P. Santo</th><th class="center" style="font-size:1.15em;font-weight:700;color:#000;">Total</th>'
-          +     '<th class="center">Esgotou em</th><th class="center">Dias</th><th class="center">Un/dia</th>'
+          +     '<th class="center">Esgotou em</th><th class="center">Dias</th><th class="center">Total Vendidos</th>'
           +     '<th class="center">P. Custo</th><th class="center">PVP</th><th class="center">Margem</th>'
           +   '</tr></thead>'
           +   '<tbody>' + linhasHTML + '</tbody>'
@@ -5958,7 +5997,18 @@
               celEsgotou.textContent = '\u2014';
             }
             celDias.textContent = (lote.dias != null) ? lote.dias : '\u2014';
-            celVeloc.textContent = (lote.velocidade_dia != null) ? Number(lote.velocidade_dia).toFixed(2) : '\u2014';
+            /* Total Vendidos (A4+A5, geral) em vez de Un/dia: lote ja
+               esgotado vendeu o qtd_lote inteiro; lote ainda em curso usa
+               a mesma velocidade_dia*dias que a RPC ja usa internamente
+               para projetar a data de esgotamento — nao inventa nada
+               novo, so mostra o total em vez da taxa diaria. */
+            var totalVendidoLote = null;
+            if (lote.data_esgotamento) {
+              totalVendidoLote = lote.qtd_lote;
+            } else if (lote.velocidade_dia != null && lote.dias != null) {
+              totalVendidoLote = Math.round(Number(lote.velocidade_dia) * Number(lote.dias));
+            }
+            celVeloc.textContent = (totalVendidoLote != null) ? totalVendidoLote : '\u2014';
           });
         });
       }

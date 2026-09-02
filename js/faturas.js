@@ -1302,6 +1302,14 @@
          fora da caixa da tabela fica recortada por esse scroll. Como
          coluna normal, participa do fluxo e aparece sempre. Tamanho a
          condizer com o ✱ de "Importar históricos" (.85rem). */
+      '.proc-th-olhos,.proc-td-olhos{width:20px;padding-left:4px!important;padding-right:0!important;}' +
+      '.proc-olhos{display:inline-flex;gap:2px;align-items:center;transform-origin:center;' +
+      'animation:procOlhosPisca 4.5s ease-in-out infinite;}' +
+      '.proc-olho{width:7px;height:7px;border-radius:50%;background:#fff;border:1px solid #555;' +
+      'position:relative;display:inline-block;}' +
+      '.proc-olho::after{content:\'\';position:absolute;width:3px;height:3px;border-radius:50%;' +
+      'background:#333;top:1.5px;left:1.5px;}' +
+      '@keyframes procOlhosPisca{0%,90%,100%{transform:scaleY(1);}94%{transform:scaleY(.1);}}' +
       '.proc-th-ajuda,.proc-td-ajuda{width:22px;padding-left:4px!important;padding-right:0!important;}' +
       '.proc-ref-help{display:none;font-size:1.2rem;font-weight:700;line-height:1;cursor:help;' +
       'color:#999;user-select:none;}' +
@@ -3170,6 +3178,7 @@
       + '<div id="proc-table-block-' + fid + '">'
       +   '<div class="proc-table-block"><div class="proc-table-wrap"><table id="proc-mainTable-' + fid + '">'
       +   '<thead><tr>'
+      +   '<th class="proc-th-olhos"></th>'
       +   '<th class="proc-th-ajuda"></th>'
       +   '<th class="left">Refer\u00eancia</th>'
       +   '<th class="left">Descri\u00e7\u00e3o</th>'
@@ -3633,7 +3642,8 @@
       var tr = document.createElement('tr');
       tr.id  = 'proc-row-' + f + '-' + r;
       tr.innerHTML =
-          '<td class="proc-td-ajuda"><span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span></td>'
+          '<td class="proc-td-olhos"><span class="proc-olhos" aria-hidden="true"><span class="proc-olho"></span><span class="proc-olho"></span></span></td>'
+        + '<td class="proc-td-ajuda"><span class="proc-ref-help" id="proc-ref-help-' + f + '-' + r + '" style="display:none;" title="">*</span></td>'
         + '<td class="td-ref">'
         + '<div class="proc-ref-wrap">'
         + '<input type="text" class="proc-ref-input"'

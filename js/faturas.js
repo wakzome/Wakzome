@@ -1295,9 +1295,9 @@
          fora da caixa da tabela fica recortada por esse scroll. Como
          coluna normal, participa do fluxo e aparece sempre. Tamanho a
          condizer com o ✱ de "Importar históricos" (.85rem). */
-      '.proc-th-ajuda,.proc-td-ajuda{width:16px;padding-left:2px!important;padding-right:0!important;}' +
-      '.proc-ref-help{display:none;font-size:.85rem;line-height:1;cursor:help;' +
-      'color:#b8b8b8;user-select:none;}' +
+      '.proc-th-ajuda,.proc-td-ajuda{width:22px;padding-left:4px!important;padding-right:0!important;}' +
+      '.proc-ref-help{display:none;font-size:1.2rem;font-weight:700;line-height:1;cursor:help;' +
+      'color:#999;user-select:none;}' +
       '.proc-ref-help.proc-ref-help-aviso{color:#C9A227;font-weight:700;' +
       'animation:procRefHelpPisca 1.1s ease-in-out infinite;}' +
       '@keyframes procRefHelpPisca{0%,100%{opacity:1;}50%{opacity:.3;}}';

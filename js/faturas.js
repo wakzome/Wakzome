@@ -1118,6 +1118,173 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     IMPORTAR BIBLIOTECA — referencia/nome/PVP oficial do sistema
+     Primavera ("Todos os Artigos.xlsx"). O PVP aqui e o preco OFICIAL
+     de venda ao publico (diferente de qualquer preco sugerido/web,
+     que e so orientativo) — grava em proc_biblioteca_artigos.
+     Reimportar o mesmo ficheiro (ou uma versao mais recente, com
+     precos actualizados) faz upsert por referencia: nunca duplica, e
+     actualiza nome/pvp quando ja existir. So le 3 colunas do Excel
+     (Artigo, Descricao, PVP1) — Unidade Base/PVP2/PVP3 sao ignoradas
+     (confirmado: PVP2/PVP3 estao vazios em praticamente todo o
+     ficheiro actual).
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Mapeia uma linha bruta do Excel [Artigo, Descricao, Unidade Base,
+     PVP1, PVP2, PVP3] para o formato de gravacao em
+     proc_biblioteca_artigos. Devolve null se faltar a referencia —
+     nunca inventa nem grava uma linha sem referencia. PVP em falta ou
+     nao numerico grava como 0 (nunca null), para nunca quebrar
+     comparacoes/ordenacoes por preco mais tarde. */
+  function procMapearLinhaBiblioteca(row) {
+    var referencia = row[0] != null ? String(row[0]).trim() : '';
+    if (!referencia) return null;
+    var nome = row[1] != null ? String(row[1]).trim() : '';
+    var pvpNum = Number(row[3]);
+    var pvp = (row[3] != null && !isNaN(pvpNum)) ? pvpNum : 0;
+    return { referencia: referencia, nome: nome, pvp: pvp };
+  }
+
+  /* Le a folha inteira e devolve so as linhas validas (com
+     referencia) — nunca ordena nem deduplica aqui, o upsert por
+     referencia trata disso do lado do Supabase. */
+  function procLerBibliotecaExcel(arrayBuffer) {
+    var wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: false });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+    var validas = [];
+    var ignoradas = 0;
+    for (var r = 1; r < linhas.length; r++) {
+      var row = linhas[r] || [];
+      if (!row.length) continue;
+      var mapeada = procMapearLinhaBiblioteca(row);
+      if (!mapeada) { ignoradas++; continue; }
+      validas.push(mapeada);
+    }
+    return { linhas: validas, ignoradas: ignoradas };
+  }
+
+  /* Grava em blocos sequenciais de 2000 (mesmo tamanho ja usado e
+     confiavel no importador de vendas), com upsert por referencia
+     (Prefer: resolution=merge-duplicates) — nunca em paralelo, para
+     nao sobrecarregar o Supabase com um ficheiro de 80k+ linhas. Se
+     um lote falhar a meio, para logo (nunca continua a saltar lotes
+     silenciosamente) — o que ja foi gravado antes desse lote fica
+     valido, so falta repetir a partir dali. */
+  function procImportarBiblioteca(linhas, log, onDone) {
+    if (!linhas.length) { log('Nenhuma linha válida encontrada.'); onDone(true); return; }
+    var TAMANHO_LOTE = 2000;
+    var pos = 0;
+    var total = linhas.length;
+
+    function proximoLote() {
+      if (pos >= linhas.length) { onDone(true); return; }
+      var inicioLote = pos;
+      var lote = linhas.slice(pos, pos + TAMANHO_LOTE);
+      pos += TAMANHO_LOTE;
+      procSbFetch('proc_biblioteca_artigos', {
+        method: 'POST',
+        headers: Object.assign(procSbHeaders(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify(lote)
+      }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        log('✓ ' + Math.min(pos, total) + ' / ' + total + ' artigo(s) gravado(s)…');
+        proximoLote();
+      }).catch(function(e) {
+        log('⚠ Erro ao gravar lote (' + inicioLote + '–' + Math.min(pos, total) + '): ' + (e && e.message ? e.message : e));
+        onDone(false);
+      });
+    }
+    proximoLote();
+  }
+
+  function procMostrarModalImportadorBiblioteca() {
+    var old = document.getElementById('proc-import-biblioteca-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var modal = document.createElement('div');
+    modal.id = 'proc-import-biblioteca-modal';
+    modal.className = 'proc-or-modal';
+    modal.innerHTML =
+        '<div class="proc-or-backdrop"></div>'
+      + '<div class="proc-or-panel" style="max-width:560px;">'
+      +   '<div class="proc-or-panel-header">'
+      +     '<div class="proc-or-panel-title">'
+      +       '<span class="proc-or-panel-title-main">Importar Biblioteca</span>'
+      +       '<span class="proc-or-panel-title-sub">Referência, nome e PVP oficial (Primavera) — upsert, nunca duplica</span>'
+      +     '</div>'
+      +     '<button class="proc-or-close-btn">✕ Fechar</button>'
+      +   '</div>'
+      +   '<div class="proc-or-panel-scroll" style="padding:20px;">'
+      +     '<p style="font-size:.8rem;color:#555;line-height:1.5;margin:0 0 14px;">Lê o ficheiro "Todos os Artigos" exportado do Primavera (colunas Artigo / Descrição / PVP1). Cada referência é gravada ou actualizada pelo seu código — nada é apagado.</p>'
+      +     '<input type="file" id="proc-import-biblioteca-file" accept=".xlsx" style="font-size:.8rem;">'
+      +     '<div style="margin-top:14px;">'
+      +       '<button class="proc-btn primary" id="proc-import-biblioteca-start-btn" disabled>Iniciar importação</button>'
+      +     '</div>'
+      +     '<div id="proc-import-biblioteca-log" style="display:none;font-family:monospace;font-size:.7rem;white-space:pre-wrap;max-height:320px;overflow-y:auto;background:#f7f7f7;border-radius:8px;padding:10px;margin-top:14px;"></div>'
+      +   '</div>'
+      + '</div>';
+
+    procOpenModal(modal);
+    procBindClose(modal);
+
+    var fileInput = document.getElementById('proc-import-biblioteca-file');
+    var startBtn  = document.getElementById('proc-import-biblioteca-start-btn');
+    var logEl     = document.getElementById('proc-import-biblioteca-log');
+    var arquivoSelecionado = null;
+
+    fileInput.addEventListener('change', function() {
+      arquivoSelecionado = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+      startBtn.disabled = !arquivoSelecionado;
+    });
+
+    function log(msg) {
+      logEl.style.display = 'block';
+      logEl.textContent += (logEl.textContent ? '\n' : '') + msg;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    startBtn.addEventListener('click', function() {
+      if (!arquivoSelecionado) return;
+      startBtn.disabled = true;
+      fileInput.disabled = true;
+      log('A carregar ficheiro…');
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        procCarregarSheetJS().then(function() {
+          log('A processar Excel…');
+          var resultado;
+          try {
+            resultado = procLerBibliotecaExcel(e.target.result);
+          } catch (err) {
+            log('⚠ Erro ao processar o Excel: ' + (err && err.message ? err.message : err));
+            return;
+          }
+          if (resultado.ignoradas) log('⚠ ' + resultado.ignoradas + ' linha(s) ignorada(s) por falta de referência.');
+          log(resultado.linhas.length + ' artigo(s) válido(s). A gravar no Supabase…');
+          procImportarBiblioteca(resultado.linhas, log, function(ok) {
+            log(ok ? '✓ Concluído.' : '⚠ Importação interrompida — corrige o erro acima e volta a tentar (o que já foi gravado antes do erro fica válido).');
+          });
+        }).catch(function() {
+          log('⚠ Não foi possível carregar a biblioteca de leitura de Excel.');
+        });
+      };
+      reader.onerror = function() { log('⚠ Erro ao ler o ficheiro.'); };
+      reader.readAsArrayBuffer(arquivoSelecionado);
+    });
+  }
+
+  function procAbrirImportadorBiblioteca() {
+    var senha = window.prompt('Esta ação requer a senha de administrador:');
+    if (senha === null) return;
+    procValidarAdmin(senha).then(function(ok) {
+      if (!ok) { window.alert('Senha incorrecta.'); return; }
+      procMostrarModalImportadorBiblioteca();
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      IMPORTACAO AUTOMATICA DE FACTURAS TAM (tam_sessions → proc_sessoes)
      Corre sozinha, sem botao, sempre que a aplicacao inicia. So traz
      facturas de TAM que ja tenham numero de guia ERP preenchido (ou
@@ -4559,6 +4726,7 @@
       +     '<div id="proc-start-extra-menu" style="display:none;position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.14);z-index:50;min-width:220px;overflow:hidden;text-align:left;">'
       +       '<button type="button" id="proc-import-hist-btn" onclick="procAbrirImportadorHistorico();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;">Importar histórico</button>'
       +       '<button type="button" id="proc-import-vendas-btn2" onclick="procAbrirImportadorVendas();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;border-top:1px solid #eee;">Importar vendas (Primavera)</button>'
+      +       '<button type="button" id="proc-import-biblioteca-btn" onclick="procAbrirImportadorBiblioteca();document.getElementById(\'proc-start-extra-menu\').style.display=\'none\';" style="display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;font-weight:600;color:#333;background:none;border:none;cursor:pointer;border-top:1px solid #eee;">Importar Biblioteca</button>'
       +     '</div>'
       +     '<div id="proc-session-bar-right" style="display:none;">'
       +       '<button class="proc-btn" id="proc-sessionMenuBtn">&#9776; sess&#245;es &#x25be;</button>'
@@ -9423,6 +9591,7 @@
   window.procGuiaIncludeChange   = procGuiaIncludeChange;
   window.procAbrirImportadorHistorico = procAbrirImportadorHistorico;
   window.procAbrirImportadorVendas = procAbrirImportadorVendas;
+  window.procAbrirImportadorBiblioteca = procAbrirImportadorBiblioteca;
   window.procMostrarModalTotaisPorFornecedor = procMostrarModalTotaisPorFornecedor;
   window.procMostrarModalFornecedoresArtigos = procMostrarModalFornecedoresArtigos;
   window.procMostrarModalAlertasGlobais = procMostrarModalAlertasGlobais;

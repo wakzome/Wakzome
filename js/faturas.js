@@ -6311,7 +6311,7 @@
      LOJAS_A5_LABEL, para nunca mostrar o codigo interno em bruto por
      causa de uma diferenca de capitalizacao vinda do RPC. */
   function procFormatarDetalheA5(detalhe) {
-    if (!detalhe || !detalhe.length) return null;
+    if (!detalhe || !detalhe.length) return 'Vendido em (Porto Santo):\nPorto Santo: 0';
     var linhas = detalhe.slice().sort(function(a, b) { return (b.qty || 0) - (a.qty || 0); }).map(function(d) {
       var chave = String(d.loja || '').toLowerCase().trim();
       var nome = LOJAS_A5_LABEL[chave] || d.loja;
@@ -6330,7 +6330,7 @@
   };
 
   function procFormatarDetalheA4(detalhe) {
-    if (!detalhe || !detalhe.length) return null;
+    if (!detalhe || !detalhe.length) return 'Vendido em (Funchal):\nMezka Funchal: 0';
     var linhas = detalhe.slice().sort(function(a, b) { return (b.qty || 0) - (a.qty || 0); }).map(function(d) {
       var chave = String(d.loja || '').toLowerCase().trim();
       var nome = LOJAS_A4_LABEL[chave] || d.loja;

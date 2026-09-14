@@ -257,7 +257,8 @@
       '.pf-table td{font-size:.8rem;font-weight:600;padding:7px 8px;border-bottom:1px solid #f0f0f0;color:#000!important;vertical-align:middle;white-space:nowrap;}',
       '.pf-table tr:last-child td{border-bottom:none;}',
       '.pf-table tbody tr:hover td{background:#f9f9f9;}',
-      '.pf-td-ref{font-weight:bold!important;letter-spacing:.04em;}',
+      '.pf-td-ref{font-weight:bold!important;letter-spacing:.04em;cursor:text;}',
+      '.pf-ref-edit-input{width:100%;box-sizing:border-box;font-weight:bold;letter-spacing:.04em;font-family:inherit;font-size:inherit;border:1.5px solid #000;border-radius:4px;padding:2px 6px;background:#fffbe6;}',
       '.pf-td-name{color:#444!important;white-space:nowrap;}',
       '.pf-td-r{text-align:right!important;font-variant-numeric:tabular-nums;}',
       '.pf-table tfoot td{background:#f5f5f5!important;font-weight:bold!important;border-top:2px solid #ddd;font-size:.8rem;color:#000!important;}',
@@ -1404,9 +1405,9 @@
       // Table (inside body)
       var tw = document.createElement('div');
       tw.className = 'pf-table-wrap';
-      var trows = res.items.map(function(it) {
+      var trows = res.items.map(function(it, itIdx) {
         return '<tr>' +
-          '<td class="pf-td-ref">' + esc(it.ref) + '</td>' +
+          '<td class="pf-td-ref" data-ref-inv="' + idx + '" data-ref-item="' + itIdx + '">' + esc(it.ref) + '</td>' +
           '<td class="pf-td-name">' + esc(it.desc) + '</td>' +
           '<td class="pf-td-r">' + it.qty + '</td>' +
           '<td class="pf-td-r">' + fmt(it.unitPrice) + ' €</td>' +
@@ -1457,6 +1458,12 @@
     content.querySelectorAll('[data-guia]').forEach(function(inp) {
       inp.addEventListener('input', function(){ pfGuiaErpChange(parseInt(inp.getAttribute('data-guia'))); });
     });
+    content.querySelectorAll('.pf-td-ref[data-ref-inv]').forEach(function(td) {
+      td.addEventListener('click', function(e) {
+        if (e.detail !== 3) return; // only triple-click
+        pfRefEditStart(td);
+      });
+    });
   }
 
   /* Guarda o numero de guia ERP directamente no objecto da fatura —
@@ -1471,6 +1478,56 @@
     inv.guiaErp = val;
     input.classList.toggle('pf-guia-done', val.length > 0);
     pfSave();
+  }
+
+  /* Edicao por triplo-clique da Referencia — apenas na tabela principal
+     de resultados da leitura do PDF. Muta o objecto do item directamente
+     em inv.engineCache[label].items — o mesmo array e usado por
+     pfGetActiveItems()/pfGetActiveResult(), pelo que o stock, os codigos
+     de barras e a lista PVP reflectem a alteracao automaticamente, e a
+     alteracao fica persistida porque engineCache faz parte de
+     pfState.invoices (serializado em pfBuildPayload). */
+  function pfRefEditStart(td) {
+    if (td.querySelector('input')) return; // ja em edicao
+    var invIdx  = parseInt(td.getAttribute('data-ref-inv'));
+    var itemIdx = parseInt(td.getAttribute('data-ref-item'));
+    var inv     = pfState.invoices[invIdx];
+    if (!inv) return;
+    var items = pfGetActiveItems(inv);
+    var it    = items[itemIdx];
+    if (!it) return;
+
+    var original = it.ref;
+    td.textContent = '';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = original;
+    input.className = 'pf-ref-edit-input';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    var done = false;
+    function commit() {
+      if (done) return;
+      done = true;
+      var val = input.value.trim();
+      if (val && val !== original) {
+        it.ref = val;
+        pfSave();
+      }
+      pfRender();
+    }
+    function cancel() {
+      if (done) return;
+      done = true;
+      pfRender();
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -1718,13 +1775,27 @@
     var res   = pfGetActiveResult(inv);
 
     // Build rows — ARM fixed A5, IVA fixed 23
-    var rows = items.map(function(it) {
+    // Group by reference: repeated refs in the invoice are summed into a
+    // single row (qty accumulated, price = weighted average per unit).
+    var stGroups = {};
+    var stOrder  = [];
+    items.forEach(function(it) {
+      if (!stGroups[it.ref]) {
+        stGroups[it.ref] = { ref: it.ref, arm: 'A5', iva: '23', qty: 0, value: 0 };
+        stOrder.push(it.ref);
+      }
+      var g = stGroups[it.ref];
+      g.qty   += it.qty;
+      g.value += it.unitPrice * it.qty;
+    });
+    var rows = stOrder.map(function(ref) {
+      var g = stGroups[ref];
       return {
-        ref:   it.ref,
-        arm:   'A5',
-        iva:   '23',
-        price: it.unitPrice,
-        qty:   it.qty
+        ref:   g.ref,
+        arm:   g.arm,
+        iva:   g.iva,
+        price: g.qty ? rnd2(g.value / g.qty) : 0,
+        qty:   g.qty
       };
     });
 
@@ -2379,8 +2450,11 @@
         if (existIdx >= 0) {
           // Preserve engine choice if user had manually selected one
           var prevEngine = pfState.activeEngines[file.name];
+          // Preserve manually-entered ERP guide number across re-processing
+          var prevGuiaErp = pfState.invoices[existIdx].guiaErp;
           pfState.invoices[existIdx] = inv;
           if (prevEngine) pfState.activeEngines[file.name] = prevEngine;
+          if (prevGuiaErp) pfState.invoices[existIdx].guiaErp = prevGuiaErp;
         } else {
           pfState.invoices.push(inv);
         }
@@ -2580,6 +2654,7 @@
       document.body.appendChild(so);
       document.getElementById('pf-sess-new-btn').addEventListener('click', pfStartNewSession);
       document.getElementById('pf-sess-back').addEventListener('click', function() {
+        if (pfState.sessionName && pfState.invoices.length) pfSave();
         pfCloseSessionPicker();
         var admBack = document.getElementById('adm-back-btn');
         if (admBack) admBack.click();
@@ -2656,10 +2731,10 @@
     pfHook();
     pfState.sessionName = pfWeekName();
     pfState.createdAt   = Date.now();
-    // Autosave every 15 seconds
+    // Autosave every 10 seconds
     setInterval(function() {
       if (pfState.sessionName && pfState.invoices.length) pfSave();
-    }, 15000);
+    }, 10000);
   }
 
   if (document.readyState === 'loading') {

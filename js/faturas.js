@@ -6051,6 +6051,14 @@
               celEsgotou.textContent = de[2] + '/' + de[1] + '/' + de[0].slice(2);
             } else if (comprasLinha > 0 && estoqueLinhaRestante <= 0) {
               celEsgotou.textContent = 'Esgotado';
+            } else if (vendidoLinha > 0) {
+              /* Mesma razao do comentario acima (linha 6038): o FIFO por
+                 linha ja sabe que esta linha teve vendas, mesmo quando o
+                 lote da RPC ainda a mostra em fila (ativo=true mas sem
+                 velocidade, por estar atras de outro lote mais antigo por
+                 esgotar). Prioridade sobre a RPC evita mostrar "ainda nao
+                 tocado" numa linha que ja vendeu. */
+              celEsgotou.textContent = '\u2014 (em curso)';
             } else if (lote && lote.ativo && lote.velocidade_dia != null) {
               /* front_ativo (calculado no servidor): a FIFO ja chegou a este lote. "Em curso"
                  so faz sentido se ja houve pelo menos uma venda — um lote a 0 un/dia (nenhuma
@@ -6064,6 +6072,13 @@
               }
             } else if (lote && lote.ativo) {
               /* Ainda ativo mas em fila atras de um lote mais antigo por esgotar — dias/velocidade ficam null na RPC precisamente para nao sugerir uma venda a 0 un/dia. */
+              celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
+            } else if (comprasLinha > 0) {
+              /* Sem lote nenhum da RPC (ex.: referencia com menos de 5
+                 pecas historicas, fora do calculo — ver nota acima) mas
+                 com stock comprado e zero vendido: mesma etiqueta que a
+                 fila usa para o mesmo estado, em vez de ficar so no
+                 traco sem explicacao. */
               celEsgotou.textContent = '\u2014 (ainda n\u00e3o tocado)';
             } else {
               celEsgotou.textContent = '\u2014';

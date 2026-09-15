@@ -392,8 +392,8 @@
     var partes = String(refRaw).toUpperCase().split('-')
       .map(function(p) { return p.replace(/[^A-Z0-9]/g, ''); })
       .filter(Boolean);
-    if (partes.indexOf(qNorm) !== -1) return true;
-    return procNormalizarRefOriginal(refRaw) === qNorm;
+    if (partes.some(function(p) { return p.indexOf(qNorm) === 0; })) return true;
+    return procNormalizarRefOriginal(refRaw).indexOf(qNorm) === 0;
   }
 
   /* Cria ou obtem a referencia interna atraves do RPC atomico

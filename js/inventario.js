@@ -523,7 +523,8 @@
           '<p><strong>' + S.persona.nombre + '</strong> já tem uma atribuição ativa como ' +
           (ativaAtual.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ' em ' + ativaAtual.tienda_id + ' — ' + ZONA_LABEL[ativaAtual.zona] + '.</p>' +
           '<p>Tem de ser encerrado corretamente antes de poder ser reatribuída a outro sítio.</p>' +
-          '<button class="inv-primario" onclick="location.reload()">Voltar</button>');
+          '<button class="inv-primario" id="inv-btn-voltar-conflito">Voltar</button>');
+        document.getElementById('inv-btn-voltar-conflito').onclick = pantallaZona;
         return;
       }
       // Mesma loja+zona+função: retomamos a atribuição existente, sem criar outra.
@@ -563,7 +564,8 @@
         render('<h1>Não disponível</h1>',
           '<p><strong>' + S.persona.nombre + '</strong> já tem uma atribuição ativa noutra loja/função, ou essa função já está ocupada neste inventário por outra pessoa.</p>' +
           '<p>Tem de ser encerrado corretamente antes de poder ser reatribuído.</p>' +
-          '<button class="inv-primario" onclick="location.reload()">Voltar</button>');
+          '<button class="inv-primario" id="inv-btn-voltar-conflito">Voltar</button>');
+        document.getElementById('inv-btn-voltar-conflito').onclick = pantallaZona;
       } else {
         render('<h1>Erro</h1>', '<p>Não foi possível registar a atribuição. Verifica a tua ligação e tenta novamente.</p>');
       }
@@ -587,7 +589,15 @@
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
 
-    let filas = unidades.map(function (u) {
+    // Revelação progressiva: uma unidade "por começar" (sem tentativas ainda) só aparece
+    // depois de a anterior já ter sido iniciada. As unidades já iniciadas ou validadas
+    // aparecem sempre, independentemente da ordem em que foram trabalhadas.
+    const numerosIniciados = unidades
+      .filter(function (u) { return (u.intentos && u.intentos.length) || u.estado === 'validada'; })
+      .map(function (u) { return u.numero; });
+    const limiteVisible = (numerosIniciados.length ? Math.max.apply(null, numerosIniciados) : 0) + 1;
+
+    let filas = unidades.filter(function (u) { return u.numero <= limiteVisible; }).map(function (u) {
       const ultimoIntento = (u.intentos || []).sort(function (a, b) {
         return b.numero_intento - a.numero_intento;
       })[0];

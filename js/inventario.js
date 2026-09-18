@@ -653,7 +653,8 @@
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
       '<p>' + validadas + ' / ' + Math.max(unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
       '<div style="width:100%;">' + filas + '</div>' + nuevaUnidadHtml + cierreHtml +
-      '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>'
+      '<button id="inv-btn-volver-tiendas" style="margin-top:24px;">← Voltar</button>' +
+      '<button id="inv-btn-salir" style="margin-top:10px;">Sair deste ecrã (não encerra a tua atribuição)</button>'
     );
 
     root().querySelectorAll('[data-accion="contar"]').forEach(function (b) {
@@ -669,6 +670,7 @@
     if (btnFijar) btnFijar.onclick = fijarNumeroEsperado;
     const btnCerrar = document.getElementById('inv-btn-cerrar-inv');
     if (btnCerrar) btnCerrar.onclick = intentarCerrarInventario;
+    document.getElementById('inv-btn-volver-tiendas').onclick = pantallaTiendas;
     document.getElementById('inv-btn-salir').onclick = function () {
       root().remove();
     };
@@ -735,13 +737,16 @@
 
     await window.sbInventario.from('unidades').update({ estado: 'en_proceso' }).eq('id', S.unidad.id);
 
+    intento.persona1_nombre = S.persona.nombre;
     S.intento = intento;
     mostrarCodigos(1);
   }
 
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
-    const { data: intento, error } = await window.sbInventario.from('intentos').select('*').eq('id', intentoId).maybeSingle();
+    const { data: intento, error } = await window.sbInventario.from('intentos')
+      .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)').eq('id', intentoId).maybeSingle();
     if (error || !intento) { alert('Não foi possível recuperar esta tentativa. Verifica a tua ligação.'); return; }
+    intento.persona1_nombre = intento.persona1 ? intento.persona1.nombre : '';
     S.unidad = { id: unidadId, numero: numero };
     S.intento = intento;
     mostrarCodigos(1);
@@ -749,8 +754,10 @@
 
   async function mostrarCodigos(indice) {
     const codigo = await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, indice);
+    const nomeP1 = S.intento.persona1_nombre ? primerNombre(S.intento.persona1_nombre) : '';
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
+      (nomeP1 ? '<p>Registado por <strong>' + nomeP1 + '</strong></p>' : '') +
       '<p>Contagem física: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
       '<p>Dá este código à Pessoa 2 para que comece a ler:</p>' +
       '<div style="font-size:40px;letter-spacing:4px;margin:16px 0;font-weight:300;">' + codigo + '</div>' +

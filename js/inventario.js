@@ -959,7 +959,7 @@
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — A ler</h1>',
       '<p class="inv-progreso" id="inv-progreso">' + validos.length + ' / ' + S.intento.conteo_fisico + ' esperadas</p>' +
       '<div class="inv-ultima" id="inv-ultima">' + panelUltimaLectura(validos[0]) + '</div>' +
-      '<input type="text" id="inv-scan-input" autocomplete="off" inputmode="none">' +
+      '<input type="text" id="inv-scan-input" autocomplete="off">' +
       '<div class="inv-menu-scan">' +
       '<button class="inv-primario" id="inv-btn-manual">Inserir código manualmente</button>' +
       '<button id="inv-btn-anular">Anular última leitura</button>' +

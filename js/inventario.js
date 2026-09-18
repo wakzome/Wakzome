@@ -750,9 +750,11 @@
 
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
     const { data: intento, error } = await window.sbInventario.from('intentos')
-      .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)').eq('id', intentoId).maybeSingle();
+      .select('*, persona1:personas!intentos_persona1_id_fkey(nombre), persona2:personas!intentos_persona2_id_fkey(nombre)')
+      .eq('id', intentoId).maybeSingle();
     if (error || !intento) { alert('Não foi possível recuperar esta tentativa. Verifica a tua ligação.'); return; }
     intento.persona1_nombre = intento.persona1 ? intento.persona1.nombre : '';
+    intento.persona2_nombre = intento.persona2 ? intento.persona2.nombre : '';
     S.unidad = { id: unidadId, numero: numero };
     S.intento = intento;
     mostrarCodigos(1);
@@ -761,11 +763,14 @@
   async function mostrarCodigos(indice) {
     const codigo = await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, indice);
     const nomeP1 = S.intento.persona1_nombre ? primerNombre(S.intento.persona1_nombre) : '';
+    const nomeP2 = S.intento.persona2_nombre ? primerNombre(S.intento.persona2_nombre) : '';
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
       (nomeP1 ? '<p>Registado por <strong>' + nomeP1 + '</strong></p>' : '') +
       '<p>Contagem física: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
-      '<p>Dá este código à Pessoa 2 para que comece a ler:</p>' +
+      (nomeP2
+        ? '<p>Dá este código a <strong>' + nomeP2 + '</strong> para que continue a ler:</p>'
+        : '<p>Dá este código à Pessoa 2 para que comece a ler:</p>') +
       '<div style="font-size:40px;letter-spacing:4px;margin:16px 0;font-weight:300;">' + codigo + '</div>' +
       '<button id="inv-btn-mas-codigos">Gerar outro código</button>' +
       '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>' +

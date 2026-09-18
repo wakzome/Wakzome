@@ -936,11 +936,14 @@
       '<p class="inv-ultima-codigo">' + escapeHtml(evento.codigo_barras) + '</p>';
   }
 
+  function focarSemTeclado(input) {
+    input.setAttribute('readonly', 'readonly');
+    input.focus();
+    setTimeout(function () { input.removeAttribute('readonly'); }, 50);
+  }
+
   async function refrescarEscaneoUI() {
     const validos = await obtenerEscaneosValidos(S.captura.id);
-
-    const elProgreso = document.getElementById('inv-progreso');
-    if (elProgreso) elProgreso.textContent = validos.length + ' / ' + S.intento.conteo_fisico + ' esperadas';
 
     const elUltima = document.getElementById('inv-ultima');
     if (elUltima) elUltima.innerHTML = panelUltimaLectura(validos[0]);
@@ -957,7 +960,6 @@
     const validos = await obtenerEscaneosValidos(S.captura.id);
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — A ler</h1>',
-      '<p class="inv-progreso" id="inv-progreso">' + validos.length + ' / ' + S.intento.conteo_fisico + ' esperadas</p>' +
       '<div class="inv-ultima" id="inv-ultima">' + panelUltimaLectura(validos[0]) + '</div>' +
       '<input type="text" id="inv-scan-input" autocomplete="off">' +
       '<div class="inv-menu-scan">' +
@@ -973,8 +975,8 @@
     );
 
     const input = document.getElementById('inv-scan-input');
-    input.focus();
-    root().addEventListener('click', function () { input.focus(); });
+    focarSemTeclado(input);
+    root().addEventListener('click', function () { focarSemTeclado(input); });
 
     input.addEventListener('input', function () {
       bufferScan = input.value;
@@ -1007,7 +1009,7 @@
     await registrarEscaneo(codigo, ficticios.referencia, ficticios.descricao);
     await refrescarEscaneoUI();
     const input = document.getElementById('inv-scan-input');
-    if (input) input.focus();
+    if (input) focarSemTeclado(input);
   }
 
   async function anularUltimoEscaneo() {

@@ -146,6 +146,55 @@
   }
   window.initSupabase = initSupabase;
 
+  // ══════════════════════════════════════════════════════════════
+  //  INVENTARIO — login independiente (clave general)
+  //
+  //  Ruta de acceso separada del login principal: solo se intenta
+  //  cuando /api/login falla. No identifica a nadie (clave general
+  //  = acceso al panel de inventario, no una persona). El token
+  //  vive únicamente en sessionStorage: se pierde al cerrar el
+  //  navegador o reiniciar el dispositivo, exigiendo login de red
+  //  de nuevo (regla de negocio explícita).
+  // ══════════════════════════════════════════════════════════════
+  const WKZ_INV_SUPABASE_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
+  const WKZ_INV_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
+
+  async function attemptInventarioLogin(clave) {
+    try {
+      const tempClient = window.supabase.createClient(WKZ_INV_SUPABASE_URL, WKZ_INV_SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession:   false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+          storageKey: 'wakzome-sb-inv-login'
+        },
+        db: { schema: 'inventario' }
+      });
+
+      const { data, error } = await tempClient.rpc('login_general', { p_clave: clave });
+      if (error || !data) return false;
+
+      const token = data;
+      sessionStorage.setItem('wkz_inv_token', token);
+
+      await new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'js/inventario.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.body.appendChild(s);
+      });
+
+      if (typeof window.openInventarioApp === 'function') {
+        window.openInventarioApp(token);
+      }
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function attemptLogin() {
     const userKey = document.getElementById('key-input').value.trim();
     if (!userKey) return;
@@ -162,6 +211,11 @@
       });
 
       if (!loginRes.ok) {
+        const invOk = await attemptInventarioLogin(userKey);
+        if (invOk) {
+          hideAuthenticating();
+          return;
+        }
         hideAuthenticating();
         alert('Senha incorreta');
         document.getElementById('key-input').value = '';

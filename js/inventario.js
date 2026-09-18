@@ -603,6 +603,9 @@
       if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
         accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
       }
+      if (S.rol === 'persona1' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
+        accion = '<button data-accion="vercodigos" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + ultimoIntento.id + '">Ver códigos</button>';
+      }
       if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
           (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Inserir código') + '</button>';
@@ -633,6 +636,9 @@
     });
     root().querySelectorAll('[data-accion="escanear"]').forEach(function (b) {
       b.onclick = function () { iniciarAutorizacionEscaneo(b.dataset.id, parseInt(b.dataset.numero, 10)); };
+    });
+    root().querySelectorAll('[data-accion="vercodigos"]').forEach(function (b) {
+      b.onclick = function () { verCodigosDeNuevo(b.dataset.id, parseInt(b.dataset.numero, 10), b.dataset.intento); };
     });
     const btnFijar = document.getElementById('inv-btn-fijar-numero');
     if (btnFijar) btnFijar.onclick = fijarNumeroEsperado;
@@ -704,6 +710,14 @@
 
     await window.sbInventario.from('unidades').update({ estado: 'en_proceso' }).eq('id', S.unidad.id);
 
+    S.intento = intento;
+    mostrarCodigos(1);
+  }
+
+  async function verCodigosDeNuevo(unidadId, numero, intentoId) {
+    const { data: intento, error } = await window.sbInventario.from('intentos').select('*').eq('id', intentoId).maybeSingle();
+    if (error || !intento) { alert('Não foi possível recuperar esta tentativa. Verifica a tua ligação.'); return; }
+    S.unidad = { id: unidadId, numero: numero };
     S.intento = intento;
     mostrarCodigos(1);
   }

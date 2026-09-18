@@ -306,8 +306,10 @@
       #inv-root { position:fixed; inset:0; background:#fafafa; z-index:99999; display:flex;
         flex-direction:column; font-family:inherit; color:#222; overflow-y:auto; }
       #inv-root .inv-header { display:flex; justify-content:space-between; align-items:center;
-        padding:14px 20px; border-bottom:1px solid #e5e5e5; background:#fff; flex-shrink:0; }
+        padding:14px 20px; border-bottom:1px solid #e5e5e5; background:#fff; flex-shrink:0;
+        position:sticky; top:0; z-index:10; gap:10px; }
       #inv-root .inv-header h1 { font-size:17px; font-weight:500; margin:0; }
+      #inv-root .inv-header button.inv-header-volver { padding:6px 14px; font-size:13px; flex-shrink:0; }
       #inv-root .inv-body { flex:1; padding:32px 24px; max-width:640px; margin:0 auto; width:100%;
         box-sizing:border-box; display:flex; flex-direction:column; align-items:center;
         justify-content:safe center; text-align:center; min-height:0; }
@@ -351,12 +353,16 @@
     return el;
   }
 
-  function render(headerHtml, bodyHtml) {
+  function render(headerHtml, bodyHtml, onVolver) {
+    const volverBtn = onVolver
+      ? '<button class="inv-header-volver" id="inv-btn-header-volver">← Voltar</button>'
+      : '';
     root().innerHTML =
-      '<div class="inv-header">' + headerHtml +
+      '<div class="inv-header">' + volverBtn + headerHtml +
       '<span id="inv-indicador" class="inv-badge">🟢 Dados protegidos</span></div>' +
       '<div class="inv-body">' + bodyHtml + '</div>';
     actualizarIndicador();
+    if (onVolver) document.getElementById('inv-btn-header-volver').onclick = onVolver;
   }
 
   function modal(html) {
@@ -653,8 +659,8 @@
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
       '<p>' + validadas + ' / ' + Math.max(unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
       '<div style="width:100%;">' + filas + '</div>' + nuevaUnidadHtml + cierreHtml +
-      '<button id="inv-btn-volver-tiendas" style="margin-top:24px;">← Voltar</button>' +
-      '<button id="inv-btn-salir" style="margin-top:10px;">Sair deste ecrã (não encerra a tua atribuição)</button>'
+      '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>',
+      pantallaTiendas
     );
 
     root().querySelectorAll('[data-accion="contar"]').forEach(function (b) {

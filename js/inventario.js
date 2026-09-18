@@ -1,38 +1,36 @@
 (function () {
 
   // ══════════════════════════════════════════════════════════════════════
-  //  INVENTARIO FÍSICO OFFLINE-FIRST — wakzome.com
+  //  INVENTÁRIO FÍSICO OFFLINE-FIRST — wakzome.com
   //
-  //  Prioridad absoluta del proyecto: JAMÁS SE PIERDA UN SOLO ESCANEO.
-  //  Por eso este archivo sigue, de punta a punta, el modelo:
+  //  Prioridade absoluta do projeto: NUNCA SE PODE PERDER UMA ÚNICA LEITURA.
+  //  Por isso este ficheiro segue, do início ao fim, o modelo:
   //
-  //    ESCANEO → GUARDAR LOCALMENTE (IndexedDB) → CONTINUAR TRABAJANDO
-  //            → (si hay red) ENVIAR A SUPABASE → CONFIRMACIÓN → SINCRONIZADO
+  //    LEITURA → GUARDAR LOCALMENTE (IndexedDB) → CONTINUAR A TRABALHAR
+  //            → (se houver rede) ENVIAR AO SUPABASE → CONFIRMAÇÃO → SINCRONIZADO
   //
-  //  Ningún escaneo depende de la red para existir. La red solo se usa
-  //  para propagar lo que ya está guardado localmente.
+  //  Nenhuma leitura depende da rede para existir. A rede só serve para
+  //  propagar o que já está guardado localmente.
   //
-  //  Lo que este archivo NO implementa todavía (deliberadamente fuera del
-  //  camino crítico de "no perder un escaneo"), y que queda para una
-  //  siguiente entrega:
-  //    - Informes/consolidaciones para el administrador (exportación).
-  //    - Procedimiento de reapertura/corrección tras un cierre definitivo.
-  //    - Service Worker / instalación como PWA.
-  //    - Gesto de "3 pulsaciones" para entrada manual (se sustituye por un
-  //      botón explícito "Introducir código manualmente", misma función).
+  //  O que este ficheiro ainda NÃO implementa (deliberadamente fora do
+  //  caminho crítico de "não perder nenhuma leitura"), para uma próxima
+  //  entrega:
+  //    - Relatórios/consolidações para o administrador (exportação).
+  //    - Procedimento de reabertura/correção após um encerramento definitivo.
+  //    - Service Worker / instalação como PWA.
   // ══════════════════════════════════════════════════════════════════════
 
   const SB_URL = 'https://wmvucabpkixdzeanfrzx.supabase.co';
   const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdnVjYWJwa2l4ZHplYW5mcnp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzI2NzgsImV4cCI6MjA4OTI0ODY3OH0.6es0OAupDi1EUflFZ3DxYH2ippcESXIiLR-RZBGAVgM';
 
-  // Secreto para los códigos de autorización HMAC. No es un secreto frente
-  // a las propias empleadas (Persona 1 y Persona 2 ya conocen el código
-  // porque Persona 1 se lo enseña a Persona 2 físicamente) — es un
-  // mecanismo de INTEGRIDAD DE FLUJO: hace que un código sea válido única y
-  // exclusivamente para su tienda+inventario+unidad+intento exactos, de
-  // forma determinística y sin necesidad de red. La barrera de seguridad
-  // real frente a terceros es el token de sesión (x-inventario-token) y
-  // las políticas RLS de la base de datos, no este secreto.
+  // Segredo para os códigos de autorização HMAC. Não é um segredo perante as
+  // próprias funcionárias (Pessoa 1 e Pessoa 2 já conhecem o código, porque
+  // a Pessoa 1 mostra-o fisicamente à Pessoa 2) — é um mecanismo de
+  // INTEGRIDADE DE FLUXO: torna um código válido única e exclusivamente
+  // para a sua loja+inventário+unidade+tentativa exatos, de forma
+  // determinística e sem precisar de rede. A barreira de segurança real
+  // perante terceiros é o token de sessão (x-inventario-token) e as
+  // políticas RLS da base de dados, não este segredo.
   const HMAC_SECRET = 'wkz-inv-codigos-2027-a19f4e7c';
 
   const IDB_NAME = 'wkz_inventario';
@@ -41,24 +39,23 @@
   const ZONA_LABEL = { loja: 'Loja', armazem: 'Armazém' };
   const UNIDAD_LABEL = { loja: 'Expositor', armazem: 'Grupo' };
 
-  // ── Estado en memoria de la sesión de inventario ──────────────────────
+  // ── Estado em memória da sessão de inventário ─────────────────────────
   const S = {
     token: null,
     persona: null,     // { id, nombre }
     rol: null,          // 'persona1' | 'persona2'
     tienda: null,        // { id, nombre }
     zona: null,          // 'loja' | 'armazem'
-    inventario: null,    // fila de inventarios
-    asignacionId: null,
-    unidad: null,        // fila de unidades seleccionada
-    intento: null,        // fila de intentos activa
-    captura: null,        // fila de capturas activa
+    inventario: null,    // linha de inventarios
+    unidad: null,        // linha de unidades selecionada
+    intento: null,        // linha de intentos ativa
+    captura: null,        // linha de capturas ativa
     pendientesSync: 0,
     dispositivoId: null
   };
 
   // ══════════════════════════════════════════════════════════════════════
-  //  INDEXEDDB — persistencia local inmediata
+  //  INDEXEDDB — persistência local imediata
   // ══════════════════════════════════════════════════════════════════════
   let dbPromise = null;
 
@@ -137,7 +134,6 @@
 
   function uuid() {
     if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
-    // Fallback muy improbable de necesitarse (navegadores modernos ya lo traen).
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -159,7 +155,7 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  CÓDIGOS DE AUTORIZACIÓN — HMAC determinístico, funciona sin red
+  //  CÓDIGOS DE AUTORIZAÇÃO — HMAC determinístico, funciona sem rede
   // ══════════════════════════════════════════════════════════════════════
   async function codigoIndice(tiendaId, inventarioId, unidadId, numeroIntento, indice) {
     const material = tiendaId + '|' + inventarioId + '|' + unidadId + '|' + numeroIntento + '|' + indice;
@@ -182,7 +178,7 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  SINCRONIZACIÓN — cola local, idempotente, por lotes
+  //  SINCRONIZAÇÃO — fila local, idempotente, em lotes
   // ══════════════════════════════════════════════════════════════════════
   let sincronizando = false;
 
@@ -195,15 +191,15 @@
     const el = document.getElementById('inv-indicador');
     if (!el) return;
     if (pendientes === 0) {
-      el.textContent = '🟢 Datos protegidos';
+      el.textContent = '🟢 Dados protegidos';
       el.style.background = '#e6f7ec';
       el.style.color = '#1e7e34';
     } else if (navigator.onLine) {
-      el.textContent = '🟠 Sincronizando… (' + pendientes + ' pendientes)';
+      el.textContent = '🟠 A sincronizar… (' + pendientes + ' pendentes)';
       el.style.background = '#fff4e0';
       el.style.color = '#a15c00';
     } else {
-      el.textContent = '🟠 Sin conexión — ' + pendientes + ' guardados localmente, pendientes de enviar';
+      el.textContent = '🟠 Sem ligação — ' + pendientes + ' guardados localmente, pendentes de envio';
       el.style.background = '#fff4e0';
       el.style.color = '#a15c00';
     }
@@ -234,11 +230,10 @@
         const { error } = await window.sbInventario.from('escaneos').insert(lote);
         if (!error || esConflictoDuplicado(error)) {
           for (const e of lote) {
-            e.synced = true;
             await idbPut('eventos', Object.assign({}, eventos.find(function (x) { return x.id === e.id; }), { synced: true }));
           }
         } else {
-          break; // se reintentará en el próximo ciclo
+          break; // será reenviado no próximo ciclo
         }
       }
 
@@ -252,8 +247,8 @@
         }
       }
     } catch (e) {
-      // Fallo de red o similar: se reintentará en el siguiente ciclo. No se pierde nada:
-      // los eventos siguen en IndexedDB con synced=false.
+      // Falha de rede ou semelhante: será reenviado no próximo ciclo. Nada se perde:
+      // os eventos continuam no IndexedDB com synced=false.
     } finally {
       sincronizando = false;
       await actualizarIndicador();
@@ -264,7 +259,7 @@
   window.addEventListener('online', sincronizar);
 
   // ══════════════════════════════════════════════════════════════════════
-  //  GUARDAR UN ESCANEO — nunca depende de la red
+  //  GUARDAR UMA LEITURA — nunca depende da rede
   // ══════════════════════════════════════════════════════════════════════
   async function registrarEscaneo(codigoBarras, referencia, descripcion) {
     const dispId = await dispositivoId();
@@ -281,8 +276,8 @@
     try {
       await idbPut('eventos', evento);
     } catch (e) {
-      // Punto crítico: si esto falla, NO se debe fingir que el escaneo existe.
-      mostrarModalIntegridad('No se pudo guardar el escaneo localmente. No continúes hasta resolver esto.');
+      // Ponto crítico: se isto falhar, NÃO se pode fingir que a leitura existe.
+      mostrarModalIntegridad('Não foi possível guardar a leitura localmente. Não continues até resolver isto.');
       throw e;
     }
     sincronizar();
@@ -297,7 +292,7 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  UI — overlay autónomo, no depende del CSS del sitio
+  //  UI — overlay autónomo, não depende do CSS do site
   // ══════════════════════════════════════════════════════════════════════
   function inyectarEstilos() {
     if (document.getElementById('inv-estilos')) return;
@@ -307,25 +302,34 @@
       #inv-root { position:fixed; inset:0; background:#fafafa; z-index:99999; display:flex;
         flex-direction:column; font-family:inherit; color:#222; overflow-y:auto; }
       #inv-root .inv-header { display:flex; justify-content:space-between; align-items:center;
-        padding:14px 20px; border-bottom:1px solid #e5e5e5; background:#fff; }
+        padding:14px 20px; border-bottom:1px solid #e5e5e5; background:#fff; flex-shrink:0; }
       #inv-root .inv-header h1 { font-size:17px; font-weight:500; margin:0; }
-      #inv-root .inv-body { flex:1; padding:24px; max-width:640px; margin:0 auto; width:100%; box-sizing:border-box; }
-      #inv-root button { font-family:inherit; font-size:15px; padding:12px 18px; border-radius:24px;
-        border:1px solid #ccc; background:#fff; cursor:pointer; margin:6px 6px 6px 0; }
+      #inv-root .inv-body { flex:1; padding:32px 24px; max-width:640px; margin:0 auto; width:100%;
+        box-sizing:border-box; display:flex; flex-direction:column; align-items:center; text-align:center; }
+      #inv-root .inv-body h1 { font-size:20px; font-weight:500; margin:0 0 24px; }
+      #inv-root .inv-body p { color:#555; }
+      #inv-root .inv-menu { display:flex; flex-direction:column; align-items:center; gap:10px; width:100%; }
+      #inv-root button { font-family:inherit; -webkit-appearance:none; appearance:none;
+        forced-color-adjust:none; font-size:15px; padding:12px 22px; border-radius:24px;
+        border:1px solid #ccc; background:#fff; color:#222; cursor:pointer; }
       #inv-root button:hover { background:#f0f0f0; }
-      #inv-root button.inv-primario { background:#222; color:#fff; border-color:#222; }
-      #inv-root button.inv-primario:hover { background:#000; }
+      #inv-root button.inv-primario { background:#1a1a1a !important; color:#fff !important; border-color:#1a1a1a; }
+      #inv-root button.inv-primario:hover { background:#000 !important; }
       #inv-root button.inv-peligro { border-color:#c0392b; color:#c0392b; }
+      #inv-root button.inv-menu-btn { min-width:220px; text-align:center; }
       #inv-root button:disabled { opacity:.4; cursor:not-allowed; }
       #inv-root .inv-lista-item { display:flex; justify-content:space-between; align-items:center;
-        padding:14px; border:1px solid #e5e5e5; border-radius:10px; margin-bottom:10px; background:#fff; }
+        gap:14px; padding:14px; border:1px solid #e5e5e5; border-radius:10px; margin-bottom:10px;
+        background:#fff; width:100%; box-sizing:border-box; text-align:left; }
       #inv-root input[type=text], #inv-root input[type=password], #inv-root input[type=number] {
         font-family:inherit; font-size:16px; padding:10px 12px; border:1px solid #ccc; border-radius:8px;
         width:100%; box-sizing:border-box; margin-bottom:10px; }
       #inv-root .inv-badge { font-size:12px; padding:4px 10px; border-radius:12px; font-weight:600; }
       #inv-root .inv-modal-fondo { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100000;
         display:flex; align-items:center; justify-content:center; }
-      #inv-root .inv-modal { background:#fff; border-radius:14px; padding:26px; max-width:420px; width:90%; }
+      #inv-root .inv-modal { background:#fff; border-radius:14px; padding:26px; max-width:420px; width:90%;
+        text-align:center; }
+      #inv-root .inv-modal .inv-menu { align-items:stretch; }
       #inv-root .inv-contador { font-size:56px; font-weight:300; text-align:center; margin:20px 0; }
       #inv-scan-input { position:absolute; opacity:0; pointer-events:none; }
     `;
@@ -345,7 +349,7 @@
   function render(headerHtml, bodyHtml) {
     root().innerHTML =
       '<div class="inv-header">' + headerHtml +
-      '<span id="inv-indicador" class="inv-badge">🟢 Datos protegidos</span></div>' +
+      '<span id="inv-indicador" class="inv-badge">🟢 Dados protegidos</span></div>' +
       '<div class="inv-body">' + bodyHtml + '</div>';
     actualizarIndicador();
   }
@@ -360,8 +364,8 @@
 
   function mostrarModalIntegridad(mensaje) {
     const f = modal(
-      '<h3>Vamos a parar un momento</h3><p>' + mensaje + '</p>' +
-      '<p>Comprueba tu conexión e inténtalo de nuevo. Ningún dato guardado hasta ahora se pierde.</p>' +
+      '<h3>Vamos parar um momento</h3><p>' + mensaje + '</p>' +
+      '<p>Verifica a tua ligação e tenta novamente. Nenhum dado guardado até agora é perdido.</p>' +
       '<button class="inv-primario" onclick="this.closest(\'.inv-modal-fondo\').remove()">Entendido</button>'
     );
     return f;
@@ -374,9 +378,9 @@
   window._invCerrarModal = cerrarModal;
 
   // ══════════════════════════════════════════════════════════════════════
-  //  GUARDAR / RECUPERAR PUNTERO DE SESIÓN (para sobrevivir a un refresco
-  //  de página SIN perder el contexto — pero siempre reverificando con el
-  //  servidor antes de continuar, nunca confiando ciegamente en lo local).
+  //  GUARDAR / RECUPERAR PONTEIRO DE SESSÃO (para sobreviver a uma
+  //  atualização de página SEM perder o contexto — mas sempre revalidando
+  //  com o servidor antes de continuar, nunca confiando ciegamente no local).
   // ══════════════════════════════════════════════════════════════════════
   async function guardarPuntero() {
     await idbPut('sesion', {
@@ -399,7 +403,7 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PANTALLA 1 — SELECCIÓN DE TIENDA
+  //  ECRÃ 1 — SELEÇÃO DE LOJA
   // ══════════════════════════════════════════════════════════════════════
   async function pantallaTiendas() {
     S.zona = null; S.rol = null; S.persona = null; S.unidad = null; S.intento = null; S.captura = null;
@@ -407,94 +411,102 @@
 
     const { data, error } = await window.sbInventario.from('tiendas').select('id,nombre').eq('activo', true).order('nombre');
     if (error) {
-      render('<h1>Inventario</h1>', '<p>No se pudieron cargar las tiendas. Comprueba tu conexión.</p>');
+      render('<h1>Inventário</h1>', '<p>Não foi possível carregar as lojas. Verifica a tua ligação.</p>');
       return;
     }
     const botones = data.map(function (t) {
-      return '<button class="inv-primario" style="display:block;width:100%;text-align:left;margin-bottom:10px;" ' +
-        'data-id="' + t.id + '" data-nombre="' + t.nombre + '">' + t.nombre + '</button>';
+      return '<button class="inv-primario inv-menu-btn" data-id="' + t.id + '" data-nombre="' + t.nombre + '">' + t.nombre + '</button>';
     }).join('');
-    render('<h1>Selecciona tu tienda</h1>', botones);
+    render('<h1>Inventário</h1>', '<h1>Seleciona a tua loja</h1><div class="inv-menu">' + botones + '</div>');
 
-    root().querySelectorAll('.inv-body button').forEach(function (b) {
+    root().querySelectorAll('.inv-menu button').forEach(function (b) {
       b.addEventListener('click', function () {
         S.tienda = { id: b.dataset.id, nombre: b.dataset.nombre };
-        pantallaZona();
+        pantallaRol();
       });
     });
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PANTALLA 2 — SELECCIÓN DE ZONA (Loja / Armazém)
-  // ══════════════════════════════════════════════════════════════════════
-  function pantallaZona() {
-    render(
-      '<h1>' + S.tienda.nombre + '</h1>',
-      '<button class="inv-primario" id="inv-btn-loja" style="display:block;width:100%;margin-bottom:10px;">Loja</button>' +
-      '<button class="inv-primario" id="inv-btn-armazem" style="display:block;width:100%;">Armazém</button>' +
-      '<button id="inv-btn-volver" style="display:block;margin-top:20px;">← Volver</button>'
-    );
-    document.getElementById('inv-btn-loja').onclick = function () { S.zona = 'loja'; pantallaRol(); };
-    document.getElementById('inv-btn-armazem').onclick = function () { S.zona = 'armazem'; pantallaRol(); };
-    document.getElementById('inv-btn-volver').onclick = pantallaTiendas;
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  PANTALLA 3 — SELECCIÓN DE ROL + CLAVE PERSONAL
+  //  ECRÃ 2 — SELEÇÃO DE PESSOA (1 ou 2) + SENHA PESSOAL
   // ══════════════════════════════════════════════════════════════════════
   function pantallaRol() {
     render(
-      '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
-      '<button class="inv-primario" id="inv-btn-p1" style="display:block;width:100%;margin-bottom:10px;">Persona 1 (conteo)</button>' +
-      '<button class="inv-primario" id="inv-btn-p2" style="display:block;width:100%;">Persona 2 (escaneo)</button>' +
-      '<button id="inv-btn-volver" style="display:block;margin-top:20px;">← Volver</button>'
+      '<h1>' + S.tienda.nombre + '</h1>',
+      '<h1>Quem és tu?</h1>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario inv-menu-btn" id="inv-btn-p1">Pessoa 1 (contagem)</button>' +
+      '<button class="inv-primario inv-menu-btn" id="inv-btn-p2">Pessoa 2 (leitura)</button>' +
+      '</div>' +
+      '<button id="inv-btn-volver" style="margin-top:24px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-p1').onclick = function () { pedirClavePersonal('persona1'); };
     document.getElementById('inv-btn-p2').onclick = function () { pedirClavePersonal('persona2'); };
-    document.getElementById('inv-btn-volver').onclick = pantallaZona;
+    document.getElementById('inv-btn-volver').onclick = pantallaTiendas;
   }
 
   function pedirClavePersonal(rol) {
     const f = modal(
-      '<h3>Clave personal</h3>' +
-      '<input type="password" id="inv-clave-personal" placeholder="Tu clave" autofocus>' +
+      '<h3>Senha pessoal</h3>' +
+      '<input type="password" id="inv-clave-personal" placeholder="A tua senha" autofocus>' +
       '<div id="inv-clave-error" style="color:#c0392b;font-size:14px;margin-bottom:10px;"></div>' +
+      '<div class="inv-menu">' +
       '<button class="inv-primario" id="inv-clave-ok">Entrar</button>' +
-      '<button onclick="window._invCerrarModal(this)">Cancelar</button>'
+      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
+      '</div>'
     );
     const input = f.querySelector('#inv-clave-personal');
     const err = f.querySelector('#inv-clave-error');
+    input.focus();
     async function intentar() {
       const clave = input.value.trim();
       if (!clave) return;
       err.textContent = '';
       const { data, error } = await window.sbInventario.rpc('verificar_persona', { p_token: S.token, p_clave: clave });
       if (error || !data || !data.length) {
-        err.textContent = 'Clave incorrecta.';
+        err.textContent = 'Senha incorreta.';
         return;
       }
       const persona = data[0];
       S.persona = { id: persona.id, nombre: persona.nombre };
       S.rol = rol;
       f.remove();
-      await entrarEnInventario();
+      pantallaZona();
     }
     f.querySelector('#inv-clave-ok').onclick = intentar;
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') intentar(); });
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  ABRIR/REUTILIZAR EL INVENTARIO (tienda+zona) Y ASIGNAR LA PERSONA
+  //  ECRÃ 3 — SELEÇÃO DE ZONA (Loja / Armazém)
+  // ══════════════════════════════════════════════════════════════════════
+  function pantallaZona() {
+    render(
+      '<h1>' + S.tienda.nombre + ' — ' + S.persona.nombre + '</h1>',
+      '<h1>Loja ou Armazém?</h1>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario inv-menu-btn" id="inv-btn-loja">Loja</button>' +
+      '<button class="inv-primario inv-menu-btn" id="inv-btn-armazem">Armazém</button>' +
+      '</div>' +
+      '<button id="inv-btn-volver" style="margin-top:24px;">← Voltar</button>'
+    );
+    document.getElementById('inv-btn-loja').onclick = function () { S.zona = 'loja'; entrarEnInventario(); };
+    document.getElementById('inv-btn-armazem').onclick = function () { S.zona = 'armazem'; entrarEnInventario(); };
+    document.getElementById('inv-btn-volver').onclick = pantallaRol;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  ABRIR/REUTILIZAR O INVENTÁRIO (loja+zona) E ATRIBUIR A PESSOA
   // ══════════════════════════════════════════════════════════════════════
   async function entrarEnInventario() {
-    render('<h1>Entrando…</h1>', '<p>Comprobando disponibilidad…</p>');
+    render('<h1>' + S.tienda.nombre + '</h1>', '<p>A entrar…</p><p>A verificar disponibilidade…</p>');
 
     let { data: inv, error: e1 } = await window.sbInventario
       .from('inventarios').select('*')
       .eq('tienda_id', S.tienda.id).eq('zona', S.zona).eq('estado', 'abierto')
       .maybeSingle();
 
-    if (e1) { render('<h1>Error</h1>', '<p>No se pudo comprobar el inventario. Revisa tu conexión.</p>'); return; }
+    if (e1) { render('<h1>Erro</h1>', '<p>Não foi possível verificar o inventário. Verifica a tua ligação.</p>'); return; }
 
     if (!inv) {
       const etiqueta = S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + ' — ' + new Date().getFullYear();
@@ -502,7 +514,7 @@
         .from('inventarios')
         .insert({ tienda_id: S.tienda.id, zona: S.zona, etiqueta: etiqueta, unidades_esperadas: 0 })
         .select().single();
-      if (e2) { render('<h1>Error</h1>', '<p>No se pudo abrir el inventario.</p>'); return; }
+      if (e2) { render('<h1>Erro</h1>', '<p>Não foi possível abrir o inventário.</p>'); return; }
       inv = nuevo;
     }
     S.inventario = inv;
@@ -513,12 +525,12 @@
 
     if (e3) {
       if (esConflictoDuplicado(e3)) {
-        render('<h1>No disponible</h1>',
-          '<p><strong>' + S.persona.nombre + '</strong> ya tiene una asignación activa en otra tienda/rol, o ese rol ya está ocupado en este inventario por otra persona.</p>' +
-          '<p>Debe cerrarse correctamente antes de poder reasignarse.</p>' +
-          '<button class="inv-primario" onclick="location.reload()">Volver</button>');
+        render('<h1>Não disponível</h1>',
+          '<p><strong>' + S.persona.nombre + '</strong> já tem uma atribuição ativa noutra loja/função, ou essa função já está ocupada neste inventário por outra pessoa.</p>' +
+          '<p>Tem de ser encerrado corretamente antes de poder ser reatribuído.</p>' +
+          '<button class="inv-primario" onclick="location.reload()">Voltar</button>');
       } else {
-        render('<h1>Error</h1>', '<p>No se pudo registrar la asignación. Revisa tu conexión e inténtalo de nuevo.</p>');
+        render('<h1>Erro</h1>', '<p>Não foi possível registar a atribuição. Verifica a tua ligação e tenta novamente.</p>');
       }
       return;
     }
@@ -528,14 +540,14 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PANTALLA 4 — LISTA DE UNIDADES (Expositores / Grupos)
+  //  ECRÃ 4 — LISTA DE UNIDADES (Expositores / Grupos)
   // ══════════════════════════════════════════════════════════════════════
   async function pantallaUnidades() {
     const { data: unidades, error } = await window.sbInventario
       .from('unidades').select('*, intentos(*)')
       .eq('inventario_id', S.inventario.id).order('numero');
 
-    if (error) { render('<h1>Error</h1>', '<p>No se pudo cargar la lista de unidades.</p>'); return; }
+    if (error) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
 
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
@@ -544,41 +556,41 @@
       const ultimoIntento = (u.intentos || []).sort(function (a, b) {
         return b.numero_intento - a.numero_intento;
       })[0];
-      let estadoTxt = 'Pendiente';
+      let estadoTxt = 'Pendente';
       let accion = '';
       if (u.estado === 'validada') {
         estadoTxt = '✅ Validado';
       } else if (ultimoIntento && ultimoIntento.estado === 'divergencia') {
-        estadoTxt = '❌ Divergencia — repetir conteo';
+        estadoTxt = '❌ Divergência — repetir contagem';
       } else if (ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
-        estadoTxt = S.rol === 'persona2' ? 'Esperando escaneo' : 'Cerrado (esperando Persona 2)';
+        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Encerrado (a aguardar Pessoa 2)';
       }
       if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
         accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
       }
       if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
-          (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Introducir código') + '</button>';
+          (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Inserir código') + '</button>';
       }
       return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + '</span>' + accion + '</div>';
     }).join('');
 
-    if (!filas) filas = '<p>Todavía no hay ' + label.toLowerCase() + 's creados.</p>';
+    if (!filas) filas = '<p>Ainda não há ' + label.toLowerCase() + 's criados.</p>';
 
     const nuevaUnidadHtml = S.rol === 'persona1'
-      ? '<div style="margin-top:20px;"><input type="number" id="inv-num-nuevas" placeholder="Número total de ' + label.toLowerCase() + 's">' +
-        '<button class="inv-primario" id="inv-btn-fijar-numero">Fijar número esperado</button></div>'
+      ? '<div style="margin-top:20px;width:100%;"><input type="number" id="inv-num-nuevas" placeholder="Número total de ' + label.toLowerCase() + 's">' +
+        '<button class="inv-primario" id="inv-btn-fijar-numero">Definir número esperado</button></div>'
       : '';
 
     const cierreHtml = S.rol === 'persona2'
-      ? '<button class="inv-primario" id="inv-btn-cerrar-inv" style="margin-top:20px;">Cerrar inventario definitivamente</button>'
+      ? '<button class="inv-primario" id="inv-btn-cerrar-inv" style="margin-top:20px;">Encerrar inventário definitivamente</button>'
       : '';
 
     render(
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
-      '<p>' + validadas + ' / ' + Math.max(unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Persona 1' : 'Persona 2') + ')</p>' +
-      filas + nuevaUnidadHtml + cierreHtml +
-      '<button id="inv-btn-salir" style="display:block;margin-top:24px;">Salir de esta pantalla (no cierra tu asignación)</button>'
+      '<p>' + validadas + ' / ' + Math.max(unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
+      '<div style="width:100%;">' + filas + '</div>' + nuevaUnidadHtml + cierreHtml +
+      '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>'
     );
 
     root().querySelectorAll('[data-accion="contar"]').forEach(function (b) {
@@ -601,12 +613,12 @@
     if (!n || n < 1) return;
     const anterior = S.inventario.unidades_esperadas || 0;
     if (n < anterior) {
-      alert('No se permite reducir el número de unidades esperadas. Actual: ' + anterior);
+      alert('Não é permitido reduzir o número de unidades esperadas. Atual: ' + anterior);
       return;
     }
     const { error: e1 } = await window.sbInventario.from('inventarios')
       .update({ unidades_esperadas: n }).eq('id', S.inventario.id);
-    if (e1) { alert('No se pudo actualizar. Revisa tu conexión.'); return; }
+    if (e1) { alert('Não foi possível atualizar. Verifica a tua ligação.'); return; }
 
     await window.sbInventario.from('incidencias').insert({
       inventario_id: S.inventario.id, tipo: 'ampliacion_unidades',
@@ -625,16 +637,16 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PERSONA 1 — CONTEO FÍSICO Y CIERRE DE LA UNIDAD
+  //  PESSOA 1 — CONTAGEM FÍSICA E ENCERRAMENTO DA UNIDADE
   // ══════════════════════════════════════════════════════════════════════
   async function iniciarConteo(unidadId, numero) {
     S.unidad = { id: unidadId, numero: numero };
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
-      '<p>Introduce el conteo físico total de esta unidad.</p>' +
-      '<input type="number" id="inv-conteo-fisico" placeholder="Piezas contadas">' +
-      '<button class="inv-primario" id="inv-btn-cerrar-conteo">Cerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
-      '<button id="inv-btn-volver-lista">← Volver</button>'
+      '<p>Introduz a contagem física total desta unidade.</p>' +
+      '<input type="number" id="inv-conteo-fisico" placeholder="Peças contadas">' +
+      '<button class="inv-primario" id="inv-btn-cerrar-conteo">Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
+      '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
     document.getElementById('inv-btn-cerrar-conteo').onclick = cerrarConteo;
@@ -642,7 +654,7 @@
 
   async function cerrarConteo() {
     const conteo = parseInt(document.getElementById('inv-conteo-fisico').value, 10);
-    if (!conteo && conteo !== 0) { alert('Introduce un número válido.'); return; }
+    if (!conteo && conteo !== 0) { alert('Introduz um número válido.'); return; }
 
     const { data: existentes } = await window.sbInventario.from('intentos')
       .select('numero_intento').eq('unidad_id', S.unidad.id).order('numero_intento', { ascending: false }).limit(1);
@@ -653,7 +665,7 @@
       conteo_fisico: conteo, cerrado_at: new Date().toISOString(), estado: 'autorizado'
     }).select().single();
 
-    if (error) { alert('No se pudo cerrar. Revisa tu conexión e inténtalo de nuevo — nada se ha perdido.'); return; }
+    if (error) { alert('Não foi possível encerrar. Verifica a tua ligação e tenta novamente — nada foi perdido.'); return; }
 
     await window.sbInventario.from('unidades').update({ estado: 'en_proceso' }).eq('id', S.unidad.id);
 
@@ -667,30 +679,30 @@
       codigos.push(await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, i));
     }
     render(
-      '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — cerrado</h1>',
-      '<p>Conteo físico: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
-      '<p>Dale uno de estos códigos a Persona 2 para que empiece a escanear:</p>' +
+      '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
+      '<p>Contagem física: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
+      '<p>Dá um destes códigos à Pessoa 2 para que comece a ler:</p>' +
       '<div style="font-size:22px;letter-spacing:2px;margin:16px 0;">' + codigos.join(' &nbsp; ') + '</div>' +
-      '<button id="inv-btn-mas-codigos">Generar más códigos</button>' +
-      '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="display:block;margin-top:16px;">Ir a la siguiente unidad</button>'
+      '<button id="inv-btn-mas-codigos">Gerar mais códigos</button>' +
+      '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>'
     );
     document.getElementById('inv-btn-mas-codigos').onclick = function () { mostrarCodigos(desdeIndice + 4); };
     document.getElementById('inv-btn-siguiente-unidad').onclick = pantallaUnidades;
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PERSONA 2 — INTRODUCIR CÓDIGO Y ESCANEAR
+  //  PESSOA 2 — INTRODUZIR CÓDIGO E LER
   // ══════════════════════════════════════════════════════════════════════
   async function iniciarAutorizacionEscaneo(unidadId, numero) {
     S.unidad = { id: unidadId, numero: numero };
 
     const { data: intento, error } = await window.sbInventario.from('intentos')
       .select('*').eq('unidad_id', unidadId).order('numero_intento', { ascending: false }).limit(1).single();
-    if (error || !intento) { render('<h1>Error</h1>', '<p>No se pudo cargar esta unidad.</p>'); return; }
+    if (error || !intento) { render('<h1>Erro</h1>', '<p>Não foi possível carregar esta unidade.</p>'); return; }
     S.intento = intento;
 
     if (intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
-      // Reanudación tras un refresco: recuperar la captura activa, nunca crear otra a ciegas.
+      // Retoma após uma atualização de página: recuperar a captura ativa, nunca criar outra às cegas.
       const { data: capturas } = await window.sbInventario.from('capturas')
         .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1);
       if (capturas && capturas.length) {
@@ -703,11 +715,11 @@
 
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
-      '<p>Conteo de Persona 1: <strong>' + intento.conteo_fisico + '</strong></p>' +
-      '<input type="text" id="inv-codigo-auth" placeholder="Código de autorización" inputmode="numeric">' +
+      '<p>Contagem da Pessoa 1: <strong>' + intento.conteo_fisico + '</strong></p>' +
+      '<input type="text" id="inv-codigo-auth" placeholder="Código de autorização" inputmode="numeric">' +
       '<div id="inv-codigo-error" style="color:#c0392b;font-size:14px;"></div>' +
-      '<button class="inv-primario" id="inv-btn-autorizar">Comenzar escaneado</button>' +
-      '<button id="inv-btn-volver-lista">← Volver</button>'
+      '<button class="inv-primario" id="inv-btn-autorizar">Começar leitura</button>' +
+      '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
     document.getElementById('inv-btn-autorizar').onclick = autorizarEscaneo;
@@ -720,24 +732,24 @@
     const codigo = document.getElementById('inv-codigo-auth').value;
     const err = document.getElementById('inv-codigo-error');
     const ok = await verificarCodigo(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, codigo);
-    if (!ok) { err.textContent = 'Código incorrecto, o pertenece a otra unidad/intento.'; return; }
+    if (!ok) { err.textContent = 'Código incorreto, ou pertence a outra unidade/tentativa.'; return; }
 
-    // .eq('estado','autorizado') actúa como guarda de concurrencia: si otra Persona 2 ya
-    // reclamó este intento entre que se listó y se autorizó, esta actualización no afecta
-    // ninguna fila y no se pisan datos.
+    // .eq('estado','autorizado') funciona como guarda de concorrência: se outra Pessoa 2 já
+    // tiver reclamado esta tentativa entre a listagem e a autorização, esta atualização não
+    // afeta nenhuma linha e nada é sobreposto.
     const { data: intentoAct, error: e1 } = await window.sbInventario.from('intentos')
       .update({ persona2_id: S.persona.id, estado: 'escaneando' })
       .eq('id', S.intento.id).eq('estado', 'autorizado').select();
-    if (e1) { err.textContent = 'No se pudo autorizar. Revisa tu conexión.'; return; }
+    if (e1) { err.textContent = 'Não foi possível autorizar. Verifica a tua ligação.'; return; }
     if (!intentoAct || !intentoAct.length) {
-      err.textContent = 'Esta unidad ya fue tomada por otra persona. Vuelve a la lista.';
+      err.textContent = 'Esta unidade já foi ocupada por outra pessoa. Volta à lista.';
       return;
     }
     S.intento = intentoAct[0];
 
     const { data: captura, error: e2 } = await window.sbInventario.from('capturas')
       .insert({ intento_id: S.intento.id, numero_captura: 1, estado: 'activa' }).select().single();
-    if (e2) { err.textContent = 'No se pudo iniciar la captura. Revisa tu conexión.'; return; }
+    if (e2) { err.textContent = 'Não foi possível iniciar a captura. Verifica a tua ligação.'; return; }
     S.captura = captura;
 
     await guardarPuntero();
@@ -745,7 +757,7 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PANTALLA DE ESCANEADO
+  //  ECRÃ DE LEITURA
   // ══════════════════════════════════════════════════════════════════════
   let bufferScan = '';
   let timerScan = null;
@@ -753,14 +765,16 @@
   async function pantallaEscaneo() {
     const total = await contarEscaneosValidos(S.captura.id);
     render(
-      '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — Escaneando</h1>',
+      '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — A ler</h1>',
       '<div class="inv-contador" id="inv-contador">' + total + '</div>' +
-      '<p style="text-align:center;color:#666;">de ' + S.intento.conteo_fisico + ' esperadas</p>' +
+      '<p>de ' + S.intento.conteo_fisico + ' esperadas</p>' +
       '<input type="text" id="inv-scan-input" autocomplete="off">' +
-      '<button class="inv-primario" id="inv-btn-manual">Introducir código manualmente</button>' +
-      '<button id="inv-btn-anular">Anular último escaneo</button>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-btn-manual">Inserir código manualmente</button>' +
+      '<button id="inv-btn-anular">Anular última leitura</button>' +
       '<button id="inv-btn-limpiar">Limpar / Começar de novo</button>' +
-      '<button class="inv-peligro" id="inv-btn-cerrar-unidad" style="display:block;margin-top:16px;">Cerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>'
+      '<button class="inv-peligro" id="inv-btn-cerrar-unidad" style="margin-top:10px;">Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
+      '</div>'
     );
 
     const input = document.getElementById('inv-scan-input');
@@ -785,7 +799,7 @@
     }
 
     document.getElementById('inv-btn-manual').onclick = function () {
-      const codigo = prompt('Introduce el código manualmente:');
+      const codigo = prompt('Insere o código manualmente:');
       if (codigo && codigo.trim()) procesarCodigo(codigo.trim());
     };
     document.getElementById('inv-btn-anular').onclick = anularUltimoEscaneo;
@@ -801,35 +815,35 @@
     document.getElementById('inv-scan-input').focus();
   }
 
-  let ultimoEscaneoId = null;
-
   async function anularUltimoEscaneo() {
     const eventos = (await idbGetAllByIndex('eventos', 'captura_id', S.captura.id))
       .sort(function (a, b) { return new Date(b.creado_en_dispositivo_at) - new Date(a.creado_en_dispositivo_at); });
-    if (!eventos.length) { alert('No hay escaneos que anular en esta captura.'); return; }
+    if (!eventos.length) { alert('Não há leituras para anular nesta captura.'); return; }
     const anulTodas = await idbGetAll('anulaciones_local');
     const anuladosSet = new Set(anulTodas.map(function (a) { return a.escaneo_id; }));
     const candidato = eventos.find(function (e) { return !anuladosSet.has(e.id); });
-    if (!candidato) { alert('No hay escaneos pendientes de anular en esta captura.'); return; }
+    if (!candidato) { alert('Não há leituras pendentes de anulação nesta captura.'); return; }
 
     const f = modal(
-      '<h3>¿Anular el último escaneo?</h3>' +
+      '<h3>Anular a última leitura?</h3>' +
       '<p>Código: ' + candidato.codigo_barras + '</p>' +
       '<select id="inv-motivo-anular" style="width:100%;padding:10px;margin-bottom:10px;">' +
       '<option value="Duplicado">Duplicado</option>' +
-      '<option value="Error de lectura">Error de lectura</option>' +
-      '<option value="Otro motivo">Otro motivo</option></select>' +
-      '<input type="text" id="inv-motivo-otro" placeholder="Explica el motivo" style="display:none;">' +
-      '<button class="inv-primario" id="inv-confirmar-anular">Confirmar anulación</button>' +
-      '<button onclick="window._invCerrarModal(this)">Cancelar</button>'
+      '<option value="Erro de leitura">Erro de leitura</option>' +
+      '<option value="Outro motivo">Outro motivo</option></select>' +
+      '<input type="text" id="inv-motivo-otro" placeholder="Explica o motivo" style="display:none;">' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-confirmar-anular">Confirmar anulação</button>' +
+      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
+      '</div>'
     );
     const sel = f.querySelector('#inv-motivo-anular');
     const otro = f.querySelector('#inv-motivo-otro');
-    sel.addEventListener('change', function () { otro.style.display = sel.value === 'Otro motivo' ? 'block' : 'none'; });
+    sel.addEventListener('change', function () { otro.style.display = sel.value === 'Outro motivo' ? 'block' : 'none'; });
 
     f.querySelector('#inv-confirmar-anular').onclick = async function () {
-      const motivo = sel.value === 'Otro motivo' ? otro.value.trim() : sel.value;
-      if (sel.value === 'Otro motivo' && !motivo) { alert('Explica el motivo.'); return; }
+      const motivo = sel.value === 'Outro motivo' ? otro.value.trim() : sel.value;
+      if (sel.value === 'Outro motivo' && !motivo) { alert('Explica o motivo.'); return; }
       const anulacion = { id: uuid(), escaneo_id: candidato.id, motivo: motivo, persona_id: S.persona.id, synced: false };
       await idbPut('anulaciones_local', anulacion);
       sincronizar();
@@ -840,18 +854,18 @@
   }
 
   async function limpiarCaptura() {
-    if (!confirm('¿Comenzar de nuevo? Los escaneos actuales quedan guardados en el historial, pero no contarán en el resultado final.')) return;
+    if (!confirm('Começar de novo? As leituras atuais ficam guardadas no histórico, mas não vão contar no resultado final.')) return;
     await window.sbInventario.from('capturas').update({ estado: 'cancelada', cerrado_at: new Date().toISOString() }).eq('id', S.captura.id);
     const { data: nueva, error } = await window.sbInventario.from('capturas')
       .insert({ intento_id: S.intento.id, numero_captura: S.captura.numero_captura + 1, estado: 'activa' }).select().single();
-    if (error) { alert('No se pudo reiniciar la captura. Revisa tu conexión.'); return; }
+    if (error) { alert('Não foi possível reiniciar a captura. Verifica a tua ligação.'); return; }
     S.captura = nueva;
     await guardarPuntero();
     pantallaEscaneo();
   }
 
   async function cerrarUnidadEscaneo() {
-    if (!confirm('¿Cerrar esta unidad? Se comparará el conteo con los escaneos válidos.')) return;
+    if (!confirm('Encerrar esta unidade? Vai comparar-se a contagem com as leituras válidas.')) return;
     const total = await contarEscaneosValidos(S.captura.id);
 
     await window.sbInventario.from('capturas').update({ estado: 'cerrada', cerrado_at: new Date().toISOString() }).eq('id', S.captura.id);
@@ -859,43 +873,43 @@
     if (total === S.intento.conteo_fisico) {
       await window.sbInventario.from('intentos').update({ estado: 'validado' }).eq('id', S.intento.id);
       await window.sbInventario.from('unidades').update({ estado: 'validada' }).eq('id', S.unidad.id);
-      alert('✅ Unidad validada: ' + total + ' / ' + S.intento.conteo_fisico);
+      alert('✅ Unidade validada: ' + total + ' / ' + S.intento.conteo_fisico);
     } else {
       await window.sbInventario.from('intentos').update({ estado: 'divergencia' }).eq('id', S.intento.id);
       await window.sbInventario.from('unidades').update({ estado: 'pendiente' }).eq('id', S.unidad.id);
-      alert('❌ Divergencia: conteo físico ' + S.intento.conteo_fisico + ' vs ' + total + ' escaneados. Persona 1 debe volver a contar esta unidad.');
+      alert('❌ Divergência: contagem física ' + S.intento.conteo_fisico + ' vs ' + total + ' lidos. A Pessoa 1 tem de voltar a contar esta unidade.');
     }
     await limpiarPuntero();
     pantallaUnidades();
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  CIERRE DEFINITIVO DEL INVENTARIO
+  //  ENCERRAMENTO DEFINITIVO DO INVENTÁRIO
   // ══════════════════════════════════════════════════════════════════════
   async function intentarCerrarInventario() {
     if (S.pendientesSync > 0) {
-      alert('Todavía hay ' + S.pendientesSync + ' escaneos pendientes de sincronizar. Espera a que el indicador se ponga verde antes de cerrar.');
+      alert('Ainda há ' + S.pendientesSync + ' leituras pendentes de sincronizar. Espera que o indicador fique verde antes de encerrar.');
       return;
     }
-    if (!navigator.onLine) { alert('Necesitas conexión a Internet para cerrar el inventario definitivamente.'); return; }
-    if (!confirm('¿Cerrar definitivamente este inventario? Esta acción no se puede deshacer.')) return;
+    if (!navigator.onLine) { alert('Precisas de ligação à Internet para encerrar o inventário definitivamente.'); return; }
+    if (!confirm('Encerrar definitivamente este inventário? Esta ação não pode ser desfeita.')) return;
 
     const { data, error } = await window.sbInventario.rpc('cerrar_inventario', {
       p_token: S.token, p_inventario_id: S.inventario.id, p_persona_id: S.persona.id
     });
-    if (error) { alert('No se pudo cerrar: ' + error.message); return; }
+    if (error) { alert('Não foi possível encerrar: ' + error.message); return; }
     const resultado = data && data[0];
     if (!resultado || !resultado.ok) {
-      alert('No se puede cerrar todavía: ' + (resultado ? resultado.motivo : 'error desconocido'));
+      alert('Ainda não é possível encerrar: ' + (resultado ? resultado.motivo : 'erro desconhecido'));
       return;
     }
-    alert('Inventario cerrado correctamente.');
+    alert('Inventário encerrado corretamente.');
     await limpiarPuntero();
     root().remove();
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  PUNTO DE ENTRADA
+  //  PONTO DE ENTRADA
   // ══════════════════════════════════════════════════════════════════════
   function openInventarioApp(token) {
     if (!token) return;

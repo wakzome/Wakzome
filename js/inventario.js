@@ -592,10 +592,17 @@
   // ══════════════════════════════════════════════════════════════════════
   async function pantallaUnidades() {
     const { data: unidades, error } = await window.sbInventario
-      .from('unidades').select('*, intentos(*, persona2:personas!intentos_persona2_id_fkey(nombre))')
+      .from('unidades').select('*, intentos(*)')
       .eq('inventario_id', S.inventario.id).order('numero');
 
     if (error) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
+
+    // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — independente
+    // de já ter começado a ler alguma unidade em concreto.
+    const { data: asigP2Lista } = await window.sbInventario.from('asignaciones')
+      .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
+      .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle();
+    const nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
 
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
@@ -619,10 +626,11 @@
       } else if (ultimoIntento && ultimoIntento.estado === 'divergencia') {
         estadoTxt = '❌ Divergência — repetir contagem';
       } else if (ultimoIntento && ultimoIntento.estado === 'escaneando') {
-        const nomeP2 = ultimoIntento.persona2 && ultimoIntento.persona2.nombre ? primerNombre(ultimoIntento.persona2.nombre) : '';
-        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : (nomeP2 ? 'Em leitura por ' + nomeP2 : 'Em leitura');
+        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : (nomeP2Inventario ? 'Em leitura por ' + nomeP2Inventario : 'Em leitura');
       } else if (ultimoIntento && ultimoIntento.estado === 'autorizado') {
-        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Encerrado (a aguardar Pessoa 2)';
+        estadoTxt = S.rol === 'persona2'
+          ? 'A aguardar leitura'
+          : (nomeP2Inventario ? 'Encerrado — a aguardar ' + nomeP2Inventario : 'Encerrado (a aguardar Pessoa 2)');
       }
       if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
         accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
@@ -750,11 +758,10 @@
 
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
     const { data: intento, error } = await window.sbInventario.from('intentos')
-      .select('*, persona1:personas!intentos_persona1_id_fkey(nombre), persona2:personas!intentos_persona2_id_fkey(nombre)')
+      .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
       .eq('id', intentoId).maybeSingle();
     if (error || !intento) { alert('Não foi possível recuperar esta tentativa. Verifica a tua ligação.'); return; }
     intento.persona1_nombre = intento.persona1 ? intento.persona1.nombre : '';
-    intento.persona2_nombre = intento.persona2 ? intento.persona2.nombre : '';
     S.unidad = { id: unidadId, numero: numero };
     S.intento = intento;
     mostrarCodigos(1);
@@ -763,7 +770,12 @@
   async function mostrarCodigos(indice) {
     const codigo = await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, indice);
     const nomeP1 = S.intento.persona1_nombre ? primerNombre(S.intento.persona1_nombre) : '';
-    const nomeP2 = S.intento.persona2_nombre ? primerNombre(S.intento.persona2_nombre) : '';
+    // Nome de Pessoa 2: quem tem o papel atribuído neste inventário agora, independentemente
+    // de já ter lido ou não esta unidade em concreto.
+    const { data: asigP2 } = await window.sbInventario.from('asignaciones')
+      .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
+      .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle();
+    const nomeP2 = (asigP2 && asigP2.persona) ? primerNombre(asigP2.persona.nombre) : '';
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
       (nomeP1 ? '<p>Registado por <strong>' + nomeP1 + '</strong></p>' : '') +

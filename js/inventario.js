@@ -140,6 +140,10 @@
     });
   }
 
+  function primerNombre(nomeCompleto) {
+    return (nomeCompleto || '').trim().split(/\s+/)[0] || '';
+  }
+
   async function dispositivoId() {
     if (S.dispositivoId) return S.dispositivoId;
     let d;
@@ -582,7 +586,7 @@
   // ══════════════════════════════════════════════════════════════════════
   async function pantallaUnidades() {
     const { data: unidades, error } = await window.sbInventario
-      .from('unidades').select('*, intentos(*)')
+      .from('unidades').select('*, intentos(*, persona2:personas!intentos_persona2_id_fkey(nombre))')
       .eq('inventario_id', S.inventario.id).order('numero');
 
     if (error) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
@@ -608,7 +612,10 @@
         estadoTxt = '✅ Validado';
       } else if (ultimoIntento && ultimoIntento.estado === 'divergencia') {
         estadoTxt = '❌ Divergência — repetir contagem';
-      } else if (ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
+      } else if (ultimoIntento && ultimoIntento.estado === 'escaneando') {
+        const nomeP2 = ultimoIntento.persona2 && ultimoIntento.persona2.nombre ? primerNombre(ultimoIntento.persona2.nombre) : '';
+        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : (nomeP2 ? 'Em leitura por ' + nomeP2 : 'Em leitura');
+      } else if (ultimoIntento && ultimoIntento.estado === 'autorizado') {
         estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Encerrado (a aguardar Pessoa 2)';
       }
       if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
@@ -748,10 +755,12 @@
       '<p>Dá este código à Pessoa 2 para que comece a ler:</p>' +
       '<div style="font-size:40px;letter-spacing:4px;margin:16px 0;font-weight:300;">' + codigo + '</div>' +
       '<button id="inv-btn-mas-codigos">Gerar outro código</button>' +
-      '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>'
+      '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>' +
+      '<button id="inv-btn-volver-codigos" style="margin-top:10px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-mas-codigos').onclick = function () { mostrarCodigos(indice + 1); };
     document.getElementById('inv-btn-siguiente-unidad').onclick = pantallaUnidades;
+    document.getElementById('inv-btn-volver-codigos').onclick = pantallaUnidades;
   }
 
   // ══════════════════════════════════════════════════════════════════════

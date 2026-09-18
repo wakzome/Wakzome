@@ -625,9 +625,16 @@
 
     if (!filas) filas = '<p>Ainda não há ' + label.toLowerCase() + 's criados.</p>';
 
-    const nuevaUnidadHtml = S.rol === 'persona1'
-      ? '<div style="margin-top:20px;width:100%;"><input type="number" id="inv-num-nuevas" placeholder="Número total de ' + label.toLowerCase() + 's">' +
-        '<button class="inv-primario" id="inv-btn-fijar-numero">Definir número esperado</button></div>'
+    // O controlo de "número esperado" só aparece: (a) na primeira vez, antes de haver
+    // qualquer número declarado, ou (b) depois de todas as unidades já declaradas
+    // estarem validadas — para acrescentar mais. Enquanto houver trabalho pendente das
+    // já declaradas, fica escondido, para não pedir de novo algo que já foi definido.
+    const esperadas = S.inventario.unidades_esperadas || 0;
+    const todasValidadas = esperadas > 0 && unidades.length >= esperadas && validadas >= esperadas;
+    const nuevaUnidadHtml = (S.rol === 'persona1' && (esperadas === 0 || todasValidadas))
+      ? '<div style="margin-top:20px;width:100%;"><input type="number" id="inv-num-nuevas" placeholder="' +
+        (esperadas === 0 ? 'Número total de ' + label.toLowerCase() + 's' : 'Novo número total (atualmente ' + esperadas + ')') + '">' +
+        '<button class="inv-primario" id="inv-btn-fijar-numero">' + (esperadas === 0 ? 'Definir número esperado' : 'Adicionar mais ' + label.toLowerCase() + 's') + '</button></div>'
       : '';
 
     const cierreHtml = S.rol === 'persona2'

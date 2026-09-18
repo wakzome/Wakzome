@@ -508,6 +508,34 @@
   async function entrarEnInventario() {
     render('<h1>' + S.tienda.nombre + '</h1>', '<p>A entrar…</p><p>A verificar disponibilidade…</p>');
 
+    // Sair do ecrã NÃO liberta a atribuição (regra de negócio explícita). Por isso, antes de
+    // tentar criar uma atribuição nova, vemos se esta pessoa já tem uma ativa. Se for
+    // exatamente a mesma loja+zona+função, é uma RETOMA, não um conflito.
+    const { data: ativaAtual, error: e0 } = await window.sbInventario
+      .from('asignaciones').select('*').eq('persona_id', S.persona.id).eq('estado', 'activa').maybeSingle();
+
+    if (e0) { render('<h1>Erro</h1>', '<p>Não foi possível verificar atribuições anteriores. Verifica a tua ligação.</p>'); return; }
+
+    if (ativaAtual) {
+      const mesma = ativaAtual.tienda_id === S.tienda.id && ativaAtual.zona === S.zona && ativaAtual.rol === S.rol;
+      if (!mesma) {
+        render('<h1>Não disponível</h1>',
+          '<p><strong>' + S.persona.nombre + '</strong> já tem uma atribuição ativa como ' +
+          (ativaAtual.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ' em ' + ativaAtual.tienda_id + ' — ' + ZONA_LABEL[ativaAtual.zona] + '.</p>' +
+          '<p>Tem de ser encerrado corretamente antes de poder ser reatribuída a outro sítio.</p>' +
+          '<button class="inv-primario" onclick="location.reload()">Voltar</button>');
+        return;
+      }
+      // Mesma loja+zona+função: retomamos a atribuição existente, sem criar outra.
+      const { data: inv, error: eInv } = await window.sbInventario
+        .from('inventarios').select('*').eq('id', ativaAtual.inventario_id).maybeSingle();
+      if (eInv || !inv) { render('<h1>Erro</h1>', '<p>Não foi possível recuperar o inventário. Verifica a tua ligação.</p>'); return; }
+      S.inventario = inv;
+      await guardarPuntero();
+      pantallaUnidades();
+      return;
+    }
+
     let { data: inv, error: e1 } = await window.sbInventario
       .from('inventarios').select('*')
       .eq('tienda_id', S.tienda.id).eq('zona', S.zona).eq('estado', 'abierto')

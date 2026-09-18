@@ -303,8 +303,9 @@
     const style = document.createElement('style');
     style.id = 'inv-estilos';
     style.textContent = `
-      #inv-root { position:fixed; inset:0; background:#fafafa; z-index:99999; display:flex;
-        flex-direction:column; font-family:inherit; color:#222; overflow-y:auto; }
+      #inv-root { position:fixed; inset:0; height:100dvh; background:#fafafa; z-index:99999; display:flex;
+        flex-direction:column; font-family:inherit; color:#222; overflow-y:auto;
+        -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
       #inv-root .inv-header { display:flex; justify-content:space-between; align-items:center;
         padding:14px 20px; border-bottom:1px solid #e5e5e5; background:#fff; flex-shrink:0;
         position:sticky; top:0; z-index:10; gap:10px; }
@@ -363,6 +364,7 @@
       '<div class="inv-header">' + volverBtn + headerHtml +
       '<span id="inv-indicador" class="inv-badge">🟢 Dados protegidos</span></div>' +
       '<div class="inv-body">' + bodyHtml + '</div>';
+    root().scrollTop = 0;
     actualizarIndicador();
     if (onVolver) document.getElementById('inv-btn-header-volver').onclick = onVolver;
   }
@@ -869,7 +871,8 @@
       '<button id="inv-btn-anular">Anular última leitura</button>' +
       '<button id="inv-btn-limpiar">Limpar / Começar de novo</button>' +
       '<button class="inv-peligro" id="inv-btn-cerrar-unidad" style="margin-top:10px;">Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
-      '</div>'
+      '</div>',
+      pantallaUnidades
     );
 
     const input = document.getElementById('inv-scan-input');

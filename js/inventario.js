@@ -448,7 +448,11 @@
   function pedirClavePersonal(rol) {
     const f = modal(
       '<h3>Senha pessoal</h3>' +
-      '<input type="password" id="inv-clave-personal" placeholder="A tua senha" autofocus>' +
+      '<div style="position:relative;">' +
+      '<input type="password" id="inv-clave-personal" placeholder="A tua senha" autofocus style="padding-right:40px;">' +
+      '<button type="button" id="inv-clave-olho" title="Mostrar/ocultar senha" ' +
+      'style="position:absolute;right:4px;top:4px;padding:6px 10px;border-radius:8px;">👁</button>' +
+      '</div>' +
       '<div id="inv-clave-error" style="color:#c0392b;font-size:14px;margin-bottom:10px;"></div>' +
       '<div class="inv-menu">' +
       '<button class="inv-primario" id="inv-clave-ok">Entrar</button>' +
@@ -457,6 +461,9 @@
     );
     const input = f.querySelector('#inv-clave-personal');
     const err = f.querySelector('#inv-clave-error');
+    f.querySelector('#inv-clave-olho').onclick = function () {
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
     input.focus();
     async function intentar() {
       const clave = input.value.trim();

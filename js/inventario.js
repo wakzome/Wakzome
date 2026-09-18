@@ -288,11 +288,50 @@
     return evento;
   }
 
-  async function contarEscaneosValidos(capturaId) {
+  async function obtenerEscaneosValidos(capturaId) {
     const eventos = await idbGetAllByIndex('eventos', 'captura_id', capturaId);
     const anulTodas = await idbGetAll('anulaciones_local');
     const anuladosSet = new Set(anulTodas.map(function (a) { return a.escaneo_id; }));
-    return eventos.filter(function (e) { return !anuladosSet.has(e.id); }).length;
+    return eventos
+      .filter(function (e) { return !anuladosSet.has(e.id); })
+      .sort(function (a, b) { return new Date(b.creado_en_dispositivo_at) - new Date(a.creado_en_dispositivo_at); });
+  }
+
+  async function contarEscaneosValidos(capturaId) {
+    return (await obtenerEscaneosValidos(capturaId)).length;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  DADOS FICTÍCIOS (referência/descrição) — não há ainda mestre de artigos
+  // ══════════════════════════════════════════════════════════════════════
+  const REFERENCIA_PREFIXOS = ['REF', 'ART', 'PRD', 'SKU'];
+  const DESCRICOES_FICTICIAS = [
+    'Camisola básica algodão', 'Calça ganga slim', 'T-shirt estampada', 'Casaco impermeável',
+    'Vestido verão floral', 'Sapatilha desportiva', 'Cinto de couro', 'Boné ajustável',
+    'Camisa social manga longa', 'Saia plissada', 'Blusão acolchoado', 'Calção de banho',
+    'Meias pack 3 unidades', 'Mala tiracolo', 'Óculos de sol'
+  ];
+
+  function hashSimples(texto) {
+    let h = 0;
+    for (let i = 0; i < texto.length; i++) {
+      h = ((h << 5) - h + texto.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  function datosFicticios(codigoBarras) {
+    const h = hashSimples(String(codigoBarras));
+    const prefixo = REFERENCIA_PREFIXOS[h % REFERENCIA_PREFIXOS.length];
+    const numero = (h % 90000) + 10000;
+    const descricao = DESCRICOES_FICTICIAS[Math.floor(h / 7) % DESCRICOES_FICTICIAS.length];
+    return { referencia: prefixo + '-' + numero, descricao: descricao };
+  }
+
+  function escapeHtml(texto) {
+    return String(texto == null ? '' : texto)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -342,6 +381,29 @@
       #inv-root .inv-modal .inv-menu { align-items:stretch; }
       #inv-root .inv-contador { font-size:56px; font-weight:300; text-align:center; margin:20px 0; }
       #inv-scan-input { position:absolute; opacity:0; pointer-events:none; }
+      #inv-root .inv-progreso { font-size:13px; color:#888; margin:0 0 4px; }
+      #inv-root .inv-ultima { width:100%; border:1px solid #e5e5e5; border-radius:12px; padding:16px;
+        margin:0 0 14px; background:#fff; box-sizing:border-box; }
+      #inv-root .inv-ultima .inv-ultima-ref { font-size:17px; font-weight:600; margin:0 0 4px; color:#1a1a1a; }
+      #inv-root .inv-ultima .inv-ultima-desc { font-size:14px; margin:0 0 8px; color:#555; }
+      #inv-root .inv-ultima .inv-ultima-codigo { font-size:13px; font-family:monospace; letter-spacing:1px;
+        margin:0; color:#888; }
+      #inv-root .inv-ultima .inv-ultima-vazio { font-size:14px; color:#999; margin:0; }
+      #inv-root .inv-menu-scan { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; }
+      #inv-root .inv-menu-scan button { padding:10px 8px; font-size:13px; width:100%; box-sizing:border-box; margin:0; }
+      #inv-root .inv-menu-scan button.inv-full { grid-column:1 / -1; }
+      #inv-root .inv-historial { width:100%; max-height:180px; overflow-y:auto;
+        -webkit-overflow-scrolling:touch; overscroll-behavior:contain; border:1px solid #e5e5e5;
+        border-radius:10px; margin-top:14px; box-sizing:border-box; background:#fff; flex-shrink:0; }
+      #inv-root .inv-historial-item { display:flex; align-items:center; gap:8px; padding:6px 10px;
+        border-bottom:1px solid #f0f0f0; text-align:left; }
+      #inv-root .inv-historial-item:last-child { border-bottom:none; }
+      #inv-root .inv-historial-item span { font-size:11px; line-height:1.3; }
+      #inv-root .inv-historial-codigo { font-family:monospace; color:#888; flex:0 0 auto; min-width:62px; }
+      #inv-root .inv-historial-ref { font-weight:600; color:#333; flex:0 0 auto; min-width:62px; }
+      #inv-root .inv-historial-desc { color:#666; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis;
+        white-space:nowrap; }
+      #inv-root .inv-historial-vazio { padding:14px; font-size:12px; color:#999; text-align:center; }
     `;
     document.head.appendChild(style);
   }
@@ -859,18 +921,53 @@
   let bufferScan = '';
   let timerScan = null;
 
+  function filaHistorial(e) {
+    return '<div class="inv-historial-item">' +
+      '<span class="inv-historial-codigo">' + escapeHtml(e.codigo_barras) + '</span>' +
+      '<span class="inv-historial-ref">' + escapeHtml(e.referencia_resuelta || '—') + '</span>' +
+      '<span class="inv-historial-desc">' + escapeHtml(e.descripcion_resuelta || '—') + '</span>' +
+      '</div>';
+  }
+
+  function panelUltimaLectura(evento) {
+    if (!evento) return '<p class="inv-ultima-vazio">À espera de leitura…</p>';
+    return '<p class="inv-ultima-ref">' + escapeHtml(evento.referencia_resuelta || '—') + '</p>' +
+      '<p class="inv-ultima-desc">' + escapeHtml(evento.descripcion_resuelta || '—') + '</p>' +
+      '<p class="inv-ultima-codigo">' + escapeHtml(evento.codigo_barras) + '</p>';
+  }
+
+  async function refrescarEscaneoUI() {
+    const validos = await obtenerEscaneosValidos(S.captura.id);
+
+    const elProgreso = document.getElementById('inv-progreso');
+    if (elProgreso) elProgreso.textContent = validos.length + ' / ' + S.intento.conteo_fisico + ' esperadas';
+
+    const elUltima = document.getElementById('inv-ultima');
+    if (elUltima) elUltima.innerHTML = panelUltimaLectura(validos[0]);
+
+    const elHist = document.getElementById('inv-historial');
+    if (elHist) {
+      elHist.innerHTML = validos.length
+        ? validos.map(filaHistorial).join('')
+        : '<p class="inv-historial-vazio">Ainda sem leituras nesta unidade.</p>';
+    }
+  }
+
   async function pantallaEscaneo() {
-    const total = await contarEscaneosValidos(S.captura.id);
+    const validos = await obtenerEscaneosValidos(S.captura.id);
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — A ler</h1>',
-      '<div class="inv-contador" id="inv-contador">' + total + '</div>' +
-      '<p>de ' + S.intento.conteo_fisico + ' esperadas</p>' +
-      '<input type="text" id="inv-scan-input" autocomplete="off">' +
-      '<div class="inv-menu">' +
+      '<p class="inv-progreso" id="inv-progreso">' + validos.length + ' / ' + S.intento.conteo_fisico + ' esperadas</p>' +
+      '<div class="inv-ultima" id="inv-ultima">' + panelUltimaLectura(validos[0]) + '</div>' +
+      '<input type="text" id="inv-scan-input" autocomplete="off" inputmode="none">' +
+      '<div class="inv-menu-scan">' +
       '<button class="inv-primario" id="inv-btn-manual">Inserir código manualmente</button>' +
       '<button id="inv-btn-anular">Anular última leitura</button>' +
-      '<button id="inv-btn-limpiar">Limpar / Começar de novo</button>' +
-      '<button class="inv-peligro" id="inv-btn-cerrar-unidad" style="margin-top:10px;">Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
+      '<button class="inv-full" id="inv-btn-limpiar">Limpar / Começar de novo</button>' +
+      '<button class="inv-peligro inv-full" id="inv-btn-cerrar-unidad">Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
+      '</div>' +
+      '<div class="inv-historial" id="inv-historial">' +
+      (validos.length ? validos.map(filaHistorial).join('') : '<p class="inv-historial-vazio">Ainda sem leituras nesta unidade.</p>') +
       '</div>',
       pantallaUnidades
     );
@@ -906,11 +1003,11 @@
   }
 
   async function procesarCodigo(codigo) {
-    await registrarEscaneo(codigo, null, null);
-    const total = await contarEscaneosValidos(S.captura.id);
-    const el = document.getElementById('inv-contador');
-    if (el) el.textContent = total;
-    document.getElementById('inv-scan-input').focus();
+    const ficticios = datosFicticios(codigo);
+    await registrarEscaneo(codigo, ficticios.referencia, ficticios.descricao);
+    await refrescarEscaneoUI();
+    const input = document.getElementById('inv-scan-input');
+    if (input) input.focus();
   }
 
   async function anularUltimoEscaneo() {
@@ -946,8 +1043,7 @@
       await idbPut('anulaciones_local', anulacion);
       sincronizar();
       f.remove();
-      const total = await contarEscaneosValidos(S.captura.id);
-      document.getElementById('inv-contador').textContent = total;
+      await refrescarEscaneoUI();
     };
   }
 

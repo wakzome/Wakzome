@@ -312,7 +312,7 @@
       #inv-root .inv-header button.inv-header-volver { padding:6px 14px; font-size:13px; flex-shrink:0; }
       #inv-root .inv-body { flex:1; padding:32px 24px; max-width:640px; margin:0 auto; width:100%;
         box-sizing:border-box; display:flex; flex-direction:column; align-items:center;
-        justify-content:safe center; text-align:center; min-height:0; }
+        justify-content:flex-start; text-align:center; min-height:0; }
       #inv-root .inv-body h1 { font-size:20px; font-weight:500; margin:0 0 24px; }
       #inv-root .inv-body p { color:#555; }
       #inv-root .inv-menu { display:flex; flex-direction:column; align-items:center; gap:10px; width:100%; }
@@ -326,8 +326,10 @@
       #inv-root button.inv-menu-btn { min-width:220px; text-align:center; }
       #inv-root button:disabled { opacity:.4; cursor:not-allowed; }
       #inv-root .inv-lista-item { display:flex; justify-content:space-between; align-items:center;
-        gap:14px; padding:14px; border:1px solid #e5e5e5; border-radius:10px; margin-bottom:10px;
+        gap:10px; padding:8px 12px; border:1px solid #e5e5e5; border-radius:10px; margin-bottom:6px;
         background:#fff; width:100%; box-sizing:border-box; text-align:left; }
+      #inv-root .inv-lista-item span { font-size:14px; }
+      #inv-root .inv-lista-item button { padding:6px 14px; font-size:13px; flex-shrink:0; }
       #inv-root input[type=text], #inv-root input[type=password], #inv-root input[type=number] {
         font-family:inherit; font-size:16px; padding:10px 12px; border:1px solid #ccc; border-radius:8px;
         width:100%; max-width:280px; box-sizing:border-box; margin:0 auto 10px; display:block; }
@@ -684,7 +686,6 @@
     if (btnFijar) btnFijar.onclick = fijarNumeroEsperado;
     const btnCerrar = document.getElementById('inv-btn-cerrar-inv');
     if (btnCerrar) btnCerrar.onclick = intentarCerrarInventario;
-    document.getElementById('inv-btn-volver-tiendas').onclick = pantallaTiendas;
     document.getElementById('inv-btn-salir').onclick = function () {
       root().remove();
     };
@@ -770,19 +771,10 @@
   async function mostrarCodigos(indice) {
     const codigo = await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, indice);
     const nomeP1 = S.intento.persona1_nombre ? primerNombre(S.intento.persona1_nombre) : '';
-    // Nome de Pessoa 2: quem tem o papel atribuído neste inventário agora, independentemente
-    // de já ter lido ou não esta unidade em concreto.
-    const { data: asigP2 } = await window.sbInventario.from('asignaciones')
-      .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
-      .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle();
-    const nomeP2 = (asigP2 && asigP2.persona) ? primerNombre(asigP2.persona.nombre) : '';
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
       (nomeP1 ? '<p>Registado por <strong>' + nomeP1 + '</strong></p>' : '') +
       '<p>Contagem física: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
-      (nomeP2
-        ? '<p>Dá este código a <strong>' + nomeP2 + '</strong> para que continue a ler:</p>'
-        : '<p>Dá este código à Pessoa 2 para que comece a ler:</p>') +
       '<div style="font-size:40px;letter-spacing:4px;margin:16px 0;font-weight:300;">' + codigo + '</div>' +
       '<button id="inv-btn-mas-codigos">Gerar outro código</button>' +
       '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>' +

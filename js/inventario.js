@@ -305,7 +305,8 @@
         padding:14px 20px; border-bottom:1px solid #e5e5e5; background:#fff; flex-shrink:0; }
       #inv-root .inv-header h1 { font-size:17px; font-weight:500; margin:0; }
       #inv-root .inv-body { flex:1; padding:32px 24px; max-width:640px; margin:0 auto; width:100%;
-        box-sizing:border-box; display:flex; flex-direction:column; align-items:center; text-align:center; }
+        box-sizing:border-box; display:flex; flex-direction:column; align-items:center;
+        justify-content:safe center; text-align:center; min-height:0; }
       #inv-root .inv-body h1 { font-size:20px; font-weight:500; margin:0 0 24px; }
       #inv-root .inv-body p { color:#555; }
       #inv-root .inv-menu { display:flex; flex-direction:column; align-items:center; gap:10px; width:100%; }
@@ -323,7 +324,7 @@
         background:#fff; width:100%; box-sizing:border-box; text-align:left; }
       #inv-root input[type=text], #inv-root input[type=password], #inv-root input[type=number] {
         font-family:inherit; font-size:16px; padding:10px 12px; border:1px solid #ccc; border-radius:8px;
-        width:100%; box-sizing:border-box; margin-bottom:10px; }
+        width:100%; max-width:280px; box-sizing:border-box; margin:0 auto 10px; display:block; }
       #inv-root .inv-badge { font-size:12px; padding:4px 10px; border-radius:12px; font-weight:600; }
       #inv-root .inv-modal-fondo { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100000;
         display:flex; align-items:center; justify-content:center; }
@@ -448,8 +449,8 @@
   function pedirClavePersonal(rol) {
     const f = modal(
       '<h3>Senha pessoal</h3>' +
-      '<div style="position:relative;">' +
-      '<input type="password" id="inv-clave-personal" placeholder="A tua senha" autofocus style="padding-right:40px;">' +
+      '<div style="position:relative;max-width:280px;margin:0 auto;">' +
+      '<input type="password" id="inv-clave-personal" placeholder="A tua senha" autofocus style="padding-right:40px;max-width:none;">' +
       '<button type="button" id="inv-clave-olho" title="Mostrar/ocultar senha" ' +
       'style="position:absolute;right:4px;top:4px;padding:6px 10px;border-radius:8px;">👁</button>' +
       '</div>' +
@@ -739,20 +740,17 @@
     mostrarCodigos(1);
   }
 
-  async function mostrarCodigos(desdeIndice) {
-    const codigos = [];
-    for (let i = desdeIndice; i < desdeIndice + 4; i++) {
-      codigos.push(await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, i));
-    }
+  async function mostrarCodigos(indice) {
+    const codigo = await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, indice);
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
       '<p>Contagem física: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
-      '<p>Dá um destes códigos à Pessoa 2 para que comece a ler:</p>' +
-      '<div style="font-size:22px;letter-spacing:2px;margin:16px 0;">' + codigos.join(' &nbsp; ') + '</div>' +
-      '<button id="inv-btn-mas-codigos">Gerar mais códigos</button>' +
+      '<p>Dá este código à Pessoa 2 para que comece a ler:</p>' +
+      '<div style="font-size:40px;letter-spacing:4px;margin:16px 0;font-weight:300;">' + codigo + '</div>' +
+      '<button id="inv-btn-mas-codigos">Gerar outro código</button>' +
       '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>'
     );
-    document.getElementById('inv-btn-mas-codigos').onclick = function () { mostrarCodigos(desdeIndice + 4); };
+    document.getElementById('inv-btn-mas-codigos').onclick = function () { mostrarCodigos(indice + 1); };
     document.getElementById('inv-btn-siguiente-unidad').onclick = pantallaUnidades;
   }
 

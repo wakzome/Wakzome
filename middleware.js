@@ -1,6 +1,7 @@
 const PUBLIC_JS = [
   '/js/shared.js',
   '/js/intro.js',
+  '/js/inventario.js',
 ];
 
 async function verifyToken(token) {

@@ -179,15 +179,20 @@
 
       await new Promise(function(resolve, reject) {
         var s = document.createElement('script');
-        s.src = 'js/inventario.js';
+        s.src = 'js/inventario.js?v=' + Date.now();
         s.onload = resolve;
         s.onerror = reject;
         document.body.appendChild(s);
       });
 
-      if (typeof window.openInventarioApp === 'function') {
-        window.openInventarioApp(token);
-      }
+      sweepThen(function() {
+        document.getElementById('login-screen').style.display = 'none';
+        showGreeting('Olá', function() {
+          if (typeof window.openInventarioApp === 'function') {
+            window.openInventarioApp(token);
+          }
+        });
+      });
 
       return true;
     } catch (e) {

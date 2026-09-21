@@ -408,6 +408,8 @@
       #inv-root .inv-historial-ref { font-weight:600; color:#333; flex:0 0 auto; min-width:62px; }
       #inv-root .inv-historial-desc { color:#666; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis;
         white-space:nowrap; }
+      #inv-root .inv-historial-qty { font-weight:700; color:#1a1a1a; flex:0 0 auto; min-width:22px;
+        text-align:right; font-size:13px !important; }
       #inv-root .inv-historial-vazio { padding:14px; font-size:12px; color:#999; text-align:center; }
     `;
     document.head.appendChild(style);
@@ -816,17 +818,67 @@
     return escaneos.filter(function (e) { return !anuladosSet.has(e.id); });
   }
 
+  function agruparPorCodigo(escaneos) {
+    const mapa = new Map();
+    escaneos.forEach(function (e) {
+      const key = e.codigo_barras;
+      if (!mapa.has(key)) {
+        mapa.set(key, {
+          codigo_barras: key,
+          referencia_resuelta: e.referencia_resuelta,
+          descripcion_resuelta: e.descripcion_resuelta,
+          cantidad: 0
+        });
+      }
+      mapa.get(key).cantidad++;
+    });
+    return Array.from(mapa.values()).sort(function (a, b) { return b.cantidad - a.cantidad; });
+  }
+
+  function filaResumoCodigo(g) {
+    return '<div class="inv-historial-item">' +
+      '<span class="inv-historial-codigo">' + escapeHtml(g.codigo_barras) + '</span>' +
+      '<span class="inv-historial-ref">' + escapeHtml(g.referencia_resuelta || '—') + '</span>' +
+      '<span class="inv-historial-desc">' + escapeHtml(g.descripcion_resuelta || '—') + '</span>' +
+      '<span class="inv-historial-qty">' + g.cantidad + '</span>' +
+      '</div>';
+  }
+
+  async function reiniciarExpositor(unidadId, numero, intentoId) {
+    if (!confirm('Reiniciar ' + UNIDAD_LABEL[S.zona].toLowerCase() + ' ' + numero + '? O trabalho validado vai ser descartado e é preciso refazer a contagem do zero para valer no relatório final. Esta ação não pode ser desfeita.')) return;
+
+    const { error: e1 } = await window.sbInventario.from('intentos')
+      .update({ estado: 'divergencia' }).eq('id', intentoId);
+    if (e1) { alert('Não foi possível reiniciar. Verifica a tua ligação.'); return; }
+
+    const { error: e2 } = await window.sbInventario.from('unidades')
+      .update({ estado: 'pendiente' }).eq('id', unidadId);
+    if (e2) { alert('A unidade ficou num estado inconsistente — tenta reiniciar de novo. Verifica a tua ligação.'); return; }
+
+    await window.sbInventario.from('incidencias').insert({
+      inventario_id: S.inventario.id, unidad_id: unidadId, tipo: 'reinicio_expositor',
+      detalle: { numero: numero, persona: S.persona.nombre, fecha: new Date().toISOString() }
+    });
+
+    alert('Reiniciado. É preciso voltar a contar esta unidade.');
+    pantallaUnidades();
+  }
+
   async function verDetalheUnidad(unidadId, numero, intentoId) {
     render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + ' — detalhe</h1>', '<p>A carregar…</p>', pantallaUnidades);
     const escaneos = await obtenerEscaneosDeUnidad(intentoId);
+    const grupos = agruparPorCodigo(escaneos);
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + ' — detalhe</h1>',
-      '<p>' + escaneos.length + ' leitura' + (escaneos.length === 1 ? '' : 's') + ' válida' + (escaneos.length === 1 ? '' : 's') + ' registada' + (escaneos.length === 1 ? '' : 's') + '</p>' +
+      '<p>' + escaneos.length + ' peça' + (escaneos.length === 1 ? '' : 's') + ' em ' + grupos.length + ' código' + (grupos.length === 1 ? '' : 's') + ' de barras</p>' +
       '<div class="inv-historial" id="inv-historial-detalhe" style="max-height:340px;">' +
-      (escaneos.length ? escaneos.map(filaHistorial).join('') : '<p class="inv-historial-vazio">Sem leituras registadas.</p>') +
-      '</div>',
+      (grupos.length ? grupos.map(filaResumoCodigo).join('') : '<p class="inv-historial-vazio">Sem leituras registadas.</p>') +
+      '</div>' +
+      '<button class="inv-peligro" id="inv-btn-reiniciar-expositor" style="margin-top:16px;">🔁 Reiniciar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>',
       pantallaUnidades
     );
+    const btnReiniciar = document.getElementById('inv-btn-reiniciar-expositor');
+    if (btnReiniciar) btnReiniciar.onclick = function () { reiniciarExpositor(unidadId, numero, intentoId); };
   }
 
   async function fijarNumeroEsperado() {

@@ -715,7 +715,7 @@
       }
       if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
-          (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Inserir código') + '</button>';
+          (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Começar leitura') + '</button>';
       }
       return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + '</span>' + accion + '</div>';
     }).join('');
@@ -998,6 +998,25 @@
       }
     }
 
+    // Com rede, o servidor já garante a entrega correta (estado 'autorizado' = Pessoa 1
+    // fechou mesmo esta unidade) — o código de autorização só é necessário como alternativa
+    // para quando não há rede nenhuma para confirmar isso automaticamente.
+    if (navigator.onLine && intento.estado === 'autorizado') {
+      render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>', '<p>A iniciar leitura…</p>');
+      const resultado = await reclamarUnidad();
+      if (resultado.ok) return;
+      render(
+        '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
+        '<p style="color:#c0392b;">' + resultado.motivo + '</p>' +
+        '<button class="inv-primario" id="inv-btn-tentar-de-novo">Tentar novamente</button>' +
+        '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>',
+        pantallaUnidades
+      );
+      document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneo(unidadId, numero); };
+      document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
+      return;
+    }
+
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
       '<p>Contagem da Pessoa 1: <strong>' + intento.conteo_fisico + '</strong></p>' +
@@ -1013,32 +1032,37 @@
     });
   }
 
+  // .eq('estado','autorizado') funciona como guarda de concorrência: se esta tentativa já
+  // tiver sido reclamada entretanto, esta atualização não afeta nenhuma linha e nada é
+  // sobreposto. Usado tanto pelo caminho automático (com rede) como pelo código manual.
+  async function reclamarUnidad() {
+    const { data: intentoAct, error: e1 } = await window.sbInventario.from('intentos')
+      .update({ persona2_id: S.persona.id, estado: 'escaneando' })
+      .eq('id', S.intento.id).eq('estado', 'autorizado').select();
+    if (e1) return { ok: false, motivo: 'Não foi possível autorizar. Verifica a tua ligação.' };
+    if (!intentoAct || !intentoAct.length) {
+      return { ok: false, motivo: 'Esta unidade já foi ocupada por outra pessoa.' };
+    }
+    S.intento = intentoAct[0];
+
+    const { data: captura, error: e2 } = await window.sbInventario.from('capturas')
+      .insert({ intento_id: S.intento.id, numero_captura: 1, estado: 'activa' }).select().single();
+    if (e2) return { ok: false, motivo: 'Não foi possível iniciar a captura. Verifica a tua ligação.' };
+    S.captura = captura;
+
+    await guardarPuntero();
+    pantallaEscaneo();
+    return { ok: true };
+  }
+
   async function autorizarEscaneo() {
     const codigo = document.getElementById('inv-codigo-auth').value;
     const err = document.getElementById('inv-codigo-error');
     const ok = await verificarCodigo(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, codigo);
     if (!ok) { err.textContent = 'Código incorreto, ou pertence a outra unidade/tentativa.'; return; }
 
-    // .eq('estado','autorizado') funciona como guarda de concorrência: se outra Pessoa 2 já
-    // tiver reclamado esta tentativa entre a listagem e a autorização, esta atualização não
-    // afeta nenhuma linha e nada é sobreposto.
-    const { data: intentoAct, error: e1 } = await window.sbInventario.from('intentos')
-      .update({ persona2_id: S.persona.id, estado: 'escaneando' })
-      .eq('id', S.intento.id).eq('estado', 'autorizado').select();
-    if (e1) { err.textContent = 'Não foi possível autorizar. Verifica a tua ligação.'; return; }
-    if (!intentoAct || !intentoAct.length) {
-      err.textContent = 'Esta unidade já foi ocupada por outra pessoa. Volta à lista.';
-      return;
-    }
-    S.intento = intentoAct[0];
-
-    const { data: captura, error: e2 } = await window.sbInventario.from('capturas')
-      .insert({ intento_id: S.intento.id, numero_captura: 1, estado: 'activa' }).select().single();
-    if (e2) { err.textContent = 'Não foi possível iniciar a captura. Verifica a tua ligação.'; return; }
-    S.captura = captura;
-
-    await guardarPuntero();
-    pantallaEscaneo();
+    const resultado = await reclamarUnidad();
+    if (!resultado.ok) err.textContent = resultado.motivo;
   }
 
   // ══════════════════════════════════════════════════════════════════════

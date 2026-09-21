@@ -599,14 +599,10 @@
     let cierreHtml = '';
     if (S.rol === 'persona2') {
       const estados = await Promise.all([construirEstadoZona('loja'), construirEstadoZona('armazem')]);
-      const partes = [];
-      if (estados[0] && estados[0].listo) {
-        partes.push('<button class="inv-primario" data-cerrar-inv="' + estados[0].inventario.id + '" style="margin-top:10px;width:100%;">Encerrar Loja definitivamente</button>');
+      const ambosListos = estados[0] && estados[0].listo && estados[1] && estados[1].listo;
+      if (ambosListos) {
+        cierreHtml = '<div style="width:100%;"><button class="inv-primario" id="inv-btn-cerrar-tienda" style="margin-top:10px;width:100%;">Encerrar inventário de ' + S.tienda.nombre + '</button></div>';
       }
-      if (estados[1] && estados[1].listo) {
-        partes.push('<button class="inv-primario" data-cerrar-inv="' + estados[1].inventario.id + '" style="margin-top:10px;width:100%;">Encerrar Armazém definitivamente</button>');
-      }
-      if (partes.length) cierreHtml = '<div style="width:100%;">' + partes.join('') + '</div>';
     }
 
     render(
@@ -621,9 +617,8 @@
     document.getElementById('inv-btn-loja').onclick = function () { S.zona = 'loja'; entrarEnInventario(); };
     document.getElementById('inv-btn-armazem').onclick = function () { S.zona = 'armazem'; entrarEnInventario(); };
     document.getElementById('inv-btn-volver').onclick = pantallaRol;
-    root().querySelectorAll('[data-cerrar-inv]').forEach(function (b) {
-      b.onclick = function () { cerrarInventarioPorZona(b.dataset.cerrarInv); };
-    });
+    const btnCerrar = document.getElementById('inv-btn-cerrar-tienda');
+    if (btnCerrar) btnCerrar.onclick = cerrarInventarioDeTienda;
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -1273,18 +1268,20 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  ENCERRAMENTO DEFINITIVO DE UM INVENTÁRIO (por zona — loja ou armazém)
+  //  ENCERRAMENTO DEFINITIVO DO INVENTÁRIO DA LOJA (Loja + Armazém juntos,
+  //  numa única transação atómica no lado do servidor — ou fecham os dois,
+  //  ou não fecha nenhum)
   // ══════════════════════════════════════════════════════════════════════
-  async function cerrarInventarioPorZona(inventarioId) {
+  async function cerrarInventarioDeTienda() {
     if (S.pendientesSync > 0) {
       alert('Ainda há ' + S.pendientesSync + ' leituras pendentes de sincronizar. Espera que o indicador fique verde antes de encerrar.');
       return;
     }
     if (!navigator.onLine) { alert('Precisas de ligação à Internet para encerrar o inventário definitivamente.'); return; }
-    if (!confirm('Encerrar definitivamente este inventário? Esta ação não pode ser desfeita.')) return;
+    if (!confirm('Encerrar definitivamente o inventário de ' + S.tienda.nombre + ' (Loja e Armazém)? Esta ação não pode ser desfeita.')) return;
 
-    const { data, error } = await window.sbInventario.rpc('cerrar_inventario', {
-      p_token: S.token, p_inventario_id: inventarioId, p_persona_id: S.persona.id
+    const { data, error } = await window.sbInventario.rpc('cerrar_inventario_tienda', {
+      p_token: S.token, p_tienda_id: S.tienda.id, p_persona_id: S.persona.id
     });
     if (error) { alert('Não foi possível encerrar: ' + error.message); return; }
     const resultado = data && data[0];
@@ -1292,7 +1289,7 @@
       alert('Ainda não é possível encerrar: ' + (resultado ? resultado.motivo : 'erro desconhecido'));
       return;
     }
-    alert('Inventário encerrado corretamente.');
+    alert('Inventário de ' + S.tienda.nombre + ' encerrado corretamente.');
     pantallaZona();
   }
 

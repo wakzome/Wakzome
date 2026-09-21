@@ -185,6 +185,7 @@
   //  SINCRONIZAÇÃO — fila local, idempotente, em lotes
   // ══════════════════════════════════════════════════════════════════════
   let sincronizando = false;
+  let timerListaUnidades = null;
 
   async function actualizarIndicador() {
     const eventos = await idbGetAll('eventos');
@@ -423,6 +424,7 @@
   }
 
   function render(headerHtml, bodyHtml, onVolver) {
+    if (timerListaUnidades) { clearInterval(timerListaUnidades); timerListaUnidades = null; }
     const volverBtn = onVolver
       ? '<button class="inv-header-volver" id="inv-btn-header-volver">← Voltar</button>'
       : '';
@@ -660,12 +662,12 @@
   // ══════════════════════════════════════════════════════════════════════
   //  ECRÃ 4 — LISTA DE UNIDADES (Expositores / Grupos)
   // ══════════════════════════════════════════════════════════════════════
-  async function pantallaUnidades() {
+  async function construirEstadoUnidades() {
     const { data: unidades, error } = await window.sbInventario
       .from('unidades').select('*, intentos(*)')
       .eq('inventario_id', S.inventario.id).order('numero');
 
-    if (error) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
+    if (error) return null;
 
     // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — independente
     // de já ter começado a ler alguma unidade em concreto.
@@ -693,6 +695,7 @@
       let accion = '';
       if (u.estado === 'validada') {
         estadoTxt = '✅ Validado';
+        accion = '<button data-accion="verdetalle" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + (ultimoIntento ? ultimoIntento.id : '') + '">Ver detalhes</button>';
       } else if (ultimoIntento && ultimoIntento.estado === 'divergencia') {
         estadoTxt = '❌ Divergência — repetir contagem';
       } else if (ultimoIntento && ultimoIntento.estado === 'escaneando') {
@@ -723,24 +726,14 @@
     // já declaradas, fica escondido, para não pedir de novo algo que já foi definido.
     const esperadas = S.inventario.unidades_esperadas || 0;
     const todasValidadas = esperadas > 0 && unidades.length >= esperadas && validadas >= esperadas;
-    const nuevaUnidadHtml = (S.rol === 'persona1' && (esperadas === 0 || todasValidadas))
-      ? '<div style="margin-top:20px;width:100%;"><input type="number" id="inv-num-nuevas" placeholder="' +
-        (esperadas === 0 ? 'Número total de ' + label.toLowerCase() + 's' : 'Novo número total (atualmente ' + esperadas + ')') + '">' +
-        '<button class="inv-primario" id="inv-btn-fijar-numero">' + (esperadas === 0 ? 'Definir número esperado' : 'Adicionar mais ' + label.toLowerCase() + 's') + '</button></div>'
-      : '';
 
-    const cierreHtml = S.rol === 'persona2'
-      ? '<button class="inv-primario" id="inv-btn-cerrar-inv" style="margin-top:20px;">Encerrar inventário definitivamente</button>'
-      : '';
+    return {
+      unidades: unidades, filas: filas, validadas: validadas,
+      esperadas: esperadas, todasValidadas: todasValidadas, label: label
+    };
+  }
 
-    render(
-      '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
-      '<p>' + validadas + ' / ' + Math.max(unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
-      '<div style="width:100%;">' + filas + '</div>' + nuevaUnidadHtml + cierreHtml +
-      '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>',
-      pantallaTiendas
-    );
-
+  function vincularAccionesUnidades() {
     root().querySelectorAll('[data-accion="contar"]').forEach(function (b) {
       b.onclick = function () { iniciarConteo(b.dataset.id, parseInt(b.dataset.numero, 10)); };
     });
@@ -750,13 +743,90 @@
     root().querySelectorAll('[data-accion="vercodigos"]').forEach(function (b) {
       b.onclick = function () { verCodigosDeNuevo(b.dataset.id, parseInt(b.dataset.numero, 10), b.dataset.intento); };
     });
+    root().querySelectorAll('[data-accion="verdetalle"]').forEach(function (b) {
+      b.onclick = function () { verDetalheUnidad(b.dataset.id, parseInt(b.dataset.numero, 10), b.dataset.intento); };
+    });
+  }
+
+  // Refresca só a lista de expositores (sem recarregar o ecrã inteiro, sem perder o
+  // scroll) enquanto se está nesta tela — para que uma mudança feita por outra pessoa
+  // (ex.: Pessoa 1 recontando após divergência) apareça sozinha em poucos segundos.
+  async function refrescarListaUnidades() {
+    const cont = document.getElementById('inv-lista-unidades');
+    if (!cont) { clearInterval(timerListaUnidades); timerListaUnidades = null; return; }
+    const estado = await construirEstadoUnidades();
+    if (!estado) return;
+    cont.innerHTML = estado.filas;
+    vincularAccionesUnidades();
+  }
+
+  async function pantallaUnidades() {
+    const estado = await construirEstadoUnidades();
+    if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
+
+    const nuevaUnidadHtml = (S.rol === 'persona1' && (estado.esperadas === 0 || estado.todasValidadas))
+      ? '<div style="margin-top:20px;width:100%;"><input type="number" id="inv-num-nuevas" placeholder="' +
+        (estado.esperadas === 0 ? 'Número total de ' + estado.label.toLowerCase() + 's' : 'Novo número total (atualmente ' + estado.esperadas + ')') + '">' +
+        '<button class="inv-primario" id="inv-btn-fijar-numero">' + (estado.esperadas === 0 ? 'Definir número esperado' : 'Adicionar mais ' + estado.label.toLowerCase() + 's') + '</button></div>'
+      : '';
+
+    const cierreHtml = S.rol === 'persona2'
+      ? '<button class="inv-primario" id="inv-btn-cerrar-inv" style="margin-top:20px;">Encerrar inventário definitivamente</button>'
+      : '';
+
+    render(
+      '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
+      '<p>' + estado.validadas + ' / ' + Math.max(estado.unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
+      '<div style="width:100%;" id="inv-lista-unidades">' + estado.filas + '</div>' + nuevaUnidadHtml + cierreHtml +
+      '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>',
+      pantallaTiendas
+    );
+
+    vincularAccionesUnidades();
     const btnFijar = document.getElementById('inv-btn-fijar-numero');
     if (btnFijar) btnFijar.onclick = fijarNumeroEsperado;
     const btnCerrar = document.getElementById('inv-btn-cerrar-inv');
     if (btnCerrar) btnCerrar.onclick = intentarCerrarInventario;
     document.getElementById('inv-btn-salir').onclick = function () {
+      if (timerListaUnidades) { clearInterval(timerListaUnidades); timerListaUnidades = null; }
       root().remove();
     };
+
+    if (timerListaUnidades) clearInterval(timerListaUnidades);
+    timerListaUnidades = setInterval(refrescarListaUnidades, 5000);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  VER DETALHES DE UMA UNIDADE JÁ VALIDADA (só consulta, não reabre nada)
+  // ══════════════════════════════════════════════════════════════════════
+  async function obtenerEscaneosDeUnidad(intentoId) {
+    if (!intentoId) return [];
+    const { data: capturas } = await window.sbInventario.from('capturas')
+      .select('id').eq('intento_id', intentoId).eq('estado', 'cerrada');
+    const capturaIds = (capturas || []).map(function (c) { return c.id; });
+    if (!capturaIds.length) return [];
+
+    const { data: escaneos } = await window.sbInventario.from('escaneos')
+      .select('*').in('captura_id', capturaIds).order('creado_en_dispositivo_at', { ascending: false });
+    if (!escaneos || !escaneos.length) return [];
+
+    const { data: anulaciones } = await window.sbInventario.from('anulaciones')
+      .select('escaneo_id').in('escaneo_id', escaneos.map(function (e) { return e.id; }));
+    const anuladosSet = new Set((anulaciones || []).map(function (a) { return a.escaneo_id; }));
+    return escaneos.filter(function (e) { return !anuladosSet.has(e.id); });
+  }
+
+  async function verDetalheUnidad(unidadId, numero, intentoId) {
+    render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + ' — detalhe</h1>', '<p>A carregar…</p>', pantallaUnidades);
+    const escaneos = await obtenerEscaneosDeUnidad(intentoId);
+    render(
+      '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + ' — detalhe</h1>',
+      '<p>' + escaneos.length + ' leitura' + (escaneos.length === 1 ? '' : 's') + ' válida' + (escaneos.length === 1 ? '' : 's') + ' registada' + (escaneos.length === 1 ? '' : 's') + '</p>' +
+      '<div class="inv-historial" id="inv-historial-detalhe" style="max-height:340px;">' +
+      (escaneos.length ? escaneos.map(filaHistorial).join('') : '<p class="inv-historial-vazio">Sem leituras registadas.</p>') +
+      '</div>',
+      pantallaUnidades
+    );
   }
 
   async function fijarNumeroEsperado() {

@@ -382,16 +382,20 @@
       #inv-root .inv-contador { font-size:56px; font-weight:300; text-align:center; margin:20px 0; }
       #inv-scan-input { position:absolute; opacity:0; pointer-events:none; }
       #inv-root .inv-progreso { font-size:13px; color:#888; margin:0 0 4px; }
-      #inv-root .inv-ultima { width:100%; border:1px solid #e5e5e5; border-radius:12px; padding:16px;
+      #inv-root .inv-ultima { width:100%; border:1px solid #e5e5e5; border-radius:14px; padding:18px;
         margin:0 0 14px; background:#fff; box-sizing:border-box; }
-      #inv-root .inv-ultima .inv-ultima-ref { font-size:17px; font-weight:600; margin:0 0 4px; color:#1a1a1a; }
-      #inv-root .inv-ultima .inv-ultima-desc { font-size:14px; margin:0 0 8px; color:#555; }
-      #inv-root .inv-ultima .inv-ultima-codigo { font-size:13px; font-family:monospace; letter-spacing:1px;
-        margin:0; color:#888; }
-      #inv-root .inv-ultima .inv-ultima-vazio { font-size:14px; color:#999; margin:0; }
-      #inv-root .inv-menu-scan { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; }
-      #inv-root .inv-menu-scan button { padding:10px 8px; font-size:13px; width:100%; box-sizing:border-box; margin:0; }
-      #inv-root .inv-menu-scan button.inv-full { grid-column:1 / -1; }
+      #inv-root .inv-ultima .inv-ultima-ref { font-size:24px; font-weight:700; margin:0 0 6px; color:#1a1a1a; }
+      #inv-root .inv-ultima .inv-ultima-desc { font-size:18px; margin:0 0 10px; color:#444; }
+      #inv-root .inv-ultima .inv-ultima-codigo { font-size:20px; font-family:monospace; letter-spacing:1px;
+        margin:0; color:#666; font-weight:600; }
+      #inv-root .inv-ultima .inv-ultima-vazio { font-size:16px; color:#999; margin:0; }
+      #inv-root .inv-acciones-icono { display:flex; justify-content:space-around; gap:8px; width:100%;
+        padding-top:14px; margin-top:14px; border-top:1px solid #eee; }
+      #inv-root .inv-icon-btn { display:flex; flex-direction:column; align-items:center; gap:4px;
+        flex:1 1 0; padding:10px 4px; border-radius:14px; border:1px solid transparent; background:transparent; }
+      #inv-root .inv-icon-btn .inv-icon { font-size:26px; line-height:1; }
+      #inv-root .inv-icon-btn .inv-icon-label { font-size:11px; color:#555; }
+      #inv-root .inv-btn-encerrar { width:100%; box-sizing:border-box; margin-top:14px; }
       #inv-root .inv-historial { width:100%; max-height:180px; overflow-y:auto;
         -webkit-overflow-scrolling:touch; overscroll-behavior:contain; border:1px solid #e5e5e5;
         border-radius:10px; margin-top:14px; box-sizing:border-box; background:#fff; flex-shrink:0; }
@@ -936,6 +940,18 @@
       '<p class="inv-ultima-codigo">' + escapeHtml(evento.codigo_barras) + '</p>';
   }
 
+  function cardUltimaLectura(evento) {
+    return '<div class="inv-ultima" id="inv-ultima">' +
+      '<div id="inv-ultima-info">' + panelUltimaLectura(evento) + '</div>' +
+      '<div class="inv-acciones-icono">' +
+      '<button class="inv-icon-btn" id="inv-btn-manual"><span class="inv-icon">✏️</span><span class="inv-icon-label">Manual</span></button>' +
+      '<button class="inv-icon-btn" id="inv-btn-anular"><span class="inv-icon">❌</span><span class="inv-icon-label">Anular</span></button>' +
+      '<button class="inv-icon-btn" id="inv-btn-limpiar"><span class="inv-icon">🔄</span><span class="inv-icon-label">Reiniciar</span></button>' +
+      '</div>' +
+      '<button class="inv-peligro inv-btn-encerrar" id="inv-btn-cerrar-unidad">🔒 Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
+      '</div>';
+  }
+
   function focarSemTeclado(input) {
     input.setAttribute('readonly', 'readonly');
     input.focus();
@@ -945,8 +961,8 @@
   async function refrescarEscaneoUI() {
     const validos = await obtenerEscaneosValidos(S.captura.id);
 
-    const elUltima = document.getElementById('inv-ultima');
-    if (elUltima) elUltima.innerHTML = panelUltimaLectura(validos[0]);
+    const elInfo = document.getElementById('inv-ultima-info');
+    if (elInfo) elInfo.innerHTML = panelUltimaLectura(validos[0]);
 
     const elHist = document.getElementById('inv-historial');
     if (elHist) {
@@ -960,14 +976,8 @@
     const validos = await obtenerEscaneosValidos(S.captura.id);
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — A ler</h1>',
-      '<div class="inv-ultima" id="inv-ultima">' + panelUltimaLectura(validos[0]) + '</div>' +
+      cardUltimaLectura(validos[0]) +
       '<input type="text" id="inv-scan-input" autocomplete="off">' +
-      '<div class="inv-menu-scan">' +
-      '<button class="inv-primario" id="inv-btn-manual">Inserir código manualmente</button>' +
-      '<button id="inv-btn-anular">Anular última leitura</button>' +
-      '<button class="inv-full" id="inv-btn-limpiar">Limpar / Começar de novo</button>' +
-      '<button class="inv-peligro inv-full" id="inv-btn-cerrar-unidad">Encerrar ' + UNIDAD_LABEL[S.zona].toLowerCase() + '</button>' +
-      '</div>' +
       '<div class="inv-historial" id="inv-historial">' +
       (validos.length ? validos.map(filaHistorial).join('') : '<p class="inv-historial-vazio">Ainda sem leituras nesta unidade.</p>') +
       '</div>',

@@ -572,19 +572,58 @@
   // ══════════════════════════════════════════════════════════════════════
   //  ECRÃ 3 — SELEÇÃO DE ZONA (Loja / Armazém)
   // ══════════════════════════════════════════════════════════════════════
-  function pantallaZona() {
+  // Estado de encerramento de uma zona (loja/armazém) desta loja — independente de já se
+  // ter "entrado" nela nesta sessão. Usado para mostrar o botão de encerrar definitivamente
+  // ao nível de "Loja ou Armazém?", sem precisar de abrir a lista de unidades.
+  async function construirEstadoZona(zona) {
+    const { data: inv, error } = await window.sbInventario
+      .from('inventarios').select('*')
+      .eq('tienda_id', S.tienda.id).eq('zona', zona).eq('estado', 'abierto')
+      .maybeSingle();
+    if (error || !inv) return null;
+
+    const { data: unidades, error: eu } = await window.sbInventario
+      .from('unidades').select('estado').eq('inventario_id', inv.id);
+    if (eu) return null;
+
+    const esperadas = inv.unidades_esperadas || 0;
+    const validadas = (unidades || []).filter(function (u) { return u.estado === 'validada'; }).length;
+    const listo = esperadas > 0 && unidades.length >= esperadas && validadas >= esperadas;
+
+    return { inventario: inv, listo: listo };
+  }
+
+  async function pantallaZona() {
+    render('<h1>' + S.tienda.nombre + ' — ' + S.persona.nombre + '</h1>', '<p>A carregar…</p>');
+
+    let cierreHtml = '';
+    if (S.rol === 'persona2') {
+      const estados = await Promise.all([construirEstadoZona('loja'), construirEstadoZona('armazem')]);
+      const partes = [];
+      if (estados[0] && estados[0].listo) {
+        partes.push('<button class="inv-primario" data-cerrar-inv="' + estados[0].inventario.id + '" style="margin-top:10px;width:100%;">Encerrar Loja definitivamente</button>');
+      }
+      if (estados[1] && estados[1].listo) {
+        partes.push('<button class="inv-primario" data-cerrar-inv="' + estados[1].inventario.id + '" style="margin-top:10px;width:100%;">Encerrar Armazém definitivamente</button>');
+      }
+      if (partes.length) cierreHtml = '<div style="width:100%;">' + partes.join('') + '</div>';
+    }
+
     render(
       '<h1>' + S.tienda.nombre + ' — ' + S.persona.nombre + '</h1>',
       '<h1>Loja ou Armazém?</h1>' +
       '<div class="inv-menu">' +
       '<button class="inv-primario inv-menu-btn" id="inv-btn-loja">Loja</button>' +
       '<button class="inv-primario inv-menu-btn" id="inv-btn-armazem">Armazém</button>' +
-      '</div>' +
+      '</div>' + cierreHtml +
       '<button id="inv-btn-volver" style="margin-top:24px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-loja').onclick = function () { S.zona = 'loja'; entrarEnInventario(); };
     document.getElementById('inv-btn-armazem').onclick = function () { S.zona = 'armazem'; entrarEnInventario(); };
     document.getElementById('inv-btn-volver').onclick = pantallaRol;
+    root().querySelectorAll('[data-cerrar-inv]').forEach(function (b) {
+      b.onclick = function () { cerrarInventarioPorZona(b.dataset.cerrarInv); };
+    });
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -594,24 +633,28 @@
     render('<h1>' + S.tienda.nombre + '</h1>', '<p>A entrar…</p><p>A verificar disponibilidade…</p>');
 
     // Sair do ecrã NÃO liberta a atribuição (regra de negócio explícita). Por isso, antes de
-    // tentar criar uma atribuição nova, vemos se esta pessoa já tem uma ativa. Se for
-    // exatamente a mesma loja+zona+função, é uma RETOMA, não um conflito.
-    const { data: ativaAtual, error: e0 } = await window.sbInventario
-      .from('asignaciones').select('*').eq('persona_id', S.persona.id).eq('estado', 'activa').maybeSingle();
+    // tentar criar uma atribuição nova, vemos se esta pessoa já tem outras ativas. Uma pessoa
+    // pode ter várias atribuições ativas em simultâneo DENTRO da mesma loja (ex.: Loja e
+    // Armazém), mas nunca em lojas diferentes ao mesmo tempo — essa é a barreira real entre
+    // lojas. Se for exatamente a mesma loja+zona+função, é uma RETOMA, não um conflito.
+    const { data: activas, error: e0 } = await window.sbInventario
+      .from('asignaciones').select('*').eq('persona_id', S.persona.id).eq('estado', 'activa');
 
     if (e0) { render('<h1>Erro</h1>', '<p>Não foi possível verificar atribuições anteriores. Verifica a tua ligação.</p>'); return; }
 
+    const ativaOutraLoja = (activas || []).find(function (a) { return a.tienda_id !== S.tienda.id; });
+    if (ativaOutraLoja) {
+      render('<h1>Não disponível</h1>',
+        '<p><strong>' + S.persona.nombre + '</strong> já tem uma atribuição ativa como ' +
+        (ativaOutraLoja.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ' em ' + ativaOutraLoja.tienda_id + ' — ' + ZONA_LABEL[ativaOutraLoja.zona] + '.</p>' +
+        '<p>Tem de ser encerrada corretamente antes de poder ser atribuída a outra loja.</p>' +
+        '<button class="inv-primario" id="inv-btn-voltar-conflito">Voltar</button>');
+      document.getElementById('inv-btn-voltar-conflito').onclick = pantallaZona;
+      return;
+    }
+
+    const ativaAtual = (activas || []).find(function (a) { return a.zona === S.zona && a.rol === S.rol; });
     if (ativaAtual) {
-      const mesma = ativaAtual.tienda_id === S.tienda.id && ativaAtual.zona === S.zona && ativaAtual.rol === S.rol;
-      if (!mesma) {
-        render('<h1>Não disponível</h1>',
-          '<p><strong>' + S.persona.nombre + '</strong> já tem uma atribuição ativa como ' +
-          (ativaAtual.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ' em ' + ativaAtual.tienda_id + ' — ' + ZONA_LABEL[ativaAtual.zona] + '.</p>' +
-          '<p>Tem de ser encerrado corretamente antes de poder ser reatribuída a outro sítio.</p>' +
-          '<button class="inv-primario" id="inv-btn-voltar-conflito">Voltar</button>');
-        document.getElementById('inv-btn-voltar-conflito').onclick = pantallaZona;
-        return;
-      }
       // Mesma loja+zona+função: retomamos a atribuição existente, sem criar outra.
       const { data: inv, error: eInv } = await window.sbInventario
         .from('inventarios').select('*').eq('id', ativaAtual.inventario_id).maybeSingle();
@@ -772,23 +815,17 @@
         '<button class="inv-primario" id="inv-btn-fijar-numero">' + (estado.esperadas === 0 ? 'Definir número esperado' : 'Adicionar mais ' + estado.label.toLowerCase() + 's') + '</button></div>'
       : '';
 
-    const cierreHtml = S.rol === 'persona2'
-      ? '<button class="inv-primario" id="inv-btn-cerrar-inv" style="margin-top:20px;">Encerrar inventário definitivamente</button>'
-      : '';
-
     render(
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
       '<p>' + estado.validadas + ' / ' + Math.max(estado.unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
-      '<div style="width:100%;" id="inv-lista-unidades">' + estado.filas + '</div>' + nuevaUnidadHtml + cierreHtml +
+      '<div style="width:100%;" id="inv-lista-unidades">' + estado.filas + '</div>' + nuevaUnidadHtml +
       '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>',
-      pantallaTiendas
+      pantallaZona
     );
 
     vincularAccionesUnidades();
     const btnFijar = document.getElementById('inv-btn-fijar-numero');
     if (btnFijar) btnFijar.onclick = fijarNumeroEsperado;
-    const btnCerrar = document.getElementById('inv-btn-cerrar-inv');
-    if (btnCerrar) btnCerrar.onclick = intentarCerrarInventario;
     document.getElementById('inv-btn-salir').onclick = function () {
       if (timerListaUnidades) { clearInterval(timerListaUnidades); timerListaUnidades = null; }
       root().remove();
@@ -1236,9 +1273,9 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  ENCERRAMENTO DEFINITIVO DO INVENTÁRIO
+  //  ENCERRAMENTO DEFINITIVO DE UM INVENTÁRIO (por zona — loja ou armazém)
   // ══════════════════════════════════════════════════════════════════════
-  async function intentarCerrarInventario() {
+  async function cerrarInventarioPorZona(inventarioId) {
     if (S.pendientesSync > 0) {
       alert('Ainda há ' + S.pendientesSync + ' leituras pendentes de sincronizar. Espera que o indicador fique verde antes de encerrar.');
       return;
@@ -1247,7 +1284,7 @@
     if (!confirm('Encerrar definitivamente este inventário? Esta ação não pode ser desfeita.')) return;
 
     const { data, error } = await window.sbInventario.rpc('cerrar_inventario', {
-      p_token: S.token, p_inventario_id: S.inventario.id, p_persona_id: S.persona.id
+      p_token: S.token, p_inventario_id: inventarioId, p_persona_id: S.persona.id
     });
     if (error) { alert('Não foi possível encerrar: ' + error.message); return; }
     const resultado = data && data[0];
@@ -1256,8 +1293,7 @@
       return;
     }
     alert('Inventário encerrado corretamente.');
-    await limpiarPuntero();
-    root().remove();
+    pantallaZona();
   }
 
   // ══════════════════════════════════════════════════════════════════════

@@ -38,6 +38,7 @@
 
   const ZONA_LABEL = { loja: 'Loja', armazem: 'Armazém' };
   const UNIDAD_LABEL = { loja: 'Expositor', armazem: 'Grupo' };
+  const UNIDAD_LABEL_PLURAL = { loja: 'expositores', armazem: 'grupos' };
 
   // ── Estado em memória da sessão de inventário ─────────────────────────
   const S = {
@@ -896,7 +897,7 @@
       return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + '</span>' + accion + '</div>';
     }).join('');
 
-    if (!filas) filas = '<p>Ainda não há ' + label.toLowerCase() + 's criados.</p>';
+    if (!filas) filas = '<p>Ainda não há ' + UNIDAD_LABEL_PLURAL[S.zona] + ' criados.</p>';
 
     // Depende exclusivamente de a Pessoa 1 já ter contado e encerrado cada unidade (existe
     // pelo menos uma tentativa registada) — independentemente de a Pessoa 2 já ter validado
@@ -942,11 +943,15 @@
   // voltar a passar por aqui.
   function pantallaDeclararNumero() {
     const label = UNIDAD_LABEL[S.zona].toLowerCase();
+    const labelPlural = UNIDAD_LABEL_PLURAL[S.zona];
     render(
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
-      '<h1>Quantos ' + label + 's há?</h1>' +
-      '<p>Declara o número total. Depois de os teres contado todos, podes adicionar mais um a um, se precisares — sem voltar a declarar.</p>' +
-      '<input type="number" id="inv-numero-declarado" placeholder="Número de ' + label + 's" min="1" max="500">' +
+      '<h1>Quantos ' + labelPlural + ' há?</h1>' +
+      '<p>Declara agora o número total de ' + labelPlural + ' que existem nesta zona.</p>' +
+      '<p>Depois de os teres contado e encerrado todos, o botão <strong>+ Adicionar</strong> aparece automaticamente para acrescentares mais, um a um — sem teres de voltar a declarar nada.</p>' +
+      '<p><strong>Em caso de teres declarado um número incorreto:</strong> conta e encerra os que já existem; assim que estiverem todos contados, usa <strong>+ Adicionar</strong> para completar os que faltam.</p>' +
+      '<p><strong>Em caso de aparecer um ' + label + ' novo</strong> que não foi contado na declaração inicial: adiciona-o da mesma forma, através de <strong>+ Adicionar</strong>, quando os restantes já estiverem todos contados.</p>' +
+      '<input type="number" id="inv-numero-declarado" placeholder="Número de ' + labelPlural + '" min="1" max="500">' +
       '<button class="inv-primario" id="inv-btn-declarar" style="margin-top:16px;width:100%;">Declarar</button>',
       pantallaZona
     );

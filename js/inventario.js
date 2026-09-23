@@ -34,7 +34,7 @@
   const HMAC_SECRET = 'wkz-inv-codigos-2027-a19f4e7c';
 
   const IDB_NAME = 'wkz_inventario';
-  const IDB_VERSION = 1;
+  const IDB_VERSION = 2;
 
   const ZONA_LABEL = { loja: 'Loja', armazem: 'Armazém' };
   const UNIDAD_LABEL = { loja: 'Expositor', armazem: 'Grupo' };
@@ -80,6 +80,10 @@
         }
         if (!db.objectStoreNames.contains('meta')) {
           db.createObjectStore('meta', { keyPath: 'clave' });
+        }
+        if (!db.objectStoreNames.contains('asociaciones_locales')) {
+          const store = db.createObjectStore('asociaciones_locales', { keyPath: 'clave' });
+          store.createIndex('sincronizado', 'sincronizado');
         }
       };
       req.onsuccess = function () { resolve(req.result); };
@@ -235,7 +239,9 @@
     if (sincronizando || !navigator.onLine || !window.sbInventario) return;
     sincronizando = true;
     try {
-      const eventos = (await idbGetAll('eventos')).filter(function (e) { return !e.synced; });
+      // Um evento com resuelto === false ainda não tem referência/descrição definitivas
+      // (código por reconhecer) — não se envia ao servidor até estar completo.
+      const eventos = (await idbGetAll('eventos')).filter(function (e) { return !e.synced && e.resuelto !== false; });
       const LOTE = 25;
       for (let i = 0; i < eventos.length; i += LOTE) {
         const lote = eventos.slice(i, i + LOTE).map(function (e) {
@@ -245,6 +251,7 @@
             codigo_barras: e.codigo_barras,
             referencia_resuelta: e.referencia_resuelta,
             descripcion_resuelta: e.descripcion_resuelta,
+            codigo_conocido: !!e.codigo_conocido,
             dispositivo_id: e.dispositivo_id,
             creado_en_dispositivo_at: e.creado_en_dispositivo_at
           };
@@ -268,6 +275,24 @@
           await idbPut('anulaciones_local', Object.assign({}, a, { synced: true }));
         }
       }
+
+      // Associações código→referência decididas offline: ficam já a valer no aparelho
+      // (guardarAsociacionLocal); isto só as leva ao servidor para ficarem partilhadas
+      // com as outras pessoas/aparelhos. Se falhar, tentam-se de novo no próximo ciclo.
+      const asociaciones = (await idbGetAll('asociaciones_locales')).filter(function (a) { return !a.sincronizado; });
+      for (const a of asociaciones) {
+        const { data, error } = await window.sbInventario.rpc('asociar_codigo_temporal', {
+          p_token: S.token,
+          p_inventario_id: a.inventario_id,
+          p_codigo: a.codigo_barras,
+          p_referencia: a.referencia,
+          p_descripcion: a.descripcion,
+          p_persona_id: a.persona_id
+        });
+        if (!error) {
+          await idbPut('asociaciones_locales', Object.assign({}, a, { sincronizado: true }));
+        }
+      }
     } catch (e) {
       // Falha de rede ou semelhante: será reenviado no próximo ciclo. Nada se perde:
       // os eventos continuam no IndexedDB com synced=false.
@@ -283,7 +308,7 @@
   // ══════════════════════════════════════════════════════════════════════
   //  GUARDAR UMA LEITURA — nunca depende da rede
   // ══════════════════════════════════════════════════════════════════════
-  async function registrarEscaneo(codigoBarras, referencia, descripcion) {
+  async function registrarEscaneoLocal(codigoBarras, referencia, descripcion, codigoConocido, resuelto) {
     const dispId = await dispositivoId();
     const evento = {
       id: uuid(),
@@ -291,6 +316,8 @@
       codigo_barras: codigoBarras,
       referencia_resuelta: referencia || null,
       descripcion_resuelta: descripcion || null,
+      codigo_conocido: !!codigoConocido,
+      resuelto: !!resuelto,
       dispositivo_id: dispId,
       creado_en_dispositivo_at: new Date().toISOString(),
       synced: false
@@ -302,8 +329,49 @@
       mostrarModalIntegridad('Não foi possível guardar a leitura localmente. Não continues até resolver isto.');
       throw e;
     }
-    sincronizar();
+    if (evento.resuelto) sincronizar();
     return evento;
+  }
+
+  // Atualiza uma leitura já guardada localmente (ex.: depois de resolver um código
+  // que não estava reconhecido). O upsert por keyPath ('id') substitui o registo inteiro.
+  async function resolverEscaneoLocal(eventoId, referencia, descripcion, codigoConocido) {
+    const evento = await idbGet('eventos', eventoId);
+    if (!evento) return;
+    evento.referencia_resuelta = referencia || null;
+    evento.descripcion_resuelta = descripcion || null;
+    evento.codigo_conocido = !!codigoConocido;
+    evento.resuelto = true;
+    await idbPut('eventos', evento);
+    sincronizar();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  CÓDIGOS NÃO RECONHECIDOS — associação código→referência guardada
+  //  primeiro no aparelho; a partilha com o servidor é sempre em segundo
+  //  plano e nunca bloqueia quem está a contar.
+  // ══════════════════════════════════════════════════════════════════════
+  function claveAsociacionLocal(inventarioId, codigo) {
+    return inventarioId + '|' + codigo;
+  }
+
+  async function buscarCodigoLocal(codigo) {
+    return await idbGet('asociaciones_locales', claveAsociacionLocal(S.inventario.id, codigo));
+  }
+
+  async function guardarAsociacionLocal(codigo, referencia, descripcion) {
+    const registro = {
+      clave: claveAsociacionLocal(S.inventario.id, codigo),
+      inventario_id: S.inventario.id,
+      codigo_barras: codigo,
+      referencia: referencia,
+      descripcion: descripcion,
+      persona_id: S.persona.id,
+      sincronizado: false
+    };
+    await idbPut('asociaciones_locales', registro);
+    sincronizar();
+    return registro;
   }
 
   async function obtenerEscaneosValidos(capturaId) {
@@ -317,41 +385,6 @@
 
   async function contarEscaneosValidos(capturaId) {
     return (await obtenerEscaneosValidos(capturaId)).length;
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  DADOS FICTÍCIOS (referência/descrição) — não há ainda mestre de artigos
-  // ══════════════════════════════════════════════════════════════════════
-  const REFERENCIA_PREFIXOS = ['REF', 'ART', 'PRD', 'SKU'];
-  const DESCRICOES_FICTICIAS = [
-    'Camisola básica algodão', 'Calça ganga slim', 'T-shirt estampada', 'Casaco impermeável',
-    'Vestido verão floral', 'Sapatilha desportiva', 'Cinto de couro', 'Boné ajustável',
-    'Camisa social manga longa', 'Saia plissada', 'Blusão acolchoado', 'Calção de banho',
-    'Meias pack 3 unidades', 'Mala tiracolo', 'Óculos de sol'
-  ];
-
-  function hashSimples(texto) {
-    let h = 0;
-    for (let i = 0; i < texto.length; i++) {
-      h = ((h << 5) - h + texto.charCodeAt(i)) | 0;
-    }
-    return Math.abs(h);
-  }
-
-  function datosFicticios(codigoBarras) {
-    const h = hashSimples(String(codigoBarras));
-    const prefixo = REFERENCIA_PREFIXOS[h % REFERENCIA_PREFIXOS.length];
-    const numero = (h % 90000) + 10000;
-    const descricao = DESCRICOES_FICTICIAS[Math.floor(h / 7) % DESCRICOES_FICTICIAS.length];
-    return { referencia: prefixo + '-' + numero, descricao: descricao };
-  }
-
-  // EXPERIMENTO (2026-09-23, a pedido de Manuel) — não há catálogo real ligado, por isso só
-  // se valida o FORMATO do código (dígitos, comprimento típico de EAN-8/UPC-A/EAN-13). Não
-  // confirma que o produto exista de verdade. Apagar esta função e a chamada em
-  // procesarCodigo() quando o teste terminar.
-  function formatoCodigoValidoEXPERIMENTO(codigo) {
-    return /^\d{8}$|^\d{12}$|^\d{13}$/.test(codigo);
   }
 
   function escapeHtml(texto) {
@@ -1533,22 +1566,78 @@
     document.getElementById('inv-btn-anular').onclick = anularUltimoEscaneo;
     document.getElementById('inv-btn-limpiar').onclick = limpiarCaptura;
     document.getElementById('inv-btn-cerrar-unidad').onclick = cerrarUnidadEscaneo;
+
+    // Se a app fechou a meio de um "código não reconhecido" por resolver, retoma aqui.
+    const eventosCaptura = await idbGetAllByIndex('eventos', 'captura_id', S.captura.id);
+    const pendente = eventosCaptura.find(function (e) { return e.resuelto === false; });
+    if (pendente) pedirReferenciaManual(pendente);
   }
 
   async function procesarCodigo(codigo) {
-    // EXPERIMENTO — ver formatoCodigoValidoEXPERIMENTO(). Apagar este bloco junto com ela.
-    if (!formatoCodigoValidoEXPERIMENTO(codigo)) {
-      alert('⚠️ Código não reconhecido: "' + codigo + '" não tem um formato de código de barras válido (8, 12 ou 13 dígitos). A leitura não foi registada.');
-      const inputInvalido = document.getElementById('inv-scan-input');
-      if (inputInvalido) focarSemTeclado(inputInvalido);
+    // 1) Já resolvido antes, neste mesmo aparelho? (funciona sem rede)
+    const local = await buscarCodigoLocal(codigo);
+    if (local) {
+      await registrarEscaneoLocal(codigo, local.referencia, local.descripcion, false, true);
+      await refrescarEscaneoUI();
+      const inputLocal = document.getElementById('inv-scan-input');
+      if (inputLocal) focarSemTeclado(inputLocal);
       return;
     }
 
-    const ficticios = datosFicticios(codigo);
-    await registrarEscaneo(codigo, ficticios.referencia, ficticios.descricao);
-    await refrescarEscaneoUI();
-    const input = document.getElementById('inv-scan-input');
-    if (input) focarSemTeclado(input);
+    // 2) A leitura fica guardada já, mesmo antes de saber se o código é conhecido.
+    const evento = await registrarEscaneoLocal(codigo, null, null, false, false);
+
+    // 3) Só com rede se tenta o catálogo/servidor (associações de outros aparelhos).
+    let resultado = null;
+    if (navigator.onLine && window.sbInventario) {
+      const { data, error } = await window.sbInventario.rpc('buscar_codigo', {
+        p_token: S.token, p_inventario_id: S.inventario.id, p_codigo: codigo
+      });
+      if (!error && data && data.length) resultado = data[0];
+    }
+
+    if (resultado) {
+      await resolverEscaneoLocal(evento.id, resultado.referencia, resultado.descripcion, resultado.fuente === 'catalogo');
+      await refrescarEscaneoUI();
+      const inputOk = document.getElementById('inv-scan-input');
+      if (inputOk) focarSemTeclado(inputOk);
+      return;
+    }
+
+    // 4) Código não reconhecido: bloqueia até introduzir referência e descrição.
+    pedirReferenciaManual(evento);
+  }
+
+  function pedirReferenciaManual(evento) {
+    const f = modal(
+      '<h3>Código não reconhecido</h3>' +
+      '<p>O código <strong>' + escapeHtml(evento.codigo_barras) + '</strong> não está no catálogo.</p>' +
+      '<p>Introduz a referência e a descrição para continuares. Não é possível avançar sem preencher os dois campos.</p>' +
+      '<input type="text" id="inv-ref-manual" placeholder="Referência" autocomplete="off">' +
+      '<input type="text" id="inv-desc-manual" placeholder="Descrição (ex.: Saia preta comprida)" autocomplete="off" style="margin-top:8px;">' +
+      '<p id="inv-ref-manual-error" style="color:#c0392b;"></p>' +
+      '<button class="inv-primario" id="inv-ref-manual-ok" style="width:100%;">Confirmar</button>'
+    );
+    const inputRef = f.querySelector('#inv-ref-manual');
+    const inputDesc = f.querySelector('#inv-desc-manual');
+    const err = f.querySelector('#inv-ref-manual-error');
+    inputRef.focus();
+
+    async function confirmar() {
+      const ref = inputRef.value.trim();
+      const desc = inputDesc.value.trim();
+      if (!ref || !desc) { err.textContent = 'Tens de preencher referência e descrição.'; return; }
+
+      await guardarAsociacionLocal(evento.codigo_barras, ref, desc);
+      await resolverEscaneoLocal(evento.id, ref, desc, false);
+      f.remove();
+      await refrescarEscaneoUI();
+      const input = document.getElementById('inv-scan-input');
+      if (input) focarSemTeclado(input);
+    }
+
+    f.querySelector('#inv-ref-manual-ok').onclick = confirmar;
+    inputDesc.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmar(); });
   }
 
   async function anularUltimoEscaneo() {

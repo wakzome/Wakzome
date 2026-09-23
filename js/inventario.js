@@ -898,8 +898,15 @@
 
     if (!filas) filas = '<p>Ainda não há ' + label.toLowerCase() + 's criados.</p>';
 
+    // Depende exclusivamente de a Pessoa 1 já ter contado e encerrado cada unidade (existe
+    // pelo menos uma tentativa registada) — independentemente de a Pessoa 2 já ter validado
+    // essa contagem ou de ter havido divergência entretanto.
+    const todasContadasPorP1 = unidades.length > 0 && unidades.every(function (u) {
+      return u.intentos && u.intentos.length > 0;
+    });
+
     return {
-      unidades: unidades, filas: filas, validadas: validadas, label: label
+      unidades: unidades, filas: filas, validadas: validadas, label: label, todasContadasPorP1: todasContadasPorP1
     };
   }
 
@@ -930,11 +937,55 @@
     vincularAccionesUnidades();
   }
 
+  // Ecrã de declaração inicial — só aparece uma vez, quando ainda não há nenhum expositor
+  // criado neste inventário. Depois disto, para adicionar mais usa-se "+ Adicionar", sem
+  // voltar a passar por aqui.
+  function pantallaDeclararNumero() {
+    const label = UNIDAD_LABEL[S.zona].toLowerCase();
+    render(
+      '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
+      '<h1>Quantos ' + label + 's há?</h1>' +
+      '<p>Declara o número total. Depois de os teres contado todos, podes adicionar mais um a um, se precisares — sem voltar a declarar.</p>' +
+      '<input type="number" id="inv-numero-declarado" placeholder="Número de ' + label + 's" min="1" max="500">' +
+      '<button class="inv-primario" id="inv-btn-declarar" style="margin-top:16px;width:100%;">Declarar</button>',
+      pantallaZona
+    );
+    document.getElementById('inv-btn-declarar').onclick = declararNumeroExpositores;
+  }
+
+  async function declararNumeroExpositores() {
+    const input = document.getElementById('inv-numero-declarado');
+    const n = parseInt(input.value, 10);
+    if (!n || n < 1 || n > 500) { alert('Introduz um número válido (entre 1 e 500).'); return; }
+
+    const filas = [];
+    for (let i = 1; i <= n; i++) filas.push({ inventario_id: S.inventario.id, numero: i });
+
+    const { error } = await window.sbInventario.from('unidades').insert(filas);
+    if (error) {
+      alert(esConflictoDuplicado(error) ? 'Já foram declarados entretanto. A atualizar a lista…' : 'Não foi possível declarar. Verifica a tua ligação e tenta novamente.');
+      pantallaUnidades();
+      return;
+    }
+
+    await window.sbInventario.from('inventarios').update({ unidades_esperadas: n }).eq('id', S.inventario.id);
+    S.inventario.unidades_esperadas = n;
+
+    pantallaUnidades();
+  }
+
   async function pantallaUnidades() {
     const estado = await construirEstadoUnidades();
-    if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
+    if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>', pantallaZona); return; }
 
-    const nuevaUnidadHtml = S.rol === 'persona1'
+    if (S.rol === 'persona1' && estado.unidades.length === 0) {
+      pantallaDeclararNumero();
+      return;
+    }
+
+    // Só reaparece quando a Pessoa 1 já contou e encerrou TODOS os expositores atuais — não é
+    // preciso voltar a declarar nada para adicionar mais a partir daí.
+    const nuevaUnidadHtml = (S.rol === 'persona1' && estado.todasContadasPorP1)
       ? '<button class="inv-primario" id="inv-btn-agregar-unidad" style="margin-top:20px;width:100%;">+ Adicionar ' + estado.label.toLowerCase() + '</button>'
       : '';
 

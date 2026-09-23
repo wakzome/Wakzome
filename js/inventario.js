@@ -1221,13 +1221,31 @@
       '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
-    document.getElementById('inv-btn-cerrar-conteo').onclick = cerrarConteo;
+    document.getElementById('inv-btn-cerrar-conteo').onclick = abrirConfirmacaoConteo;
   }
 
-  async function cerrarConteo() {
+  // Antes de gravar, pede confirmação explícita do número — e permite voltar atrás com o
+  // campo vazio em vez de gravar logo. O número em si nunca mais volta a aparecer depois disto.
+  function abrirConfirmacaoConteo() {
     const conteo = parseInt(document.getElementById('inv-conteo-fisico').value, 10);
     if (!conteo && conteo !== 0) { alert('Introduz um número válido.'); return; }
+    const f = modal(
+      '<h3>Confirmar contagem</h3>' +
+      '<p>Vais declarar <strong>' + conteo + '</strong> peças.</p>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-conteo-confirmar">Confirmar</button>' +
+      '<button id="inv-conteo-rehacer">Rehacer</button>' +
+      '</div>'
+    );
+    f.querySelector('#inv-conteo-confirmar').onclick = function () { f.remove(); cerrarConteo(conteo); };
+    f.querySelector('#inv-conteo-rehacer').onclick = function () {
+      f.remove();
+      const input = document.getElementById('inv-conteo-fisico');
+      if (input) { input.value = ''; input.focus(); }
+    };
+  }
 
+  async function cerrarConteo(conteo) {
     const { data: existentes } = await window.sbInventario.from('intentos')
       .select('numero_intento').eq('unidad_id', S.unidad.id).order('numero_intento', { ascending: false }).limit(1);
     const numeroIntento = existentes && existentes.length ? existentes[0].numero_intento + 1 : 1;
@@ -1246,6 +1264,23 @@
     mostrarCodigos(1);
   }
 
+  // Refazer uma contagem já declarada — só é permitido enquanto a Pessoa 2 ainda não
+  // começou a leitura (estado 'autorizado'). Cria uma tentativa nova e independente da
+  // primeira declaração; a anterior fica registada no histórico, nada é apagado.
+  async function refazerConteo() {
+    if (!confirm('Refazer a contagem desta unidade? A declaração anterior fica substituída.')) return;
+    const { data: ultimo, error } = await window.sbInventario
+      .from('intentos').select('*').eq('unidad_id', S.unidad.id)
+      .order('numero_intento', { ascending: false }).limit(1).maybeSingle();
+    if (error) { alert('Não foi possível verificar o estado atual. Verifica a tua ligação.'); return; }
+    if (!ultimo || ultimo.estado !== 'autorizado') {
+      alert('Já não é possível refazer: a Pessoa 2 já começou a leitura desta unidade.');
+      pantallaUnidades();
+      return;
+    }
+    iniciarConteo(S.unidad.id, S.unidad.numero);
+  }
+
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
     const { data: intento, error } = await window.sbInventario.from('intentos')
       .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
@@ -1260,18 +1295,22 @@
   async function mostrarCodigos(indice) {
     const codigo = await codigoIndice(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, indice);
     const nomeP1 = S.intento.persona1_nombre ? primerNombre(S.intento.persona1_nombre) : '';
+    // Só pode refazer enquanto a Pessoa 2 ainda não reclamou esta tentativa.
+    const podeRefazer = S.intento.estado === 'autorizado';
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + S.unidad.numero + ' — encerrado</h1>',
       (nomeP1 ? '<p>Registado por <strong>' + nomeP1 + '</strong></p>' : '') +
-      '<p>Contagem física: <strong>' + S.intento.conteo_fisico + '</strong></p>' +
       '<div style="font-size:40px;letter-spacing:4px;margin:16px 0;font-weight:300;">' + codigo + '</div>' +
       '<button id="inv-btn-mas-codigos">Gerar outro código</button>' +
       '<button class="inv-primario" id="inv-btn-siguiente-unidad" style="margin-top:16px;">Ir para a próxima unidade</button>' +
+      (podeRefazer ? '<button id="inv-btn-refazer" style="margin-top:10px;">Refazer contagem</button>' : '') +
       '<button id="inv-btn-volver-codigos" style="margin-top:10px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-mas-codigos').onclick = function () { mostrarCodigos(indice + 1); };
     document.getElementById('inv-btn-siguiente-unidad').onclick = pantallaUnidades;
     document.getElementById('inv-btn-volver-codigos').onclick = pantallaUnidades;
+    const btnRefazer = document.getElementById('inv-btn-refazer');
+    if (btnRefazer) btnRefazer.onclick = refazerConteo;
   }
 
   // ══════════════════════════════════════════════════════════════════════

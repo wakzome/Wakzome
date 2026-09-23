@@ -1851,6 +1851,8 @@
       sincronizar();
       f.remove();
       await refrescarEscaneoUI();
+      const input = document.getElementById('inv-scan-input');
+      if (input) focarSemTeclado(input);
     };
   }
 

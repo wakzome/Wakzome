@@ -565,7 +565,11 @@
     const botones = data.map(function (t) {
       return '<button class="inv-primario inv-menu-btn" data-id="' + t.id + '" data-nombre="' + t.nombre + '">' + t.nombre + '</button>';
     }).join('');
-    render('<h1>Inventário</h1>', '<h1>Seleciona a tua loja</h1><div class="inv-menu">' + botones + '</div>');
+    render(
+      '<h1>Inventário</h1>',
+      '<h1>Seleciona a tua loja</h1><div class="inv-menu">' + botones + '</div>' +
+      '<button id="inv-btn-lisboa" style="margin-top:24px;">LISBOA</button>'
+    );
 
     root().querySelectorAll('.inv-menu button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -573,6 +577,89 @@
         pantallaRol();
       });
     });
+    document.getElementById('inv-btn-lisboa').onclick = pedirClaveAdminRelatorios;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  LISBOA — relatórios consolidados de todas as lojas, protegido por
+  //  clave de administração (não passa pelo login de Pessoa 1/2).
+  // ══════════════════════════════════════════════════════════════════════
+  function pedirClaveAdminRelatorios() {
+    const f = modal(
+      '<h3>Clave de administração</h3>' +
+      '<div style="position:relative;max-width:280px;margin:0 auto;">' +
+      '<input type="password" id="inv-clave-lisboa" placeholder="Clave de administração" autofocus style="padding-right:40px;max-width:none;">' +
+      '<button type="button" id="inv-clave-lisboa-olho" title="Mostrar/ocultar senha" ' +
+      'style="position:absolute;right:4px;top:4px;padding:6px 10px;border-radius:8px;">👁</button>' +
+      '</div>' +
+      '<div id="inv-clave-lisboa-error" style="color:#c0392b;font-size:14px;margin-bottom:10px;"></div>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-clave-lisboa-ok">Entrar</button>' +
+      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
+      '</div>'
+    );
+    const input = f.querySelector('#inv-clave-lisboa');
+    const err = f.querySelector('#inv-clave-lisboa-error');
+    f.querySelector('#inv-clave-lisboa-olho').onclick = function () {
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
+    input.focus();
+    async function confirmar() {
+      const clave = input.value.trim();
+      if (!clave) return;
+      err.textContent = '';
+      const { data, error } = await window.sbInventario.rpc('verificar_clave_admin', { p_token: S.token, p_clave: clave });
+      if (error) { err.textContent = 'Não foi possível verificar. Verifica a tua ligação.'; return; }
+      if (!data) { err.textContent = 'Clave incorreta.'; return; }
+      f.remove();
+      pantallaRelatoriosGlobal();
+    }
+    f.querySelector('#inv-clave-lisboa-ok').onclick = confirmar;
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmar(); });
+  }
+
+  async function pantallaRelatoriosGlobal() {
+    render('<h1>LISBOA</h1>', '<p>A carregar…</p>', pantallaTiendas);
+
+    const { data: tiendas, error } = await window.sbInventario
+      .from('tiendas').select('id,nombre').eq('activo', true).order('nombre');
+    if (error) {
+      render('<h1>LISBOA</h1>', '<p>Não foi possível carregar as lojas. Verifica a tua ligação.</p>', pantallaTiendas);
+      return;
+    }
+
+    const estados = await Promise.all(tiendas.map(function (t) { return hayCierreCompletoTienda(t.id); }));
+    const linhaEstilo = 'display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #eee;';
+    const filas = tiendas.map(function (t, i) {
+      if (!estados[i]) {
+        return '<div style="' + linhaEstilo + '"><span>' + escapeHtml(t.nombre) + '</span>' +
+          '<span style="color:#888;font-size:14px;">sem encerramento definitivo</span></div>';
+      }
+      return '<div style="' + linhaEstilo + '"><span>' + escapeHtml(t.nombre) + '</span>' +
+        '<div class="inv-relatorios" style="margin:0;">' +
+        '<button class="inv-btn-redondo" data-tienda-id="' + t.id + '" data-tienda-nombre="' + escapeHtml(t.nombre) + '" data-formato="ean">EAN</button>' +
+        '<button class="inv-btn-redondo" data-tienda-id="' + t.id + '" data-tienda-nombre="' + escapeHtml(t.nombre) + '" data-formato="ref">REF</button>' +
+        '</div></div>';
+    }).join('');
+
+    render(
+      '<h1>LISBOA</h1>',
+      '<h1>Relatórios</h1>' +
+      filas +
+      '<div style="' + linhaEstilo + 'margin-top:16px;border-bottom:none;">' +
+      '<span><strong>Todas as lojas de Porto Santo</strong></span>' +
+      '<div class="inv-menu" style="margin:0;">' +
+      '<button class="inv-primario" id="inv-btn-global-ean">EAN</button>' +
+      '<button class="inv-primario" id="inv-btn-global-ref">REF</button>' +
+      '</div></div>',
+      pantallaTiendas
+    );
+
+    root().querySelectorAll('[data-tienda-id]').forEach(function (b) {
+      b.onclick = function () { descargarConsolidadoDeTienda(b.dataset.tiendaId, b.dataset.tiendaNombre, b.dataset.formato); };
+    });
+    document.getElementById('inv-btn-global-ean').onclick = function () { descargarConsolidadoGlobal('ean'); };
+    document.getElementById('inv-btn-global-ref').onclick = function () { descargarConsolidadoGlobal('ref'); };
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -1170,32 +1257,49 @@
     return escaneos.filter(function (e) { return !anuladosSet.has(e.id); });
   }
 
-  // Devolve o consolidado da loja (Loja + Armazém) — usa o cierre MAIS RECENTE de cada
-  // zona. Devolve null se ainda não há um cierre de ambas as zonas.
-  async function obtenerConsolidadoTienda(tiendaId) {
+  // Devolve os escaneos (sem anuladas) de Loja+Armazém do encerramento MAIS RECENTE de
+  // uma loja, ou null se ainda não há um encerramento definitivo de ambas as zonas.
+  async function obtenerEscaneosCerradosDeTienda(tiendaId) {
+    const completo = await hayCierreCompletoTienda(tiendaId);
+    if (!completo) return null;
+
     const { data: invLoja } = await window.sbInventario
       .from('inventarios').select('id').eq('tienda_id', tiendaId).eq('zona', 'loja').eq('estado', 'cerrado')
       .order('cerrado_at', { ascending: false }).limit(1).maybeSingle();
     const { data: invArmazem } = await window.sbInventario
       .from('inventarios').select('id').eq('tienda_id', tiendaId).eq('zona', 'armazem').eq('estado', 'cerrado')
       .order('cerrado_at', { ascending: false }).limit(1).maybeSingle();
-
     if (!invLoja || !invArmazem) return null;
 
     const escaneosLoja = await obtenerEscaneosDeInventario(invLoja.id);
     const escaneosArmazem = await obtenerEscaneosDeInventario(invArmazem.id);
-    return agruparPorCodigo(escaneosLoja.concat(escaneosArmazem));
+    return escaneosLoja.concat(escaneosArmazem);
   }
 
-  async function descargarConsolidado(formato) {
-    let grupos;
-    try {
-      grupos = await obtenerConsolidadoTienda(S.tienda.id);
-    } catch (e) {
-      alert('Não foi possível obter os dados. Verifica a tua ligação.');
-      return;
+  // Devolve o consolidado da loja (Loja + Armazém) — usa o cierre MAIS RECENTE de cada
+  // zona. Devolve null se ainda não há um cierre de ambas as zonas.
+  async function obtenerConsolidadoTienda(tiendaId) {
+    const escaneos = await obtenerEscaneosCerradosDeTienda(tiendaId);
+    return escaneos ? agruparPorCodigo(escaneos) : null;
+  }
+
+  // Consolidado de TODAS as lojas ativas com encerramento definitivo, junto num só grupo
+  // por código (sem distinção de loja) — as quantidades de códigos repetidos entre lojas
+  // somam-se automaticamente, porque agruparPorCodigo() agrupa pelo código de barras.
+  async function obtenerConsolidadoGlobal() {
+    const { data: tiendas, error } = await window.sbInventario.from('tiendas').select('id').eq('activo', true);
+    if (error) throw error;
+    let todosEscaneos = [];
+    for (const t of (tiendas || [])) {
+      const escaneos = await obtenerEscaneosCerradosDeTienda(t.id);
+      if (escaneos) todosEscaneos = todosEscaneos.concat(escaneos);
     }
-    if (!grupos) { alert('Ainda não há um encerramento definitivo de Loja e Armazém para consolidar.'); return; }
+    return agruparPorCodigo(todosEscaneos);
+  }
+
+  // Constrói e transfere o ficheiro .xlsx a partir de grupos já consolidados
+  // (obtenerConsolidadoTienda / obtenerConsolidadoGlobal).
+  async function exportarGruposExcel(grupos, nomeBase, formato) {
     if (!grupos.length) { alert('Não há leituras registadas para consolidar.'); return; }
 
     try {
@@ -1223,8 +1327,43 @@
     const ws = window.XLSX.utils.aoa_to_sheet(filas);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, nomeFolha);
-    const nomeArquivo = (S.tienda.nombre || 'loja').replace(/[^a-z0-9]+/gi, '_') + '_' + nomeFolha + '.xlsx';
+    const nomeArquivo = (nomeBase || 'loja').replace(/[^a-z0-9]+/gi, '_') + '_' + nomeFolha + '.xlsx';
     window.XLSX.writeFile(wb, nomeArquivo);
+  }
+
+  async function descargarConsolidado(formato) {
+    let grupos;
+    try {
+      grupos = await obtenerConsolidadoTienda(S.tienda.id);
+    } catch (e) {
+      alert('Não foi possível obter os dados. Verifica a tua ligação.');
+      return;
+    }
+    if (!grupos) { alert('Ainda não há um encerramento definitivo de Loja e Armazém para consolidar.'); return; }
+    await exportarGruposExcel(grupos, S.tienda.nombre, formato);
+  }
+
+  async function descargarConsolidadoDeTienda(tiendaId, tiendaNombre, formato) {
+    let grupos;
+    try {
+      grupos = await obtenerConsolidadoTienda(tiendaId);
+    } catch (e) {
+      alert('Não foi possível obter os dados. Verifica a tua ligação.');
+      return;
+    }
+    if (!grupos) { alert('Ainda não há um encerramento definitivo de Loja e Armazém para consolidar.'); return; }
+    await exportarGruposExcel(grupos, tiendaNombre, formato);
+  }
+
+  async function descargarConsolidadoGlobal(formato) {
+    let grupos;
+    try {
+      grupos = await obtenerConsolidadoGlobal();
+    } catch (e) {
+      alert('Não foi possível obter os dados. Verifica a tua ligação.');
+      return;
+    }
+    await exportarGruposExcel(grupos, 'Porto_Santo', formato);
   }
 
   async function reiniciarExpositor(unidadId, numero, intentoId) {

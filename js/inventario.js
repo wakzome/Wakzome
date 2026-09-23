@@ -586,9 +586,8 @@
       .from('unidades').select('estado').eq('inventario_id', inv.id);
     if (eu) return null;
 
-    const esperadas = inv.unidades_esperadas || 0;
     const validadas = (unidades || []).filter(function (u) { return u.estado === 'validada'; }).length;
-    const listo = esperadas > 0 && unidades.length >= esperadas && validadas >= esperadas;
+    const listo = unidades.length > 0 && validadas === unidades.length;
 
     return { inventario: inv, listo: listo };
   }
@@ -760,16 +759,8 @@
 
     if (!filas) filas = '<p>Ainda não há ' + label.toLowerCase() + 's criados.</p>';
 
-    // O controlo de "número esperado" só aparece: (a) na primeira vez, antes de haver
-    // qualquer número declarado, ou (b) depois de todas as unidades já declaradas
-    // estarem validadas — para acrescentar mais. Enquanto houver trabalho pendente das
-    // já declaradas, fica escondido, para não pedir de novo algo que já foi definido.
-    const esperadas = S.inventario.unidades_esperadas || 0;
-    const todasValidadas = esperadas > 0 && unidades.length >= esperadas && validadas >= esperadas;
-
     return {
-      unidades: unidades, filas: filas, validadas: validadas,
-      esperadas: esperadas, todasValidadas: todasValidadas, label: label
+      unidades: unidades, filas: filas, validadas: validadas, label: label
     };
   }
 
@@ -804,23 +795,21 @@
     const estado = await construirEstadoUnidades();
     if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>'); return; }
 
-    const nuevaUnidadHtml = (S.rol === 'persona1' && (estado.esperadas === 0 || estado.todasValidadas))
-      ? '<div style="margin-top:20px;width:100%;"><input type="number" id="inv-num-nuevas" placeholder="' +
-        (estado.esperadas === 0 ? 'Número total de ' + estado.label.toLowerCase() + 's' : 'Novo número total (atualmente ' + estado.esperadas + ')') + '">' +
-        '<button class="inv-primario" id="inv-btn-fijar-numero">' + (estado.esperadas === 0 ? 'Definir número esperado' : 'Adicionar mais ' + estado.label.toLowerCase() + 's') + '</button></div>'
+    const nuevaUnidadHtml = S.rol === 'persona1'
+      ? '<button class="inv-primario" id="inv-btn-agregar-unidad" style="margin-top:20px;width:100%;">+ Adicionar ' + estado.label.toLowerCase() + '</button>'
       : '';
 
     render(
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
-      '<p>' + estado.validadas + ' / ' + Math.max(estado.unidades.length, S.inventario.unidades_esperadas) + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
+      '<p>' + estado.validadas + ' / ' + estado.unidades.length + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
       '<div style="width:100%;" id="inv-lista-unidades">' + estado.filas + '</div>' + nuevaUnidadHtml +
       '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>',
       pantallaZona
     );
 
     vincularAccionesUnidades();
-    const btnFijar = document.getElementById('inv-btn-fijar-numero');
-    if (btnFijar) btnFijar.onclick = fijarNumeroEsperado;
+    const btnAgregar = document.getElementById('inv-btn-agregar-unidad');
+    if (btnAgregar) btnAgregar.onclick = agregarUnidad;
     document.getElementById('inv-btn-salir').onclick = function () {
       if (timerListaUnidades) { clearInterval(timerListaUnidades); timerListaUnidades = null; }
       root().remove();
@@ -913,31 +902,27 @@
     if (btnReiniciar) btnReiniciar.onclick = function () { reiniciarExpositor(unidadId, numero, intentoId); };
   }
 
-  async function fijarNumeroEsperado() {
-    const n = parseInt(document.getElementById('inv-num-nuevas').value, 10);
-    if (!n || n < 1) return;
-    const anterior = S.inventario.unidades_esperadas || 0;
-    if (n < anterior) {
-      alert('Não é permitido reduzir o número de unidades esperadas. Atual: ' + anterior);
+  // Cria diretamente o próximo expositor/grupo — sem declarar um total antecipado.
+  // Cada clique corresponde a uma unidade física que existe agora, e mais nenhuma.
+  async function agregarUnidad() {
+    const { data: ultimas, error: e0 } = await window.sbInventario
+      .from('unidades').select('numero').eq('inventario_id', S.inventario.id)
+      .order('numero', { ascending: false }).limit(1);
+    if (e0) { alert('Não foi possível adicionar. Verifica a tua ligação.'); return; }
+    const siguiente = (ultimas && ultimas.length ? ultimas[0].numero : 0) + 1;
+
+    const { error: e1 } = await window.sbInventario.from('unidades')
+      .insert({ inventario_id: S.inventario.id, numero: siguiente });
+    if (e1) {
+      alert(esConflictoDuplicado(e1) ? 'Já foi adicionada entretanto. A atualizar a lista…' : 'Não foi possível adicionar. Verifica a tua ligação.');
+      pantallaUnidades();
       return;
     }
-    const { error: e1 } = await window.sbInventario.from('inventarios')
-      .update({ unidades_esperadas: n }).eq('id', S.inventario.id);
-    if (e1) { alert('Não foi possível atualizar. Verifica a tua ligação.'); return; }
 
-    await window.sbInventario.from('incidencias').insert({
-      inventario_id: S.inventario.id, tipo: 'ampliacion_unidades',
-      detalle: { anterior: anterior, nuevo: n, persona: S.persona.nombre, fecha: new Date().toISOString() }
-    });
+    // Mantém a coluna coerente para referência/auditoria — não é usada para bloquear nada.
+    await window.sbInventario.from('inventarios').update({ unidades_esperadas: siguiente }).eq('id', S.inventario.id);
+    S.inventario.unidades_esperadas = siguiente;
 
-    if (n > anterior) {
-      const filas = [];
-      for (let i = anterior + 1; i <= n; i++) {
-        filas.push({ inventario_id: S.inventario.id, numero: i });
-      }
-      await window.sbInventario.from('unidades').insert(filas);
-    }
-    S.inventario.unidades_esperadas = n;
     pantallaUnidades();
   }
 

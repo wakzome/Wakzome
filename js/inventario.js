@@ -159,6 +159,21 @@
     return (nomeCompleto || '').trim().split(/\s+/)[0] || '';
   }
 
+  // Rede de segurança para leituras "rede primeiro, cópia local depois": numa zona sem
+  // sinal o telefone pode continuar a acreditar que há ligação (navigator.onLine === true)
+  // e o pedido ao servidor não falha — fica pendurado à espera de uma resposta que nunca
+  // chega. Isto garante que essa espera nunca é maior do que TIMEOUT_RED_MS, para cair
+  // sempre para a cópia local a tempo.
+  const TIMEOUT_RED_MS = 4000;
+  function conTimeout(promessa) {
+    return Promise.race([
+      promessa,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('tempo esgotado')); }, TIMEOUT_RED_MS);
+      })
+    ]);
+  }
+
   async function dispositivoId() {
     if (S.dispositivoId) return S.dispositivoId;
     let d;
@@ -1160,13 +1175,16 @@
   // Tenta sempre primeiro no servidor (mais atual); sem rede, cai para a cópia local —
   // nunca fica bloqueado só por falta de sinal.
   async function obtenerUltimoIntentoParaUnidad(unidadId) {
+    if (await estaModoSinInternetActivo(S.inventario.id)) {
+      return await obtenerUltimoIntentoLocalOCache(unidadId);
+    }
     try {
-      const { data, error } = await window.sbInventario.from('intentos')
-        .select('*').eq('unidad_id', unidadId).order('numero_intento', { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await conTimeout(window.sbInventario.from('intentos')
+        .select('*').eq('unidad_id', unidadId).order('numero_intento', { ascending: false }).limit(1).maybeSingle());
       if (error) throw error;
       if (data) return data;
     } catch (e) {
-      // sem rede ou falha do servidor: cai para a cópia local.
+      // sem rede, pedido demorado ou falha do servidor: cai para a cópia local.
     }
     return await obtenerUltimoIntentoLocalOCache(unidadId);
   }
@@ -1205,33 +1223,42 @@
     let unidades = null;
     let nomeP2Inventario = '';
 
-    try {
-      const { data, error } = await window.sbInventario
-        .from('unidades').select('*, intentos(*)')
-        .eq('inventario_id', S.inventario.id).order('numero');
-      if (error) throw error;
-      unidades = data;
+    // Com o modo sem Internet ativo, a pessoa já disse explicitamente que não há rede —
+    // vai-se direto à cópia local, sem tentar sequer o servidor (resposta imediata, nunca
+    // pendurado à espera de um pedido que não vai chegar a lado nenhum).
+    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
 
-      // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — só um
-      // detalhe cosmético; se falhar, a lista continua a funcionar sem ele.
-      const { data: asigP2Lista } = await window.sbInventario.from('asignaciones')
-        .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
-        .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle();
-      nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
-
-      await guardarCacheUnidades(S.inventario.id, unidades);
-    } catch (e) {
-      // Sem rede (ou falha do servidor): usa a última cópia guardada neste aparelho. A
-      // lista nunca fica bloqueada só porque não há sinal.
+    if (modoSinInternet) {
       unidades = await obtenerCacheUnidades(S.inventario.id);
       if (!unidades) return null;
+    } else {
+      try {
+        const { data, error } = await conTimeout(window.sbInventario
+          .from('unidades').select('*, intentos(*)')
+          .eq('inventario_id', S.inventario.id).order('numero'));
+        if (error) throw error;
+        unidades = data;
+
+        // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — só um
+        // detalhe cosmético; se falhar, a lista continua a funcionar sem ele.
+        const { data: asigP2Lista } = await conTimeout(window.sbInventario.from('asignaciones')
+          .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
+          .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle());
+        nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
+
+        await guardarCacheUnidades(S.inventario.id, unidades);
+      } catch (e) {
+        // Sem rede (ou o pedido demorou demasiado): usa a última cópia guardada neste
+        // aparelho. A lista nunca fica bloqueada só porque não há sinal.
+        unidades = await obtenerCacheUnidades(S.inventario.id);
+        if (!unidades) return null;
+      }
     }
 
     unidades = await fusionarIntentosLocales(unidades);
 
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
-    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
 
     // Revelação progressiva (só com o modo sem Internet desativado): uma unidade "por
     // começar" só aparece depois de a anterior já ter sido iniciada. Com o modo ativo,
@@ -1272,7 +1299,7 @@
         // Código à mão na própria lista, sem ter de entrar em "Ver códigos" — pedido
         // explícito para trabalhar sem Internet, mas útil sempre.
         const codigo = await codigoIndice(S.tienda.id, S.inventario.id, u.id, ultimoIntento.numero_intento, 1);
-        codigoInline = '<span class="inv-codigo-lista">' + codigo + '</span>';
+        codigoInline = ' <strong class="inv-codigo-lista">(' + codigo + ')</strong>';
       }
       if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
@@ -1771,17 +1798,19 @@
 
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
     let intento = null;
-    try {
-      const { data, error } = await window.sbInventario.from('intentos')
-        .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
-        .eq('id', intentoId).maybeSingle();
-      if (error) throw error;
-      if (data) {
-        data.persona1_nombre = data.persona1 ? data.persona1.nombre : '';
-        intento = data;
+    if (!(await estaModoSinInternetActivo(S.inventario.id))) {
+      try {
+        const { data, error } = await conTimeout(window.sbInventario.from('intentos')
+          .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
+          .eq('id', intentoId).maybeSingle());
+        if (error) throw error;
+        if (data) {
+          data.persona1_nombre = data.persona1 ? data.persona1.nombre : '';
+          intento = data;
+        }
+      } catch (e) {
+        // sem rede, pedido demorado ou falha do servidor: cai para a cópia local, abaixo.
       }
-    } catch (e) {
-      // sem rede: cai para a cópia local, mais abaixo.
     }
     if (!intento) intento = await obtenerUltimoIntentoLocalOCache(unidadId);
     if (!intento) { alert('Não foi possível recuperar esta tentativa.'); return; }
@@ -1821,17 +1850,21 @@
     if (!intento) { render('<h1>Erro</h1>', '<p>Não foi possível carregar esta unidade.</p>', pantallaUnidades); return; }
     S.intento = intento;
 
+    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
+
     if (intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
       // Retoma após uma atualização de página: recuperar a captura ativa (servidor, e se não
       // houver rede, a cópia guardada neste aparelho), nunca criar outra às cegas.
       let captura = null;
-      try {
-        const { data: capturas, error } = await window.sbInventario.from('capturas')
-          .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1);
-        if (error) throw error;
-        if (capturas && capturas.length) captura = capturas[0];
-      } catch (e) {
-        // sem rede: procura abaixo na cópia local.
+      if (!modoSinInternet) {
+        try {
+          const { data: capturas, error } = await conTimeout(window.sbInventario.from('capturas')
+            .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1));
+          if (error) throw error;
+          if (capturas && capturas.length) captura = capturas[0];
+        } catch (e) {
+          // sem rede, pedido demorado ou falha: procura abaixo na cópia local.
+        }
       }
       if (!captura) {
         const locales = await idbGetAllByIndex('capturas_locales', 'intento_id', intento.id);
@@ -1845,23 +1878,31 @@
       }
     }
 
-    // Com rede, o servidor já garante a entrega correta (estado 'autorizado' = Pessoa 1
-    // fechou mesmo esta unidade) — o código de autorização só é necessário como alternativa
-    // para quando não há rede nenhuma para confirmar isso automaticamente.
-    if (navigator.onLine && intento.estado === 'autorizado') {
+    // Com rede real, o servidor já garante a entrega correta (estado 'autorizado' = Pessoa 1
+    // fechou mesmo esta unidade) — o código de autorização só é necessário como alternativa.
+    // Com o modo sem Internet ativo, ou se o servidor não confirma a tempo, usa-se sempre o
+    // código manual (abaixo), sem ficar à espera de uma ligação que pode nem existir.
+    if (!modoSinInternet && navigator.onLine && intento.estado === 'autorizado') {
       render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>', '<p>A iniciar leitura…</p>');
-      const resultado = await reclamarUnidad();
-      if (resultado.ok) return;
-      render(
-        '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
-        '<p style="color:#c0392b;">' + resultado.motivo + '</p>' +
-        '<button class="inv-primario" id="inv-btn-tentar-de-novo">Tentar novamente</button>' +
-        '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>',
-        pantallaUnidades
-      );
-      document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneo(unidadId, numero); };
-      document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
-      return;
+      let resultado = null;
+      try {
+        resultado = await conTimeout(reclamarUnidad());
+      } catch (e) {
+        resultado = null; // tempo esgotado: segue para o ecrã do código manual, abaixo.
+      }
+      if (resultado) {
+        if (resultado.ok) return;
+        render(
+          '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
+          '<p style="color:#c0392b;">' + resultado.motivo + '</p>' +
+          '<button class="inv-primario" id="inv-btn-tentar-de-novo">Tentar novamente</button>' +
+          '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>',
+          pantallaUnidades
+        );
+        document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneo(unidadId, numero); };
+        document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
+        return;
+      }
     }
 
     render(

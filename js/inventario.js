@@ -1114,12 +1114,19 @@
           codigo_barras: key,
           referencia_resuelta: e.referencia_resuelta,
           descripcion_resuelta: e.descripcion_resuelta,
+          codigo_conocido: true,
           cantidad: 0
         });
       }
-      mapa.get(key).cantidad++;
+      const g = mapa.get(key);
+      if (!e.codigo_conocido) g.codigo_conocido = false;
+      g.cantidad++;
     });
-    return Array.from(mapa.values()).sort(function (a, b) { return b.cantidad - a.cantidad; });
+    // Códigos sem catálogo sempre primeiro (nunca por acaso), depois por quantidade.
+    return Array.from(mapa.values()).sort(function (a, b) {
+      if (a.codigo_conocido !== b.codigo_conocido) return a.codigo_conocido ? 1 : -1;
+      return b.cantidad - a.cantidad;
+    });
   }
 
   function filaResumoCodigo(g) {
@@ -1198,15 +1205,17 @@
       return;
     }
 
+    const AVISO_SEM_CATALOGO = 'SEM CATÁLOGO — criar referência ou associar este código EAN';
+
     let filas, nomeFolha;
     if (formato === 'ean') {
-      filas = [['Código de Barras', 'Nº de Peças']].concat(
-        grupos.map(function (g) { return [g.codigo_barras, g.cantidad]; })
+      filas = [['Código de Barras', 'Nº de Peças', 'Aviso']].concat(
+        grupos.map(function (g) { return [g.codigo_barras, g.cantidad, g.codigo_conocido ? '' : AVISO_SEM_CATALOGO]; })
       );
       nomeFolha = 'EAN';
     } else {
-      filas = [['Referência', 'Código de Barras', 'Descrição', 'Nº de Peças']].concat(
-        grupos.map(function (g) { return [g.referencia_resuelta || '', g.codigo_barras, g.descripcion_resuelta || '', g.cantidad]; })
+      filas = [['Referência', 'Código de Barras', 'Descrição', 'Nº de Peças', 'Aviso']].concat(
+        grupos.map(function (g) { return [g.referencia_resuelta || '', g.codigo_barras, g.descripcion_resuelta || '', g.cantidad, g.codigo_conocido ? '' : AVISO_SEM_CATALOGO]; })
       );
       nomeFolha = 'REF';
     }

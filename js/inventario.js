@@ -537,13 +537,15 @@
   //  ECRÃ 2 — SELEÇÃO DE PESSOA (1 ou 2) + SENHA PESSOAL
   // ══════════════════════════════════════════════════════════════════════
 
-  // Nome de quem já está ativo nesta loja com este papel (qualquer zona) — é só uma etiqueta
-  // para reconhecimento visual; carregar a senha continua obrigatório para entrar.
-  async function obtenerNombreActivoPorRol(rol) {
+  // Nome de quem foi a ÚLTIMA pessoa a assumir este papel nesta loja (qualquer zona) —
+  // mesmo já liberada (inventário fechado), fica como referência de quem fez o trabalho,
+  // até que outra pessoa entre e assuma o papel de novo. É só uma etiqueta de reconhecimento
+  // visual; carregar a senha continua obrigatório para entrar.
+  async function obtenerUltimoNombrePorRol(rol) {
     const { data, error } = await window.sbInventario
       .from('asignaciones')
       .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
-      .eq('tienda_id', S.tienda.id).eq('rol', rol).eq('estado', 'activa')
+      .eq('tienda_id', S.tienda.id).eq('rol', rol)
       .order('asignado_at', { ascending: false }).limit(1).maybeSingle();
     if (error || !data || !data.persona) return '';
     return primerNombre(data.persona.nombre);
@@ -552,8 +554,8 @@
   async function pantallaRol() {
     render('<h1>' + S.tienda.nombre + '</h1>', '<p>A carregar…</p>');
 
-    const nombreP1 = await obtenerNombreActivoPorRol('persona1');
-    const nombreP2 = await obtenerNombreActivoPorRol('persona2');
+    const nombreP1 = await obtenerUltimoNombrePorRol('persona1');
+    const nombreP2 = await obtenerUltimoNombrePorRol('persona2');
 
     render(
       '<h1>' + S.tienda.nombre + '</h1>',

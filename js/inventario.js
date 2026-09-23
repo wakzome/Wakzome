@@ -662,7 +662,8 @@
       relatoriosHtml = '<div class="inv-relatorios">' +
         '<button class="inv-btn-redondo" id="inv-btn-relatorio-ean">EAN</button>' +
         '<button class="inv-btn-redondo" id="inv-btn-relatorio-ref">REF</button>' +
-        '</div>';
+        '</div>' +
+        '<button id="inv-btn-reabrir-tienda" style="margin-top:12px;width:100%;">🔓 Reabrir para edição</button>';
     }
 
     render(
@@ -683,6 +684,52 @@
     if (btnEan) btnEan.onclick = function () { descargarConsolidado('ean'); };
     const btnRef = document.getElementById('inv-btn-relatorio-ref');
     if (btnRef) btnRef.onclick = function () { descargarConsolidado('ref'); };
+    const btnReabrir = document.getElementById('inv-btn-reabrir-tienda');
+    if (btnReabrir) btnReabrir.onclick = pedirClaveAdmin;
+  }
+
+  // Pede a clave de administração e, se correta, reabre o cierre mais recente de Loja +
+  // Armazém desta loja para edição (adicionar/reiniciar unidades). Não altera nada do que
+  // já foi validado até agora.
+  function pedirClaveAdmin() {
+    const f = modal(
+      '<h3>Clave de administração</h3>' +
+      '<div style="position:relative;max-width:280px;margin:0 auto;">' +
+      '<input type="password" id="inv-clave-admin" placeholder="Clave de administração" autofocus style="padding-right:40px;max-width:none;">' +
+      '<button type="button" id="inv-clave-admin-olho" title="Mostrar/ocultar senha" ' +
+      'style="position:absolute;right:4px;top:4px;padding:6px 10px;border-radius:8px;">👁</button>' +
+      '</div>' +
+      '<div id="inv-clave-admin-error" style="color:#c0392b;font-size:14px;margin-bottom:10px;"></div>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-clave-admin-ok">Reabrir</button>' +
+      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
+      '</div>'
+    );
+    const input = f.querySelector('#inv-clave-admin');
+    const err = f.querySelector('#inv-clave-admin-error');
+    f.querySelector('#inv-clave-admin-olho').onclick = function () {
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
+    input.focus();
+    async function confirmar() {
+      const clave = input.value.trim();
+      if (!clave) return;
+      err.textContent = '';
+      const { data, error } = await window.sbInventario.rpc('reabrir_inventario_tienda', {
+        p_token: S.token, p_tienda_id: S.tienda.id, p_clave_admin: clave
+      });
+      if (error) { err.textContent = 'Não foi possível reabrir. Verifica a tua ligação.'; return; }
+      const resultado = data && data[0];
+      if (!resultado || !resultado.ok) {
+        err.textContent = resultado ? resultado.motivo : 'Erro desconhecido.';
+        return;
+      }
+      f.remove();
+      alert('Inventário reaberto para edição.');
+      pantallaZona();
+    }
+    f.querySelector('#inv-clave-admin-ok').onclick = confirmar;
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmar(); });
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -729,15 +776,42 @@
       .eq('tienda_id', S.tienda.id).eq('zona', S.zona).eq('estado', 'abierto')
       .maybeSingle();
 
-    if (e1) { render('<h1>Erro</h1>', '<p>Não foi possível verificar o inventário. Verifica a tua ligação.</p>'); return; }
+    if (e1) {
+      render('<h1>Erro</h1>', '<p>Não foi possível verificar o inventário. Verifica a tua ligação.</p>', pantallaZona);
+      return;
+    }
 
     if (!inv) {
+      // Não há inventário aberto nesta loja/zona. Antes de criar um novo, vemos se já existe um
+      // encerrado com a mesma etiqueta (mesmo ano) — nesse caso não é um erro, é que este
+      // inventário já foi encerrado e só um/a administrador/a pode reabri-lo para edição.
       const etiqueta = S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + ' — ' + new Date().getFullYear();
+      const { data: cerrado, error: eChk } = await window.sbInventario
+        .from('inventarios').select('*')
+        .eq('tienda_id', S.tienda.id).eq('zona', S.zona).eq('etiqueta', etiqueta)
+        .maybeSingle();
+
+      if (eChk) {
+        render('<h1>Erro</h1>', '<p>Não foi possível verificar o inventário. Verifica a tua ligação.</p>', pantallaZona);
+        return;
+      }
+
+      if (cerrado) {
+        render('<h1>Inventário encerrado</h1>',
+          '<p>O inventário de ' + ZONA_LABEL[S.zona] + ' de <strong>' + S.tienda.nombre + '</strong> já foi encerrado.</p>' +
+          '<p>Pede a um/a administrador/a para o reabrir para edição.</p>',
+          pantallaZona);
+        return;
+      }
+
       const { data: nuevo, error: e2 } = await window.sbInventario
         .from('inventarios')
         .insert({ tienda_id: S.tienda.id, zona: S.zona, etiqueta: etiqueta, unidades_esperadas: 0 })
         .select().single();
-      if (e2) { render('<h1>Erro</h1>', '<p>Não foi possível abrir o inventário.</p>'); return; }
+      if (e2) {
+        render('<h1>Erro</h1>', '<p>Não foi possível abrir o inventário.</p>', pantallaZona);
+        return;
+      }
       inv = nuevo;
     }
     S.inventario = inv;

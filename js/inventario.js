@@ -1318,7 +1318,6 @@
 
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
-      '<p>Contagem da Pessoa 1: <strong>' + intento.conteo_fisico + '</strong></p>' +
       '<input type="text" id="inv-codigo-auth" placeholder="Código de autorização" inputmode="numeric">' +
       '<div id="inv-codigo-error" style="color:#c0392b;font-size:14px;"></div>' +
       '<button class="inv-primario" id="inv-btn-autorizar">Começar leitura</button>' +
@@ -1524,11 +1523,11 @@
     if (total === S.intento.conteo_fisico) {
       await window.sbInventario.from('intentos').update({ estado: 'validado' }).eq('id', S.intento.id);
       await window.sbInventario.from('unidades').update({ estado: 'validada' }).eq('id', S.unidad.id);
-      alert('✅ Unidade validada: ' + total + ' / ' + S.intento.conteo_fisico);
+      alert('✅ ' + UNIDAD_LABEL[S.zona] + ' validado.');
     } else {
       await window.sbInventario.from('intentos').update({ estado: 'divergencia' }).eq('id', S.intento.id);
       await window.sbInventario.from('unidades').update({ estado: 'pendiente' }).eq('id', S.unidad.id);
-      alert('❌ Divergência: contagem física ' + S.intento.conteo_fisico + ' vs ' + total + ' lidos. A Pessoa 1 tem de voltar a contar esta unidade.');
+      alert('❌ ' + UNIDAD_LABEL[S.zona] + ' não validado — divergência. A Pessoa 1 tem de voltar a contar esta unidade.');
     }
     await limpiarPuntero();
     pantallaUnidades();

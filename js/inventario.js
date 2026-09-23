@@ -1540,7 +1540,12 @@
 
     const input = document.getElementById('inv-scan-input');
     focarSemTeclado(input);
-    root().addEventListener('click', function () { focarSemTeclado(input); });
+    root().addEventListener('click', function () {
+      // Com um aviso aberto (ex.: código não reconhecido), não roubar o foco dos
+      // seus campos — aí o teclado tem de aparecer normalmente ao tocar.
+      if (root().querySelector('.inv-modal-fondo')) return;
+      focarSemTeclado(input);
+    });
 
     input.addEventListener('input', function () {
       bufferScan = input.value;

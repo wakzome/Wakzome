@@ -215,6 +215,11 @@
   //  SINCRONIZAÇÃO — fila local, idempotente, em lotes
   // ══════════════════════════════════════════════════════════════════════
   let sincronizando = false;
+  // Cada tentativa automática de reclamar uma unidade (Pessoa 2, com rede) leva o seu
+  // próprio número. Se essa tentativa responder tarde demais — depois de já se ter seguido
+  // por outro caminho, como o código manual — reconhece-se pelo número e não se salta a
+  // tela por baixo do que a pessoa já esteja a fazer.
+  let operacionReclamoVigente = 0;
   let timerListaUnidades = null;
   let sheetJsPromise = null;
 
@@ -1295,11 +1300,16 @@
         accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
       }
       if (S.rol === 'persona1' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
-        accion = '<button data-accion="vercodigos" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + ultimoIntento.id + '">Ver códigos</button>';
-        // Código à mão na própria lista, sem ter de entrar em "Ver códigos" — pedido
-        // explícito para trabalhar sem Internet, mas útil sempre.
-        const codigo = await codigoIndice(S.tienda.id, S.inventario.id, u.id, ultimoIntento.numero_intento, 1);
-        codigoInline = ' <strong class="inv-codigo-lista">(' + codigo + ')</strong>';
+        if (modoSinInternet) {
+          // Sem Internet, o código é o único jeito de a Pessoa 2 avançar — mostra-se sempre.
+          accion = '<button data-accion="vercodigos" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + ultimoIntento.id + '">Ver códigos</button>';
+          const codigo = await codigoIndice(S.tienda.id, S.inventario.id, u.id, ultimoIntento.numero_intento, 1);
+          codigoInline = ' <strong class="inv-codigo-lista">(' + codigo + ')</strong>';
+        } else if (ultimoIntento.estado === 'autorizado') {
+          // Com Internet o servidor entrega a unidade sozinho — o código não é necessário;
+          // a única ação útil aqui, enquanto a Pessoa 2 ainda não reclamou, é poder corrigir.
+          accion = '<button data-accion="refazer" data-id="' + u.id + '" data-numero="' + u.numero + '">Refazer contagem</button>';
+        }
       }
       if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
@@ -1334,6 +1344,12 @@
     });
     root().querySelectorAll('[data-accion="vercodigos"]').forEach(function (b) {
       b.onclick = function () { verCodigosDeNuevo(b.dataset.id, parseInt(b.dataset.numero, 10), b.dataset.intento); };
+    });
+    root().querySelectorAll('[data-accion="refazer"]').forEach(function (b) {
+      b.onclick = function () {
+        S.unidad = { id: b.dataset.id, numero: parseInt(b.dataset.numero, 10) };
+        refazerConteo();
+      };
     });
     root().querySelectorAll('[data-accion="verdetalle"]').forEach(function (b) {
       b.onclick = function () { verDetalheUnidad(b.dataset.id, parseInt(b.dataset.numero, 10), b.dataset.intento); };
@@ -1779,7 +1795,14 @@
 
     intento.persona1_nombre = S.persona.nombre;
     S.intento = intento;
-    mostrarCodigos(1);
+
+    // Com Internet o código não é necessário (o servidor entrega a unidade sozinho) —
+    // volta-se direto para a lista. Sem Internet, continua a mostrar-se o ecrã do código.
+    if (await estaModoSinInternetActivo(S.inventario.id)) {
+      mostrarCodigos(1);
+    } else {
+      pantallaUnidades();
+    }
   }
 
   // Refazer uma contagem já declarada — só é permitido enquanto a Pessoa 2 ainda não
@@ -1884,11 +1907,15 @@
     // código manual (abaixo), sem ficar à espera de uma ligação que pode nem existir.
     if (!modoSinInternet && navigator.onLine && intento.estado === 'autorizado') {
       render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>', '<p>A iniciar leitura…</p>');
+      const miOperacion = ++operacionReclamoVigente;
       let resultado = null;
       try {
-        resultado = await conTimeout(reclamarUnidad());
+        resultado = await conTimeout(reclamarUnidad(miOperacion));
       } catch (e) {
-        resultado = null; // tempo esgotado: segue para o ecrã do código manual, abaixo.
+        resultado = null;
+        // Tempo esgotado: se este pedido responder mais tarde, já não é mais o vigente —
+        // não vai saltar a tela por cima do código manual, abaixo.
+        if (miOperacion === operacionReclamoVigente) operacionReclamoVigente++;
       }
       if (resultado) {
         if (resultado.ok) return;
@@ -1921,8 +1948,9 @@
 
   // .eq('estado','autorizado') funciona como guarda de concorrência: se esta tentativa já
   // tiver sido reclamada entretanto, esta atualização não afeta nenhuma linha e nada é
-  // sobreposto. Usado tanto pelo caminho automático (com rede) como pelo código manual.
-  async function reclamarUnidad() {
+  // sobreposto. Usado apenas pelo caminho automático (com rede) — o código manual usa
+  // reclamarUnidadLocal(), abaixo.
+  async function reclamarUnidad(miOperacion) {
     const { data: intentoAct, error: e1 } = await window.sbInventario.from('intentos')
       .update({ persona2_id: S.persona.id, estado: 'escaneando' })
       .eq('id', S.intento.id).eq('estado', 'autorizado').select();
@@ -1937,6 +1965,11 @@
     if (e2) return { ok: false, motivo: 'Não foi possível iniciar a captura. Verifica a tua ligação.' };
     S.captura = captura;
 
+    // Se esta resposta chegou depois de a pessoa já ter seguido por outro caminho (ex.:
+    // o tempo esgotou e entretanto usou o código manual), a atribuição no servidor fica
+    // válida na mesma — mas não se salta a tela por baixo do que já esteja a fazer.
+    if (miOperacion !== operacionReclamoVigente) return { ok: true, tarde: true };
+
     await guardarPuntero();
     pantallaEscaneo();
     return { ok: true };
@@ -1946,6 +1979,10 @@
   // primeiro no aparelho (a sincronização, com a mesma guarda de concorrência do caminho
   // automático, faz-se sozinha em segundo plano — ver sincronizar()).
   async function reclamarUnidadLocal() {
+    // Invalida qualquer tentativa automática ainda pendente (ex.: uma que ficou à espera
+    // do servidor e depois teve o tempo esgotado) — se ela responder mais tarde, já não
+    // vai saltar a tela por cima deste caminho.
+    operacionReclamoVigente++;
     const intentoLocal = Object.assign({}, S.intento, {
       persona2_id: S.persona.id, estado: 'escaneando', synced: false
     });

@@ -536,13 +536,31 @@
   // ══════════════════════════════════════════════════════════════════════
   //  ECRÃ 2 — SELEÇÃO DE PESSOA (1 ou 2) + SENHA PESSOAL
   // ══════════════════════════════════════════════════════════════════════
-  function pantallaRol() {
+
+  // Nome de quem já está ativo nesta loja com este papel (qualquer zona) — é só uma etiqueta
+  // para reconhecimento visual; carregar a senha continua obrigatório para entrar.
+  async function obtenerNombreActivoPorRol(rol) {
+    const { data, error } = await window.sbInventario
+      .from('asignaciones')
+      .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
+      .eq('tienda_id', S.tienda.id).eq('rol', rol).eq('estado', 'activa')
+      .order('asignado_at', { ascending: false }).limit(1).maybeSingle();
+    if (error || !data || !data.persona) return '';
+    return primerNombre(data.persona.nombre);
+  }
+
+  async function pantallaRol() {
+    render('<h1>' + S.tienda.nombre + '</h1>', '<p>A carregar…</p>');
+
+    const nombreP1 = await obtenerNombreActivoPorRol('persona1');
+    const nombreP2 = await obtenerNombreActivoPorRol('persona2');
+
     render(
       '<h1>' + S.tienda.nombre + '</h1>',
       '<h1>Quem és tu?</h1>' +
       '<div class="inv-menu">' +
-      '<button class="inv-primario inv-menu-btn" id="inv-btn-p1">Pessoa 1 (contagem)</button>' +
-      '<button class="inv-primario inv-menu-btn" id="inv-btn-p2">Pessoa 2 (leitura)</button>' +
+      '<button class="inv-primario inv-menu-btn" id="inv-btn-p1">' + (nombreP1 ? nombreP1 + ' (contagem)' : 'Pessoa 1 (contagem)') + '</button>' +
+      '<button class="inv-primario inv-menu-btn" id="inv-btn-p2">' + (nombreP2 ? nombreP2 + ' (leitura)' : 'Pessoa 2 (leitura)') + '</button>' +
       '</div>' +
       '<button id="inv-btn-volver" style="margin-top:24px;">← Voltar</button>'
     );

@@ -34,7 +34,7 @@
   const HMAC_SECRET = 'wkz-inv-codigos-2027-a19f4e7c';
 
   const IDB_NAME = 'wkz_inventario';
-  const IDB_VERSION = 2;
+  const IDB_VERSION = 3;
 
   const ZONA_LABEL = { loja: 'Loja', armazem: 'Armazém' };
   const UNIDAD_LABEL = { loja: 'Expositor', armazem: 'Grupo' };
@@ -84,6 +84,16 @@
         if (!db.objectStoreNames.contains('asociaciones_locales')) {
           const store = db.createObjectStore('asociaciones_locales', { keyPath: 'clave' });
           store.createIndex('sincronizado', 'sincronizado');
+        }
+        if (!db.objectStoreNames.contains('intentos_locales')) {
+          const store = db.createObjectStore('intentos_locales', { keyPath: 'id' });
+          store.createIndex('unidad_id', 'unidad_id');
+          store.createIndex('synced', 'synced');
+        }
+        if (!db.objectStoreNames.contains('capturas_locales')) {
+          const store = db.createObjectStore('capturas_locales', { keyPath: 'id' });
+          store.createIndex('intento_id', 'intento_id');
+          store.createIndex('synced', 'synced');
         }
       };
       req.onsuccess = function () { resolve(req.result); };
@@ -211,8 +221,12 @@
   async function actualizarIndicador() {
     const eventos = await idbGetAll('eventos');
     const anul = await idbGetAll('anulaciones_local');
+    const intentosLoc = await idbGetAll('intentos_locales');
+    const capturasLoc = await idbGetAll('capturas_locales');
     const pendientes = eventos.filter(function (e) { return !e.synced; }).length +
-      anul.filter(function (a) { return !a.synced; }).length;
+      anul.filter(function (a) { return !a.synced; }).length +
+      intentosLoc.filter(function (i) { return !i.synced; }).length +
+      capturasLoc.filter(function (c) { return !c.synced; }).length;
     S.pendientesSync = pendientes;
     const el = document.getElementById('inv-indicador');
     if (!el) return;
@@ -239,6 +253,61 @@
     if (sincronizando || !navigator.onLine || !window.sbInventario) return;
     sincronizando = true;
     try {
+      // Intentos e capturas primeiro — escaneos e capturas dependem deles existirem no
+      // servidor (chaves estrangeiras). Um conflito real (ex.: duas pessoas fecharam a
+      // mesma unidade offline) fica marcado como "conflito" em vez de ser gravado às
+      // escondidas: nada se sobrepõe em silêncio.
+      const intentosLoc = (await idbGetAll('intentos_locales')).filter(function (i) { return !i.synced && !i.conflicto; });
+      for (const it of intentosLoc) {
+        const payload = {
+          id: it.id, unidad_id: it.unidad_id, numero_intento: it.numero_intento,
+          persona1_id: it.persona1_id || null, persona2_id: it.persona2_id || null,
+          conteo_fisico: it.conteo_fisico != null ? it.conteo_fisico : null,
+          estado: it.estado, cerrado_at: it.cerrado_at || null
+        };
+        // Pode ser uma tentativa nova (Pessoa 1 fechou a contagem) ou a atualização de uma
+        // já existente no servidor (Pessoa 2 reclamou-a offline). Tenta primeiro como
+        // atualização — só avança se ainda estava "autorizado", ou seja, se mais ninguém
+        // mexeu nela entretanto.
+        const { data: atualizados, error: eUpd } = await window.sbInventario.from('intentos')
+          .update(payload).eq('id', it.id).eq('estado', 'autorizado').select();
+        if (eUpd) continue; // rede/erro: tenta no próximo ciclo
+
+        if (atualizados && atualizados.length) {
+          await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
+          continue;
+        }
+
+        // Não havia nenhuma linha "autorizado" com este id: ou ainda não existe (é mesmo
+        // nova) ou já mudou de mãos — nesse caso não se sobrescreve às escondidas.
+        const { data: existente } = await window.sbInventario.from('intentos').select('id').eq('id', it.id).maybeSingle();
+        if (!existente) {
+          const { error: eIns } = await window.sbInventario.from('intentos').insert(payload);
+          if (!eIns) {
+            await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
+          } else if (esConflictoDuplicado(eIns)) {
+            await idbPut('intentos_locales', Object.assign({}, it, { conflicto: true }));
+          }
+        } else {
+          await idbPut('intentos_locales', Object.assign({}, it, { conflicto: true }));
+        }
+      }
+
+      const capturasLoc = (await idbGetAll('capturas_locales')).filter(function (c) { return !c.synced && !c.conflicto; });
+      for (const c of capturasLoc) {
+        // Só avança se o intento desta captura já está confirmado no servidor.
+        const intentoPai = intentosLoc.find(function (i) { return i.id === c.intento_id; });
+        if (intentoPai && !intentoPai.synced) continue;
+        const { error } = await window.sbInventario.from('capturas').insert({
+          id: c.id, intento_id: c.intento_id, numero_captura: c.numero_captura, estado: c.estado
+        });
+        if (!error) {
+          await idbPut('capturas_locales', Object.assign({}, c, { synced: true }));
+        } else if (esConflictoDuplicado(error)) {
+          await idbPut('capturas_locales', Object.assign({}, c, { conflicto: true }));
+        }
+      }
+
       // Um evento com resuelto === false ainda não tem referência/descrição definitivas
       // (código por reconhecer) — não se envia ao servidor até estar completo.
       const eventos = (await idbGetAll('eventos')).filter(function (e) { return !e.synced && e.resuelto !== false; });
@@ -983,39 +1052,206 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
+  //  MODO SEM INTERNET — ativado por cada pessoa no seu próprio aparelho, com ligação,
+  //  antes de ir para uma zona sem sinal (ex.: Armazém). Só muda a REVELAÇÃO da lista
+  //  (mostra todos os grupos já declarados de uma vez); a proteção de fundo (guardar
+  //  primeiro no aparelho, sincronizar depois) está sempre ativa, com ou sem este modo.
+  // ══════════════════════════════════════════════════════════════════════
+  function claveModoOffline(inventarioId) {
+    return 'modo_sin_internet_' + inventarioId;
+  }
+
+  async function estaModoSinInternetActivo(inventarioId) {
+    const registro = await idbGet('meta', claveModoOffline(inventarioId));
+    return !!(registro && registro.activo);
+  }
+
+  async function definirModoSinInternet(inventarioId, activo) {
+    await idbPut('meta', { clave: claveModoOffline(inventarioId), activo: activo });
+  }
+
+  // Verifica, neste aparelho, se alguma das duas zonas desta loja ainda tem o modo sem
+  // Internet ativo — usado para bloquear o encerramento definitivo até ser desativado.
+  async function hayModoSinInternetActivoEnTienda(tiendaId) {
+    for (const zona of ['loja', 'armazem']) {
+      const { data: inv } = await window.sbInventario
+        .from('inventarios').select('id').eq('tienda_id', tiendaId).eq('zona', zona)
+        .order('creado_at', { ascending: false }).limit(1).maybeSingle();
+      if (inv && await estaModoSinInternetActivo(inv.id)) return true;
+    }
+    return false;
+  }
+
+  function claveCacheUnidades(inventarioId) {
+    return 'unidades_cache_' + inventarioId;
+  }
+
+  async function guardarCacheUnidades(inventarioId, unidades) {
+    await idbPut('meta', { clave: claveCacheUnidades(inventarioId), unidades: unidades, guardado_at: new Date().toISOString() });
+  }
+
+  async function obtenerCacheUnidades(inventarioId) {
+    const registro = await idbGet('meta', claveCacheUnidades(inventarioId));
+    return registro ? registro.unidades : null;
+  }
+
+  // Sobrepõe, por cima dos dados do servidor (ou da cópia guardada), as contagens/leituras
+  // feitas neste aparelho que ainda não foram confirmadas pelo servidor — para que apareçam
+  // na lista de imediato, sem esperar pela sincronização.
+  async function fusionarIntentosLocales(unidades) {
+    const idsUnidad = new Set(unidades.map(function (u) { return u.id; }));
+    const pendientes = (await idbGetAll('intentos_locales')).filter(function (it) {
+      return !it.synced && idsUnidad.has(it.unidad_id);
+    });
+    if (!pendientes.length) return unidades;
+
+    const porUnidad = {};
+    pendientes.forEach(function (it) {
+      (porUnidad[it.unidad_id] = porUnidad[it.unidad_id] || []).push(it);
+    });
+
+    return unidades.map(function (u) {
+      const propios = porUnidad[u.id];
+      if (!propios || !propios.length) return u;
+      const intentosCombinados = (u.intentos || []).slice();
+      propios.forEach(function (local) {
+        const idx = intentosCombinados.findIndex(function (srv) { return srv.id === local.id; });
+        if (idx >= 0) intentosCombinados[idx] = local; else intentosCombinados.push(local);
+      });
+      return Object.assign({}, u, { intentos: intentosCombinados });
+    });
+  }
+
+  // Próximo número de tentativa para uma unidade, olhando tanto para a última cópia
+  // guardada do servidor como para as tentativas ainda só guardadas neste aparelho —
+  // funciona sem rede nenhuma.
+  async function siguienteNumeroIntento(inventarioId, unidadId) {
+    let maxNum = 0;
+    const cache = await obtenerCacheUnidades(inventarioId);
+    if (cache) {
+      const u = cache.find(function (x) { return x.id === unidadId; });
+      if (u && u.intentos) {
+        u.intentos.forEach(function (it) { if (it.numero_intento > maxNum) maxNum = it.numero_intento; });
+      }
+    }
+    const locales = await idbGetAllByIndex('intentos_locales', 'unidad_id', unidadId);
+    locales.forEach(function (it) { if (it.numero_intento > maxNum) maxNum = it.numero_intento; });
+    return maxNum + 1;
+  }
+
+  // Último intento de uma unidade, olhando para a cópia guardada do servidor e para as
+  // tentativas só guardadas neste aparelho — funciona sem rede nenhuma.
+  async function obtenerUltimoIntentoLocalOCache(unidadId) {
+    let candidatos = [];
+    const cache = await obtenerCacheUnidades(S.inventario.id);
+    if (cache) {
+      const u = cache.find(function (x) { return x.id === unidadId; });
+      if (u && u.intentos) candidatos = candidatos.concat(u.intentos);
+    }
+    const locales = await idbGetAllByIndex('intentos_locales', 'unidad_id', unidadId);
+    locales.forEach(function (local) {
+      const idx = candidatos.findIndex(function (c) { return c.id === local.id; });
+      if (idx >= 0) candidatos[idx] = local; else candidatos.push(local);
+    });
+    candidatos.sort(function (a, b) { return b.numero_intento - a.numero_intento; });
+    return candidatos[0] || null;
+  }
+
+  // Tenta sempre primeiro no servidor (mais atual); sem rede, cai para a cópia local —
+  // nunca fica bloqueado só por falta de sinal.
+  async function obtenerUltimoIntentoParaUnidad(unidadId) {
+    try {
+      const { data, error } = await window.sbInventario.from('intentos')
+        .select('*').eq('unidad_id', unidadId).order('numero_intento', { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
+      if (data) return data;
+    } catch (e) {
+      // sem rede ou falha do servidor: cai para a cópia local.
+    }
+    return await obtenerUltimoIntentoLocalOCache(unidadId);
+  }
+
+  function pedirPrepararSinInternet() {
+    const mensagem = S.rol === 'persona1'
+      ? '<p>A partir de agora vais ver todos os ' + UNIDAD_LABEL_PLURAL[S.zona] + ' já declarados de uma vez, em vez de um de cada vez.</p>' +
+        '<p>Continua a contar e a encerrar cada um normalmente. O código de cada um aparecerá diretamente na lista, ao lado de "Encerrado" — não precisas de entrar para o ver.</p>'
+      : '<p>A partir de agora vais ver todos os ' + UNIDAD_LABEL_PLURAL[S.zona] + ' já declarados de uma vez.</p>' +
+        '<p>Para cada um marcado como "Encerrado", usa o código que aparece ao lado dele para começares a ler — não é preciso esperar que o sistema o faça sozinho.</p>';
+    const f = modal(
+      '<h3>Preparar para trabalhar sem Internet</h3>' +
+      mensagem +
+      '<p>Isto guarda agora, neste aparelho, uma cópia de tudo o que já existe, para que a lista continue a funcionar mesmo sem sinal.</p>' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-preparar-offline-ok">Ativar</button>' +
+      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
+      '</div>'
+    );
+    f.querySelector('#inv-preparar-offline-ok').onclick = async function () {
+      await definirModoSinInternet(S.inventario.id, true);
+      f.remove();
+      pantallaUnidades();
+    };
+  }
+
+  function pedirDesativarSinInternet() {
+    if (!confirm('Desativar o modo sem Internet nesta zona?')) return;
+    definirModoSinInternet(S.inventario.id, false).then(pantallaUnidades);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
   //  ECRÃ 4 — LISTA DE UNIDADES (Expositores / Grupos)
   // ══════════════════════════════════════════════════════════════════════
   async function construirEstadoUnidades() {
-    const { data: unidades, error } = await window.sbInventario
-      .from('unidades').select('*, intentos(*)')
-      .eq('inventario_id', S.inventario.id).order('numero');
+    let unidades = null;
+    let nomeP2Inventario = '';
 
-    if (error) return null;
+    try {
+      const { data, error } = await window.sbInventario
+        .from('unidades').select('*, intentos(*)')
+        .eq('inventario_id', S.inventario.id).order('numero');
+      if (error) throw error;
+      unidades = data;
 
-    // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — independente
-    // de já ter começado a ler alguma unidade em concreto.
-    const { data: asigP2Lista } = await window.sbInventario.from('asignaciones')
-      .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
-      .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle();
-    const nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
+      // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — só um
+      // detalhe cosmético; se falhar, a lista continua a funcionar sem ele.
+      const { data: asigP2Lista } = await window.sbInventario.from('asignaciones')
+        .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
+        .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle();
+      nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
+
+      await guardarCacheUnidades(S.inventario.id, unidades);
+    } catch (e) {
+      // Sem rede (ou falha do servidor): usa a última cópia guardada neste aparelho. A
+      // lista nunca fica bloqueada só porque não há sinal.
+      unidades = await obtenerCacheUnidades(S.inventario.id);
+      if (!unidades) return null;
+    }
+
+    unidades = await fusionarIntentosLocales(unidades);
 
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
+    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
 
-    // Revelação progressiva: uma unidade "por começar" (sem tentativas ainda) só aparece
-    // depois de a anterior já ter sido iniciada. As unidades já iniciadas ou validadas
-    // aparecem sempre, independentemente da ordem em que foram trabalhadas.
-    const numerosIniciados = unidades
-      .filter(function (u) { return (u.intentos && u.intentos.length) || u.estado === 'validada'; })
-      .map(function (u) { return u.numero; });
-    const limiteVisible = (numerosIniciados.length ? Math.max.apply(null, numerosIniciados) : 0) + 1;
+    // Revelação progressiva (só com o modo sem Internet desativado): uma unidade "por
+    // começar" só aparece depois de a anterior já ter sido iniciada. Com o modo ativo,
+    // aparecem todas as declaradas de uma vez, como pedido.
+    let unidadesVisibles = unidades;
+    if (!modoSinInternet) {
+      const numerosIniciados = unidades
+        .filter(function (u) { return (u.intentos && u.intentos.length) || u.estado === 'validada'; })
+        .map(function (u) { return u.numero; });
+      const limiteVisible = (numerosIniciados.length ? Math.max.apply(null, numerosIniciados) : 0) + 1;
+      unidadesVisibles = unidades.filter(function (u) { return u.numero <= limiteVisible; });
+    }
 
-    let filas = unidades.filter(function (u) { return u.numero <= limiteVisible; }).map(function (u) {
+    const filasArr = await Promise.all(unidadesVisibles.map(async function (u) {
       const ultimoIntento = (u.intentos || []).sort(function (a, b) {
         return b.numero_intento - a.numero_intento;
       })[0];
       let estadoTxt = 'Pendente';
       let accion = '';
+      let codigoInline = '';
       if (u.estado === 'validada') {
         estadoTxt = '✅ Validado';
         accion = '<button data-accion="verdetalle" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + (ultimoIntento ? ultimoIntento.id : '') + '">Ver detalhes</button>';
@@ -1033,13 +1269,18 @@
       }
       if (S.rol === 'persona1' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button data-accion="vercodigos" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + ultimoIntento.id + '">Ver códigos</button>';
+        // Código à mão na própria lista, sem ter de entrar em "Ver códigos" — pedido
+        // explícito para trabalhar sem Internet, mas útil sempre.
+        const codigo = await codigoIndice(S.tienda.id, S.inventario.id, u.id, ultimoIntento.numero_intento, 1);
+        codigoInline = '<span class="inv-codigo-lista">' + codigo + '</span>';
       }
       if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
         accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
           (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Começar leitura') + '</button>';
       }
-      return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + '</span>' + accion + '</div>';
-    }).join('');
+      return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + codigoInline + '</span>' + accion + '</div>';
+    }));
+    let filas = filasArr.join('');
 
     if (!filas) filas = '<p>Ainda não há ' + UNIDAD_LABEL_PLURAL[S.zona] + ' criados.</p>';
 
@@ -1052,7 +1293,8 @@
     });
 
     return {
-      unidades: unidades, filas: filas, validadas: validadas, label: label, todasContadasPorP1: todasContadasPorP1
+      unidades: unidades, filas: filas, validadas: validadas, label: label,
+      todasContadasPorP1: todasContadasPorP1, modoSinInternet: modoSinInternet
     };
   }
 
@@ -1166,10 +1408,16 @@
       ? '<button class="inv-primario" id="inv-btn-agregar-unidad" style="margin-top:20px;width:100%;">+ Adicionar ' + estado.label.toLowerCase() + '</button>'
       : '';
 
+    const modoHtml = estado.modoSinInternet
+      ? '<div style="background:#fff4e0;color:#a15c00;padding:10px;border-radius:8px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
+        '<span>🔌 Modo sem Internet ativo</span>' +
+        '<button id="inv-btn-desativar-offline">Desativar</button></div>'
+      : '<button id="inv-btn-preparar-offline" style="margin-top:16px;width:100%;">📴 Preparar para trabalhar sem Internet</button>';
+
     render(
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
       '<p>' + estado.validadas + ' / ' + estado.unidades.length + ' validados — ' + S.persona.nombre + ' (' + (S.rol === 'persona1' ? 'Pessoa 1' : 'Pessoa 2') + ')</p>' +
-      '<div style="width:100%;" id="inv-lista-unidades">' + estado.filas + '</div>' + nuevaUnidadHtml +
+      '<div style="width:100%;" id="inv-lista-unidades">' + estado.filas + '</div>' + nuevaUnidadHtml + modoHtml +
       '<button id="inv-btn-salir" style="margin-top:24px;">Sair deste ecrã (não encerra a tua atribuição)</button>',
       pantallaZona
     );
@@ -1177,6 +1425,10 @@
     vincularAccionesUnidades();
     const btnAgregar = document.getElementById('inv-btn-agregar-unidad');
     if (btnAgregar) btnAgregar.onclick = agregarUnidad;
+    const btnPreparar = document.getElementById('inv-btn-preparar-offline');
+    if (btnPreparar) btnPreparar.onclick = pedirPrepararSinInternet;
+    const btnDesativar = document.getElementById('inv-btn-desativar-offline');
+    if (btnDesativar) btnDesativar.onclick = pedirDesativarSinInternet;
     document.getElementById('inv-btn-salir').onclick = function () {
       if (timerListaUnidades) { clearInterval(timerListaUnidades); timerListaUnidades = null; }
       root().remove();
@@ -1479,18 +1731,24 @@
   }
 
   async function cerrarConteo(conteo) {
-    const { data: existentes } = await window.sbInventario.from('intentos')
-      .select('numero_intento').eq('unidad_id', S.unidad.id).order('numero_intento', { ascending: false }).limit(1);
-    const numeroIntento = existentes && existentes.length ? existentes[0].numero_intento + 1 : 1;
+    const numeroIntento = await siguienteNumeroIntento(S.inventario.id, S.unidad.id);
+    const intento = {
+      id: uuid(), unidad_id: S.unidad.id, numero_intento: numeroIntento, persona1_id: S.persona.id,
+      conteo_fisico: conteo, cerrado_at: new Date().toISOString(), estado: 'autorizado', synced: false
+    };
+    try {
+      await idbPut('intentos_locales', intento);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar a contagem localmente. Não continues até resolver isto.');
+      throw e;
+    }
+    sincronizar();
 
-    const { data: intento, error } = await window.sbInventario.from('intentos').insert({
-      unidad_id: S.unidad.id, numero_intento: numeroIntento, persona1_id: S.persona.id,
-      conteo_fisico: conteo, cerrado_at: new Date().toISOString(), estado: 'autorizado'
-    }).select().single();
-
-    if (error) { alert('Não foi possível encerrar. Verifica a tua ligação e tenta novamente — nada foi perdido.'); return; }
-
-    await window.sbInventario.from('unidades').update({ estado: 'en_proceso' }).eq('id', S.unidad.id);
+    // Detalhe informativo (não crítico): se falhar por falta de rede, sincroniza-se sozinho
+    // mais tarde através da cópia guardada acima.
+    if (navigator.onLine) {
+      window.sbInventario.from('unidades').update({ estado: 'en_proceso' }).eq('id', S.unidad.id).then(function () {}, function () {});
+    }
 
     intento.persona1_nombre = S.persona.nombre;
     S.intento = intento;
@@ -1502,10 +1760,7 @@
   // primeira declaração; a anterior fica registada no histórico, nada é apagado.
   async function refazerConteo() {
     if (!confirm('Refazer a contagem desta unidade? A declaração anterior fica substituída.')) return;
-    const { data: ultimo, error } = await window.sbInventario
-      .from('intentos').select('*').eq('unidad_id', S.unidad.id)
-      .order('numero_intento', { ascending: false }).limit(1).maybeSingle();
-    if (error) { alert('Não foi possível verificar o estado atual. Verifica a tua ligação.'); return; }
+    const ultimo = await obtenerUltimoIntentoLocalOCache(S.unidad.id);
     if (!ultimo || ultimo.estado !== 'autorizado') {
       alert('Já não é possível refazer: a Pessoa 2 já começou a leitura desta unidade.');
       pantallaUnidades();
@@ -1515,11 +1770,21 @@
   }
 
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
-    const { data: intento, error } = await window.sbInventario.from('intentos')
-      .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
-      .eq('id', intentoId).maybeSingle();
-    if (error || !intento) { alert('Não foi possível recuperar esta tentativa. Verifica a tua ligação.'); return; }
-    intento.persona1_nombre = intento.persona1 ? intento.persona1.nombre : '';
+    let intento = null;
+    try {
+      const { data, error } = await window.sbInventario.from('intentos')
+        .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
+        .eq('id', intentoId).maybeSingle();
+      if (error) throw error;
+      if (data) {
+        data.persona1_nombre = data.persona1 ? data.persona1.nombre : '';
+        intento = data;
+      }
+    } catch (e) {
+      // sem rede: cai para a cópia local, mais abaixo.
+    }
+    if (!intento) intento = await obtenerUltimoIntentoLocalOCache(unidadId);
+    if (!intento) { alert('Não foi possível recuperar esta tentativa.'); return; }
     S.unidad = { id: unidadId, numero: numero };
     S.intento = intento;
     mostrarCodigos(1);
@@ -1552,17 +1817,28 @@
   async function iniciarAutorizacionEscaneo(unidadId, numero) {
     S.unidad = { id: unidadId, numero: numero };
 
-    const { data: intento, error } = await window.sbInventario.from('intentos')
-      .select('*').eq('unidad_id', unidadId).order('numero_intento', { ascending: false }).limit(1).single();
-    if (error || !intento) { render('<h1>Erro</h1>', '<p>Não foi possível carregar esta unidade.</p>'); return; }
+    const intento = await obtenerUltimoIntentoParaUnidad(unidadId);
+    if (!intento) { render('<h1>Erro</h1>', '<p>Não foi possível carregar esta unidade.</p>', pantallaUnidades); return; }
     S.intento = intento;
 
     if (intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
-      // Retoma após uma atualização de página: recuperar a captura ativa, nunca criar outra às cegas.
-      const { data: capturas } = await window.sbInventario.from('capturas')
-        .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1);
-      if (capturas && capturas.length) {
-        S.captura = capturas[0];
+      // Retoma após uma atualização de página: recuperar a captura ativa (servidor, e se não
+      // houver rede, a cópia guardada neste aparelho), nunca criar outra às cegas.
+      let captura = null;
+      try {
+        const { data: capturas, error } = await window.sbInventario.from('capturas')
+          .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1);
+        if (error) throw error;
+        if (capturas && capturas.length) captura = capturas[0];
+      } catch (e) {
+        // sem rede: procura abaixo na cópia local.
+      }
+      if (!captura) {
+        const locales = await idbGetAllByIndex('capturas_locales', 'intento_id', intento.id);
+        captura = locales.find(function (c) { return c.estado === 'activa'; }) || null;
+      }
+      if (captura) {
+        S.captura = captura;
         await guardarPuntero();
         pantallaEscaneo();
         return;
@@ -1625,14 +1901,42 @@
     return { ok: true };
   }
 
+  // Caminho do código manual: nunca depende da rede. Guarda a atribuição e a nova captura
+  // primeiro no aparelho (a sincronização, com a mesma guarda de concorrência do caminho
+  // automático, faz-se sozinha em segundo plano — ver sincronizar()).
+  async function reclamarUnidadLocal() {
+    const intentoLocal = Object.assign({}, S.intento, {
+      persona2_id: S.persona.id, estado: 'escaneando', synced: false
+    });
+    try {
+      await idbPut('intentos_locales', intentoLocal);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
+    }
+    S.intento = intentoLocal;
+
+    const captura = { id: uuid(), intento_id: S.intento.id, numero_captura: 1, estado: 'activa', synced: false };
+    try {
+      await idbPut('capturas_locales', captura);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
+    }
+    sincronizar();
+    S.captura = captura;
+
+    await guardarPuntero();
+    pantallaEscaneo();
+  }
+
   async function autorizarEscaneo() {
     const codigo = document.getElementById('inv-codigo-auth').value;
     const err = document.getElementById('inv-codigo-error');
     const ok = await verificarCodigo(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, codigo);
     if (!ok) { err.textContent = 'Código incorreto, ou pertence a outra unidade/tentativa.'; return; }
 
-    const resultado = await reclamarUnidad();
-    if (!resultado.ok) err.textContent = resultado.motivo;
+    await reclamarUnidadLocal();
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -1897,6 +2201,10 @@
       return;
     }
     if (!navigator.onLine) { alert('Precisas de ligação à Internet para encerrar o inventário definitivamente.'); return; }
+    if (await hayModoSinInternetActivoEnTienda(S.tienda.id)) {
+      alert('O modo sem Internet ainda está ativo neste aparelho, numa das zonas. Desativa-o (na lista de unidades dessa zona) antes de encerrar definitivamente.');
+      return;
+    }
     if (!confirm('Encerrar definitivamente o inventário de ' + S.tienda.nombre + ' (Loja e Armazém)? Esta ação não pode ser desfeita.')) return;
 
     const { data, error } = await window.sbInventario.rpc('cerrar_inventario_tienda', {

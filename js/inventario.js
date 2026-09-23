@@ -186,6 +186,22 @@
   // ══════════════════════════════════════════════════════════════════════
   let sincronizando = false;
   let timerListaUnidades = null;
+  let sheetJsPromise = null;
+
+  // Carrega a biblioteca de geração de Excel (.xlsx) só quando é mesmo preciso — a maioria
+  // das sessões de escaneamento nunca a usa. Fica em cache depois do primeiro carregamento.
+  function cargarSheetJS() {
+    if (window.XLSX) return Promise.resolve();
+    if (sheetJsPromise) return sheetJsPromise;
+    sheetJsPromise = new Promise(function (resolve, reject) {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      script.onload = function () { resolve(); };
+      script.onerror = function () { sheetJsPromise = null; reject(new Error('falha ao carregar')); };
+      document.head.appendChild(script);
+    });
+    return sheetJsPromise;
+  }
 
   async function actualizarIndicador() {
     const eventos = await idbGetAll('eventos');
@@ -411,6 +427,11 @@
       #inv-root .inv-historial-qty { font-weight:700; color:#1a1a1a; flex:0 0 auto; min-width:22px;
         text-align:right; font-size:13px !important; }
       #inv-root .inv-historial-vazio { padding:14px; font-size:12px; color:#999; text-align:center; }
+      #inv-root .inv-relatorios { display:flex; justify-content:center; gap:16px; width:100%;
+        margin-top:16px; }
+      #inv-root .inv-btn-redondo { width:64px; height:64px; border-radius:50%; padding:0;
+        display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700;
+        flex:0 0 auto; }
     `;
     document.head.appendChild(style);
   }
@@ -592,6 +613,17 @@
     return { inventario: inv, listo: listo };
   }
 
+  // Verifica se já existe um encerramento definitivo de Loja E de Armazém para esta loja —
+  // condição para mostrar os botões de download do relatório consolidado.
+  async function hayCierreCompletoTienda(tiendaId) {
+    const { data, error } = await window.sbInventario
+      .from('inventarios').select('zona').eq('tienda_id', tiendaId).eq('estado', 'cerrado');
+    if (error || !data) return false;
+    const zonas = {};
+    data.forEach(function (r) { zonas[r.zona] = true; });
+    return !!(zonas.loja && zonas.armazem);
+  }
+
   async function pantallaZona() {
     render('<h1>' + S.tienda.nombre + ' — ' + S.persona.nombre + '</h1>', '<p>A carregar…</p>');
 
@@ -604,13 +636,22 @@
       }
     }
 
+    let relatoriosHtml = '';
+    const cierreCompleto = await hayCierreCompletoTienda(S.tienda.id);
+    if (cierreCompleto) {
+      relatoriosHtml = '<div class="inv-relatorios">' +
+        '<button class="inv-btn-redondo" id="inv-btn-relatorio-ean">EAN</button>' +
+        '<button class="inv-btn-redondo" id="inv-btn-relatorio-ref">REF</button>' +
+        '</div>';
+    }
+
     render(
       '<h1>' + S.tienda.nombre + ' — ' + S.persona.nombre + '</h1>',
       '<h1>Loja ou Armazém?</h1>' +
       '<div class="inv-menu">' +
       '<button class="inv-primario inv-menu-btn" id="inv-btn-loja">Loja</button>' +
       '<button class="inv-primario inv-menu-btn" id="inv-btn-armazem">Armazém</button>' +
-      '</div>' + cierreHtml +
+      '</div>' + cierreHtml + relatoriosHtml +
       '<button id="inv-btn-volver" style="margin-top:24px;">← Voltar</button>'
     );
     document.getElementById('inv-btn-loja').onclick = function () { S.zona = 'loja'; entrarEnInventario(); };
@@ -618,6 +659,10 @@
     document.getElementById('inv-btn-volver').onclick = pantallaRol;
     const btnCerrar = document.getElementById('inv-btn-cerrar-tienda');
     if (btnCerrar) btnCerrar.onclick = cerrarInventarioDeTienda;
+    const btnEan = document.getElementById('inv-btn-relatorio-ean');
+    if (btnEan) btnEan.onclick = function () { descargarConsolidado('ean'); };
+    const btnRef = document.getElementById('inv-btn-relatorio-ref');
+    if (btnRef) btnRef.onclick = function () { descargarConsolidado('ref'); };
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -863,6 +908,93 @@
       '<span class="inv-historial-desc">' + escapeHtml(g.descripcion_resuelta || '—') + '</span>' +
       '<span class="inv-historial-qty">' + g.cantidad + '</span>' +
       '</div>';
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  RELATÓRIO CONSOLIDADO DA LOJA (Loja + Armazém, depois de ambos fechados)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // Mesma lógica de obterEscaneosDeUnidad, mas para TODAS as unidades de um inventário
+  // de uma só vez (usado para consolidar um inventário inteiro, não só uma unidade).
+  async function obtenerEscaneosDeInventario(inventarioId) {
+    const { data: unidades, error } = await window.sbInventario
+      .from('unidades').select('id, intentos(id, numero_intento)').eq('inventario_id', inventarioId);
+    if (error || !unidades || !unidades.length) return [];
+
+    const intentoIds = unidades.map(function (u) {
+      const intentos = (u.intentos || []).slice().sort(function (a, b) { return b.numero_intento - a.numero_intento; });
+      return intentos.length ? intentos[0].id : null;
+    }).filter(function (id) { return id; });
+    if (!intentoIds.length) return [];
+
+    const { data: capturas } = await window.sbInventario.from('capturas')
+      .select('id').in('intento_id', intentoIds).eq('estado', 'cerrada');
+    const capturaIds = (capturas || []).map(function (c) { return c.id; });
+    if (!capturaIds.length) return [];
+
+    const { data: escaneos } = await window.sbInventario.from('escaneos')
+      .select('*').in('captura_id', capturaIds);
+    if (!escaneos || !escaneos.length) return [];
+
+    const { data: anulaciones } = await window.sbInventario.from('anulaciones')
+      .select('escaneo_id').in('escaneo_id', escaneos.map(function (e) { return e.id; }));
+    const anuladosSet = new Set((anulaciones || []).map(function (a) { return a.escaneo_id; }));
+    return escaneos.filter(function (e) { return !anuladosSet.has(e.id); });
+  }
+
+  // Devolve o consolidado da loja (Loja + Armazém) — usa o cierre MAIS RECENTE de cada
+  // zona. Devolve null se ainda não há um cierre de ambas as zonas.
+  async function obtenerConsolidadoTienda(tiendaId) {
+    const { data: invLoja } = await window.sbInventario
+      .from('inventarios').select('id').eq('tienda_id', tiendaId).eq('zona', 'loja').eq('estado', 'cerrado')
+      .order('cerrado_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: invArmazem } = await window.sbInventario
+      .from('inventarios').select('id').eq('tienda_id', tiendaId).eq('zona', 'armazem').eq('estado', 'cerrado')
+      .order('cerrado_at', { ascending: false }).limit(1).maybeSingle();
+
+    if (!invLoja || !invArmazem) return null;
+
+    const escaneosLoja = await obtenerEscaneosDeInventario(invLoja.id);
+    const escaneosArmazem = await obtenerEscaneosDeInventario(invArmazem.id);
+    return agruparPorCodigo(escaneosLoja.concat(escaneosArmazem));
+  }
+
+  async function descargarConsolidado(formato) {
+    let grupos;
+    try {
+      grupos = await obtenerConsolidadoTienda(S.tienda.id);
+    } catch (e) {
+      alert('Não foi possível obter os dados. Verifica a tua ligação.');
+      return;
+    }
+    if (!grupos) { alert('Ainda não há um encerramento definitivo de Loja e Armazém para consolidar.'); return; }
+    if (!grupos.length) { alert('Não há leituras registadas para consolidar.'); return; }
+
+    try {
+      await cargarSheetJS();
+    } catch (e) {
+      alert('Não foi possível carregar a biblioteca de Excel. Verifica a tua ligação e tenta novamente.');
+      return;
+    }
+
+    let filas, nomeFolha;
+    if (formato === 'ean') {
+      filas = [['Código de Barras', 'Nº de Peças']].concat(
+        grupos.map(function (g) { return [g.codigo_barras, g.cantidad]; })
+      );
+      nomeFolha = 'EAN';
+    } else {
+      filas = [['Referência', 'Código de Barras', 'Descrição', 'Nº de Peças']].concat(
+        grupos.map(function (g) { return [g.referencia_resuelta || '', g.codigo_barras, g.descripcion_resuelta || '', g.cantidad]; })
+      );
+      nomeFolha = 'REF';
+    }
+
+    const ws = window.XLSX.utils.aoa_to_sheet(filas);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, nomeFolha);
+    const nomeArquivo = (S.tienda.nombre || 'loja').replace(/[^a-z0-9]+/gi, '_') + '_' + nomeFolha + '.xlsx';
+    window.XLSX.writeFile(wb, nomeArquivo);
   }
 
   async function reiniciarExpositor(unidadId, numero, intentoId) {

@@ -346,6 +346,14 @@
     return { referencia: prefixo + '-' + numero, descricao: descricao };
   }
 
+  // EXPERIMENTO (2026-09-23, a pedido de Manuel) — não há catálogo real ligado, por isso só
+  // se valida o FORMATO do código (dígitos, comprimento típico de EAN-8/UPC-A/EAN-13). Não
+  // confirma que o produto exista de verdade. Apagar esta função e a chamada em
+  // procesarCodigo() quando o teste terminar.
+  function formatoCodigoValidoEXPERIMENTO(codigo) {
+    return /^\d{8}$|^\d{12}$|^\d{13}$/.test(codigo);
+  }
+
   function escapeHtml(texto) {
     return String(texto == null ? '' : texto)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1528,6 +1536,14 @@
   }
 
   async function procesarCodigo(codigo) {
+    // EXPERIMENTO — ver formatoCodigoValidoEXPERIMENTO(). Apagar este bloco junto com ela.
+    if (!formatoCodigoValidoEXPERIMENTO(codigo)) {
+      alert('⚠️ Código não reconhecido: "' + codigo + '" não tem um formato de código de barras válido (8, 12 ou 13 dígitos). A leitura não foi registada.');
+      const inputInvalido = document.getElementById('inv-scan-input');
+      if (inputInvalido) focarSemTeclado(inputInvalido);
+      return;
+    }
+
     const ficticios = datosFicticios(codigo);
     await registrarEscaneo(codigo, ficticios.referencia, ficticios.descricao);
     await refrescarEscaneoUI();

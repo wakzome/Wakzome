@@ -177,6 +177,17 @@
       const token = data;
       sessionStorage.setItem('wkz_inv_token', token);
 
+      // Catálogo local — sem "?v=" para que o navegador o guarde em cache e só volte a
+      // descarregá-lo quando eu publicar uma versão nova (ex.: a atualização de janeiro).
+      await new Promise(function(resolve, reject) {
+        if (window.WKZ_CATALOGO) { resolve(); return; }
+        var sCat = document.createElement('script');
+        sCat.src = 'js/catalogo-datos.js';
+        sCat.onload = resolve;
+        sCat.onerror = reject;
+        document.body.appendChild(sCat);
+      });
+
       await new Promise(function(resolve, reject) {
         var s = document.createElement('script');
         s.src = 'js/inventario.js?v=' + Date.now();

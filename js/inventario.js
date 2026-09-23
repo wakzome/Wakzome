@@ -618,6 +618,19 @@
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmar(); });
   }
 
+  // Verificação de que o catálogo local (js/catalogo-datos.js) carregou corretamente.
+  function infoCatalogoLocal() {
+    const catalogo = window.WKZ_CATALOGO;
+    if (!catalogo) {
+      return '<p style="color:#c0392b;">⚠️ Catálogo local não carregado.</p>';
+    }
+    const codigos = Object.keys(catalogo);
+    const referencias = new Set(codigos.map(function (c) { return catalogo[c][0]; }));
+    return '<p style="color:#555;font-size:14px;">Catálogo local: ' +
+      referencias.size.toLocaleString('pt-PT') + ' referências — ' +
+      codigos.length.toLocaleString('pt-PT') + ' códigos de barras.</p>';
+  }
+
   async function pantallaRelatoriosGlobal() {
     render('<h1>LISBOA</h1>', '<p>A carregar…</p>', pantallaTiendas);
 
@@ -645,6 +658,7 @@
     render(
       '<h1>LISBOA</h1>',
       '<h1>Relatórios</h1>' +
+      infoCatalogoLocal() +
       filas +
       '<div style="' + linhaEstilo + 'margin-top:16px;border-bottom:none;">' +
       '<span><strong>Todas as lojas de Porto Santo</strong></span>' +
@@ -1727,7 +1741,17 @@
   }
 
   async function procesarCodigo(codigo) {
-    // 1) Já resolvido antes, neste mesmo aparelho? (funciona sem rede)
+    // 1) Catálogo mestre, embutido no aparelho (js/catalogo-datos.js) — sem rede, instantâneo.
+    const doCatalogo = window.WKZ_CATALOGO && window.WKZ_CATALOGO[codigo];
+    if (doCatalogo) {
+      await registrarEscaneoLocal(codigo, doCatalogo[0], doCatalogo[1], true, true);
+      await refrescarEscaneoUI();
+      const inputCat = document.getElementById('inv-scan-input');
+      if (inputCat) focarSemTeclado(inputCat);
+      return;
+    }
+
+    // 2) Já resolvido antes, neste mesmo aparelho? (funciona sem rede)
     const local = await buscarCodigoLocal(codigo);
     if (local) {
       await registrarEscaneoLocal(codigo, local.referencia, local.descripcion, false, true);
@@ -1737,10 +1761,10 @@
       return;
     }
 
-    // 2) A leitura fica guardada já, mesmo antes de saber se o código é conhecido.
+    // 3) A leitura fica guardada já, mesmo antes de saber se o código é conhecido.
     const evento = await registrarEscaneoLocal(codigo, null, null, false, false);
 
-    // 3) Só com rede se tenta o catálogo/servidor (associações de outros aparelhos).
+    // 4) Só com rede: associações temporais feitas noutros aparelhos para este inventário.
     let resultado = null;
     if (navigator.onLine && window.sbInventario) {
       const { data, error } = await window.sbInventario.rpc('buscar_codigo', {
@@ -1750,14 +1774,14 @@
     }
 
     if (resultado) {
-      await resolverEscaneoLocal(evento.id, resultado.referencia, resultado.descripcion, resultado.fuente === 'catalogo');
+      await resolverEscaneoLocal(evento.id, resultado.referencia, resultado.descripcion, false);
       await refrescarEscaneoUI();
       const inputOk = document.getElementById('inv-scan-input');
       if (inputOk) focarSemTeclado(inputOk);
       return;
     }
 
-    // 4) Código não reconhecido: bloqueia até introduzir referência e descrição.
+    // 5) Código não reconhecido: bloqueia até introduzir referência e descrição.
     pedirReferenciaManual(evento);
   }
 

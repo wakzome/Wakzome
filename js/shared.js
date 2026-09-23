@@ -187,7 +187,7 @@
 
       sweepThen(function() {
         document.getElementById('login-screen').style.display = 'none';
-        showGreeting('Olá', function() {
+        showGreeting(null, function() {
           if (typeof window.openInventarioApp === 'function') {
             window.openInventarioApp(token);
           }

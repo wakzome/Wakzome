@@ -629,7 +629,9 @@
     if (eu) return null;
 
     const validadas = (unidades || []).filter(function (u) { return u.estado === 'validada'; }).length;
-    const listo = unidades.length > 0 && validadas === unidades.length;
+    // Uma zona fica "pronta" quando já foi declarada (unidades_esperadas não é null) e não
+    // fica nenhuma por validar — incluindo o caso de ter sido declarada com 0 (nada a contar).
+    const listo = inv.unidades_esperadas !== null && (unidades.length === 0 || validadas === unidades.length);
 
     return { inventario: inv, listo: listo };
   }
@@ -807,7 +809,7 @@
 
       const { data: nuevo, error: e2 } = await window.sbInventario
         .from('inventarios')
-        .insert({ tienda_id: S.tienda.id, zona: S.zona, etiqueta: etiqueta, unidades_esperadas: 0 })
+        .insert({ tienda_id: S.tienda.id, zona: S.zona, etiqueta: etiqueta })
         .select().single();
       if (e2) {
         render('<h1>Erro</h1>', '<p>Não foi possível abrir o inventário.</p>', pantallaZona);
@@ -901,8 +903,9 @@
 
     // Depende exclusivamente de a Pessoa 1 já ter contado e encerrado cada unidade (existe
     // pelo menos uma tentativa registada) — independentemente de a Pessoa 2 já ter validado
-    // essa contagem ou de ter havido divergência entretanto.
-    const todasContadasPorP1 = unidades.length > 0 && unidades.every(function (u) {
+    // essa contagem ou de ter havido divergência entretanto. Uma lista vazia (0 declarados)
+    // conta como "todas contadas" — não há nenhuma pendente.
+    const todasContadasPorP1 = unidades.every(function (u) {
       return u.intentos && u.intentos.length > 0;
     });
 
@@ -951,7 +954,7 @@
       '<p>Depois de os teres contado e encerrado todos, o botão <strong>+ Adicionar</strong> aparece automaticamente para acrescentares mais, um a um — sem teres de voltar a declarar nada.</p>' +
       '<p><strong>Em caso de teres declarado um número incorreto:</strong> conta e encerra os que já existem; assim que estiverem todos contados, usa <strong>+ Adicionar</strong> para completar os que faltam.</p>' +
       '<p><strong>Em caso de aparecer um ' + label + ' novo</strong> que não foi contado na declaração inicial: adiciona-o da mesma forma, através de <strong>+ Adicionar</strong>, quando os restantes já estiverem todos contados.</p>' +
-      '<input type="number" id="inv-numero-declarado" placeholder="Número de ' + labelPlural + '" min="1" max="500">' +
+      '<input type="number" id="inv-numero-declarado" placeholder="Número de ' + labelPlural + '" min="0" max="500">' +
       '<button class="inv-primario" id="inv-btn-declarar" style="margin-top:16px;width:100%;">Declarar</button>',
       pantallaZona
     );
@@ -961,19 +964,46 @@
   async function declararNumeroExpositores() {
     const input = document.getElementById('inv-numero-declarado');
     const n = parseInt(input.value, 10);
-    if (!n || n < 1 || n > 500) { alert('Introduz um número válido (entre 1 e 500).'); return; }
+    if (isNaN(n) || n < 0 || n > 500) { alert('Introduz um número válido (0 ou mais, até 500).'); return; }
 
-    const filas = [];
-    for (let i = 1; i <= n; i++) filas.push({ inventario_id: S.inventario.id, numero: i });
-
-    const { error } = await window.sbInventario.from('unidades').insert(filas);
-    if (error) {
-      alert(esConflictoDuplicado(error) ? 'Já foram declarados entretanto. A atualizar a lista…' : 'Não foi possível declarar. Verifica a tua ligação e tenta novamente.');
-      pantallaUnidades();
+    if (n === 0) {
+      // Declarar 0 é uma afirmação forte ("não há nada aqui") — merece um aviso explícito
+      // antes de gravar, com opção de voltar atrás e escrever de novo.
+      const f = modal(
+        '<h3>Atenção</h3>' +
+        '<p>Vais declarar que não há nenhum ' + UNIDAD_LABEL[S.zona].toLowerCase() + ' nesta zona.</p>' +
+        '<div class="inv-menu">' +
+        '<button class="inv-primario" id="inv-declarar-cero-confirmar">Confirmar</button>' +
+        '<button id="inv-declarar-cero-refazer">Refazer</button>' +
+        '</div>'
+      );
+      f.querySelector('#inv-declarar-cero-confirmar').onclick = function () { f.remove(); guardarDeclaracao(0); };
+      f.querySelector('#inv-declarar-cero-refazer').onclick = function () {
+        f.remove();
+        input.value = '';
+        input.focus();
+      };
       return;
     }
 
-    await window.sbInventario.from('inventarios').update({ unidades_esperadas: n }).eq('id', S.inventario.id);
+    await guardarDeclaracao(n);
+  }
+
+  async function guardarDeclaracao(n) {
+    if (n > 0) {
+      const filas = [];
+      for (let i = 1; i <= n; i++) filas.push({ inventario_id: S.inventario.id, numero: i });
+
+      const { error } = await window.sbInventario.from('unidades').insert(filas);
+      if (error) {
+        alert(esConflictoDuplicado(error) ? 'Já foram declarados entretanto. A atualizar a lista…' : 'Não foi possível declarar. Verifica a tua ligação e tenta novamente.');
+        pantallaUnidades();
+        return;
+      }
+    }
+
+    const { error: eUpd } = await window.sbInventario.from('inventarios').update({ unidades_esperadas: n }).eq('id', S.inventario.id);
+    if (eUpd) { alert('Não foi possível declarar. Verifica a tua ligação e tenta novamente.'); return; }
     S.inventario.unidades_esperadas = n;
 
     pantallaUnidades();
@@ -983,7 +1013,7 @@
     const estado = await construirEstadoUnidades();
     if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>', pantallaZona); return; }
 
-    if (S.rol === 'persona1' && estado.unidades.length === 0) {
+    if (S.rol === 'persona1' && S.inventario.unidades_esperadas === null) {
       pantallaDeclararNumero();
       return;
     }
@@ -1234,7 +1264,7 @@
       '<p>Vais declarar <strong>' + conteo + '</strong> peças.</p>' +
       '<div class="inv-menu">' +
       '<button class="inv-primario" id="inv-conteo-confirmar">Confirmar</button>' +
-      '<button id="inv-conteo-rehacer">Rehacer</button>' +
+      '<button id="inv-conteo-rehacer">Refazer</button>' +
       '</div>'
     );
     f.querySelector('#inv-conteo-confirmar').onclick = function () { f.remove(); cerrarConteo(conteo); };

@@ -168,13 +168,31 @@
   // chega. Isto garante que essa espera nunca é maior do que TIMEOUT_RED_MS, para cair
   // sempre para a cópia local a tempo.
   const TIMEOUT_RED_MS = 4000;
+
+  // Sinal de ligação real, atualizado sozinho por cada pedido que já se faz à rede (a lista
+  // que se atualiza sozinha, reclamar unidade, encerrar unidade, sincronizar) — nunca se faz
+  // nenhum pedido extra só para isto. Começa otimista com o que o navegador diz; o primeiro
+  // pedido real corrige-o se estiver errado. O evento 'offline' do navegador (sem rede
+  // nenhuma, garantido) marca-o logo a falso, sem esperar por nenhum pedido.
+  let conexaoRealOk = navigator.onLine;
+  window.addEventListener('offline', function () { conexaoRealOk = false; });
+  function hayInternetReal() {
+    return conexaoRealOk;
+  }
+
   function conTimeout(promessa) {
     return Promise.race([
       promessa,
       new Promise(function (_, reject) {
         setTimeout(function () { reject(new Error('tempo esgotado')); }, TIMEOUT_RED_MS);
       })
-    ]);
+    ]).then(function (resultado) {
+      conexaoRealOk = true;
+      return resultado;
+    }, function (erro) {
+      conexaoRealOk = false;
+      throw erro;
+    });
   }
 
   async function dispositivoId() {
@@ -1219,50 +1237,11 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  MODO SEM INTERNET — ativado por cada pessoa no seu próprio aparelho, com ligação,
-  //  antes de ir para uma zona sem sinal (ex.: Armazém). Só muda a REVELAÇÃO da lista
-  //  (mostra todos os grupos já declarados de uma vez); a proteção de fundo (guardar
-  //  primeiro no aparelho, sincronizar depois) está sempre ativa, com ou sem este modo.
+  //  MODO SEM INTERNET — decidido sozinho pelo sistema (ver hayInternetReal, acima), sem
+  //  nenhum interruptor manual. Só muda a REVELAÇÃO da lista (mostra todos os grupos já
+  //  declarados de uma vez, com código manual); a proteção de fundo (guardar primeiro no
+  //  aparelho, sincronizar depois) está sempre ativa, com ou sem ligação.
   // ══════════════════════════════════════════════════════════════════════
-  function claveModoOffline(inventarioId) {
-    return 'modo_sin_internet_' + inventarioId;
-  }
-
-  async function estaModoSinInternetActivo(inventarioId) {
-    const registro = await idbGet('meta', claveModoOffline(inventarioId));
-    return !!(registro && registro.activo);
-  }
-
-  async function definirModoSinInternet(inventarioId, activo) {
-    await idbPut('meta', { clave: claveModoOffline(inventarioId), activo: activo });
-  }
-
-  // Só se chama com ligação real. Nunca assume nada por falha ou demora — nesse caso
-  // devolve false e o modo sem Internet continua ativo até se confirmar mesmo que já não
-  // há nada pendente (0 unidades também conta como "ainda não" — não há nada para desligar).
-  async function verificarSiTodoResueltoParaDesligar(inventarioId) {
-    try {
-      const { data, error } = await conTimeout(window.sbInventario
-        .from('unidades').select('estado').eq('inventario_id', inventarioId));
-      if (error) throw error;
-      if (!data || !data.length) return false;
-      return data.every(function (u) { return u.estado === 'validada'; });
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Verifica, neste aparelho, se alguma das duas zonas desta loja ainda tem o modo sem
-  // Internet ativo — usado para bloquear o encerramento definitivo até ser desativado.
-  async function hayModoSinInternetActivoEnTienda(tiendaId) {
-    for (const zona of ['loja', 'armazem']) {
-      const { data: inv } = await window.sbInventario
-        .from('inventarios').select('id').eq('tienda_id', tiendaId).eq('zona', zona)
-        .order('creado_at', { ascending: false }).limit(1).maybeSingle();
-      if (inv && await estaModoSinInternetActivo(inv.id)) return true;
-    }
-    return false;
-  }
 
   function claveCacheUnidades(inventarioId) {
     return 'unidades_cache_' + inventarioId;
@@ -1363,7 +1342,7 @@
   // Tenta sempre primeiro no servidor (mais atual); sem rede, cai para a cópia local —
   // nunca fica bloqueado só por falta de sinal.
   async function obtenerUltimoIntentoParaUnidad(unidadId) {
-    if (await estaModoSinInternetActivo(S.inventario.id)) {
+    if (!hayInternetReal()) {
       return await obtenerUltimoIntentoLocalOCache(unidadId);
     }
     try {
@@ -1377,33 +1356,6 @@
     return await obtenerUltimoIntentoLocalOCache(unidadId);
   }
 
-  function pedirPrepararSinInternet() {
-    const mensagem = S.rol === 'persona1'
-      ? '<p>A partir de agora vais ver todos os ' + UNIDAD_LABEL_PLURAL[S.zona] + ' já declarados de uma vez, em vez de um de cada vez.</p>' +
-        '<p>Continua a contar e a encerrar cada um normalmente. O código de cada um aparecerá diretamente na lista, ao lado de "Encerrado" — não precisas de entrar para o ver.</p>'
-      : '<p>A partir de agora vais ver todos os ' + UNIDAD_LABEL_PLURAL[S.zona] + ' já declarados de uma vez.</p>' +
-        '<p>Para cada um marcado como "Encerrado", usa o código que aparece ao lado dele para começares a ler — não é preciso esperar que o sistema o faça sozinho.</p>';
-    const f = modal(
-      '<h3>Preparar para trabalhar sem Internet</h3>' +
-      mensagem +
-      '<p>Isto guarda agora, neste aparelho, uma cópia de tudo o que já existe, para que a lista continue a funcionar mesmo sem sinal.</p>' +
-      '<div class="inv-menu">' +
-      '<button class="inv-primario" id="inv-preparar-offline-ok">Ativar</button>' +
-      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
-      '</div>'
-    );
-    f.querySelector('#inv-preparar-offline-ok').onclick = async function () {
-      await definirModoSinInternet(S.inventario.id, true);
-      f.remove();
-      pantallaUnidades();
-    };
-  }
-
-  function pedirDesativarSinInternet() {
-    if (!confirm('Desativar o modo sem Internet nesta zona?')) return;
-    definirModoSinInternet(S.inventario.id, false).then(pantallaUnidades);
-  }
-
   // ══════════════════════════════════════════════════════════════════════
   //  ECRÃ 4 — LISTA DE UNIDADES (Expositores / Grupos)
   // ══════════════════════════════════════════════════════════════════════
@@ -1414,8 +1366,7 @@
   //  usa nem mostra código manual. Só o despachante abaixo decide qual usar.
   // ══════════════════════════════════════════════════════════════════════
   async function construirEstadoUnidades() {
-    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
-    return modoSinInternet ? construirEstadoUnidadesOffline() : construirEstadoUnidadesOnline();
+    return hayInternetReal() ? construirEstadoUnidadesOnline() : construirEstadoUnidadesOffline();
   }
 
   function calcularTodasContadasPorP1(unidades) {
@@ -1632,14 +1583,6 @@
     const cont = document.getElementById('inv-lista-unidades');
     if (!cont) { clearInterval(timerListaUnidades); timerListaUnidades = null; return; }
 
-    if (navigator.onLine && await estaModoSinInternetActivo(S.inventario.id)) {
-      if (await verificarSiTodoResueltoParaDesligar(S.inventario.id)) {
-        await definirModoSinInternet(S.inventario.id, false);
-        pantallaUnidades();
-        return;
-      }
-    }
-
     const estado = await construirEstadoUnidades();
     if (!estado) return;
     cont.innerHTML = estado.filas;
@@ -1715,12 +1658,6 @@
   }
 
   async function pantallaUnidades() {
-    if (navigator.onLine && await estaModoSinInternetActivo(S.inventario.id)) {
-      if (await verificarSiTodoResueltoParaDesligar(S.inventario.id)) {
-        await definirModoSinInternet(S.inventario.id, false);
-      }
-    }
-
     const estado = await construirEstadoUnidades();
     if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>', pantallaZona); return; }
 
@@ -1740,10 +1677,8 @@
       : '';
 
     const modoHtml = estado.modoSinInternet
-      ? '<div style="background:#fff4e0;color:#a15c00;padding:10px;border-radius:8px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
-        '<span>🔌 Modo sem Internet ativo</span>' +
-        '<button id="inv-btn-desativar-offline">Desativar</button></div>'
-      : '<button id="inv-btn-preparar-offline" style="margin-top:16px;width:100%;">📴 Preparar para trabalhar sem Internet</button>';
+      ? '<div style="background:#fff4e0;color:#a15c00;padding:10px;border-radius:8px;margin-top:16px;text-align:center;">🔌 A trabalhar sem Internet</div>'
+      : '';
 
     render(
       '<h1>' + S.tienda.nombre + ' — ' + ZONA_LABEL[S.zona] + '</h1>',
@@ -1758,10 +1693,6 @@
     if (btnAgregar) btnAgregar.onclick = agregarUnidad;
     const btnAgregarP2 = document.getElementById('inv-btn-agregar-unidad-p2');
     if (btnAgregarP2) btnAgregarP2.onclick = pedirNumeroGrupoManual;
-    const btnPreparar = document.getElementById('inv-btn-preparar-offline');
-    if (btnPreparar) btnPreparar.onclick = pedirPrepararSinInternet;
-    const btnDesativar = document.getElementById('inv-btn-desativar-offline');
-    if (btnDesativar) btnDesativar.onclick = pedirDesativarSinInternet;
     document.getElementById('inv-btn-salir').onclick = function () {
       if (timerListaUnidades) { clearInterval(timerListaUnidades); timerListaUnidades = null; }
       root().remove();
@@ -2133,7 +2064,7 @@
 
     // Com Internet o código não é necessário (o servidor entrega a unidade sozinho) —
     // volta-se direto para a lista. Sem Internet, continua a mostrar-se o ecrã do código.
-    if (await estaModoSinInternetActivo(S.inventario.id)) {
+    if (!hayInternetReal()) {
       mostrarCodigos(1);
     } else {
       pantallaUnidades();
@@ -2156,7 +2087,7 @@
 
   async function verCodigosDeNuevo(unidadId, numero, intentoId) {
     let intento = null;
-    if (!(await estaModoSinInternetActivo(S.inventario.id))) {
+    if (hayInternetReal()) {
       try {
         const { data, error } = await conTimeout(window.sbInventario.from('intentos')
           .select('*, persona1:personas!intentos_persona1_id_fkey(nombre)')
@@ -2203,10 +2134,9 @@
   // ══════════════════════════════════════════════════════════════════════
   async function iniciarAutorizacionEscaneo(unidadId, numero) {
     S.unidad = { id: unidadId, numero: numero };
-    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
-    return modoSinInternet
-      ? iniciarAutorizacionEscaneoOffline(unidadId, numero)
-      : iniciarAutorizacionEscaneoOnline(unidadId, numero);
+    return hayInternetReal()
+      ? iniciarAutorizacionEscaneoOnline(unidadId, numero)
+      : iniciarAutorizacionEscaneoOffline(unidadId, numero);
   }
 
   // Caminho com Internet: nunca mostra nem aceita código manual. Se a rede falhar mesmo na
@@ -2261,7 +2191,10 @@
         '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>',
         pantallaUnidades
       );
-      document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneoOnline(unidadId, numero); };
+      // Volta a passar pelo despachante (não chama este caminho outra vez diretamente):
+      // se a falha acima já revelou que afinal não há Internet, o novo toque cai sozinho
+      // no código manual, sem ficar preso a repetir o mesmo pedido que já falhou.
+      document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneo(unidadId, numero); };
       document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
       return;
     }
@@ -2643,8 +2576,7 @@
   }
 
   async function cerrarUnidadEscaneo() {
-    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
-    return modoSinInternet ? cerrarUnidadEscaneoOffline() : cerrarUnidadEscaneoOnline();
+    return hayInternetReal() ? cerrarUnidadEscaneoOnline() : cerrarUnidadEscaneoOffline();
   }
 
   // Caminho com Internet: já se conhece a quantidade real da Pessoa 1 (veio do reclamo
@@ -2751,10 +2683,6 @@
       return;
     }
     if (!navigator.onLine) { alert('Precisas de ligação à Internet para encerrar o inventário definitivamente.'); return; }
-    if (await hayModoSinInternetActivoEnTienda(S.tienda.id)) {
-      alert('O modo sem Internet ainda está ativo neste aparelho, numa das zonas. Desativa-o (na lista de unidades dessa zona) antes de encerrar definitivamente.');
-      return;
-    }
     if (!confirm('Encerrar definitivamente o inventário de ' + S.tienda.nombre + ' (Loja e Armazém)? Esta ação não pode ser desfeita.')) return;
 
     const { data, error } = await window.sbInventario.rpc('cerrar_inventario_tienda', {

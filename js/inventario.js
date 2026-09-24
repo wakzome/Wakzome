@@ -523,7 +523,9 @@
           p_token: S.token, p_intento_id: it.id
         });
         if (!error && data && data.length && data[0].ok) {
-          await idbPut('intentos_locales', Object.assign({}, it, { validacionResuelta: true }));
+          await idbPut('intentos_locales', Object.assign({}, it, {
+            estado: data[0].resultado, validacionResuelta: true
+          }));
         }
         // Se falhar, tenta-se de novo no próximo ciclo.
       }
@@ -1344,7 +1346,12 @@
       const u = cache.find(function (x) { return x.id === unidadId; });
       if (u && u.intentos) candidatos = candidatos.concat(u.intentos);
     }
-    const locales = await idbGetAllByIndex('intentos_locales', 'unidad_id', unidadId);
+    // Só um registo local ainda por sincronizar tem prioridade sobre a cópia da cache — uma
+    // vez sincronizado, a cache é que manda, porque pode já refletir um resultado mais
+    // recente (ex.: uma validação/divergência resolvida entretanto) que este registo local,
+    // nunca mais atualizado depois de sincronizar, não sabe.
+    const locales = (await idbGetAllByIndex('intentos_locales', 'unidad_id', unidadId))
+      .filter(function (local) { return !local.synced; });
     locales.forEach(function (local) {
       const idx = candidatos.findIndex(function (c) { return c.id === local.id; });
       if (idx >= 0) candidatos[idx] = local; else candidatos.push(local);

@@ -34,7 +34,7 @@
   const HMAC_SECRET = 'wkz-inv-codigos-2027-a19f4e7c';
 
   const IDB_NAME = 'wkz_inventario';
-  const IDB_VERSION = 3;
+  const IDB_VERSION = 4;
 
   const ZONA_LABEL = { loja: 'Loja', armazem: 'Armazém' };
   const UNIDAD_LABEL = { loja: 'Expositor', armazem: 'Grupo' };
@@ -94,6 +94,9 @@
           const store = db.createObjectStore('capturas_locales', { keyPath: 'id' });
           store.createIndex('intento_id', 'intento_id');
           store.createIndex('synced', 'synced');
+        }
+        if (!db.objectStoreNames.contains('unidades_locales')) {
+          db.createObjectStore('unidades_locales', { keyPath: 'id' });
         }
       };
       req.onsuccess = function () { resolve(req.result); };
@@ -189,26 +192,69 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  CÓDIGOS DE AUTORIZAÇÃO — HMAC determinístico, funciona sem rede
+  //  CÓDIGOS DE AUTORIZAÇÃO E IDENTIFICADORES — HMAC determinístico, funciona
+  //  sem rede. A chave importa-se uma única vez e fica em cache: tanto os
+  //  códigos como os identificadores abaixo fazem dezenas/centenas de
+  //  assinaturas quando se procura um código sem saber o número da tentativa.
   // ══════════════════════════════════════════════════════════════════════
+  let hmacKeyPromise = null;
+  function obtenerHmacKey() {
+    if (!hmacKeyPromise) {
+      const enc = new TextEncoder();
+      hmacKeyPromise = crypto.subtle.importKey(
+        'raw', enc.encode(HMAC_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+    }
+    return hmacKeyPromise;
+  }
+
+  async function assinarMaterial(material) {
+    const key = await obtenerHmacKey();
+    const enc = new TextEncoder();
+    return new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(material)));
+  }
+
   async function codigoIndice(tiendaId, inventarioId, unidadId, numeroIntento, indice) {
     const material = tiendaId + '|' + inventarioId + '|' + unidadId + '|' + numeroIntento + '|' + indice;
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw', enc.encode(HMAC_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-    );
-    const firma = await crypto.subtle.sign('HMAC', key, enc.encode(material));
-    const bytes = new Uint8Array(firma);
+    const bytes = await assinarMaterial(material);
     const n = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
     return String(n % 1000000).padStart(6, '0');
   }
 
-  async function verificarCodigo(tiendaId, inventarioId, unidadId, numeroIntento, codigoIntroducido) {
-    for (let i = 1; i <= 50; i++) {
-      const c = await codigoIndice(tiendaId, inventarioId, unidadId, numeroIntento, i);
-      if (c === codigoIntroducido.trim()) return true;
+  // Identificadores calculados a partir de dados que os dois aparelhos já conhecem (loja,
+  // inventário, número do grupo/expositor, número da tentativa) em vez de um valor ao acaso
+  // — para que, sem nenhuma ligação entre os dois telefones, cada um chegue sozinho ao
+  // mesmo identificador para "o mesmo grupo" ou "a mesma tentativa de contagem".
+  async function idDeterministico(partes) {
+    const bytes = (await assinarMaterial(partes.join('|'))).slice(0, 16);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex = '';
+    for (let i = 0; i < 16; i++) hex += bytes[i].toString(16).padStart(2, '0');
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20, 32);
+  }
+
+  async function unidadIdDeterministico(inventarioId, numero) {
+    return idDeterministico(['unidad', inventarioId, numero]);
+  }
+
+  async function intentoIdDeterministico(unidadId, numeroIntento) {
+    return idDeterministico(['intento', unidadId, numeroIntento]);
+  }
+
+  // Descobre a que número de tentativa pertence um código, sem a pessoa precisar de saber
+  // isso — experimenta uma faixa ampla de tentativas e de índices. Mesmo no pior caso são
+  // só assinaturas locais (sem rede), quase instantâneo num telemóvel.
+  async function buscarNumeroIntentoPorCodigo(tiendaId, inventarioId, unidadId, codigoIntroducido) {
+    const codigo = (codigoIntroducido || '').trim();
+    if (!codigo) return null;
+    for (let n = 1; n <= 30; n++) {
+      for (let i = 1; i <= 50; i++) {
+        const c = await codigoIndice(tiendaId, inventarioId, unidadId, n, i);
+        if (c === codigo) return n;
+      }
     }
-    return false;
+    return null;
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -243,10 +289,12 @@
     const anul = await idbGetAll('anulaciones_local');
     const intentosLoc = await idbGetAll('intentos_locales');
     const capturasLoc = await idbGetAll('capturas_locales');
+    const unidadesLoc = await idbGetAll('unidades_locales');
     const pendientes = eventos.filter(function (e) { return !e.synced; }).length +
       anul.filter(function (a) { return !a.synced; }).length +
       intentosLoc.filter(function (i) { return !i.synced; }).length +
-      capturasLoc.filter(function (c) { return !c.synced; }).length;
+      capturasLoc.filter(function (c) { return !c.synced; }).length +
+      unidadesLoc.filter(function (u) { return !u.synced; }).length;
     S.pendientesSync = pendientes;
     const el = document.getElementById('inv-indicador');
     if (!el) return;
@@ -273,12 +321,53 @@
     if (sincronizando || !navigator.onLine || !window.sbInventario) return;
     sincronizando = true;
     try {
-      // Intentos e capturas primeiro — escaneos e capturas dependem deles existirem no
+      // Unidades novas primeiro (ex.: um expositor/grupo adicionado offline) — intentos
+      // dependem de a unidade já existir no servidor (chave estrangeira).
+      const unidadesLoc = (await idbGetAll('unidades_locales')).filter(function (u) { return !u.synced && !u.conflicto; });
+      for (const u of unidadesLoc) {
+        const { error } = await window.sbInventario.from('unidades').insert({
+          id: u.id, inventario_id: u.inventario_id, numero: u.numero, estado: u.estado
+        });
+        if (!error || esConflictoDuplicado(error)) {
+          // Duplicado é esperado e inofensivo aqui: o identificador é sempre o mesmo para
+          // "este inventário, este número", venha de que aparelho vier.
+          await idbPut('unidades_locales', Object.assign({}, u, { synced: true }));
+        }
+        // qualquer outro erro (rede): tenta-se de novo no próximo ciclo.
+      }
+
+      // Intentos e capturas a seguir — escaneos e capturas dependem deles existirem no
       // servidor (chaves estrangeiras). Um conflito real (ex.: duas pessoas fecharam a
       // mesma unidade offline) fica marcado como "conflito" em vez de ser gravado às
       // escondidas: nada se sobrepõe em silêncio.
       const intentosLoc = (await idbGetAll('intentos_locales')).filter(function (i) { return !i.synced && !i.conflicto; });
       for (const it of intentosLoc) {
+        if (it.parcial) {
+          // Veio do código manual da Pessoa 2, que nunca soube a quantidade que a Pessoa 1
+          // contou nem quem é ela — só se toca no que é mesmo dela (quem está a ler e o
+          // estado), nunca em conteo_fisico/persona1_id/cerrado_at, que podem nem ter
+          // chegado ainda ao servidor.
+          const { data: atualizados, error: eUpd } = await window.sbInventario.from('intentos')
+            .update({ persona2_id: it.persona2_id, estado: it.estado })
+            .eq('id', it.id).eq('estado', 'autorizado').select();
+          if (eUpd) continue;
+          if (atualizados && atualizados.length) {
+            await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
+            continue;
+          }
+          // 0 linhas afetadas: ou a linha da Pessoa 1 ainda não chegou ao servidor (não se
+          // insere nada incompleto — espera-se), ou já mudou de mãos entretanto.
+          const { data: existente } = await window.sbInventario.from('intentos')
+            .select('estado, persona2_id').eq('id', it.id).maybeSingle();
+          if (!existente) continue;
+          if (existente.estado === it.estado && existente.persona2_id === it.persona2_id) {
+            await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
+          } else {
+            await idbPut('intentos_locales', Object.assign({}, it, { conflicto: true }));
+          }
+          continue;
+        }
+
         const payload = {
           id: it.id, unidad_id: it.unidad_id, numero_intento: it.numero_intento,
           persona1_id: it.persona1_id || null, persona2_id: it.persona2_id || null,
@@ -1118,6 +1207,22 @@
   // Sobrepõe, por cima dos dados do servidor (ou da cópia guardada), as contagens/leituras
   // feitas neste aparelho que ainda não foram confirmadas pelo servidor — para que apareçam
   // na lista de imediato, sem esperar pela sincronização.
+  // Acrescenta, por cima da lista vinda do servidor (ou da cópia guardada), os expositores/
+  // grupos adicionados neste aparelho que ainda não sincronizaram — para que apareçam na
+  // lista de imediato, com ou sem rede. Uma unidade real do servidor (mesmo identificador)
+  // tem sempre prioridade sobre a versão local.
+  async function fusionarUnidadesLocales(unidades) {
+    const locales = (await idbGetAll('unidades_locales')).filter(function (u) {
+      return u.inventario_id === S.inventario.id;
+    });
+    if (!locales.length) return unidades;
+    const idsExistentes = new Set(unidades.map(function (u) { return u.id; }));
+    const extra = locales.filter(function (u) { return !idsExistentes.has(u.id); })
+      .map(function (u) { return { id: u.id, numero: u.numero, estado: u.estado, intentos: [] }; });
+    if (!extra.length) return unidades;
+    return unidades.concat(extra).sort(function (a, b) { return a.numero - b.numero; });
+  }
+
   async function fusionarIntentosLocales(unidades) {
     const idsUnidad = new Set(unidades.map(function (u) { return u.id; }));
     const pendientes = (await idbGetAll('intentos_locales')).filter(function (it) {
@@ -1260,16 +1365,17 @@
       }
     }
 
+    unidades = await fusionarUnidadesLocales(unidades);
     unidades = await fusionarIntentosLocales(unidades);
 
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
 
-    // Revelação progressiva (só com o modo sem Internet desativado): uma unidade "por
-    // começar" só aparece depois de a anterior já ter sido iniciada. Com o modo ativo,
-    // aparecem todas as declaradas de uma vez, como pedido.
+    // Revelação progressiva — só se aplica à Pessoa 1 (é ela quem declara/conta em sequência)
+    // e só com o modo sem Internet desativado. A Pessoa 2 vê sempre todos os declarados de
+    // uma vez: ela só lê o que a Pessoa 1 já fechou, nunca precisa de "avançar" pela lista.
     let unidadesVisibles = unidades;
-    if (!modoSinInternet) {
+    if (!modoSinInternet && S.rol === 'persona1') {
       const numerosIniciados = unidades
         .filter(function (u) { return (u.intentos && u.intentos.length) || u.estado === 'validada'; })
         .map(function (u) { return u.numero; });
@@ -1311,9 +1417,15 @@
           accion = '<button data-accion="refazer" data-id="' + u.id + '" data-numero="' + u.numero + '">Refazer contagem</button>';
         }
       }
-      if (S.rol === 'persona2' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
-        accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">' +
-          (ultimoIntento.estado === 'escaneando' ? 'Continuar' : 'Começar leitura') + '</button>';
+      if (S.rol === 'persona2' && u.estado !== 'validada') {
+        // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
+        // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
+        // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
+        // "Pendente". Só muda para "Continuar" quando é mesmo ela quem já está a lê-lo.
+        const jaEDela = ultimoIntento && ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id === S.persona.id;
+        accion = jaEDela
+          ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
+          : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
       }
       return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + codigoInline + '</span>' + accion + '</div>';
     }));
@@ -1329,9 +1441,19 @@
       return u.intentos && u.intentos.length > 0;
     });
 
+    // Do lado da Pessoa 2: nada por saber lhe pede ação (nada em "autorizado", nem em
+    // "escaneando" por outra pessoa) — controla se lhe aparece a opção de acrescentar um
+    // expositor/grupo novo pelo número, quando a Pessoa 1 adicionou um sem rede.
+    const todoResueltoPorP2 = unidades.every(function (u) {
+      if (u.estado === 'validada') return true;
+      const ultimoIntento = (u.intentos || []).sort(function (a, b) { return b.numero_intento - a.numero_intento; })[0];
+      if (!ultimoIntento) return true;
+      return !(ultimoIntento.estado === 'autorizado' || (ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id !== S.persona.id));
+    });
+
     return {
       unidades: unidades, filas: filas, validadas: validadas, label: label,
-      todasContadasPorP1: todasContadasPorP1, modoSinInternet: modoSinInternet
+      todasContadasPorP1: todasContadasPorP1, todoResueltoPorP2: todoResueltoPorP2, modoSinInternet: modoSinInternet
     };
   }
 
@@ -1449,6 +1571,10 @@
     // preciso voltar a declarar nada para adicionar mais a partir daí.
     const nuevaUnidadHtml = (S.rol === 'persona1' && estado.todasContadasPorP1)
       ? '<button class="inv-primario" id="inv-btn-agregar-unidad" style="margin-top:20px;width:100%;">+ Adicionar ' + estado.label.toLowerCase() + '</button>'
+      // Sem Internet, se a Pessoa 1 adicionar um novo depois de a Pessoa 2 já ter acabado o
+      // que via, ela não tem como saber sozinha — este botão deixa-a ir buscá-lo pelo número.
+      : (S.rol === 'persona2' && estado.modoSinInternet && estado.todoResueltoPorP2)
+      ? '<button class="inv-primario" id="inv-btn-agregar-unidad-p2" style="margin-top:20px;width:100%;">+ Adicionar ' + estado.label.toLowerCase() + '</button>'
       : '';
 
     const modoHtml = estado.modoSinInternet
@@ -1468,6 +1594,8 @@
     vincularAccionesUnidades();
     const btnAgregar = document.getElementById('inv-btn-agregar-unidad');
     if (btnAgregar) btnAgregar.onclick = agregarUnidad;
+    const btnAgregarP2 = document.getElementById('inv-btn-agregar-unidad-p2');
+    if (btnAgregarP2) btnAgregarP2.onclick = pedirNumeroGrupoManual;
     const btnPreparar = document.getElementById('inv-btn-preparar-offline');
     if (btnPreparar) btnPreparar.onclick = pedirPrepararSinInternet;
     const btnDesativar = document.getElementById('inv-btn-desativar-offline');
@@ -1714,26 +1842,70 @@
 
   // Cria diretamente o próximo expositor/grupo — sem declarar um total antecipado.
   // Cada clique corresponde a uma unidade física que existe agora, e mais nenhuma.
+  // Próximo número de expositor/grupo, olhando para a última cópia do servidor e para os
+  // que já foram adicionados neste aparelho mas ainda não sincronizaram — funciona sem rede.
+  async function siguienteNumeroUnidad() {
+    let maxNum = 0;
+    const cache = await obtenerCacheUnidades(S.inventario.id);
+    if (cache) cache.forEach(function (u) { if (u.numero > maxNum) maxNum = u.numero; });
+    (await idbGetAll('unidades_locales')).forEach(function (u) {
+      if (u.inventario_id === S.inventario.id && u.numero > maxNum) maxNum = u.numero;
+    });
+    return maxNum + 1;
+  }
+
+  // Local primeiro, como o encerramento de uma contagem — funciona com ou sem rede. O
+  // identificador é sempre o mesmo para "este inventário, este número", venha de que
+  // aparelho vier (ver idDeterministico), por isso não há risco de duplicar ao sincronizar.
   async function agregarUnidad() {
-    const { data: ultimas, error: e0 } = await window.sbInventario
-      .from('unidades').select('numero').eq('inventario_id', S.inventario.id)
-      .order('numero', { ascending: false }).limit(1);
-    if (e0) { alert('Não foi possível adicionar. Verifica a tua ligação.'); return; }
-    const siguiente = (ultimas && ultimas.length ? ultimas[0].numero : 0) + 1;
-
-    const { error: e1 } = await window.sbInventario.from('unidades')
-      .insert({ inventario_id: S.inventario.id, numero: siguiente });
-    if (e1) {
-      alert(esConflictoDuplicado(e1) ? 'Já foi adicionada entretanto. A atualizar a lista…' : 'Não foi possível adicionar. Verifica a tua ligação.');
-      pantallaUnidades();
-      return;
+    const numero = await siguienteNumeroUnidad();
+    const unidad = {
+      id: await unidadIdDeterministico(S.inventario.id, numero),
+      inventario_id: S.inventario.id, numero: numero, estado: 'pendente', synced: false
+    };
+    try {
+      await idbPut('unidades_locales', unidad);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
     }
+    sincronizar();
 
-    // Mantém a coluna coerente para referência/auditoria — não é usada para bloquear nada.
-    await window.sbInventario.from('inventarios').update({ unidades_esperadas: siguiente }).eq('id', S.inventario.id);
-    S.inventario.unidades_esperadas = siguiente;
+    // Detalhe informativo (não crítico): se falhar por falta de rede, sincroniza-se sozinho
+    // mais tarde através da cópia guardada acima.
+    if (navigator.onLine) {
+      window.sbInventario.from('inventarios').update({ unidades_esperadas: numero }).eq('id', S.inventario.id).then(function () {}, function () {});
+    }
+    S.inventario.unidades_esperadas = numero;
 
     pantallaUnidades();
+  }
+
+  // Pessoa 2, sem Internet: a única forma de saber que a Pessoa 1 acrescentou mais um
+  // expositor/grupo é ela dizer-lhe o número de viva voz. Isto não cria nada no servidor
+  // (quem cria é sempre a Pessoa 1) — só calcula o mesmo identificador e avança direto para
+  // o ecrã do código, guardando uma referência local só para a lista o mostrar corretamente.
+  function pedirNumeroGrupoManual() {
+    const label = UNIDAD_LABEL[S.zona].toLowerCase();
+    const f = modal(
+      '<h3>Novo ' + label + '</h3>' +
+      '<p>Pergunta à Pessoa 1 o número do ' + label + ' que ela acrescentou, e escreve-o aqui.</p>' +
+      '<input type="text" id="inv-numero-grupo-manual" inputmode="numeric" placeholder="Número">' +
+      '<div class="inv-menu">' +
+      '<button class="inv-primario" id="inv-numero-grupo-ok">Continuar</button>' +
+      '<button onclick="window._invCerrarModal(this)">Cancelar</button>' +
+      '</div>'
+    );
+    f.querySelector('#inv-numero-grupo-ok').onclick = async function () {
+      const numero = parseInt(f.querySelector('#inv-numero-grupo-manual').value, 10);
+      if (!numero || numero < 1) return;
+      const id = await unidadIdDeterministico(S.inventario.id, numero);
+      await idbPut('unidades_locales', {
+        id: id, inventario_id: S.inventario.id, numero: numero, estado: 'pendente', synced: true
+      });
+      f.remove();
+      iniciarAutorizacionEscaneo(id, numero);
+    };
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -1776,7 +1948,8 @@
   async function cerrarConteo(conteo) {
     const numeroIntento = await siguienteNumeroIntento(S.inventario.id, S.unidad.id);
     const intento = {
-      id: uuid(), unidad_id: S.unidad.id, numero_intento: numeroIntento, persona1_id: S.persona.id,
+      id: await intentoIdDeterministico(S.unidad.id, numeroIntento),
+      unidad_id: S.unidad.id, numero_intento: numeroIntento, persona1_id: S.persona.id,
       conteo_fisico: conteo, cerrado_at: new Date().toISOString(), estado: 'autorizado', synced: false
     };
     try {
@@ -1869,13 +2042,15 @@
   async function iniciarAutorizacionEscaneo(unidadId, numero) {
     S.unidad = { id: unidadId, numero: numero };
 
+    // Pode não haver nada aqui ainda — o aparelho desta pessoa pode simplesmente não saber
+    // que a Pessoa 1 já fechou esta unidade (nunca houve rede entre os dois aparelhos). Isso
+    // não impede nada: o ecrã do código manual, mais abaixo, descobre tudo sozinho.
     const intento = await obtenerUltimoIntentoParaUnidad(unidadId);
-    if (!intento) { render('<h1>Erro</h1>', '<p>Não foi possível carregar esta unidade.</p>', pantallaUnidades); return; }
     S.intento = intento;
 
     const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
 
-    if (intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
+    if (intento && intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
       // Retoma após uma atualização de página: recuperar a captura ativa (servidor, e se não
       // houver rede, a cópia guardada neste aparelho), nunca criar outra às cegas.
       let captura = null;
@@ -1905,7 +2080,7 @@
     // fechou mesmo esta unidade) — o código de autorização só é necessário como alternativa.
     // Com o modo sem Internet ativo, ou se o servidor não confirma a tempo, usa-se sempre o
     // código manual (abaixo), sem ficar à espera de uma ligação que pode nem existir.
-    if (!modoSinInternet && navigator.onLine && intento.estado === 'autorizado') {
+    if (intento && !modoSinInternet && navigator.onLine && intento.estado === 'autorizado') {
       render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>', '<p>A iniciar leitura…</p>');
       const miOperacion = ++operacionReclamoVigente;
       let resultado = null;
@@ -2011,8 +2186,17 @@
   async function autorizarEscaneo() {
     const codigo = document.getElementById('inv-codigo-auth').value;
     const err = document.getElementById('inv-codigo-error');
-    const ok = await verificarCodigo(S.tienda.id, S.inventario.id, S.unidad.id, S.intento.numero_intento, codigo);
-    if (!ok) { err.textContent = 'Código incorreto, ou pertence a outra unidade/tentativa.'; return; }
+
+    // Descobre-se sempre a que tentativa pertence o código, em vez de confiar num número já
+    // conhecido — assim funciona tanto quando este aparelho não sabia nada desta unidade,
+    // como quando a Pessoa 1 teve de refazer a contagem sem que isso chegasse a saber-se.
+    const numeroIntento = await buscarNumeroIntentoPorCodigo(S.tienda.id, S.inventario.id, S.unidad.id, codigo);
+    if (numeroIntento === null) { err.textContent = 'Código incorreto, ou pertence a outra unidade/tentativa.'; return; }
+
+    S.intento = {
+      id: await intentoIdDeterministico(S.unidad.id, numeroIntento),
+      unidad_id: S.unidad.id, numero_intento: numeroIntento, estado: 'autorizado', parcial: true
+    };
 
     await reclamarUnidadLocal();
   }

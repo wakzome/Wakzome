@@ -1208,6 +1208,21 @@
     await idbPut('meta', { clave: claveModoOffline(inventarioId), activo: activo });
   }
 
+  // Só se chama com ligação real. Nunca assume nada por falha ou demora — nesse caso
+  // devolve false e o modo sem Internet continua ativo até se confirmar mesmo que já não
+  // há nada pendente (0 unidades também conta como "ainda não" — não há nada para desligar).
+  async function verificarSiTodoResueltoParaDesligar(inventarioId) {
+    try {
+      const { data, error } = await conTimeout(window.sbInventario
+        .from('unidades').select('estado').eq('inventario_id', inventarioId));
+      if (error) throw error;
+      if (!data || !data.length) return false;
+      return data.every(function (u) { return u.estado === 'validada'; });
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Verifica, neste aparelho, se alguma das duas zonas desta loja ainda tem o modo sem
   // Internet ativo — usado para bloquear o encerramento definitivo até ser desativado.
   async function hayModoSinInternetActivoEnTienda(tiendaId) {
@@ -1513,6 +1528,15 @@
   async function refrescarListaUnidades() {
     const cont = document.getElementById('inv-lista-unidades');
     if (!cont) { clearInterval(timerListaUnidades); timerListaUnidades = null; return; }
+
+    if (navigator.onLine && await estaModoSinInternetActivo(S.inventario.id)) {
+      if (await verificarSiTodoResueltoParaDesligar(S.inventario.id)) {
+        await definirModoSinInternet(S.inventario.id, false);
+        pantallaUnidades();
+        return;
+      }
+    }
+
     const estado = await construirEstadoUnidades();
     if (!estado) return;
     cont.innerHTML = estado.filas;
@@ -1588,6 +1612,12 @@
   }
 
   async function pantallaUnidades() {
+    if (navigator.onLine && await estaModoSinInternetActivo(S.inventario.id)) {
+      if (await verificarSiTodoResueltoParaDesligar(S.inventario.id)) {
+        await definirModoSinInternet(S.inventario.id, false);
+      }
+    }
+
     const estado = await construirEstadoUnidades();
     if (!estado) { render('<h1>Erro</h1>', '<p>Não foi possível carregar a lista de unidades.</p>', pantallaZona); return; }
 

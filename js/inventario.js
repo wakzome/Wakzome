@@ -1981,7 +1981,7 @@
     const numero = await siguienteNumeroUnidad();
     const unidad = {
       id: await unidadIdDeterministico(S.inventario.id, numero),
-      inventario_id: S.inventario.id, numero: numero, estado: 'pendente', synced: false
+      inventario_id: S.inventario.id, numero: numero, estado: 'pendiente', synced: false
     };
     try {
       await idbPut('unidades_locales', unidad);
@@ -2021,7 +2021,7 @@
       if (!numero || numero < 1) return;
       const id = await unidadIdDeterministico(S.inventario.id, numero);
       await idbPut('unidades_locales', {
-        id: id, inventario_id: S.inventario.id, numero: numero, estado: 'pendente', synced: true
+        id: id, inventario_id: S.inventario.id, numero: numero, estado: 'pendiente', synced: true
       });
       f.remove();
       iniciarAutorizacionEscaneo(id, numero);

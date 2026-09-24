@@ -346,25 +346,45 @@
           // Veio do código manual da Pessoa 2, que nunca soube a quantidade que a Pessoa 1
           // contou nem quem é ela — só se toca no que é mesmo dela (quem está a ler e o
           // estado), nunca em conteo_fisico/persona1_id/cerrado_at, que podem nem ter
-          // chegado ainda ao servidor. O estado anterior esperado no servidor depende de
-          // qual transição é esta: autorizado→escaneando (reclamou) ou
-          // escaneando→pendiente_validacion (fechou a leitura).
-          const anterior = it.estado === 'pendiente_validacion' ? 'escaneando' : 'autorizado';
-          const { data: atualizados, error: eUpd } = await window.sbInventario.from('intentos')
-            .update({ persona2_id: it.persona2_id, estado: it.estado })
-            .eq('id', it.id).eq('estado', anterior).select();
-          if (eUpd) continue;
+          // chegado ainda ao servidor.
+          //
+          // Enquanto esteve mesmo sem Internet, este aparelho pode ter passado por várias
+          // transições (reclamou, leu, fechou) sem que nenhuma delas chegasse a sincronizar
+          // — cada gravação local seguinte substitui a anterior no IndexedDB (mesmo id). Por
+          // isso não se pode exigir um único "estado anterior" exato: tenta-se, em ordem, a
+          // partir de qualquer estado por onde já se sabe que passou nesta transição.
+          const anteriores = it.estado === 'pendiente_validacion' ? ['escaneando', 'autorizado'] : ['autorizado'];
+          let atualizados = null;
+          for (const anterior of anteriores) {
+            const filtro = window.sbInventario.from('intentos')
+              .update({ persona2_id: it.persona2_id, estado: it.estado })
+              .eq('id', it.id).eq('estado', anterior);
+            // Ao saltar diretamente de "autorizado" para "pendiente_validacion" (o passo
+            // intermédio "escaneando" nunca chegou a ser visto pelo servidor), só se avança
+            // se ainda não houver ninguém atribuído — nunca se pisa a leitura de outra pessoa.
+            const { data, error: eUpd } = anterior === 'autorizado' && it.estado === 'pendiente_validacion'
+              ? await filtro.is('persona2_id', null).select()
+              : await filtro.select();
+            if (eUpd) { atualizados = null; break; }
+            if (data && data.length) { atualizados = data; break; }
+          }
+          if (atualizados === null && !navigator.onLine) continue; // rede caiu a meio: tenta no próximo ciclo
           if (atualizados && atualizados.length) {
             await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
             continue;
           }
-          // 0 linhas afetadas: ou a linha da Pessoa 1 ainda não chegou ao servidor (não se
-          // insere nada incompleto — espera-se), ou já mudou de mãos entretanto.
+          // 0 linhas afetadas em todas as tentativas: ou a linha da Pessoa 1 ainda não chegou
+          // ao servidor (não se insere nada incompleto — espera-se), ou já mudou de mãos
+          // entretanto (outra pessoa reclamou-a por outro caminho).
           const { data: existente } = await window.sbInventario.from('intentos')
             .select('estado, persona2_id').eq('id', it.id).maybeSingle();
           if (!existente) continue;
           if (existente.estado === it.estado && existente.persona2_id === it.persona2_id) {
             await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
+          } else if (existente.estado === 'autorizado' || (existente.estado === 'escaneando' && existente.persona2_id === it.persona2_id)) {
+            // Ainda dentro do que esta Pessoa 2 já percorreu — só não sincronizou ainda por
+            // falha de rede pontual; tenta-se de novo no próximo ciclo, sem marcar conflito.
+            continue;
           } else {
             await idbPut('intentos_locales', Object.assign({}, it, { conflicto: true }));
           }
@@ -406,6 +426,11 @@
       }
 
       const capturasLoc = (await idbGetAll('capturas_locales')).filter(function (c) { return !c.synced && !c.conflicto; });
+      // Lê-se de novo, já depois do laço acima, para saber o estado REAL e atual de cada
+      // intento (synced/conflito) — o array "intentosLoc" ali em cima é uma fotografia de
+      // antes desse laço correr, e usá-lo aqui confundia "já sincronizado" com "ficou em
+      // conflito", chegando a criar uma captura presa a um intento que nunca vai validar.
+      const intentosLocalesAgora = await idbGetAll('intentos_locales');
       for (const c of capturasLoc) {
         // Pode já existir no servidor (ex.: aberta pelo caminho automático online e agora
         // fechada aqui) — tenta-se sempre atualizar primeiro por id.
@@ -416,10 +441,12 @@
           await idbPut('capturas_locales', Object.assign({}, c, { synced: true }));
           continue;
         }
-        // Ainda não existe no servidor: só se cria quando o intento (chave estrangeira)
-        // já lá está.
-        const intentoPai = intentosLoc.find(function (i) { return i.id === c.intento_id; });
-        if (intentoPai && !intentoPai.synced) continue;
+        // Ainda não existe no servidor: só se cria quando o intento (chave estrangeira) já
+        // está mesmo confirmado lá — nunca quando ainda está por sincronizar, e nunca quando
+        // ficou em conflito (nesse caso nunca vai existir; ficar à espera para sempre é o
+        // comportamento certo, não um insere às cegas).
+        const intentoPai = intentosLocalesAgora.find(function (i) { return i.id === c.intento_id; });
+        if (!intentoPai || !intentoPai.synced || intentoPai.conflicto) continue;
         const { error } = await window.sbInventario.from('capturas').insert({
           id: c.id, intento_id: c.intento_id, numero_captura: c.numero_captura, estado: c.estado, cerrado_at: c.cerrado_at || null
         });
@@ -1529,6 +1556,8 @@
         estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Em leitura';
       } else if (ultimoIntento && ultimoIntento.estado === 'autorizado') {
         estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Encerrado (a aguardar Pessoa 2)';
+      } else if (ultimoIntento && ultimoIntento.estado === 'pendiente_validacion') {
+        estadoTxt = 'Encerrado — a aguardar validação';
       }
       if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
         accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
@@ -1540,14 +1569,20 @@
         codigoInline = ' <strong class="inv-codigo-lista">(' + codigo + ')</strong>';
       }
       if (S.rol === 'persona2' && u.estado !== 'validada') {
-        // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
-        // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
-        // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
-        // "Pendente". Só muda para "Continuar" quando é mesmo ela quem já está a lê-lo.
         const jaEDela = ultimoIntento && ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id === S.persona.id;
-        accion = jaEDela
-          ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
-          : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
+        // Ela mesma já fechou esta leitura neste aparelho — fica à espera de validação (só
+        // possível com Internet). Nunca se deixa reabrir por curiosidade: reabrir duplicaria
+        // a captura e apagaria por cima do que já ficou guardado.
+        const jaFechadaPorEla = ultimoIntento && ultimoIntento.estado === 'pendiente_validacion' && ultimoIntento.persona2_id === S.persona.id;
+        if (!jaFechadaPorEla) {
+          // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
+          // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
+          // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
+          // "Pendente". Só muda para "Continuar" quando é mesmo ela quem já está a lê-lo.
+          accion = jaEDela
+            ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
+            : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
+        }
       }
       return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + codigoInline + '</span>' + accion + '</div>';
     }));
@@ -2251,6 +2286,18 @@
       }
     }
 
+    // Segunda barreira, além da lista de unidades: se ela mesma já fechou esta leitura
+    // neste aparelho, nunca se volta a pedir código — reabrir duplicaria a captura.
+    if (intento && intento.estado === 'pendiente_validacion' && intento.persona2_id === S.persona.id) {
+      render(
+        '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
+        '<p>Já encerraste esta leitura neste aparelho. Fica à espera de validação até haver Internet.</p>' +
+        '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>'
+      );
+      document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
+      return;
+    }
+
     render(
       '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
       '<input type="text" id="inv-codigo-auth" placeholder="Código de autorização" inputmode="numeric">' +
@@ -2298,6 +2345,17 @@
   // primeiro no aparelho (a sincronização, com a mesma guarda de concorrência do caminho
   // automático, faz-se sozinha em segundo plano — ver sincronizar()).
   async function reclamarUnidadLocal() {
+    // Segunda barreira, além do ecrã que já evita mostrar isto: nunca se reclama de novo,
+    // neste aparelho, uma leitura que já foi começada aqui antes — evitaria duplicar a
+    // captura e apagar por cima do que já ficou guardado (incluindo um "pendente de
+    // validação" já fechado).
+    const existenteLocal = await idbGet('intentos_locales', S.intento.id);
+    if (existenteLocal) {
+      alert('Esta leitura já foi começada neste aparelho e não pode ser reaberta aqui.');
+      pantallaUnidades();
+      return;
+    }
+
     // Invalida qualquer tentativa automática ainda pendente (ex.: uma que ficou à espera
     // do servidor e depois teve o tempo esgotado) — se ela responder mais tarde, já não
     // vai saltar a tela por cima deste caminho.

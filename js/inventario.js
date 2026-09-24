@@ -346,10 +346,13 @@
           // Veio do código manual da Pessoa 2, que nunca soube a quantidade que a Pessoa 1
           // contou nem quem é ela — só se toca no que é mesmo dela (quem está a ler e o
           // estado), nunca em conteo_fisico/persona1_id/cerrado_at, que podem nem ter
-          // chegado ainda ao servidor.
+          // chegado ainda ao servidor. O estado anterior esperado no servidor depende de
+          // qual transição é esta: autorizado→escaneando (reclamou) ou
+          // escaneando→pendiente_validacion (fechou a leitura).
+          const anterior = it.estado === 'pendiente_validacion' ? 'escaneando' : 'autorizado';
           const { data: atualizados, error: eUpd } = await window.sbInventario.from('intentos')
             .update({ persona2_id: it.persona2_id, estado: it.estado })
-            .eq('id', it.id).eq('estado', 'autorizado').select();
+            .eq('id', it.id).eq('estado', anterior).select();
           if (eUpd) continue;
           if (atualizados && atualizados.length) {
             await idbPut('intentos_locales', Object.assign({}, it, { synced: true }));
@@ -404,11 +407,21 @@
 
       const capturasLoc = (await idbGetAll('capturas_locales')).filter(function (c) { return !c.synced && !c.conflicto; });
       for (const c of capturasLoc) {
-        // Só avança se o intento desta captura já está confirmado no servidor.
+        // Pode já existir no servidor (ex.: aberta pelo caminho automático online e agora
+        // fechada aqui) — tenta-se sempre atualizar primeiro por id.
+        const { data: atualizados, error: eUpd } = await window.sbInventario.from('capturas')
+          .update({ estado: c.estado, cerrado_at: c.cerrado_at || null }).eq('id', c.id).select();
+        if (eUpd) continue;
+        if (atualizados && atualizados.length) {
+          await idbPut('capturas_locales', Object.assign({}, c, { synced: true }));
+          continue;
+        }
+        // Ainda não existe no servidor: só se cria quando o intento (chave estrangeira)
+        // já lá está.
         const intentoPai = intentosLoc.find(function (i) { return i.id === c.intento_id; });
         if (intentoPai && !intentoPai.synced) continue;
         const { error } = await window.sbInventario.from('capturas').insert({
-          id: c.id, intento_id: c.intento_id, numero_captura: c.numero_captura, estado: c.estado
+          id: c.id, intento_id: c.intento_id, numero_captura: c.numero_captura, estado: c.estado, cerrado_at: c.cerrado_at || null
         });
         if (!error) {
           await idbPut('capturas_locales', Object.assign({}, c, { synced: true }));
@@ -470,6 +483,22 @@
         if (!error) {
           await idbPut('asociaciones_locales', Object.assign({}, a, { sincronizado: true }));
         }
+      }
+
+      // Leituras fechadas offline pela Pessoa 2 que já sincronizaram (dados completos dos
+      // dois lados garantidos no servidor): só agora, com Internet a sério, se resolve se
+      // está certo ou errado, comparando com a contagem real da Pessoa 1.
+      const porValidar = (await idbGetAll('intentos_locales')).filter(function (it) {
+        return it.synced && it.estado === 'pendiente_validacion' && !it.validacionResuelta;
+      });
+      for (const it of porValidar) {
+        const { data, error } = await window.sbInventario.rpc('validar_intento', {
+          p_token: S.token, p_intento_id: it.id
+        });
+        if (!error && data && data.length && data[0].ok) {
+          await idbPut('intentos_locales', Object.assign({}, it, { validacionResuelta: true }));
+        }
+        // Se falhar, tenta-se de novo no próximo ciclo.
       }
     } catch (e) {
       // Falha de rede ou semelhante: será reenviado no próximo ciclo. Nada se perde:
@@ -2434,21 +2463,35 @@
   }
 
   async function cerrarUnidadEscaneo() {
-    if (!confirm('Encerrar esta unidade? Vai comparar-se a contagem com as leituras válidas.')) return;
     const total = await contarEscaneosValidos(S.captura.id);
+    if (!confirm('Encerrar esta unidade (' + total + ' leituras)? Fica pendente de validação até haver Internet.')) return;
 
-    await window.sbInventario.from('capturas').update({ estado: 'cerrada', cerrado_at: new Date().toISOString() }).eq('id', S.captura.id);
-
-    if (total === S.intento.conteo_fisico) {
-      await window.sbInventario.from('intentos').update({ estado: 'validado' }).eq('id', S.intento.id);
-      await window.sbInventario.from('unidades').update({ estado: 'validada' }).eq('id', S.unidad.id);
-      alert('✅ ' + UNIDAD_LABEL[S.zona] + ' validado.');
-    } else {
-      await window.sbInventario.from('intentos').update({ estado: 'divergencia' }).eq('id', S.intento.id);
-      await window.sbInventario.from('unidades').update({ estado: 'pendiente' }).eq('id', S.unidad.id);
-      alert('❌ ' + UNIDAD_LABEL[S.zona] + ' não validado — divergência. A Pessoa 1 tem de voltar a contar esta unidade.');
+    // Nunca se decide aqui se está certo ou errado: enquanto não há Internet (ou enquanto
+    // a Pessoa 2 só tem um registo "parcial", sem a quantidade real da Pessoa 1), qualquer
+    // comparação seria feita às cegas. Guarda-se local primeiro — como em qualquer outro
+    // ponto crítico — e a decisão fica para quando houver ligação e dados completos.
+    const capturaLocal = Object.assign({}, S.captura, { estado: 'cerrada', cerrado_at: new Date().toISOString(), synced: false });
+    try {
+      await idbPut('capturas_locales', capturaLocal);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
     }
+    S.captura = capturaLocal;
+
+    const intentoLocal = Object.assign({}, S.intento, { estado: 'pendiente_validacion', synced: false });
+    try {
+      await idbPut('intentos_locales', intentoLocal);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
+    }
+    S.intento = intentoLocal;
+
+    sincronizar();
     await limpiarPuntero();
+
+    alert('Encerrado. Fica pendente de validação até teres Internet — nessa altura compara-se automaticamente com a contagem da Pessoa 1.');
     pantallaUnidades();
   }
 

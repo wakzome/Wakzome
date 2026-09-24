@@ -1373,40 +1373,61 @@
   // ══════════════════════════════════════════════════════════════════════
   //  ECRÃ 4 — LISTA DE UNIDADES (Expositores / Grupos)
   // ══════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════
+  //  MURALHA CHINA — daqui em diante, o caminho com Internet e o caminho sem
+  //  Internet são funções completamente separadas. Nenhuma das duas chama a
+  //  rede a partir do caminho sem Internet, e o caminho com Internet nunca
+  //  usa nem mostra código manual. Só o despachante abaixo decide qual usar.
+  // ══════════════════════════════════════════════════════════════════════
   async function construirEstadoUnidades() {
+    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
+    return modoSinInternet ? construirEstadoUnidadesOffline() : construirEstadoUnidadesOnline();
+  }
+
+  function calcularTodasContadasPorP1(unidades) {
+    // Depende exclusivamente de a Pessoa 1 já ter contado e encerrado cada unidade (existe
+    // pelo menos uma tentativa registada) — independentemente de a Pessoa 2 já ter validado
+    // essa contagem ou de ter havido divergência entretanto. Uma lista vazia (0 declarados)
+    // conta como "todas contadas" — não há nenhuma pendente.
+    return unidades.every(function (u) { return u.intentos && u.intentos.length > 0; });
+  }
+
+  function calcularTodoResueltoPorP2(unidades) {
+    // Do lado da Pessoa 2: nada por saber lhe pede ação (nada em "autorizado", nem em
+    // "escaneando" por outra pessoa) — controla se lhe aparece a opção de acrescentar um
+    // expositor/grupo novo pelo número, quando a Pessoa 1 adicionou um sem rede.
+    return unidades.every(function (u) {
+      if (u.estado === 'validada') return true;
+      const ultimoIntento = (u.intentos || []).sort(function (a, b) { return b.numero_intento - a.numero_intento; })[0];
+      if (!ultimoIntento) return true;
+      return !(ultimoIntento.estado === 'autorizado' || (ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id !== S.persona.id));
+    });
+  }
+
+  async function construirEstadoUnidadesOnline() {
     let unidades = null;
     let nomeP2Inventario = '';
+    try {
+      const { data, error } = await conTimeout(window.sbInventario
+        .from('unidades').select('*, intentos(*)')
+        .eq('inventario_id', S.inventario.id).order('numero'));
+      if (error) throw error;
+      unidades = data;
 
-    // Com o modo sem Internet ativo, a pessoa já disse explicitamente que não há rede —
-    // vai-se direto à cópia local, sem tentar sequer o servidor (resposta imediata, nunca
-    // pendurado à espera de um pedido que não vai chegar a lado nenhum).
-    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
+      // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — só um
+      // detalhe cosmético; se falhar, a lista continua a funcionar sem ele.
+      const { data: asigP2Lista } = await conTimeout(window.sbInventario.from('asignaciones')
+        .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
+        .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle());
+      nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
 
-    if (modoSinInternet) {
+      await guardarCacheUnidades(S.inventario.id, unidades);
+    } catch (e) {
+      // Sem rede na hora (ou o pedido demorou demasiado): usa a última cópia guardada neste
+      // aparelho. Continua-se no caminho "com Internet" — nunca se passa a código manual só
+      // por uma falha pontual; para isso existe o modo sem Internet, explícito.
       unidades = await obtenerCacheUnidades(S.inventario.id);
       if (!unidades) return null;
-    } else {
-      try {
-        const { data, error } = await conTimeout(window.sbInventario
-          .from('unidades').select('*, intentos(*)')
-          .eq('inventario_id', S.inventario.id).order('numero'));
-        if (error) throw error;
-        unidades = data;
-
-        // Nome de quem tem o papel de Pessoa 2 atribuído a este inventário agora — só um
-        // detalhe cosmético; se falhar, a lista continua a funcionar sem ele.
-        const { data: asigP2Lista } = await conTimeout(window.sbInventario.from('asignaciones')
-          .select('persona:personas!asignaciones_persona_id_fkey(nombre)')
-          .eq('inventario_id', S.inventario.id).eq('rol', 'persona2').eq('estado', 'activa').maybeSingle());
-        nomeP2Inventario = (asigP2Lista && asigP2Lista.persona) ? primerNombre(asigP2Lista.persona.nombre) : '';
-
-        await guardarCacheUnidades(S.inventario.id, unidades);
-      } catch (e) {
-        // Sem rede (ou o pedido demorou demasiado): usa a última cópia guardada neste
-        // aparelho. A lista nunca fica bloqueada só porque não há sinal.
-        unidades = await obtenerCacheUnidades(S.inventario.id);
-        if (!unidades) return null;
-      }
     }
 
     unidades = await fusionarUnidadesLocales(unidades);
@@ -1415,11 +1436,11 @@
     const label = UNIDAD_LABEL[S.zona];
     const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
 
-    // Revelação progressiva — só se aplica à Pessoa 1 (é ela quem declara/conta em sequência)
-    // e só com o modo sem Internet desativado. A Pessoa 2 vê sempre todos os declarados de
-    // uma vez: ela só lê o que a Pessoa 1 já fechou, nunca precisa de "avançar" pela lista.
+    // Revelação progressiva — só se aplica à Pessoa 1 (é ela quem declara/conta em sequência).
+    // A Pessoa 2 vê sempre todos os declarados de uma vez: ela só lê o que a Pessoa 1 já
+    // fechou, nunca precisa de "avançar" pela lista.
     let unidadesVisibles = unidades;
-    if (!modoSinInternet && S.rol === 'persona1') {
+    if (S.rol === 'persona1') {
       const numerosIniciados = unidades
         .filter(function (u) { return (u.intentos && u.intentos.length) || u.estado === 'validada'; })
         .map(function (u) { return u.numero; });
@@ -1427,13 +1448,12 @@
       unidadesVisibles = unidades.filter(function (u) { return u.numero <= limiteVisible; });
     }
 
-    const filasArr = await Promise.all(unidadesVisibles.map(async function (u) {
+    const filasArr = unidadesVisibles.map(function (u) {
       const ultimoIntento = (u.intentos || []).sort(function (a, b) {
         return b.numero_intento - a.numero_intento;
       })[0];
       let estadoTxt = 'Pendente';
       let accion = '';
-      let codigoInline = '';
       if (u.estado === 'validada') {
         estadoTxt = '✅ Validado';
         accion = '<button data-accion="verdetalle" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + (ultimoIntento ? ultimoIntento.id : '') + '">Ver detalhes</button>';
@@ -1449,64 +1469,96 @@
       if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
         accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
       }
-      if (S.rol === 'persona1' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
-        if (modoSinInternet) {
-          // Sem Internet, o código é o único jeito de a Pessoa 2 avançar — mostra-se sempre.
-          accion = '<button data-accion="vercodigos" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + ultimoIntento.id + '">Ver códigos</button>';
-          const codigo = await codigoIndice(S.tienda.id, S.inventario.id, u.id, ultimoIntento.numero_intento, 1);
-          codigoInline = ' <strong class="inv-codigo-lista">(' + codigo + ')</strong>';
-        } else if (ultimoIntento.estado === 'autorizado') {
-          // Com Internet o servidor entrega a unidade sozinho — o código não é necessário;
-          // a única ação útil aqui, enquanto a Pessoa 2 ainda não reclamou, é poder corrigir.
-          accion = '<button data-accion="refazer" data-id="' + u.id + '" data-numero="' + u.numero + '">Refazer contagem</button>';
-        }
+      if (S.rol === 'persona1' && ultimoIntento && ultimoIntento.estado === 'autorizado') {
+        // Com Internet o servidor entrega a unidade sozinho — o código não é necessário;
+        // a única ação útil aqui, enquanto a Pessoa 2 ainda não reclamou, é poder corrigir.
+        accion = '<button data-accion="refazer" data-id="' + u.id + '" data-numero="' + u.numero + '">Refazer contagem</button>';
       }
       if (S.rol === 'persona2' && u.estado !== 'validada') {
         const jaEDela = ultimoIntento && ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id === S.persona.id;
-        if (modoSinInternet) {
-          // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
-          // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
-          // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
-          // "Pendente".
-          accion = jaEDela
-            ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
-            : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
-        } else if (jaEDela) {
+        if (jaEDela) {
           accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>';
         } else if (ultimoIntento && ultimoIntento.estado === 'autorizado') {
-          // Com Internet, a Pessoa 1 já fechou — o servidor entrega a unidade sozinho, sem
-          // pedir nenhum código.
+          // Com Internet, a Pessoa 1 já fechou — o servidor entrega a unidade sozinho.
+          // NUNCA se pede código neste caminho.
           accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Escanear</button>';
         }
         // Senão (ainda nada fechado pela Pessoa 1): sem botão nenhum, só o "Pendente" acima.
       }
-      return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + codigoInline + '</span>' + accion + '</div>';
-    }));
+      return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + '</span>' + accion + '</div>';
+    });
     let filas = filasArr.join('');
-
     if (!filas) filas = '<p>Ainda não há ' + UNIDAD_LABEL_PLURAL[S.zona] + ' criados.</p>';
-
-    // Depende exclusivamente de a Pessoa 1 já ter contado e encerrado cada unidade (existe
-    // pelo menos uma tentativa registada) — independentemente de a Pessoa 2 já ter validado
-    // essa contagem ou de ter havido divergência entretanto. Uma lista vazia (0 declarados)
-    // conta como "todas contadas" — não há nenhuma pendente.
-    const todasContadasPorP1 = unidades.every(function (u) {
-      return u.intentos && u.intentos.length > 0;
-    });
-
-    // Do lado da Pessoa 2: nada por saber lhe pede ação (nada em "autorizado", nem em
-    // "escaneando" por outra pessoa) — controla se lhe aparece a opção de acrescentar um
-    // expositor/grupo novo pelo número, quando a Pessoa 1 adicionou um sem rede.
-    const todoResueltoPorP2 = unidades.every(function (u) {
-      if (u.estado === 'validada') return true;
-      const ultimoIntento = (u.intentos || []).sort(function (a, b) { return b.numero_intento - a.numero_intento; })[0];
-      if (!ultimoIntento) return true;
-      return !(ultimoIntento.estado === 'autorizado' || (ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id !== S.persona.id));
-    });
 
     return {
       unidades: unidades, filas: filas, validadas: validadas, label: label,
-      todasContadasPorP1: todasContadasPorP1, todoResueltoPorP2: todoResueltoPorP2, modoSinInternet: modoSinInternet
+      todasContadasPorP1: calcularTodasContadasPorP1(unidades),
+      todoResueltoPorP2: calcularTodoResueltoPorP2(unidades),
+      modoSinInternet: false
+    };
+  }
+
+  async function construirEstadoUnidadesOffline() {
+    // A pessoa já disse explicitamente que não há rede — vai-se direto à cópia local, sem
+    // tentar sequer o servidor (resposta imediata, nunca pendurado à espera de um pedido
+    // que não vai chegar a lado nenhum).
+    let unidades = await obtenerCacheUnidades(S.inventario.id);
+    if (!unidades) return null;
+
+    unidades = await fusionarUnidadesLocales(unidades);
+    unidades = await fusionarIntentosLocales(unidades);
+
+    const label = UNIDAD_LABEL[S.zona];
+    const validadas = unidades.filter(function (u) { return u.estado === 'validada'; }).length;
+
+    // Sem revelação progressiva: nenhuma das duas pessoas tem como "avançar" de outra forma
+    // enquanto não há rede — vêem sempre todos os declarados de uma vez.
+    const filasArr = await Promise.all(unidades.map(async function (u) {
+      const ultimoIntento = (u.intentos || []).sort(function (a, b) {
+        return b.numero_intento - a.numero_intento;
+      })[0];
+      let estadoTxt = 'Pendente';
+      let accion = '';
+      let codigoInline = '';
+      if (u.estado === 'validada') {
+        estadoTxt = '✅ Validado';
+        accion = '<button data-accion="verdetalle" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + (ultimoIntento ? ultimoIntento.id : '') + '">Ver detalhes</button>';
+      } else if (ultimoIntento && ultimoIntento.estado === 'divergencia') {
+        estadoTxt = '❌ Divergência — repetir contagem';
+      } else if (ultimoIntento && ultimoIntento.estado === 'escaneando') {
+        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Em leitura';
+      } else if (ultimoIntento && ultimoIntento.estado === 'autorizado') {
+        estadoTxt = S.rol === 'persona2' ? 'A aguardar leitura' : 'Encerrado (a aguardar Pessoa 2)';
+      }
+      if (S.rol === 'persona1' && u.estado !== 'validada' && (!ultimoIntento || ultimoIntento.estado === 'divergencia')) {
+        accion = '<button class="inv-primario" data-accion="contar" data-id="' + u.id + '" data-numero="' + u.numero + '">Contar</button>';
+      }
+      if (S.rol === 'persona1' && ultimoIntento && (ultimoIntento.estado === 'autorizado' || ultimoIntento.estado === 'escaneando')) {
+        // Sem Internet, o código é o único jeito de a Pessoa 2 avançar — mostra-se sempre.
+        accion = '<button data-accion="vercodigos" data-id="' + u.id + '" data-numero="' + u.numero + '" data-intento="' + ultimoIntento.id + '">Ver códigos</button>';
+        const codigo = await codigoIndice(S.tienda.id, S.inventario.id, u.id, ultimoIntento.numero_intento, 1);
+        codigoInline = ' <strong class="inv-codigo-lista">(' + codigo + ')</strong>';
+      }
+      if (S.rol === 'persona2' && u.estado !== 'validada') {
+        // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
+        // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
+        // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
+        // "Pendente". Só muda para "Continuar" quando é mesmo ela quem já está a lê-lo.
+        const jaEDela = ultimoIntento && ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id === S.persona.id;
+        accion = jaEDela
+          ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
+          : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
+      }
+      return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + codigoInline + '</span>' + accion + '</div>';
+    }));
+    let filas = filasArr.join('');
+    if (!filas) filas = '<p>Ainda não há ' + UNIDAD_LABEL_PLURAL[S.zona] + ' criados.</p>';
+
+    return {
+      unidades: unidades, filas: filas, validadas: validadas, label: label,
+      todasContadasPorP1: calcularTodasContadasPorP1(unidades),
+      todoResueltoPorP2: calcularTodoResueltoPorP2(unidades),
+      modoSinInternet: true
     };
   }
 
@@ -2109,28 +2161,31 @@
   // ══════════════════════════════════════════════════════════════════════
   async function iniciarAutorizacionEscaneo(unidadId, numero) {
     S.unidad = { id: unidadId, numero: numero };
+    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
+    return modoSinInternet
+      ? iniciarAutorizacionEscaneoOffline(unidadId, numero)
+      : iniciarAutorizacionEscaneoOnline(unidadId, numero);
+  }
 
-    // Pode não haver nada aqui ainda — o aparelho desta pessoa pode simplesmente não saber
-    // que a Pessoa 1 já fechou esta unidade (nunca houve rede entre os dois aparelhos). Isso
-    // não impede nada: o ecrã do código manual, mais abaixo, descobre tudo sozinho.
+  // Caminho com Internet: nunca mostra nem aceita código manual. Se a rede falhar mesmo na
+  // hora, mostra um erro com "Tentar novamente" — não cai para o código, que é conceito
+  // exclusivo do modo sem Internet.
+  async function iniciarAutorizacionEscaneoOnline(unidadId, numero) {
     const intento = await obtenerUltimoIntentoParaUnidad(unidadId);
     S.intento = intento;
 
-    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
-
     if (intento && intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
-      // Retoma após uma atualização de página: recuperar a captura ativa (servidor, e se não
-      // houver rede, a cópia guardada neste aparelho), nunca criar outra às cegas.
+      // Retoma após uma atualização de página: recuperar a captura ativa no servidor, nunca
+      // criar outra às cegas.
       let captura = null;
-      if (!modoSinInternet) {
-        try {
-          const { data: capturas, error } = await conTimeout(window.sbInventario.from('capturas')
-            .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1));
-          if (error) throw error;
-          if (capturas && capturas.length) captura = capturas[0];
-        } catch (e) {
-          // sem rede, pedido demorado ou falha: procura abaixo na cópia local.
-        }
+      try {
+        const { data: capturas, error } = await conTimeout(window.sbInventario.from('capturas')
+          .select('*').eq('intento_id', intento.id).eq('estado', 'activa').limit(1));
+        if (error) throw error;
+        if (capturas && capturas.length) captura = capturas[0];
+      } catch (e) {
+        // sem rede na hora, pedido demorado ou falha: procura na cópia local guardada da
+        // última vez que esta captura esteve ativa neste aparelho.
       }
       if (!captura) {
         const locales = await idbGetAllByIndex('capturas_locales', 'intento_id', intento.id);
@@ -2144,11 +2199,7 @@
       }
     }
 
-    // Com rede real, o servidor já garante a entrega correta (estado 'autorizado' = Pessoa 1
-    // fechou mesmo esta unidade) — o código de autorização só é necessário como alternativa.
-    // Com o modo sem Internet ativo, ou se o servidor não confirma a tempo, usa-se sempre o
-    // código manual (abaixo), sem ficar à espera de uma ligação que pode nem existir.
-    if (intento && !modoSinInternet && navigator.onLine && intento.estado === 'autorizado') {
+    if (intento && intento.estado === 'autorizado') {
       render('<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>', '<p>A iniciar leitura…</p>');
       const miOperacion = ++operacionReclamoVigente;
       let resultado = null;
@@ -2157,20 +2208,45 @@
       } catch (e) {
         resultado = null;
         // Tempo esgotado: se este pedido responder mais tarde, já não é mais o vigente —
-        // não vai saltar a tela por cima do código manual, abaixo.
+        // não vai saltar a tela por cima do que já se mostra abaixo.
         if (miOperacion === operacionReclamoVigente) operacionReclamoVigente++;
       }
-      if (resultado) {
-        if (resultado.ok) return;
-        render(
-          '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
-          '<p style="color:#c0392b;">' + resultado.motivo + '</p>' +
-          '<button class="inv-primario" id="inv-btn-tentar-de-novo">Tentar novamente</button>' +
-          '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>',
-          pantallaUnidades
-        );
-        document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneo(unidadId, numero); };
-        document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
+      if (resultado && resultado.ok) return;
+      render(
+        '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
+        '<p style="color:#c0392b;">' + (resultado ? resultado.motivo : 'Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente.') + '</p>' +
+        '<button class="inv-primario" id="inv-btn-tentar-de-novo">Tentar novamente</button>' +
+        '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>',
+        pantallaUnidades
+      );
+      document.getElementById('inv-btn-tentar-de-novo').onclick = function () { iniciarAutorizacionEscaneoOnline(unidadId, numero); };
+      document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
+      return;
+    }
+
+    // A Pessoa 1 ainda não fechou esta unidade: não há nada a reclamar. Neste caminho nunca
+    // se pede código — só resta esperar e voltar a tentar.
+    render(
+      '<h1>' + UNIDAD_LABEL[S.zona] + ' ' + numero + '</h1>',
+      '<p>A Pessoa 1 ainda não fechou esta unidade. Aguarda e volta a tentar.</p>' +
+      '<button id="inv-btn-volver-lista" style="margin-top:10px;">← Voltar</button>'
+    );
+    document.getElementById('inv-btn-volver-lista').onclick = pantallaUnidades;
+  }
+
+  // Caminho sem Internet: nunca toca a rede. O código manual descobre tudo sozinho, mesmo
+  // quando este aparelho não faz ideia de que a Pessoa 1 já fechou a unidade.
+  async function iniciarAutorizacionEscaneoOffline(unidadId, numero) {
+    const intento = await obtenerUltimoIntentoLocalOCache(unidadId);
+    S.intento = intento;
+
+    if (intento && intento.estado === 'escaneando' && intento.persona2_id === S.persona.id) {
+      const locales = await idbGetAllByIndex('capturas_locales', 'intento_id', intento.id);
+      const captura = locales.find(function (c) { return c.estado === 'activa'; }) || null;
+      if (captura) {
+        S.captura = captura;
+        await guardarPuntero();
+        pantallaEscaneo();
         return;
       }
     }
@@ -2502,13 +2578,78 @@
   }
 
   async function cerrarUnidadEscaneo() {
+    const modoSinInternet = await estaModoSinInternetActivo(S.inventario.id);
+    return modoSinInternet ? cerrarUnidadEscaneoOffline() : cerrarUnidadEscaneoOnline();
+  }
+
+  // Caminho com Internet: já se conhece a quantidade real da Pessoa 1 (veio do reclamo
+  // automático) — valida-se já, na hora, sem esperar pelo ciclo de sincronização em segundo
+  // plano. Guarda-se local primeiro na mesma, como em qualquer outro ponto crítico.
+  async function cerrarUnidadEscaneoOnline() {
+    const total = await contarEscaneosValidos(S.captura.id);
+    if (!confirm('Encerrar esta unidade (' + total + ' leituras)?')) return;
+
+    const capturaLocal = Object.assign({}, S.captura, { estado: 'cerrada', cerrado_at: new Date().toISOString(), synced: false });
+    try {
+      await idbPut('capturas_locales', capturaLocal);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
+    }
+    S.captura = capturaLocal;
+
+    const intentoLocal = Object.assign({}, S.intento, { estado: 'pendiente_validacion', synced: false });
+    try {
+      await idbPut('intentos_locales', intentoLocal);
+    } catch (e) {
+      mostrarModalIntegridad('Não foi possível guardar localmente. Não continues até resolver isto.');
+      throw e;
+    }
+    S.intento = intentoLocal;
+
+    await limpiarPuntero();
+
+    try {
+      const { error: eCap } = await conTimeout(window.sbInventario.from('capturas')
+        .update({ estado: 'cerrada', cerrado_at: capturaLocal.cerrado_at }).eq('id', capturaLocal.id));
+      if (eCap) throw eCap;
+      await idbPut('capturas_locales', Object.assign({}, capturaLocal, { synced: true }));
+
+      const { error: eInt } = await conTimeout(window.sbInventario.from('intentos')
+        .update({ estado: 'pendiente_validacion' }).eq('id', intentoLocal.id).eq('estado', 'escaneando'));
+      if (eInt) throw eInt;
+
+      const { data, error: eVal } = await conTimeout(window.sbInventario.rpc('validar_intento', {
+        p_token: S.token, p_intento_id: intentoLocal.id
+      }));
+      if (eVal) throw eVal;
+      if (data && data.length && data[0].ok) {
+        await idbPut('intentos_locales', Object.assign({}, intentoLocal, { synced: true, validacionResuelta: true }));
+        if (data[0].resultado === 'validado') {
+          alert('✅ ' + UNIDAD_LABEL[S.zona] + ' validado.');
+        } else {
+          alert('❌ ' + UNIDAD_LABEL[S.zona] + ' não validado — divergência. A Pessoa 1 tem de voltar a contar esta unidade.');
+        }
+        pantallaUnidades();
+        return;
+      }
+    } catch (e) {
+      // Rede a falhar mesmo agora (raro, já que este é o caminho com Internet): fica
+      // guardado local (acima) e a sincronização em segundo plano resolve sozinha.
+    }
+
+    sincronizar();
+    alert('Encerrado. Não foi possível validar agora — fica pendente e resolve-se sozinho assim que a ligação voltar.');
+    pantallaUnidades();
+  }
+
+  // Caminho sem Internet: nunca toca a rede nem decide validado/divergência — o registo é
+  // sempre "parcial" (nunca chegou a conhecer a quantidade real da Pessoa 1). Guarda-se só
+  // local; a validação fica mesmo para quando houver ligação (ver sincronizar()).
+  async function cerrarUnidadEscaneoOffline() {
     const total = await contarEscaneosValidos(S.captura.id);
     if (!confirm('Encerrar esta unidade (' + total + ' leituras)? Fica pendente de validação até haver Internet.')) return;
 
-    // Nunca se decide aqui se está certo ou errado: enquanto não há Internet (ou enquanto
-    // a Pessoa 2 só tem um registo "parcial", sem a quantidade real da Pessoa 1), qualquer
-    // comparação seria feita às cegas. Guarda-se local primeiro — como em qualquer outro
-    // ponto crítico — e a decisão fica para quando houver ligação e dados completos.
     const capturaLocal = Object.assign({}, S.captura, { estado: 'cerrada', cerrado_at: new Date().toISOString(), synced: false });
     try {
       await idbPut('capturas_locales', capturaLocal);

@@ -1462,14 +1462,23 @@
         }
       }
       if (S.rol === 'persona2' && u.estado !== 'validada') {
-        // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
-        // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
-        // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
-        // "Pendente". Só muda para "Continuar" quando é mesmo ela quem já está a lê-lo.
         const jaEDela = ultimoIntento && ultimoIntento.estado === 'escaneando' && ultimoIntento.persona2_id === S.persona.id;
-        accion = jaEDela
-          ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
-          : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
+        if (modoSinInternet) {
+          // O aparelho da Pessoa 2 pode simplesmente não saber ainda que a Pessoa 1 já fechou
+          // este grupo (nunca houve rede entre os dois aparelhos) — por isso a opção de
+          // inserir o código está sempre disponível, mesmo quando esta linha ainda parece
+          // "Pendente".
+          accion = jaEDela
+            ? '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>'
+            : '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Inserir código</button>';
+        } else if (jaEDela) {
+          accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Continuar</button>';
+        } else if (ultimoIntento && ultimoIntento.estado === 'autorizado') {
+          // Com Internet, a Pessoa 1 já fechou — o servidor entrega a unidade sozinho, sem
+          // pedir nenhum código.
+          accion = '<button class="inv-primario" data-accion="escanear" data-id="' + u.id + '" data-numero="' + u.numero + '">Escanear</button>';
+        }
+        // Senão (ainda nada fechado pela Pessoa 1): sem botão nenhum, só o "Pendente" acima.
       }
       return '<div class="inv-lista-item"><span>' + label + ' ' + u.numero + ' — ' + estadoTxt + codigoInline + '</span>' + accion + '</div>';
     }));

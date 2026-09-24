@@ -339,6 +339,19 @@
     if (sincronizando || !navigator.onLine || !window.sbInventario) return;
     sincronizando = true;
     try {
+      // O navegador diz que há rede, mas o último pedido real disse que não: confirma-se
+      // aqui com um único pedido mínimo — só nesta janela de dúvida, nunca enquanto a
+      // ligação já está confirmada (aí quem mantém o sinal atualizado é a própria lista,
+      // ao atualizar-se sozinha). Sem isto, a sincronização abaixo pode ter sucesso na
+      // mesma (não depende deste sinal) e o ecrã ficar preso a acreditar que não há rede.
+      if (!hayInternetReal()) {
+        try {
+          await conTimeout(window.sbInventario.from('unidades').select('id').limit(1));
+        } catch (e) {
+          // continua sem confirmar; tenta-se de novo no próximo ciclo (5s).
+        }
+      }
+
       // Unidades novas primeiro (ex.: um expositor/grupo adicionado offline) — intentos
       // dependem de a unidade já existir no servidor (chave estrangeira).
       const unidadesLoc = (await idbGetAll('unidades_locales')).filter(function (u) { return !u.synced && !u.conflicto; });
